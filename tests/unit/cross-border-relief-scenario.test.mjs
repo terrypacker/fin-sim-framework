@@ -192,9 +192,29 @@ function runDefaultIntlRetirement() {
 // 2000 Ralph reforms (ITAA 1997 Div 67), so the Math.min cap is a real fidelity gap
 // worth ~4,137 lifetime here. Out of scope for an attribution change.
 //
+// Design 76 P3 (Gap B + D), +0.97% (715,426 → 722,339). The remaining ~18 US-source
+// income types stopped writing household scalars and now attribute to the account
+// owner / earner / asset holder. On this scenario the household scalars drain to zero
+// entirely, so nothing reaches computeAuTaxPerPerson's even-split divisor any more.
+//
+// The direction is the same income-splitting removal as P2, but P3 only lands here
+// because Gap D moved with it. The FITO "without US-source" pass subtracts each
+// person's US-source slice from their own income, so that slice must be attributed
+// identically to the income. Migrating the income while leaving the removal set on an
+// even split was measured at 949,884 (+32.8%) — each person's limit sized off a
+// mismatched base. The two halves of P3 are not separable.
+//
+// P3 also tripped FTC-US-9, which is an invariant test rather than a golden: the
+// de-minimis fallback in `_auTaxOnUsSourceIncome` read the household scalars to
+// apportion AU tax by US-source share, and once those drained it computed a 0 share,
+// declared the whole AU liability AU-source, and leaked ~88k of AU tax on US-source
+// income back into the creditable base. Fixed by summing the per-person maps too
+// (the same `_sumMap` treatment superTax already had). Worth noting that the golden
+// alone would NOT have caught this — the invariant test did.
+//
 // A move back DOWN toward ~698k would mean ownership attribution has gone inert again.
-const EXPECTED_LIFETIME_TAX = 715_426;
-const EXPECTED_NET_WORTH     = 12_268_463;
+const EXPECTED_LIFETIME_TAX = 722_339;
+const EXPECTED_NET_WORTH     = 12_256_784;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

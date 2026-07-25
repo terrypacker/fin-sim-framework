@@ -127,7 +127,7 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
     const collAuBasis    = fifo.collectibleBasisByCountry?.AU        ?? realizedAuBasis;
     const collIndexedAu  = fifo.collectibleIndexedBasisByCountry?.AU ?? collAuBasis;
     return {
-      type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency,
+      type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency, stateKey,
       gain,
       auGain:        Math.max(0, +(proceeds - collAuBasis).toFixed(2)),
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),
@@ -143,7 +143,7 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
   }
   return {
     type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain,
-    residency, proceeds, costBasis: realizedBasis, description: 'rebalance',
+    residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
   };
 }
 

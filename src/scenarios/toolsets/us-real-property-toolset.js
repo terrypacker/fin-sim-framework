@@ -57,7 +57,7 @@ export const US_REAL_PROPERTY = {
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
       { type: 'US_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+        fields: { gain: ValueType.number(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       // Country-agnostic loan payment (design 54 P2): one shared action/reducer for
       // US_LOAN_PAYMENT + AU_LOAN_PAYMENT, declared by both real-property toolsets
       // (registerActionType is idempotent). cc: null so it stays in REAL_PROPERTY_CASH
@@ -67,7 +67,7 @@ export const US_REAL_PROPERTY = {
       { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_TAX', cc: 'US',
-        fields: { amount: ValueType.number(), residency: ValueType.text() } },
+        fields: { amount: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       { type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), delta: ValueType.number() } },
     ],

@@ -56,6 +56,9 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonNrWithholdingUnfrankedDividendYTD',
   'auPersonSuperTaxYTD',
   'auPersonEarnedIncomeYTD',
+  'auPersonUsSourceOrdinaryAudYTD',
+  'auPersonUsSourceCapGainsAudYTD',
+  'auPersonUsSourceRealCapGainsAudYTD',
 ];
 
 // ─── TaxSettleHandler base + per-country subclasses ───────────────────────────
@@ -348,8 +351,15 @@ function _auTaxOnUsSourceIncome(action, state) {
   const allNullLimit = details.every(d => d?.fitoLimit == null);
   if (!allNullLimit) return explicit;
 
-  const usSourceAud = (state?.usSourceOrdinaryAudYTD ?? 0) + (state?.usSourceCapGainsAudYTD ?? 0);
-  const totalAud    = (state?.auOrdinaryIncomeYTD    ?? 0) + (state?.auCapitalGainsYTD    ?? 0);
+  // Design 76 Gap B/D: these buckets now live in per-person maps, with the household
+  // scalars retained only for income that resolved to nobody. Read BOTH — reading the
+  // scalars alone made this share 0 once attribution landed, which silently declared
+  // the entire AU liability to be AU-source tax and leaked six figures of AU tax on
+  // US-source income back into the creditable base (caught by FTC-US-9).
+  const usSourceAud = (state?.usSourceOrdinaryAudYTD ?? 0) + (state?.usSourceCapGainsAudYTD ?? 0)
+                    + _sumMap(state?.auPersonUsSourceOrdinaryAudYTD) + _sumMap(state?.auPersonUsSourceCapGainsAudYTD);
+  const totalAud    = (state?.auOrdinaryIncomeYTD    ?? 0) + (state?.auCapitalGainsYTD    ?? 0)
+                    + _sumMap(state?.auPersonOrdinaryIncomeYTD) + _sumMap(state?.auPersonCapitalGainsYTD);
   if (!(usSourceAud > 0) || !(totalAud > 0)) return explicit;
 
   const fitoTotal  = details.reduce((s, d) => s + (d?.fito ?? 0), 0);

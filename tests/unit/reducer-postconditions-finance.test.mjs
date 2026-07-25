@@ -236,7 +236,7 @@ test('UsSavingsInterestCreditReducer: credits savings, bumps usOrdinaryIncomeYTD
   assert.equal(next.auOrdinaryIncomeYTD, undefined, 'US resident: no AU classification');
 });
 
-test('UsSavingsInterestCreditReducer: AU resident also accrues auOrdinaryIncomeYTD + usSourceOrdinaryUsdYTD', () => {
+test('UsSavingsInterestCreditReducer: AU resident accrues per-person AU income + usSourceOrdinaryUsdYTD', () => {
   const services = makeServices();
   services.stateRegistry.getStateKey = () => 'usSavingsAccount';
   const r = new UsSavingsInterestCreditReducer(services);
@@ -248,7 +248,13 @@ test('UsSavingsInterestCreditReducer: AU resident also accrues auOrdinaryIncomeY
   const next = runReducer(r, state, makeAction('US_SAVINGS_INTEREST_CREDIT', { amount: 200 }),
     DATE, { checkNoMutation: false, balance: true, nonNegative: true });
   assert.equal(next.usOrdinaryIncomeYTD, 200);
-  assert.equal(next.auOrdinaryIncomeYTD, 200);
+  // Design 76 Gap B/D: the AU-assessable interest and its US-source removal slice
+  // are attributed to the account's owner rather than left on household scalars,
+  // and they must move TOGETHER — a mismatch sizes the FITO limit off the wrong base.
+  const owner = Object.keys(next.auPersonOrdinaryIncomeYTD ?? {})[0];
+  assert.ok(owner != null, 'AU interest must be attributed to a person');
+  assert.equal(next.auPersonOrdinaryIncomeYTD[owner], 200);
+  assert.equal(next.auPersonUsSourceOrdinaryAudYTD[owner], 200);
   assert.equal(next.usSourceOrdinaryUsdYTD, 200);
 });
 

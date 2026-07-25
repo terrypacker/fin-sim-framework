@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { accumulateByOwnership } from '../ownership-utils.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 /**
@@ -74,11 +75,21 @@ export class UsSavingsInterestCreditReducer extends Reducer {
       // auOrdinaryIncomeYTD as-written) so the §4.5/§4.6 with/without passes stay
       // self-consistent. (auOrdinaryIncomeYTD is added unconverted here, a
       // pre-existing quirk independent of design 52 — preserved as-is.)
+      // Design 76 Gap B/D: attribute both the assessable income and its US-source
+      // removal slice to the account's owner. They must move together — a person
+      // holding 100% of the income but half the removal slice gets a FITO limit
+      // sized off the wrong base.
+      const share = accumulateByOwnership({}, { ownershipType: 'sole', ownerId: personKey }, action.amount, state.people);
+      const add = (map, delta) => {
+        const out = { ...(map ?? {}) };
+        for (const [k, v] of Object.entries(delta)) out[k] = (out[k] ?? 0) + v;
+        return out;
+      };
       return this.newState({
         ...base,
-        auOrdinaryIncomeYTD:    (state.auOrdinaryIncomeYTD ?? 0) + action.amount,
+        auPersonOrdinaryIncomeYTD:      add(state.auPersonOrdinaryIncomeYTD, share),
+        auPersonUsSourceOrdinaryAudYTD: add(state.auPersonUsSourceOrdinaryAudYTD, share),
         usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + action.amount,
-        usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + action.amount,
       });
     }
     return this.newState(base);

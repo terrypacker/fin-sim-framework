@@ -48,9 +48,11 @@ export class SsIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency } = action;
+    const { amount, residency, personKey } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
-    return this.newState(state, {}, [{ type: 'SS_INCOME_TAX', amount, residency }]);
+    // personKey carries through to the AU return (design 76 Gap B). Absent on the
+    // bare-event path, which has no person — that falls back to the household scalar.
+    return this.newState(state, {}, [{ type: 'SS_INCOME_TAX', amount, residency, personKey }]);
   }
 }
 
@@ -145,9 +147,14 @@ export class BonusApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency } = action;
+    const { amount, residency, personKey } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
-    return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, residency }]);
+    // KNOWN LIMITATION (design 76 Gap B): a bonus is W-2 wages and belongs wholly to
+    // the earner, but the BONUS event carries no person, so personKey is normally
+    // undefined and the amount stays on the household scalar. Plumbed here so an
+    // attributed bonus works the moment the event grows a person; deliberately NOT
+    // defaulted to the primary earner, which would be a guess dressed as a fact.
+    return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, residency, personKey }]);
   }
 }
 
@@ -199,7 +206,10 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
       auIndexedGain = Math.max(0, salePrice - indexedBasis);
     }
 
-    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency }]);
+    // Design 76 Gap B: carry the equity's ownership so the AU gain is attributed to
+    // its holder rather than halved across the household (mirrors AU_HOUSE_SALE_TAX).
+    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
+      ownershipType: eq?.ownershipType, ownerId: eq?.ownerId, owners: eq?.owners }]);
   }
 }
 

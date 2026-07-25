@@ -187,12 +187,20 @@ export class TaxSettleService {
         auNrWithholdingUnfrankedDividendYTD: perPersonShare(state.auPersonNrWithholdingUnfrankedDividendYTD, state.auNrWithholdingUnfrankedDividendYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
-        // FITO (design 52 §4.5): the US-source removal set and the US-tax-paid
-        // input are household scalars — split evenly across residents so each
-        // person's return applies its own share of the offset + with/without limit.
-        usSourceOrdinaryAudYTD:      (state.usSourceOrdinaryAudYTD ?? 0) / numResidents,
-        usSourceCapGainsAudYTD:      (state.usSourceCapGainsAudYTD ?? 0) / numResidents,
-        usSourceRealCapGainsAudYTD:  (state.usSourceRealCapGainsAudYTD ?? 0) / numResidents,
+        // FITO (design 52 §4.5): the US-source removal set — the slice
+        // _assessResidentPreFito subtracts for the "without US-source" pass that
+        // sizes the FITO limit. Design 76 Gap D migrates it per-person on the same
+        // hybrid as the income above, and that pairing is load-bearing rather than
+        // cosmetic: this set MUST be attributed identically to the income it is a
+        // subset of. Give Terry 100% of an IRA distribution's assessable income but
+        // only half its US-source slice and his "without" pass removes too little,
+        // overstating his limit, while Jeanne's removes income she never had.
+        usSourceOrdinaryAudYTD:      perPersonShare(state.auPersonUsSourceOrdinaryAudYTD,     state.usSourceOrdinaryAudYTD),
+        usSourceCapGainsAudYTD:      perPersonShare(state.auPersonUsSourceCapGainsAudYTD,     state.usSourceCapGainsAudYTD),
+        usSourceRealCapGainsAudYTD:  perPersonShare(state.auPersonUsSourceRealCapGainsAudYTD, state.usSourceRealCapGainsAudYTD),
+        // Still an even split, and still on P4's list. Unlike the three above there
+        // is no per-person value to migrate to: US tax is assessed MFJ and stamped
+        // once per US settle, so this has to be *apportioned* rather than attributed.
         usTaxPaidOnUsSourceAud:      (state.usTaxPaidOnUsSourceAud ?? 0) / numResidents,
         // AU CGT reform (design 57 §6.6): this person's Age Pension / JobSeeker
         // exemption from the 30% CGT minimum tax; read by AuTaxRates2027._cgtRelief.

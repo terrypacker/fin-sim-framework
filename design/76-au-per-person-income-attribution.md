@@ -1,13 +1,15 @@
 # 76 — AU per-person income attribution
 
-**Status: P1 + P2 IMPLEMENTED (Gaps C and A); P3–P5 proposed.** §7's four questions are answered and settled.
+**Status: P1–P3 IMPLEMENTED (Gaps C, A, B and D); P4–P5 remain.** §7's four questions are answered and settled.
 P1 landed bit-for-bit inert on both scenarios, as its phase contract required. P2 then moved
 attribution onto true ownership: **+$2** on the reference scenario (where all re-attributed AU income
 is flat-rate or joint) but **+2.15%** on the design 52 default (where a solely-owned account pays
 franked dividends into progressive brackets) — the correct removal of a phantom income split, since
 Australia has no joint assessment. **That second figure disproved a claim in §5, which now carries a
-correction.** Suite: 3,973 unit (+25 new) / 910 viz green. See §4 for the per-phase record, and §0 for
-an unrelated taxed-by-neither-country defect fixed in passing.
+correction.** P3 then migrated the remaining ~18 income types plus their FITO removal set: on the reference
+scenario **every AU household scalar now drains to zero**, so nothing reaches the even-split divisor
+at all. Suite: 4,001 unit (+53 new) / 910 viz green. See §4 for the per-phase record, and §0 for an
+unrelated taxed-by-neither-country defect fixed in passing.
 
 Australia has no joint assessment. Every individual lodges their own return, and every dollar of
 assessable income belongs to exactly one taxpayer — or, for a jointly held asset, to each owner in
@@ -327,8 +329,8 @@ individually harmful.
 |---|---|---|
 | **P1** ✅ **DONE** | Gap C — resolve the account from `action.stateKey` in the AU module; thread `stateKey` onto `AU_SAVINGS_EARNINGS_TAX` (5 sites), `AU_FIXED_INCOME_EARNINGS_TAX`, the AU brokerage actions and `SUPER_CONTRIBUTION_TAX`, with the toolset field declarations. Follow `SUPER_EARNINGS_TAX`. | **Inert — confirmed.** Golden byte-identical; per-person accumulators unchanged. This is the point: it lands the plumbing under a fallback that masks it. |
 | **P2** | Gap A — carry `ownershipType` + `owners` through both `_accountToStatePlain` functions. | Per-person values move to true ownership. **Totals barely move** (~$17 lifetime) — see §5. Safe only because P1 landed first. |
-| **P3** | Gap B — migrate the 20 action types. Largest phase; split by family (retirement accounts / brokerage+bond / income / capital gains) so each lands testable. Carries Gap D's first three scalars along with it. | **This is where the money is.** Expect movement inside the ±$193k band. |
-| **P4** | Gap D — apportion `usTaxPaidOnUsSourceAud` by each person's US-source share. | Second-order; changes FITO relief, not assessable income. |
+| **P3** ✅ **DONE** | Gap B — migrate the 20 action types. Largest phase; split by family (retirement accounts / brokerage+bond / income / capital gains) so each lands testable. Carries Gap D's first three scalars along with it. | **This is where the money is.** Expect movement inside the ±$193k band. |
+| **P4** | Gap D *(remainder)* — apportion `usTaxPaidOnUsSourceAud` by each person's US-source share. The other three FITO scalars shipped with P3, which proved they could not be deferred. | Second-order; changes FITO relief, not assessable income. |
 | **P5** | Delete the `/ numResidents` fallback in `computeAuTaxPerPerson`, or convert it to a dev-mode assertion that fires if any AU household scalar is non-zero at settle. | None if P3 is complete — and that is the test. |
 
 ### P1 implementation record
@@ -408,6 +410,64 @@ regression guard, a joint-account control, an unresolvable-owner fallback, and a
 unequal-super-balance assertion (the originally reported symptom). **Mutation-verified** — 5 of 7 fail
 against the pre-P2 projections; the 2 that pass are the joint split and the unresolved-owner fallback,
 both correct before and after.
+
+### P3 implementation record
+
+All 18 remaining action types migrated, plus two writers found outside the tax modules
+(`us-savings-interest-credit-reducer.js`, `cash-sleeve-interest-apply-reducer.js`) that were booking
+US savings / cash-sleeve interest straight onto the household scalar. Shared seam:
+`resolveAttributionFractions(state, action, canonicalKey)` in `ownership-utils.js`, resolving
+`personKey` → `stateKey` → inline ownership per §7's decision, and `bookAuResident()` in the US module,
+which pairs each AU field with its per-person twin.
+
+**Result on the reference scenario: every AU household scalar drains to zero.** FY2032 ordinary income
+went from `primary=2,982 spouse=2,982` (an even split of $33k) to `primary=33,403 spouse=5,581`, and
+capital gains from a $9,523 shared scalar to 100% on the owner of the brokerage account. Nothing
+reaches `computeAuTaxPerPerson`'s divisor any more, so P5's assertion would pass today.
+
+| | reference scenario | design 52 default |
+|---|---|---|
+| lifetime tax | 1,831,460 → 1,846,043 (**+0.80%**) | 715,426 → 722,339 (**+0.97%**) |
+| also | out-of-funds 2060-06-30 → 2060-01-31; deficit +345k | net worth 12,268,463 → 12,256,784 |
+
+Both move UP, which is the income-splitting removal doing what P2 started — now on the whole income
+base rather than just franking credits.
+
+**Gap D could not be deferred, and the measurement is the argument.** §3 claimed the US-source removal
+set "migrates for free" with the income. It does not migrate for free; it migrates *compulsorily*. The
+FITO limit is sized by re-running the assessment with each person's US-source slice subtracted from
+their own income, so attributing the income while leaving the removal set on an even split gives every
+person a limit computed off a base they do not have. Measured on the design 52 scenario: income-only
+migration lands at **949,884 (+32.8%)** versus **699,756** with the removal set aligned — a $250k
+swing, and in the wrong direction. The two halves of P3 are one change.
+
+**P3 tripped an invariant test, and that is the part worth remembering.** FTC-US-9 asserts that AU tax
+on US-source income never enters the US creditable base. `_auTaxOnUsSourceIncome`'s de-minimis fallback
+apportions the AU liability by US-source *share*, reading `usSourceOrdinaryAudYTD` and
+`auOrdinaryIncomeYTD` — household scalars that P3 had just drained to zero. With a 0 share it declared
+the entire AU liability to be AU-source tax, leaking ~88k back into the creditable base. Fixed by
+summing the per-person maps alongside the scalars, the same `_sumMap` treatment `superTax` already had
+one line above. **The golden did not catch this** — it was inside the ±1% band at the time. The
+invariant test did. Any future phase that drains a scalar should grep for every reader of that scalar
+before assuming the drain is safe.
+
+Tests: `tests/unit/design-76-gap-b-migration.test.mjs`, 28 cases — per-account attribution for 8
+ordinary-income types, person-derived (SS/wages), capital gains with their discountable slice, four
+Gap D pairing assertions, a non-resident control for each type, and an explicit check that an
+unattributable action still books to the *visible* household scalar rather than a silent even split.
+Every case also asserts the household scalars stay at 0. **Mutation-verified** — 18 of 28 fail against
+the pre-P3 module; the 10 that pass are the non-resident controls and the fallback case, correct
+either way.
+
+Existing tests updated rather than weakened: the EVT suites now assert the owner's slice via new
+`auOrdinaryFor` / `auGainsFor` helpers (strictly stronger than the old household assertion), and
+`assertNoAuIncome` checks the per-person maps too — a scalar-only "is zero" check would now pass even
+if income leaked into a map.
+
+**Known limitation:** `BONUS_TAX` still books to the household scalar. A bonus is W-2 wages and belongs
+wholly to the earner, but the BONUS event carries no person. The `personKey` path is plumbed so it works
+the moment the event grows one; it is deliberately not defaulted to the primary earner, which would be
+a guess dressed as a fact.
 
 P5 is the one that makes this stick. As long as the silent even-split fallback exists, the next
 income type added will quietly acquire the same bug. Turning it into a loud failure is what

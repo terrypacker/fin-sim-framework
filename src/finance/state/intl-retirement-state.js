@@ -195,6 +195,14 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // AU-source *earned* income (wages/SE) per person — backs the per-person
     // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.
     this.auPersonEarnedIncomeYTD            = _zeroes();
+    // US-source slices of this person's AU-assessable income (design 76 Gap D), AUD.
+    // These are the FITO "removal set": computeAuTaxPerPerson gives each person their
+    // own share, and _assessResidentPreFito re-runs the without-US-source pass by
+    // subtracting them. They MUST be attributed exactly like the income they are a
+    // subset of — a mismatched removal set computes the FITO limit off the wrong base.
+    this.auPersonUsSourceOrdinaryAudYTD         = _zeroes();
+    this.auPersonUsSourceCapGainsAudYTD         = _zeroes();
+    this.auPersonUsSourceRealCapGainsAudYTD     = _zeroes();
 
     // Guardrail strategy substrate (design/26 Increment 2).
     // initialWithdrawalRate is null until RETIREMENT_DATE_REACHED fires (or pre-populated

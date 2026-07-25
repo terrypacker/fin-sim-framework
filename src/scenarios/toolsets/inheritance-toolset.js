@@ -131,6 +131,7 @@ export const INHERITANCE = {
       { type: 'INHERITED_RA_DISTRIBUTION_TAX', fields: {
         amount:    ValueType.currency('USD'),
         residency: ValueType.text(),
+        stateKey:  ValueType.text(),
       } },
     ],
   },

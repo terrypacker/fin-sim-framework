@@ -190,7 +190,10 @@ test('EVT-51: company sale records gain as AU capital gain + FTC if AU resident'
   // Both the US federal and the additive AU dynamic reducer (design 57 §6.5) process
   // this action — search all entries rather than assuming the federal is [0].
   const allDiffs = taxEntries.flatMap(e => e.stateDiff);
-  const auGainsDiff = allDiffs.find(d => d.field === 'auCapitalGainsYTD');
+  // Design 76 Gap B: attributed to the equity holder's per-person map rather than
+  // the auCapitalGainsYTD household scalar.
+  const auGainsDiff = allDiffs.find(d => d.field === 'auPersonCapitalGainsYTD.primary');
+  assert.ok(auGainsDiff != null, 'AU gain must be attributed to the equity holder');
   assert.strictEqual(auGainsDiff.delta, 450_000);
   const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');

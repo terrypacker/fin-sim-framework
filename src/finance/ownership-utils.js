@@ -102,6 +102,57 @@ export function resolveAttributionAsset(state, action, canonicalKey) {
 }
 
 /**
+ * Resolve who an income item belongs to, from whatever identifier its action carries.
+ *
+ * Design 76 §7 settled one identifier per income shape, chosen so each emit site
+ * stamps what it naturally has to hand:
+ *
+ *   1. `personKey`  — person-derived income with no account behind it: wages,
+ *                     self-employment, Social Security. Always 100% to the earner
+ *                     or recipient; personal services income is never apportionable.
+ *   2. `stateKey`   — account-derived income. Resolves to the account, then to its
+ *                     owners, keeping ownership resolution in exactly one place.
+ *   3. inline owner  — asset-derived income whose asset is not an account and may
+ *      fields         not be in state under a stable key: real property, collectibles,
+ *                     company equity. The emitter stamps ownership onto the action.
+ *
+ * Returns null when nothing resolves, which callers MUST treat as "fall back to the
+ * household scalar" rather than as an even split — the even split is precisely the
+ * bug design 76 exists to remove, and a silent one is worse than a loud scalar.
+ *
+ * @param {object} state        - Simulation state snapshot
+ * @param {object} action       - Tax action carrying personKey | stateKey | owner fields
+ * @param {string} canonicalKey - Fallback state key for the account-derived case
+ * @returns {{ personKey: string, fraction: number }[] | null}
+ */
+export function resolveAttributionFractions(state, action, canonicalKey) {
+  // (1) Explicit person — the earner/recipient, whole. Deliberately NOT gated on
+  // state.people: a personKey already IS a person key, so there is nothing to
+  // resolve. Only the ownership branches below need the people map (to turn
+  // person *ids* into person *keys*). When state.people is present we still use it
+  // to reject an unknown key rather than inventing a person.
+  if (action?.personKey != null) {
+    if (state?.people != null && state.people[action.personKey] == null) return null;
+    return [{ personKey: action.personKey, fraction: 1.0 }];
+  }
+
+  if (state?.people == null) return null;
+
+  // (3) Ownership stamped inline on the action (asset is not an account).
+  const hasInlineOwnership = action?.ownershipType != null
+                          || action?.ownerId      != null
+                          || action?.owners       != null;
+  const asset = hasInlineOwnership
+    ? { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners }
+    // (2) Account-derived — resolve the account, then its owners.
+    : resolveAttributionAsset(state, action, canonicalKey);
+  if (asset == null) return null;
+
+  const fractions = ownershipFractions(asset, state.people);
+  return fractions.length > 0 ? fractions : null;
+}
+
+/**
  * Apply a per-person split to an existing per-person accumulator map.
  * Returns a new map (does not mutate the input).
  *

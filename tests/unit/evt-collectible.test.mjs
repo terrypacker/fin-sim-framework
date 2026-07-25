@@ -226,8 +226,11 @@ test('EVT-36: collectible sale records gain as AU capital gain if AU resident', 
   // auCapitalGainsYTD) and the additive AU dynamic reducer (design 57 §6.5), so the
   // federal diff is no longer guaranteed to be entry [0].
   const allDiffs = taxEntries.flatMap(e => e.stateDiff);
-  const auGainsDiff = allDiffs.find(d => d.field === 'auCapitalGainsYTD');
+  // Design 76 Gap B: the gain now lands in the per-person map, keyed by the
+  // collectible's owner, rather than on the auCapitalGainsYTD household scalar.
+  const auGainsDiff = allDiffs.find(d => d.field === 'auPersonCapitalGainsYTD.primary');
   const expectedGain = AU_COLLECTIBLE_JSON.collectibles[0].value - AU_COLLECTIBLE_JSON.collectibles[0].costBasis;
+  assert.ok(auGainsDiff != null, 'AU gain must be attributed to the collectible owner');
   assert.strictEqual(auGainsDiff.delta, expectedGain);
   const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
@@ -346,7 +349,9 @@ test('EVT-46: gold collectible sale records AU capital gain if AU resident', () 
   // Both the US federal and the additive AU dynamic reducer process this action
   // (design 57 §6.5) — search all entries rather than assuming the federal is [0].
   const allDiffs = taxEntries.flatMap(e => e.stateDiff);
-  const auGainsDiff = allDiffs.find(d => d.field === 'auCapitalGainsYTD');
+  // Design 76 Gap B — per-person map keyed by the collectible's owner (see EVT-36).
+  const auGainsDiff = allDiffs.find(d => d.field === 'auPersonCapitalGainsYTD.primary');
+  assert.ok(auGainsDiff != null, 'AU gain must be attributed to the collectible owner');
   assert.strictEqual(auGainsDiff.delta, 20000);
   const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');

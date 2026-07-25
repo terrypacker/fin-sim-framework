@@ -312,7 +312,9 @@ export class InheritedRaDistributionApplyReducer extends AccountServiceReducer {
     if (cash != null) {
       this.accountService.transaction(cash.account, convertExpenseToAccount(amount, 'USD', cash.account, state), null);
     }
-    const chained = isRoth ? [] : [{ type: 'INHERITED_RA_DISTRIBUTION_TAX', amount, residency }];
+    // Design 76 Gap B: stamp the inherited account so the AU return attributes to
+    // the beneficiary who inherited it.
+    const chained = isRoth ? [] : [{ type: 'INHERITED_RA_DISTRIBUTION_TAX', amount, residency, stateKey }];
     return this.newState(state, { [stateKey]: { ...acct, balance: newBalance } }, chained);
   }
 }

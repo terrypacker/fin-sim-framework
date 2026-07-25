@@ -77,7 +77,9 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       stateUpdate,
-      [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency }]
+      // Design 76 Gap B: attribute the AU gain to the collectible's owner(s).
+      [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
+        ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]
     );
   }
 }

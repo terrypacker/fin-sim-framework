@@ -19,6 +19,7 @@
 
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { auOrdinaryFor, auGainsFor } from '../helpers/assert.js';
 
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
@@ -233,7 +234,7 @@ test('EVT-52→EVT-43: converted IRA earnings stay AU-assessable, deferred to Ro
   // Conversion: US ordinary income on the full 70k; no AU event at conversion.
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 70_000);
   // Withdrawal: only the 10k IRA-earnings-sourced share is AU ordinary income.
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10_000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
+  assert.strictEqual(auOrdinaryFor(sim.state), 10_000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
   assert.strictEqual(sim.state.usPenaltyYTD, 0); // primary is age 60
 });

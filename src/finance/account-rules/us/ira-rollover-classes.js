@@ -69,10 +69,14 @@ export class IraRolloverWithdrawalApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, residency } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    // Per-account (design 55 §7 / 76 Gap B): honor a handler-stamped stateKey so a
+    // household with more than one IRA debits — and taxes — the right person's.
+    const key = action.stateKey ?? 'iraAccount';
     return this.newState(
       state,
-      { iraAccount: debitIra(state.iraAccount, amount) },
-      [{ type: 'IRA_ROLLOVER_WITHDRAWAL_TAX', amount, residency }]
+      { [key]: debitIra(state[key], amount) },
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'IRA_ROLLOVER_WITHDRAWAL_TAX', amount, residency, stateKey: key }]
     );
   }
 }
@@ -102,7 +106,8 @@ export class IraRmdApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       { [stateKey]: debitIra(state[stateKey], amount) },
-      [{ type: 'IRA_RMD_TAX', amount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'IRA_RMD_TAX', amount, residency, stateKey }]
     );
   }
 }

@@ -232,7 +232,8 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
           holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
       },
-      [{ type: 'K401_RMD_TAX', amount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'K401_RMD_TAX', amount, residency, stateKey }]
     );
   }
 }
