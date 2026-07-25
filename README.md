@@ -91,7 +91,7 @@ The dev server entry point is `index.html` → `src/main.js` → `SimulationWork
   - `vite.config.js` — production app build (entry: `index.html` → `src/main.js`).
   - `vite.lib.config.js` — library build for consumers (`@terrypacker/financial-sim`).
 - Output dirs are `dist/` (app) and `dist-lib/` (library, ESM-only).
-- `src/index.js` is **auto-generated** by `scripts/build-index.js` from the directory tree. Regenerate after adding/removing exported modules: `npm run build:index`. Do not edit `src/index.js` manually.
+- `src/index.js` is **auto-generated** by `scripts/dev/build-index.js` from the directory tree. Regenerate after adding/removing exported modules: `npm run build:index`. Do not edit `src/index.js` manually.
 - **No runtime dependencies.** Dev-only deps: `vite`, `jest`, `jest-environment-jsdom`, `@babel/parser`, `echarts` (used by the graph renderer in the workbench UI).
 
 History note: the project previously used Rollup; see `design/14-vite-migration.md`.
@@ -411,7 +411,7 @@ The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT
 
 ## Library Packaging
 
-`src/index.js` is the library entry point and is **auto-generated** by `scripts/build-index.js`. Run `npm run build:index` whenever you add or remove an exported class. The library build (`vite.lib.config.js`, `npm run build:lib`) emits ESM only into `dist-lib/`.
+`src/index.js` is the library entry point and is **auto-generated** by `scripts/dev/build-index.js`. Run `npm run build:index` whenever you add or remove an exported class. The library build (`vite.lib.config.js`, `npm run build:lib`) emits ESM only into `dist-lib/`.
 
 ```json
 "exports": { ".": { "import": "./dist-lib/index.esm.js" } }
@@ -444,7 +444,7 @@ Notable suites:
 | Services / serialization | `service-registry.test.mjs`, `base-scenario.test.mjs`, `scenario-loader.test.mjs`, `scenario-serializer.test.mjs`, `scenario-roundtrip.test.mjs`, `serializer-finance-roundtrip.test.mjs`, `serializer-framework-execution.test.mjs`, `state-registry.test.mjs`, `type-registries.test.mjs` |
 | Graph / viz | `graph-geometry.test.mjs`, `graph-query-api.test.mjs`, `orthogonal-edge-router.test.mjs`, `column-layout.test.mjs`, `collision-detector.test.mjs`, `simulation-animator.test.mjs` |
 
-`scripts/check-requirements.js` (`npm run requirements`) cross-references the JP Spec xlsx against `EVT-X:` test names.
+`scripts/dev/check-requirements.js` (`npm run requirements`) cross-references the JP Spec xlsx against `EVT-X:` test names.
 
 ---
 

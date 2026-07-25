@@ -14,7 +14,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const ROOT = resolve(import.meta.dirname, '..');
+const ROOT = resolve(import.meta.dirname, '../..');
 const TEST_DIRS = ['tests/unit', 'tests/viz'];
 
 // All known requirement IDs — keep in sync with docs/requirements.md

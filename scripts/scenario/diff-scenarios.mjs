@@ -60,10 +60,10 @@
 import { readFileSync } from 'node:fs';
 import { basename }     from 'node:path';
 
-import { ServiceRegistry }     from '../src/services/service-registry.js';
-import { BaseScenario }        from '../src/scenarios/base-scenario.js';
-import { ScenarioLoader }      from '../src/scenarios/scenario-loader.js';
-import { computeNetLiquidity } from '../src/finance/derived-metrics/net-liquidity.js';
+import { ServiceRegistry }     from '../../src/services/service-registry.js';
+import { BaseScenario }        from '../../src/scenarios/base-scenario.js';
+import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
+import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
 
 const DEFAULT_TRACK_FIELDS = [
   'metrics.netWorth',
