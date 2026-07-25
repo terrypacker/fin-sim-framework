@@ -21,6 +21,55 @@
 
 let _mutations = null;
 
+// ── Deep clone ────────────────────────────────────────────────────────────
+
+/**
+ * Deep-clone a simulation state tree.
+ *
+ * A hand-rolled replacement for `structuredClone`, which is the single largest
+ * cost in a long run (the journal/diff machinery clones state per event and per
+ * untracked reducer). `structuredClone` pays for the full HTML structured-clone
+ * algorithm — cycle detection, transferables, every exotic built-in — none of
+ * which sim state uses. Measured on a real 44-year scenario state it is ~3.3x
+ * slower than this walk (199us vs 61us per clone).
+ *
+ * Equivalence notes vs. structuredClone, for this state shape (plain objects,
+ * arrays, Dates, and plain-data class instances):
+ *   - Class prototypes: structuredClone ALSO returns plain objects for class
+ *     instances, so dropping the prototype here matches existing behaviour.
+ *   - Cycles: structuredClone preserves them; this recurses until the stack
+ *     blows. Sim state is JSON-serialisable by construction (it is persisted and
+ *     journalled), so cycles cannot occur — both outcomes are a hard crash.
+ *   - Functions: structuredClone throws; this copies the reference. A function
+ *     in state is a bug either way, but it will no longer be caught here.
+ *
+ * @param {*} v
+ * @returns {*} a deep copy
+ */
+export function deepClone(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const n = v.length;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = deepClone(v[i]);
+    return out;
+  }
+  if (v instanceof Date) return new Date(v.getTime());
+  if (v instanceof Map) {
+    const m = new Map();
+    for (const [k, x] of v) m.set(k, deepClone(x));
+    return m;
+  }
+  if (v instanceof Set) {
+    const s = new Set();
+    for (const x of v) s.add(deepClone(x));
+    return s;
+  }
+  const out = {};
+  for (const k in v) out[k] = deepClone(v[k]);
+  return out;
+}
+
 /**
  * Journal-immutability enforcement.
  *

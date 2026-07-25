@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { deepClone } from './state-utils.js';
 
 /**
  * Manages snapshot, replay, and branching state for a Simulation.
@@ -30,7 +31,7 @@ export class SimulationHistory {
   takeSnapshot() {
     const snap = {
       date: new Date(this._sim.currentDate),
-      state: structuredClone(this._sim.state),
+      state: deepClone(this._sim.state),
       rngState: this._sim.rngState,
       queue: this._sim.queue.data.map(e => ({ ...e, date: new Date(e.date) }))
     };
@@ -42,7 +43,7 @@ export class SimulationHistory {
     const snap = this.snapshots[index];
     if (!snap) return;
     this._sim.currentDate = new Date(snap.date);
-    this._sim.state = structuredClone(snap.state);
+    this._sim.state = deepClone(snap.state);
     this._sim.rngState = snap.rngState;
     this._sim.queue.restoreData(snap.queue.map(e => ({ ...e, date: new Date(e.date) })));
     this.snapshotCursor = index;

@@ -30,7 +30,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import { diffStates, MutationTracker } from "./state-utils.js";
+import { diffStates, MutationTracker, deepClone } from "./state-utils.js";
 import { buildExecutionId } from "./execution-utils.js";
 import { ExecutionGraph } from "./execution-graph.js";
 import { GraphRecorder } from "./graph-recorder.js";
@@ -95,11 +95,15 @@ export class Simulation {
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
 
-    this.state = structuredClone(
+    this.state = deepClone(
       initialState instanceof SimulationState ? initialState.toPlain() : initialState
     );
 
     this.rng = this.createRNG(seed);
+
+    // { clone, from } — the end-of-event state clone carried forward to serve as
+    // the next event's stateBefore. See execute(). Null whenever unusable.
+    this._carryStateSnapshot = null;
 
     this.history = new SimulationHistory(this);
     this.history.enableSnapshots = opts.enableSnapshots ?? true;
@@ -162,7 +166,7 @@ export class Simulation {
   }
 
   deepClone(obj) {
-    return structuredClone(obj);
+    return deepClone(obj);
   }
 
   unschedule(type) {
@@ -328,7 +332,23 @@ export class Simulation {
     const handlers = this.handlers.get(event.type) || [];
 
     // Capture state-before once (at true event start, not on resume).
-    const stateBefore = this.silent ? null : (savedStateBefore ?? structuredClone(this.state));
+    //
+    // The previous event in this stepTo loop already cloned state at its END,
+    // and stepTo does not touch state between events, so that clone IS this
+    // event's state-before — reuse it instead of paying a second identical deep
+    // clone (~1 of every 4 clones in a long run). The `from` reference guard
+    // makes the reuse conditional on this.state still being the very object
+    // that clone was taken from, so any path that swaps state out (rewind,
+    // restoreSnapshot, an external assignment between stepTo calls) falls back
+    // to a fresh clone. In-place mutation by a bus subscriber would defeat the
+    // guard, but that already violates the journal's immutability invariant and
+    // throws under JOURNAL_STRICT.
+    const carry = this._carryStateSnapshot;
+    const stateBefore = this.silent
+      ? null
+      : (savedStateBefore
+          ?? (carry && carry.from === this.state ? carry.clone : deepClone(this.state)));
+    this._carryStateSnapshot = null;
 
     let eventExecId;
     let eventNodeId;
@@ -466,7 +486,11 @@ export class Simulation {
           ? this._derivedMetrics.run(this.state, this.currentDate)
           : this._derivedMetrics(this.state, this.currentDate);
       }
-      const stateSnapshot = structuredClone(this.state);
+      const stateSnapshot = deepClone(this.state);
+      // Hand this clone to the next event in the same stepTo loop as its
+      // `stateBefore` — nothing mutates state between two events, so cloning
+      // again would produce an identical copy. See _carryStateSnapshot.
+      this._carryStateSnapshot = { clone: stateSnapshot, from: this.state };
       const now = new Date(this.currentDate);
       this.bus.publish(new ExecutionBusMessage({
         phase:         EXECUTION_PHASES.END,
@@ -720,7 +744,7 @@ export class Simulation {
         r instanceof FieldReducer || r instanceof AccountTransactionReducer
       );
       if (useTracker) MutationTracker.begin();
-      const prevState = (!this.silent && !useTracker) ? structuredClone(this.state) : null;
+      const prevState = (!this.silent && !useTracker) ? deepClone(this.state) : null;
       const reducerExecId = this._makeExecutionId(reducerWrapper.reducer?.id ?? null, actionExecId);
 
       let reducerNodeId = null;
