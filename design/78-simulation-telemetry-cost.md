@@ -1,16 +1,18 @@
 # 78 — Simulation performance: telemetry cost and history-proportional work
 
-**Status: ALL PHASES COMPLETE (implemented + green, 4,030 unit / 915 viz, on
-`wip/sim-performance`).**
+**Status: Phases 0–3 COMPLETE (implemented + green, 4,030 unit / 925 viz, on
+`wip/sim-performance`). §8 lists measured candidates for phases 4+, none started.**
 
 | Phase | | Result |
 |---|---|---|
 | 0 | engine hot paths | step loop 9,540ms → 3,759ms (**2.5×**) |
 | 1 | telemetry contract | `npm run scenario --fast` 3.90s → 0.46s (**8.5×** wall); MC 14.4s → 11.6s |
 | 2 | cheaper diff snapshot | `full` run 4,497ms → 2,899ms (**1.55×**); journal bit-identical |
-| 3 | UI playback | playback ~20.3s → ~9.3s (**2.2×**); timeline 70% of wall → ~1.5% |
+| 3 | UI playback | playback ~20.3s → ~4.5s (**4.5×**); timeline 70% of wall → ~1% |
+| 4+ | §8 — proposed | event-diff composition (~658ms), bus granularity, graph bounding |
 
-Cumulative for the batch tooling: **10.9s → 0.46s, ~24×.**
+Cumulative: batch tooling **10.9s → 0.46s (~24×)**; headless `full` **9.5s → 2.8s**;
+UI playback **~20.3s → ~4.5s**.
 
 The simulation got slower as toolsets, events, handlers and reducers were added. The natural
 reading is "more work per period, so it costs more". Profiling says otherwise. **The
@@ -462,12 +464,15 @@ which made the engine look 3× slower than it was. Compare warm to warm.
 
 ### 6.4 What is left in the UI
 
-The simulation is now ~85% of playback wall (7.7–8.0s of ~9.3s), and in-browser `stepTo` is
-still far slower than the same run headless (3.76s) because of the **16 bus subscribers**
-doing per-message work — 151,210 publishes per run. That, not the timeline, is the next UI
-target. Note a one-shot `stepTo` to the end in the browser costs ~21s, *more than the whole
-100-frame playback*, because outside playback the subscribers are unthrottled and render
-per message.
+The simulation is now the bulk of playback wall time. This section originally named the bus
+subscribers as the next target, on an inference from the browser/headless gap; **§8.1
+measures them directly and that inference was wrong** — they are ~12%, not the bulk. After
+Phase 2 the UI is dominated by the same engine work as the headless run, so §8's candidates
+serve both.
+
+One artefact worth keeping: a one-shot `stepTo` to the end in the browser costs ~21s, *more
+than a whole 100-frame playback*, because outside playback the subscribers are unthrottled
+and render per message.
 
 ---
 
@@ -483,7 +488,102 @@ Every phase is held to the same bar:
 - Phase 1 §4.5 and Phase 2 additionally require a before/after comparison of an MC run
   (ranking and failure rates), because both change what MC observes.
 
-## 8. Decisions
+## 8. Phases 4+ — proposed, not implemented
+
+Where the engine stands after phases 0–3. Headless `full` telemetry, same
+scenario, 2,835ms total:
+
+| Cost centre | Self time | Share |
+|---|---|---|
+| `diffStates` + its `walk` | 1,088ms | 38% |
+| `deepClone` | 423ms | 15% |
+| garbage collector | 214ms | 7% |
+| `snapshotForDiff` | 181ms | 6% |
+| `_processReducers` | 180ms | 6% |
+| execution-graph `addNode`/`addEdge` + index upkeep | 162ms | 6% |
+
+Diffing is now the single largest cost, and it splits almost evenly:
+
+| | Calls | Per call | Total |
+|---|---|---|---|
+| event-level (`stateBefore` vs `stateSnapshot`) | 6,363 | 103.4µs | **658ms** |
+| reducer-level (`snapshotForDiff` vs live state) | 12,976 | 51.9µs | **673ms** |
+
+The event-level diff is dear because both sides are independent deep clones with
+no shared references, so `walk` compares every leaf. The reducer-level diff is
+half the price precisely because §5.5's snapshot shares references below level 1
+and short-circuits.
+
+### 8.1 Correcting an earlier claim about the bus
+
+An earlier draft of §6.4 said the 16 bus subscribers were the next UI target,
+inferring ~4s from the gap between in-browser and headless `stepTo`. Measured
+directly, with every subscriber individually timed across a full playback, that
+is **wrong**:
+
+| | |
+|---|---|
+| playback wall | 5.19s |
+| `sim.stepTo` | 3,910ms (75%) |
+| publish machinery (message construction + predicate matching + dispatch) | 642ms |
+| …of which the subscriber callbacks themselves | 522ms |
+| …of which bus overhead | 119ms |
+| publishes per run | 151,210 |
+
+The bus is ~12% of playback, not the bulk of it. The gap that produced the wrong
+inference had already closed: headless `full` fell from 3.76s to 2.83s in Phase 2,
+so browser (3.9s) minus headless (2.8s) is ~1.0s, and the bus explains most of it.
+
+**The UI is now dominated by the same engine work as the headless run.** There is
+no separate UI problem left to solve beyond what follows.
+
+### 8.2 Candidates, most valuable first
+
+**A. Compose the event-level diff from the reducer diffs it already has (~658ms).**
+Every state change inside an event passes through a reducer, and each reducer's
+diff is already computed and journalled. Re-deriving the event diff with a full
+walk over two deep clones re-does work that was just done. Merging the per-reducer
+diffs would replace a 103µs walk with a cheap concatenation.
+
+Not free of risk, which is why it is not done here:
+- Derived metrics run *after* the reducers and before the snapshot, so
+  `metrics.*` changes appear in no reducer diff. They would need a targeted diff
+  of that subtree.
+- A field written by two reducers in one event yields two entries; the composed
+  diff must coalesce to first-before/last-after to match today's output.
+- Event-level `stateDiff` is a *published bus contract*
+  (`echarts-graph-renderer.js` reads it for node `stateChanges`), so this is a
+  behaviour change, not an internal refactor. It needs the §5.6 treatment — dump
+  and `cmp` every event-level diff before and after.
+
+**B. Stop cloning state twice at the end of an event (~30ms).** `execute()` builds
+`stateSnapshot`, then `journal.addSnapshot(date, this.state)` deep-clones the same
+unmutated state again. Small, obviously correct, needs `addSnapshot` to accept an
+already-detached snapshot.
+
+**C. Bound the execution graph (~162ms + memory).** It reaches 76k nodes and 130k
+edges on a 44-year run; `addNode`/`addEdge`/index upkeep is 6% of the run and the
+graph is retained for the whole session. It is already suppressed at every
+telemetry level but `full`. A ring buffer, or recording only event-kind nodes,
+would cut both. Note this is the structure whose growth caused the original §2
+quadratic.
+
+**D. Reduce bus granularity (~642ms in-browser).** 151,210 publishes for 6,363
+events — 96% are sub-event (handler/action/reducer) messages, each an allocation
+plus predicate matching across 19 subscribers. Most subscribers use `busQueue`,
+which pushes **every** message into an array drained only at render time; under
+playback throttling that is ~75,000 messages accumulated per subscriber between
+drains, which is also where a good share of the 214ms GC comes from. Publishing
+sub-event telemetry only when something subscribes at that granularity would cut
+allocation, dispatch and GC together.
+
+**E. `holdings-plugin` has a third hand-rolled render scheduler** (rAF-only, no
+throttle, with a mounted-guard), so it repaints per frame during playback while
+every other view is throttled. Small, but it belongs with (D).
+
+---
+
+## 9. Decisions
 
 Locked:
 
