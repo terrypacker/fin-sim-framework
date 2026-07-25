@@ -12,6 +12,7 @@ import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
 import { APP_EVENTS }           from '../app-display-settings.js';
 import { withBom }              from '../../utils/csv.js';
+import { RenderScheduler }      from '../components/render-scheduler.js';
 
 export class TimelinePresenter {
   constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings, appBus }) {
@@ -21,16 +22,17 @@ export class TimelinePresenter {
     this._formatDate = displaySettings?.formatDate ?? (d => d.toDateString());
     this._unsubscribeSettings = null;
 
-    // Playback render throttling, mirroring BaseComponent.setRenderThrottle.
-    // The timeline is a presenter rather than a BaseComponent, which is the only
-    // reason it was left out of the animator's throttle list while the graph,
-    // state panel, chart, accounts and dash cards were all in it — so during
-    // playback it re-rendered on every frame and became 70% of the wall time
-    // (design 78 §6). Only the playback-driven update() path is throttled;
-    // interactive renders (filters, toggles) stay immediate.
-    this._renderThrottleMs = 0;
-    this._renderPending    = null;
-    this._renderDirty      = false;
+    // Playback render throttling. The timeline is a presenter, not a
+    // BaseComponent, which is the only reason it was left out of the animator's
+    // throttle list while the graph, state panel, chart, accounts and dash cards
+    // were all in it — so during playback it re-rendered on every frame and
+    // became 70% of the wall time (design 78 §6).
+    //
+    // `immediate: 'sync'` because this presenter's contract is that a step has
+    // repainted by the time update() returns; `flushOnRelease` because playback
+    // ends by dropping the throttle to 0, and without a flush the last coalesced
+    // frame is lost with nothing following to correct it.
+    this._scheduler = new RenderScheduler({ immediate: 'sync', flushOnRelease: true });
 
     // Display-currency conversion of action-payload amounts (design 10 §Phase 4).
     this._controller.displaySettings = displaySettings ?? null;
@@ -121,25 +123,12 @@ export class TimelinePresenter {
    * @param {number} ms
    */
   setRenderThrottle(ms) {
-    this._renderThrottleMs = ms ?? 0;
-    if (this._renderThrottleMs === 0 && this._renderPending) {
-      clearTimeout(this._renderPending);
-      this._renderPending = null;
-      if (this._renderDirty) { this._renderDirty = false; this._render(); }
-    }
+    this._scheduler.setThrottle(ms);
   }
 
   /** Render now, or coalesce onto the throttle timer when one is set. */
   _scheduleRender() {
-    if (this._renderThrottleMs === 0) { this._render(); return; }
-    this._renderDirty = true;
-    if (this._renderPending) return;
-    this._renderPending = setTimeout(() => {
-      this._renderPending = null;
-      if (!this._renderDirty) return;
-      this._renderDirty = false;
-      this._render();
-    }, this._renderThrottleMs);
+    this._scheduler.schedule(() => this._render());
   }
 
   update() {
@@ -246,6 +235,9 @@ export class TimelinePresenter {
 
   destroy() {
     this._unsubscribeSettings?.();
+    // Drop any coalesced render still on the timer, or it fires against a
+    // destroyed view after a scenario Rebuild.
+    this._scheduler.cancel();
     this._view.destroy();
   }
 }
