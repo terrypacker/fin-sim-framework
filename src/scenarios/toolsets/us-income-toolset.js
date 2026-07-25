@@ -41,7 +41,7 @@ export const US_INCOME = {
       { type: 'WAGES_WITHHELD_APPLY', fields: { amount: ValueType.currency('USD') } },
       { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
       { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
-      { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
+      { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
       { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',

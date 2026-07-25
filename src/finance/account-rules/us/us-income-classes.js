@@ -149,11 +149,10 @@ export class BonusApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, residency, personKey } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
-    // KNOWN LIMITATION (design 76 Gap B): a bonus is W-2 wages and belongs wholly to
-    // the earner, but the BONUS event carries no person, so personKey is normally
-    // undefined and the amount stays on the household scalar. Plumbed here so an
-    // attributed bonus works the moment the event grows a person; deliberately NOT
-    // defaulted to the primary earner, which would be a guess dressed as a fact.
+    // A bonus is W-2 wages and belongs wholly to the earner — Australia assesses it
+    // to them alone. BonusHandler.resolveBonusEarner picks the person (explicit
+    // data.personId, else the sole active earner, else the highest wage), so this
+    // always carries a personKey in practice.
     return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, residency, personKey }]);
   }
 }
@@ -295,9 +294,66 @@ export class SeIncomeUsHandler extends HandlerEntry {
   }
 }
 
+/** Whether `person` is drawing employment income on `date` (matches MonthlyWagesHandler). */
+function _isEarning(person, date) {
+  if ((person?.monthlyWage ?? 0) <= 0) return false;
+  const retDate = person.retirementDate;
+  return retDate ? date < retDate : true;
+}
+
+/** One warning per session for an unattributed bonus, not one per event. */
+let _warnedBonusFallback = false;
+
+/**
+ * Resolve which person a bonus belongs to (design 76 P5).
+ *
+ * A bonus is W-2 wages and belongs wholly to the person who earned it — Australia
+ * assesses it to them alone, and personal services income is never apportionable.
+ * The BONUS event historically carried no person, so this resolves one:
+ *
+ *   1. `data.personId`, when the event names an earner. Always preferred.
+ *   2. The only person still drawing wages on this date. Unambiguous whenever one
+ *      spouse has retired, which is the common case for a bonus late in a career.
+ *   3. The highest earner among those still working, else the highest earner overall.
+ *      A deterministic tie-break rather than a coin flip.
+ *
+ * This used to be allowed to fall through to a household scalar, which
+ * `computeAuTaxPerPerson` then split by headcount. That option is gone: the scalars
+ * were deleted once every other income type attributed, and an unresolved bonus would
+ * now be *dropped* from the AU return rather than merely mis-split. A documented
+ * inference beats silently losing the income, and case 3 warns so it is visible.
+ *
+ * @returns {string|null} personKey, or null when the household has no people at all
+ */
+export function resolveBonusEarner(state, data, date) {
+  const people = state?.people ?? {};
+  const keys   = Object.keys(people).filter(k => people[k] != null);
+  if (keys.length === 0) return null;
+
+  // (1) Explicit.
+  if (data?.personId != null && people[data.personId] != null) return data.personId;
+
+  // (2) Exactly one person is still working.
+  const working = keys.filter(k => _isEarning(people[k], date));
+  if (working.length === 1) return working[0];
+
+  // (3) Highest wage among the plausible set; deterministic, and warned about.
+  const pool = working.length > 0 ? working : keys;
+  const best = pool.reduce((a, b) =>
+    (people[b].monthlyWage ?? 0) > (people[a].monthlyWage ?? 0) ? b : a, pool[0]);
+  if (keys.length > 1 && !_warnedBonusFallback) {
+    _warnedBonusFallback = true;
+    console.warn(
+      `[design 76] A BONUS event carries no personId and more than one earner is plausible; `
+      + `attributing it to "${people[best].name || best}" (highest wage). Australia assesses a bonus `
+      + `to the person who earned it, so set the event's data.personId to make this explicit.`);
+  }
+  return best;
+}
+
 export class BonusHandler extends HandlerEntry {
   static type        = 'BonusHandler';
-  static description = 'Dispatches BONUS_APPLY with the bonus amount and AU residency flag.';
+  static description = 'Dispatches BONUS_APPLY with the bonus amount, the earning person, and their AU residency flag.';
   static eventType   = 'BONUS';
 
   constructor() {
@@ -305,10 +361,15 @@ export class BonusHandler extends HandlerEntry {
     this.generatedActionTypes = ['BONUS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ data, state }) {
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+  call({ data, state, date }) {
+    const cashKey   = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const personKey = resolveBonusEarner(state, data, date);
+    // Residency of the EARNER, not of whoever happens to be first in state.people —
+    // it decides whether Australia assesses this bonus at all.
+    const residency = state.people?.[personKey]?.residency
+      ?? state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null;
     return [
-      { type: 'BONUS_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      { type: 'BONUS_APPLY', amount: data.amount, residency, personKey },
       new FieldValueAction('bonus', 'Bonus', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];

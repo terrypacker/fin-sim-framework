@@ -25,6 +25,63 @@ import {
 // who died mid-year (already gone from state.people) but still owes a final-year
 // return (design/68 Gap 1). Franking credits / earned-income views are excluded:
 // they are credits or duplicate views, not a standalone reason to file.
+// Household AU scalars that design 76 migrated to per-person maps. Anything left in
+// one of these at settle time is income that resolved to nobody, and it gets divided
+// by headcount below — the very behaviour design 76 exists to remove. Post-P3 both
+// reference scenarios drain these to zero, so a non-zero value means a newly added
+// income type skipped attribution. Warned about rather than thrown on: the scalar is
+// still a correct-in-total fallback, and a hard throw would take down a user's run
+// over an accuracy regression. `tests/unit/design-76-no-household-residue.test.mjs`
+// is the enforcing check.
+const AU_MIGRATED_HOUSEHOLD_FIELDS = [
+  'auOrdinaryIncomeYTD',
+  'auCapitalGainsYTD',
+  'auDiscountableGainsYTD',
+  'auRealCapitalGainsYTD',
+  'usSourceOrdinaryAudYTD',
+  'usSourceCapGainsAudYTD',
+  'usSourceRealCapGainsAudYTD',
+];
+
+/**
+ * True in dev/test, false in a production build — mirrors state-utils' strict gate.
+ *
+ * Read per call rather than cached at module load so a test can opt a single case out
+ * of the escalation (the two that deliberately exercise the legacy shared-pool split).
+ * Runs once per country per simulated year, so the cost is irrelevant.
+ */
+function _attributionWarningsOn() {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.AU_ATTRIBUTION_WARN === 'off') return false;
+      if (process.env.AU_ATTRIBUTION_WARN === 'on')  return true;
+      if (process.env.NODE_ENV === 'production') return false;
+    }
+  } catch { /* no process (browser) */ }
+  return true;
+}
+/**
+ * Escalate the warning to a throw. On in dev/test — where an un-attributed income
+ * type is a programming error being introduced right now, and failing at the point
+ * of introduction is worth far more than a correct-in-total number — and off in a
+ * production build, where the user's run should survive.
+ */
+function _attributionStrict() {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.AU_ATTRIBUTION_STRICT === 'off') return false;
+      if (process.env.AU_ATTRIBUTION_STRICT === 'on')  return true;
+      if (process.env.NODE_ENV === 'production') return false;
+    }
+  } catch { /* no process (browser) */ }
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) return false;
+  } catch { /* import.meta.env absent */ }
+  return true;
+}
+/** Fields already reported this session — one warning each, not one per settle. */
+const _warnedFields = new Set();
+
 const AU_PER_PERSON_INCOME_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
   'auPersonCapitalGainsYTD',
@@ -169,6 +226,45 @@ export class TaxSettleService {
     const auModule = this._getModule('AU', state);
     const taxYear  = period ? new Date(period.startMs).getUTCFullYear() : undefined;
 
+    // Design 76 P5: every AU-assessable income type now attributes to a person, so
+    // nothing should be sitting on these household scalars. Anything that is has
+    // skipped attribution, and dividing it by headcount is the bug this design
+    // exists to remove — right only by accident, for a jointly held asset with equal
+    // owners, and wrong for everything else.
+    //
+    // Surfaced rather than silently split, and surfaced loudly in dev/test because
+    // that is where a newly added income type gets introduced. Production keeps
+    // running: the scalar is still correct in TOTAL, so a household's headline tax
+    // is right even when the split is not, and taking down someone's simulation over
+    // an accuracy regression is the wrong trade. `AU_ATTRIBUTION_STRICT=on` forces
+    // the throw anywhere; `AU_ATTRIBUTION_WARN=off` silences the warning.
+    const residues = AU_MIGRATED_HOUSEHOLD_FIELDS
+      .map(field => ({ field, value: state[field] ?? 0 }))
+      .filter(r => Math.abs(r.value) > 0.005);
+    if (residues.length > 0 && numResidents > 1) {
+      const detail = residues.map(r => `${r.field}=${r.value.toFixed(2)}`).join(', ');
+      const message =
+        `[design 76] AU income reached the settle unattributed and would be split `
+        + `${numResidents} ways: ${detail}. Australia has no joint assessment — stamp the `
+        + `emitting action with personKey / stateKey / owner fields so it attributes to `
+        + `whoever actually earns it.`;
+      if (_attributionStrict()) throw new Error(message);
+      for (const { field } of residues) {
+        if (_attributionWarningsOn() && !_warnedFields.has(field)) {
+          _warnedFields.add(field);
+          console.warn(`${message} (AU_ATTRIBUTION_WARN=off to silence.)`);
+        }
+      }
+    }
+
+    // Each person's US-source income (AUD), on the same hybrid as everything below.
+    // Hoisted because the FITO *tax* apportionment (design 76 Gap D / P4) needs the
+    // household total as its denominator, not just this person's slice.
+    const usSourceFor = (k) =>
+        (state.auPersonUsSourceOrdinaryAudYTD?.[k] ?? 0) + (state.usSourceOrdinaryAudYTD ?? 0) / numResidents
+      + (state.auPersonUsSourceCapGainsAudYTD?.[k] ?? 0) + (state.usSourceCapGainsAudYTD ?? 0) / numResidents;
+    const usSourceTotal = residentKeys.reduce((sum, k) => sum + usSourceFor(k), 0);
+
     return residentKeys.map((key) => {
       // Living person, else the death-captured record (name + Age Pension flag).
       const person = people[key] ?? deceased[key] ?? {};
@@ -198,10 +294,25 @@ export class TaxSettleService {
         usSourceOrdinaryAudYTD:      perPersonShare(state.auPersonUsSourceOrdinaryAudYTD,     state.usSourceOrdinaryAudYTD),
         usSourceCapGainsAudYTD:      perPersonShare(state.auPersonUsSourceCapGainsAudYTD,     state.usSourceCapGainsAudYTD),
         usSourceRealCapGainsAudYTD:  perPersonShare(state.auPersonUsSourceRealCapGainsAudYTD, state.usSourceRealCapGainsAudYTD),
-        // Still an even split, and still on P4's list. Unlike the three above there
-        // is no per-person value to migrate to: US tax is assessed MFJ and stamped
-        // once per US settle, so this has to be *apportioned* rather than attributed.
-        usTaxPaidOnUsSourceAud:      (state.usTaxPaidOnUsSourceAud ?? 0) / numResidents,
+        // Design 76 Gap D / P4 — the one FITO input that cannot be *attributed*.
+        // US tax is assessed MFJ and stamped once per US settle, so there is no
+        // per-person value to migrate to; it has to be APPORTIONED. The basis is each
+        // person's share of the US-source income Australia is also taxing, which is
+        // exactly what the three lines above now provide.
+        //
+        // Why that basis: this figure exists to cap the FITO, and the cap is meant to
+        // relieve the US tax borne on the income AU is taxing a second time. Handing a
+        // person half the household's US tax when they hold 90% of the US-source income
+        // under-relieves them and over-relieves their spouse, whose own limit then
+        // wastes the excess (FITO has no carryforward — §4.5). Apportioning by income
+        // share keeps each person's offset proportionate to the double tax they bear,
+        // and degrades to the old even split when the two shares are equal.
+        //
+        // Zero US-source income across the household ⇒ nothing to apportion by; fall
+        // back to the even split rather than dividing by zero.
+        usTaxPaidOnUsSourceAud: usSourceTotal > 0
+          ? (state.usTaxPaidOnUsSourceAud ?? 0) * (usSourceFor(key) / usSourceTotal)
+          : (state.usTaxPaidOnUsSourceAud ?? 0) / numResidents,
         // AU CGT reform (design 57 §6.6): this person's Age Pension / JobSeeker
         // exemption from the 30% CGT minimum tax; read by AuTaxRates2027._cgtRelief.
         auMinTaxExempt:              person.incomeSupportRecipient === true,

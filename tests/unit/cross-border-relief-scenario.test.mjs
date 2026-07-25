@@ -212,9 +212,41 @@ function runDefaultIntlRetirement() {
 // (the same `_sumMap` treatment superTax already had). Worth noting that the golden
 // alone would NOT have caught this — the invariant test did.
 //
+// Design 76 P4 (Gap D remainder), −0.33% (722,339 → 719,938). `usTaxPaidOnUsSourceAud`
+// is the one FITO input that cannot be attributed — US tax is assessed MFJ and stamped
+// once per US settle — so it is now APPORTIONED by each person's share of the US-source
+// income AU is taxing, instead of split by headcount. DOWN is the expected direction:
+// FITO has no carryforward (§4.5), so relief handed to a spouse whose own limit cannot
+// absorb it is simply lost. Matching the offset to the income share wastes less of it.
+//
+// P4 also exposed a latent defect in `_auTaxOnUsSourceIncome`, again caught by
+// FTC-US-9 rather than by any golden: the A$1,000 de-minimis test is PER PERSON, but
+// the fallback handling it was all-or-nothing across the household. A mixed household
+// — one spouse over the threshold with a computed fitoLimit, one under with a null one
+// — contributed 0 for the under-threshold spouse, declaring their entire AU liability
+// AU-source and therefore creditable against US tax (~24k of leak). Latent for as long
+// as the even split kept both spouses on the same side of the threshold; P4's
+// income-share apportionment pushed them apart. Now apportioned per person, which
+// drops the peak current-year passive foreign tax from 13,515 to 154 — two orders of
+// magnitude under FTC-US-9's bound, and consistent with that test's own statement that
+// this household's genuine AU-source tax is very small.
+//
+// Design 76 P5 close-out, −0.01% (719,938 → 719,844). Two last attribution holes:
+// BONUS_TAX now resolves an earner (explicit data.personId, else the sole person
+// still working, else the highest wage) instead of sitting on the household scalar;
+// and the FY2027 CGT-reform *real* buckets (auRealCapitalGainsYTD /
+// usSourceRealCapGainsAudYTD) now attribute on the US-source paths in
+// au-tax-module-2027, which had kept writing household scalars by design note.
+// Barely visible here because this scenario realises little in FY2027+; on the real
+// user scenario it moved lifetime tax +$1,022.
+//
+// The real-bucket hole was found by the P5 runtime warning on a live scenario, NOT
+// by the suite — the residue test's field list had omitted the two real buckets, so
+// it could not see them. Both are now listed there.
+//
 // A move back DOWN toward ~698k would mean ownership attribution has gone inert again.
-const EXPECTED_LIFETIME_TAX = 722_339;
-const EXPECTED_NET_WORTH     = 12_256_784;
+const EXPECTED_LIFETIME_TAX = 719_844;
+const EXPECTED_NET_WORTH     = 12_260_459;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

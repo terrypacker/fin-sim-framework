@@ -604,29 +604,42 @@ test('computeAuTaxPerPerson computes separate tax for each AU resident', () => {
 });
 
 test('computeAuTaxPerPerson splits shared passive income equally', () => {
-  const service = new TaxSettleService();
-  const state = {
-    people: {
-      primary: { name: 'Alice', residency: 'AU' },
-      spouse:  { name: 'Bob',   residency: 'AU' },
-    },
-    auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
-    auOrdinaryIncomeYTD:         20000,  // shared passive income
-    auCapitalGainsYTD:           0,
-    auNonResidentWithholdingYTD: 0,
-    auSuperTaxYTD:               0,
-    auFrankingCreditYTD:         0,
-    inflationAccumulator:        { AU: 1.0 },
-    currentPeriods:              { AU: { startMs: Date.UTC(2025, 6, 1) } },
-  };
+  // Design 76 P5 escalated an unattributed household scalar to a throw in dev/test.
+  // This case deliberately exercises that legacy shared-pool split — still the
+  // production fallback, and still correct in TOTAL — so it opts out of the
+  // escalation rather than being rewritten to per-person maps, which would stop it
+  // testing the thing it exists to test.
+  const _prevStrict = process.env.AU_ATTRIBUTION_STRICT;
+  process.env.AU_ATTRIBUTION_STRICT = 'off';
+  try {
 
-  const results = service.computeAuTaxPerPerson(state);
-  const alice = results.find(r => r.personKey === 'primary');
-  const bob   = results.find(r => r.personKey === 'spouse');
+    const service = new TaxSettleService();
+    const state = {
+      people: {
+        primary: { name: 'Alice', residency: 'AU' },
+        spouse:  { name: 'Bob',   residency: 'AU' },
+      },
+      auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
+      auOrdinaryIncomeYTD:         20000,  // shared passive income
+      auCapitalGainsYTD:           0,
+      auNonResidentWithholdingYTD: 0,
+      auSuperTaxYTD:               0,
+      auFrankingCreditYTD:         0,
+      inflationAccumulator:        { AU: 1.0 },
+      currentPeriods:              { AU: { startMs: Date.UTC(2025, 6, 1) } },
+    };
 
-  // Each should see $10k AU income (shared $20k / 2 residents)
-  assert.strictEqual(alice.taxDetail.inputs.ordinaryIncome, 10000);
-  assert.strictEqual(bob.taxDetail.inputs.ordinaryIncome,   10000);
+    const results = service.computeAuTaxPerPerson(state);
+    const alice = results.find(r => r.personKey === 'primary');
+    const bob   = results.find(r => r.personKey === 'spouse');
+
+    // Each should see $10k AU income (shared $20k / 2 residents)
+    assert.strictEqual(alice.taxDetail.inputs.ordinaryIncome, 10000);
+    assert.strictEqual(bob.taxDetail.inputs.ordinaryIncome,   10000);
+  } finally {
+    if (_prevStrict === undefined) delete process.env.AU_ATTRIBUTION_STRICT;
+    else process.env.AU_ATTRIBUTION_STRICT = _prevStrict;
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

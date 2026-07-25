@@ -33,6 +33,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
+import { resolveBonusEarner } from '../../src/finance/account-rules/us/us-income-classes.js';
 
 const PEOPLE = {
   primary: { id: 'primary', name: 'Terry',  residency: 'AU' },
@@ -227,4 +228,56 @@ describe('design 76 P3 — a non-resident books nothing to Australia', () => {
       assertNothingOnHousehold(next, type);
     });
   }
+});
+
+// ── Bonus attribution (design 76 P5, closing the last unattributed path) ──────
+
+describe('design 76 P5 — a bonus is assessed to the person who earned it', () => {
+  const AT = new Date(Date.UTC(2030, 0, 15));
+  const people = (primary, spouse) => ({
+    people: {
+      primary: { id: 'primary', name: 'Terry',  ...primary },
+      spouse:  { id: 'spouse',  name: 'Jeanne', ...spouse  },
+    },
+  });
+
+  test('an explicit data.personId always wins', () => {
+    const st = people({ monthlyWage: 20000 }, { monthlyWage: 2000 });
+    assert.strictEqual(resolveBonusEarner(st, { personId: 'spouse' }, AT), 'spouse');
+  });
+
+  test('the sole person still working gets it', () => {
+    // Terry has retired, Jeanne has not — unambiguous, no warning, no guess.
+    const st = people(
+      { monthlyWage: 20000, retirementDate: new Date(Date.UTC(2027, 0, 1)) },
+      { monthlyWage: 2000 });
+    assert.strictEqual(resolveBonusEarner(st, {}, AT), 'spouse');
+  });
+
+  test('both still working ⇒ the higher earner, deterministically', () => {
+    const st = people({ monthlyWage: 20000 }, { monthlyWage: 2000 });
+    assert.strictEqual(resolveBonusEarner(st, {}, AT), 'primary');
+    // Same inputs, same answer — no coin flip.
+    assert.strictEqual(resolveBonusEarner(st, {}, AT), 'primary');
+  });
+
+  test('both retired ⇒ still resolves, to the higher lifetime earner', () => {
+    // A bonus after both retirements is odd but must not go unattributed: with the
+    // household scalars now an error path, an unresolved bonus would be dropped.
+    const ret = new Date(Date.UTC(2027, 0, 1));
+    const st = people({ monthlyWage: 20000, retirementDate: ret },
+                      { monthlyWage: 2000,  retirementDate: ret });
+    assert.strictEqual(resolveBonusEarner(st, {}, AT), 'primary');
+  });
+
+  test('an unknown personId falls through to inference rather than vanishing', () => {
+    const st = people({ monthlyWage: 20000 }, { monthlyWage: 2000 });
+    assert.strictEqual(resolveBonusEarner(st, { personId: 'ghost' }, AT), 'primary');
+  });
+
+  test('BONUS_TAX books the whole bonus to the stamped earner', () => {
+    const next = run('BONUS_TAX', { amount: 50000, residency: 'AU', personKey: 'spouse' });
+    assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD), { spouse: 50000 });
+    assertNothingOnHousehold(next, 'BONUS_TAX');
+  });
 });

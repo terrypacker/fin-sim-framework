@@ -1,14 +1,20 @@
 # 76 — AU per-person income attribution
 
-**Status: P1–P3 IMPLEMENTED (Gaps C, A, B and D); P4–P5 remain.** §7's four questions are answered and settled.
+**Status: COMPLETE — P1–P5 implemented (Gaps A, B, C, D).** §7's four questions are answered and settled.
 P1 landed bit-for-bit inert on both scenarios, as its phase contract required. P2 then moved
 attribution onto true ownership: **+$2** on the reference scenario (where all re-attributed AU income
 is flat-rate or joint) but **+2.15%** on the design 52 default (where a solely-owned account pays
 franked dividends into progressive brackets) — the correct removal of a phantom income split, since
 Australia has no joint assessment. **That second figure disproved a claim in §5, which now carries a
 correction.** P3 then migrated the remaining ~18 income types plus their FITO removal set: on the reference
-scenario **every AU household scalar now drains to zero**, so nothing reaches the even-split divisor
-at all. Suite: 4,001 unit (+53 new) / 910 viz green. See §4 for the per-phase record, and §0 for an
+scenario **every AU household scalar drains to zero**, so nothing reaches the even-split divisor at
+all. P4 apportioned the last FITO input, and P5 added the residue check that keeps it that way.
+Suite: 4,017 unit (+69 new) / 910 viz green.
+
+**Two of the four defects this design fixed were found by an invariant test, not by a golden**
+(FTC-US-9, both times). Totals are structurally blind here: an unattributed dollar is divided by
+headcount and the parts sum back, so lifetime tax barely moves while every person's return is wrong.
+That is the single most transferable lesson in this document. See §4 for the per-phase record, and §0 for an
 unrelated taxed-by-neither-country defect fixed in passing.
 
 Australia has no joint assessment. Every individual lodges their own return, and every dollar of
@@ -328,10 +334,10 @@ individually harmful.
 | Phase | Work | Golden impact |
 |---|---|---|
 | **P1** ✅ **DONE** | Gap C — resolve the account from `action.stateKey` in the AU module; thread `stateKey` onto `AU_SAVINGS_EARNINGS_TAX` (5 sites), `AU_FIXED_INCOME_EARNINGS_TAX`, the AU brokerage actions and `SUPER_CONTRIBUTION_TAX`, with the toolset field declarations. Follow `SUPER_EARNINGS_TAX`. | **Inert — confirmed.** Golden byte-identical; per-person accumulators unchanged. This is the point: it lands the plumbing under a fallback that masks it. |
-| **P2** | Gap A — carry `ownershipType` + `owners` through both `_accountToStatePlain` functions. | Per-person values move to true ownership. **Totals barely move** (~$17 lifetime) — see §5. Safe only because P1 landed first. |
+| **P2** ✅ **DONE** | Gap A — carry `ownershipType` through both `_accountToStatePlain` functions (accounts have no `owners[]`; that field is RealProperty-only), and carry `owners[]` through the four *asset* projections, which dropped it. | Per-person values move to true ownership. Totals move **+$2** on the reference scenario but **+2.15%** on the design 52 default — this row originally predicted "~$17, barely moves", which was wrong and is corrected in §5. Safe only because P1 landed first. |
 | **P3** ✅ **DONE** | Gap B — migrate the 20 action types. Largest phase; split by family (retirement accounts / brokerage+bond / income / capital gains) so each lands testable. Carries Gap D's first three scalars along with it. | **This is where the money is.** Expect movement inside the ±$193k band. |
-| **P4** | Gap D *(remainder)* — apportion `usTaxPaidOnUsSourceAud` by each person's US-source share. The other three FITO scalars shipped with P3, which proved they could not be deferred. | Second-order; changes FITO relief, not assessable income. |
-| **P5** | Delete the `/ numResidents` fallback in `computeAuTaxPerPerson`, or convert it to a dev-mode assertion that fires if any AU household scalar is non-zero at settle. | None if P3 is complete — and that is the test. |
+| **P4** ✅ **DONE** | Gap D *(remainder)* — apportion `usTaxPaidOnUsSourceAud` by each person's US-source share. The other three FITO scalars shipped with P3, which proved they could not be deferred. | Second-order; changes FITO relief, not assessable income. |
+| **P5** ✅ **DONE** | Delete the `/ numResidents` fallback in `computeAuTaxPerPerson`, or convert it to a dev-mode assertion that fires if any AU household scalar is non-zero at settle. | None if P3 is complete — and that is the test. |
 
 ### P1 implementation record
 
@@ -469,7 +475,90 @@ wholly to the earner, but the BONUS event carries no person. The `personKey` pat
 the moment the event grows one; it is deliberately not defaulted to the primary earner, which would be
 a guess dressed as a fact.
 
-P5 is the one that makes this stick. As long as the silent even-split fallback exists, the next
+### P4 implementation record
+
+`usTaxPaidOnUsSourceAud` is now apportioned by each person's share of the US-source income Australia
+is taxing, using the maps P3 created. Impact: **−0.33%** (design 52) and **−0.26%** (reference), and
+DOWN is the right direction — FITO has no carryforward, so an offset handed to a spouse whose own
+limit cannot absorb it is simply lost. Matching the offset to the income share wastes less of it.
+Zero household US-source income falls back to the even split rather than dividing by zero.
+
+**P4 exposed a second latent defect, again caught by FTC-US-9 and again invisible to the golden.**
+The A$1,000 FITO de-minimis test is *per person*, but the fallback in `_auTaxOnUsSourceIncome` that
+handles it was all-or-nothing across the household: the apportionment branch fired only when EVERY
+person's `fitoLimit` was null. A mixed household — one spouse over the threshold with a computed
+limit, one under with a null one — contributed **zero** for the under-threshold spouse, declaring
+their entire AU liability to be AU-source and therefore creditable against US tax. Roughly 24k of
+leak in the reference run.
+
+It had been latent for as long as the even split kept both spouses on the same side of the A$1,000
+threshold. P4's income-share apportionment is exactly what pushes them apart, so the fix ships with
+it: the fallback is now applied per detail, using each person's own US-source share (surfaced as
+`inputs.usSourceOrdinary` / `usSourceCapGains`). Peak current-year passive foreign tax fell from
+13,515 to **154** — two orders of magnitude below FTC-US-9's bound and consistent with that test's
+own statement that this household's genuine AU-source tax is very small.
+
+Tests: `tests/unit/design-76-fito-apportionment.test.mjs`, 5 cases — 90/10 apportionment with a
+conservation check, degradation to the even split at equal shares, the zero-US-source divide-by-zero
+guard, per-person US-source exposure, and the mixed de-minimis shape.
+
+### P5 implementation record
+
+Two parts, one durable and one advisory.
+
+**The enforcing check** is `tests/unit/design-76-no-household-residue.test.mjs`: run the full
+multi-decade scenario and assert that no migrated household scalar carries a balance *into* any AU
+settle. It does not enumerate income types — it watches the negative space — so it is the test that
+fails when someone adds a twenty-first income type and forgets to attribute it.
+
+It has to read the journal's `stateDiff.before`, not final state, because the settle's apply reducer
+zeroes these buckets: end-of-run state is 0 whether or not attribution works. **The first version of
+this test did read final state and was therefore vacuous — it passed against the pre-migration
+module.** Mutation-checking against `34dc682` is what caught that; the corrected version reports 39
+residues there, including $189k of capital gains and $283k of US-source ordinary income in single
+years. A second, weaker case guards against a wholesale revert to the even split.
+
+**The advisory part** is a one-warning-per-field `console.warn` in `computeAuTaxPerPerson` naming any
+scalar that reached settle unattributed, gated to dev/test (`AU_ATTRIBUTION_WARN=off` to silence).
+Deliberately a warning, not a throw: the scalar is still correct in total, and taking down a user's
+run over an accuracy regression is the wrong trade.
+
+**§7 Q3 (deleting the scalars) — now done.** The blocker was `BONUS_TAX`, the last income type with
+no owner. `BonusHandler.resolveBonusEarner` now resolves one: an explicit `data.personId`, else the
+only person still drawing wages on that date, else the highest earner (deterministic, and warned
+about). A bonus is W-2 wages and Australia assesses it wholly to the earner, so there was never a
+defensible household reading — only missing data. The residency stamped on the action is now the
+*earner's* too, which decides whether Australia assesses it at all.
+
+With that closed, an unattributed household scalar is a **hard error in dev/test**
+(`AU_ATTRIBUTION_STRICT`, on by default outside production builds) naming the offending field.
+Production still computes: the scalar is correct in TOTAL, so a headline figure stays usable, and
+taking down someone's simulation over a split-accuracy regression is the wrong trade. That is the
+"hard failure instead of a silent even split" Q3 asked for, placed where the failure is actionable —
+at the point a new income type is introduced.
+
+Two tests deliberately exercise the legacy shared-pool split (design 68's YOD-3 and design 52's
+equal-split case). Both opt out of the escalation explicitly rather than being rewritten, because the
+fallback they cover is still the production path.
+
+**A hole this close-out found, that the suite could not.** Running the user's live scenario through
+the new warning surfaced `auRealCapitalGainsYTD` = 10,998.61 reaching settle unattributed: the FY2027
+CGT-reform *real* buckets in `au-tax-module-2027.js` still wrote household scalars on the four
+US-source paths, carrying an explicit "no per-person split" note that the Gap B migration never
+revisited. They are the Gap D pairing all over again — the FY2027 FITO pass subtracts
+`usSourceRealCapGainsAudYTD` from `auRealCapitalGainsYTD` — so both now attribute through
+`resolveAttributionFractions`.
+
+The residue test had missed it because its own field list omitted the two real buckets. Both are now
+listed. Worth stating plainly: **the test could not see the bug because I wrote the list, and the
+runtime warning could, because it enumerates the same constant the code uses.** A checked-in scenario
+exercising FY2027+ realisations would have caught it too.
+
+**On §7 Q4 (saved states):** the household scalars are still read and still summed everywhere that
+matters, so existing saves load and settle correctly — their residue simply flows through the
+even-split fallback as before, and now warns. No migration or version gate is needed while the
+scalars remain. One live scenario in the Chrome debug session will want re-saving to pick up the
+per-person maps; nothing breaks if it is not. As long as the silent even-split fallback exists, the next
 income type added will quietly acquire the same bug. Turning it into a loud failure is what
 converts "migrated" from an assertion into something the suite can check.
 
