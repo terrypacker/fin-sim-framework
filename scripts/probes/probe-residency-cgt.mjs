@@ -33,11 +33,11 @@
  * purchase date. This probe now asserts the ATO-correct outcome.
  */
 
-import { AccountService }       from '../src/finance/services/account-service.js';
-import { ACCOUNT_TYPE }         from '../src/finance/assets/account.js';
-import { ALLOCATION }           from '../src/finance/holdings/allocation.js';
-import { consumeHoldingsFifo }  from '../src/finance/holdings/holdings-fifo.js';
-import { AuTaxRates2025 }       from '../src/finance/tax/au/au-tax-rates-2025.js';
+import { AccountService }       from '../../src/finance/services/account-service.js';
+import { ACCOUNT_TYPE }         from '../../src/finance/assets/account.js';
+import { ALLOCATION }           from '../../src/finance/holdings/allocation.js';
+import { consumeHoldingsFifo }  from '../../src/finance/holdings/holdings-fifo.js';
+import { AuTaxRates2025 }       from '../../src/finance/tax/au/au-tax-rates-2025.js';
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 const usd = n => '$' + Math.round(n).toLocaleString();

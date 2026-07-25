@@ -16,7 +16,7 @@
  *   1. The control spec: categorical variable, describe, forward-effective actuate.
  *   2. The projection shim: a committed crossBorderDrawdown candidate BITES under a
  *      snapshot-seeded rollout (the MPC path), not just the one-shot compile path.
- *      This is the headless twin of scripts/verify-mpc-lever.mjs — it guards the
+ *      This is the headless twin of scripts/lab/verify-mpc-lever.mjs — it guards the
  *      _seededSim re-stamp so the §11.1 gap (injection clobbering the control)
  *      cannot silently return.
  *

@@ -1,0 +1,34 @@
+{
+  "_comment": "EXAMPLE Monte Carlo arm spec. Synthetic round numbers only — not calibrated to any real plan. `base` levers apply to every arm; each arm then overrides. Arm keys become output filenames, so keep them short and shell-safe. Name arms so the CONTRAST is legible: mc-report pairs them and the pair label is what you end up quoting.",
+
+  "base": {
+    "spendTotal": 8000
+  },
+
+  "arms": {
+    "retire-2030": {
+      "retire": { "primary": 2030 }
+    },
+    "retire-2032": {
+      "retire": { "primary": 2032 }
+    },
+    "retire-2030-lean": {
+      "retire": { "primary": 2030 },
+      "spendTotal": 6000
+    },
+    "retire-2030-windfall": {
+      "retire": { "primary": 2030 },
+      "equity": [
+        {
+          "key": "exampleTranche",
+          "value": 200000,
+          "saleYear": 2031,
+          "costBasis": 0,
+          "appreciationRate": 0.05,
+          "destination": "usStockAccount",
+          "ownerId": "primary"
+        }
+      ]
+    }
+  }
+}
