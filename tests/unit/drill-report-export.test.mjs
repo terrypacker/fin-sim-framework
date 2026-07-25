@@ -279,3 +279,47 @@ test('rowsToCsv quotes separators and unions columns across ragged rows', () => 
     '"has,comma",,"say ""hi"""',
   ]);
 });
+
+// ─── taxYearLabel ─────────────────────────────────────────────────────────────
+
+test('taxYearLabel spells the AU fiscal year out, beside the numeric join key', async () => {
+  // The bare AU integer is the trap this column exists to close: `2025` on a row
+  // covering July 2025 – June 2026 reads as calendar 2025 and is off by half a
+  // year. taxYear STAYS numeric so the file still pivots and still joins to the
+  // worksheet CSV.
+  const [report] = await exportDrillReports({
+    journal:   buildAuJournal(),
+    registry:  new ReportDefinitionRegistry(),
+    services,
+    reportIds: ['ordinary-income-by-source'],
+    ccs:       ['AU'],
+  });
+
+  const rows = parseCsv(report.csv);
+  assert.deepStrictEqual(rows.map(r => r.taxYear),      ['2025', '2026']);
+  assert.deepStrictEqual(rows.map(r => r.taxYearLabel), ['FY 2025–26', 'FY 2026–27']);
+});
+
+test('US rows label the calendar year, on both export paths', async () => {
+  const [perPeriod]   = await exportOne('ordinary-income-by-source');
+  const [yearGrouped] = await exportOne('tax-paid-by-year');
+
+  assert.deepStrictEqual(parseCsv(perPeriod.csv).map(r => r.taxYearLabel),   ['CY 2026', 'CY 2027']);
+  assert.deepStrictEqual(parseCsv(yearGrouped.csv).map(r => r.taxYearLabel), ['CY 2026', 'CY 2027']);
+});
+
+test('the year-grouped AU path restates the label too, not just the integer', async () => {
+  // au-tax-by-person-year has no cc facet and declares yearCc: 'AU'; the label has
+  // to follow the same `yearCc` basis the integer restatement uses, or the two
+  // columns on the same row would disagree.
+  const [report] = await exportDrillReports({
+    journal:   buildAuJournal(),
+    registry:  new ReportDefinitionRegistry(),
+    services,
+    reportIds: ['au-tax-by-person-year'],
+    ccs:       ['AU'],
+  });
+  const rows = parseCsv(report.csv);
+  assert.deepStrictEqual(rows.map(r => r.taxYear),      ['2025', '2026']);
+  assert.deepStrictEqual(rows.map(r => r.taxYearLabel), ['FY 2025–26', 'FY 2026–27']);
+});

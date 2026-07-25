@@ -13,7 +13,7 @@ import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
-import { toUSD, toAUD }  from './tax-fx.js';
+import { toUSD, toAUD, taxFxRate } from './tax-fx.js';
 
 /** Sum the numeric values of a { key: number } map (per-person accumulators). */
 function _sumMap(map) {
@@ -105,7 +105,12 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
     const usTaxPaidOnUsSourceAud = toAUD(usTaxOnUsSource, 'USD', state);
 
     return [
-      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, usTaxPaidOnUsSourceAud },
+      // fxRate rides on the settlement so the return can state the USD/AUD rate
+      // behind its converted figures (see taxFxRate for what it does and does
+      // not cover). Declared in the US_TAX toolset's action fields, so it
+      // survives into `action.data` for the document modules and the CSV export.
+      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, usTaxPaidOnUsSourceAud,
+        fxRate: taxFxRate(state) },
       { type: 'RECORD_BALANCE' },
     ];
   }
@@ -129,19 +134,22 @@ export class AuTaxSettleHandler extends TaxSettleHandlerBase {
   static description      = 'Computes end-of-year AU tax liability and emits AU_TAX_SETTLE_APPLY + RECORD_BALANCE.';
 
   call({ state }) {
+    // Same rate on both AU paths as on the US settle — one household, one pair.
+    const fxRate = taxFxRate(state);
+
     if (state.auPersonOrdinaryIncomeYTD && Object.keys(state.auPersonOrdinaryIncomeYTD).length > 0) {
       const personTaxDetails = this._settleService.computeAuTaxPerPerson(state);
       if (personTaxDetails.length > 0) {
         const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
         return [
-          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails },
+          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails, fxRate },
           { type: 'RECORD_BALANCE' },
         ];
       }
     }
     const taxDetail = this._settleService.computeAuTax(state);
     return [
-      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail },
+      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate },
       { type: 'RECORD_BALANCE' },
     ];
   }

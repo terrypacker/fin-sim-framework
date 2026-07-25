@@ -65,6 +65,9 @@
 }
 .tax-doc-title   { color: var(--blue-text); font-size: 12px; font-weight: bold; letter-spacing: 0.02em; }
 .tax-doc-subtitle { color: var(--text-muted); font-size: 10px; margin-top: 3px; }
+/* FX rate behind the return's converted figures — supporting detail, so lighter
+   than the filing status it sits under. */
+.tax-doc-fx-note { color: var(--text-muted); font-size: 10px; margin-top: 2px; opacity: 0.85; font-variant-numeric: tabular-nums; }
 .tax-doc-close-x {
   background: none;
   border: none;

@@ -43,7 +43,8 @@ export const AU_TAX = {
     actions: [
       { type: 'AU_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
       { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
-        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any() } },
+        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any(),
+                  fxRate: ValueType.number() } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
         fields: { amount: ValueType.currency('AUD') } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },

@@ -21,6 +21,16 @@
  * The CSV is a projection of the very same TaxDocument the tax popup renders
  * (design 71 §2.1), so if the two ever disagree, that is a bug.
  *
+ * Files are written with a UTF-8 BOM so Excel decodes `§`, the FY en dash and `≤`
+ * correctly instead of falling back to the legacy codepage (§5.5).
+ *
+ * Two columns worth knowing about (§5.5):
+ *   `taxYearLabel` — `taxYear` spelled the way the return files it (`CY 2032`,
+ *                    `FY 2025–26`). `taxYear` itself stays the integer, since it
+ *                    is the join key to the drill files and the only sortable form.
+ *   `fxRate`       — USD/AUD at the settlement (AUD per USD), the rate behind
+ *                    every converted figure on a cross-border return.
+ *
  * Usage:
  *   node scripts/export-tax-csv.mjs --reference > tax.csv
  *   node scripts/export-tax-csv.mjs <file.json> [options] > tax.csv
@@ -86,6 +96,7 @@ import {
   toCsv,
   verifyWorksheetRows,
 } from '../src/finance/tax/tax-worksheet-export.js';
+import { withBom }                 from '../src/utils/csv.js';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
@@ -260,11 +271,11 @@ async function writeDrillReports(runs, opts) {
         continue;
       }
       const file = `${r.id}.csv`;
-      writeFileSync(join(dir, file), r.csv + '\n');
+      writeFileSync(join(dir, file), withBom(r.csv) + '\n');
       manifest.push([r.id, `"${r.title}"`, r.mode, r.cc, r.years, r.rowCount, file].join(','));
       written++;
     }
-    writeFileSync(join(dir, '_manifest.csv'), manifest.join('\n') + '\n');
+    writeFileSync(join(dir, '_manifest.csv'), withBom(manifest.join('\n')) + '\n');
     console.error(`Wrote ${written} drill report(s) (${opts.drillDetail}) to ${dir}/`
       + ` for ${run.name}`);
   }
@@ -340,7 +351,11 @@ async function main() {
   }
 
   if (rows.length) {
-    const csv = toCsv(rows);
+    // BOM on the artifact, not in toCsv: without it Excel decodes the file with
+    // the legacy codepage and every § / – / ≤ in the labels arrives mangled.
+    // stdout gets one too — `> tax.csv` is the documented usage, so the
+    // redirected bytes are the file.
+    const csv = withBom(toCsv(rows));
     if (opts.out) {
       writeFileSync(opts.out, csv + '\n');
       console.error(`Wrote ${rows.length} rows to ${opts.out}`);

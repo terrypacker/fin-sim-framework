@@ -54,7 +54,7 @@ export const US_STATE_TAX = {
     ],
     actions: [
       { type: 'STATE_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
-        fields: { tax: ValueType.number(), taxDetail: ValueType.any() } },
+        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number() } },
       { type: 'STATE_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
       { type: 'CHANGE_STATE_RESIDENCY_APPLY', cc: 'US',

@@ -11,6 +11,7 @@
 import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
 import { APP_EVENTS }           from '../app-display-settings.js';
+import { withBom }              from '../../utils/csv.js';
 
 export class TimelinePresenter {
   constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings, appBus }) {
@@ -181,7 +182,7 @@ export class TimelinePresenter {
   }
 
   _triggerDownload(csv) {
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([withBom(csv)], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;

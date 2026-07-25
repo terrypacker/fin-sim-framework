@@ -16,6 +16,7 @@ import { AuTaxDocument2024 }     from './au/au-tax-document-2024.js';
 import { AuTaxDocument2025 }     from './au/au-tax-document-2025.js';
 import { AuTaxDocument2026 }     from './au/au-tax-document-2026.js';
 import { AuTaxDocument2027 }     from './au/au-tax-document-2027.js';
+import { TAX_FX_PAIR }           from './tax-fx.js';
 
 /**
  * TaxDocumentRegistry — registry for BaseTaxDocumentModule instances.
@@ -77,7 +78,7 @@ export class TaxDocumentRegistry {
           docs[i].personKey  = personKey;
           docs[i].personName = `${personName} — ${docs[i].title.split('—')[0].trim()}`;
         }
-        return docs;
+        return docs.map(d => _withFx(d, data));
       });
     }
 
@@ -89,7 +90,10 @@ export class TaxDocumentRegistry {
       : cc === 'AU' ? _extractAuSaleRecords(journalEntry, journal)
       : []
       : [];
-    return module.generate(taxDetail, taxYear, saleRecords, period);
+    const result = module.generate(taxDetail, taxYear, saleRecords, period);
+    return Array.isArray(result)
+      ? result.map(d => _withFx(d, data))
+      : _withFx(result, data);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -110,6 +114,26 @@ export class TaxDocumentRegistry {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
+
+/**
+ * Stamp the settlement's FX rate onto a generated document, in place.
+ *
+ * Done HERE rather than inside each document module for the same reason
+ * `personKey` is: the rate is a property of the settlement, not of the return's
+ * layout, and threading it through every module's `generate()` signature would
+ * touch seven classes to add one field none of them reason about. Supplementary
+ * forms (Schedule D, the CGT Schedule) get it too, so a reader who exports only
+ * the schedule still knows the rate.
+ *
+ * Absent on a settlement predating this field, or in a single-country run where
+ * no rate was ever recorded — the document then simply carries no FX line.
+ */
+function _withFx(doc, data) {
+  if (!doc || data?.fxRate == null) return doc;
+  doc.fxRate = data.fxRate;
+  doc.fxPair = TAX_FX_PAIR;
+  return doc;
+}
 
 function _ccFromActionType(type) {
   if (!type) return null;

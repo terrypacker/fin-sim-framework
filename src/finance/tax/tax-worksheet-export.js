@@ -33,6 +33,7 @@
 
 import { JournalReportingService } from '../journal-reporting-service.js';
 import { primaryTaxSettleEntries, settleActionTypeFor } from './tax-settle-entries.js';
+import { taxYearLabel } from './tax-year-label.js';
 
 /** Native currency of a filing, by country (design 71 §5.3 — never display currency). */
 const COUNTRY_TO_CURRENCY = { US: 'USD', AU: 'AUD' };
@@ -42,11 +43,28 @@ const COUNTRY_TO_CURRENCY = { US: 'USD', AU: 'AUD' };
  * shape validated against `scenarios/example-tax-report.csv`; `personKey` and
  * `currency` are APPENDED so a spreadsheet built on the 15-column export keeps
  * working. Never insert into the middle of this list.
+ *
+ * Three more are appended for the same reason (§5.5):
+ *
+ *   `taxYearLabel` — `taxYear` spelled the way the return files it: `CY 2032`,
+ *                    or `FY 2025–26` for AU. `taxYear` itself STAYS the integer
+ *                    (2025 = FY2025-26): it is the join key against the
+ *                    drill-report CSVs, what `--year` filters on, and the only
+ *                    form a spreadsheet can sort or pivot numerically. The
+ *                    label is what stops a reader taking an AU `2025` for the
+ *                    calendar year — it is off by half a year.
+ *   `fxPair`/`fxRate` — the USD/AUD rate in force at the settlement, quoted as
+ *                    AUD per USD. Every cross-border figure on the return was
+ *                    normalized through it and is otherwise unreproducible from
+ *                    the export alone. See `taxFxRate` for its exact meaning:
+ *                    it is the settle-date rate, not a weighted average of the
+ *                    rates the individual lines accrued at.
  */
 export const WORKSHEET_COLUMNS = [
   'taxYear', 'country', 'form', 'section', 'line', 'label', 'rowType', 'amount',
   'bracketRate', 'bracketLower', 'bracketUpper', 'bracketIncome', 'bracketTax',
   'parentLine', 'drillReport', 'personKey', 'currency',
+  'taxYearLabel', 'fxPair', 'fxRate',
 ];
 
 /**
@@ -148,6 +166,13 @@ function flattenDocument(doc) {
     form:      formNameOf(doc),
     personKey: doc.personKey ?? null,
     currency:  COUNTRY_TO_CURRENCY[doc.country] ?? doc.currency ?? null,
+    // Repeated on every row rather than stated once: a worksheet is read through
+    // a pivot table, where a header-only value would be filtered away.
+    taxYearLabel: taxYearLabel(doc.country, doc.taxYear),
+    // Absent in a single-country run (no rate was ever recorded) and on
+    // settlements predating the field — blank cells, never a fabricated 1.0.
+    fxPair:       doc.fxRate != null ? (doc.fxPair ?? null) : null,
+    fxRate:       doc.fxRate ?? null,
   };
 
   const rows = [];
@@ -369,6 +394,12 @@ export function toCsv(rows, { header = true } = {}) {
 /** Money renders at 2dp, rates at 5dp. */
 const MONEY_DP = 2;
 const RATE_DP  = 5;
+/**
+ * FX at 6dp. An exchange rate is a multiplier, not a percentage: at 5dp a rate
+ * of 1.55 applied to a seven-figure gain is already off by dollars, and the
+ * column exists precisely so a reader can re-derive the conversion.
+ */
+const FX_DP    = 6;
 
 /** Columns holding a currency amount — all formatted alike. */
 const MONEY_COLUMNS = new Set([
@@ -393,6 +424,7 @@ function formatCell(col, row) {
 
   if (col === 'amount')    return value.toFixed(row.rowType === 'RATE' ? RATE_DP : MONEY_DP);
   if (col === 'bracketRate') return value.toFixed(RATE_DP);
+  if (col === 'fxRate')      return value.toFixed(FX_DP);
   if (MONEY_COLUMNS.has(col)) return value.toFixed(MONEY_DP);
   return value;
 }

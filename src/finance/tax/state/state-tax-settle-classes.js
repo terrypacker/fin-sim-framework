@@ -14,6 +14,7 @@ import { InsufficientFundsError } from '../../assets/account.js';
 import { ACCOUNT_ROLES }       from '../../state/account-roles.js';
 import { StateTaxSettleService } from './state-tax-settle-service.js';
 import { STATE_YTD_FIELDS }    from './state-income-classification.js';
+import { taxFxRate }           from '../tax-fx.js';
 
 /**
  * US state tax settlement (design 34 §5) — the state analog of the federal
@@ -45,7 +46,10 @@ export class StateTaxSettleHandler extends HandlerEntry {
     // Skip emitting so the default (no-state) scenario's journal stays clean.
     if (!taxDetail.stateCode) return [];
     return [
-      { type: 'STATE_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail },
+      // The state return is USD throughout, but its ordinary-income base is fed
+      // by the same FX-normalized federal accumulators, so it reports the same
+      // rate as the federal return rather than leaving the column blank.
+      { type: 'STATE_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate: taxFxRate(state) },
       { type: 'RECORD_BALANCE' },
     ];
   }
