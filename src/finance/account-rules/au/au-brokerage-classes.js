@@ -36,43 +36,57 @@ export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer
   }
 
   reduce(state, action) {
-    const sa = state.auStockAccount;
+    // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so
+    // multiple AU brokerage accounts each credit — and are taxed to — their own
+    // owner. Falls back to the canonical key for legacy dispatchers and old saves.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
     return this.newState(
       state,
       {
-        auStockAccount: {
+        [key]: {
           ...sa,
           balance: sa.balance + action.amount,
         },
       },
-      [{ type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX', amount: action.amount }]
+      [{ type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX', amount: action.amount, stateKey: key }]
     );
   }
 }
 
 /**
  * EVT-27: AU franked dividend (non-resident) — stays in account, no AU tax.
+ * Chains AU_DIVIDEND_FRANKED_NONRESIDENT_TAX (US ordinary income only — Australia
+ * exempts the franked part under ITAA 1936 s128B(3)(ga), but a US citizen is taxed
+ * on worldwide income regardless). See the tax module for the full reasoning.
  */
 export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceReducer {
   static type        = 'AuDividendFrankedNonResidentApplyReducer';
-  static description = 'Adds franked dividend to auStockAccount for non-residents; no AU tax chained.';
+  static description = 'Adds franked dividend to auStockAccount for non-residents; chains AU_DIVIDEND_FRANKED_NONRESIDENT_TAX (US ordinary income, no AU tax).';
   static actionType  = 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
 
   constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Franked Dividend Non-Resident Apply', PRIORITY.CASH_FLOW);
-    this.reducedActionTypes = ['AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY'];
+    this.reducedActionTypes   = ['AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY'];
+    this.generatedActionTypes = ['AU_DIVIDEND_FRANKED_NONRESIDENT_TAX'];
   }
 
   reduce(state, action) {
-    const sa = state.auStockAccount;
-    return this.newState(state, {
-      auStockAccount: {
-        ...sa,
-        balance:           sa.balance           + action.amount,
-        contributionBasis: sa.contributionBasis + action.amount,
-        earningsBasis:     sa.earningsBasis     + action.amount,
+    // Per-account (design 55 §7 / 76 Gap C) — see the sibling reducers above.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
+    return this.newState(
+      state,
+      {
+        [key]: {
+          ...sa,
+          balance:           sa.balance           + action.amount,
+          contributionBasis: sa.contributionBasis + action.amount,
+          earningsBasis:     sa.earningsBasis     + action.amount,
+        },
       },
-    });
+      [{ type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', amount: action.amount, stateKey: key }]
+    );
   }
 }
 
@@ -92,16 +106,20 @@ export class AuDividendUnfrankedResidentApplyReducer extends AccountServiceReduc
   }
 
   reduce(state, action) {
-    const sa = state.auStockAccount;
+    // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so
+    // multiple AU brokerage accounts each credit — and are taxed to — their own
+    // owner. Falls back to the canonical key for legacy dispatchers and old saves.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
     return this.newState(
       state,
       {
-        auStockAccount: {
+        [key]: {
           ...sa,
           balance: sa.balance + action.amount,
         },
       },
-      [{ type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', amount: action.amount }]
+      [{ type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', amount: action.amount, stateKey: key }]
     );
   }
 }
@@ -122,16 +140,20 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceRe
   }
 
   reduce(state, action) {
-    const sa = state.auStockAccount;
+    // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so
+    // multiple AU brokerage accounts each credit — and are taxed to — their own
+    // owner. Falls back to the canonical key for legacy dispatchers and old saves.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
     return this.newState(
       state,
       {
-        auStockAccount: {
+        [key]: {
           ...sa,
           balance: sa.balance + action.amount,
         },
       },
-      [{ type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', amount: action.amount }]
+      [{ type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', amount: action.amount, stateKey: key }]
     );
   }
 }
@@ -176,7 +198,9 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const { salePrice, residency } = action;
-    const sa = state.auStockAccount;
+    // Per-account (design 55 §7 / 76 Gap C) — see the dividend reducers above.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
 
     // CGT cost-base indexation context (design 57 §6.3): current AU price level and
     // the as-of (sale) date from the current AU period. FIFO returns an indexed AU
@@ -217,13 +241,13 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       {
-        auStockAccount: {
+        [key]: {
           ...sa,
           balance:  newBalance,
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key }]
     );
   }
 }

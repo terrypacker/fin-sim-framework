@@ -311,6 +311,10 @@ export class StateSchemaRegistry {
     // (wages/SE), per person — distinct from auPersonOrdinaryIncomeYTD which mixes
     // wages with AU interest/rent and so cannot back the per-person FEIE cap.
     this.registerPattern('auPersonEarnedIncomeYTD.*',           ParameterValueType.currency('AUD'));
+    // design 76 Gap D — per-person US-source slices (the FITO removal set), AUD
+    this.registerPattern('auPersonUsSourceOrdinaryAudYTD.*', ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonUsSourceCapGainsAudYTD.*', ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonUsSourceRealCapGainsAudYTD.*', ParameterValueType.currency('AUD'));
 
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
     // Dedicated ATO CPI indexation series (design 57 Part 2, Item A) — unitless

@@ -149,6 +149,12 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         proceeds:    salePrice,
         costBasis:   adjustedBasis,
         description: stateKey || 'usHouse',
+        // Design 76 Gap B: attribute the AU gain to the property's owner(s), as
+        // AU_HOUSE_SALE_TAX already does. A solely-owned US house sold by an AU
+        // resident was otherwise assessed half to each spouse.
+        ownershipType: propState?.ownershipType,
+        ownerId:       propState?.ownerId,
+        owners:        propState?.owners,
       }]
     );
   }

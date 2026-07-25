@@ -109,19 +109,24 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, penaltyAmount, residency } = action;
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
-    const ra         = state.rothAccount;
+    // Per-account (design 55 §7 / 76 Gap B): honor a handler-stamped stateKey so a
+    // household with more than one of these accounts debits — and taxes — the right
+    // person's. Falls back to the canonical key for legacy dispatchers and old saves.
+    const key        = action.stateKey ?? 'rothAccount';
+    const ra         = state[key];
     const newBalance = ra.balance - amount;
     return this.newState(
       state,
       {
-        rothAccount: {
+        [key]: {
           ...ra,
           balance:       newBalance,
           earningsBasis: ra.earningsBasis - amount,
           holdings:      scaleHoldings(ra.holdings, ra.balance, newBalance),
         },
       },
-      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency, stateKey: key }]
     );
   }
 }

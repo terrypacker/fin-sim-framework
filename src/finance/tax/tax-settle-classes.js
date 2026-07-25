@@ -56,6 +56,9 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonNrWithholdingUnfrankedDividendYTD',
   'auPersonSuperTaxYTD',
   'auPersonEarnedIncomeYTD',
+  'auPersonUsSourceOrdinaryAudYTD',
+  'auPersonUsSourceCapGainsAudYTD',
+  'auPersonUsSourceRealCapGainsAudYTD',
 ];
 
 // ─── TaxSettleHandler base + per-country subclasses ───────────────────────────
@@ -329,33 +332,39 @@ function _auTaxOnUsSourceIncome(action, state) {
     : (action.taxDetail ? [action.taxDetail] : []);
   if (details.length === 0) return 0;
 
-  const explicit = details.reduce(
-    (sum, d) => sum + Math.max(0, (d?.fitoLimit ?? 0) - (d?.fito ?? 0)),
-    0,
-  );
-
-  // De-minimis fallback (design 72 §1). Under the A$1,000 shortcut the FITO limit
-  // is deliberately not computed, so `fitoLimit` is null and the loop above
-  // contributes 0 — which silently declares the *entire* AU liability to be tax on
-  // AU-source income. In a year with a large US-source realisation that is wildly
-  // wrong: six figures of AU tax on US-source income leaks into the general/passive
-  // baskets and funds a decade of over-relief.
+  // Per-person, because the A$1,000 de-minimis test is per-person (design 76 P4).
   //
-  // When no detail computed a limit, apportion the gross AU tax by the US-source
-  // share of assessable income instead. Approximate — the CGT discount means the
-  // gross buckets are not exactly the taxed amounts — but bounded and far closer
-  // than zero. Only applies when there is US-source income to apportion to.
-  const allNullLimit = details.every(d => d?.fitoLimit == null);
-  if (!allNullLimit) return explicit;
+  // Two ways a person's return can tell us how much of their AU tax sits on
+  // US-source income:
+  //
+  //   (a) fitoLimit computed — the limit IS the AU tax on their US-source income
+  //       (ATO "step 1 − step 2"), so the unrelieved part is limit − fito.
+  //   (b) fitoLimit null — they fell under the A$1,000 shortcut, where the limit is
+  //       deliberately not computed. Apportion their gross AU tax by their own
+  //       US-source share of assessable income instead. Approximate (the CGT
+  //       discount means gross buckets are not exactly the taxed amounts) but
+  //       bounded, and far closer than the zero this used to contribute.
+  //
+  // This was previously all-or-nothing: the (b) branch fired only when EVERY detail
+  // had a null limit, so a MIXED household — one spouse over the threshold, one
+  // under — contributed 0 for the under-threshold spouse and silently declared their
+  // whole liability to be AU-source, hence creditable. Latent for as long as the
+  // even split kept both spouses on the same side of the threshold; design 76 P4's
+  // income-share apportionment pushed them apart and FTC-US-9 caught it (~24k of a
+  // spouse's AU tax on US-source income leaking into the creditable base).
+  const perPersonUsSource = (d) => {
+    const usSource = (d?.inputs?.usSourceOrdinary ?? 0) + (d?.inputs?.usSourceCapGains ?? 0);
+    const total    = (d?.inputs?.ordinaryIncome   ?? 0) + (d?.inputs?.capitalGains    ?? 0);
+    if (!(usSource > 0) || !(total > 0)) return 0;
+    const fito     = d?.fito ?? 0;
+    const grossTax = (d?.netLiability ?? 0) + fito;
+    return Math.max(0, grossTax * Math.min(1, usSource / total) - fito);
+  };
 
-  const usSourceAud = (state?.usSourceOrdinaryAudYTD ?? 0) + (state?.usSourceCapGainsAudYTD ?? 0);
-  const totalAud    = (state?.auOrdinaryIncomeYTD    ?? 0) + (state?.auCapitalGainsYTD    ?? 0);
-  if (!(usSourceAud > 0) || !(totalAud > 0)) return explicit;
-
-  const fitoTotal  = details.reduce((s, d) => s + (d?.fito ?? 0), 0);
-  const share      = Math.min(1, usSourceAud / totalAud);
-  const grossAuTax = (action.tax ?? 0) + fitoTotal;
-  return Math.max(0, grossAuTax * share - fitoTotal);
+  return details.reduce((sum, d) => sum + (d?.fitoLimit != null
+    ? Math.max(0, d.fitoLimit - (d.fito ?? 0))   // (a)
+    : perPersonUsSource(d)),                     // (b)
+    0);
 }
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────

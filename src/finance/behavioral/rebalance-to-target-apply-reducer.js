@@ -76,7 +76,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       if (taxable && allocation !== ALLOCATION.CASH) {
         const r = consumeHoldingsFifo(matching, take, { level: auLevel, asOfMs: auAsOfMs, country: 'AU' });
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
-        taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency }));
+        taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
       } else {
         holdings = _reduceProRata(holdings, allocation, take);
       }
@@ -113,7 +113,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
  * COLLECTIBLE_SALE_TAX (US 28% collectible / AU indexed via `isGold`); US vs AU stock
  * routes through STOCK_WITHDRAWAL_TAX vs AU_STOCK_WITHDRAWAL_TAX.
  */
-function _sellTax({ allocation, country, proceeds, fifo, residency }) {
+function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = null }) {
   const realizedBasis        = fifo.realizedBasis;
   const realizedAuBasis      = fifo.realizedBasisByCountry?.AU ?? realizedBasis;
   const realizedIndexedAu    = fifo.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
@@ -127,7 +127,7 @@ function _sellTax({ allocation, country, proceeds, fifo, residency }) {
     const collAuBasis    = fifo.collectibleBasisByCountry?.AU        ?? realizedAuBasis;
     const collIndexedAu  = fifo.collectibleIndexedBasisByCountry?.AU ?? collAuBasis;
     return {
-      type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency,
+      type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency, stateKey,
       gain,
       auGain:        Math.max(0, +(proceeds - collAuBasis).toFixed(2)),
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),
@@ -137,12 +137,13 @@ function _sellTax({ allocation, country, proceeds, fifo, residency }) {
     const auDiscountableGain = Math.min(auGain, fifo.realizedDiscountableGainByCountry?.AU ?? auGain);
     return {
       type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
-      residency, proceeds, costBasis: realizedBasis, description: 'rebalance',
+      // Design 76 Gap C — attribute the gain to the account that was rebalanced.
+      residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
     };
   }
   return {
     type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain,
-    residency, proceeds, costBasis: realizedBasis, description: 'rebalance',
+    residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
   };
 }
 

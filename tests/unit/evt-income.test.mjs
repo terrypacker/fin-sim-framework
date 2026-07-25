@@ -23,6 +23,7 @@
 
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
+import { auOrdinaryFor } from '../helpers/assert.js';
 
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
@@ -326,7 +327,9 @@ test('EVT-50: bonus is AU ordinary income if AU resident', () => {
   sim.stepTo(new Date(2026, 1, 28));
 
   // design 51: US-source bonus (USD) is normalized into the AUD bucket.
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10000 * sim.state.effectiveExchangeRates.USD_AUD);
+  // design 76 P5: a bonus is W-2 wages, so it is assessed wholly to the earner
+  // rather than halved across the household.
+  assert.strictEqual(auOrdinaryFor(sim.state), 10000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 

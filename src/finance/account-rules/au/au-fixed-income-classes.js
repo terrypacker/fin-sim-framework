@@ -40,7 +40,7 @@ export class AuFixedIncomeEarningsApplyReducer extends AccountServiceReducer {
       {
         [key]: { ...prev, balance: (prev.balance ?? 0) + amount },
       },
-      [{ type: 'AU_FIXED_INCOME_EARNINGS_TAX', amount, residency }]
+      [{ type: 'AU_FIXED_INCOME_EARNINGS_TAX', amount, residency, stateKey: key }]
     );
   }
 }

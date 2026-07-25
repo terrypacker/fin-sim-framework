@@ -113,19 +113,32 @@ test('YOD-2: computeAuTaxPerPerson files a final return for a deceased income-ho
 // ── YOD-3 ─────────────────────────────────────────────────────────────────────
 
 test('YOD-3: numResidents counts the deceased so the survivor shared-pool split is unchanged', () => {
-  // Move all AU ordinary income into the *shared* pool (no per-person entries),
-  // so the only thing that varies the survivor's tax is the numResidents divisor.
-  const state = postDeathSettleState({
-    auPersonOrdinaryIncomeYTD: {},          // nothing per-person…
-    auOrdinaryIncomeYTD: 100_000,           // …all in the shared pool
-  });
-  const details = svc.computeAuTaxPerPerson(state);
+  // Design 76 P5 escalated an unattributed household scalar to a throw in dev/test.
+  // This case deliberately exercises that legacy shared-pool split — still the
+  // production fallback, and still correct in TOTAL — so it opts out of the
+  // escalation rather than being rewritten to per-person maps, which would stop it
+  // testing the thing it exists to test.
+  const _prevStrict = process.env.AU_ATTRIBUTION_STRICT;
+  process.env.AU_ATTRIBUTION_STRICT = 'off';
+  try {
 
-  // With the deceased counted (numResidents=2) the shared pool splits 50/50,
-  // so the survivor is assessed on 50_000, not the full 100_000.
-  const spouse = details.find(d => d.personKey === 'spouse');
-  assert.ok(spouse, 'survivor should have a return');
-  assert.strictEqual(details.length, 2, 'deceased must still be counted as a resident-of-the-year');
+    // Move all AU ordinary income into the *shared* pool (no per-person entries),
+    // so the only thing that varies the survivor's tax is the numResidents divisor.
+    const state = postDeathSettleState({
+      auPersonOrdinaryIncomeYTD: {},          // nothing per-person…
+      auOrdinaryIncomeYTD: 100_000,           // …all in the shared pool
+    });
+    const details = svc.computeAuTaxPerPerson(state);
+
+    // With the deceased counted (numResidents=2) the shared pool splits 50/50,
+    // so the survivor is assessed on 50_000, not the full 100_000.
+    const spouse = details.find(d => d.personKey === 'spouse');
+    assert.ok(spouse, 'survivor should have a return');
+    assert.strictEqual(details.length, 2, 'deceased must still be counted as a resident-of-the-year');
+  } finally {
+    if (_prevStrict === undefined) delete process.env.AU_ATTRIBUTION_STRICT;
+    else process.env.AU_ATTRIBUTION_STRICT = _prevStrict;
+  }
 });
 
 // ── YOD-4 ─────────────────────────────────────────────────────────────────────

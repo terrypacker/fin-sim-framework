@@ -68,7 +68,10 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
       if (retDate && date < new Date(retDate)) continue;
 
       actions.push(
-        { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null },
+        // Design 76 Gap B: stamp WHOSE benefit this is. Social Security is
+        // per-recipient by definition and the two people have different
+        // entitlements, so it must never be halved across the household.
+        { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null, personKey: key },
         new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
       );
     }
