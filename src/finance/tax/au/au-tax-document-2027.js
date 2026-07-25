@@ -61,8 +61,12 @@ export class AuTaxDocument2027 extends AuTaxDocument2026 {
         ...(topUp > 0
           ? [{ label: 'CGT Minimum Tax Top-up (30%)', amount: topUp }]
           : []),
-        { label: 'Super Tax', amount: inputs.superTax },
         { label: 'Gross Tax', amount: taxDetail.grossTax },
+        // Memo, BELOW Gross Tax and outside it: Div 295 fund tax is the super fund's
+        // liability, withheld from fund assets, never assessed on the member
+        // (design 77 §5.3). Kept visible so the reader sees the whole burden — but
+        // inside the subtotal it would stop the section footing.
+        { label: 'Memo: Super Fund Tax (withheld in fund)', amount: inputs.superTax, memo: true },
       ],
     };
   }

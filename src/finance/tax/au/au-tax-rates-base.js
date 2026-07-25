@@ -40,13 +40,15 @@ const NR_WITHHOLDING_RATE = 0.15;
  *   - Progressive marginal brackets on (ordinary income + capital gains)
  *   - Medicare levy with low-income phase-in threshold
  *   - Franking credits offset ordinary tax before Medicare levy
- *   - Super tax (already a flat amount, added directly)
  *
  * Non-resident path:
  *   - Separate non-resident brackets (no tax-free threshold)
  *   - No Medicare levy, no franking credit offset
  *   - Non-resident withholding already deducted at source (added directly)
- *   - Super tax added directly
+ *
+ * Neither path includes the Div 295 superannuation FUND tax (`auSuperTaxYTD`).
+ * It is the fund's liability, withheld from fund assets when the contribution or
+ * earning accrues, and appears here only as a memo line (design 77 §5.3).
  *
  * The `year` property on each subclass refers to the financial year start
  * (e.g. year=2024 means FY 2024-25, beginning July 2024).
@@ -233,8 +235,16 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
       : 0;
 
+    // Design 77 §5.3 — `auSuperTaxYTD` is NOT part of this. Div 295 fund tax is
+    // levied on the superannuation fund, not the member: it never appears on the
+    // member's notice of assessment, and it is withheld from fund assets at accrual
+    // (SuperEarningsHandler / SuperContributionApplyReducer). Including it here made
+    // it a personal liability, debited from AU cash by AU_TAX_PAYMENT_DEBIT — paying
+    // the same tax twice, once out of the fund and once out of the member's pocket.
+    // It stays on the return as a memo line only. Same treatment as the two other
+    // withheld-at-source buckets, `auSuperDeathTaxYTD` and `neInheritanceTaxYTD`.
     const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy - frankingOffset)
-                              + auSuperTaxYTD + minTaxTopUp;
+                              + minTaxTopUp;
 
     // Split baseTax into its ordinary-income and capital-gain components for
     // display (design 57 report breakdown). AU has no separate CGT schedule of
@@ -319,8 +329,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         }
       }
 
+      // Design 77 §5.3 — super fund tax excluded (see _assessResidentPreFito).
       const netLiability = Math.max(0, a.baseTax + a.medicareLevy - a.frankingOffset - fito)
-                         + a.superTax + a.minTaxTopUp;
+                         + a.minTaxTopUp;
 
       const totalGrossIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -354,7 +365,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         fitoLimit,
         fitoDeMinimis,
         nonResidentWithholdingTax: 0,
-        grossTax:                 a.baseTax + a.medicareLevy + a.superTax + a.minTaxTopUp,
+        grossTax:                 a.baseTax + a.medicareLevy + a.minTaxTopUp,
+        // Fund-level Div 295 tax, already withheld inside super. Reported so the
+        // reader can see the whole tax burden; excluded from grossTax/netLiability
+        // because it is not the member's liability (design 77 §5.3).
+        superFundTax:             a.superTax,
         credits:                  a.frankingOffset,
         netLiability,
         effectiveRate,
@@ -371,13 +386,16 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           ...(a.minTaxTopUp > 0
             ? [{ label: `CGT Minimum Tax Top-up (${Math.round(a.minTaxRate * 100)}%)`, amount: a.minTaxTopUp }]
             : []),
-          { label: 'Super Tax',                     amount:  auSuperTaxYTD },
-          { label: 'Gross Tax',                     amount:  a.baseTax + a.medicareLevy + a.superTax + a.minTaxTopUp },
+          { label: 'Gross Tax',                     amount:  a.baseTax + a.medicareLevy + a.minTaxTopUp },
           { label: 'Franking Credits',              amount: -a.frankingOffset },
           ...(fito > 0
             ? [{ label: `Foreign Income Tax Offset${fitoDeMinimis ? ' (de-minimis)' : ''}`, amount: -fito }]
             : []),
           { label: 'Net Tax Liability',             amount:  netLiability },
+          // Memo, below the liability line and deliberately outside every subtotal
+          // above it: the fund's own Div 295 tax, already withheld from the member's
+          // super balance. Not payable by the member (design 77 §5.3).
+          { label: 'Memo: Super Fund Tax (withheld in fund)', amount: auSuperTaxYTD, memo: true },
         ],
       };
     } else {
@@ -410,7 +428,10 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         pooledIncome:       auNonResidentWithholdingYTD,         pooledTax,
       });
 
-      const grossTax                 = Math.max(0, baseTax) + auSuperTaxYTD + nonResidentWithholdingTax;
+      // Design 77 §5.3 — super fund tax excluded here too. A non-resident member's
+      // Australian fund still pays Div 295 tax on its earnings, and it is still the
+      // fund's liability, not theirs.
+      const grossTax                 = Math.max(0, baseTax) + nonResidentWithholdingTax;
       const netLiability             = grossTax;
 
       const totalGrossIncome   = totalIncome + withholdingIncome;
@@ -443,6 +464,7 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         nrWithholdingInterestTax:          interestTax,
         nrWithholdingUnfrankedDividendTax: unfrankedDivTax,
         nrWithholdingPooledTax:            pooledTax,
+        superFundTax:             auSuperTaxYTD,
         // The withholding tax lines, label + amount + flat band already paired, for
         // the document to render without re-deriving any of the three.
         nrWithholdingLines,
@@ -475,8 +497,8 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           { label: 'Total Assessable Income',                 amount:  assessableIncome },
           { label: 'Tax on Income (Non-Resident Brackets)',   amount:  baseTax },
           ...nrWithholdingLines,
-          { label: 'Super Tax',                               amount:  auSuperTaxYTD },
           { label: 'Net Tax Liability',                       amount:  netLiability },
+          { label: 'Memo: Super Fund Tax (withheld in fund)', amount:  auSuperTaxYTD, memo: true },
         ],
       };
     }

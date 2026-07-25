@@ -115,13 +115,28 @@ test('draw-down: vintages older than 10 years expire', () => {
 
 // ─── AU→US pool funding (§4.4) ───────────────────────────────────────────────
 
-test('funding: AU settle apportions the AU tax (less super) to baskets in USD', () => {
+test('funding: AU settle apportions the AU tax to baskets in USD', () => {
   const out = new AuTaxSettleApplyReducer().reduce(
     { effectiveExchangeRates: rate1, foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 50_000, auSuperTaxYTD: 2_000 },
-    { type: 'AU_TAX_SETTLE_APPLY', tax: 12_000 },   // post-FITO AU net liability (AUD)
+    { type: 'AU_TAX_SETTLE_APPLY', tax: 10_000 },   // post-FITO AU net liability (AUD)
   );
-  // auCreditable = 12,000 − 2,000 super = 10,000; all-passive share → all Passive.
+  // Design 77 §5.3 — `tax` no longer contains the Div 295 super fund tax at all
+  // (it left the member's liability), so the reducer must NOT subtract auSuperTaxYTD
+  // a second time. It is present in state here precisely to catch that: a residual
+  // `− superTax` would produce 8,000 and understate the creditable base.
   assert.equal(out.ftcCurrentPassive, 10_000);
+  assert.equal(out.ftcCurrentGeneral, 0);
+});
+
+test('funding: super fund tax is NOT creditable and never enters the §904 baskets', () => {
+  // The member had no personal AU liability at all this year — only the fund paid
+  // tax. Nothing is creditable: §901 credits the person on whom the foreign law
+  // imposes liability (Treas. Reg. §1.901-2(f)), and that is the fund's trustee.
+  const out = new AuTaxSettleApplyReducer().reduce(
+    { effectiveExchangeRates: rate1, foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 50_000, auSuperTaxYTD: 9_000 },
+    { type: 'AU_TAX_SETTLE_APPLY', tax: 0, fundTax: 9_000 },
+  );
+  assert.equal(out.ftcCurrentPassive, 0);
   assert.equal(out.ftcCurrentGeneral, 0);
 });
 

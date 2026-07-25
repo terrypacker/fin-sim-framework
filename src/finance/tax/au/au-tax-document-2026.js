@@ -21,12 +21,18 @@ import { taxYearLabel }          from '../tax-year-label.js';
  *
  * Resident sections:
  *   Income          — Ordinary income, capital gains with 50% CGT discount, assessable income
- *   Tax Computation — Income tax, Medicare levy, super tax, gross tax
+ *   Tax Computation — Income tax, Medicare levy, gross tax
  *   Credits         — Franking credits
  *
  * Non-resident sections:
  *   Income          — Ordinary income, capital gains (no discount), NR withholding income
- *   Tax Computation — Income tax (NR brackets), NR withholding tax (15%), super tax
+ *   Tax Computation — Income tax (NR brackets), NR withholding tax (15%)
+ *
+ * Both Tax Computation sections end with a `memo: true` line disclosing the Div 295
+ * superannuation FUND tax. Design 77 §5.3 took it out of Gross Tax and Net Liability
+ * — it is the fund's tax, withheld from fund assets, never assessed on the member —
+ * so it must stay out of every footing sum. `memo` is the flag that says so; the
+ * section-reconciliation tests filter on it exactly as they do on `sub`.
  */
 const CGT_SCHEDULE_THRESHOLD = 10_000;
 
@@ -125,12 +131,14 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
             // table itself (design 73 Gap 2), so a label can never name a rate the
             // computation did not use.
             ...(taxDetail.nrWithholdingLines ?? []),
-            { label: 'Super Tax',                             amount: inputs.superTax },
             // The non-resident section previously stopped short of a total, so its
             // lines had nothing to foot against (design 71 §11.4). Gross Tax is the
             // sum the summary already reports; stating it makes the section checkable
             // by the same rule as every other return.
             { label: 'Gross Tax',                             amount: taxDetail.grossTax },
+            // Memo, outside the total — the fund's Div 295 liability, not the
+            // member's (design 77 §5.3).
+            { label: 'Memo: Super Fund Tax (withheld in fund)', amount: inputs.superTax, memo: true },
           ],
         },
       ],
@@ -181,8 +189,12 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
         this._taxOnIncomeLine(taxDetail),
         ...this._taxOnIncomeSubRows(taxDetail),
         { label: 'Medicare Levy',   amount: taxDetail.medicareLevy, flat: br.medicareLevy ?? undefined },
-        { label: 'Super Tax',       amount: inputs.superTax },
         { label: 'Gross Tax',       amount: taxDetail.grossTax },
+        // Memo, BELOW Gross Tax and outside it: Div 295 fund tax is the super fund's
+        // liability, withheld from fund assets, never assessed on the member
+        // (design 77 §5.3). Kept visible so the reader sees the whole burden — but
+        // inside the subtotal it would stop the section footing.
+        { label: 'Memo: Super Fund Tax (withheld in fund)', amount: inputs.superTax, memo: true },
       ],
     };
   }

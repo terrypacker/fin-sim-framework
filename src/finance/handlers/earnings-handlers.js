@@ -13,6 +13,7 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsGrowth, computeHoldingsDividends } from '../holdings/holdings-earnings.js';
 import { getBirthDate } from '../residency-utils.js';
+import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
 
 /** Whole years of age as of asOfDate (matches the super withdrawal handlers' getAge). */
 function getAge(birthDate, asOfDate) {
@@ -546,25 +547,39 @@ export class SuperEarningsHandler extends HandlerEntry {
 
   call({ data, state, date }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const growthArgs = {
       state, stateKey,
       // data.rate is a one-off override that bypasses the effective-rate map.
       rateOverride:    data?.rate ?? null,
       fallbackRate:    this.defaultRate,
       fallbackRateKey: this.rateKey,
-    });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    };
+    const gross = computeHoldingsGrowth(growthArgs);
+    if (gross.amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+
     // Pension/retirement phase (member ≥ 60, condition-of-release proxy — same
     // gate the super withdrawal handlers use): fund earnings are tax-free (0%).
     // Accumulation phase (< 60): earnings taxed at the flat 15% super rate.
     const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
     const birthDate = getBirthDate(state, personKey);
     const age       = birthDate && date ? getAge(birthDate, date) : 0;
-    const taxRate   = age >= 60 ? 0 : undefined;
+    const taxRate   = superEarningsTaxRate(age);
+
+    // Design 77 §5.1 — the fund pays the 15% earnings tax out of FUND assets, so
+    // what reaches the member is growth NET of it. Re-running the growth with
+    // `factor: 1 - taxRate` (rather than scaling `gross` after the fact) keeps the
+    // balance increment and the per-holding transacts internally consistent: both
+    // come out of the same rounding pass, so the §4.4 invariant
+    // (Σ holdings.marketValue === balance) survives the withholding.
+    //
+    // `grossAmount` rides along so the classifier can record the tax against the
+    // base it is actually levied on. It is the accrual basis for auSuperTaxYTD;
+    // the member's cash is never touched (that was the pre-77 bug).
+    const net = taxRate > 0 ? computeHoldingsGrowth({ ...growthArgs, factor: 1 - taxRate }) : gross;
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount, stateKey, taxRate },
-      ...holdingActions,
-      new RecordMetricAction('super_earnings', amount),
+      { type: 'SUPER_EARNINGS_APPLY', amount: net.amount, grossAmount: gross.amount, stateKey, taxRate },
+      ...net.holdingActions,
+      new RecordMetricAction('super_earnings', net.amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

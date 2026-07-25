@@ -33,6 +33,7 @@ import { ServiceRegistry }          from '../../src/services/service-registry.js
 import { BaseScenario }             from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario }   from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }           from '../../src/scenarios/scenario-loader.js';
+import { SUPER_TAX_RATE }          from '../../src/finance/tax/au/super-tax-rate.js';
 
 function buildPrebuilt() {
   ServiceRegistry.resetAll();
@@ -106,7 +107,14 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   const expectedWhole = {
     rothAccount:  p.rothGrowthRate,
     iraAccount:   p.iraGrowthRate,
-    superAccount: p.superGrowthRate,
+    // Design 77 §5.1 — an accumulation-phase super account compounds NET of the 15%
+    // Div 295 fund earnings tax, because the fund pays that tax out of the member's
+    // own assets. This is the one account whose credited return is below its
+    // configured rate, and it is the point of the design: pre-77 the balance
+    // compounded gross and the tax was separately taken from the member's AU cash.
+    // The prebuilt's members are in accumulation for these three early years; once
+    // they pass 60 the rate reverts to the full `superGrowthRate` (see evt-super).
+    superAccount: p.superGrowthRate * (1 - SUPER_TAX_RATE),
   };
   // Equity sleeves of the mixed books still grow at exactly the equity rate.
   const expectedEquitySleeve = {

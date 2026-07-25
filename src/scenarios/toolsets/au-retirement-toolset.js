@@ -101,8 +101,11 @@ export const AU_RETIREMENT = {
       { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD') } },
-      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
-      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      // design 77 §5.1 — `amount` is NET of the fund's Div 295 earnings tax, `grossAmount`
+      // is the pre-tax base and `taxRate` the rate applied (0 in pension phase). All three
+      // must be declared or pickPayload drops them and the journal cannot explain the split.
+      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
       { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },

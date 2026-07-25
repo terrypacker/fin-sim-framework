@@ -271,10 +271,11 @@ test('AuTaxDocument2027 resident: Tax Computation reconciles to Gross Tax with m
   const topUp = comp.lineItems.find(li => li.label === 'CGT Minimum Tax Top-up (30%)');
   assert.ok(topUp, 'expected a CGT Minimum Tax Top-up line');
   const gross = comp.lineItems.find(li => li.label === 'Gross Tax').amount;
-  // Exclude the Gross Tax total itself and the breakdown sub-rows (which restate
-  // "Tax on Income", they are not additional amounts).
+  // Exclude the Gross Tax total itself, the breakdown sub-rows (which restate
+  // "Tax on Income", they are not additional amounts), and memo rows (design 77 §5.3
+  // — the super FUND tax, disclosed but not part of the member's liability).
   const sumOfParts = comp.lineItems
-    .filter(li => li.label !== 'Gross Tax' && !li.sub)
+    .filter(li => li.label !== 'Gross Tax' && !li.sub && !li.memo)
     .reduce((s, li) => s + li.amount, 0);
   assert.ok(Math.abs(sumOfParts - gross) < 1e-6, 'section line items must sum to Gross Tax');
 });

@@ -83,12 +83,18 @@ test('AuSavingsEarnings: scalar balance increment, input not mutated (I1)', () =
 
 // ─── AU super ─────────────────────────────────────────────────────────────────
 
-test('SuperContribution: auCash → super (+basis), synced + conserved (I3/I5)', () => {
+test('SuperContribution: auCash → super (+basis), synced + conserved net of fund tax (I3/I5)', () => {
   const state = { auSavingsAccount: acct('auSavingsAccount', 20000), superAccount: acct('superAccount', 50000, 'AUD', { contributionBasis: 50000, earningsBasis: 0 }) };
+  // Design 77 §5.2 — 6,000 leaves AU cash, the fund takes 900 (15%) of Div 295
+  // contributions tax on receipt, and 5,100 lands in the member's balance. `fee` is
+  // the helper's channel for exactly this: intended, declared leakage rather than a
+  // silent conservation break.
   const { next } = runAcct(new SuperContributionApplyReducer(makeServices()), state,
-    { type: 'SUPER_CONTRIBUTION_APPLY', amount: 6000 }, { conserve: ['auSavingsAccount', 'superAccount'], fee: 0 });
-  assert.equal(next.superAccount.balance, 56000);
-  assert.equal(next.superAccount.contributionBasis, 56000);
+    { type: 'SUPER_CONTRIBUTION_APPLY', amount: 6000 }, { conserve: ['auSavingsAccount', 'superAccount'], fee: 900 });
+  assert.equal(next.superAccount.balance, 55100);
+  // Basis takes the same net figure, so balance === contributionBasis + earningsBasis
+  // survives the withholding.
+  assert.equal(next.superAccount.contributionBasis, 55100);
 });
 
 for (const [label, Reducer, type] of [
