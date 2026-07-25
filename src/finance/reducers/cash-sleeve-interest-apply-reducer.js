@@ -54,7 +54,7 @@ export class CashSleeveInterestApplyReducer extends Reducer {
 
     if (taxMode === 'au') {
       // AU-source cash interest → AU ordinary income via the shared AU tax path.
-      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]);
+      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency, stateKey: key }]);
     }
 
     // taxMode === 'us' — US ordinary income (federal + state). When AU-resident,

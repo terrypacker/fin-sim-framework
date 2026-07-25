@@ -77,7 +77,7 @@ export class BondSleeveCouponApplyReducer extends Reducer {
 
     if (taxMode === 'au') {
       // AU-source coupon interest → AU ordinary income via the shared AU tax path.
-      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]);
+      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency, stateKey: key }]);
     }
 
     // taxMode === 'us' — route through the design-59 bond-coupon tax classification

@@ -9,7 +9,7 @@
  */
 
 import { AuTaxModule2026 } from './au-tax-module-2026.js';
-import { accumulateByOwnership } from '../../ownership-utils.js';
+import { accumulateByOwnership, resolveAttributionAsset } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
 
 /**
@@ -56,7 +56,9 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       const next = baseStock(state, action);
       if (action.residency !== 'AU') return next;   // real bucket for residents only
       const realGain = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
-      return this._recordRealGain(next, state, realGain, state.auStockAccount);
+      // Design 76 Gap C: resolve the same account the parent's gross-bucket path
+      // resolved, so the real bucket slices identically (see _recordRealGain).
+      return this._recordRealGain(next, state, realGain, resolveAttributionAsset(state, action, 'auStockAccount'));
     });
 
     const baseHouse = fns.get('AU_HOUSE_SALE_TAX');

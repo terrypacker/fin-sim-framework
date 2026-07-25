@@ -90,7 +90,7 @@ export class AuSavingsEarningsApplyReducer extends AccountServiceReducer {
       {
         [key]: { ...acct, balance: acct.balance + amount },
       },
-      [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]
+      [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency, stateKey: key }]
     );
   }
 }

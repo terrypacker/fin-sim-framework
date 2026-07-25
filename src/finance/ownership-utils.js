@@ -76,6 +76,32 @@ export function splitByOwnership(asset, amount, people) {
 }
 
 /**
+ * Resolve the account an income item should be attributed to.
+ *
+ * Attribution must follow the account that actually produced the income, not a
+ * canonical state key: a household with two accounts in the same role (design 55)
+ * has one `auSavingsAccount` and one `spouseAuSavingsAccount`, and reading the
+ * canonical key alone attributes *both* accounts' interest to the first one's owner.
+ * Emitting reducers therefore stamp `stateKey` on the tax action and this resolves it.
+ *
+ * `canonicalKey` is the pre-design-55 single-account key, kept as the fallback for
+ * legacy bare-event dispatchers and pre-stateKey saved actions. A stamped key that
+ * no longer resolves (account deleted or re-flagged mid-run) also falls back rather
+ * than returning undefined — the same absent-but-non-null trap that
+ * `resolveDestinationCashKey` was added to close on the sale path.
+ *
+ * @param {object} state        - Simulation state snapshot
+ * @param {object} action       - Tax action, optionally carrying `stateKey`
+ * @param {string} canonicalKey - Fallback state key
+ * @returns {object|null}       - The account object, or null if neither resolves
+ */
+export function resolveAttributionAsset(state, action, canonicalKey) {
+  const stamped = action?.stateKey;
+  if (stamped != null && state?.[stamped] != null) return state[stamped];
+  return state?.[canonicalKey] ?? null;
+}
+
+/**
  * Apply a per-person split to an existing per-person accumulator map.
  * Returns a new map (does not mutate the input).
  *

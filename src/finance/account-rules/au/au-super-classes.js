@@ -48,14 +48,19 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], -action.amount, null);
-    const sa = state.superAccount;
+    // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so a
+    // household with two super accounts credits — and taxes — the right member's.
+    // Falls back to the canonical key for legacy dispatchers and pre-stateKey saves.
+    // Mirrors SuperEarningsApplyReducer, which already resolves this way.
+    const key = action.stateKey ?? 'superAccount';
+    const sa = state[key];
     this.accountService.transaction(sa, action.amount, null);
     return this.newState(
       state,
       {
-        superAccount: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
+        [key]: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
       },
-      [{ type: 'SUPER_CONTRIBUTION_TAX', amount: action.amount }]
+      [{ type: 'SUPER_CONTRIBUTION_TAX', amount: action.amount, stateKey: key }]
     );
   }
 }
