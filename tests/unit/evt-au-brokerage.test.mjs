@@ -143,13 +143,43 @@ test('EVT-27: Franked dividend (non-resident) has no AU tax', () => {
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_NONRESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
+  // ITAA 1936 s128B(3)(ga)(i) excludes the franked part of a dividend from
+  // withholding tax for a foreign resident; s128D keeps it out of assessable
+  // income; ss207-20/207-70 deny the franking offset. Australia taxes nothing.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auNonResidentWithholdingYTD, 0);
   assert.strictEqual(sim.state.auFrankingCreditYTD, 0);
 });
 
-// TODO (EVT-27): US tax treatment for non-resident franked dividends is unresolved (CSV: "Ordinary Income??").
-// When clarified, add an assertion here for usOrdinaryIncomeYTD.
+// EVT-27 US leg (was a TODO — "Ordinary Income??" in the requirements CSV). The
+// uncertainty was only ever about the US side; docs/requirements.md resolves it as
+// Ordinary Income. Australia's exemption above does not reach a US citizen, who is
+// taxed on worldwide income wherever resident (IRC §61, §1). Before this was wired,
+// the reducer chained no tax action at all and the dividend was taxed by NEITHER
+// country.
+test('EVT-27: Franked dividend (non-resident) IS US ordinary income', () => {
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'US' }));
+  const before = sim.state.usOrdinaryIncomeYTD;
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_NONRESIDENT', data: { amount: 1000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  // AUD 1000 booked in USD at the prevailing rate — assert it moved by a positive
+  // amount rather than pinning a specific FX rate.
+  assert.ok(sim.state.usOrdinaryIncomeYTD > before,
+    'franked non-resident dividend must reach the US worldwide return');
+});
+
+test('EVT-27: Franked dividend (non-resident) is NIIT base and feeds the §904 passive basket', () => {
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'US' }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_NONRESIDENT', data: { amount: 1000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  // Dividends are net investment income (IRC §1411(c)(1)(A)(i)). No Australian tax
+  // is paid, so no FTC offsets it — the 3.8% surtax lands wholly unrelieved here.
+  assert.ok(sim.state.usNetInvestmentIncomeYTD > 0, 'dividend is NII for the 3.8% surtax');
+  // AU-source (sourced to the paying company's residence) ⇒ passive basket numerator.
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'AU-source dividend sizes the passive §904 limit');
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVT-28: Unfranked Dividend — AU Resident

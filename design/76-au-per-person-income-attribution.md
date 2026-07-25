@@ -4,7 +4,8 @@
 P1 landed **inert on the golden as designed** — net worth 4,810,931, cumulative deficit 4,563,500 and
 lifetime tax 1,831,460 are byte-identical before and after, and every per-person accumulator is
 unchanged, because attribution still falls through to the even split until Gap A lands in P2. Suite:
-3,964 unit (+16 new) / 910 viz green. See §4 for the per-phase record.
+3,966 unit (+18 new) / 910 viz green. See §4 for the per-phase record, and §0 for an unrelated
+taxed-by-neither-country defect fixed in passing.
 
 Australia has no joint assessment. Every individual lodges their own return, and every dollar of
 assessable income belongs to exactly one taxpayer — or, for a jointly held asset, to each owner in
@@ -36,6 +37,54 @@ Every figure in this document was taken from a live run of `scenarios/fin-sim-sc
   `computeAuTaxPerPerson` that Gap B's fix must not disturb.
 - **`design/71` (tax worksheet CSV export)** — the per-person AU return lines it exports are
   currently wrong for reasons A and C even where the total is right.
+
+---
+
+## 0. Fixed in passing — EVT-27 was taxed by neither country  ✅ DONE
+
+Surfaced while auditing which AU reducers chain a tax action, during P1. Not an attribution defect
+and not otherwise part of this document, but it lives in the files P1 touched.
+
+`AuDividendFrankedNonResidentApplyReducer` (EVT-27, a franked dividend received while a **non**-resident
+of Australia) chained **no tax action at all**. Its three siblings — franked/resident,
+unfranked/resident, unfranked/non-resident — all book `usOrdinaryIncomeYTD`. This one booked nothing
+anywhere, so a US citizen living in the US and holding ASX shares paid tax on franked dividends in
+**neither country**.
+
+The Australian half was always right and is unchanged: ITAA 1936 s128B(3)(ga)(i) excludes the franked
+part of a dividend from withholding tax for a foreign resident, s128D keeps it out of assessable
+income, and ss207-20 / 207-70 deny the franking offset to non-residents. No AU tax, no franking
+credit, and — since no foreign tax is paid — no FTC.
+
+What was missing is that Australia's exemption does not reach the United States. A US citizen is
+taxed on worldwide income wherever resident (IRC §61, §1), so the dividend is US ordinary income and
+NII for the §1411 surtax, exactly as on the other three branches. Being AU-source it also belongs in
+the §904 passive basket numerator; no foreign tax accompanies it, but the numerator sizes the
+*limitation*, not the credit, so genuinely foreign-source income raising the passive limit is §904
+working as intended. (Contrast design 73's warning, which was about *US*-source income being fed
+into a basket numerator — a different and improper thing.)
+
+This was a known, documented gap rather than a new discovery, which is why it was safe to close
+quickly:
+
+- `docs/requirements.md:63` already specifies EVT-27 as US **Ordinary Income** / AU **N** / FTC **N**
+  — and marked it ✅ even though the US half was never built.
+- `tests/unit/evt-au-brokerage.test.mjs` carried an explicit
+  `TODO (EVT-27): US tax treatment ... is unresolved (CSV: "Ordinary Income??")`. The "??" was
+  uncertainty about the *US* side only; the AU side was never in doubt. **TODO now closed.**
+
+New `AU_DIVIDEND_FRANKED_NONRESIDENT_TAX` action type + reducer fn, chained from the apply reducer
+and declared in `au-brokerage-toolset.js`. Two new tests, mutation-verified (both fail without the
+chained action; the two pre-existing EVT-27 tests still pass, confirming the AU treatment is
+untouched). **Golden unmoved** — the reference scenario has no `au-stock` account, so the entire AU
+brokerage family is dormant there; this changes any scenario holding AU shares while non-resident.
+
+**Checked and deliberately NOT changed:** `AuStockEarningsApplyReducer` (EVT-30) also chains no tax
+action, and that is correct. It books *unrealized* appreciation; its exact US sibling
+`StockEarningsApplyReducer` is identically tax-free, and `docs/requirements.md:66` specifies N/N/N.
+Neither country taxes unrealized gain — AU CGT event A1 fires on disposal, the US taxes on
+realization — and the gain is captured at sale by `AU_STOCK_WITHDRAWAL_TAX` from the FIFO basis.
+Chaining a tax action there would double-count: once as it accrues, again as capital gain at sale.
 
 ---
 
@@ -114,7 +163,7 @@ Both account→state projections drop `ownershipType`. `_accountToStatePlain` in
 `src/scenarios/toolsets/us-retirement-toolset.js:90` each carry `ownerId` but neither carries
 `ownershipType` or `owners`:
 
-```js
+```text
     role:                  account.role                  ?? null,
     ownerId:               account.ownerId               ?? null,     // ← carried
     minimumBalance:        account.minimumBalance        ?? 0,        // ← ownershipType absent

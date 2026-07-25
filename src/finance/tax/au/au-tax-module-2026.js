@@ -367,6 +367,44 @@ export class AuTaxModule2026 extends BaseTaxModule {
         };
       }],
 
+      // EVT-27: franked dividend (NON-resident) — US ordinary income, no AU tax, no FTC.
+      //
+      // Australia taxes nothing here and that is correct: ITAA 1936 s128B(3)(ga)(i)
+      // excludes the franked part of a dividend from withholding tax for a foreign
+      // resident, s128D keeps it out of assessable income, and ss207-20 / 207-70 deny
+      // the franking offset to non-residents. So no auOrdinaryIncomeYTD, no
+      // withholding bucket, and no franking credit — unlike all three sibling
+      // dividend events.
+      //
+      // But the Australian exemption says nothing about the United States. A US
+      // citizen is taxed on worldwide income wherever resident (IRC §61, §1), so the
+      // dividend is US ordinary income exactly as it is on the other three branches.
+      // This leg was specified in docs/requirements.md (EVT-27: US "Ordinary Income")
+      // but never implemented — the reducer chained no tax action at all, so a
+      // US-resident citizen holding ASX shares paid tax on franked dividends in
+      // NEITHER country. The old "Ordinary Income??" note in the requirements CSV was
+      // uncertainty about the US side; the AU side was never in doubt.
+      //
+      // NIIT: dividends are net investment income (IRC §1411(c)(1)(A)(i)), and since
+      // no Australian tax is paid there is no FTC to reduce it — this is the one
+      // dividend branch where the 3.8% surtax lands wholly unrelieved.
+      //
+      // §904: the dividend is AU-source (sourced to the paying company's residence),
+      // so it belongs in the passive basket numerator. No foreign tax accompanies it,
+      // but the numerator sizes the LIMITATION, not the credit — genuinely
+      // foreign-source income raising the passive limit is §904 working as intended.
+      // Contrast design 73's warning, which was about US-source income being fed
+      // into a basket numerator; that is a different and improper thing.
+      ['AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', (state, action) => {
+        const usd = toUSD(action.amount, 'AUD', state);
+        return {
+          ...state,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
+        };
+      }],
+
       // EVT-28: unfranked dividend (resident) — US ordinary income, AU ordinary income, FTC.
       // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', (state, action) => {
