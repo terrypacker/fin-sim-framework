@@ -1,11 +1,13 @@
 # 76 — AU per-person income attribution
 
-**Status: P1 IMPLEMENTED (Gap C); P2–P5 proposed.** §7's four questions are answered and settled.
-P1 landed **inert on the golden as designed** — net worth 4,810,931, cumulative deficit 4,563,500 and
-lifetime tax 1,831,460 are byte-identical before and after, and every per-person accumulator is
-unchanged, because attribution still falls through to the even split until Gap A lands in P2. Suite:
-3,966 unit (+18 new) / 910 viz green. See §4 for the per-phase record, and §0 for an unrelated
-taxed-by-neither-country defect fixed in passing.
+**Status: P1 + P2 IMPLEMENTED (Gaps C and A); P3–P5 proposed.** §7's four questions are answered and settled.
+P1 landed bit-for-bit inert on both scenarios, as its phase contract required. P2 then moved
+attribution onto true ownership: **+$2** on the reference scenario (where all re-attributed AU income
+is flat-rate or joint) but **+2.15%** on the design 52 default (where a solely-owned account pays
+franked dividends into progressive brackets) — the correct removal of a phantom income split, since
+Australia has no joint assessment. **That second figure disproved a claim in §5, which now carries a
+correction.** Suite: 3,973 unit (+25 new) / 910 viz green. See §4 for the per-phase record, and §0 for
+an unrelated taxed-by-neither-country defect fixed in passing.
 
 Australia has no joint assessment. Every individual lodges their own return, and every dollar of
 assessable income belongs to exactly one taxpayer — or, for a jointly held asset, to each owner in
@@ -366,6 +368,47 @@ by the tax module but never declared in `au-brokerage-toolset.js`. `_pickPayload
 correctly — the field is merely invisible to the journal and the design 71 exports. A reporting gap
 worth closing when someone is next in that file.
 
+### P2 implementation record
+
+`ownershipType` added to both `_accountToStatePlain` functions. Accounts carry no `owners[]` — that
+field lives on `RealProperty`, not `Asset` — so projecting it there would have been dead weight.
+
+While auditing the projections, the same defect turned up one level out: **real property,
+collectibles and company equity all carried `ownershipType` + `ownerId` but dropped `owners[]`** — the
+first and most precise branch of `ownershipFractions`, which outranks sole/joint. The field is
+serialized and round-tripped, and `rental-income-classes.js:264` reads it off `propState` to attribute
+rent, so design 73's rental attribution could never see anything finer than the coarse sole/joint
+split. Added to all four projections. Inert on both reference scenarios (every asset there has
+`owners: []`), but it is the same bug and P3's collectible/company-equity attribution needs it.
+
+Measured impact, by scenario — the two differ, and the difference is the point:
+
+| | reference scenario | design 52 default |
+|---|---|---|
+| lifetime tax | 4,563,500 → 4,563,517 deficit; tax **+$2** | 700,352 → 715,426 (**+2.15%**) |
+| why | all re-attributed income is flat-rate or joint | `auStockAccount` is solely owned and pays franked dividends into progressive brackets |
+
+The design 52 lock was re-pinned (698,420 → 715,426; net worth 12,273,473 → 12,268,463) with the full
+derivation in the test comment. **This contradicted §5's original claim and that section now carries a
+correction** — see the callout there.
+
+One hypothesis checked and disproved rather than assumed: `frankingOffset = Math.min(credit, baseTax)`
+treats franking credits as non-refundable, so concentrating them on one owner *could* have wasted them
+and manufactured the rise artificially. Measured, the cap binds **less** after P2 (7,148 → 4,137),
+because credits now land on the high-income owner who can absorb them instead of half-wasting against
+the low-income spouse; with a refundable offset P2's delta would be *larger* (+18,085 vs +15,074). The
+rise is the income-splitting removal, not an artifact. Separately: resident franking credits have been
+refundable since the 2000 Ralph reforms (ITAA 1997 Div 67), so that cap is a genuine fidelity gap worth
+~4,137 lifetime here — noted, out of scope for an attribution change.
+
+Tests: `tests/unit/design-76-ownership-projection.test.mjs`, 7 cases, all resolving ownership **out of
+`sim.state`** rather than off the `Asset` instance — the `Asset` always had `ownershipType`, and
+asserting against it is precisely the blind spot that let this live. Includes the §6 sole-ownership
+regression guard, a joint-account control, an unresolvable-owner fallback, and an end-to-end
+unequal-super-balance assertion (the originally reported symptom). **Mutation-verified** — 5 of 7 fail
+against the pre-P2 projections; the 2 that pass are the joint split and the unresolved-owner fallback,
+both correct before and after.
+
 P5 is the one that makes this stick. As long as the silent even-split fallback exists, the next
 income type added will quietly acquire the same bug. Turning it into a loud failure is what
 converts "migrated" from an assertion into something the suite can check.
@@ -382,12 +425,33 @@ visibly corrects super tax from 1,937/1,937 to 504/3,371 — moves lifetime taxe
 
 So the headline totals will *not* validate P1 and P2. Only the progressive machinery is
 split-sensitive: the resident marginal brackets, the tax-free threshold, the Medicare levy, the CGT
-discount, and design 57's 30% CGT minimum tax. All of those act on `auOrdinaryIncomeYTD` and
-`auCapitalGainsYTD` — Gap B's fields. That is both why P3 carries the entire measurable value and
-why P1/P2 need per-person assertions rather than golden locks to be tested at all.
+discount, and design 57's 30% CGT minimum tax. That is why P1/P2 need per-person assertions rather
+than golden locks to be tested at all.
 
-Corollary for review: **a P1 or P2 change that moves the lifetime total significantly is a
-regression, not a success.** Only P3 should move it.
+> ### ⚠️ Correction (written during P2 — the original claim here was wrong)
+>
+> This section first concluded: *"a P1 or P2 change that moves the lifetime total significantly is a
+> regression, not a success. Only P3 should move it."* **That is false, and P2 disproved it.**
+>
+> The error was generalising from one scenario. On the *reference* scenario
+> (`fin-sim-scenarios.json`) every AU-taxed dollar that P2 re-attributes is either flat-rate (super
+> at 15%, NR withholding at the treaty caps) or genuinely joint (rent from a jointly-owned house), so
+> P2 moved it by **+$2** — and the flat-tax-invariance reasoning above held perfectly.
+>
+> But the split-sensitive machinery does **not** only act on Gap B's fields. `auPersonFrankingCreditYTD`
+> and the per-person ordinary/gains maps already feed the progressive brackets today. On the design 52
+> default scenario — where `auStockAccount` is *solely* owned and pays franked dividends into
+> progressive brackets — P2 moved lifetime tax **+2.15%** (700,352 → 715,426), because franking
+> credits stopped being halved onto a spouse who never owned the shares (4,517/4,517 → 9,035/0).
+>
+> That rise is correct: Australia has no joint assessment and no income splitting. The original claim
+> would have led a reviewer to read a genuine correction as a regression.
+>
+> **The rule that actually holds:** a phase moves the total exactly insofar as it re-attributes
+> *progressively-taxed* income in a scenario where ownership is *unequal*. Judge each phase against
+> that, not against a blanket "P1/P2 must be inert." P1 remains inert by construction — it changes
+> which account is read, not how income is split — and was measured bit-for-bit inert on both
+> scenarios.
 
 Note also that on the reference scenario the extra tax from the 100/0 probe was absorbed by the
 existing deficit — net worth stayed at 4,810,931 in both runs because the scenario already goes

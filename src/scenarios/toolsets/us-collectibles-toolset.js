@@ -128,6 +128,8 @@ function _collectibleToStatePlain(col) {
     plannedSaleYear:     col.plannedSaleYear  ?? null,
     ownershipType:       col.ownershipType    ?? 'sole',
     ownerId:             col.ownerId          ?? null,
+    // Design 76 Gap A — owners[] outranks sole/joint; needed by P3's gain attribution.
+    owners:              col.owners           ?? [],
     country:             col.country          ?? 'US',
     appreciationSchedule: col.appreciationSchedule ?? null,
     // AU CGT reform (design 57 Part 2, Item C): bullion marker + AU basis/level,

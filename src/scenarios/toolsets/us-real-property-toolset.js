@@ -221,6 +221,8 @@ function _propertyToStatePlain(prop) {
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',
     ownerId:             prop.ownerId            ?? null,
+    // Design 76 Gap A — see the AU sibling; owners[] outranks sole/joint.
+    owners:              prop.owners             ?? [],
     country:             prop.country            ?? 'US',
     // Tag the FX currency so net-worth / net-liquidity / spending guardrails
     // convert a non-USD property instead of counting it 1:1 as USD.

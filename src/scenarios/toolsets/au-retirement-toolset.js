@@ -696,6 +696,12 @@ function _accountToStatePlain(account) {
     currency:              account.currency              ?? null,
     role:                  account.role                  ?? null,
     ownerId:               account.ownerId               ?? null,
+    // Design 76 Gap A: ownershipType MUST be projected alongside ownerId.
+    // `ownershipFractions` resolves owners[] → sole+ownerId → even split, so a
+    // missing ownershipType silently disqualifies the `sole` branch and sends
+    // every per-person attribution to the even split — which is what made all
+    // the accumulateByOwnership wiring from designs 52/55/73 inert.
+    ownershipType:         account.ownershipType         ?? 'sole',
     minimumBalance:        account.minimumBalance        ?? 0,
     drawdownPriority:      account.drawdownPriority      ?? null,
     allowsEarlyWithdrawal: account.allowsEarlyWithdrawal ?? false,

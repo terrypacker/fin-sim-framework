@@ -157,8 +157,44 @@ function runDefaultIntlRetirement() {
 // (Rev. Proc. 2025-32) replaced the "inflate the 2025 brackets" fallback: the
 // OBBBA schedule's wider bands + $32,200 MFJ standard deduction cut the US
 // liability slightly. Downward, but ~1%, not the six-figure ftcYTD swing.
-const EXPECTED_LIFETIME_TAX = 698_420;
-const EXPECTED_NET_WORTH     = 12_273_473;
+// Design 76 §0 + P2 (AU per-person attribution) — an UPWARD tax move in two parts,
+// measured separately against 698,429 at the pre-76 baseline (34dc682):
+//
+//   §0 EVT-27, +0.28% (698,429 → 700,352). A franked dividend received while a
+//   NON-resident of Australia chained no tax action at all, so it was taxed by
+//   neither country. Australia is right to exempt it (ITAA 1936 s128B(3)(ga)), but a
+//   US citizen is taxed on worldwide income, so it now reaches the US return.
+//
+//   P2 Gap A, +2.15% (700,352 → 715,426). `ownershipType` was dropped by
+//   `_accountToStatePlain` on the way into runtime state, so `ownershipFractions`
+//   could never take its `sole` branch and EVERY per-person attribution fell through
+//   to an even split. The default scenario's `auStockAccount` is solely owned by
+//   `primary`, so its franked dividends and franking credits were being halved onto
+//   the spouse: `auPersonFrankingCreditYTD` read 4,517/4,517 and now reads 9,035/0.
+//
+// The rise is the correct removal of a phantom income split. Australia has no joint
+// assessment and no income splitting — one spouse's investment income cannot be
+// parked on the other to use their tax-free threshold and lower brackets.
+//
+// Checked, because the direction could also be explained by a modelling artifact:
+// `frankingOffset = Math.min(credit, baseTax)` treats franking credits as
+// NON-refundable, so concentrating them on one person could in principle waste them.
+// Measured, it goes the other way — the cap costs 7,148 before P2 and only 4,137
+// after, because the credits now land on the high-income owner who can absorb them
+// instead of half-wasting against the low-income spouse. With a refundable offset the
+// P2 delta would be LARGER (+18,085 rather than +15,074), so the cap understates this
+// move rather than manufacturing it.
+//
+// P1 (design 76 Gap C, stateKey threading) was measured at exactly 698,429 — bit-for-
+// bit inert, as its phase contract required.
+//
+// FOLLOW-UP (not design 76): resident franking credits have been refundable since the
+// 2000 Ralph reforms (ITAA 1997 Div 67), so the Math.min cap is a real fidelity gap
+// worth ~4,137 lifetime here. Out of scope for an attribution change.
+//
+// A move back DOWN toward ~698k would mean ownership attribution has gone inert again.
+const EXPECTED_LIFETIME_TAX = 715_426;
+const EXPECTED_NET_WORTH     = 12_268_463;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {
