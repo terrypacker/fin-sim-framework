@@ -30,7 +30,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import { diffStates, MutationTracker, deepClone } from "./state-utils.js";
+import { diffStates, MutationTracker, deepClone, snapshotForDiff } from "./state-utils.js";
 import { buildExecutionId } from "./execution-utils.js";
 import { ExecutionGraph } from "./execution-graph.js";
 import { GraphRecorder } from "./graph-recorder.js";
@@ -799,14 +799,22 @@ export class Simulation {
       }
       this.control.resuming = false;
 
-      // Use MutationTracker for FieldReducer/AccountTransactionReducer (avoids structuredClone).
-      // Fall back to clone for other reducer types (account-rules, plain fns) that mutate directly.
+      // Use MutationTracker for FieldReducer/AccountTransactionReducer (records
+      // writes as they happen — no snapshot at all). Every other reducer type
+      // (account-rules, plain fns) is diffed against a before-snapshot instead.
+      //
+      // That snapshot is `snapshotForDiff`, a two-level copy, NOT a deep clone:
+      // it exists only to be the left-hand side of the diffStates call below, and
+      // two levels provably captures every in-place write these reducers make
+      // (design 78 §5.5 — see the note on snapshotForDiff, and the guard script
+      // scripts/dev/diff-mutation-tracker.mjs). diffStates remains the producer of
+      // stateDelta, so journal output is unchanged.
       const r = reducerWrapper.reducer;
       const useTracker = !this.silent && (
         r instanceof FieldReducer || r instanceof AccountTransactionReducer
       );
       if (useTracker) MutationTracker.begin();
-      const prevState = (!this.silent && !useTracker) ? deepClone(this.state) : null;
+      const prevState = (!this.silent && !useTracker) ? snapshotForDiff(this.state) : null;
       const reducerExecId = this._makeExecutionId(reducerWrapper.reducer?.id ?? null, actionExecId);
 
       let reducerNodeId = null;

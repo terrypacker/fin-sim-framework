@@ -1,13 +1,13 @@
 # 78 — Simulation performance: telemetry cost and history-proportional work
 
-**Status: Phases 0, 1 and 3 COMPLETE (implemented + green, 4,028 unit / 910 viz, on
-`wip/sim-performance`). Phase 2 is DESIGNED, not implemented.**
+**Status: ALL PHASES COMPLETE (implemented + green, 4,030 unit / 915 viz, on
+`wip/sim-performance`).**
 
 | Phase | | Result |
 |---|---|---|
 | 0 | engine hot paths | step loop 9,540ms → 3,759ms (**2.5×**) |
 | 1 | telemetry contract | `npm run scenario --fast` 3.90s → 0.46s (**8.5×** wall); MC 14.4s → 11.6s |
-| 2 | MutationTracker coverage | designed — est. 1.5–2s of the remaining 3.76s in `full` |
+| 2 | cheaper diff snapshot | `full` run 4,497ms → 2,899ms (**1.55×**); journal bit-identical |
 | 3 | UI playback | playback ~20.3s → ~9.3s (**2.2×**); timeline 70% of wall → ~1.5% |
 
 Cumulative for the batch tooling: **10.9s → 0.46s, ~24×.**
@@ -46,8 +46,8 @@ Three independent instances of the same shape, all measured:
 | Instance | Per-step work | Grows with | Status |
 |---|---|---|---|
 | `BaseService.getAll()` scans the whole `Graph` | O(all nodes) | execution-graph nodes | **fixed** (Phase 0) |
-| Untracked reducers deep-clone + diff whole state | O(state) × 12,976 | reducer count | Phase 2 |
-| `TimelinePresenter` re-renders the whole journal per playback frame | O(journal) × 100 | journal entries | Phase 3 |
+| Untracked reducers deep-clone + diff whole state | O(state) × 12,976 | reducer count | **fixed** (Phase 2) |
+| `TimelinePresenter` re-renders the whole journal per playback frame | O(journal) × 100 | journal entries | **fixed** (Phase 3) |
 
 ## 2. Evidence
 
@@ -237,7 +237,7 @@ not what `SimulationHistory` can do.
 
 ---
 
-## 5. Phase 2 — MutationTracker coverage
+## 5. Phase 2 — the diff snapshot (MutationTracker coverage, rejected)
 
 ### 5.1 What the clone is for
 
@@ -279,47 +279,91 @@ cash/transaction reducers:
 `UsTaxPaymentDebit` (8), `StateTaxPaymentDebit` (2), `UsHouseSaleApply` (1),
 `CompanySaleApply` (1), `ChangeResidencyApply` (1).
 
-### 5.3 The approach
+### 5.3 The approach the harness rejected
 
-They share a seam. Every one of those 15 debits or credits an account, and does it through
-`AccountService.transaction()` — which is precisely the seam `AccountTransactionReducer`
-already uses to feed `MutationTracker`. Recording from inside `transaction()` rather than
-from the reducer subclass covers all 15 at one site, and makes the coverage rule
-*structural* ("mutations go through the seam") instead of *nominal* ("your class extends the
-right base").
+The plan above was to record from inside `AccountService.transaction()` — the seam all 15
+in-place mutators share — then flip `useTracker` from an `instanceof` test to "did the
+tracker see everything?".
 
-Sequencing:
+Building the differential harness first (§5.4) is what killed it. Its verbose output shows
+what the untracked reducers actually miss, and it is **not** account balances:
 
-1. Record from inside `transaction()`; verify the 15 classes go quiet as in-place mutators
-   under the Phase 2 probe.
-2. Flip the `useTracker` predicate from an `instanceof` test to "did the tracker observe
-   anything, and did nothing else change?" — with a `deepClone` fallback retained for any
-   reducer that still mutates outside the seam.
-3. Only then remove the clone for the reducers proven covered.
+```
+DynamicTaxReducer               1670x missed:usOrdinaryIncomeYTD
+                                1124x missed:auPersonOrdinaryIncomeYTD.spouse
+                                1119x missed:usNetInvestmentIncomeYTD
+AccumulateConsumptionReducer     528x missed:cumulativeConsumption
+CashSleeveInterestApplyReducer   680x missed:usOrdinaryIncomeYTD
+```
 
-The 12.3% no-op case falls out for free: `MutationTracker.flush()` already returns `null`
-when nothing was recorded.
+These are **plain state fields written directly**, not account mutations. `transaction()`
+covers `<account>.balance` and `.holdings` and nothing else. To make a reducer fully tracked,
+*every* write it makes must pass a recording seam — so this was never 15 reducers and one
+seam, it was ~58 reducers and their several-dozen direct field writes, each an opportunity to
+introduce exactly the silent under-footing §5.4 warns about.
 
-### 5.4 The compatibility argument (this is the risk)
+That is a bad trade for ~1.5s. Rejected.
 
-**Phase 2 changes journal fidelity, not just speed.** `diffStates` produces
-`{field, before, after, delta}` for every leaf that differs, derived structurally.
-`MutationTracker` produces the same shape, but from what `record()` was *told*. These agree
-only if the seam records everything the diff would have found.
+### 5.5 What was implemented instead: a cheaper snapshot, same diff
 
-`Journal.stateDelta` is consumed by the design 16 drill reports and by `npm run crossfoot`,
-which foots multi-year tax exports. A reducer whose writes are partially recorded produces a
-journal that still *looks* well-formed and quietly under-foots — the exact failure mode the
-`startOffset` and CG-report bugs had.
+The clone exists only to be the left-hand side of `diffStates`. It is never published, never
+retained, never read as data. So the question is not "can we avoid diffing?" but **"how much
+of state does the snapshot actually have to preserve?"**
 
-So Phase 2 is gated on a **differential test**: run the scenario with both strategies active
-simultaneously and assert `MutationTracker.flush()` equals `diffStates(prevState, state)`
-entry-for-entry, for every untracked reducer, across a full run. That harness is the
-deliverable of step 1 — not step 3. `JOURNAL_STRICT` freezing already proves the weaker
-property (nobody mutates *recorded* leaves); this proves the stronger one.
+Reducers change state two ways. Copy-on-write leaves the old object untouched, so holding its
+reference suffices. In-place writes need a real copy — but every in-place write in the
+codebase lands **one level down**, on an account field, via `transaction()`. That is the same
+finding as §5.2's "15 in-place mutators", read structurally instead of nominally.
 
-Expected saving: 12,976 clones **and** 12,976 diff walks — the largest remaining item in
-`full` mode, worth roughly 1.5–2s of the current 3.76s.
+So a **two-level copy** — new top-level object, plus a shallow copy of each top-level value —
+should be sufficient. The harness settles it rather than arguing it:
+
+| Snapshot strategy | Untracked runs producing the same diff as `deepClone` | Blocking reducers |
+|---|---|---|
+| shallow `{ ...state }` | 10,186 / 12,976 (78.5%) | 15 |
+| **two-level copy** | **12,976 / 12,976 (100%)** | **0** |
+
+Implemented as `snapshotForDiff` in `state-utils.js`, used for `prevState` on the untracked
+path. **`diffStates` remains the producer of `stateDelta`**, so this is a pure
+snapshot-strategy change with no journal-fidelity question at all — which is why it sidesteps
+the entire §5.4 risk. Zero domain code changed; no reducer, and none of the 105
+`transaction()` call sites, was touched.
+
+Cost per untracked reducer, measured on real mid-run state:
+
+| | deepClone path | snapshotForDiff path |
+|---|---|---|
+| snapshot | 35.4µs | 10.0µs |
+| `diffStates` | 67.0µs | 41.0µs (level-2 reference fast-path) |
+| **combined** | **102.3µs** | **51.0µs (2.0×)** |
+
+### 5.6 Verification
+
+- **Journal bit-identical.** Dumped every one of the 28,464 entries with its full
+  `stateDelta` before and after; `cmp` reports no difference. This is the strongest possible
+  statement of the compatibility argument §5.4 asked for, and it is stronger than the
+  entry-for-entry tracker comparison originally proposed.
+- `npm run crossfoot` — all 50 linked lines foot; tax worksheet footing checks pass.
+- All four telemetry levels still agree at netWorth 4,810,931.
+- 4,030 unit + 915 viz green.
+
+**Result: `full`-telemetry run 4,497ms → 2,899ms (1.55×).**
+
+### 5.7 The invariant this rests on, and its guard
+
+Two levels is an **empirical** property of today's reducers, not a structural guarantee. A
+reducer that mutates three levels down in place (`state.a.b.c = …`) would produce an
+incomplete diff — and the journal would still look well-formed while under-reporting, which
+is precisely the failure mode §5.4 exists to prevent.
+
+Two guards, because this cannot be left to inspection:
+
+- `tests/unit/snapshot-for-diff.test.mjs` (SNAP-1) runs a scenario with **both** snapshot
+  strategies live and asserts the diffs match field for field. Mutation-verified: degrading
+  `snapshotForDiff` to a one-level copy fails it.
+- `node scripts/dev/diff-mutation-tracker.mjs <scenario>` is the same check over a full
+  44-year run, and additionally reports which reducers `MutationTracker` could take over if
+  that path is ever revisited.
 
 ---
 
@@ -445,14 +489,18 @@ Locked:
 
 1. **Silent suppresses observation, never computation** (§4.2). Derived metrics always run.
 2. **Telemetry becomes a named level, not three booleans** (§4.3).
-3. **Phase 2 is gated on a differential test** proving tracker output equals diff output,
-   written before any clone is removed (§5.4).
+3. **Phase 2 is gated on a differential test** written before any clone is removed (§5.4).
+   Held — and the harness earned its keep by rejecting the plan it was built to validate.
 4. **Phase 0's `deepClone` accepts two documented divergences** from `structuredClone`
    (cycles, functions) as impossible-by-construction in journalled state (§3.2).
-
-5. **MC drops full history snapshots for a sampler** (§4.5) — was open, now closed by the
-   two verifications recorded there. The optimizer keeps snapshots: `rollToSnapshot` is the
-   MPC seam and genuinely needs them, so it sits at the `metrics` level.
+5. **MC drops full history snapshots for a sampler** (§4.5) — closed by the two
+   verifications recorded there. The optimizer keeps snapshots: `rollToSnapshot` is the MPC
+   seam and genuinely needs them, so it sits at the `metrics` level.
+6. **Extending MutationTracker coverage is REJECTED** (§5.3). It is ~58 reducers' direct
+   field writes, not 15 reducers and one seam, and every one is a chance to under-foot the
+   journal. `snapshotForDiff` (§5.5) gets most of the win by changing no domain code at all.
+7. **`snapshotForDiff` is two levels deep, and that is an empirical bound** (§5.7), held by
+   SNAP-1 and the harness script rather than by inspection.
 
 Open:
 
