@@ -1,14 +1,14 @@
 # 78 — Simulation performance: telemetry cost and history-proportional work
 
-**Status: Phases 0 and 1 COMPLETE (implemented + green, 4,023 unit / 910 viz, on
-`wip/sim-performance`). Phases 2 and 3 are DESIGNED, not implemented.**
+**Status: Phases 0, 1 and 3 COMPLETE (implemented + green, 4,028 unit / 910 viz, on
+`wip/sim-performance`). Phase 2 is DESIGNED, not implemented.**
 
 | Phase | | Result |
 |---|---|---|
 | 0 | engine hot paths | step loop 9,540ms → 3,759ms (**2.5×**) |
 | 1 | telemetry contract | `npm run scenario --fast` 3.90s → 0.46s (**8.5×** wall); MC 14.4s → 11.6s |
 | 2 | MutationTracker coverage | designed — est. 1.5–2s of the remaining 3.76s in `full` |
-| 3 | UI playback | designed — `TimelinePresenter` is 70% of playback wall time |
+| 3 | UI playback | playback ~20.3s → ~9.3s (**2.2×**); timeline 70% of wall → ~1.5% |
 
 Cumulative for the batch tooling: **10.9s → 0.46s, ~24×.**
 
@@ -356,16 +356,74 @@ frames it runs `_render()`, which makes **five full passes over a journal that g
 `allOptions()`, `dateBounds()`, `causalGroups()` — and then re-renders the DOM. 142ms per
 frame at the end of the run.
 
-Fixes, cheapest first:
+### 6.1 What was actually slow
 
-1. **Throttle the timeline during playback** like every other view. Mechanical, and it is
-   simply an omission — the timeline should have been in that list.
-2. **Stop double-computing `groups()`** — `update()` computes it to find the latest date key,
-   then `_render()` computes it again.
-3. **Make the scans incremental.** `dateBounds` and `allOptions` are running maxima and
-   running distinct-sets; both can be maintained as entries are appended instead of rebuilt
-   from scratch. This is the real fix — (1) reduces how often the O(journal) work happens,
-   but only (3) stops it being O(journal).
+Benchmarking the controller against a real 28,464-entry journal redirected the plan. The
+static read above blamed the five scans; the numbers blamed something else:
+
+| Controller call | Before | After |
+|---|---|---|
+| `groups()` | **155.9ms** — of which **87% was `sum()`** | 30.0ms |
+| `causalGroups()` | 20.5ms | 31.8ms |
+| `dateBounds()` | 4.3ms | 7.2ms |
+| `allOptions()` | 0.7ms | 1.3ms |
+| `_render()` total | 181.4ms | 70.3ms |
+| per playback frame (`_render` + `update`'s second `groups()`) | **337.3ms** | 70.3ms |
+
+`sum()` formats an action's amount for display, and `fmtNative` built a
+**`new Intl.NumberFormat` per call**. Constructing an `Intl.NumberFormat` is far more
+expensive than using one, and `groups()` called it for every journal entry. That single
+line was 135ms of the 142ms-per-frame figure.
+
+Worse, it was formatting ~28,000 values to display about twenty: the view is
+**virtualized**, and `sum` is read only by `_renderFlatAction`, for visible rows only.
+
+### 6.2 The fixes
+
+1. **Cache the `Intl.NumberFormat` per currency code.** A handful of codes exist in a run.
+2. **Make `sum` lazy** — a prototype getter on a small `TimelineItem` class, memoised, so it
+   is computed when a row is actually painted. Transparent to the view and its tests, which
+   destructure `{ entry, idx, sum, taxDoc }` exactly as before.
+3. **Stop double-computing `groups()`.** `update()` built the entire grouped map to read one
+   string — the latest date key — then `_render()` built it again. New
+   `TimelineController.latestDateKey()` scans backward and stops at the first match.
+4. **Throttle the timeline during playback** like every other view. `TimelinePresenter` gains
+   `setRenderThrottle`, and the animator drives it. Only the playback path (`update()`) is
+   throttled; interactive renders stay synchronous. `setRenderThrottle(0)` also **flushes** a
+   pending render, so stopping playback never leaves a stale final frame.
+
+Item 3 of the original plan — making `dateBounds`/`allOptions` incremental — was **dropped
+as unnecessary**. Together they are ~8ms of a 70ms render, and throttling cut renders from
+100 per playback to under a dozen, so the whole remaining scan cost is well under 100ms per
+run. Making them incremental would add mutable index state to the controller for no
+measurable gain.
+
+### 6.3 Result
+
+Measured in the live workbench, warm page, three consecutive playbacks:
+
+| | Old | New |
+|---|---|---|
+| Playback wall, play → end | 20.09s / 20.41s | 9.55s / 8.04s / 10.43s |
+| `TimelinePresenter` total | 14,208ms | 33–162ms |
+| Timeline renders per playback | 100 | 2–10 |
+| Timeline share of wall | **70%** | **~1.5%** |
+
+**Playback ~20.3s → ~9.3s, about 2.2×.**
+
+A measurement caveat worth recording: the first playback after a page reload is
+**cold-JIT** and runs roughly twice as slow as subsequent ones. An early comparison here
+was confounded by exactly that — old numbers came from a warm page, new from a cold reload,
+which made the engine look 3× slower than it was. Compare warm to warm.
+
+### 6.4 What is left in the UI
+
+The simulation is now ~85% of playback wall (7.7–8.0s of ~9.3s), and in-browser `stepTo` is
+still far slower than the same run headless (3.76s) because of the **16 bus subscribers**
+doing per-message work — 151,210 publishes per run. That, not the timeline, is the next UI
+target. Note a one-shot `stepTo` to the end in the browser costs ~21s, *more than the whole
+100-frame playback*, because outside playback the subscribers are unthrottled and render
+per message.
 
 ---
 
