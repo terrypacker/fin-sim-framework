@@ -35,7 +35,7 @@ import { UsAccountModule2026 } from './finance/account-rules/us/us-account-modul
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, BondCouponApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from './finance/account-rules/us/us-brokerage-classes.js';
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from './finance/account-rules/us/us-collectible-classes.js';
 import { getUsEarlyWithdrawalRules } from './finance/account-rules/us/us-early-withdrawal-rules.js';
-import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
+import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, resolveBonusEarner, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
 import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
@@ -171,7 +171,7 @@ import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
 import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulated-annealing-solver.js';
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
-import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
+import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
 import { isParamVisible, visibleWhenControllers, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
@@ -243,6 +243,7 @@ import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from './finance/tax/au/au-tax-rates-2027.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
+import { SUPER_TAX_RATE, superEarningsTaxRate } from './finance/tax/au/super-tax-rate.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
@@ -626,6 +627,7 @@ export const Finance = {
   WagesIncomeHandler,
   WagesWithheldHandler,
   SeIncomeUsHandler,
+  resolveBonusEarner,
   BonusHandler,
   CompanySaleHandler,
   auMainResidenceExemptFraction,
@@ -938,6 +940,8 @@ export const Finance = {
   EvalLedger,
   ownershipFractions,
   splitByOwnership,
+  resolveAttributionAsset,
+  resolveAttributionFractions,
   accumulateByOwnership,
   isParamVisible,
   visibleWhenControllers,
@@ -1041,6 +1045,8 @@ export const Finance = {
   AuTaxRates2026,
   AuTaxRates2027,
   AuTaxRatesBase,
+  SUPER_TAX_RATE,
+  superEarningsTaxRate,
   BaseTaxDocumentModule,
   BaseTaxModule,
   BaseTaxRatesModule,
