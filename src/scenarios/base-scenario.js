@@ -243,7 +243,18 @@ export class BaseScenario extends SimGraphNode {
    *   this every MC iteration ran at seed 1 and drew the identical stochastic path,
    *   silently collapsing sequence-of-returns risk to a single ordering.
    */
-  buildSim({ seed = 1 } = {}) {
+  /**
+   * @param {object} [o]
+   * @param {number} [o.seed=1]
+   * @param {'full'|'journal'|'metrics'|'off'} [o.telemetry='full'] Observation
+   *   cost of the run — see TELEMETRY_LEVELS (design 78 §4.3). Batch callers
+   *   (Monte Carlo, optimizer, scripts/) should ask for the level they need
+   *   here rather than poking sim.silent after the fact.
+   * @param {function} [o.sampler] Optional (state, date) => record, called at the
+   *   history-snapshot cadence. Lets a batch caller collect a time series without
+   *   paying for full-state snapshots; read it back off `sim.samples`.
+   */
+  buildSim({ seed = 1, telemetry = 'full', sampler = null } = {}) {
     const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
     const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
 
@@ -268,7 +279,7 @@ export class BaseScenario extends SimGraphNode {
       graph,
       seed,
       initialState: resolved,
-      opts: { derivedMetrics },
+      opts: { derivedMetrics, telemetry, sampler },
     });
 
     simulationRegistry.register('primary', sim);

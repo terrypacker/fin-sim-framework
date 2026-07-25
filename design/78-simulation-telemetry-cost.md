@@ -1,7 +1,16 @@
 # 78 — Simulation performance: telemetry cost and history-proportional work
 
-**Status: Phase 0 COMPLETE (implemented + green, 4,023 unit / 910 viz — commit `91ca969` on
-`wip/sim-performance`). Phases 1, 2 and 3 are DESIGNED, not implemented.**
+**Status: Phases 0 and 1 COMPLETE (implemented + green, 4,023 unit / 910 viz, on
+`wip/sim-performance`). Phases 2 and 3 are DESIGNED, not implemented.**
+
+| Phase | | Result |
+|---|---|---|
+| 0 | engine hot paths | step loop 9,540ms → 3,759ms (**2.5×**) |
+| 1 | telemetry contract | `npm run scenario --fast` 3.90s → 0.46s (**8.5×** wall); MC 14.4s → 11.6s |
+| 2 | MutationTracker coverage | designed — est. 1.5–2s of the remaining 3.76s in `full` |
+| 3 | UI playback | designed — `TimelinePresenter` is 70% of playback wall time |
+
+Cumulative for the batch tooling: **10.9s → 0.46s, ~24×.**
 
 The simulation got slower as toolsets, events, handlers and reducers were added. The natural
 reading is "more work per period, so it costs more". Profiling says otherwise. **The
@@ -73,10 +82,14 @@ today:
 
 | Configuration | Set by | Time | Notes |
 |---|---|---|---|
-| everything on | `scripts/lib/run.mjs` | 3,779ms | ← after Phase 0; nothing disabled |
-| `silent` | `optimization-problem.js:403` | 494ms | still writes 28,464 journal entries it never reads |
-| `silent` + journal off | `intl-retirement-mc-runner.js:267` | 441ms | still takes 1,803 full-state clones |
-| + snapshots off | — | **298ms** | the floor: this is the actual financial math |
+| everything on | `scripts/lib/run.mjs` | 3,779ms | nothing disabled — the unclaimed win |
+| `silent` + journal off | `optimization-problem.js:403-404`, `intl-retirement-mc-runner.js:267-268` | ~530ms | still takes 1,803 full-state clones for history |
+| + snapshots off | — | **~370ms** | the floor: this is the actual financial math |
+
+Both batch callers already suppress the bus and the journal. Neither can suppress
+history snapshots, because both read them — MC for its yearly series (§4.5), the
+optimizer for the MPC snapshot seam (`rollToSnapshot`). So the 1,803 full-state
+clones are the entire remaining batch overhead.
 
 ## 3. Phase 0 — landed
 
@@ -157,9 +170,9 @@ both set it. But it was never given a contract, so three things went wrong indep
 2. **Callers poke the flag after construction.** Every call site does
    `sim.silent = true` *after* `buildSim()`, which works only because nothing runs in
    between, and means `BaseScenario.buildSim()` cannot forward it.
-3. **The three switches are set in inconsistent combinations.** `silent`,
-   `journal.enabled` and `history.enableSnapshots` are independent booleans. The optimizer
-   sets only the first, so it writes and retains 28,464 journal entries it never reads.
+3. **The three switches are independent booleans** — `silent`, `journal.enabled`,
+   `history.enableSnapshots` — set individually at each call site with no name for the
+   combination being asked for, and no way to state one up front.
 
 Consequence (2) is why `scripts/` gets no benefit: there is no way to ask for a fast run.
 Consequence (1) is the trap waiting for anyone who adds one — `scripts/lib/run.mjs`'s
@@ -204,12 +217,19 @@ order to extract **three numbers per year**: net worth, net liquidity, house val
 the full-state history snapshot with a lightweight per-year sampler — 44 small records
 instead of 1,803 state clones. **441ms → ~300ms.**
 
-**Risk, and it is the main risk in Phase 1.** This changes the *provenance* of the series:
-the three metrics would be computed during the run rather than against a retained snapshot.
-They should be identical — the sampler runs at the same point the snapshot was taken — but
-design 74's path-shape diagnostics consume this series, so it needs a golden comparison
-against a current MC run before it is trusted. If the comparison moves, keep snapshots for
-MC and take the 441ms.
+**Implemented as a `sampler` hook** on `Simulation`, called at the history-snapshot cadence
+and at the same point in the event loop, so provenance is preserved exactly. It receives live
+state and returns numbers only. MC now builds with `telemetry: 'off'` plus
+`sampler: sampleTimeSeriesPoint`, and reads `sim.samples`.
+
+**The risk was that this changes the series' provenance** — metrics computed during the run
+rather than against a retained snapshot — and design 74's path-shape diagnostics consume that
+series. Verified two ways rather than assumed:
+
+1. Deterministic run, both paths side by side: **45 yearly points, identical** in year, net
+   worth and net liquidity.
+2. Full MC via `mc-run.mjs`, 4 arms × 30 stochastic paths, old code vs new:
+   **all 4 arm result files byte-identical.** Wall 14.4s → 11.6s.
 
 Note that history snapshots must remain available generally: `design/3` branching, the time
 scrubber, `stepBack()` and `rewindTo` all depend on them. This changes what *MC* asks for,
@@ -372,11 +392,16 @@ Locked:
 4. **Phase 0's `deepClone` accepts two documented divergences** from `structuredClone`
    (cycles, functions) as impossible-by-construction in journalled state (§3.2).
 
+5. **MC drops full history snapshots for a sampler** (§4.5) — was open, now closed by the
+   two verifications recorded there. The optimizer keeps snapshots: `rollToSnapshot` is the
+   MPC seam and genuinely needs them, so it sits at the `metrics` level.
+
 Open:
 
-1. **Does MC keep full history snapshots?** (§4.5) — decided by whether the lightweight
-   sampler reproduces design 74's path diagnostics exactly.
-2. **Remove `BaseService._serviceFilter`?** Now unreferenced (§3.4).
-3. **Should playback be frame-count-based at all?** (§6) — 1%-per-frame means a 10-year and a
+1. **Remove `BaseService._serviceFilter`?** Now unreferenced (§3.4).
+2. **Should playback be frame-count-based at all?** (§6) — 1%-per-frame means a 10-year and a
    44-year scenario both take 100 frames, so the per-frame work scales with scenario length.
    Out of scope here; noted because it caps how good playback can get.
+3. **Should `openSim()` default to `off` too?** (§4.4) — it defaults to `full` because a tool
+   that opens a sim without stepping it usually wants the journal. `run()` defaults to `off`.
+   Worth revisiting if the split proves confusing in practice.

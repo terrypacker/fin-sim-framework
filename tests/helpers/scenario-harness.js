@@ -55,9 +55,15 @@ import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
  * @param {Date|number|string} [opts.simStart]
  * @param {Date|number|string} [opts.simEnd]
  * @param {Date|number|string} [opts.stepTo]  when set, advances the sim to here.
+ * @param {'full'|'journal'|'metrics'|'off'} [opts.telemetry='full'] observation
+ *                                     level for the run — see TELEMETRY_LEVELS
+ *                                     (design 78 §4.3).
+ * @param {function} [opts.sampler]    optional (state, date) ⇒ record collected at
+ *                                     the snapshot cadence; read back via sim.samples.
  * @returns {{ sim, scenario, services, cfg }}
  */
-export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, stepTo } = {}) {
+export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, stepTo,
+                                  telemetry = 'full', sampler = null } = {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const cfg = IntlRetirementScenario.buildDefaultConfig(params, simStart, simEnd);
@@ -68,7 +74,7 @@ export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, step
     simStart:     new Date(cfg.simStart),
     simEnd:       new Date(cfg.simEnd),
   });
-  scenario.buildSim();
+  scenario.buildSim({ telemetry, sampler });
   new ScenarioLoader().load(cfg, services);
   if (stepTo != null) scenario.sim.stepTo(stepTo instanceof Date ? stepTo : new Date(stepTo));
   return { sim: scenario.sim, scenario, services, cfg };

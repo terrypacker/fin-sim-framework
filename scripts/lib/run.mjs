@@ -54,8 +54,15 @@ export async function quietAsync(fn) {
 /**
  * Build and load a sim from a cfg WITHOUT stepping it. Use when a tool needs to
  * inspect intermediate state rather than just the terminal row.
+ *
+ * @param {object} cfg
+ * @param {object} [o]
+ * @param {'full'|'journal'|'metrics'|'off'} [o.telemetry='full'] See
+ *   TELEMETRY_LEVELS (design 78 §4.3). Defaults to `full` because a tool that
+ *   opens a sim without stepping it usually wants to inspect the journal or
+ *   snapshots; pass `'off'` if all you need is state.
  */
-export function openSim(cfg) {
+export function openSim(cfg, { telemetry = 'full' } = {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
@@ -64,7 +71,7 @@ export function openSim(cfg) {
     simStart:     new Date(cfg.simStart),
     simEnd:       new Date(cfg.simEnd),
   });
-  scenario.buildSim();
+  scenario.buildSim({ telemetry });
   new ScenarioLoader().load(cfg, services);
   return scenario.sim;
 }
@@ -72,10 +79,20 @@ export function openSim(cfg) {
 /**
  * Run a cfg to its simEnd and reduce it to one row.
  *
+ * Defaults to `telemetry: 'off'` — this function's whole contract is "reduce to
+ * one terminal row", and `summarize()` reads only state and derived metrics,
+ * both of which are produced at every level. Journal, history snapshots and bus
+ * telemetry are pure cost here, and they dominate: ~3,800ms vs ~300ms on a
+ * 44-year scenario (design 78 §2). This is what makes the grid/frontier/sweep
+ * tooling roughly 12x faster.
+ *
+ * @param {object} cfg
+ * @param {object} [o]
+ * @param {'full'|'journal'|'metrics'|'off'} [o.telemetry='off']
  * @returns {{failed, oofDate, deficit, deficitMonths, netWorth, netLiq}}
  */
-export function run(cfg) {
-  const sim = openSim(cfg);
+export function run(cfg, { telemetry = 'off' } = {}) {
+  const sim = openSim(cfg, { telemetry });
   quiet(() => sim.stepTo(new Date(cfg.simEnd)));
   return summarize(sim);
 }
@@ -103,7 +120,8 @@ export function summarize(sim) {
  * @param {string} [country] inflation accumulator to deflate by (default: US)
  */
 export function traceRealSpending(cfg, country = 'US') {
-  const sim = openSim(cfg);
+  // Reads state only (expenses + inflation accumulator), so no telemetry needed.
+  const sim = openSim(cfg, { telemetry: 'off' });
   const startYear = new Date(cfg.simStart).getUTCFullYear();
   const endYear   = new Date(cfg.simEnd).getUTCFullYear();
   const series = [];
