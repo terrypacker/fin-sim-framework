@@ -1,7 +1,7 @@
 # 39 — MPC Financial Controller (closed-loop advisor cockpit)
 
 **Status**: Proposed (draft 2026-06-26)
-**Related**: `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/40-after-tax-net-worth.md` (**prerequisite for the Roth flagship** — the objective re-pricing that gives the conversion lever a gradient; see §12.5), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost).
+**Related**: `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/40-after-tax-net-worth.md` (**prerequisite for the Roth flagship** — the objective re-pricing that gives the conversion lever a gradient; see §12.5), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost), `design/61-holding-allocation-lever.md` §7/OQ7 + `design/58` / `design/65` / `design/66` (the levers whose **harvest** back into a scenario §13 specifies).
 
 > **Reading note**: design 38 is the *engine* (search over a horizon, offline). This is the *driver* — a closed-loop, receding-horizon controller that calls that engine repeatedly as life unfolds, and a cockpit UI to drive it. They share one `evaluate`/objective core; nothing here re-implements search.
 
@@ -237,6 +237,26 @@ Naïve cost is `epochs × candidates × horizon-length`. Mitigations, in order o
 - **Per-variant default λ (no re-tune on basis switch).** The penalty `λ·|terminal − target|` is in DOLLARS, but the running reward is dollars for CONSUMPTION and UTILS for CRRA (orders of magnitude smaller, scale-dependent on consumption level + γ), so a single fixed λ over-anchors the CRRA variants. `_defaultLambda(running, result)` now scales the CRRA default by the run's **marginal utility of consumption** `u'(c̄) = c̄^{-γ}` — the dollars→utils shadow price — so each dollar of terminal miss costs the same *leverage* as in the consumption variant. The `AccumulateConsumptionUtilityReducer` accumulates `cumulativeConsumptionMarginalUtility` + a count; `_readResult` surfaces the run average as `consumptionMarginalUtility`. Consumption variants keep `DEFAULT_TERMINAL_WEALTH_PENALTY`; an explicit `terminalWealthTargetPenalty` still overrides either. *Verified on a real run:* a fixed λ=10 made the CRRA penalty ~4.7e7 vs a reward of ~190 (terminal dominates ~2.5e5×); the auto-scaled λ gives penalty ~101 vs reward ~190 — balanced, matching the consumption variant.
 - **Tested**: `objectives.test.mjs` (+7: complete 2×2 with family/variant tags; `resolveDieWithTargetKey` mapping; the CRRA×Liquid variant rewards utility & anchors on liquidity, ignoring net worth; `groupedObjectiveOptions` collapses the family; CRRA default λ auto-scales by `consumptionMarginalUtility`; consumption basis ignores it; explicit penalty overrides). `crra-objective.test.mjs` (+2: `marginalUtility` math; reducer accumulates sum+count → run-average `u′(c̄)`). `mpc-cockpit-plugin.test.mjs` (+2) and `opt-config-panel.test.mjs` (+2: grouping + `getConfig` resolution). All suites green (unit 2912, viz 796).
 
+**Step 12 — Harvest: copy a completed run's decisions back into the scenario** [x] *(see §13; 12a–12f done, 12g gated; browser verification outstanding)*
+- The cockpit discovers good values; today there is no way to get them **into the loaded scenario** as an inspectable, re-runnable, saveable plan. §13 specifies the harvest: a per-lever `harvest()` hook → a reviewable `HarvestPlan` → an upsert into `scenario.params` (values **plus** the enabling params that make them bite) → Rebuild/Save through the existing flows.
+- Sub-steps:
+  - **12a — Harvest seam + record enrichment.** Stamp `runId` / `controlKeys` / `controlVars` on the decision record (§13.2) and give the `decision` layer durable storage (`fin-sim-decisions`, H4); `harvestDecisions(records, ctx) → HarvestPlan` in `src/finance/mpc/harvest.js`; `harvest()` hooks on the schedule-shaped levers; POINT default with a varied-across-epochs warning for the rest (§13.3–§13.4).
+  - **12b — Safe write into the scenario.** `applyHarvestPlan(scenario, plan)`: schema-driven **upsert** (not `if (p) p.value`), single-store write to `cfg.params`, enabling params applied atomically, `harvestedFrom` provenance stamp (H5), `PARAMS_CHANGED` so the Scenario panel re-renders (§13.5). Re-label the seven `actuate` persist sites as *live-value sync* (H3).
+  - **12c — Cockpit UI.** "Copy to scenario…" → diff/preview (param · lever · form · current → harvested · epochs · warnings) → Apply, with the Rebuild prompt (§13.8). Available at any point in a run, with the epoch range shown (H2); one `runId` per harvest, no cross-run merge (H1).
+  - **12d — GLIDEPATH bake for `ALLOCATION_MIX`** — closes design 61 §7 / OQ7's deferred schedule-baking (§13.6.4).
+  - **12e — `RESOLVE` for the scalar levers** (§13.6.6): a budgeted full-horizon design-38 solve from t₀, jointly over the scalar levers, warm-started from the MPC's committed values and run **after** the schedule bakes are folded into `baseParams`. Opt-in per harvest; falls back to POINT.
+  - **12f — Verify the bake + VoTV readout.** Deterministic from-t₀ re-run at the same seed vs the MPC's committed terminal, drift decomposed (§13.7); headless `scripts/lab/verify-harvest.mjs`. Then the free byproduct: `VoTV = B − C`, `VoFB = A − B` per lever (§13.13.3), `scripts/lab/votv.mjs`.
+  - **12g — (Phase 3, gated) time-varying param forms** for the levers that have none — drawdown role/sleeve weights, cross-border mode, ladder length (§13.6.5). Plant work in designs 58 / 65 / 66 — and **gated on 12f's VoTV numbers**, not on intuition (D7). If ≥2 levers show real time-variation value, the right move is the factored schedule param type (§13.13.4, a future design 79), not a ninth bespoke `*List`.
+- Browser verification per CLAUDE.md: auto-run the cockpit to simEnd, harvest, Rebuild, confirm the re-run trajectory tracks the MPC's and the Scenario panel shows the baked values. **[ ] STILL OUTSTANDING** — everything below is covered by unit/viz tests plus the headless verifier, but the live Apply→Rebuild→panel loop has not been driven in a browser.
+
+**Step 12 — implementation notes (2026-07-25, `wip/mpc-parameter-values`)**
+- **Landed.** `src/finance/mpc/harvest.js` (`harvestDecisions` → `HarvestPlan`, `pointHarvest`, `collapseConsecutive`, `ageAt`, `requiresIncludes`), `harvest-apply.js` (`applyHarvestPlan` schema-driven upsert + enabling params + `harvestedFrom`), `harvest-resolve.js` (`resolveStaticLevers`/`foldScheduleBakes`/`mergeResolved`, with `makeProblem`/`makeSolver` DI seams), `decision-record-storage.js` + `decision-record-registry.js` (durable `fin-sim-decisions`, H4), `harvest`/`harvestRequires` hooks on SPENDING/ROTH/EARLY_WITHDRAWAL/ALLOCATION_MIX, `runId`/`controlKeys`/`controlVars` on the record, `readDecisionRuns`, `WB_EVENTS.PARAMS_CHANGED` → `scenarioTabPresenter.refreshParams()`, the cockpit's "Copy to scenario…" review panel, and `scripts/lab/verify-harvest.mjs` + `scripts/lab/votv.mjs` over `scripts/lib/harvest-lab.mjs` (`npm run verify:harvest` / `npm run votv`).
+- **Tests:** `tests/unit/mpc-harvest.test.mjs` (+48) and `tests/viz/mpc-cockpit-plugin.test.mjs` (+9). Suites green: **4078 unit / 934 viz**.
+- **§13.7 gate MET on the spending lever.** `npm run verify:harvest -- SPENDING --epochs 3` reports **B ≡ A to the dollar** ($12,140,961, drift +0.00%) — the baked band table re-runs from t₀ to exactly the terminal the closed-loop run committed. The ~1% goal is comfortably met; discretization cost nothing here because the run's decisions collapsed to a single band.
+- **A REAL BUG, found by the verifier, not by the tests.** `CockpitController` seeded `this.committed = { ...baseParams }` — a *shallow* copy. `apply()` commits through the path-aware `set()` (`spendingExpenseBands[0].monthlyAmount`), which mutates the **container**, so every epoch silently rewrote the caller's nested array. In the cockpit that caller is `_paramsToMap(scenario.params)`, i.e. **the active scenario's own band table / schedule entries** — an undeclared write outside both the actuate and harvest paths, and one that made the harvest diff's "from" column show the mutated value instead of the pre-run one. First symptom was a bogus +15.5% harvest drift. Fixed with `_deepCopyParams` on `baseParams` *and* `committed`; regression-tested. Worth noting it survived every existing test because nothing previously compared a pre-run param value to its post-run self.
+- **Deviation from the plan as written:** the two scripts share `scripts/lib/harvest-lab.mjs` rather than duplicating the run/harvest/re-run machinery; `votv.mjs` is the `--resolve` path of the same lab.
+- **Honesty guard added to the VoTV readout.** A first `DRAWDOWN_XBORDER` run returned `VoTV = 0`, which reads as "this lever wants to be a scalar" — but all three terminals equalled the *baseline*, i.e. the lever never bit in that scenario at all ([[mpc-lever-tests-scenario-shaped]]). The report now detects `A ≈ before` and prints **INCONCLUSIVE** instead of a verdict, because a zero from an inert lever says nothing about time-variation. Any Phase-3 (12g) decision must clear this guard first.
+
 ### Out of this plan (tracked elsewhere)
 - Stochastic / MC-coupled MPC (§10 Q5).
 - iLQR/DDP control.
@@ -304,3 +324,581 @@ The user wants "various goals," so the lever stays objective-agnostic and user-s
 - **Closed loop** — over a toy tax ladder the loop recovers the known per-year targets, and the **"convert at all" decision genuinely flips** (never-convert wins on a flat ladder, convert wins on a stepped one).
 - **Apply-forward** — a forward-effective schedule edit at "now" ≡ a from-scratch run with that schedule from "now"; the realized past is untouched (the §9 gate).
 - **QP polish (with Step 6)** — on a locally-smooth segment QP improves the sampling elite's target; across a bracket kink it degrades gracefully (no chatter).
+
+---
+
+## 13. Harvesting a completed run back into the scenario
+
+*Status: proposed (2026-07-25). Implements §11 Step 12. Closes the deferred
+schedule-baking item in `design/61-holding-allocation-lever.md` §7 / OQ7 and the
+same gap in designs 58 / 65 / 45 / 66 — every lever, one mechanism.*
+
+### 13.1 The gap
+
+The cockpit is a **discovery** surface: run the levers, let the controller find
+values that beat trial-and-error (especially the ones no human tunes by hand — a
+spending band table, a per-year Roth ladder, a four-way weight simplex). But when
+the run ends, those values live in the controller's `committed` bag, the live sim's
+re-wired reducers, and a session-only decision log. The user's loop —
+**discover → copy into the loaded scenario → Rebuild → inspect → Save** — has no
+copy step.
+
+What happens *today* is worse than nothing, because it is invisible and lossy.
+Each lever's `actuate()` (§Step 5b) persists its committed value into
+`scenario.params` so the next Advise rollout (which recompiles from params) agrees
+with the live sim. That write is a *side effect for consistency*, not a harvest,
+and it splits three ways by the **shape of the target param**:
+
+| Lever's target param shape | What ~20 epochs of `actuate` leave behind | Verdict |
+|---|---|---|
+| **Per-year schedule** (`rothConversionSchedule`, `earlyWithdrawalSchedule`) | one entry per decided year — accumulated, chronological | **accidentally correct**: a real schedule harvest already |
+| **Band table** (`spendingExpenseBands[i]`) | the **last** epoch's amount written onto the band active at that epoch | lossy: every earlier decision overwritten |
+| **Scalar** (`crossBorderDrawdown`, `withinTierDraw`, `drawdownWeight::*`, `sleeveWeight::*`, `allocWeight::*`, `bondLadderRungs`) | the **last** epoch's value only | lossy and silent: the whole time-path collapses to its final point |
+
+So after an Auto run the scenario is in a half-harvested state nobody asked for or
+can see, and a Rebuild produces a trajectory that does **not** match what the
+cockpit just showed. Three separate defects: no **explicit** harvest, no
+**visibility**, and no **schedule** form for the levers that need one.
+
+There is a fourth, quieter one: the persist is `const p = params.find(…); if (p) p.value = v` at
+every `actuate` site. When the target key isn't materialized in `cfg.params` the
+write **silently disappears** (the [[two-param-stores-trap]] shape). It happens to
+work today because `ScenarioLoader._mergeParamSchema` materializes the whole
+combined schema — but nothing enforces it, and nothing reports a miss.
+
+### 13.2 What a "run result" is — the harvest source
+
+Harvest reads the **decision records** (`layer:'decision'`, Step 5c), not the
+controller. The controller is the wrong source twice over: `committed` is a flat
+bag with the time dimension already collapsed, and the cockpit nulls
+`this._controller` after every Apply and every clock step, so it does not survive
+the run it produced. The records do — `{ id, asOfDate, controlParams, result,
+goalMetric }`, one per Apply, oldest-first, independent of controller lifecycle.
+
+Three additions make them self-describing enough to harvest (12a):
+
+- **`runId`** — stamped per cockpit run (a new one on each Advise-after-idle /
+  Auto start). Without it, three exploratory runs in one session blend into one
+  incoherent schedule. Harvest defaults to the newest run and lets the user pick.
+- **`controlKeys`** — which levers were active, so a mixed-lever log routes each
+  paramKey back to the lever that owns it.
+- **`controlVars`** — the epoch's variable descriptors (`_role`, `_class`, `_year`,
+  `_bandIndex`, `_effectiveYear`, `_controlKey`). `controlParams` alone is
+  `{'spendingExpenseBands[3].monthlyAmount': 7500}` — enough to *replay*, not
+  enough to *re-key* onto a band table whose indices the harvest is about to
+  rewrite. The descriptors are already built (`_variables()`); they are just not
+  recorded.
+
+Records remain **session-only** (Step 5c). That is acceptable — harvest is the
+thing you do at the end of a run, in the same session. Cross-reload persistence
+(a `fin-sim-decisions` store) stays the Step 5c Option #2 follow-up; harvest is
+what would finally justify it.
+
+### 13.3 Three harvest forms
+
+**POINT** — one value per param, no time dimension: take the last (or modal)
+epoch's decision. Faithful only if the controller's per-epoch decisions were
+(near-)constant; otherwise arbitrary. Correct and complete for a design-38 **OPT**
+solve, which searches one fixed plan by construction (§13.9).
+
+**SCHEDULE** — the per-epoch sequence baked into a time-keyed param the plant
+already reads. Faithful to what the controller actually did.
+
+**RESOLVE** — re-solve the *best static value over the whole run*, warm-started
+from the MPC's committed values (§13.6.6). This is the principled answer to "what
+one number should this param be?", and it is what a scalar-only lever deserves
+instead of an arbitrary last-epoch collapse. It costs an optimizer run; it needs
+no new plant.
+
+The form is a property of the **plant**, not a preference: a lever can only be
+harvested as a SCHEDULE if some param expresses "this value, from this age/year."
+
+| Lever | Control param(s) | Enabling params | Schedule form in the plant today | Phase-1 harvest |
+|---|---|---|---|---|
+| `SPENDING` | `spendingExpenseBands[i].monthlyAmount` | `spendingStrategy ∋ EXPLICIT_BANDS` | **yes** — the band table *is* an age-keyed schedule | **SCHEDULE** (§13.6.1) |
+| `ROTH` | `rothConversionSchedule[i].incomeTarget` | `rothConversionEnabled` | **yes** — per-year entries | **SCHEDULE** (§13.6.2) |
+| `EARLY_WITHDRAWAL` | `earlyWithdrawalSchedule[i].{taxDeferredAmount,rothAmount}` | `earlyWithdrawalEnabled` + window | **yes** — per-year entries | **SCHEDULE** (§13.6.2) |
+| `ALLOCATION_MIX` | `allocWeight::<CLASS>` | `behavioralStrategies ∋ TARGET_ALLOCATION`, `allocationStrategy=OPTIMIZED` | **yes, unused** — `allocationSchedule=GLIDEPATH` + `allocationGlidepath:[{age,weights}]` (design 61 Phase 3) | **SCHEDULE** (§13.6.4) |
+| `DRAWDOWN_WEIGHTS` | `drawdownWeight::<role>` | `drawdownStrategy=WEIGHTED` | no | **RESOLVE**, else POINT + warning |
+| `DRAWDOWN_SLEEVE` | `sleeveWeight::<CLASS>` | `drawdownSleeveOrder=WEIGHTED` | no | **RESOLVE**, else POINT + warning |
+| `DRAWDOWN_XBORDER` | `crossBorderDrawdown` | — | no | **RESOLVE**, else POINT + warning |
+| `DRAWDOWN_WITHINTIER` | `withinTierDraw` | — | no | **RESOLVE**, else POINT + warning |
+| `BOND_LADDER` | `bondLadderRungs` | `behavioralStrategies ∋ BOND_LADDER` | no | **RESOLVE**, else POINT + warning |
+
+Phase 1 therefore ships **four real schedule bakes on plant that already exists**,
+**RESOLVE** for the five scalar levers (§13.6.6), and POINT as the zero-cost
+fallback. New time-varying param forms for the bottom five are Phase 3 (§13.6.5)
+and belong to their own designs — and §13.13.3 makes the case that they should be
+justified by measurement first.
+
+### 13.4 The seam
+
+Mirrors `describe`/`actuate` — one optional hook per control spec, pure, testable
+without a sim:
+
+```js
+// COCKPIT_CONTROLS.<LEVER>
+harvest: ({ epochs, baseParams, state, epsilon }) => ({
+  params:   { [paramKey]: value },      // the bake
+  requires: { [paramKey]: value },      // enabling params (§13.5)
+  warnings: [ 'string' ],               // collapses, ties, out-of-range
+})
+// epochs: [{ asOfDate, candidate, vars }] oldest-first, ALREADY filtered to this
+//         control's own variable subset (routed by `_controlKey`).
+```
+
+No hook ⇒ the **POINT default**: last epoch's value per paramKey, plus a warning
+naming how many epochs disagreed and by how much. Silence is never an option — a
+collapsed lever must say so.
+
+Two pure functions above it, in a new `src/finance/mpc/harvest.js`:
+
+```js
+harvestDecisions(records, { controls, baseParams, state, runId, epsilon }) -> HarvestPlan
+applyHarvestPlan(scenario, plan, { schema })                              -> { applied, created, skipped }
+
+HarvestPlan = {
+  runId, goal, solver, levers, epochRange: [firstDate, lastDate], epochs: n,
+  entries:  [{ paramKey, lever, form, from, to, epochs, label }],  // the diff model
+  requires: [{ paramKey, from, to, reason }],
+  warnings: [...],
+}
+```
+
+`HarvestPlan` is the **review artifact**: the preview panel renders it, the user
+approves it, `applyHarvestPlan` executes it. Nothing writes a param without
+passing through it.
+
+### 13.5 Writing into the scenario safely
+
+Four rules, each fixing something that is wrong or absent today.
+
+1. **Upsert, don't update-if-present.** Resolve the key against the combined
+   scenario + toolset param schema and materialize a typed entry
+   (`{name,label,type,group,description,node,options,…}`) exactly as
+   `ScenarioLoader._mergeParamSchema._toEntry` does, when it is missing. A key that
+   matches no schema entry is **reported as skipped**, never silently dropped. This
+   replaces the `if (p) p.value = v` idiom at every `actuate` site too.
+2. **One store.** Write `cfg.params` only, and let the loader's params→parameters
+   sync do the rest on Rebuild. Writing both is how the two stores drift
+   ([[two-param-stores-trap]]).
+3. **Enabling params ride along, atomically.** A harvested `drawdownWeight::*` is
+   *inert* unless `drawdownStrategy=WEIGHTED`; an `allocationGlidepath` is ignored
+   unless `allocationSchedule=GLIDEPATH`. Each control declares `harvestRequires`,
+   and the plan surfaces those flips in the diff as first-class rows — the user
+   sees "and this switches your Drawdown Strategy to WEIGHTED" **before** approving.
+   This is the single easiest way for a harvest to look successful and do nothing.
+4. **Tell the UI.** The Scenario panel holds the live `params` array by reference,
+   so values change under it without a re-render. Add a `WB_EVENTS.PARAMS_CHANGED`
+   publish after apply; the scenario presenter subscribes and calls its existing
+   `refreshParams()` (the same refresh the CSV import already performs locally).
+
+Harvest **does not** Rebuild, save, or touch the running sim. It edits the loaded
+scenario's params and stops — the user's existing Rebuild and Save buttons take it
+from there. That keeps the blast radius at "an edit you could have typed."
+
+### 13.6 The per-lever bakes
+
+#### 13.6.1 `SPENDING` → age bands
+
+The lever tunes the band **active at "now"**, so each epoch's committed amount is
+what the plan spent from that epoch until the next decision — a step function,
+which is exactly what `spendingExpenseBands` is. Bake:
+
+- one `{ startAge, monthlyAmount }` per epoch, `startAge` = the primary's age at
+  `asOfDate` (from the scenario's persons, not the disposable snapshot);
+- collapse consecutive equal amounts (|Δ| ≤ ε, default $1) into one band;
+- two epochs in the same age-year ⇒ last wins;
+- **preserve** pre-existing bands with `startAge` below the first epoch's age —
+  that is the pre-MPC plan for the realized past, which the run never re-decided
+  and the harvest must not delete;
+- units are unchanged: the lever, the param, and the reducer all speak **real
+  base-year USD** (the reducer compounds to nominal). No conversion, and none of
+  the real/nominal confusion the card's `describe` has to manage.
+
+A 20-epoch run typically collapses to a handful of bands — legible, editable, and
+the exact table a human could never have found by trial and error.
+
+#### 13.6.2 `ROTH` / `EARLY_WITHDRAWAL` → per-year schedules
+
+The union of every epoch's decided year, positive amounts only (absence ==
+skip-year, matching the toolsets). This is already what `actuate` accumulates, so
+harvest here is **idempotent** — it re-derives the same schedule from the log
+rather than trusting the side effect, and closes the case where the user reverted
+params mid-run.
+
+#### 13.6.3 The POINT levers
+
+Last-committed value, plus a mandatory warning quantifying the collapse:
+`"Drawdown order changed in 7 of 22 epochs — freezing the last decision; the
+re-run will differ from the cockpit trajectory."` For `DRAWDOWN_XBORDER` /
+`DRAWDOWN_WITHINTIER` (categorical) the warning reports the mode histogram, and
+the plan offers **last** or **modal** as the collapse rule — a mode that held for
+18 of 22 epochs is the better single answer than whatever the last epoch picked.
+
+#### 13.6.4 `ALLOCATION_MIX` → GLIDEPATH anchors (design 61 §7 / OQ7)
+
+The plant half is already built and unused: `allocationSchedule=GLIDEPATH` +
+`allocationGlidepath: [{age, weights}]`, interpolated by the primary's age in
+`RebalanceToTargetReducer.resolveScheduledTarget`. Bake:
+
+- each epoch's committed weights → the **synthesized mix**
+  (`synthesizeTargetAllocation`, i.e. what the run actually held, not the raw
+  stick-breaking weights) → an anchor at that epoch's age;
+- collapse an anchor whose L1 distance from its predecessor is ≤ ε (default 0.02)
+  — the same hold-band idea design 61 §7 uses to avoid CGT-churning flip-flop,
+  reused here to keep the table legible;
+- **step vs smooth.** `interpolateGlidepath` *blends linearly* between anchors,
+  while the MPC held each mix flat until the next decision. Default to a
+  **step-faithful** bake (paired anchors: `{age_i, mix_i}` and
+  `{age_{i+1}−δ, mix_i}`) so the re-run reproduces the run; offer **smooth** (one
+  anchor per epoch) as the legible alternative, and let §13.7's verify report the
+  difference rather than assert one is right;
+- **prepend a start anchor.** `interpolateGlidepath` clamps below the first anchor,
+  so without an anchor at the plan's start age a from-t₀ re-run would apply the
+  first MPC epoch's mix to the entire *realized past* — silently rewriting years the
+  run never decided. Prepend `{age: age at simStart, weights: the pre-run static
+  mix}`;
+- keep the last mix in `allocWeight::*` as well: it is the reducer's `targetAllocation`
+  fallback when the glidepath is unconfigured or empty.
+
+Sets `allocationSchedule=GLIDEPATH` via `harvestRequires`. `REGIME_CONDITIONED`
+harvest (per-regime map) is the natural sibling and stays future work — it needs
+epochs tagged with the regime active at each, which the record does not carry yet.
+
+#### 13.6.5 Phase 3 — the levers with no schedule form
+
+`drawdownWeight::*`, `sleeveWeight::*`, `crossBorderDrawdown`, `withinTierDraw`
+and `bondLadderRungs` are static scalars; a faithful bake needs an age/year-keyed
+form (a `drawdownWeightSchedule` of `{age, weights}`, the drawdown twin of the
+allocation glidepath, and likewise for the sleeve/ladder). That is **plant work in
+designs 58 / 65 / 66**, not here, and it should be justified by evidence — if the
+POINT warning shows the controller's order was effectively constant, the schedule
+buys nothing. Ship Phase 1, read the warnings, then decide (§13.13.3 turns that
+into a measurement).
+
+#### 13.6.6 `RESOLVE` — the best *static* value for the whole run
+
+POINT asks "which epoch's answer do we keep?" — a question with no good answer.
+The right question is **"given that this param must be one number for the whole
+run, what number is best?"**, and that is not a collapse of the MPC's decisions at
+all: it is a **design-38 optimization over the full horizon** with the lever as a
+static variable. The machinery already exists; harvest just has to call it.
+
+```
+RESOLVE(lever) = OptimizationProblem({
+  variables:    lever.buildVariables(...)            // the same encoding the cockpit searched
+  baseParams:   scenario params + everything else already harvested
+  objective:    the MPC run's goal (stamped on the records)
+  initialState: t₀   ← NOT a snapshot: this is an open-loop, whole-run solve
+}).solve({ start: <the MPC's committed values>, budget })
+```
+
+Three properties make this the right default for the five scalar levers:
+
+1. **It answers the user's actual question.** "Optimal parameters for the entire
+   run" is an open-loop, full-horizon problem — precisely design 38's problem, not
+   design 39's. Harvest is where the two meet.
+2. **The MPC run is a free warm start.** The controller has already explored this
+   lever against realized state; its committed values (and the per-epoch spread)
+   seed both the start point and a sensible search range. A cold OPT solve would
+   redo that work.
+3. **It composes with the schedule bakes.** RESOLVE runs *after* the SCHEDULE
+   levers are applied to `baseParams`, so the static value is optimal **given** the
+   harvested spending/Roth/allocation schedules — not against the pre-run scenario.
+   Order matters and is part of the plan: schedules first, then RESOLVE, in one
+   pass.
+
+Cost is one budgeted solve per harvest (not per lever — the scalar levers resolve
+**jointly**, for the same coupling reason as H1). It is opt-in per harvest with a
+progress indicator, and it degrades to POINT if the user declines or it is
+cancelled. The plan records which entries came from RESOLVE vs POINT vs SCHEDULE,
+because a reader deserves to know which numbers were searched over the whole run
+and which were snapshots of a moment.
+
+**Honest limit.** RESOLVE finds the best static value *on the path it solves over*
+— under design 74/75 stochastic returns that is one seed. It is a better number
+than last-epoch-wins by construction, not a guarantee out of sample. §13.13.3's
+diagnostic is what tells you whether a static value was ever adequate here.
+
+### 13.7 What a baked scenario does and does not reproduce
+
+This is the honest part, and it must be in the UI, not just the doc.
+
+A harvested scenario is **open-loop**: a fixed schedule that re-runs
+deterministically with no controller in the loop. Two distinct drifts follow.
+
+1. **Discretization** — the bake approximates the policy (band collapse, anchor
+   ε, step-vs-smooth, POINT collapses). Bounded, measurable, and reported.
+2. **Loss of feedback** — the MPC *re-decided from realized state each epoch*. On
+   the **same** realized path a faithful bake tracks it closely; on **any other**
+   path (a different seed, an MC arm, an edited assumption) the baked schedule
+   cannot react, because reacting is precisely what got left behind. Design 74/75
+   made return and house paths stochastic, so this is not hypothetical: the same
+   baked scenario under a different seed is a *different, worse* plan than the
+   controller would have chosen there.
+
+That is the semantics of a saved scenario, not a defect — but a user who harvests
+a plan and then runs Monte Carlo over it must not read the failure rate as the
+controller's. State it on the panel, in one line.
+
+**Verify (12e).** After apply, offer a one-click check: re-run the harvested
+scenario from t₀ **at the same seed** and compare to the MPC's committed terminal
+on the goal's primary metric (`objectivePrimaryMetric`, already stamped on each
+record). Report `Δ` and `Δ%`, and attribute: if the realized paths match but the
+terminals diverge, it is discretization; if the harvest is a POINT collapse of a
+lever that varied, the warning already said so. Headless twin:
+`scripts/lab/verify-harvest.mjs` (a sibling of `verify-mpc-lever.mjs`), so this is
+regression-testable and not only a browser gesture.
+
+Fidelity targets are stated as goals, not gates: **schedule-form levers within
+~1% of the committed terminal**; POINT levers *unbounded by construction* and
+labelled as such.
+
+### 13.8 UX
+
+One new button on the cockpit toolbar — **"Copy to scenario…"**, enabled once the
+current run has ≥1 decision record — opening an inline review panel:
+
+```
+Harvest run · 22 epochs · 2026 → 2047 · Goal: Die With Target (net liquidity) · CEM
+
+  Monthly Spending          SCHEDULE   spendingExpenseBands
+      age 62  $7,500   ·  age 68  $6,200  ·  age 79  $4,900        (22 epochs → 3 bands)
+  Allocation Mix            SCHEDULE   allocationGlidepath   + allocationSchedule → GLIDEPATH
+      age 62  E70/B25/C5  →  age 79  E40/B50/C10               (22 epochs → 5 anchors)
+  Drawdown Order            POINT      drawdownWeight::×4    + drawdownStrategy → WEIGHTED
+      ⚠ changed in 7 of 22 epochs — freezing the last decision
+
+  [ Copy to scenario ]   [ Cancel ]
+```
+
+After apply: a confirmation naming what changed and what to do next
+("14 params updated, 2 created — **Rebuild** to run it, then Save"). Deliberately
+**not** auto-Rebuilding: Rebuild re-runs from t₀ and throws away the cockpit's
+realized "now", which the user may still be working from.
+
+### 13.9 The same seam serves the OPT panel
+
+A design-38 solve produces exactly one candidate over a fixed plan — a
+**single-epoch, POINT** harvest, which is the trivial case of the same machinery
+and needs no schedule at all. The OPT results panel has no "apply best" affordance
+today either, so `applyHarvestPlan` (§13.4) should be built lever-agnostic and
+reused there: same upsert, same enabling params, same diff, same
+`PARAMS_CHANGED`. One mechanism, two producers.
+
+### 13.10 Decisions locked
+
+- **D1 — Source is the decision log, not the controller.** Enriched with
+  `runId`/`controlKeys`/`controlVars` (§13.2).
+- **D2 — Destination is the loaded scenario's params, in place, behind an explicit
+  preview.** No new scenario, no auto-Rebuild, no auto-Save — the user's existing
+  Rebuild/Save flows finish the job.
+- **D3 — Upsert + single store + enabling params + `PARAMS_CHANGED`** (§13.5).
+  Applies retroactively to the existing `actuate` persist sites.
+- **D4 — Form follows the plant.** SCHEDULE where a time-keyed param exists,
+  RESOLVE (or POINT) elsewhere — with a mandatory, quantified collapse warning.
+  Never a silent collapse.
+- **D5 — Fidelity is reported, not assumed** (§13.7), and the open-loop caveat is
+  surfaced in the UI.
+- **D6 — A scalar-only lever gets a *searched* number, not a snapshot.** RESOLVE
+  (§13.6.6) re-solves the best static value over the whole run, jointly across the
+  scalar levers, warm-started from the MPC's committed values and applied **after**
+  the schedule bakes. POINT remains the zero-cost fallback, labelled as such.
+- **D7 — Which levers deserve a schedule form is a measurement, not a judgement.**
+  Phase 3 (§13.6.5) is gated on the VoTV/VoFB readout (§13.13.3), and a ninth
+  bespoke `*List` type should not be written before the question in §13.13.4 is
+  settled.
+
+### 13.11 Resolved questions (answered 2026-07-25)
+
+- **H1 — Multiple runs in one session → harvest ONE run, jointly.** Default to the
+  newest `runId`; no cross-run merge. Tuning spending in run A and Roth in run B and
+  stapling the results together discards exactly the cross-lever coupling the
+  multi-lever search exists to find (a Roth ladder is only optimal *given* a
+  spending path, because conversions are funded out of the same drawdown). If you
+  want both levers, run both levers. The picker lists prior runs for inspection,
+  but harvest targets one.
+- **H2 — Harvest is available at any point in a run**, with the epoch range stated
+  on the plan and in the provenance stamp. A truncated schedule is a legitimate
+  "first N years" plan; refusing to copy until simEnd would make the common case
+  (explore a decade, take the answer) impossible.
+- **H3 — `actuate`'s param write stays, re-labelled.** It is *live-value sync* —
+  the mechanism that keeps recompiled Advise rollouts consistent with the live sim
+  (§Step 5b) — not persistence, and the code should say so at all seven sites.
+  Harvest is the persistence path and overwrites those values with the full
+  schedule. §13.1's table stays as the record of what the sync leaves behind.
+- **H4 — Decision records get durable storage** (Step 5c Option #2, `fin-sim-decisions`),
+  since a page refresh currently destroys an un-harvested run. Lands in 12a: same
+  `decision` layer, its own storage key, never `fin-sim-scenarios`.
+- **H5 — Harvest stamps provenance on the scenario**: `harvestedFrom: { runId, goal,
+  solver, levers, epochRange, date }`, in 12b. It's the difference between a
+  shareable plan and a pile of magic constants — and it's what lets a later reader
+  (or a later you) know which numbers were searched and which were typed.
+
+### 13.12 Remaining open question
+
+- **H6 — Where the knots live.** §13.13 (below) argues that the POINT/SCHEDULE
+  split is an artifact of the param system, not of the levers. Whether to factor a
+  first-class schedule-valued param type — and for which levers time-variation is
+  even the right upgrade — is deliberately left open, with a measurement (§13.13.3)
+  that answers it empirically rather than by argument.
+
+---
+
+### 13.13 Static values, schedules, and policies — the representation question
+
+*Raised 2026-07-25 while reviewing §13: if the controller re-decides every param
+every epoch, why is a scenario param a single number? This section is the
+grounded answer, and the argument for what to do about it. It is analysis, not a
+committed plan — the framework change it points at (§13.13.4) should be its own
+design doc if it is taken up.*
+
+#### 13.13.1 The framework already has time-varying params — eight of them, unfactored
+
+The premise "our params are static" is only half true. Time-variation has been
+added **eight separate times**, each as a bespoke one-off:
+
+| Param | Type | Key axis | Interpolation | Editor | Searchable? |
+|---|---|---|---|---|---|
+| `spendingExpenseBands` | `ExpenseBandList` | age | step | table | `opt:true`, hand-written per-band expansion |
+| `spendingAgeBands` | `AgeBandList` | age | step + in-band drift | table | `opt:true` |
+| `rothConversionSchedule` | `RothScheduleList` | year | step (absent = skip) | table | `controllable`, hand-written per-year expansion |
+| `earlyWithdrawalSchedule` | `EarlyWithdrawalScheduleList` | year | step (absent = skip) | table | `controllable` |
+| `primeSchedule` | `PrimeScheduleList` | year | step | table | no |
+| `allocationGlidepath` | `Object` | age | **linear** | **JSON textarea** | no |
+| `yieldCurveSchedule` | `Object` | year | step | **JSON textarea** | no |
+| `usYieldCurveShape` / `auYieldCurveShape` | `Object` | tenor (not time) | linear + clamp | **JSON textarea** | no |
+
+Every row re-invents the same four things: a **type name**, a **table editor**
+(`scenario-tab-view.js` dispatches five near-identical `_build*ListEditor`
+functions), a **resolver** (`bandForAge`, `interpolateGlidepath`,
+`resolveScheduledTarget`, the toolsets' per-year `emitYear`…), and — for the two
+that are searchable — a **hand-written knot expansion**
+(`buildExpenseBandOptConfigs`, `buildRothScheduleOptConfigs`, siblings by
+copy-paste). The three that reached for `Object` got the worst of it: a JSON
+textarea, no validation, no search, no harvest.
+
+So the real finding is not *"params are static"*. It is:
+
+> **Time-varying params are pervasive, but there is no first-class notion of one —
+> so each arrives with its own type, editor, resolver, and search encoding, and the
+> ones that don't get that investment silently stay static.**
+
+§13.3's POINT/SCHEDULE split is a **census of that history**, not a property of the
+levers. `drawdownWeight::*` is POINT-only because nobody has yet written a
+`DrawdownWeightScheduleList` type + editor + resolver + expansion — not because
+drawdown order is naturally constant over 40 years (it obviously isn't: it should
+turn over at retirement, at the move, and at RMD age).
+
+#### 13.13.2 The ladder — four ways to represent a decision
+
+Static-vs-time-series is the wrong axis; there are four rungs, and time series is
+only the second:
+
+| Rung | Form | Example in this codebase | Generalizes across paths? |
+|---|---|---|---|
+| 1 | **Static scalar** — one value, all times, all paths | `crossBorderDrawdown`, `bondLadderRungs` | trivially (it ignores everything) |
+| 2 | **Time-varying schedule** — `value(t)`, same on every path | `spendingExpenseBands`, `allocationGlidepath` | **no** — open-loop; fitted to the path it was solved on |
+| 3 | **State-conditioned rule** — `value(state)` | `allocationRegimeTargets`, `DOWNTURN_ROTH_CONVERSION`, guardrail spending (design 26), the drawdown rules | **yes** — reacts on any path |
+| 4 | **Closed-loop policy** — `value(state, t)`, re-solved online | the MPC controller itself | **yes**, optimally — but only while it runs |
+
+Harvest is a **projection down this ladder**: rung 4 → rung 2 (SCHEDULE) or rung 1
+(POINT/RESOLVE). §13.7's "loss of feedback" is exactly the information destroyed
+by that projection, and it is why a baked schedule that matches the MPC on its own
+path can be *worse than the pre-run scenario* on a different seed.
+
+Two consequences that matter more than the schedule question:
+
+- **Rung 3 often beats rung 2.** A per-year spending schedule fitted on one path is
+  overfit; "spend 4% of the portfolio, floored at $X" reacts on every path and
+  needs two numbers. Where a lever's variation is really *responding to state*
+  (markets, balances, residency) and not to the calendar, the right upgrade is a
+  **rule with searchable coefficients**, not more knots. This project already has
+  the pattern — design 26 spending strategies, design 29 behavioral strategies,
+  the regime-conditioned allocation — and rung-3 params are *static scalars again*
+  (rule coefficients), which is why they harvest cleanly.
+- **The Roth lever is the existence proof.** §12.2 chose an income-*target* control
+  over a dollar-amount control precisely because the target is a **rule
+  parameter**: `convert = min(IRA, target − ordinaryIncomeYTD)` self-adjusts to a
+  low-income or down-market year. That is rung 3 wearing rung-2 clothes — and it
+  predicts that a *static* income target loses little against the per-year
+  schedule, because the rule already absorbs the variation. §13.13.3 measures it.
+
+More knots is the answer only when the variation is genuinely **exogenous and
+calendar-driven** — age (glidepaths, the retirement spending smile), statutory ages
+(RMD, preservation age, Medicare), and known one-off events (the move, the house
+sale). That list is short, and notably it is *exactly* where the eight existing
+schedule params already are.
+
+#### 13.13.3 The measurement — value of time variation (VoTV)
+
+The argument above should not be settled by argument. The harvest produces all
+three artifacts needed to settle it empirically, per lever, for **free**:
+
+```
+A = terminal under the MPC's committed closed-loop plan   (already recorded)
+B = terminal under the baked SCHEDULE                     (§13.7 verify)
+C = terminal under the best static value (RESOLVE)        (§13.6.6)
+
+VoTV(lever) = B − C     ← what time-variation is worth
+VoFB(lever) = A − B     ← what feedback is worth (and what harvest destroys)
+```
+
+Read out per lever, this answers the whole question with numbers:
+
+- `VoTV ≈ 0` → **the lever wants to be a scalar.** Ship RESOLVE, don't build a
+  schedule type for it. (My prior: `crossBorderDrawdown`, `withinTierDraw`, and
+  quite possibly `bondLadderRungs`.)
+- `VoTV` large → build the schedule form (Phase 3), and the number justifies the
+  work.
+- `VoFB` large *while* `VoTV ≈ 0` → **the variation is state-driven, not
+  calendar-driven**: a rung-3 rule is the right upgrade, and a schedule would just
+  overfit. This is the case a knot-count debate can't detect and the one most
+  likely to be true for the drawdown levers.
+
+Run it under two or three seeds and the out-of-sample story falls out too — a
+schedule whose advantage vanishes on seed 2 was fitted, not found. This is a
+one-evening script on top of Step 12 (`scripts/lab/votv.mjs`, sibling of
+`verify-harvest.mjs`), and it should gate Phase 3 rather than following it.
+
+#### 13.13.4 If the answer is "yes, factor it" — what that design would contain
+
+Should the measurement justify it, the framework change is a **schedule-valued
+param kind**, not nine more one-off types. Sketch, for a future design doc (79):
+
+- **Declaration**: `type:'Schedule'` + `{ axis: 'age'|'year'|'date', interp:
+  'STEP'|'LINEAR'|'SKIP', of: <the scalar/Object schema of one knot's value> }`.
+  The eight existing params become declarations, keeping their stored shapes.
+- **One resolver**: `resolveScheduled(param, { age, year, ms }) → value`, replacing
+  `bandForAge` / `interpolateGlidepath` / the per-year `emitYear` dispatches.
+- **One editor**: a generic knot table (add/remove/sort/validate rows), replacing
+  the five `_build*ListEditor` twins — and, notably, upgrading the three
+  `Object`-typed schedules off the JSON textarea for free.
+- **One search encoding**: a schedule expands to K variables over a **fixed knot
+  set** — which is already design 38 §6.0's fixed-dimension requirement and design
+  39 §3's control vector, so `buildExpenseBandOptConfigs` and
+  `buildRothScheduleOptConfigs` collapse into it.
+- **One harvest**: every schedule-typed param becomes SCHEDULE-harvestable
+  automatically, and §13.3's table stops being a census of past effort. This is the
+  payoff that connects the two halves of this document.
+- **Parsimony as a first-class control**: max-knots and an ε-collapse are
+  properties of the schedule type, not per-lever code — the overfitting guard lives
+  where the knots do.
+
+**Cost to be honest about:** K knots × L levers explodes an open-loop search, which
+is precisely why the closed-loop controller is the natural *producer* of schedules
+and design 38 is not. A first-class schedule type makes it easy to add knots; the
+VoTV measurement is what should keep that easiness from becoming overfitting.
+
+#### 13.13.5 Recommendation
+
+1. Ship Step 12 as specified — including **RESOLVE** (§13.6.6), which delivers
+   "optimal parameters for the entire run" with no framework change.
+2. Add the **VoTV/VoFB readout** (§13.13.3) as a byproduct; it costs one script.
+3. **Do not** build schedule forms for the remaining levers on intuition. Let the
+   numbers say which levers want rung 2, which want rung 3, and which were fine as
+   scalars all along.
+4. If ≥2 levers show a real `VoTV`, write design 79 (§13.13.4) and factor the type
+   **once**, retrofitting the eight existing params — rather than adding a ninth
+   bespoke `*List`.

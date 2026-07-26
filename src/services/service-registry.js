@@ -35,6 +35,8 @@ import { HOLDING_REDUCER_CLASSES } from '../finance/holdings/holding-reducers.js
 import { DecisionGraphRegistry }       from '../finance/decision-graph/decision-graph-registry.js';
 import { DecisionGraphStorage }        from '../finance/decision-graph/decision-graph-storage.js';
 import { DecisionGraphResultStorage }  from '../finance/decision-graph/decision-graph-result-storage.js';
+import { DecisionRecordRegistry }      from '../finance/mpc/decision-record-registry.js';
+import { DecisionRecordStorage }       from '../finance/mpc/decision-record-storage.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -79,6 +81,8 @@ export class ServiceRegistry {
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.dgRegistry         = new DecisionGraphRegistry(new DecisionGraphStorage(), this.graph);
     this.dgResultStorage    = new DecisionGraphResultStorage();
+    // MPC decision records (design 39 §13 H4) — layer:'decision', own storage key.
+    this.decisionRecords    = new DecisionRecordRegistry(new DecisionRecordStorage(), this.graph);
     this.simulationRegistry = new SimulationRegistry();
     // Populated by ScenarioCompiler.compile() with the merged US+AU PeriodService.
     // Null until the first compile; cleared on reset() so stale period ranges
