@@ -28,7 +28,9 @@
     "export:tax": "node scripts/tax/export-tax-csv.mjs",
     "crossfoot": "node scripts/tax/crossfoot-drill-reports.mjs",
     "probe:residency-cgt": "node scripts/probes/probe-residency-cgt.mjs",
-    "probe:foreign-property-cgt": "node scripts/probes/probe-foreign-property-cgt.mjs"
+    "probe:foreign-property-cgt": "node scripts/probes/probe-foreign-property-cgt.mjs",
+    "verify:harvest": "node scripts/lab/verify-harvest.mjs",
+    "votv": "node scripts/lab/votv.mjs"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
