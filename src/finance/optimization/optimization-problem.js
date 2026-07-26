@@ -20,7 +20,8 @@ import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
 import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
-import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable } from './optimization-objectives.js';
+import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable,
+         infeasibilityOf, INFEASIBLE_OFFSET } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
@@ -111,6 +112,7 @@ export class OptimizationProblem {
     simEnd       = new Date(Date.UTC(2041, 0, 1)),
     initialState = { kind: 'compile', cfgTemplate: null },
     horizonYears = null,   // sliding window length H (design 41); null/0 = full horizon
+    feasibilityFirst = false,  // lexicographic solvency ranking (design 80 U2)
   } = {}) {
     this.variables    = variables;
     this.baseParams   = baseParams;
@@ -119,6 +121,7 @@ export class OptimizationProblem {
     this.simEnd       = simEnd;
     this.initialState = initialState;
     this.horizonYears = horizonYears;
+    this.feasibilityFirst = feasibilityFirst;
     this._serializedTemplate = null;
   }
 
@@ -241,7 +244,41 @@ export class OptimizationProblem {
     const { evaluate, direction } = this.objective;
     const sign  = direction === 'minimize' ? -1 : 1;
     const snapshot = this.initialState?.kind === 'snapshot' ? this.initialState.snapshot : undefined;
-    return sign * evaluate(result, { snapshot });
+    const base = sign * evaluate(result, { snapshot });
+    if (!this.feasibilityFirst) return base;
+
+    // Design 80 U2 — lexicographic solvency ranking.
+    //
+    // Two distinct things this buys; be precise about which, because the obvious
+    // story is the wrong one. It is NOT that `μ · deficit` under-prices ruin —
+    // measured at the failing epoch (design/80 §2.9) the plain score already ranked
+    // the feasible option ~50x above the nearest infeasible one. What it buys is:
+    //
+    //  1. SEARCH GUIDANCE. Under the plain score, infeasible candidates are ordered
+    //     by `reward − λ − μ·deficit`, a mixture that includes consumption — so in a
+    //     high-dimensional space where feasible samples are scarce, CEM's elite set
+    //     fills with "expensively infeasible" points and refits its mean toward
+    //     them. Ordering infeasible candidates by least shortfall ALONE gives a
+    //     clean gradient back to the feasible set. This is what actually removed
+    //     the five failing epochs of §2.7.
+    //  2. A STRUCTURAL GUARANTEE in place of a numeric one. Solvency now holds at
+    //     any μ, so it cannot be lost to a future re-tune. That matters because the
+    //     λ term provably cannot help carry it: `computeNetLiquidity` bottoms out at
+    //     0 ("reaches zero at the same moment an OutOfFunds event fires"), so
+    //     `|terminal − target|` is capped at `target` across the whole insolvent
+    //     region and the terminal penalty for ruin never scales with its severity.
+    //
+    // When NOTHING is feasible — a real case, e.g. a lever range floor above the
+    // affordable level (§2.5) — least-shortfall ordering still gives the solver a
+    // direction, and `isFeasibleResult` lets the caller say so instead of silently
+    // committing the least-bad option.
+    //
+    // OFFSET is finite, not -Infinity: CEM fits a distribution over the elite set
+    // and a non-finite score poisons the mean/σ update. It is far above any
+    // realistic |base| (consumption, λ and μ terms are ≲1e10 on these scenarios)
+    // and far above any realistic deficit, so the two bands cannot interleave.
+    const shortfall = infeasibilityOf(result, snapshot);
+    return shortfall > 0 ? -INFEASIBLE_OFFSET - shortfall : base;
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────

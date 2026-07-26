@@ -146,9 +146,14 @@ if (controlRanges) {
   console.log(`  SPENDING search range: ${fmtUsd(r.min)} – ${fmtUsd(r.max)} (step ${fmtUsd(r.step)})\n`);
 }
 
+// `--no-feasibility-first` reproduces PRE-design-80-U2 ranking, so a run can be
+// compared against the behaviour the user actually saw in the browser.
+const feasibilityFirst = !argv.includes('--no-feasibility-first');
+console.log(`  feasibilityFirst: ${feasibilityFirst ? 'ON (design 80 U2)' : 'OFF (pre-U2 behaviour)'}\n`);
+
 const controller = new CockpitController({
   simStart, simEnd, baseParams, cfgTemplate, objective, controls, graph, runId, parentId: null,
-  controlRanges,
+  controlRanges, feasibilityFirst,
 });
 controller.setSnapshot(snapshot);
 

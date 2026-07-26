@@ -1,21 +1,87 @@
 # 80 — Feasibility-preserving harvest: why a baked plan goes broke and the controller doesn't
 
-**Status**: Proposed (2026-07-26)
+**Status**: Proposed (2026-07-26). **Superseded in direction by `design/81-run-as-replayable-artifact.md`** — §2.11's finding (whole-run harvesting is the wrong granularity) is what 81 acts on. F1 here remains required; F2 is de-prioritised (§10).
 **Related**: `design/39-mpc-financial-controller.md` §13 (the harvest this corrects — §13.3 forms, §13.6.3 POINT, §13.6.6 RESOLVE, §13.7 fidelity, §13.13 the representation question), `design/38-optimization-solver-framework.md` (the solve RESOLVE calls), `design/58-drawdown-levers.md` / `design/65-allocation-aware-drawdown.md` / `design/66-bond-fidelity.md` (the levers with no schedule form), `design/74-stochastic-return-paths.md` (multi-seed feasibility), `design/45` (early-withdrawal mechanics — the access cliff)
 
 > **Reading note**: design 39 §13 specifies *how* to copy a controller run back into a scenario. This design is about a case where doing that correctly still produces a **broken plan** — and argues that the harvest's job is not to reproduce the controller's answer but to **re-solve the controller's problem without feedback**. Those are different problems, and conflating them is the defect.
 
 ---
 
+## 0. Start here
+
+*This document is an investigation log as much as a design. It changed direction three times, and most of the mechanisms proposed along the way were disproved by later measurement. **Read §0 and §2.11; treat §2.3–§2.10 as the record of how we got there, not as current claims.***
+
+### The conclusion
+
+A `DIE_WITH_TARGET_LIQUID` (target \$0) cockpit run over the user's real scenario is **solvent at every one of its 44 epochs**, and the harvest of it goes **out-of-funds 2051-04-30 with a \$5.7M deficit**. Verified against the exported decision log (§2.11):
+
+- **A′** (the realized closed-loop path, replayed) ends solvent at \$106,476.
+- **B** (the baked scenario, re-run from t₀) ends at \$0, insolvent.
+- Swapping one lever group at a time from its per-epoch sequence to its baked form: **every SCHEDULE bake individually causes ruin; the POINT collapse is the only innocent one.**
+
+The bakes are *faithful* — their errors are a ±1-year step shift, an ε-collapse, a glidepath L1 tolerance. **The plan has no room for any of them**, because A′ leaves ~2% terminal margin, which is exactly what a die-with-zero goal on the liquid scope asks for. **The margin was being supplied by feedback**, and baking removes the feedback while keeping the boundary-hugging trajectory.
+
+### What to build
+
+| | Item | Why | Where |
+|---|---|---|---|
+| 1 | **F1 — block an infeasible harvest before apply** | Required. Nothing checks solvency today, and §2.6 shows the goal metric *cannot* substitute: a ruined plan and a perfect spend-down both read \$0. `design/81` also depends on this for promoting a variant. | §4.1 |
+| 2 | **U5 — expose solver budget + seed as cockpit controls** | Both hardcoded with no UI. Small, self-contained, independent of everything else. | §10.1 |
+
+That is the whole remaining scope of this document. Everything else is done, refuted, or has moved.
+
+### What NOT to build
+
+| Item | Status |
+|---|---|
+| **U1** un-saturate the terminal λ | **Refuted** (§2.9) — the objective ranks feasible above infeasible by ~50×. Also: raising the terminal target \$0→\$30k **cannot** help; the λ ruin penalty is capped at `λ · target`. |
+| **U3** SPENDING "rest-of-life" encoding | **Refuted** (§2.11) — an artifact of a 2-band reconstruction. The real pre-run table had 21 bands; each epoch decided a genuine segment. |
+| **U4** search adequacy | **Demoted** (§2.10) — at the app's real budget (64) the controller stays feasible throughout. The evals/dimension readout survives inside U5. |
+| **F2** margin-aware re-solve | **De-prioritised** by `design/81` — not refuted, out-competed. |
+| **F3 / F4** drawdown schedule forms, `bridgeReserve` | **Do not build** (§2.11) — the POINT levers are exonerated outright. Design 39 §13.13.4's `Schedule` type (design 79) is unmotivated by this evidence. |
+
+### Already landed
+
+- **U2** feasibility-first ranking — `feasibilityFirst` on `OptimizationProblem` (default off ⇒ OPT path byte-identical; default on for the cockpit), `advise()` returns a `feasibility` block, records stamp `extra.feasibility`. Tests in `tests/unit/feasibility-first.test.mjs`. **Byte-identical at budget 64** — insurance, not a fix.
+- **F5** ruin diagnostics on the decision record — landed with U2.
+- **`replayDecisions`** (`src/finance/mpc/replay.js`) + `tests/unit/mpc-replay.test.mjs`. This is what produced §2.11, and it is the foundation of `design/81`.
+- Lab tooling: `scripts/lib/scenario-probe.mjs`, `scripts/lab/{attribute-ruin,spend-ceiling,epoch-solvency,score-decomposition,replay-vs-bake}.mjs`.
+
+### Moved to design 81
+
+**P1-1b** (full effective param set per epoch) is now `design/81` **Phase 1a** — do it there, not here. It is the fix for index-keyed decisions silently re-keying when the band table changes.
+
+### Method note
+
+Four in-code reconstructions of the user's run produced four *different* wrong mechanisms. One export of the real decision log (`fin-sim-decisions` from browser localStorage) settled it in an afternoon. **Ask for the log first.**
+
+---
+
 ## 1. The observation
 
-Running the cockpit against a `DIE_WITH_TARGET` ("die with zero") goal and harvesting the result: **the baked scenario fails early — insolvency in the 2050s — while the closed-loop MPC run it was baked from does not.** The failure sits where the plan has to bridge from liquid/taxable wealth to retirement accounts that are not yet accessible: die-with-zero drives taxable down as far as it can, and open-loop it goes one step too far.
+Running the cockpit against a `DIE_WITH_TARGET_LIQUID` ("die with zero", terminal = net liquidity) goal and harvesting the result: **the baked scenario fails early — out-of-funds 2051-04-30 — while the closed-loop run it was baked from is solvent at every epoch.**
+
+*(As first written, this section attributed the failure to bridging from taxable wealth to not-yet-accessible retirement accounts. That was a guess and it is **wrong** — see §2.5 and §2.11. The real mechanism is in §2.11.)*
 
 This is not the drift design 39 §13.7 anticipated. §13.7 promises a **bounded, measurable Δ** on the goal metric, with a fidelity target of ~1% for schedule-form levers. A plan that runs out of money is not 1% off; it is a different kind of object. §13.7's framing quietly assumes the baked plan is *solvent*, and there is nothing in the harvest that enforces that.
 
 ---
 
-## 2. Why it happens — four mechanisms, all in the code
+## 2. Why it happens — the investigation
+
+> **Reading guide.** These subsections are chronological and several are **disproved by later ones**. If you want the answer, read **§2.11**; if you want the durable general theory, read **§2.1–§2.2**. The rest is kept because the refutations are themselves useful (they record which plausible mechanisms are *not* in play, and each was disproved by a measurement worth being able to repeat).
+>
+> | | | |
+> |---|---|---|
+> | §2.1–2.2 | the boundary/margin theory | **stands** — sharpened by §2.11 |
+> | §2.3–2.4 | drawdown POINT collapse | **refuted** §2.5, §2.11 |
+> | §2.5 | SPENDING blamed, feedback premium | superseded by §2.11 |
+> | §2.6 | goal metric degenerate at target | **stands** — load-bearing for F1 |
+> | §2.7 | controller commits ruin | **refuted** §2.10 (wrong budget) |
+> | §2.8 | bake misses both directions | superseded by §2.11 |
+> | §2.9 | objective ranks correctly; λ cap | **stands** |
+> | §2.10 | budget correction | **stands** |
+> | §2.11 | **the answer, on real data** | **current** |
 
 ### 2.1 The objective is indifferent to solvency margin
 
@@ -166,6 +232,129 @@ The mechanism behind (a) is the missing piece, and it is a property of the objec
 
 Note also what the epoch table shows about the trajectory: from epoch 2 onward the projected terminal is \$52,744 → \$78,181 → \$0 → \$898 against a multi-million-dollar plan. **The controller rides the boundary for the entire run**, which is exactly what §2.1 predicts and precisely the state in which no error budget remains for a bake.
 
+### 2.9 The objective is fine. The **search** is not. (measured 2026-07-26)
+
+§2.7 concluded λ saturation had disarmed μ. `scripts/lab/score-decomposition.mjs` tests that directly — drive the real loop to the first failing epoch (24, snapshot 2050-01-01), then sweep the SPENDING variable across its range at that snapshot and decompose every score:
+
+| spend/mo | reward (Δcons) | λ·\|term−tgt\| | μ·deficit | **score** | terminal | deficit | failed |
+|---|---|---|---|---|---|---|---|
+| \$7,000 | \$1,600,967 | −\$2,384,998 | −\$0 | −\$784,031 | \$875,641 | \$0 | |
+| **\$7,500** | \$1,715,322 | −\$462,932 | −\$0 | **+\$1,252,390** | \$169,963 | \$0 | |
+| \$8,000 | \$1,829,677 | −\$0 | −\$64,562,599 | −\$62,732,922 | \$0 | \$645,626 | ❌ |
+| \$10,000 | \$2,287,096 | −\$0 | −\$361,262,812 | −\$358,975,716 | \$0 | \$3,612,628 | ❌ |
+
+**The objective gets this right, decisively.** The feasible argmax (\$7,500) beats the nearest infeasible option by ~\$64M — a factor of 50. μ is not disarmed; it is dominant. The controller committed \$7,646 anyway, so **no reweighting of the objective would have prevented this**. U1 is refuted and must not be built.
+
+Two corrections to §2.7 follow, and one survives:
+
+- **Survives, in corrected form:** the λ term genuinely cannot carry solvency. Because `computeNetLiquidity` bottoms at 0, `|L − target|` is bounded above by `target` throughout the insolvent region, so **the terminal penalty for ruin is capped at `λ · target`** no matter how catastrophic. This also answers a user observation directly: **raising the target from \$0 to \$30,000 does not help and cannot** — it lifts the cap to `10 × 30,000 = $300k`, which is noise beside μ's \$64M. Raising the target changes the cap linearly and never makes it a gradient. Worth documenting on the param; not worth code.
+- **Wrong:** "the objective goes blind below the boundary." μ·deficit is linear in shortfall and provides a strong gradient. The blindness is confined to the λ term.
+- **Wrong:** "μ's documented calibration is violated." It holds comfortably here.
+
+**U4 — search adequacy is the real root cause.** The run was CEM at `budget 20` over 8 levers (13+ variables) — roughly two generations of ten samples in a 13-dimensional space, where the feasible spend region at this epoch is about the bottom fifth of the lever's range. The controller committed \$7,646, sitting just past a feasibility boundary that lies between \$7,500 and \$8,000. That is an under-powered search landing marginally outside the feasible set, not a mis-priced trade. Candidate work, in order:
+
+1. **Report search adequacy.** Budget per dimension is knowable before solving; a cockpit run at 1.5 evaluations/dimension should say so.
+2. **Feasibility-seeking initialisation.** Seed the first generation from the previous epoch's *feasible* committed point (the warm start already exists) and bisect toward feasibility on the dominant lever before the general search.
+3. **Re-measure at an honest budget** before anything else — the reproduction's budget is mine, not the user's, and the user's actual cockpit budget is unknown (§9).
+
+**What U2 buys — and it is more than expected.** The prediction was "no ranking change, just a guarantee plus reporting," since \$7,500 already won by 50×. Measured, the same 30-epoch run **fixes the failure outright**:
+
+| | before U2 | after U2 |
+|---|---|---|
+| epochs 24–28 | \$7,646, terminal **\$0**, deficit \$1,827, **❌ failed** | \$8,037 / \$7,596, terminal **\$78,181 / \$34,590**, deficit **\$0**, ✅ |
+| infeasible epochs | **5 of 30** | **0 of 30** |
+
+The mechanism is **search guidance, not final ranking**. Under the plain score, infeasible candidates are ordered by `reward − λ − μ·deficit`, which mixes consumption into the comparison — so CEM's elite set, in a 13-dimensional space where feasible samples are scarce, fills with "expensively infeasible" points and refits its mean toward them. Under feasibility-first, infeasible candidates are ordered by **least shortfall alone**: a clean gradient pointing at the feasible set. That is precisely U4's proposed mechanism (2), arriving as a side effect of the ranking change, and it means U2 partially addresses the root cause rather than only masking it.
+
+The guarantee and the reporting still stand on their own: solvency is lexicographic and holds at any μ (pinned by `tests/unit/feasibility-first.test.mjs`, including a μ=0 case), and `advise()` now returns a `feasibility` block. **0-of-N feasible candidates is the signal that the lever's range is the binding constraint**, and it was invisible before.
+
+Confirmed on a second seed: seed 7, 30 epochs, **0 infeasible**, terminals \$597,909 → \$10,496 and every projection solvent. The two seeds pick materially different paths (seed 1 settles near \$8,037/\$7,596, seed 7 wanders \$7,438–\$8,625), so the feasibility result is not a single lucky trajectory.
+
+*Verified on one scenario at budget 20, two seeds; §9's caveats about budget and reproduction fidelity apply, and U4's re-measurement at an honest budget is still owed.*
+
+### 2.10 §2.7 was measured at the wrong budget — the controller does NOT commit ruin
+
+**Correction, 2026-07-26.** §2.7's headline finding — five consecutive epochs committing a plan their own rollout flagged `scenarioFailed` — was produced at `budget 20`. That is **not what the app runs**. `mpc-cockpit-plugin.js` hardcodes `budget: 64, seed: 1` for both manual Advise (`:573`) and Auto (`:708`); the 48 at `:907` is the harvest RESOLVE, a separate path.
+
+Re-run at the real budget, pre-U2 ranking, same 30 epochs, same scenario, same seed:
+
+| | budget 20 (my probe) | **budget 64 (what the app runs)** |
+|---|---|---|
+| infeasible epochs | 5 of 30 | **0 of 30** |
+| committed spend | \$7,646–\$8,037 | \$7,441–\$7,930, settling \$7,646 |
+| projected terminal | \$0 at the failing epochs | \$6,826–\$300,869, all solvent |
+
+**So candidate (a) does not occur in the real configuration, and §2.7's mechanism is withdrawn.** The controller rides the boundary — a terminal of \$6,826 on a multi-million-dollar plan is as close to zero as it gets — but it stays solvent at every epoch. What follows:
+
+- **U1 stays refuted** (§2.9's decomposition is budget-independent: the objective ranks feasible above infeasible by ~50×).
+- **U2 is insurance, not the fix.** It is a correct structural guarantee with tests and no blast radius on the OPT path, and it matters if U5 ever lets a user *lower* the budget — but it does not explain or repair the user's insolvent scenario. The "U2 removed 5 failing epochs" result in §2.9 is real only at budget 20, i.e. against a defect that the shipped app does not have. §2.9's table is retained with that scope.
+- **U4 drops sharply in priority.** At budget 64 the search is adequate to stay feasible throughout. ~4.9 evals/dimension is still thin and the U5 readout is still worth having, but search is not the root cause.
+- **What survives is the harvest**, which is where this document started. The controller produces a solvent, boundary-hugging plan; the harvest turns it into a different and more aggressive one; nothing checks the result. **F1 (feasibility gate before apply) and U3 (the rest-of-life encoding) are the live work.**
+
+**Reproduction fidelity — still not matched, and this bounds every claim above.** At budget 64 my run commits \$7,441–\$7,646, while the user's saved scenario carries bands from \$7,489 to \$10,000 (mean \$8,731), several pinned at the range maximum. Values sitting at the max indicate epochs where the controller wanted *more* than the range allowed, which my reconstruction never reaches. Remaining differences: my `baseParams` start from the harvested cfg with the non-spending levers already at harvested values rather than their pre-run state; 30 epochs to age 76 versus ~42 to age 89; and the user may have driven manual Advise rather than Auto. **The mechanisms below are directly observed; the user's specific run is not reproduced.**
+
+#### What is measured, and therefore safe to build on
+
+1. The saved scenario is insolvent — out-of-funds 2051-04-30, \$5,705,589 deficit, terminal net worth \$4,803,802 (the illiquid residue).
+2. `SPENDING` is the responsible lever; the four drawdown levers move the ruin date by months (§2.5).
+3. The open-loop ceiling is ≈\$7,244/mo mean against a baked \$8,731 — a **20.5% feedback premium** (§2.5).
+4. **Every epoch targets band index 1**, so every decision is a *rest-of-life* level that the harvest re-keys into one-year steps (§2.5c). Observed in every run at every budget and seed. **This is the most robust finding in this document.**
+5. `finalNetLiquidity` is degenerate at `target = 0`: a bankrupt plan and a perfect spend-down both read \$0, so neither the cockpit card nor `verify-harvest.mjs` can tell them apart (§2.6).
+6. The λ penalty for ruin is capped at `λ · target`, so raising the target \$0→\$30k cannot help (§2.9).
+7. At the app's real budget the controller stays solvent at every epoch (this section).
+
+---
+
+### 2.11 Ground truth — the real decision log settles it (2026-07-26)
+
+The user exported the browser's `fin-sim-decisions` store: **44 epochs, one run, 9 levers, `DIE_WITH_TARGET_LIQUID`, sim 2026→2070.** The saved scenario was verified to be *exactly* the harvest of these records — the 23 MPC-decided spending bands match the derived harvest age-for-age and dollar-for-dollar. Both ends of the pipeline are now ground truth, and the reconstructions in §2.5–§2.10 can be retired in favour of it.
+
+**Every prior mechanism is refuted:**
+
+| Claim | Verdict against the real log |
+|---|---|
+| §2.7(a) controller commits ruin | **Refuted** — all 44 epochs record `cumulativeDeficit: 0`, `scenarioFailed: false` |
+| §2.5(c) / U3 rest-of-life encoding | **Refuted** — `_bandIndex` increments 2,3,3,4,5,5,5,6,7,8… The user's pre-run table already had **21 bands** (ages 0,45,47,48,50,51,54,55,56,58–68,76 — itself an earlier harvest), so each epoch decided a genuine *segment*. The rest-of-life behaviour was an artifact of my 2-band reconstruction. |
+| §2.3/§2.4 the POINT collapse breaks it | **Refuted** — see the isolation below |
+| §2.5 SPENDING's bake is unfaithful | **Refuted** — it reproduces every epoch exactly |
+
+**The three terms** (`scripts/lab/replay-vs-bake.mjs`, using the new `replayDecisions`):
+
+| Term | Terminal net liquidity | Solvency |
+|---|---|---|
+| **A** last epoch projected | \$16,249 | ✅ solvent |
+| **A′** realized closed-loop (replay) | **\$106,476** | ✅ **solvent** |
+| **B** baked scenario from t₀ | \$0 | ❌ **ruin 2051-04-30, \$5,705,589** |
+
+A and A′ agree to the same order of magnitude, so the controller's projections do describe the path its decisions produce. **The run is solvent; the harvest of it is not.**
+
+**Which bake?** Start from the solvent replay and swap one lever group from its per-epoch sequence to its baked form:
+
+| Swap | Result |
+|---|---|
+| full replay (A′) | ✅ solvent, \$106,476 |
+| bake **SPENDING** | ❌ **ruin, \$3,966,450** |
+| bake **ALLOCATION_MIX** | ❌ **ruin, \$1,696,078** |
+| bake **ROTH** | ❌ **ruin, \$2,305,959** |
+| bake **EARLY_WITHDRAWAL** | ❌ **ruin, \$1,561,963** |
+| bake the 5 POINT levers | ✅ solvent, \$3,529,481 |
+
+**Every SCHEDULE bake individually causes multi-million-dollar ruin. The POINT collapse — the one this document was written to indict — is the only bake that doesn't.**
+
+#### Why: there is no achievable fidelity that saves this plan
+
+The four schedule bakes are *faithful* in the sense §13.6 intends. Their residual errors are small: a ±1-year step shift from keying on age-at-`asOfDate`, an ε-collapse of consecutive equal amounts, a glidepath L1 collapse at 0.02, `absence == skip-year` in the two schedules. None of that is a defect. **The plan simply has no room for any of it.**
+
+A′ ends with **\$106,476** of terminal liquidity on a multi-million-dollar plan — about 2% of scale, which is precisely what `DIE_WITH_TARGET_LIQUID` with `target = 0` *asks for*. At that margin a 1% approximation error is a 50% terminal error and a 3% error is insolvency. §13.7's "schedule-form levers within ~1% of the committed terminal" is not merely unmet here; **it is unmeetable**, because the denominator has been optimised to zero.
+
+This is §2.1–§2.2's thesis, now demonstrated end-to-end on real data rather than argued:
+
+> **The margin was being supplied by feedback.** The controller re-measured every year and steered along the boundary. Baking removes the steering while keeping the boundary-hugging trajectory, and then *any* approximation — in *any* lever, schedule or point — tips it over. The direction of the error is incidental; that there is an error at all is sufficient.
+
+**Therefore the fix is not better bakes.** Improving fidelity attacks a term that is already small. The fix is **F2** — the harvest must re-solve with an explicit solvency margin, because an open-loop plan needs a buffer the closed-loop one provably did not. F2 was demoted in §2.10 as "treating a symptom"; that was wrong. It is the only item on the list that addresses the actual mechanism. **F1** (block an infeasible harvest before apply) remains the necessary companion, and §2.6 explains why it cannot be expressed as a fidelity percentage.
+
+---
+
 ### 2.8 The bake misses in *both* directions
 
 The same 34-epoch run's harvest re-runs from t₀ at **\$11,421,707** terminal liquidity, against the controller's committed **\$898** — four orders of magnitude, in the *conservative* direction, while the user's saved scenario missed in the *aggressive* direction (ruin 2051). Same root causes (the §2.5(c) re-keying, plus the last-anchor extrapolation noted in §9). The honest conclusion is stronger than "harvested plans go broke":
@@ -204,6 +393,15 @@ Today §13.7's verify is **post-hoc and optional** ("offer a one-click check" af
 - Headless twin in `scripts/lab/verify-harvest.mjs`, so it is regression-testable.
 
 This is small and it stops the harvest shipping broken plans regardless of whether anything else here lands.
+
+**Implementation notes (added 2026-07-26 — enough to start cold):**
+
+- **Reuse `isFeasibleResult` / `infeasibilityOf`** from `optimization-objectives.js`; they landed with U2 and already handle the `scenarioFailed`-without-accrued-deficit case and snapshot windowing. Do not re-derive a solvency test.
+- **Where the check runs.** `applyHarvestPlan(scenario, plan, { schema })` is pure param-writing today and must stay so. Put the check *above* it — a `checkHarvestFeasibility(scenario, plan, { simStart, simEnd, cfgTemplate })` that folds the plan onto a copy of the params, runs from t₀, and returns `{ feasible, outOfFundsDate, cumulativeDeficit, deficitMonths }`. The preview panel calls it before enabling **Copy to scenario**; `applyHarvestPlan` stays a dumb writer.
+- **Never express this as a Δ%.** §2.6: `finalNetLiquidity` reaches zero at the same moment `OUT_OF_FUNDS` fires, so a ruined plan and a perfect spend-down both terminate at \$0 and the drift reads ≈0. `verify-harvest.mjs` additionally guards its verdict on `a !== 0` and so prints **nothing** at a=0 — fix that too, and make the headless verdict report feasibility as its own line above the drift.
+- **Partial harvests must be checkable.** Design 81 promotes single values and single levers, so the check takes a *plan*, not a whole run — a plan with one entry is a valid input. That is also what makes it reusable as design 81's Phase-5 promotion gate.
+- **Cost.** One extra full-horizon run per preview (a few seconds on this scenario at `telemetry:'off'`). Run it when the preview opens, not on every checkbox toggle, and debounce if the pick-list lands.
+- **Test** with `scenarios/fin-sim-die-with.json` + `scenarios/fin-sim-decisions.json`: harvesting that log must be **blocked**, naming 2051-04-30. That pair is a permanent regression fixture for this gate.
 
 ### 4.2 F2 — Bake-aware re-solve: the harvest optimises a *different problem*
 
@@ -263,6 +461,8 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 ## 5. Decisions locked
 
+> **Caveat.** D1–D5 are sound and unchanged. **D6 (RESOLVE for scalar levers) is de-prioritised** with F2, and **D7 (Phase 3 gated on VoTV)** is answered in the negative by §2.11 — the drawdown levers are exonerated, so there is no VoTV case to measure for them.
+
 - **D1 — Feasibility precedes fidelity.** A harvest plan is checked for solvency *before* apply; infeasible blocks with an explicit, labelled override. `Δ%` fidelity targets apply only to feasible plans.
 - **D2 — The harvest re-solves a different problem than the controller solved.** Closed-loop objectives may be indifferent to margin because feedback supplies it; an open-loop bake must buy margin explicitly. RESOLVE gets a min-liquidity floor by default, multi-seed feasibility opt-in.
 - **D3 — Variance is the wrong collapse statistic.** §13.6.3's warning is augmented with a **boundary-crossing** check: did this lever move within ±1 year of a statutory access age, a move, or a sale? One decisive move there outranks twenty small ones.
@@ -296,6 +496,8 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 ## 8. Step-by-step implementation plan
 
+> **Historical.** This plan was written against the original premise and reorganised twice as measurements came in. **§10 is the current ledger** and §0 is the summary. Kept for the P0 record — the attribution tooling in P0 is real and reusable.
+
 ### Status legend
 - [ ] not started · [x] done
 
@@ -327,21 +529,6 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 ---
 
-## 10. Where this leaves the design (2026-07-26)
-
-P0 was supposed to confirm a harvest defect. It found a **controller** defect, and the scope of this document has to move with it. Revised priority, highest first:
-
-1. **U1 — Un-saturate the terminal term (§2.7).** The `liquid` scope with `target = 0` gives the objective no gradient in the insolvent region, and μ's calibration explicitly assumes a gradient that isn't there. Options in Q6; a one-sided λ (free above the target, penalised below) is the cheapest correction and is arguably the right semantics for terminal *liquidity* regardless. **This is a design-39/38 objective fix and it is the root cause.**
-2. **U2 — Never commit an epoch whose own rollout reports `scenarioFailed`.** The controller has the flag in hand at decision time and ignores it. A hard feasibility filter on the candidate set — reject infeasible candidates before ranking, fall back to the least-deficit candidate only if *all* are infeasible, and surface that state loudly in the cockpit — is a small, local change with no objective re-tune.
-3. **U3 — Fix the SPENDING lever's rest-of-life encoding (§2.5c).** Either the lever must decide a *segment* (a band it owns until the next epoch) rather than the open-ended tail, or the harvest must stop re-keying rest-of-life answers as steps. Until one of these changes, `SPENDING` cannot be harvested faithfully at all (§2.8) — and this is design 39 §13.6.1, not design 80.
-4. **F5 / F1** (ruin diagnostics on the record; feasibility gate before apply) — still correct, still wanted, and now justified by §2.6 as much as by §2.5: the goal metric cannot distinguish success from ruin, so neither the cockpit card nor `verify-harvest.mjs` can.
-5. **F2 (margin-floor RESOLVE)** — demoted. It is a reasonable robustness measure but it treats a symptom; with U1 and U2 in place its value should be re-measured, not assumed.
-6. **F3 / F4 (P3 plant work)** — **do not build.** §2.5 exonerated the drawdown levers and §2.8 shows the schedule form is not the binding constraint. Design 39 §13.13.4's `Schedule` type (design 79) is likewise unmotivated by this evidence.
-
-The general theory in §2.1–2.2 survives intact and is in fact sharper than when it was written: an objective that optimises toward a constraint boundary produces plans with no error budget, and feedback is what was silently paying for the margin. What changed is *where the fix belongs*.
-
----
-
 ## 9. Honest limits
 
 - ~~The attribution to the drawdown levers is **inferred**, not yet measured.~~ **Measured 2026-07-26 and refuted** (§2.5). The general theory in §2.1–2.2 survives — an objective indifferent to solvency margin produces knife-edge plans — but it is `SPENDING`, not the drawdown levers, that carries it here. Worth keeping as a caution: the predicted signature (`drawdownWeight::super` drawn first, ahead of preservation age) was *visibly present in the harvested params* and still not load-bearing. A plausible-looking artifact in a harvested scenario is not evidence.
@@ -351,3 +538,42 @@ The general theory in §2.1–2.2 survives intact and is in fact sharper than wh
 - The `--spend-range` and `--goal` flags are not cosmetic. Both were needed to reproduce the behaviour and neither is the default; a lab result on this scenario without both is measuring a different system.
 - Nothing here makes an open-loop plan as good as the controller. It makes it **solvent**, and states what it cost. §13.7's open-loop caveat stands unchanged and still belongs on the panel.
 - A margin floor is a robustness heuristic, not a guarantee. Multi-seed feasibility (F2b) is closer to honest; full chance-constrained harvest is design 39 §10 Q5's territory and stays out of scope.
+
+---
+
+## 10. Current state
+
+*§0 is the summary. This is the full ledger, including why each item landed where it did.*
+
+| Item | State | Rationale |
+|---|---|---|
+| **F1** block an infeasible harvest before apply | **TODO — priority 1** | Nothing checks solvency today; §2.6 shows the goal metric cannot substitute. `design/81` depends on it to promote a variant. §4.1 |
+| **U5** budget + seed cockpit controls | **TODO — priority 2** | Hardcoded, no UI. Absorbs U4's evals/dimension readout. §10.1 |
+| **U2** feasibility-first ranking | **DONE** | Correct, tested, byte-identical at budget 64. Insurance, not a fix — matters once U5 lets a user lower the budget. |
+| **F5** ruin diagnostics on the record | **DONE** | Landed with U2 as `extra.feasibility`. |
+| **P1-1b** per-epoch effective params | **MOVED** → `design/81` Phase 1a | Prerequisite there; index-keyed decisions re-key silently without it. |
+| **U4** search adequacy | **DEMOTED** | §2.10 — at budget 64 the search stays feasible. Readout survives in U5; feasibility-seeking init unjustified. |
+| **F2** margin-aware re-solve | **DE-PRIORITISED** | Out-competed by `design/81`, not refuted. §2.11's analysis is why 81 exists. |
+| **U1** un-saturate terminal λ | **REFUTED** | §2.9 — objective ranks feasible above infeasible ~50×. |
+| **U3** SPENDING rest-of-life encoding | **REFUTED** | §2.11 — artifact of a 2-band reconstruction; the real table had 21 bands. |
+| **F3 / F4** drawdown schedules, `bridgeReserve` | **DO NOT BUILD** | §2.11 exonerates the POINT levers outright. |
+| **P1-1e** boundary-crossing POINT warning | **DROPPED** | Was motivated by §2.4's POINT indictment, which §2.11 refuted. A better collapse warning is still defensible, but nothing here argues for it. |
+
+**The general theory (§2.1–§2.2) survives intact and is sharper than when written:** an objective that optimises toward a constraint boundary produces plans with no error budget, and feedback is what was silently paying for the margin. What moved three times was *where the fix belongs* — from the harvest, to the controller, and back to the objective's zero margin. `design/81` acts on the corollary: if the plan has no margin, stop committing all of it at once.
+
+### 10.1 U5 detail — budget and seed
+
+`mpc-cockpit-plugin.js` hardcodes `budget: 64, seed: 1` at `:573` (manual Advise) and `:708` (Auto), and `budget: 48, seed: 1` at `:907` (the harvest RESOLVE). Nothing surfaces either. Two consequences the user cannot currently act on:
+
+- **Budget is fixed while the search space is not.** A one-lever run is 1 variable; §2.9's 8-lever run is 13+. A fixed 64 is ~64 evals/dimension in the first case and ~4.9 in the second — a thorough search and a sparse one wearing the same number, with no way to notice or compensate. Pair the control with a live **evals/dimension** readout so sparsity is visible *before* the run rather than inferred from a bad answer after it. This is U4's item 1, and the control is what makes it actionable.
+- **`seed: 1` everywhere means every Auto run explores the identical trajectory.** Reproducibility is the right default, but with no way to vary it, solver variance is invisible: a plan that only works on seed 1 looks exactly like a robust one. A seed control is also the cheapest form of the out-of-sample check design 39 §13.7 asks for.
+
+Small, self-contained UI work, independent of U2/U3/U4 and worth doing regardless of how they land. Plumb one budget and one seed through all three call sites rather than adding a per-path control.
+
+The general theory in §2.1–2.2 survives intact and is sharper than when written: an objective that optimises toward a constraint boundary produces plans with no error budget, and feedback is what was silently paying for the margin.
+
+**Where the fix belongs moved three times and landed on §2.1.** P0 moved it from the harvest to the controller; §2.10 moved it back when the controller finding proved to be an artifact of a budget the app does not use; §2.11, on the real decision log, put it on the *objective's zero margin* rather than on any bake. Everything invented along the way — U1, U3, U4 — is withdrawn, and U2 survives only as insurance. **The live work is F2 (margin-aware re-solve) and F1 (block an infeasible harvest), both in the original draft.**
+
+The detour paid for itself in findings that outlast it: §2.6 (the goal metric cannot distinguish success from ruin, so the shipped verify cannot catch this class of failure), the λ cap that explains why raising the terminal target does nothing, the exoneration of the drawdown levers, and `replayDecisions` — without which none of §2.11 was measurable. But the lesson is the cheaper one: **four reconstructions produced four wrong mechanisms, and one export of the real decision log settled it in an afternoon.** Get the log first.
+
+---
