@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ALLOCATION_VALUES } from './allocation.js';
+import { ALLOCATION, ALLOCATION_VALUES } from './allocation.js';
 import { RATE_KEYS }         from '../economic-regimes/rate-keys.js';
 
 const RATE_KEY_VALUES = new Set(Object.values(RATE_KEYS));
@@ -169,6 +169,15 @@ export class Holding {
    *                                                  BondPriceAdjustReducer pull-to-par mark (the accretion owns the price
    *                                                  trajectory) but still takes the rate-sensitivity mark. Ignored for
    *                                                  non-BOND allocations / bond funds (no maturityDate).
+   * @param {number|null} [opts.fxBasisRate=null]   - BOND holdings in a non-USD account (design 87 G9):
+   *                                                  foreign units per USD when the bond was ACQUIRED. A
+   *                                                  foreign-currency bond is a debt instrument
+   *                                                  (§988(c)(1)(B)(i)) and its HOLDER realizes ordinary
+   *                                                  exchange gain or loss on principal when it is redeemed
+   *                                                  or disposed of (Reg. §1.988-2(b)(5) — the mirror of the
+   *                                                  (b)(6) obligor rule the mortgage leg uses). Ignored for
+   *                                                  EQUITY/GOLD, which are NOT §988 property: their currency
+   *                                                  movement rides inside the capital gain via §1001.
    * @param {boolean}     [opts.inflationLinked=false] - BOND holdings only (design 66 §G5): a TIPS / inflation-linked
    *                                                  bond. Its principal indexes to CPI each year (via
    *                                                  `state.cpiAccumulator`), so its cash coupon (marketValue × couponRate)
@@ -205,13 +214,24 @@ export class Holding {
     rollTermYears        = null,
     zeroCoupon           = false,
     inflationLinked      = false,
+    fxBasisRate          = null,
   } = {}) {
     assertValidAllocation(allocation, id);
     assertValidRateKey(rateKey, id);
     this.id                   = id;
     this.allocation           = allocation;
     this.marketValue          = marketValue;
-    this.costBasis            = costBasis;
+    // Design 87 §11 — CASH carries no capital gain, so its basis IS its value. A unit
+    // of currency is disposed of for exactly its face; there is no price to have moved.
+    // Enforced here rather than trusted, because a stale ratio is invisible and
+    // survives forever: the proportional scaling in holding-utils preserves whatever
+    // basis:value ratio a lot is created with, so one bad authoring or import fixes it
+    // in place for the life of the plan.
+    //
+    // This does NOT discard currency basis. A foreign-currency pool's §988 basis is a
+    // RATE, not an amount, and lives in `fxBasisRate` — that separation is the whole
+    // point of design 87. `costBasis` was never able to express it.
+    this.costBasis            = allocation === ALLOCATION.CASH ? marketValue : costBasis;
     this.costBaseByCountry    = costBaseByCountry;
     this.purchaseDate         = purchaseDate;
     this.acquisitionPriceLevel = acquisitionPriceLevel;
@@ -232,6 +252,7 @@ export class Holding {
     this.rollTermYears        = rollTermYears;
     this.zeroCoupon           = zeroCoupon;
     this.inflationLinked      = inflationLinked;
+    this.fxBasisRate          = fxBasisRate;
   }
 
   toJSON() {
@@ -268,6 +289,7 @@ export class Holding {
       rollTermYears:       this.rollTermYears,
       zeroCoupon:          this.zeroCoupon,
       inflationLinked:     this.inflationLinked,
+      fxBasisRate:         this.fxBasisRate,
     };
   }
 
@@ -306,6 +328,7 @@ export class Holding {
       // design 66 §G5/§G6: TIPS + zero-coupon/OID. Absent ⇒ a plain (coupon) bond.
       zeroCoupon:     d.zeroCoupon ?? false,
       inflationLinked: d.inflationLinked ?? false,
+      fxBasisRate:     d.fxBasisRate     ?? null,
     });
   }
 }

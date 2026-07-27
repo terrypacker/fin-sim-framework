@@ -12,6 +12,8 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield }       from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
+import { computeSection988Gain, section988Residence }
+  from '../account-rules/loan-classes.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -70,6 +72,7 @@ export class BondMaturityReducer extends Reducer {
     const effectiveRates = state.effectiveInterestRates ?? {};
     const yieldCurve     = state.yieldCurve ?? {};
     const accountUpdates = {};
+    const s988Actions    = [];
 
     for (const key of Object.keys(state)) {
       const account = state[key];
@@ -78,12 +81,76 @@ export class BondMaturityReducer extends Reducer {
       const hasMatured = account.holdings.some(h => isMatured(h, asOfMs));
       if (!hasMatured) continue;
 
+      // Design 87 G9 — a foreign-currency bond is a DEBT INSTRUMENT (§988(c)(1)(B)(i)),
+      // and its holder realizes ordinary exchange gain or loss on principal when it is
+      // redeemed (Reg. §1.988-2(b)(5), the mirror of the (b)(6) obligor rule the
+      // mortgage leg uses). Collected before the map so the pre-redemption holding —
+      // which still carries `fxBasisRate` — is the one measured.
+      for (const h of account.holdings) {
+        if (isMatured(h, asOfMs)) s988Actions.push(...section988ForRedemption(state, key, account, h));
+      }
+
       const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates, yieldCurve) : h);
       accountUpdates[key] = _syncBalance({ ...account, holdings: nextHoldings });
     }
 
-    return this.newState(state, accountUpdates);
+    return this.newState(state, accountUpdates, s988Actions);
   }
+}
+
+/**
+ * §988 on the redemption of a foreign-currency bond — design 87 G9.
+ *
+ * Only BOND is reached. EQUITY and GOLD are deliberately absent: §988(c)(1)(B) is a
+ * closed list (debt instruments, accrued items, forwards/futures/options) and a share
+ * is on none of it, so its currency movement stays *inside* the capital gain via §1001
+ * translation. Booking a separate §988 item on an equity sleeve would both double-count
+ * the move and recharacterise capital gain as ordinary.
+ *
+ * Measured on the PRINCIPAL received (par), not on market value: Reg. §1.988-2(b)(5)
+ * separates the exchange component of principal from the instrument's own price
+ * movement, which remains capital.
+ *
+ * @returns {object[]} zero or one SECTION_988_GAIN action
+ */
+function section988ForRedemption(state, accountKey, account, holding) {
+  if (holding.allocation !== ALLOCATION.BOND) return [];
+  if (holding.fxBasisRate == null) return [];
+  // Keyed on the ACCOUNT's currency: the bond is denominated in whatever the account
+  // is. Super is excluded for the same reason design 87 §5 keeps it out everywhere —
+  // a pension interest is its own regime (design 83 Art. 18 / design 84 s99B), and
+  // reaching inside it here would conflate two unrelated sets of rules.
+  const ccy = account.currency?.code ?? account.currency ?? null;
+  if (ccy == null || ccy === 'USD' || account.type === 'super') return [];
+
+  const par = holding.inflationLinked
+    ? Math.max(holding.marketValue ?? 0, holding.faceValue ?? 0)
+    : (holding.faceValue ?? holding.marketValue ?? 0);
+  if (!(par > 0)) return [];
+
+  const spot = state?.effectiveExchangeRates?.USD_AUD ?? 1.55;
+  if (!(spot > 0)) return [];
+
+  // A bond held in a taxable account is an investment — §212 — so the §988(e)(3) share
+  // is 1 unless the account says otherwise. That is the opposite default from a cash
+  // pool, where the balance funds living expenses; the difference is deliberate.
+  const frac = account.deductibleFraction ?? 1;
+  // Rates TRANSPOSED, because this is the HOLDER of the debt, not the obligor —
+  // Reg. §1.988-2(b)(5) vs (b)(6). `computeSection988Gain` is written in the obligor's
+  // convention, so passing (acq, spot) here would invert the sign of every redemption.
+  // `false`: no §988(e)(2) de minimis. Redeeming a debt instrument returns principal;
+  // it is not a disposition of nonfunctional currency. Same reasoning as the mortgage.
+  const r = computeSection988Gain(par, spot, holding.fxBasisRate, frac, false);
+  if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return [];
+
+  return [{
+    type: 'SECTION_988_GAIN',
+    accountKey, holdingId: holding.id ?? null,
+    currency: account.currency?.code ?? account.currency ?? null,
+    amount: r.recognized, gross: r.gross,
+    disallowedLoss: r.disallowedLoss, deMinimis: r.deMinimis,
+    residency: section988Residence(state, account),
+  }];
 }
 
 /** True when a holding is an individual bond that has reached maturity. */

@@ -143,6 +143,18 @@ export class Account extends Asset {
     // payment handler for loans, Phase 3), overriding the absolute `interestRate`.
     // null → not Prime-linked → the absolute `interestRate` path applies (back-compat).
     this.primeSpread    = opts.primeSpread    ?? null;
+    // §988 currency basis (design 87). The rate at which this pool's foreign currency
+    // was acquired, in foreign units per USD. Applies to ANY non-USD cash account —
+    // §988(c)(1)(C)(ii) reaches every bank deposit denominated in nonfunctional
+    // currency, so savings, transaction and offset accounts are on the same footing.
+    // null ⇒ stamped at the first disposition, which understates §988 rather than
+    // inventing it; author the real rate to fix that.
+    this.fxBasisRate    = opts.fxBasisRate    ?? null;
+    // §988(e)(3) / s8-1 income-producing share. Shared with LoanAccount, which has
+    // used it since design 86 G3 — the two provisions ask the same question, so a
+    // second knob would mean maintaining two independently-wrong ones. On a currency
+    // pool it decides whether an exchange LOSS is deductible at all (§165(c)).
+    this.deductibleFraction = opts.deductibleFraction ?? null;
     // Transaction-account flag (design 55 §7). Default false → the debit/replenish
     // target resolver falls back to the SAVINGS role, so legacy scenarios are
     // unchanged. Serialized only when true (see ScenarioSerializer._serializeAccount).

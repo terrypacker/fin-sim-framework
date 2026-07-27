@@ -387,11 +387,24 @@ a moving USD/AUD path this is not small, and it is a **cost of holding foreign
 leverage specifically** — which makes it in-scope for the question this design serves,
 even though it is the lowest-value item here. Documented, not scheduled.
 
-**Promoted by §8, and BUILT as P8.** This was the lowest-value item while every run
-held the exchange rate constant, because a §988 gain on a pinned rate is identically
-zero — measured, and confirmed: `fxProcessModel: NONE` produces exactly zero §988
-events in every year. §8 requires a live FX process, and the moment the rate moves this
-stops being a rounding error.
+**Promoted by §8, and BUILT as P8.** This was thought to be the lowest-value item
+while every run held the exchange rate constant. §8 requires a live FX process, and
+the moment the rate moves this stops being a rounding error.
+
+> **Correction — "a pinned rate produces zero §988" is false, and the live scenario is
+> the counter-example.** §988(b)(1) measures from the **booking date** to the
+> **payment date**, not year over year. A pinned rate does not freeze the *gain*; it
+> freezes the *rate of* gain. Whenever a loan's authored `bookingFxRate` differs from
+> the pinned `exchangeRateUsdToAud` — which is the normal case, because the booking
+> rate is real history and the pin is a modelling choice — every unit of principal
+> repaid realizes a **constant** `1/r_book − 1/r_pin`, forever, under
+> `fxProcessModel: NONE`. On a loan booked when the AUD was materially stronger than
+> the pin, that constant is on the order of ten cents per unit, and over a full
+> amortisation it compounds to a five-figure lump of US ordinary income on a rate
+> that never moves. The earlier "measured, and confirmed: exactly zero events in
+> every year" was measured on a fixture where `bookingFxRate` happened to equal spot.
+> FX-pinned is a control for the *deposit* leg's path risk, never the debt leg's level.
+> Concrete figures are in the gitignored run notes, not here.
 
 **Built.** `bookingFxRate` on `LoanAccount` and `mortgageBookingFxRate` on
 `RealProperty` record the rate the debt was incurred at; each principal repayment
@@ -427,15 +440,72 @@ not transcription:
 **Two structural silences, and they are the finding rather than a caveat.** An
 interest-only loan repays no principal, so it recognizes **nothing** until it
 amortises or matures — deferring decades of currency movement into whichever year the
-balloon lands, as a single lump of ordinary income. A fully offset loan is equally
-silent, because an offset suppresses interest without repaying principal. **§988 bites
-on repayment, not on holding the debt**, which means it does not weigh against holding
-a fully-offset facility at all — it weighs against *exercising* it.
+balloon lands, as a single lump of ordinary income. And an offset suppresses interest
+without repaying principal, so merely *holding* a fully-offset facility realizes
+nothing. **§988 bites on repayment, not on holding the debt.**
+
+> **Correction — do not compose those two into "a fully offset loan is silent".**
+> Combining them inverts the result. A fully offset **amortizing** loan has zero
+> interest, so **100% of every payment is principal** — the maximum §988 realization
+> rate, not zero. Silence requires interest-only *and* offset; the live scenario's AU
+> house is P&I with `offset ≥ balance` and therefore realizes §988 on every single
+> payment, every month, for the whole life of the loan. The silence belongs to
+> `interestOnly: true`, and
+> the offset was doing none of the work.
+>
+> Nor is repayment the only trigger. Reg. §1.988-2(b)(6) realizes the obligor's
+> position when principal is paid **or the obligation is transferred or extinguished**
+> — a refinance that is a significant modification under Reg. §1.1001-3, or a buyer
+> assuming the mortgage on sale, realizes the whole accumulated position with no cash
+> repayment at all. Neither is modelled. Note also that an AU **redraw** facility is
+> tax-different from an offset even though the two are economically near-identical:
+> money paid into redraw genuinely reduces principal (cf. ATO TR 2000/2, which treats
+> the redraw as a fresh borrowing), so redraw realizes §988 on every extra repayment
+> where an offset realizes none.
 
 **Not modelled:** the §988 item on interest between accrual and payment
-(Reg. §1.988-2(b)(3)) is identically zero here because the two are simultaneous. Nor is
-§988 on the AUD *deposit* in the offset account itself; that is a separate transaction
-class and is out of scope.
+(Reg. §1.988-2(b)(4) for the obligor) is identically zero here because the two are
+simultaneous. Nor is §988 on the AUD *deposit* in the offset account itself — which is
+not a separate curiosity but **the matched opposite leg of the position P8 models**;
+see open question 5, which §8 depends on.
+
+**Source is residency-dependent, and was hard-coded to the US — FIXED.**
+§988(a)(3)(A) sources the gain by the taxpayer's residence, and §988(a)(3)(B)(i)(I)
+defines an individual's residence as the country of their **tax home** under
+§911(d)(3) — not their citizenship. So the "US-sourced, therefore in no foreign §904
+basket" statement above holds only while the tax home is in the US. After `moveYear`
+the tax home is Australia and the same gain is **foreign-source, general category**
+(a currency item appears nowhere on Pub 514's passive list, and general is the
+residual — the same reasoning `bookArt18Pension` applies to a pension).
+
+`SECTION_988_GAIN` now carries `residency`, stamped by `section988Residence` from the
+loan's owner, and the US classifier tags an AU-resident gain into
+`foreignGeneralIncomeYTD`. Three things made this safe rather than fiddly:
+
+- **A basket accumulator is a subset-TAG of gross income, not a second income line.**
+  The gain joins `usOrdinaryIncomeYTD` *and* the basket, so
+  `Σ basket gross ≤ grossIncomeAllSources` still holds. Adding it to the basket alone
+  would have been G5b in reverse. Regression: S988-31.
+- **The LOSS half deliberately does not move.** A foreign-source §988 loss stays on
+  the `agi` + `unrelatedDeductions` route, which apportions it pro-rata across the
+  baskets — the correct §904 treatment for a deduction, and the one that does not
+  re-open the negative-basket trap. Regression: S988-32.
+- **Absent `residency` falls back to US-source**, so saved actions from before this
+  change are inert rather than wrong. Regression: S988-30.
+
+The gain carries no foreign tax with it: for an Australian resident the AUD loan is
+denominated in their own functional currency, so Div 775 ITAA 1997 has no forex
+realisation event and Australia assesses nothing. The whole effect is to raise the
+§904 general numerator, making room to credit *other* Australian tax — booking it
+US-source simply wasted that room.
+
+**Measured on the base scenario** (figures in the gitignored run notes): roughly half
+the lifetime §988 gain is re-sourced — nothing before the move year M, a *partial*
+year at M because residency flips mid-year and the earlier payments correctly stay
+US-source, then every year to payoff. The terminal net-worth effect is a few hundred
+dollars. Small, and worth stating plainly: this is a *correctness* fix on a run whose
+FTC position is not currently limitation-constrained. Where the general basket binds
+it is worth materially more, and it costs nothing to have right.
 
 ---
 
@@ -702,10 +772,57 @@ Per-gap tests are listed above. Across all of them:
 
 5. **Should the AU offset *deposit* be a §988 transaction too?** P8 covers foreign
    currency **debt** only. A US person's foreign-currency bank balance is also §988
-   property, with gain or loss on disposition. For a personal account §988(e) and its
-   \$200 de minimis apply, so the amounts are usually small — but "usually" is not
-   "always" for a balance of this size, and the offset is precisely the account §8 is
-   about. Out of scope, deliberately, and flagged rather than silently omitted.
+   property: §988(c)(1)(C)(ii) says "nonfunctional currency" *includes* "demand or
+   time deposits … issued by a bank", and (c)(1)(C)(i) makes **any** disposition of it
+   a §988 transaction. Out of scope, deliberately, and flagged rather than silently
+   omitted.
+
+   **This is §8's question, not a footnote — and the original framing understated it
+   twice.** First, "the amounts are usually small because of §988(e) and its \$200 de
+   minimis" is backwards for a deposit of this size: the de minimis is \$200 *per
+   transaction*, and the offset is drained over a hundred-plus transactions of
+   thousands each. Second, and more important, the offset is not an independent
+   position — it is the **matched opposite** of the debt leg P8 does model. Filling an
+   offset converts USD to AUD, establishing an AUD basis; draining it disposes of that
+   AUD. So:
+
+   > gain(debt) = P × (1/r_book − 1/r_pay)  ·  gain(deposit) = D × (1/r_disp − 1/r_acq)
+
+   If the loan and the offset are opened on the same day at the same rate and unwound
+   together (r_book = r_acq, r_pay = r_disp, P = D) the two are **exactly equal and
+   opposite**, and the intervening FX path is irrelevant — only the endpoints matter,
+   and the endpoints cancel. The economics of a fully-offset facility are perfectly
+   hedged. What is *not* hedged is the tax:
+
+   - **On a personal-use property the hedge is denied.** One leg's gain is recognized;
+     the matching leg's loss is a nondeductible personal loss under §165(c). Quijano
+     (93 F.3d 26) also forecloses the rescue — §988(d)(2)(B) requires the taxpayer to
+     have *identified* the borrowing as a hedge, and you cannot self-integrate after
+     the fact. Perfect economic hedge, tax on the full gain, in **either** FX
+     direction. That is the phantom §8 needs to answer for.
+   - **On a rental the trap is disarmed** (both legs business-use under §988(e)(3), so
+     both are recognized) — but then the two legs *cancel*, which means modelling one
+     and not the other **manufactures the entire number**. In the live scenario that is
+     the case: `deductibleFraction: null` + `rentalEnabled: true` ⇒ business fraction
+     1, and every dollar of §988 ordinary income P8 books over the life of the loan has
+     an unmodelled twin of the same magnitude and opposite sign sitting in the offset.
+   - **Deploying and later refilling the offset de-synchronizes the legs.** Spending
+     offset AUD is a disposition — the deposit leg realizes *then*, at that spot, while
+     the debt leg keeps waiting. Refilling establishes a new basis at a new rate. After
+     one such round trip the two legs no longer share endpoints and no longer cancel,
+     which is the case where the deposit leg is a genuinely independent exposure rather
+     than a mirror.
+
+   So the honest statement of P8's status is: **§988 on a fully-offset facility is a
+   two-legged position, and only one leg is built.** §8 should not quote P8's number as
+   a carrying cost of the AUD-liquidity option until the deposit leg exists — see §8.
+
+   **SUPERSEDED, and promoted out of this document: see `design/87-foreign-currency-
+   basis-pools.md`.** The question generalises past the offset. §988(c)(1)(C)(ii) makes
+   *any* foreign-currency bank deposit nonfunctional currency, so every AUD cash account
+   is a basis pool and every cross-currency transfer is a realization — the offset is
+   just the largest and slowest one. Design 87 builds the transfer leg (phase 1) and the
+   offset leg (phase 2), and specifies the general pool (phase 3) without building it.
 
 ---
 

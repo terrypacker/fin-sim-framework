@@ -598,9 +598,30 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // Design 86 G7 / P8 — exchange gain or loss on foreign-currency DEBT.
       //
       // §988(a)(1)(A) makes it ORDINARY, not capital, and §988(a)(3)(A) sources it
-      // by the residence of the taxpayer — so for this model it is US-source
-      // ordinary income and reaches NO foreign §904 basket. That is deliberate and
-      // it is the whole reason the loss half is booked separately below.
+      // by the **residence of the taxpayer** — which §988(a)(3)(B)(i)(I) defines as
+      // the country of the individual's TAX HOME under §911(d)(3), not their
+      // citizenship. So the source is not a constant: it follows `moveYear`.
+      //
+      //   · tax home in the US  ⇒ US-source. No foreign §904 basket, as before.
+      //   · tax home in Australia ⇒ FOREIGN-source, general category. A currency item
+      //     appears nowhere on Pub 514's passive list, and general is the residual —
+      //     the same reasoning bookArt18Pension applies to a pension.
+      //
+      // The basket accumulator is a subset-TAG of gross income, not an extra income
+      // line (see the generalGross assembly in us-tax-rates-base), so a foreign-source
+      // gain joins usOrdinaryIncomeYTD *and* foreignGeneralIncomeYTD, and the
+      // Σ basket gross ≤ grossIncomeAllSources invariant is preserved.
+      //
+      // It carries no foreign tax with it: for an Australian resident the AUD loan is
+      // denominated in their own functional currency, so Div 775 ITAA 1997 has no
+      // forex realisation event and Australia assesses nothing. The effect is
+      // therefore purely to raise the §904 general numerator, making room to credit
+      // OTHER Australian tax. Booking it US-source wasted that room.
+      //
+      // SIMPLIFICATION, deliberate: a foreign-source §988 LOSS is not subtracted from
+      // foreignGeneralIncomeYTD. It stays on the unrelated-deduction route below,
+      // which apportions it across the baskets pro-rata — the correct §904 treatment
+      // for a deduction, and the one that does not re-open the negative-basket trap.
       //
       // A gain simply joins usOrdinaryIncomeYTD. A LOSS may not: reducing
       // usOrdinaryIncomeYTD (hence grossIncomeAllSources) while leaving every
@@ -616,7 +637,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // deliberately NOT deductible anywhere. It is the foreign-mortgage trap — a
       // currency move that cost real money and still produces no deduction.
       ['SECTION_988_GAIN', (state, action) => {
-        const { amount = 0, disallowedLoss = 0 } = action;
+        const { amount = 0, disallowedLoss = 0, residency = null } = action;
         const next = {
           ...state,
           usSection988DisallowedLossYTD: (state.usSection988DisallowedLossYTD ?? 0) + disallowedLoss,
@@ -626,6 +647,10 @@ export class UsTaxModule2026 extends BaseTaxModule {
             ...next,
             usOrdinaryIncomeYTD:  state.usOrdinaryIncomeYTD + amount,
             usSection988GainYTD: (state.usSection988GainYTD ?? 0) + amount,
+            // §988(a)(3)(B)(i)(I): tax home abroad ⇒ foreign-source, general basket.
+            ...(residency === 'AU'
+              ? { foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + amount }
+              : {}),
           };
         }
         return {

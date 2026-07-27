@@ -689,6 +689,23 @@
           <input type="checkbox" data-id="isTransactionAccount"
                  title="Route this country's household cash (expenses, wages, contributions, taxes) through this account. Flag exactly one cash account per country."/>
         </div>
+        <!-- §988 currency basis (design 87). Shown only for a NON-USD cash account:
+             §988(c)(1)(C)(ii) makes any foreign-currency bank deposit nonfunctional
+             currency, so savings/transaction/offset all qualify, and USD never does
+             (it is the taxpayer's functional currency, §985(b)(1)). -->
+        <div data-id="fxBasisFields" style="display:none">
+          <div class="node-field">
+            <label>§988 FX Basis</label>
+            <input type="number" step="0.0001" data-id="fxBasisRate" placeholder="blank = rate at first disposition"
+                   title="Foreign units per USD at which this pool's currency was ACQUIRED (design 87). Spending foreign cash is a disposition of nonfunctional currency and realizes ordinary exchange gain or loss against this rate. For a balance built up over years this is the balance-weighted average of the rates it was acquired at — AUD earned in Australia takes the spot rate on the day earned, so a long-accumulated pool is NOT today's rate. Blank stamps the rate at the first disposition, which UNDERSTATES §988 rather than inventing it."/>
+            <div class="field-hint" data-id="fxBasisHint" style="font-size:0.8em;opacity:0.7"></div>
+          </div>
+          <div class="node-field">
+            <label>Income-Producing</label>
+            <input type="number" step="0.01" min="0" max="1" data-id="cashDeductibleFraction" placeholder="blank = 0 (personal)"
+                   title="§988(e)(3) share of this pool put to an income-producing use (0–1). Decides whether an exchange LOSS is deductible at all: a personal currency loss is disallowed under §165(c) while the matching gain is still taxed. Blank = fully personal, the safe default — an offset backing a rental should be set explicitly."/>
+          </div>
+        </div>
         <div class="node-field" data-id="drawdownRow">
           <label>Drawdown</label>
           <input type="number" data-id="drawdownPriority" placeholder="blank = exclude"/>

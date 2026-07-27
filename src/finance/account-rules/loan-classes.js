@@ -14,6 +14,12 @@ import { RecordBalanceAction, FieldValueAction } from '../../simulation-framewor
 import { resolveCashKey } from './cash-routing.js';
 import { fxRate }         from '../fx/fx-conversion.js';
 import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
+// Design 87: the currency leg. This is a deliberate two-module cycle — currency-basis
+// delegates the shared §988 arithmetic back here so there is ONE implementation of it
+// rather than two that drift. Safe because everything crossing the boundary in both
+// directions is a hoisted `export function`, evaluated only at call time, never during
+// module initialization. Do not add a top-level `const` that reads across it.
+import { realizeCurrencyDisposition } from './currency-basis.js';
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -279,9 +285,18 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
 
 // ─── §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8) ──────
 
-/** §988(e)(2) de minimis: personal-transaction exchange GAIN of $200 or less per
- *  transaction is not recognized. Statutory, not inflation-indexed. */
-const SECTION_988_PERSONAL_DE_MINIMIS_USD = 200;
+/**
+ * §988(e)(2) de minimis: a personal-transaction exchange GAIN of $200 or less is not
+ * recognized. Statutory, not inflation-indexed, and **per transaction**.
+ *
+ * Exported because design 87 moved its application to the leg the provision is actually
+ * written for. §988(e)(2) is by its terms confined to cases where "nonfunctional
+ * currency **is disposed of** by an individual" — spending foreign cash — which is the
+ * currency-pool leg in currency-basis.js, not the retirement of a debt. Retiring a
+ * mortgage disposes of no currency by the obligor, so the floor has no home here.
+ * Design 87 G4.
+ */
+export const SECTION_988_PERSONAL_DE_MINIMIS_USD = 200;
 
 /**
  * The income-producing share of a loan for §988(e) purposes.
@@ -310,9 +325,11 @@ export function section988BusinessFraction(state, loan) {
  * Exchange gain or loss under §988 on a repayment of foreign-currency principal.
  *
  * A US individual's functional currency is the dollar (§985(b)(1)), so a debt
- * denominated in anything else is a §988 transaction (§988(c)(1)(B)(iii)) and the
- * gain or loss is **ordinary** (§988(a)(1)(A)). It is realized on each payment of
- * principal (Reg. §1.988-2(b)(5)), measured against the rate on the booking date:
+ * denominated in anything else is a §988 transaction (§988(c)(1)(B)(i) — "becoming
+ * the obligor under a debt instrument") and the gain or loss is **ordinary**
+ * (§988(a)(1)(A)). The OBLIGOR realizes it on each payment of principal
+ * (Reg. §1.988-2(b)(6); (b)(5) is the holder's mirror), measured against the rate on
+ * the booking date — the date the taxpayer became the obligor, §988(c)(2)(A):
  *
  *     gain(USD) = principalPaid × (1/bookingRate − 1/spotRate)
  *
@@ -324,20 +341,33 @@ export function section988BusinessFraction(state, loan) {
  * §988(e) then splits the result, and the two halves are NOT symmetric — this is
  * the notorious foreign-mortgage trap and it is deliberately reproduced:
  *   · the income-producing share recognizes gain AND loss;
- *   · the personal share recognizes GAIN ONLY (above the §988(e)(2) $200 de
- *     minimis). A personal exchange loss is a nondeductible personal loss under
- *     §165(c), so a US person can owe tax on a currency move that cost them money.
+ *   · the personal share recognizes GAIN ONLY. A personal exchange loss is a
+ *     nondeductible personal loss under §165(c) — Quijano v. United States, 93 F.3d
+ *     26 (1st Cir. 1996), a sterling mortgage on a UK residence — so a US person can
+ *     owe tax on a currency move that cost them money.
  *
- * Pure and rate-agnostic so it can be tested without a sim.
+ * ON THE $200 FLOOR — design 87 G4. §988(e)(2) is by its terms confined to cases where
+ * "nonfunctional currency **is disposed of** by an individual". Retiring a DEBT
+ * disposes of no currency by the obligor, so the de minimis has no home on the debt
+ * leg; it belongs to the currency-pool leg in currency-basis.js, which is the
+ * transaction the provision was written for. Hence `applyDeMinimis`: the currency leg
+ * passes it (default), the LOAN path passes false. It only ever reduced recognized
+ * gain, so removing it from the debt leg is a small increase in taxable income.
+ *
+ * Pure and rate-agnostic so it can be tested without a sim, and shared with the
+ * currency leg — {@link computeCurrencyDisposition} delegates here with the rates
+ * transposed, since a deposit is the exact mirror of a debt.
  *
  * @param {number} principalPaid  principal repaid, in the LOAN's currency (> 0)
  * @param {number} bookingRate    foreign units per USD when the debt was incurred
  * @param {number} spotRate       foreign units per USD on the payment date
  * @param {number} businessFrac   0..1, from {@link section988BusinessFraction}
+ * @param {boolean} [applyDeMinimis=true]  apply the §988(e)(2) per-transaction floor
  * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number }}
  *          all USD; `recognized` is signed (the amount that reaches the return).
  */
-export function computeSection988Gain(principalPaid, bookingRate, spotRate, businessFrac) {
+export function computeSection988Gain(principalPaid, bookingRate, spotRate, businessFrac,
+                                      applyDeMinimis = true) {
   const zero = { recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0 };
   if (!(principalPaid > 0) || !(bookingRate > 0) || !(spotRate > 0)) return zero;
 
@@ -350,7 +380,8 @@ export function computeSection988Gain(principalPaid, bookingRate, spotRate, busi
   // then leaks into state and JSON as "-0".
   if (personal >= 0) {
     // Personal GAIN: recognized, unless the whole personal piece is de minimis.
-    const deMinimis = personal <= SECTION_988_PERSONAL_DE_MINIMIS_USD ? personal : 0;
+    const deMinimis = (applyDeMinimis && personal <= SECTION_988_PERSONAL_DE_MINIMIS_USD)
+      ? personal : 0;
     return {
       recognized: business + (personal - deMinimis) + 0,
       gross, disallowedLoss: 0, deMinimis,
@@ -598,6 +629,18 @@ export class LoanPaymentApplyReducer extends Reducer {
 
     // The debit happens in the CASH account's currency, capped to its balance.
     const actualCash = Math.min(cashDue, Math.max(0, cash?.balance ?? 0));
+    // Design 87 G3 — the OTHER leg. When a foreign-currency loan is serviced from a
+    // same-currency pool (an offset, which resolveLoanCashKey makes the default), the
+    // payment is simultaneously a repayment of principal AND a disposition of
+    // nonfunctional currency (§988(c)(1)(C)(i)). Realized against the pool's basis
+    // BEFORE the debit, for the same reason as the transfer leg.
+    //
+    // On a matched facility this is the near-exact mirror of the debt leg computed
+    // below, so the two largely cancel — which is the finding, not a bug. See design
+    // 87 §3 for the three cases where they do NOT cancel.
+    const cashS988 = (actualCash > 0 && cash)
+      ? realizeCurrencyDisposition(state, cashKey, cash, actualCash, section988Residence(state, loan))
+      : { patch: {}, actions: [] };
     if (actualCash > 0 && cash) this.accountService.transaction(cash, -actualCash, null);
 
     // Value delivered to the loan, converted back into the LOAN's currency. When the
@@ -618,9 +661,16 @@ export class LoanPaymentApplyReducer extends Reducer {
     const { patch: s988Patch, actions: s988Actions } =
       _section988ForPayment(state, loanKey, loan, oldBalance, principalPart);
 
+    // The cash pool's entry is spread AFTER transaction() mutated its balance in place,
+    // so only `fxBasisRate` is being added; writing a pre-debit copy back would undo
+    // the payment.
+    const cashPatch = (cash && Object.keys(cashS988.patch).length)
+      ? { [cashKey]: { ...cash, ...cashS988.patch } } : {};
+
     return this.newState(state, {
       [loanKey]: { ...loan, ...s988Patch, balance: +newBalance.toFixed(2) },
-    }, s988Actions);
+      ...cashPatch,
+    }, [...s988Actions, ...cashS988.actions]);
   }
 }
 
@@ -628,19 +678,30 @@ export class LoanPaymentApplyReducer extends Reducer {
  * The §988 leg of a loan payment: what to stamp on the loan, and what to book.
  *
  * A non-USD loan held by a US person (functional currency USD, §985(b)(1)) is a §988
- * transaction (§988(c)(1)(B)(iii)); exchange gain or loss is ordinary (§988(a)(1)(A))
- * and is realized on each payment of PRINCIPAL (Reg. §1.988-2(b)(5)). Interest
- * carries its own §988 item between accrual and payment (Reg. §1.988-2(b)(3)), but
- * here accrual and payment are simultaneous, so that piece is identically zero and is
- * deliberately not modelled.
+ * transaction (§988(c)(1)(B)(i)); exchange gain or loss is ordinary (§988(a)(1)(A))
+ * and the obligor realizes it on each payment of PRINCIPAL (Reg. §1.988-2(b)(6)).
+ * Interest carries its own §988 item between accrual and payment
+ * (Reg. §1.988-2(b)(4) for the obligor), but here accrual and payment are
+ * simultaneous, so that piece is identically zero and is deliberately not modelled.
  *
- * Two consequences are the whole reason this matters to the offset question rather
+ * Consequences that are the whole reason this matters to the offset question rather
  * than being a rounding error:
  *   · an INTEREST-ONLY loan repays no principal, so it recognizes NOTHING until it
  *     amortises or matures — deferring decades of currency movement into whichever
  *     year the balloon lands in, as a single lump of ordinary income;
- *   · a fully OFFSET loan is likewise silent, because an offset suppresses interest
- *     without repaying principal. §988 bites on repayment, not on holding the debt.
+ *   · an offset suppresses INTEREST without repaying principal, so merely holding a
+ *     fully-offset facility realizes nothing. §988 bites on repayment, not on
+ *     holding the debt.
+ *   · but "offset" and "silent" are NOT the same claim, and combining the two above
+ *     inverts the result. On a fully-offset AMORTIZING loan the interest is zero, so
+ *     100% of every payment is principal — the MAXIMUM §988 realization rate, not
+ *     zero. That is the live scenario's AU house (P&I, offset ≥ balance): §988 fires
+ *     on every payment until the loan closes.
+ *
+ * NOT modelled, and each is a full realization of the accumulated position with no
+ * cash repayment: Reg. §1.988-2(b)(6) also fires when the obligation is "transferred
+ * or extinguished" — a refinance that is a significant modification under
+ * Reg. §1.1001-3, or a buyer assuming the mortgage on sale.
  *
  * @returns {{ patch: object, actions: object[] }} fields to merge onto the loan, and
  *          any SECTION_988_GAIN to emit.
@@ -670,8 +731,10 @@ function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) 
   }
   if (!(principalPart > 0)) return none;
 
+  // `false` — no §988(e)(2) de minimis on the debt leg. Design 87 G4: the provision
+  // reaches dispositions of nonfunctional CURRENCY, and retiring a debt is not one.
   const r = computeSection988Gain(
-    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan));
+    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan), false);
   if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return none;
 
   return {
@@ -680,6 +743,34 @@ function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) 
       type: 'SECTION_988_GAIN', loanKey, currency: ccy,
       amount: r.recognized, gross: r.gross,
       disallowedLoss: r.disallowedLoss, deMinimis: r.deMinimis,
+      residency: section988Residence(state, loan),
     }],
   };
+}
+
+/**
+ * The taxpayer's **residence** for §988(a)(3) sourcing — which is a tax-home test,
+ * not a citizenship one.
+ *
+ * §988(a)(3)(A) sources exchange gain or loss "by reference to the residence of the
+ * taxpayer … on whose books the … liability … is properly reflected", and
+ * §988(a)(3)(B)(i)(I) defines an individual's residence as "the country in which such
+ * individual's **tax home** (as defined in section 911(d)(3)) is located". A US
+ * citizen whose tax home is Australia is therefore *foreign* for this purpose, and
+ * the same gain that was US-source before the move becomes foreign-source after it.
+ *
+ * The model's per-person `residency` (flipped at `moveYear` by ChangeResidencyHandler)
+ * is exactly that concept, so it is read directly rather than re-derived. A loan is
+ * attributed to its own `ownerId`, else its linked property's, else the first person —
+ * the fallback chain the earnings handlers already use. Both spouses move together in
+ * this model, so the joint-return case is not sensitive to which one is picked.
+ *
+ * @returns {string|null} 'US' | 'AU' | null when no people are configured
+ */
+export function section988Residence(state, loan) {
+  const people = state?.people;
+  if (!people) return null;
+  const prop    = loan?.linkedPropertyKey ? state?.[loan.linkedPropertyKey] : null;
+  const ownerId = loan?.ownerId ?? prop?.ownerId ?? Object.keys(people)[0];
+  return people[ownerId]?.residency ?? null;
 }

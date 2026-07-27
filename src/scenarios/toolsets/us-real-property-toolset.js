@@ -76,9 +76,13 @@ export const US_REAL_PROPERTY = {
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any
       // country, and its US tax character is decided by the US classifier.
+      // `residency` is the §988(a)(3)(B) tax-home test that decides SOURCE, and it must
+      // be declared or pickPayload drops it and every gain reverts to US-source.
       { type: 'SECTION_988_GAIN', cc: null,
-        fields: { loanKey: ValueType.text(), currency: ValueType.text(), amount: ValueType.number(),
-                  gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number() } },
+        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(),
+                  currency: ValueType.text(), amount: ValueType.number(),
+                  gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
+                  residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_TAX', cc: 'US',

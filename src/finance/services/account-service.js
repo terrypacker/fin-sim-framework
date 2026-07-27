@@ -22,6 +22,7 @@ import { consumeHoldings } from '../holdings/holdings-fifo.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
+import { realizeCurrencyDisposition } from '../account-rules/currency-basis.js';
 
 // Cash/savings roles: drawn before investments (cash band) and liquid across the
 // currency border in replenishSavings, and only ever drawn down to minimumBalance.
@@ -613,6 +614,18 @@ export class AccountService extends AssetService {
     const pushTransfer = (srcAccount, srcKey, sourceAmount, targetAmount, fee) => {
       const fromCcy = srcAccount.currency?.code ?? srcAccount.country;
       if (fromCcy === currency) return; // same-currency draw is not a transfer
+      // Design 87 G2 — THE SECOND CONVERSION PATH. The stranding fix (design 44) spends
+      // idle foreign cash inline here rather than routing through INTL_TRANSFER_APPLY,
+      // so a §988 disposition realized only in that reducer would silently depend on
+      // which drawdown branch ran. This is the one seam every inline cross-currency leg
+      // passes through, which is why the realization hangs off it rather than off each
+      // of the three draw orderings above.
+      //
+      // Stamping `fxBasisRate` mutates the live account object, matching how this
+      // service already mutates balances via transaction().
+      const s988 = realizeCurrencyDisposition(state, srcKey, srcAccount, sourceAmount, residency);
+      if (s988.patch.fxBasisRate != null) srcAccount.fxBasisRate = s988.patch.fxBasisRate;
+      pendingTaxActions.push(...s988.actions);
       crossBorderTransfers.push({
         type:       'INTL_TRANSFER_RECORD',
         direction:  fromCcy === 'AUD' ? 'AU_TO_US' : 'US_TO_AU',

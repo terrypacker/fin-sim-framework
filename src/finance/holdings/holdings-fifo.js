@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { isCollectibleAllocation } from './allocation.js';
+import { ALLOCATION, isCollectibleAllocation } from './allocation.js';
 import { buildHoldingsComparator } from './holdings-selection.js';
 
 /**
@@ -123,7 +123,16 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     }
     const take = Math.min(remaining, mv);
     const fraction   = take / mv;
-    const basisShare = (h.costBasis ?? 0) * fraction;
+    // Design 87 §11 — CASH realizes NO capital gain. A unit of currency is disposed of
+    // for exactly its face, so its basis equals its proceeds by definition; there is no
+    // price to have moved. `rebalance-to-target-apply-reducer` has always known this
+    // (`taxable && allocation !== ALLOCATION.CASH`), but this path — the brokerage
+    // DRAWDOWN path — did not, so the same sleeve booked a phantom gain when it was
+    // drawn instead of rebalanced. Whatever `costBasis` a CASH lot happens to carry is
+    // meaningless for gain purposes; the §988 currency basis is a RATE and lives in
+    // `fxBasisRate`, which is the whole point of design 87.
+    const isCash     = h.allocation === ALLOCATION.CASH;
+    const basisShare = isCash ? take : (h.costBasis ?? 0) * fraction;
     realizedBasis += basisShare;
     if (isCollectibleAllocation(h.allocation)) {
       collectibleProceeds += take;
@@ -131,7 +140,7 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     }
     for (const c of countries) {
       const cb = h.costBaseByCountry?.[c] ?? (h.costBasis ?? 0);
-      realizedBasisByCountry[c] += cb * fraction;
+      realizedBasisByCountry[c] += isCash ? take : cb * fraction;
     }
     if (idxCountry) {
       const cb        = h.costBaseByCountry?.[idxCountry] ?? (h.costBasis ?? 0);
@@ -146,8 +155,10 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       const factor    = (held12mo && lotLevel != null && lotLevel > 0 && indexation.level > 0)
         ? Math.max(1, indexation.level / lotLevel)
         : 1;
-      const idxBasisShare = cb * fraction;
-      realizedIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
+      // Cash is never indexed either: ratcheting a currency balance's basis up would
+      // manufacture a capital LOSS out of inflation on money that cannot have one.
+      const idxBasisShare = isCash ? take : cb * fraction;
+      realizedIndexedBasisByCountry[idxCountry] += isCash ? take : idxBasisShare * factor;
       // Discountable gain (design 62 §4): EQUITY/BOND (non-collectible) lots held
       // ≥12mo from the deemed-acquisition date are eligible for the pre-2027 Division
       // 115 50% discount. Sum each such lot's per-lot floored AU gain (proceeds share
@@ -170,7 +181,10 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       const partial = {
         ...h,
         marketValue: +remainingMv.toFixed(2),
-        costBasis:   +((h.costBasis ?? 0) - basisShare).toFixed(2),
+        // A CASH remainder re-asserts the invariant rather than subtracting: a stale
+        // basis minus full proceeds would otherwise leave a NEGATIVE basis behind.
+        costBasis:   isCash ? +remainingMv.toFixed(2)
+                            : +((h.costBasis ?? 0) - basisShare).toFixed(2),
       };
       // Deplete each per-country cost base by the same consumed fraction.
       if (h.costBaseByCountry) {
