@@ -22,7 +22,8 @@
     "test:all": "npm run test:unit && npm run test:viz",
     "requirements": "node scripts/check-requirements.js",
     "requirements:missing": "node scripts/check-requirements.js --missing",
-    "scenario": "node scripts/run-scenario.mjs"
+    "scenario": "node scripts/run-scenario.mjs",
+    "probe:residency-cgt": "node scripts/probe-residency-cgt.mjs"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
