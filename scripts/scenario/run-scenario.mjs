@@ -41,7 +41,7 @@ import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const opts = { files: [], to: null, params: false, verbose: false, json: false, first: false };
+  const opts = { files: [], to: null, params: false, verbose: false, json: false, first: false, fast: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
@@ -50,6 +50,7 @@ function parseArgs(argv) {
       case '--verbose': opts.verbose = true; break;
       case '--json':    opts.json = true; break;
       case '--first':   opts.first = true; break;
+      case '--fast':    opts.fast = true; break;
       case '-h': case '--help': opts.help = true; break;
       default:
         if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
@@ -70,6 +71,8 @@ Options:
   --first            Only run the first scenario in each file (default: run all).
   --verbose          Show the simulation's own console output (e.g. OUT_OF_FUNDS).
   --json             Emit machine-readable JSON instead of tables.
+  --fast             Drop journal/snapshots/bus telemetry (~12x faster). Safe for
+                     the tables below; disables anything reading sim.journal.
   -h, --help         Show this help.`;
 
 // ─── Running ────────────────────────────────────────────────────────────────
@@ -79,7 +82,7 @@ Options:
  * and a flattened net-wealth breakdown. Suppresses the simulation's own console
  * output unless `verbose`, so the comparison tables aren't drowned in run logs.
  */
-function runScenario(cfg, endDate, { verbose }) {
+function runScenario(cfg, endDate, { verbose, fast }) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
@@ -88,7 +91,9 @@ function runScenario(cfg, endDate, { verbose }) {
     simStart:     new Date(cfg.simStart),
     simEnd:       new Date(cfg.simEnd),
   });
-  scenario.buildSim();
+  // --fast drops journal, history snapshots and bus telemetry, none of which
+  // summarize() reads. ~12x on a 44-year scenario (design 78 §4.4).
+  scenario.buildSim({ telemetry: fast ? 'off' : 'full' });
   new ScenarioLoader().load(cfg, services);
 
   const sim = scenario.sim;

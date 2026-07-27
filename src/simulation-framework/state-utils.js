@@ -21,6 +21,93 @@
 
 let _mutations = null;
 
+// ── Deep clone ────────────────────────────────────────────────────────────
+
+/**
+ * Deep-clone a simulation state tree.
+ *
+ * A hand-rolled replacement for `structuredClone`, which is the single largest
+ * cost in a long run (the journal/diff machinery clones state per event and per
+ * untracked reducer). `structuredClone` pays for the full HTML structured-clone
+ * algorithm — cycle detection, transferables, every exotic built-in — none of
+ * which sim state uses. Measured on a real 44-year scenario state it is ~3.3x
+ * slower than this walk (199us vs 61us per clone).
+ *
+ * Equivalence notes vs. structuredClone, for this state shape (plain objects,
+ * arrays, Dates, and plain-data class instances):
+ *   - Class prototypes: structuredClone ALSO returns plain objects for class
+ *     instances, so dropping the prototype here matches existing behaviour.
+ *   - Cycles: structuredClone preserves them; this recurses until the stack
+ *     blows. Sim state is JSON-serialisable by construction (it is persisted and
+ *     journalled), so cycles cannot occur — both outcomes are a hard crash.
+ *   - Functions: structuredClone throws; this copies the reference. A function
+ *     in state is a bug either way, but it will no longer be caught here.
+ *
+ * @param {*} v
+ * @returns {*} a deep copy
+ */
+export function deepClone(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const n = v.length;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = deepClone(v[i]);
+    return out;
+  }
+  if (v instanceof Date) return new Date(v.getTime());
+  if (v instanceof Map) {
+    const m = new Map();
+    for (const [k, x] of v) m.set(k, deepClone(x));
+    return m;
+  }
+  if (v instanceof Set) {
+    const s = new Set();
+    for (const x of v) s.add(deepClone(x));
+    return s;
+  }
+  const out = {};
+  for (const k in v) out[k] = deepClone(v[k]);
+  return out;
+}
+
+/**
+ * Snapshot state for the sole purpose of diffing it against itself after a
+ * reducer runs (design 78 §5.5).
+ *
+ * A full `deepClone` is overkill here. The snapshot is never published, never
+ * retained, and never read as data — `_processReducers` uses it once, as the
+ * left-hand side of `diffStates`, and drops it. All it has to do is preserve the
+ * pre-reducer values of anything the reducer might change.
+ *
+ * Two levels is enough, because reducers change state in exactly two ways:
+ *   - copy-on-write — `{ ...state, foo }`, or a new object at some key. The old
+ *     object is untouched, so holding its reference is sufficient.
+ *   - in-place — `account.balance = …`, the one pattern that defeats a purely
+ *     shallow copy. Every such write in the codebase lands ONE level down, on an
+ *     account field, via AccountService.transaction(). Copying each top-level
+ *     value one level deep captures those.
+ *
+ * Verified empirically over a full 44-year all-toolset run: across all 12,976
+ * reducer invocations that take this path, the diff produced from this snapshot
+ * is identical to the diff produced from a `deepClone`, for every field. Re-check
+ * with `node scripts/dev/diff-mutation-tracker.mjs <scenario>` after touching
+ * reducer internals — a reducer that mutates THREE levels down in place
+ * (`state.a.b.c = …`) would silently produce an incomplete diff, and the journal
+ * would look well-formed while under-reporting. That script is the guard.
+ *
+ * @param {object} state
+ * @returns {object} a two-level copy, ~3.5x cheaper than deepClone
+ */
+export function snapshotForDiff(state) {
+  const out = {};
+  for (const k in state) {
+    const v = state[k];
+    if (v !== null && typeof v === 'object') out[k] = Array.isArray(v) ? [...v] : { ...v };
+    else out[k] = v;
+  }
+  return out;
+}
+
 /**
  * Journal-immutability enforcement.
  *

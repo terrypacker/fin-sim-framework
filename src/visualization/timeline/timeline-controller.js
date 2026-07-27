@@ -12,9 +12,52 @@ import { primaryTaxSettleEntries } from '../../finance/tax/tax-settle-entries.js
 
 const COUNTRY_TO_CURRENCY = { AU: 'AUD', US: 'USD' };
 
+/**
+ * Constructing an `Intl.NumberFormat` is expensive — far more so than using one.
+ * There are only a handful of distinct currency codes in a run, so build one
+ * formatter per code and reuse it. Profiled during playback, the uncached version
+ * was 87% of the cost of `groups()`, which is itself the dominant cost of a
+ * timeline render (design 78 §6).
+ */
+const _fmtCache = new Map();
+function _formatterFor(currency) {
+  let f = _fmtCache.get(currency);
+  if (!f) {
+    f = currency
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency })
+      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    _fmtCache.set(currency, f);
+  }
+  return f;
+}
+
 function fmtNative(n, currency) {
-  if (!currency) return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+  const formatted = _formatterFor(currency).format(n);
+  return currency ? formatted : '$' + formatted;
+}
+
+/**
+ * One rendered action row in the grouped timeline.
+ *
+ * `sum` is a LAZY prototype getter, not an eager field. It is read only when the
+ * row is actually painted, and the timeline view is virtualized — of thousands of
+ * grouped entries, roughly twenty are on screen. Computing it eagerly for every
+ * journal entry on every render meant formatting ~28k currency values per
+ * playback frame to display ~20 of them.
+ */
+class TimelineItem {
+  constructor(controller, entry, idx, taxDoc) {
+    this._controller = controller;
+    this._sum        = undefined;
+    this.entry       = entry;
+    this.idx         = idx;
+    this.taxDoc      = taxDoc;
+  }
+
+  get sum() {
+    if (this._sum === undefined) this._sum = this._controller.sum(this.entry.action);
+    return this._sum;
+  }
 }
 
 export class TimelineController {
@@ -134,6 +177,24 @@ export class TimelineController {
     };
   }
 
+  /**
+   * The date key of the newest entry that passes the current filters, or null.
+   *
+   * This exists so the presenter's auto-expand can find the latest date group
+   * WITHOUT building the whole grouped map — which is what it used to do, paying
+   * a full grouping pass over the journal to read a single string, once per
+   * playback frame (design 78 §6). Scans backward, so it stops at the first
+   * match rather than walking the journal.
+   */
+  latestDateKey(formatDate) {
+    const journal = this.journal?.journal;
+    if (!journal?.length) return null;
+    for (let i = journal.length - 1; i >= 0; i--) {
+      if (this._passesFilter(journal[i])) return formatDate(journal[i].date);
+    }
+    return null;
+  }
+
   _passesFilter(entry) {
     if (this.filterEvents.size  > 0 && !this.filterEvents.has(entry.event.type))   return false;
     if (this.filterActions.size > 0 && !this.filterActions.has(entry.action.type)) return false;
@@ -163,9 +224,7 @@ export class TimelineController {
       if (!map.has(d)) map.set(d, new Map());
       const byEv = map.get(d);
       if (!byEv.has(entry.event.type)) byEv.set(entry.event.type, []);
-      byEv.get(entry.event.type).push({
-        entry, idx, sum: this.sum(entry.action), taxDoc: taxDocs.has(entry),
-      });
+      byEv.get(entry.event.type).push(new TimelineItem(this, entry, idx, taxDocs.has(entry)));
     });
     return map;
   }
