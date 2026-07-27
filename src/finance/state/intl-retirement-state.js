@@ -149,6 +149,14 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // deliberately outside the settle reset, because surviving the year boundary is
     // the point. Released against later passive income.
     this.usPassiveLossCarryforward         = 0;
+    // §988 exchange gain/loss on foreign-currency DEBT (design 86 G7 / P8), USD.
+    // Three fields rather than one signed scalar because the three have genuinely
+    // different tax lives: the gain joins ordinary income, the loss is an ordinary
+    // deduction taken separately so it cannot break the §904 partition (G5b), and
+    // the §988(e) personal share is recognized for reporting but deductible NOWHERE.
+    this.usSection988GainYTD           = 0;
+    this.usSection988LossYTD           = 0;   // stored positive
+    this.usSection988DisallowedLossYTD = 0;   // stored positive; reporting only
     this.usPenaltyYTD = 0;
     this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;

@@ -296,12 +296,23 @@ export class BaseScenario extends SimGraphNode {
    *   does when handed a date past this scenario's simEnd — see Simulation.
    */
   buildSim({
-    seed = 1, telemetry = 'full', sampler = null, samplerCadence = 'interval',
+    seed = null, telemetry = 'full', sampler = null, samplerCadence = 'interval',
     pastEndPolicy = 'throw',
   } = {}) {
     // Remembered so rebuild() can reconstruct an equivalent sim rather than a
-    // default one — see rebuild().
+    // default one — see rebuild(). `seed` is stored UNRESOLVED (possibly null) so a
+    // rebuild re-derives it the same way this call did.
     this._buildSimOpts = { seed, telemetry, sampler, samplerCadence, pastEndPolicy };
+
+    // The default is null rather than 1 so that "caller said nothing" is
+    // distinguishable from "caller explicitly asked for seed 1". That distinction is
+    // what lets the scenario's `randomSeed` PARAMETER fill the gap (applied by
+    // ScenarioLoader, which is the first point that knows the params) while a
+    // caller-supplied seed still wins outright. Monte Carlo depends on winning:
+    // its per-iteration seed is the whole mechanism for drawing distinct paths, and
+    // letting a scenario parameter override it would collapse every path onto one
+    // ordering — design 74's bug, in reverse.
+    const resolvedSeed = seed ?? 1;
 
     const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
     const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
@@ -328,7 +339,7 @@ export class BaseScenario extends SimGraphNode {
     const sim = new Simulation(this.simStart, {
       bus: new EventBus(),
       graph,
-      seed,
+      seed: resolvedSeed,
       initialState: resolved,
       // simEnd is the run's horizon, not just a slider bound: the toolsets
       // schedule events out to it and no further, so stepping past it produces a
@@ -338,6 +349,11 @@ export class BaseScenario extends SimGraphNode {
         simEnd: this.simEnd, pastEndPolicy,
       },
     });
+
+    // Whether the seed came from the caller or from the `seed ?? 1` fallback.
+    // ScenarioLoader reads this to decide if the scenario's `randomSeed` parameter
+    // may be applied; an explicit seed is never overridden.
+    sim.seedWasExplicit = seed != null;
 
     simulationRegistry.register('primary', sim);
     simulationSync.setSimStart(this.simStart);

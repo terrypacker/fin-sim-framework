@@ -196,6 +196,37 @@ export class ScenarioLoader {
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
       this._restoreFromGraph(cfg, services);
     }
+
+    this._applyRandomSeed(cfg, services);
+  }
+
+  /**
+   * Apply the scenario's `randomSeed` parameter to the live sim's in-loop RNG.
+   *
+   * This has to happen HERE rather than in `buildSim()`, and the ordering is the
+   * whole point: `buildSim()` runs BEFORE the params are loaded, so at construction
+   * time the scenario does not yet know its own seed. Every stochastic process —
+   * FX (design 47), the yield curve (design 67), equity return paths (design 74) —
+   * draws from `sim.rng`, so before this existed there was no way to vary a single
+   * deterministic run's path at all: `randomSeed` was simply an unread key, and
+   * every run of a stochastic scenario drew the identical sequence. That silently
+   * made a seed sweep look like a robust result when it was one path measured
+   * repeatedly.
+   *
+   * An explicit `buildSim({ seed })` always wins (`seedWasExplicit`). Monte Carlo
+   * relies on that: its per-iteration seed is the entire mechanism for drawing
+   * distinct paths, and letting a scenario parameter override it would collapse
+   * every iteration onto one ordering — the design 74 defect, re-introduced from
+   * the other side.
+   *
+   * @private
+   */
+  _applyRandomSeed(cfg, services) {
+    const seed = cfg?.parameters?.randomSeed;
+    if (seed == null) return;
+    const sim = services?.simulationRegistry?.getPrimary?.();
+    if (!sim || sim.seedWasExplicit) return;
+    sim.reseed(seed);
   }
 
   /**

@@ -60,6 +60,12 @@ export function synthesizeLoanForProperty(prop) {
     // 25–30 year term, and both are dates the borrower knows, not durations.
     interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
     maturityYear:          prop.mortgageMaturityYear          ?? null,
+    // §988 booking rate (design 86 G7). Without this a mortgage synthesized from a
+    // property could never state when it was incurred, so a loan already outstanding
+    // at t0 — which is the normal case for a real plan — would be stamped at the t0
+    // rate and silently recognize no exchange gain or loss on the years of currency
+    // movement that actually preceded it.
+    bookingFxRate:         prop.mortgageBookingFxRate         ?? null,
     linkedPropertyKey: prop.stateKey,
     country:           prop.country ?? 'US',
     currency:          prop.currency ?? null,
@@ -233,6 +239,111 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
   return Math.min(loan?.monthlyPayment ?? 0, balance + interest);
 }
 
+// ─── §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8) ──────
+
+/** §988(e)(2) de minimis: personal-transaction exchange GAIN of $200 or less per
+ *  transaction is not recognized. Statutory, not inflation-indexed. */
+const SECTION_988_PERSONAL_DE_MINIMIS_USD = 200;
+
+/**
+ * The income-producing share of a loan for §988(e) purposes.
+ *
+ * §988(e)(1) switches §988 off for an individual's **personal** transactions, and
+ * §988(e)(3) defines a transaction as personal "except to the extent that expenses
+ * properly allocable to such transaction meet the requirements of section 162 or
+ * 212". That "to the extent" is a FRACTION, and it is the same fraction design 86 G3
+ * already made authorable for s8-1 deductibility — the business/income-producing use
+ * of the borrowed money. So this reuses `deductibleFraction` rather than inventing a
+ * second, independently-wrong knob.
+ *
+ * `null` (every pre-86 loan) keeps the pre-86 rule: fully income-producing iff the
+ * loan finances a property that is currently renting, otherwise fully personal.
+ *
+ * @returns {number} 0..1
+ */
+export function section988BusinessFraction(state, loan) {
+  const stated = loan?.deductibleFraction;
+  if (stated != null) return Math.min(1, Math.max(0, stated));
+  const prop = loan?.linkedPropertyKey ? state?.[loan.linkedPropertyKey] : null;
+  return prop?.rentalEnabled ? 1 : 0;
+}
+
+/**
+ * Exchange gain or loss under §988 on a repayment of foreign-currency principal.
+ *
+ * A US individual's functional currency is the dollar (§985(b)(1)), so a debt
+ * denominated in anything else is a §988 transaction (§988(c)(1)(B)(iii)) and the
+ * gain or loss is **ordinary** (§988(a)(1)(A)). It is realized on each payment of
+ * principal (Reg. §1.988-2(b)(5)), measured against the rate on the booking date:
+ *
+ *     gain(USD) = principalPaid × (1/bookingRate − 1/spotRate)
+ *
+ * with rates quoted as foreign units per USD. The sign follows the borrower's
+ * economics: if the foreign currency has WEAKENED (more units per USD, spot >
+ * booking) the borrower discharges the debt with fewer dollars than it was booked
+ * at, which is a gain.
+ *
+ * §988(e) then splits the result, and the two halves are NOT symmetric — this is
+ * the notorious foreign-mortgage trap and it is deliberately reproduced:
+ *   · the income-producing share recognizes gain AND loss;
+ *   · the personal share recognizes GAIN ONLY (above the §988(e)(2) $200 de
+ *     minimis). A personal exchange loss is a nondeductible personal loss under
+ *     §165(c), so a US person can owe tax on a currency move that cost them money.
+ *
+ * Pure and rate-agnostic so it can be tested without a sim.
+ *
+ * @param {number} principalPaid  principal repaid, in the LOAN's currency (> 0)
+ * @param {number} bookingRate    foreign units per USD when the debt was incurred
+ * @param {number} spotRate       foreign units per USD on the payment date
+ * @param {number} businessFrac   0..1, from {@link section988BusinessFraction}
+ * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number }}
+ *          all USD; `recognized` is signed (the amount that reaches the return).
+ */
+export function computeSection988Gain(principalPaid, bookingRate, spotRate, businessFrac) {
+  const zero = { recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0 };
+  if (!(principalPaid > 0) || !(bookingRate > 0) || !(spotRate > 0)) return zero;
+
+  const gross    = principalPaid * (1 / bookingRate - 1 / spotRate);
+  const frac     = Math.min(1, Math.max(0, businessFrac));
+  const business = gross * frac;
+  const personal = gross * (1 - frac);
+
+  // `+ 0` normalizes -0, which `gross * 0` produces for a negative gross and which
+  // then leaks into state and JSON as "-0".
+  if (personal >= 0) {
+    // Personal GAIN: recognized, unless the whole personal piece is de minimis.
+    const deMinimis = personal <= SECTION_988_PERSONAL_DE_MINIMIS_USD ? personal : 0;
+    return {
+      recognized: business + (personal - deMinimis) + 0,
+      gross, disallowedLoss: 0, deMinimis,
+    };
+  }
+  // Personal LOSS: disallowed outright. No de minimis floor applies to a loss —
+  // §988(e)(2) is written for gain only.
+  return { recognized: business + 0, gross, disallowedLoss: -personal, deMinimis: 0 };
+}
+
+/**
+ * Re-book a loan's §988 booking rate when principal is ADDED (negative
+ * amortization, or a redraw): the debt becomes a blend of dollars borrowed at two
+ * different rates.
+ *
+ * The blend must preserve the debt's total USD booking value, so it is a
+ * balance-weighted HARMONIC mean, not an arithmetic one:
+ *
+ *     newBalance / r_new  =  oldBalance / r_old  +  added / r_spot
+ *
+ * Getting this wrong is not cosmetic. Leaving the original rate in place would
+ * later measure the repayment of newly-borrowed dollars against a rate that never
+ * applied to them, manufacturing §988 gain or loss out of an accounting choice.
+ */
+export function blendSection988BookingRate(oldBalance, bookingRate, added, spotRate) {
+  if (!(added > 0) || !(spotRate > 0)) return bookingRate;
+  if (!(bookingRate > 0)) return spotRate;
+  const usdValue = oldBalance / bookingRate + added / spotRate;
+  return usdValue > 0 ? (oldBalance + added) / usdValue : spotRate;
+}
+
 /**
  * Handles LOAN_PAYMENT events (design 54 §4). For each liability account with a
  * positive balance, accrues one month of interest on the effective (offset-reduced)
@@ -403,10 +514,79 @@ export class LoanPaymentApplyReducer extends Reducer {
     // Principal reduction = delivered − accrued interest. Negative ⇒ balance grows
     // (negative amortization). Clamp only at payoff (0), never at growth.
     const principalPart = deliveredLoanCcy - interest;
-    const newBalance    = Math.max(0, (loan?.balance ?? 0) - principalPart);
+    const oldBalance    = loan?.balance ?? 0;
+    const newBalance    = Math.max(0, oldBalance - principalPart);
+
+    // §988 (design 86 G7 / P8) is computed HERE rather than in the handler, because
+    // the handler's `payment` is only the SCHEDULED one — when the cash pool is short
+    // the reducer funds less, and only principal that is actually repaid realizes
+    // exchange gain or loss. Computing it upstream would book §988 on money that was
+    // never paid.
+    const { patch: s988Patch, actions: s988Actions } =
+      _section988ForPayment(state, loanKey, loan, oldBalance, principalPart);
 
     return this.newState(state, {
-      [loanKey]: { ...loan, balance: +newBalance.toFixed(2) },
-    }, []);
+      [loanKey]: { ...loan, ...s988Patch, balance: +newBalance.toFixed(2) },
+    }, s988Actions);
   }
+}
+
+/**
+ * The §988 leg of a loan payment: what to stamp on the loan, and what to book.
+ *
+ * A non-USD loan held by a US person (functional currency USD, §985(b)(1)) is a §988
+ * transaction (§988(c)(1)(B)(iii)); exchange gain or loss is ordinary (§988(a)(1)(A))
+ * and is realized on each payment of PRINCIPAL (Reg. §1.988-2(b)(5)). Interest
+ * carries its own §988 item between accrual and payment (Reg. §1.988-2(b)(3)), but
+ * here accrual and payment are simultaneous, so that piece is identically zero and is
+ * deliberately not modelled.
+ *
+ * Two consequences are the whole reason this matters to the offset question rather
+ * than being a rounding error:
+ *   · an INTEREST-ONLY loan repays no principal, so it recognizes NOTHING until it
+ *     amortises or matures — deferring decades of currency movement into whichever
+ *     year the balloon lands in, as a single lump of ordinary income;
+ *   · a fully OFFSET loan is likewise silent, because an offset suppresses interest
+ *     without repaying principal. §988 bites on repayment, not on holding the debt.
+ *
+ * @returns {{ patch: object, actions: object[] }} fields to merge onto the loan, and
+ *          any SECTION_988_GAIN to emit.
+ */
+function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) {
+  const none = { patch: {}, actions: [] };
+  const ccy  = currencyCode(loan);
+  if (!ccy || ccy === 'USD') return none;
+
+  const spot = state?.effectiveExchangeRates?.USD_AUD ?? 1.55;
+  if (!(spot > 0)) return none;
+
+  // An unstamped loan is booked at today's rate and recognizes nothing this period.
+  // For a loan already outstanding at t0 the true booking rate is historical and
+  // unknowable to the model, so treating it as incurred now is the honest default —
+  // it UNDERSTATES §988 rather than inventing it. Author `bookingFxRate` to state
+  // the real one.
+  if (loan.bookingFxRate == null) return { patch: { bookingFxRate: spot }, actions: [] };
+
+  // Principal ADDED (negative amortization / redraw) re-books the debt as a blend of
+  // dollars borrowed at two rates; nothing is realized.
+  if (principalPart < 0) {
+    return {
+      patch: { bookingFxRate: blendSection988BookingRate(oldBalance, loan.bookingFxRate, -principalPart, spot) },
+      actions: [],
+    };
+  }
+  if (!(principalPart > 0)) return none;
+
+  const r = computeSection988Gain(
+    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan));
+  if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return none;
+
+  return {
+    patch: {},
+    actions: [{
+      type: 'SECTION_988_GAIN', loanKey, currency: ccy,
+      amount: r.recognized, gross: r.gross,
+      disallowedLoss: r.disallowedLoss, deMinimis: r.deMinimis,
+    }],
+  };
 }

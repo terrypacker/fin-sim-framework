@@ -103,6 +103,14 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usSeEarningsYTD        = 0,
       usSsWagesYTD           = 0,
       usFilingSingle         = false,
+      // §988 ordinary exchange LOSS on foreign-currency debt (design 86 G7 / P8),
+      // stored positive. It is an above-the-line ordinary deduction, taken here
+      // rather than netted into usOrdinaryIncomeYTD by the classifier — see the
+      // SECTION_988_GAIN classifier for why (G5b: a negative that reduces gross
+      // income without reducing any basket breaks the §904 partition). Entering
+      // via BOTH `agi` and `unrelatedDeductions` is what keeps the Form 1116
+      // identity exact; that is the same pair usNegativeIncomeYTD uses.
+      usSection988LossYTD    = 0,
     } = state;
 
     // Step 0a: §469 passive activity loss limitation (design 86 G5/G5b).
@@ -135,7 +143,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
     // Step 1: AGI and taxable ordinary income (AGI reduced by the ½ SE-tax
     // deduction — the surtax is not deductible).
-    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction;
+    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction - usSection988LossYTD;
     const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
     // Step 1b: FEIE (Form 2555) — exclude foreign *earned* income up to the cap
@@ -236,7 +244,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // fractions could still overshoot.
     const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
-    const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD);
+    const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
+                                  + Math.max(0, usSection988LossYTD);
 
     // Step 6: Foreign Tax Credit — per §904 basket (design 52 §4.3). Replaces the
     // pre-52 `min(ftcYTD, grossTax)` income-credit hack: credit the *actual* AU
@@ -363,6 +372,19 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
         ...(seDeduction > 0
           ? [{ label: '½ Self-Employment Tax Deduction', amount: -seDeduction }]
+          : []),
+        // §988 (design 86 G7). The gain is already inside grossOrdinaryIncome; only
+        // the deductible loss is a separate line. The disallowed personal loss is
+        // printed too, at zero effect — an amount that cost real money and produces
+        // no deduction is exactly the thing a reader must not have to infer.
+        ...((state.usSection988GainYTD ?? 0) > 0
+          ? [{ label: '§988 Exchange Gain on Foreign Debt (in gross income)', amount: 0 }]
+          : []),
+        ...(usSection988LossYTD > 0
+          ? [{ label: '§988 Exchange Loss on Foreign Debt', amount: -usSection988LossYTD }]
+          : []),
+        ...((state.usSection988DisallowedLossYTD ?? 0) > 0
+          ? [{ label: '§988 Personal Exchange Loss — DISALLOWED (§165(c))', amount: 0 }]
           : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },

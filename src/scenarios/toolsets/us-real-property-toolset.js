@@ -64,6 +64,13 @@ export const US_REAL_PROPERTY = {
       // regardless of which country's loan it settles.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number() } },
+      // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
+      // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
+      // registerActionType is idempotent. cc: null — it is realized on a loan in any
+      // country, and its US tax character is decided by the US classifier.
+      { type: 'SECTION_988_GAIN', cc: null,
+        fields: { loanKey: ValueType.text(), currency: ValueType.text(), amount: ValueType.number(),
+                  gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number() } },
       { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_TAX', cc: 'US',
