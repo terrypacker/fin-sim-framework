@@ -30,6 +30,8 @@
  *   equityShift       number           parallel shift on EVERY equity growth rate,
  *                                      in rate points (-0.03 turns 10% into 7%)
  *   equity            [{...}]          inject CompanyEquity records (tranches)
+ *   companyEquity     {stateKey: {...}} per-equity overrides on tranches the scenario
+ *                                      ALREADY carries (sale year, value, …)
  *   property          {stateKey: {...}} per-property overrides (sale year, value, costs)
  *   spendingStrategy  string           FIXED | GUARDRAIL | EXPLICIT_BANDS | …
  *   monthlyExpenses   number           the raw expense line (EXCLUDES loan payments)
@@ -71,6 +73,9 @@ export function buildVariant(cfg, levers = {}) {
   if (levers.moveYear != null) set('moveYear', levers.moveYear);
   if (levers.equityShift) applyEquityShift(out, set, levers.equityShift);
   if (levers.equity) for (const rec of levers.equity) addCompanyEquity(out, rec);
+  if (levers.companyEquity) {
+    for (const [stateKey, o] of Object.entries(levers.companyEquity)) applyCompanyEquity(out, set, stateKey, o);
+  }
   if (levers.property) {
     for (const [stateKey, o] of Object.entries(levers.property)) applyProperty(out, set, stateKey, o);
   }
@@ -224,6 +229,59 @@ export function addCompanyEquity(cfg, {
     appreciationRate, plannedSaleYear: saleYear,
     ownershipType, ownerId, country, appreciationSchedule: null,
   };
+}
+
+/**
+ * Per-equity overrides on a tranche the scenario ALREADY carries — the read/modify
+ * sibling of `addCompanyEquity`'s create.
+ *
+ *   saleYear             number|null   null = never becomes sellable
+ *   value                number        absolute override of the base-year face value
+ *   valueMult            number        multiplier on the existing value
+ *   appreciationRate     number
+ *   costBasis            number
+ *   destination          string        state KEY of the account taking the proceeds
+ *
+ * Sweeping a sale year is the whole point: a private tranche whose liquidity date is
+ * decided by someone else is not a plan input, it is an axis. Use `addCompanyEquity`
+ * only for a tranche the scenario does NOT model — injecting one that it does gives
+ * you two, and the phantom sells while the real one sits there as dead paper.
+ *
+ * `saleYear: null` is meaningful and is the DEFAULT STATE of an unvested tranche, so
+ * this distinguishes "absent" from "explicitly null" via `in`. It is also close to
+ * inert for solvency: US_COMPANY_SALE schedules a COMPANY_SALE only when
+ * `plannedSaleYear != null`, so a null tranche appreciates onto the balance sheet
+ * forever and never converts to cash. Expect it to move `netWorth` a great deal and
+ * `failed` not at all — which is exactly why `failed` is the primary outcome here.
+ */
+export function applyCompanyEquity(cfg, set, stateKey, o = {}) {
+  const rec = (cfg.companyEquities ?? []).find(e => e.stateKey === stateKey || e.id === stateKey);
+  const st  = cfg.initialState?.[stateKey];
+  if (!rec && !st) {
+    throw new Error(`companyEquity lever: no equity "${stateKey}" `
+      + `(have: ${(cfg.companyEquities ?? []).map(e => e.stateKey ?? e.id).join(', ') || 'none'})`);
+  }
+
+  if ('saleYear' in o) {
+    if (rec) rec.plannedSaleYear = o.saleYear;
+    if (st)  st.plannedSaleYear  = o.saleYear;
+    set(`equity.${stateKey}.plannedSaleYear`, o.saleYear);
+  }
+  if (o.value != null || o.valueMult != null) {
+    const base = o.value ?? (rec?.value ?? st?.value ?? 0);
+    const v = Math.round(o.valueMult != null ? base * o.valueMult : base);
+    if (rec) rec.value = v;
+    if (st)  st.value  = v;
+    set(`equity.${stateKey}.value`, v);
+  }
+  for (const f of ['appreciationRate', 'costBasis']) {
+    if (o[f] == null) continue;
+    if (rec) rec[f] = o[f];
+    if (st)  st[f]  = o[f];
+  }
+  // design/72 Gap 2: this is a state KEY. A record id here never resolves and the
+  // proceeds land silently in the generic cash pool.
+  if (o.destination != null && rec) rec.saleDestinationAccount = o.destination;
 }
 
 /**
