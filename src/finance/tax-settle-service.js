@@ -277,6 +277,11 @@ export class TaxSettleService {
         auOrdinaryIncomeYTD:         perPersonShare(state.auPersonOrdinaryIncomeYTD,         state.auOrdinaryIncomeYTD),
         auCapitalGainsYTD:           perPersonShare(state.auPersonCapitalGainsYTD,            state.auCapitalGainsYTD),
         auDiscountableGainsYTD:      perPersonShare(state.auPersonDiscountableGainsYTD,       state.auDiscountableGainsYTD),
+        // design 83 G7 step 3 — the apportioned base and its relief travel with the
+        // discountable gain they belong to, or the person's return would apply a flat
+        // 50% to a base someone else's apportionment had already reduced.
+        auDiscountApportionedBaseYTD: perPersonShare(state.auPersonDiscountApportionedBaseYTD, state.auDiscountApportionedBaseYTD),
+        auDiscountAllowanceYTD:       perPersonShare(state.auPersonDiscountAllowanceYTD,       state.auDiscountAllowanceYTD),
         auRealCapitalGainsYTD:       perPersonShare(state.auPersonRealCapitalGainsYTD,        state.auRealCapitalGainsYTD),
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
         auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),

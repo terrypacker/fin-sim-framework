@@ -30,6 +30,8 @@ function _sumMap(map) {
 // and consumed (excess lost) at the next AU settle.
 const YTD_FIELDS = {
   US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usNetInvestmentIncomeYTD', 'usPenaltyYTD',
+       // design 83 G7 step 3b — the §1250 depreciation slice; per-year like every gain bucket
+       'usUnrecaptured1250GainYTD',
        // design 86 G5 — the SIGNED per-year passive results. The suspended-loss POOL
        // (usPassiveLossCarryforward) is deliberately NOT here: it must survive.
        'usPassiveActivityIncomeYTD', 'usForeignPassiveActivityIncomeYTD',
@@ -52,7 +54,9 @@ const YTD_FIELDS = {
        // carryforward of their own (a loss that outruns income becomes an NOL, which
        // this model does not have — stated in design 86 §3 "Out of scope").
        'usSection988GainYTD', 'usSection988LossYTD', 'usSection988DisallowedLossYTD'],
-  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
+  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD',
+       // design 83 G7 step 3 — s115-115 apportionment
+       'auDiscountApportionedBaseYTD', 'auDiscountAllowanceYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
        // design 73 Gap 2 — per-type non-resident final withholding
        'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
@@ -65,6 +69,8 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
   'auPersonCapitalGainsYTD',
   'auPersonDiscountableGainsYTD',
+  'auPersonDiscountApportionedBaseYTD',
+  'auPersonDiscountAllowanceYTD',
   'auPersonRealCapitalGainsYTD',
   'auPersonFrankingCreditYTD',
   'auPersonNonResidentWithholdingYTD',

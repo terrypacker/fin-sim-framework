@@ -87,6 +87,10 @@ export const COVERED = [
   'AuDividendUnfrankedResidentApplyReducer', 'AuDividendUnfrankedNonResidentApplyReducer',
   'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
   'AuFixedIncomeEarningsApplyReducer', 'AuSeIncomeApplyReducer', 'AuWagesIncomeApplyReducer', 'AuHouseSaleApplyReducer',
+  // Buying a dwelling mid-run (design 83 §10 follow-on) — tests/unit/evt-property-purchase.test.mjs
+  'PropertyPurchaseApplyReducer',
+  // s292-102 downsizer contribution — tests/unit/evt-downsizer-contribution.test.mjs
+  'SuperDownsizerContributionApplyReducer',
 
   // D — top-level finance (dedicated tests)
   'AccumulateDeficitReducer', 'OutOfFundsReducer', 'SetOutOfFundsDateReducer',

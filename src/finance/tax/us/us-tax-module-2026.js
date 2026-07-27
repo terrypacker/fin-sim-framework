@@ -518,7 +518,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // this US-source gain is relievable). Mirrors STOCK_WITHDRAWAL_TAX; no foreign-
       // passive basket entry (US-source income is not foreign for the US return).
       ['US_HOUSE_SALE_TAX', (state, action) => {
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain };
+        // Design 83 G7 step 3b — the depreciation slice is unrecaptured §1250 gain,
+        // taxed at its own 25% ceiling rather than the LTCG rates. `action.gain` is
+        // already net of it, so the two buckets partition the taxable gain rather than
+        // overlapping. Written only when non-zero: a never-rented home has no slice,
+        // and creating the key at 0 would put a diff on every ordinary house sale.
+        const depGain = Math.max(0, action.depreciationGain ?? 0);
+        let next = {
+          ...state,
+          usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain,
+          ...(depGain !== 0
+            ? { usUnrecaptured1250GainYTD: (state.usUnrecaptured1250GainYTD ?? 0) + depGain }
+            : {}),
+        };
         if (action.residency === 'AU' && (action.auGain ?? 0) > 0) {
           const audGain         = toAUD(action.auGain, 'USD', state);
           const audDiscountable = toAUD(action.auDiscountableGain ?? action.auGain, 'USD', state);

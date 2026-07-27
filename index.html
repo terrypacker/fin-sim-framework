@@ -866,10 +866,6 @@
           <input type="number" data-id="appreciationRate" value="0.035" step="0.001"/>
         </div>
         <div class="node-field">
-          <label>Primary Res.</label>
-          <input type="checkbox" data-id="isPrimaryResidence"/>
-        </div>
-        <div class="node-field">
           <label>Sale Year</label>
           <input type="number" data-id="plannedSaleYear" placeholder="blank = none"/>
         </div>
@@ -892,6 +888,74 @@
             <option value="">— none —</option>
           </select>
         </div>
+        <!-- ── PURCHASE — buying this dwelling part-way through the run. A property
+             with a future purchase year sits DORMANT at value 0 until then (running
+             costs skip a zero-value property and appreciation on 0 is 0), so this is
+             how a downsize is authored: sell one dwelling, buy another. ── -->
+        <div class="node-section-head">Purchase (buy mid-run)</div>
+        <div class="node-field">
+          <label>Purchase Year</label>
+          <input type="number" data-id="purchaseYear" placeholder="blank = owned from the start"
+                 title="Calendar year this dwelling is bought. Blank = already owned at the simulation start (today's behaviour). Set it and the property is DORMANT — worth nothing, costing nothing — until 15 January of that year, when the price is debited and it becomes an ordinary property. The purchase settles AFTER any sale on the same date, so selling and buying in one January works."/>
+        </div>
+        <div class="node-field">
+          <label>Purchase Price</label>
+          <input type="number" data-id="purchasePrice" placeholder="blank = no purchase"
+                 title="What the dwelling costs, in TODAY's money, in the property's currency. It is grown to the purchase date at this property's own appreciation rate — not CPI — so a price set as a share of what you are selling keeps that share. A purchase year with no price buys nothing."/>
+        </div>
+        <div class="node-field">
+          <label>Price Is Nominal</label>
+          <input type="checkbox" data-id="purchasePriceIsNominal"
+                 title="Tick when the price is already stated as at the purchase date (a contracted price). Unticked — the default — treats it as today's money and grows it."/>
+        </div>
+        <div class="node-field">
+          <label>Fund From</label>
+          <select data-id="purchaseFundFrom"
+                  title="Account the purchase price is debited from. Blank uses the property country's cash pool. If the balance would breach its minimum, the shortfall is raised through the normal drawdown queue — which is what makes a purchase interact with the portfolio instead of looking free.">
+            <option value="">— country cash pool —</option>
+          </select>
+        </div>
+
+        <!-- ── MAIN RESIDENCE HISTORY — design 83 G7. The static Primary Res. checkbox
+             above can only say "throughout" or "never"; these dates say WHEN, which is
+             what s118-185, §121(b)(5) and s115-115 all turn on. ── -->
+        <div class="node-section-head">Main Residence History (design 83 G7)</div>
+        <div class="node-field">
+          <label>Acquired</label>
+          <input type="date" data-id="acquisitionDate"
+                 title="When the dwelling was actually bought. This is the denominator of the AU s118-185 ownership period AND of the s115-105 CGT discount testing period, and the start of the US §121 nonqualified-use window. LEAVE IT BLANK AND THOSE CONCESSIONS ARE DENIED — it is not defaulted to the simulation start, because that would treat a twenty-year hold as a three-year one and inflate every fraction in your favour. Set automatically when a dwelling is bought mid-run."/>
+        </div>
+        <!-- One dropdown plus a conditional date, rather than free-form dates that can
+             be set to contradictory combinations (design 83 §7b.2c). The four options
+             are the only histories the rules distinguish, and each shows exactly the
+             one date it needs — so "moved out before you moved in" is unreachable
+             rather than merely invalid. -->
+        <div class="node-field">
+          <label>History</label>
+          <select data-id="mainResidenceMode"
+                  title="Which main-residence history this dwelling has. NEVER = an investment property throughout (no AU exemption, no US §121). THROUGHOUT = the main residence for the whole hold (fully exempt in AU, full §121 cap in the US). The two mixed options each prorate — Australia by the fraction of ownership days, the United States by §121(b)(5) nonqualified use — and the ORDER matters: renting after you move out is forgiven by §121 Exception 1, renting before you move in is not.">
+            <option value="never">Never a main residence</option>
+            <option value="throughout">Main residence throughout</option>
+            <option value="moved-out">From the start, then moved out</option>
+            <option value="moved-in">Became one later</option>
+          </select>
+        </div>
+        <div class="node-field" data-id="mainResidenceMovedInRow">
+          <label>Moved In</label>
+          <input type="date" data-id="mainResidenceFrom"
+                 title="When this dwelling first became the main residence. Australia exempts only the fraction of ownership days it WAS the main residence, so moving into a long-rented house late buys a small fraction — not the lot."/>
+        </div>
+        <div class="node-field" data-id="mainResidenceMovedOutRow">
+          <label>Moved Out</label>
+          <input type="date" data-id="mainResidenceUntil"
+                 title="When it stopped being the main residence. Everything after this date is a rental period — which §121 Exception 1 forgives, unlike the years before you move in."/>
+        </div>
+        <div class="node-field">
+          <label>Downsizer Contrib.</label>
+          <input type="checkbox" data-id="claimDownsizerContribution"
+                 title="Claim the AU s292-102 downsizer super contribution on this dwelling's sale: up to A$300,000 per owner aged 55+, outside the contribution caps, for an Australian dwelling held 10+ years. Requires the main-residence exemption to be at least PARTLY available — so a dwelling that was never lived in funds nothing, and this is the same lever as Main Res. From. Figures unverified against the ATO."/>
+        </div>
+
         <!-- ── MORTGAGE — synthesized into a linked Loan liability at build time
              (design 54 P2); its terms and deductibility come from design 86. ── -->
         <div class="node-section-head">Mortgage (design 54 / 86)</div>

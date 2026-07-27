@@ -786,6 +786,18 @@ export class ScenarioSerializer {
       landValueRatio:             p.landValueRatio             ?? 0.2,
       annualDepreciationOverride: p.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
+      // Main-residence history + acquisition (design 83 G7) and the purchase path.
+      // These sit on an explicit per-field ALLOWLIST in BOTH directions — a field left
+      // out here is silently dropped on save/load, which is how mortgageBookingFxRate
+      // was quietly inert for a whole session.
+      mainResidenceFrom:          p.mainResidenceFrom          ?? null,
+      mainResidenceUntil:         p.mainResidenceUntil         ?? null,
+      acquisitionDate:            p.acquisitionDate            ?? null,
+      purchaseYear:               p.purchaseYear               ?? null,
+      purchasePrice:              p.purchasePrice              ?? null,
+      purchaseFundFrom:           p.purchaseFundFrom           ?? null,
+      purchasePriceIsNominal:     p.purchasePriceIsNominal     ?? false,
+      claimDownsizerContribution: p.claimDownsizerContribution ?? false,
       // Cross-border CGT step-up (design 62 §5)
       costBaseByCountry:          p.costBaseByCountry          ?? null,
       acquisitionPriceLevel:      p.acquisitionPriceLevel      ?? null,
@@ -845,6 +857,18 @@ export class ScenarioSerializer {
       landValueRatio:             d.landValueRatio             ?? 0.2,
       annualDepreciationOverride: d.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
+      // Main-residence history + acquisition (design 83 G7) and the purchase path.
+      // These sit on an explicit per-field ALLOWLIST in BOTH directions — a field left
+      // out here is silently dropped on save/load, which is how mortgageBookingFxRate
+      // was quietly inert for a whole session.
+      mainResidenceFrom:          d.mainResidenceFrom          ?? null,
+      mainResidenceUntil:         d.mainResidenceUntil         ?? null,
+      acquisitionDate:            d.acquisitionDate            ?? null,
+      purchaseYear:               d.purchaseYear               ?? null,
+      purchasePrice:              d.purchasePrice              ?? null,
+      purchaseFundFrom:           d.purchaseFundFrom           ?? null,
+      purchasePriceIsNominal:     d.purchasePriceIsNominal     ?? false,
+      claimDownsizerContribution: d.claimDownsizerContribution ?? false,
       // Cross-border CGT step-up (design 62 §5)
       costBaseByCountry:          d.costBaseByCountry          ?? null,
       acquisitionPriceLevel:      d.acquisitionPriceLevel      ?? null,

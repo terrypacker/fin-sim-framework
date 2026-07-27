@@ -144,7 +144,20 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const discountBase = (state != null && 'auDiscountableGainsYTD' in state)
       ? Math.min(auCapitalGainsYTD, Math.max(0, state.auDiscountableGainsYTD ?? 0))
       : auCapitalGainsYTD;
-    const reliefAmount   = discountBase * this._cgtDiscountRate;
+    // Design 83 G7 step 3 — s115-105/110/115. The discount is not a flat 50%: it is
+    // 50% × (days an Australian resident ÷ days in the discount testing period). Where a
+    // classifier knew the asset's real testing period it recorded the apportioned base
+    // and the relief it earned; everything else keeps the flat rate, which is the right
+    // answer for it — design 62's deemed acquisition restarts the clock at the move, so
+    // a non-TAP asset's testing period lies wholly inside the residency.
+    //
+    // Splitting the base in two rather than scaling one number is what keeps this
+    // additive: a year can contain both an apportioned property disposal and a flat-rate
+    // share sale, and they must not be averaged into a rate neither of them attracts.
+    const apportionedBase  = Math.min(discountBase, Math.max(0, state?.auDiscountApportionedBaseYTD ?? 0));
+    const flatBase         = Math.max(0, discountBase - apportionedBase);
+    const apportionedRelief = Math.max(0, state?.auDiscountAllowanceYTD ?? 0);
+    const reliefAmount   = flatBase * this._cgtDiscountRate + apportionedRelief;
     const netTaxableGain = auCapitalGainsYTD - reliefAmount;
     return { netTaxableGain, reliefAmount, minTaxRate: 0 };
   }

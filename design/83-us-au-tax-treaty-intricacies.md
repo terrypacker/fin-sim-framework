@@ -2155,12 +2155,91 @@ Articles 18 and 27, which carry most of §16 and §17, are untouched.
 
 ---
 
+## 21. G7 — implemented, except the discount apportionment (2026-08-06)
+
+Built for a dwelling **rented first and possibly occupied later** — sub-case 2b, the
+history that the deferral in §7b.5 was ordered around and which the reference plan's AU
+house actually has. **All five applicable steps are done**; step 4 is not applicable.
+
+| step | status | note |
+|---|---|---|
+| 1 — s118-110(3) foreign-resident gate | **done** | Snapshot at the CGT event, not a look-back |
+| 2 — `mainResidenceFrom`/`Until` + s118-185 | **done** | `acquisitionDate` added; absent ⇒ denial, never a guess |
+| 3 — CGT discount by residency days | **done** | Opt-in on `acquisitionDate`, so no re-baseline was needed after all |
+| 3b — depreciation split + §1250 bucket | **done** | Promoted: §7b.5 assumed a never-rented dwelling |
+| 4 — s118-145 absence rule + s118-192 | **not applicable** | Both limbs need main-residence status *before* the income time; rent-then-occupy fails both |
+| 5 — §121 with nonqualified-use proration | **done** | Applied to BOTH countries' dwellings |
+
+**The ordering in §7b.5 was wrong for this dwelling, in both directions.** Step 3b was
+listed as optional generality and is in fact required — a rented property accrues
+`accumulatedDepreciation`, §121 can never shelter it, and without a 25% bucket there was
+nowhere to put a differently-rated slice. Step 4 was listed as the generality to finish
+with and is *unavailable*: s118-145(1) applies to "a dwelling **that was your main
+residence**" and s118-192(1)(b) asks whether a full exemption would have been available
+just before the income time, so a dwelling rented from the start fails both limbs.
+
+**What this corrects, and it is not what the headline suggests.** Neither concession is
+the round number people expect. Australia exempts the *fraction of ownership days* the
+dwelling was the main residence — rent for twenty years, move in for three, and roughly
+3/23 is exempt, not the lot. The United States prorates the \$250k/\$500k the same way
+under §121(b)(5), and **the rent-then-occupy order is the penalised one**: Pub 523's
+Exception 1 forgives renting *after* you move out, not *before* you move in. Both
+countries prorate by time; both penalise this order.
+
+**Case 1 was also wrong, against the taxpayer, and step 3 fixes it.** The model gave a
+foreign resident a 0% CGT discount, but s115-115 *apportions* by AU-resident days over
+the whole ownership period — it does not deny. What a foreign resident loses is the
+main-residence exemption (s118-110(3)), a different provision; conflating the two is
+exactly what the binary switch did, and it was wrong in both directions. A returning
+resident was given the full 50% on a gain that mostly accrued abroad; a departing one
+was given nothing.
+
+**Step 3 needed no golden re-baseline, contrary to the plan.** The apportionment is
+computed from the asset's `acquisitionDate`, and with none stated it falls back to the
+pre-G7 binary — so it is opt-in per property. It also bites far more narrowly than
+"every AU CGT asset" suggested: design 62's s855-45 deemed acquisition restarts the
+clock at the move for every non-TAP asset, leaving its testing period wholly inside the
+residency at 50%. **Australian real property is the only class that reaches it**, which
+is a narrow set and a large number — measured at an 11.9% effective discount, not 50%,
+for a thirty-year hold with eight resident years.
+
+Two accumulators rather than one scaled figure (`auDiscount{ApportionedBase,Allowance}YTD`,
+plus per-person twins): a year can contain both an apportioned property disposal and a
+flat-rate share sale, and averaging them into one rate would produce a discount neither
+asset attracts.
+
+**Two things landed that design 83 never contemplated**, because G7 is only useful with
+them:
+
+- **A property purchase path** (`property-purchase.js`). Design 83 has no way to acquire
+  a dwelling mid-run, which makes the commonest retirement move — sell the family home,
+  buy something smaller — inexpressible. A property with a future `purchaseYear` sits
+  dormant at value 0, which the engine already treats as absent (`HouseRunningCostHandler`
+  skips `value <= 0`; appreciation on 0 is 0), so dormancy needed no gate. The price is
+  stated in today's money and grown at the property's own appreciation rate, because the
+  quantity a downsize preserves is the *ratio* between the home sold and the home bought.
+- **The s292-102 downsizer contribution** (`au/downsizer-contribution.js`). Up to
+  A\$300,000 per person into super, outside the caps. Its eligibility gate is
+  s292-102(1)(b) — the dwelling must have qualified *at least partly* for the
+  main-residence exemption — which makes it **the same lever as `mainResidenceFrom`**.
+  Moving in before selling buys a slice of s118-185 and the entire downsizer capacity
+  together, and for a long-rented dwelling the second is frequently the larger. Figures
+  are transcribed from secondary knowledge and are **unverified against the ATO**.
+
+Suite green throughout: 4,581 + 996, with no golden re-baseline — every pre-G7 property
+keeps its exact answer, because a bare `isPrimaryResidence` can only mean "throughout"
+or "never" and is treated as meaning exactly that.
+
+Tests: `tests/unit/evt-main-residence.test.mjs` (23),
+`tests/unit/evt-property-purchase.test.mjs` (14),
+`tests/unit/evt-downsizer-contribution.test.mjs` (11).
+
 ## 20. Where design 83 stands after this session
 
 | gap | status |
 |---|---|
 | G1, G2, G3, G4, G5, G6, G8, G9, G10 (parts 1–3), G11 | **DONE** |
-| G7 | **DEFERRED** — §11; the reference plan never sells the AU house |
+| G7 | **DONE** (step 4 not applicable) — see §21 |
 
 G7 is the only gap left, and it is unchanged: six steps (§7b.5), one of which
 apportions the CGT discount by residency days across *every* AU CGT asset, another of

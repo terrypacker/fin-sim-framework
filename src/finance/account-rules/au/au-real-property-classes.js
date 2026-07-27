@@ -13,6 +13,9 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { auMainResidenceExemption, unrecaptured1250Gain, toMs } from '../main-residence.js';
+import { downsizerContributions } from './downsizer-contribution.js';
+import { ownershipFractions } from '../../ownership-utils.js';
 
 /** Default AU cash pool key when no saleDestinationAccount is provided. */
 const defaultAuCashKey = (state) =>
@@ -43,7 +46,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['AU_HOUSE_SALE_APPLY'];
-    this.generatedActionTypes = ['AU_HOUSE_SALE_TAX'];
+    this.generatedActionTypes = ['AU_HOUSE_SALE_TAX', 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY'];
   }
 
   reduce(state, action) {
@@ -53,9 +56,49 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     // Div 43 capital-works deductions taken during the hold reduce the CGT cost
     // base, so the gain is larger (design 48 §4.5). accumulatedDepreciation is 0
     // for non-rental properties, so this is a no-op there.
-    const accumulatedDep = (stateKey && state[stateKey]?.accumulatedDepreciation) ?? 0;
+    const propState      = stateKey ? state[stateKey] : null;
+    const accumulatedDep = propState?.accumulatedDepreciation ?? 0;
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const gain        = Math.max(0, salePrice - adjustedBasis);
+
+    // Design 83 G7 steps 1–2 + 3b. Three figures leave here instead of one, because
+    // the two countries tax three different slices of the same disposal:
+    //
+    //   · `auTaxableFraction` — s118-185 after the s118-110(3) foreign-resident gate.
+    //     AU-side only: the US grants no relief for an Australian main residence beyond
+    //     its own §121, so this must NOT reduce the US gain.
+    //   · `depreciationGain` — the Div 43 / §168 slice. Australia already handles it
+    //     correctly by the basis reduction above (s110-45(2)), and it rides the
+    //     exemption and the discount like any other gain. The United States taxes it as
+    //     unrecaptured §1250 gain at a 25% ceiling and §121 can never exclude it, so it
+    //     has to travel separately.
+    //   · `gain` — the whole thing, which is what the US starts from.
+    const saleMs = state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
+    const auExemption = auMainResidenceExemption(propState, {
+      acquisitionMs:   toMs(propState?.acquisitionDate),
+      saleMs,
+      residencyAtSale: residency,
+    });
+    // ITAA97 s292-102 — the downsizer super contribution. Emitted from the sale rather
+    // than scheduled separately because every one of its gates is a fact about THIS
+    // disposal: the exemption fraction just computed, the ownership period, the sale
+    // proceeds, and who owned it. The 90-day window the statute allows is collapsed to
+    // the sale date, which is the right simplification here — nothing in the model can
+    // use the float, and modelling it would only add a lag with no decision attached.
+    const owners_ = ownershipFractions({ ownershipType, ownerId, owners }, state.people ?? {})
+      .map(({ personKey, fraction }) => ({
+        personKey, fraction,
+        birthDate: state.people?.[personKey]?.birthDate ?? null,
+      }));
+    const downsizer = downsizerContributions({
+      prop: propState, proceeds: salePrice, exemptFraction: auExemption.exemptFraction,
+      acquisitionMs: toMs(propState?.acquisitionDate), saleMs, owners: owners_,
+    });
+    const downsizerActions = downsizer.contributions.map(c => ({
+      type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY',
+      personKey: c.personKey, amount: c.amount, reason: downsizer.reason,
+    }));
+
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'AU', state, destinationKey);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
@@ -74,7 +117,20 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       updates,
-      [{ type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners, proceeds: salePrice, costBasis: adjustedBasis, description }]
+      [...downsizerActions,
+       { type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners,
+         proceeds: salePrice, costBasis: adjustedBasis, description,
+         // G7: the AU-assessable slice after s118-185, and the §1250 slice the US
+         // taxes at its own rate. Both default to the pre-G7 answer — taxableFraction
+         // 1 and a 0 depreciation slice — for any property that states no history.
+         auTaxableFraction: auExemption.taxableFraction,
+         auExemptionReason: auExemption.reason,
+         depreciationGain:  unrecaptured1250Gain(gain, accumulatedDep),
+         acquisitionMs:     toMs(propState?.acquisitionDate),
+         saleMs,
+         mainResidenceFrom:  propState?.mainResidenceFrom  ?? null,
+         mainResidenceUntil: propState?.mainResidenceUntil ?? null,
+         isPrimaryResidence: propState?.isPrimaryResidence ?? false }]
     );
   }
 }

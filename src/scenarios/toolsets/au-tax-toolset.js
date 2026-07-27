@@ -88,6 +88,9 @@ export const AU_TAX = {
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
       auDiscountableGainsYTD:           0,   // CGT 50%-discount-eligible slice (design 62 §4)
+      // design 83 G7 step 3 — s115-115 residency apportionment of the discount
+      auDiscountApportionedBaseYTD:     0,
+      auDiscountAllowanceYTD:           0,
       auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
       auNonResidentWithholdingYTD:      0,
       // Per-type non-resident final withholding (design 73 Gap 2): interest at the
@@ -99,6 +102,8 @@ export const AU_TAX = {
       auPersonOrdinaryIncomeYTD:        {},
       auPersonCapitalGainsYTD:          {},
       auPersonDiscountableGainsYTD:     {},
+      auPersonDiscountApportionedBaseYTD: {},
+      auPersonDiscountAllowanceYTD:       {},
       auPersonRealCapitalGainsYTD:      {},
       auPersonNonResidentWithholdingYTD:{},
       auPersonNrWithholdingInterestYTD:          {},
@@ -116,6 +121,8 @@ export const AU_TAX = {
       state.auPersonOrdinaryIncomeYTD[p.id] = 0;
       state.auPersonCapitalGainsYTD[p.id] = 0;
       state.auPersonDiscountableGainsYTD[p.id] = 0;
+      state.auPersonDiscountApportionedBaseYTD[p.id] = 0;
+      state.auPersonDiscountAllowanceYTD[p.id]       = 0;
       state.auPersonRealCapitalGainsYTD[p.id] = 0;
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
       state.auPersonNrWithholdingInterestYTD[p.id] = 0;
