@@ -59,6 +59,8 @@ export const COVERED = [
   'BondCouponApplyReducer', 'BondCouponCashApplyReducer',
   // Cash-sleeve money-market interest covered by evt-cash-sleeve-interest.test.mjs (design 60).
   'CashSleeveInterestApplyReducer',
+  // Bond-sleeve coupon (equity-served non-US_STOCK accounts) covered by evt-bond-sleeve-coupon.test.mjs.
+  'BondSleeveCouponApplyReducer',
   'StockContributionApplyReducer', 'StockEarningsApplyReducer', 'StockDividendApplyReducer',
   'StockWithdrawalApplyReducer', 'FixedIncomeContributionApplyReducer',
   'FixedIncomeEarningsApplyReducer', 'FixedIncomeWithdrawalApplyReducer',
