@@ -29,6 +29,7 @@
     "crossfoot": "node scripts/tax/crossfoot-drill-reports.mjs",
     "probe:residency-cgt": "node scripts/probes/probe-residency-cgt.mjs",
     "probe:foreign-property-cgt": "node scripts/probes/probe-foreign-property-cgt.mjs",
+    "probe:tax-payment-leak": "node scripts/probes/probe-tax-payment-tax-leak.mjs",
     "verify:harvest": "node scripts/lab/verify-harvest.mjs",
     "votv": "node scripts/lab/votv.mjs"
   },

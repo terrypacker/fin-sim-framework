@@ -385,6 +385,18 @@ function _auTaxOnUsSourceIncome(action, state) {
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────
 
+/**
+ * Tax actions an `AccountService.replenishSavings` draw can emit — the taxable
+ * consequence of liquidating assets to raise cash. Declared as generated edges by
+ * every reducer that funds itself through a draw, so the action graph shows that
+ * paying a bill can itself create taxable income.
+ */
+export const DRAWDOWN_TAX_ACTION_TYPES = Object.freeze([
+  'STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX',
+  'K401_WITHDRAWAL_TAX', 'IRA_WITHDRAWAL_CONTRIB_TAX', 'IRA_WITHDRAWAL_EARNINGS_TAX',
+  'ROTH_WITHDRAWAL_EARNINGS_TAX', 'SUPER_WITHDRAWAL_EARNINGS_TAX',
+]);
+
 class TaxPaymentDebitReducerBase extends Reducer {
   static cc;
   static actionType;
@@ -402,7 +414,8 @@ class TaxPaymentDebitReducerBase extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = [new.target.actionType];
-    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', new.target.actionType];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', 'OUT_OF_FUNDS',
+                                 new.target.actionType, ...DRAWDOWN_TAX_ACTION_TYPES];
   }
 
   reduce(state, action, date) {
@@ -431,16 +444,32 @@ class TaxPaymentDebitReducerBase extends Reducer {
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     let crossBorderTransfers = [];
+    // Tax the FUNDING of the tax. Selling brokerage lots or distributing from an
+    // IRA/401k/super to raise the cash is an ordinary taxable event — the draw
+    // returns STOCK_WITHDRAWAL_TAX / *_WITHDRAWAL_TAX / COLLECTIBLE_SALE_TAX for
+    // exactly that. Emitting them accrues the income into the YTD buckets the NEXT
+    // settle reads: the sibling apply reducer (PRIORITY.TAX_APPLY) has already
+    // reset this year's buckets before this debit runs at TAX_APPLY + 1, so the
+    // gain lands in the following tax year. That deferral is what keeps the model
+    // finite — accruing into the year being settled would be circular (more tax ⇒
+    // bigger sale ⇒ more tax). Dropping them, which is what this reducer used to
+    // do, made a locally-funded tax bill tax-free while the same bill funded across
+    // the border (IntlTransferApplyReducer, which forwards them) was not.
+    let pendingTaxActions = [];
     if (shortfall > 0 && !escalated) {
       try {
         // A cross-currency cash sweep here (e.g. AU cash topping up US savings to
         // pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap A).
         // replenishSavings tops the account up as far as the sources allow before
         // throwing InsufficientFundsError with the uncoverable residual.
-        ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
+        ({ crossBorderTransfers = [], pendingTaxActions = [] } =
+          this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
-        // Proceed to the cross-border escalation below for the uncoverable part.
+        // The failed draw still emptied every eligible account, realizing gains on
+        // the way down. Keep those accruals (e.partial), then proceed to the
+        // cross-border escalation below for the uncoverable part.
+        ({ crossBorderTransfers = [], pendingTaxActions = [] } = e.partial);
       }
     }
 
@@ -474,7 +503,7 @@ class TaxPaymentDebitReducerBase extends Reducer {
 
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
-    }, [...crossBorderTransfers, ...residualActions]);
+    }, [...crossBorderTransfers, ...pendingTaxActions, ...residualActions]);
   }
 
   /**

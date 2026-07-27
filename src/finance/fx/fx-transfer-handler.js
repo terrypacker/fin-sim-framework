@@ -68,6 +68,10 @@ export class FxTransferToHandler extends HandlerEntry {
         transferRecords.push(...(r.crossBorderTransfers ?? []));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
+        // Keep what the exhausted draw already realized (see
+        // InsufficientFundsError.partial) — those sales are taxable regardless.
+        pendingTax.push(...e.partial.pendingTaxActions);
+        transferRecords.push(...e.partial.crossBorderTransfers);
       }
     }
 
