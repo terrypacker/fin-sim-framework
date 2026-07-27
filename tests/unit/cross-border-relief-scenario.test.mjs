@@ -70,8 +70,16 @@ function runDefaultIntlRetirement() {
 // outside the FTC system, so it lifts lifetime tax by ~$28k (+2.6%) to
 // ~1,121,674 — an UPWARD move (an added surtax), leaving ending net worth
 // within the ±1% band. A downward swing would still signal over-relief.
+// Year-one accrual fix: the year-end investment-income family (bond coupons,
+// dividends, stock/401k/super earnings, RMD) was scheduled with startOffset(1),
+// which silently skipped the first sim year — holdings held from simStart earned
+// nothing in year one. Corrected to startOffset(0), so year one now accrues its
+// investment income and growth. This adds ~one extra year of compounding to the
+// front of the run, lifting ending net worth ~+3.4% to ~11,911,160. Lifetime tax
+// stays within the ±1% band (the extra year's tax is small next to the 44-year
+// total). A large swing beyond these would signal the offset regressed.
 const EXPECTED_LIFETIME_TAX = 1_121_674;
-const EXPECTED_NET_WORTH     = 11_522_944;
+const EXPECTED_NET_WORTH     = 11_911_160;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

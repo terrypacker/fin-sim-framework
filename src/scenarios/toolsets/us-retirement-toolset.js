@@ -504,12 +504,12 @@ export const US_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('IRA Earnings').type('INTL_IRA_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#5C6BC0').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#5C6BC0').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
           .name('IRA Annual RMD').type('IRA_ANNUAL_RMD')
-          .interval('year-end').startOffset(1).enabled(true).color('#E65100').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#E65100').build()
       );
     }
 
@@ -517,7 +517,7 @@ export const US_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('Roth IRA Earnings').type('INTL_ROTH_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#7E57C2').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#7E57C2').build()
       );
     }
 
@@ -525,12 +525,12 @@ export const US_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('401k Earnings').type('INTL_K401_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#42A5F5').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#42A5F5').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
           .name('401k Annual RMD').type('K401_ANNUAL_RMD')
-          .interval('year-end').startOffset(1).enabled(true).color('#BF360C').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#BF360C').build()
       );
     }
 
@@ -538,17 +538,17 @@ export const US_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('US Stock Earnings').type('INTL_STOCK_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#26A69A').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#26A69A').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
           .name('US Stock Dividends').type('DIVIDEND_SCHEDULED')
-          .interval('year-end').startOffset(1).enabled(true).color('#4CAF50').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#4CAF50').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
           .name('Bond Coupons').type('INTL_BOND_COUPON')
-          .interval('year-end').startOffset(1).enabled(true).color('#8D6E63').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#8D6E63').build()
       );
     }
 
