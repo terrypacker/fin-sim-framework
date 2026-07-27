@@ -582,6 +582,95 @@ test('applyActions throws when action chain exceeds MAX_ACTIONS limit', () => {
   );
 });
 
+// ─── Simulation class: horizon (simEnd) guard ─────────────────────────────────
+//
+// A scenario schedules events out to simEnd and no further, so a stepTo() past it
+// used to drain the queue and then park the clock in the future with state frozen
+// at the horizon — a half-advanced world that reads like a modelling bug. These
+// pin the refusal.
+
+function horizonSim({ simEnd = new Date(Date.UTC(2027, 0, 1)), pastEndPolicy } = {}) {
+  const sim = new Simulation(new Date(Date.UTC(2025, 0, 1)), {
+    initialState: { counter: 0 },
+    opts: { simEnd, pastEndPolicy },
+  });
+  sim.reducers.register('INCREMENT', (state) => ({ ...state, counter: state.counter + 1 }));
+  sim.register('TICK', () => [{ type: 'INCREMENT' }]);
+  // Bounded series: three annual ticks, the last one ON simEnd.
+  for (let y = 2025; y <= 2027; y++) {
+    sim.schedule({ type: 'TICK', date: new Date(Date.UTC(y, 0, 1)) });
+  }
+  return sim;
+}
+
+test('stepTo past simEnd throws SimulationHorizonError and does not advance the clock', () => {
+  const sim = horizonSim();
+
+  sim.stepTo(new Date(Date.UTC(2026, 0, 1)));
+  assert.strictEqual(sim.state.counter, 2);
+
+  let err = null;
+  try { sim.stepTo(new Date(Date.UTC(2030, 0, 1))); } catch (e) { err = e; }
+  assert.strictEqual(err?.name, 'SimulationHorizonError');
+  assert.match(err.message, /simEnd=2027-01-01/);
+  Assert.datesEqual(err.target, new Date(Date.UTC(2030, 0, 1)));
+  Assert.datesEqual(err.simEnd, new Date(Date.UTC(2027, 0, 1)));
+
+  // Nothing moved: the refused step is a no-op, not a partial advance.
+  Assert.datesEqual(sim.currentDate, new Date(Date.UTC(2026, 0, 1)));
+  assert.strictEqual(sim.state.counter, 2);
+  assert.strictEqual(sim.queue.size(), 1, 'the 2027 tick is still queued');
+});
+
+test('stepTo exactly to simEnd is allowed', () => {
+  const sim = horizonSim();
+  sim.stepTo(new Date(Date.UTC(2027, 0, 1)));
+  assert.strictEqual(sim.state.counter, 3);
+  Assert.datesEqual(sim.currentDate, new Date(Date.UTC(2027, 0, 1)));
+});
+
+test("pastEnd:'warn' clamps the step to simEnd instead of throwing", () => {
+  const sim = horizonSim({ pastEndPolicy: 'warn' });
+  const { warn } = console;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(' '));
+  try {
+    sim.stepTo(new Date(Date.UTC(2030, 0, 1)));
+  } finally {
+    console.warn = warn;
+  }
+  assert.strictEqual(warnings.length, 1);
+  assert.match(warnings[0], /past this simulation's horizon/);
+  // Clamped: every event ran, and the clock stops at the horizon rather than 2030.
+  assert.strictEqual(sim.state.counter, 3);
+  Assert.datesEqual(sim.currentDate, new Date(Date.UTC(2027, 0, 1)));
+});
+
+test("pastEnd:'off' keeps the legacy behaviour (clock past simEnd, state frozen)", () => {
+  const sim = horizonSim();
+  sim.stepTo(new Date(Date.UTC(2030, 0, 1)), { pastEnd: 'off' });
+  assert.strictEqual(sim.state.counter, 3, 'all queued events still ran');
+  Assert.datesEqual(sim.currentDate, new Date(Date.UTC(2030, 0, 1)));
+});
+
+test('a sim with no declared horizon is unguarded', () => {
+  const sim = horizonSim({ simEnd: null });
+  assert.strictEqual(sim.simEnd, null);
+  sim.stepTo(new Date(Date.UTC(2030, 0, 1)));
+  Assert.datesEqual(sim.currentDate, new Date(Date.UTC(2030, 0, 1)));
+});
+
+test('branch() inherits the horizon', () => {
+  const sim = horizonSim();
+  sim.stepTo(new Date(Date.UTC(2026, 0, 1)));
+  const branched = sim.branch();
+  Assert.datesEqual(branched.simEnd, new Date(Date.UTC(2027, 0, 1)));
+  assert.throws(
+    () => branched.stepTo(new Date(Date.UTC(2030, 0, 1))),
+    { name: 'SimulationHorizonError' }
+  );
+});
+
 // ─── Simulation class: snapshots & rewind ─────────────────────────────────────
 
 test('Snapshot is captured after each handled event', () => {

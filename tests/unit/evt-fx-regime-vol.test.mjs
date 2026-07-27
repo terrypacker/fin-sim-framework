@@ -42,11 +42,11 @@ function loadScenario(config) {
   return scenario.sim;
 }
 
-function makeConfig(shock, { fxProcessModel = 'MEAN_REVERTING' } = {}) {
+function makeConfig(shock, { fxProcessModel = 'MEAN_REVERTING', simEnd = '2029-01-01' } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER', 'ECONOMIC_REGIMES'],
     simStart: '2026-01-01',
-    simEnd:   '2029-01-01',
+    simEnd,
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0, auInflationRate: 0,
       rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
@@ -156,12 +156,16 @@ test('EVT-FXRV-4: full-crisis regime drifts the anchor up AND raises volatility'
 // US/AU period advances, so regime drift lagged up to 6 months into the rate.
 // The recovery ticks (RECOMPUTE_REGIMES, monthly) must keep the anchor current.
 test('EVT-FXRV-5: anchor decays with the V recovery curve month-by-month', () => {
+  // The shock lands in 2030, so this case needs a horizon past the default 2029 —
+  // otherwise the Apr-2030 step is past simEnd, where the bounded event series
+  // (income, expenses, tax) have stopped and only self-rescheduling monthly ticks
+  // still fire. That half-dead world is what stepTo() now refuses to produce.
   const sim = loadScenario(makeConfig({
     shockId: 'anchor-track', name: 'Anchor Track', startDate: '2030-01-01',
     levelEffects: null,
     regime: { fxAdjustment: { USD_AUD: 0.08 } },
     recovery: { profile: 'V', durationMonths: 18 },
-  }));
+  }, { simEnd: '2032-01-01' }));
 
   // Three months in (t=3): V factor = 1 - 3/18 = 0.8333 → anchor = 1.55 + 0.08×0.8333.
   sim.stepTo(new Date(Date.UTC(2030, 3, 20))); // Apr 20 2030 ≈ t=3.6mo, mid-recovery

@@ -253,8 +253,10 @@ export class BaseScenario extends SimGraphNode {
    * @param {function} [o.sampler] Optional (state, date) => record, called at the
    *   history-snapshot cadence. Lets a batch caller collect a time series without
    *   paying for full-state snapshots; read it back off `sim.samples`.
+   * @param {'throw'|'warn'|'off'} [o.pastEndPolicy='throw'] What `sim.stepTo()`
+   *   does when handed a date past this scenario's simEnd — see Simulation.
    */
-  buildSim({ seed = 1, telemetry = 'full', sampler = null } = {}) {
+  buildSim({ seed = 1, telemetry = 'full', sampler = null, pastEndPolicy = 'throw' } = {}) {
     const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
     const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
 
@@ -279,7 +281,10 @@ export class BaseScenario extends SimGraphNode {
       graph,
       seed,
       initialState: resolved,
-      opts: { derivedMetrics, telemetry, sampler },
+      // simEnd is the run's horizon, not just a slider bound: the toolsets
+      // schedule events out to it and no further, so stepping past it produces a
+      // half-advanced world. Handing it to the sim lets stepTo() say so.
+      opts: { derivedMetrics, telemetry, sampler, simEnd: this.simEnd, pastEndPolicy },
     });
 
     simulationRegistry.register('primary', sim);
