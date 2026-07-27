@@ -1,7 +1,7 @@
 # 72 — Company equity sale: cross-border fidelity fixes
 
 **Status: Gaps 1, 2 & 3 IMPLEMENTED** (+ the de-minimis sub-fix in §1). Gap 4 outstanding.
-Suite green: 3779 unit + 897 viz. Surfaced by scenario testing of `CompanyEquity` sale timing
+Suite green: 3779 unit + 906 viz. Surfaced by scenario testing of `CompanyEquity` sale timing
 across a US→AU residency change.
 
 **Result: the ~4.4× residency cliff was ~70% modelling artifact.** After both fixes the
@@ -173,6 +173,13 @@ copied `resolveDestinationKey` helpers now delegate to a shared
 `resolveSaleDestinationKey(state, dest, defaultKey)` in `cash-routing.js`, so the
 cash-pool fallback survives for a genuinely unresolvable destination — one place, one
 behaviour.
+
+Upstream, the three asset editors now put the **stateKey** in the option value rather than
+`a.stateKey ?? a.id`, and omit accounts that have no stateKey (they are inert — there is no
+state to credit). A legacy id still selects its account in the dropdown, so re-saving migrates
+it. The loader normalization stays a migration rather than a permanent crutch. Note that since
+design 55 §3.1 (stateKey-at-creation) a UI-created account gets a stateKey immediately, so the
+id form only reaches new saves from scenarios that predate it.
 
 ### Measured impact
 
@@ -413,6 +420,7 @@ each alone understates the correction.
 | 2 | `finance/account-rules/cash-routing.js` — shared `resolveSaleDestinationKey` |
 | 2 | `finance/account-rules/us/us-income-classes.js`, `us-collectible-classes.js`, `us-real-property-classes.js`, `au/au-real-property-classes.js` — four copied resolvers now delegate |
 | 2 | `scenarios/scenario-loader.js` — `_normalizeSaleDestinations` (id → stateKey, records + persisted events) |
+| 2 | `visualization/assets/company-equity-editor.js`, `collectible-editor.js`, `real-property-editor.js` — destination select emits stateKeys only |
 | 3 | `finance/assets/company-equity.js` — `costBaseByCountry` / `acquisitionPriceLevel` / `acquisitionDateByCountry` |
 | 3 | `finance/services/company-equity-service.js` — `recordResidencyChange` step-up |
 | 3 | `finance/reducers/change-residency-apply-reducer.js` — step 1d, copy-on-write |
