@@ -12,6 +12,8 @@ import { EventBuilder }               from '../../simulation-framework/builders/
 import { ReducerBuilder }             from '../../simulation-framework/builders/reducer-builder.js';
 import { OneOffEvent }                from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
+import { RATE_KEYS }                  from '../../finance/economic-regimes/rate-keys.js';
+import { CashSleeveInterestHandler }  from '../../finance/handlers/cash-sleeve-interest-handler.js';
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
 import { HealthcareEventHandler }     from '../../finance/spending/strategies/healthcare-event-handler.js';
@@ -487,6 +489,30 @@ export const AU_RETIREMENT = {
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
+      }
+    }
+
+    // Money-market yield on CASH sleeves of AU equity-served accounts (design 60).
+    // Shares the CASH_SLEEVE_INTEREST monthly event scheduled by US_RETIREMENT.
+    // au-stock cash interest is AU ordinary income; super cash interest is
+    // tax-deferred (super environment). Rate reuses the AU savings rate from
+    // effectiveInterestRates, compounded monthly by reinvesting into the sleeve.
+    const cashInterestEvent = context.schedulesById['CASH_SLEEVE_INTEREST'];
+    if (cashInterestEvent) {
+      const auCashSleeveAccounts = [
+        ...auStockAccts.map(a => ({ acct: a, role: ACCOUNT_ROLES.AU_STOCK, taxMode: 'au' })),
+        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'deferred' })),
+      ];
+      for (const { acct, role, taxMode } of auCashSleeveAccounts) {
+        const h = new CashSleeveInterestHandler({
+          stateRegistry: sr, role,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          interestRate: acct.interestRate ?? p.auSavingsInterestRate,
+          rateKey: RATE_KEYS.SAVINGS_AU,
+          taxMode,
+        });
+        h.handledEvents.push(cashInterestEvent);
+        handlers.push(h);
       }
     }
 

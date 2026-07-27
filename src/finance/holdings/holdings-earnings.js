@@ -267,3 +267,57 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
     holdingActions,
   };
 }
+
+/**
+ * Walk an account's CASH holdings and compute per-holding money-market interest
+ * (design 60):
+ *
+ *   perHolding = marketValue × rate × factor
+ *
+ * `rate` is resolved from `state.effectiveInterestRates` using the account's
+ * country SAVINGS key: `<rateKey>::<stateKey>` per-account override → shared
+ * `<rateKey>` → `fallbackRate`, mirroring `UsSavingsInterestMonthlyHandler`. This
+ * is the yield a CASH sleeve inside an *equity-served* account (brokerage /
+ * retirement / super) earns: those accounts run off the equity-growth earnings
+ * handler, which (post design-59 follow-up) applies NO return to CASH, so without
+ * this stream their cash would sit idle. Savings/offset/fixed-income accounts have
+ * their own interest handlers and are NOT wired to this stream (no double-count).
+ *
+ * Only CASH holdings earn here; EQUITY/BOND/GOLD/OTHER are skipped. `factor` scales
+ * the annual rate to the accrual period (1/12 for the monthly stream), so monthly
+ * crediting compounds the sleeve — the effective annual yield is therefore slightly
+ * above the nominal rate, exactly as the monthly savings-interest handlers behave.
+ *
+ * Returns the dividend-shaped `{ amount, holdingActions }`; `holdingActions`
+ * reinvest the interest into each CASH sleeve (costBasisDelta 0) so it compounds.
+ *
+ * @param {object} opts
+ * @param {object} opts.state
+ * @param {string} opts.stateKey
+ * @param {string} opts.rateKey       - SAVINGS_US / SAVINGS_AU key into effectiveInterestRates
+ * @param {number} opts.fallbackRate  - Annual rate used when the map has no entry
+ * @param {number} [opts.factor=1/12] - Annual→period scale (1/12 = monthly)
+ * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsCashInterest({ state, stateKey, rateKey, fallbackRate, factor = 1 / 12 }) {
+  const account  = state?.[stateKey];
+  const holdings = account?.holdings ?? [];
+  const rates    = state?.effectiveInterestRates ?? {};
+  const rate = (stateKey != null ? rates[`${rateKey}::${stateKey}`] : undefined)
+    ?? (rateKey != null ? rates[rateKey] : undefined)
+    ?? fallbackRate;
+
+  let total = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h || h.allocation !== 'CASH') continue;
+    const mv       = h.marketValue ?? 0;
+    const interest = +(mv * rate * factor).toFixed(2);
+    if (interest === 0) continue;
+    total += interest;
+    holdingActions.push(new HoldingTransactAction({
+      stateKey, holdingId: h.id, marketValueDelta: interest, costBasisDelta: 0,
+    }));
+  }
+  return { amount: +total.toFixed(2), holdingActions };
+}
