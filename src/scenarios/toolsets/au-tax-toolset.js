@@ -17,7 +17,13 @@ import { AuPeriodAdvanceHandler, AuPeriodAdvanceReducer }
   from '../../finance/tax/period-advance-classes.js';
 import { AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer }
   from '../../finance/tax/tax-settle-classes.js';
+import { AuCgtBasisResetHandler, AuCgtBasisResetReducer }
+  from '../../finance/account-rules/au/au-cgt-reset-classes.js';
+import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+
+// AU CGT reform (design 57 §6.4): the 1 July 2027 deemed cost base reset.
+const AU_CGT_RESET_DATE = new Date(Date.UTC(2027, 6, 1));
 
 /**
  * AU_TAX toolset — declarative shell around TaxService for AU.
@@ -38,10 +44,11 @@ export const AU_TAX = {
   dependencies: ['AU_BANKING'],
 
   types: {
-    handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler],
-    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer],
+    handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler, AuCgtBasisResetHandler],
+    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer, AuCgtBasisResetReducer],
     actions: [
       { type: 'AU_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
+      { type: 'AU_CGT_BASIS_RESET_APPLY', fields: {} },
       { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any() } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
@@ -60,12 +67,14 @@ export const AU_TAX = {
       ...capture.statePatches,
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
+      auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
       auNonResidentWithholdingYTD:      0,
       auSuperTaxYTD:                    0,
       auFrankingCreditYTD:              0,
       ftcYTD:                           0,
       auPersonOrdinaryIncomeYTD:        {},
       auPersonCapitalGainsYTD:          {},
+      auPersonRealCapitalGainsYTD:      {},
       auPersonNonResidentWithholdingYTD:{},
       auPersonSuperTaxYTD:              {},
       auPersonFrankingCreditYTD:        {},
@@ -75,6 +84,7 @@ export const AU_TAX = {
     context.people.forEach(p => {
       state.auPersonOrdinaryIncomeYTD[p.id] = 0;
       state.auPersonCapitalGainsYTD[p.id] = 0;
+      state.auPersonRealCapitalGainsYTD[p.id] = 0;
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;
       state.auPersonFrankingCreditYTD[p.id] = 0;
@@ -84,17 +94,45 @@ export const AU_TAX = {
   },
 
   schedules(context) {
-    return _getContributions(context).events;
+    return [..._getContributions(context).events, ..._cgtResetEvents(context)];
   },
 
   handlers(context) {
-    return _getContributions(context).handlers;
+    // The reset handler is only registered when its event is actually scheduled;
+    // otherwise the handler→event edge would reference a missing event node.
+    const resetHandlers = _spansCgtReset(context) ? [new AuCgtBasisResetHandler()] : [];
+    return [..._getContributions(context).handlers, ...resetHandlers];
   },
 
   reducers(context) {
-    return [..._getContributions(context).reducers, ..._getBalanceSnapshotReducer(context)];
+    return [
+      ..._getContributions(context).reducers,
+      ..._getBalanceSnapshotReducer(context),
+      new AuCgtBasisResetReducer({ accountService: context.accountService }),
+    ];
   },
 };
+
+/**
+ * True when the simulation spans the 1 July 2027 reform date (starts before it
+ * and ends on/after it). A sim that starts after the reform needs no reset — its
+ * lots are already post-reform.
+ */
+function _spansCgtReset(context) {
+  return context.startDate < AU_CGT_RESET_DATE && context.endDate >= AU_CGT_RESET_DATE;
+}
+
+/** The 1 July 2027 deemed cost base reset event, scheduled once when in range. */
+function _cgtResetEvents(context) {
+  if (!_spansCgtReset(context)) return [];
+  return [new OneOffEvent({
+    name:    'AU CGT Cost Base Reset (1 Jul 2027)',
+    type:    'AU_CGT_BASIS_RESET',
+    date:    AU_CGT_RESET_DATE,
+    enabled: true,
+    color:   '#8E24AA',
+  })];
+}
 
 function _getContributions(context) {
   if (context._auTaxCapture) return context._auTaxCapture;

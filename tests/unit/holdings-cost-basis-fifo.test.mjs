@@ -125,3 +125,44 @@ test('FIFO: zero-marketValue holding skipped', () => {
   // basis from h_real only
   assert.equal(r.realizedBasis, 240);  // 400 × 300/500
 });
+
+// ─── CGT cost-base indexation (design 57 §6.3) ───────────────────────────────
+
+/** AU holding lot carrying a per-country AU cost base and an acquisition level. */
+function auLot({ id, mv, basis, auBasis, level, date }) {
+  return new Holding({
+    id, allocation: ALLOCATION.EQUITY, marketValue: mv, costBasis: basis,
+    costBaseByCountry: { AU: auBasis }, acquisitionPriceLevel: level,
+    purchaseDate: date, rateKey: RATE,
+  });
+}
+
+test('FIFO indexation: absent context ⇒ no indexed tally', () => {
+  const r = consumeHoldingsFifo([auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: 1.0, date: D(2020) })], 1000);
+  assert.deepEqual(r.realizedIndexedBasisByCountry, {});
+});
+
+test('FIFO indexation: lot held >12mo indexes AU basis up by the CPI ratio', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: 1.0, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU' });
+  assert.equal(r.realizedBasisByCountry.AU, 800);          // un-indexed
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 1200);  // 800 × (1.5 / 1.0)
+});
+
+test('FIFO indexation: lot held <12mo is not indexed (factor 1)', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: 1.0, date: D(2030, 0, 1) });
+  const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030, 5, 1).getTime(), country: 'AU' });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);   // <12 months held
+});
+
+test('FIFO indexation: lot with no acquisition level is not indexed', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: null, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU' });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);
+});
+
+test('FIFO indexation: factor is clamped ≥1 (deflation never lowers basis)', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: 2.0, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU' });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);   // max(1, 1.5/2.0) = 1
+});

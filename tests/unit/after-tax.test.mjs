@@ -271,13 +271,14 @@ describe('liquidationRateProvider (Option C) — the tax-engine waterfall', () =
     assert.notEqual(r, 0.99, 'used the US engine, not the configured AU fallback');
   });
 
-  test('AU brokerage cap-gains route through computeAuTax (50% CGT discount)', () => {
+  test('AU brokerage cap-gains route through computeAuTax (post-2027 CGT reform)', () => {
     const rp = liquidationRateProvider({ capGainsRate: 0.99 });
     const auStock = acct('au-stock', 100_000, { currency: 'AUD' });
     const state = { auOrdinaryIncomeYTD: 0, people: { p: { residency: 'AU' } } };
     const r = rp.capGainsLiquidationRate(auStock, 100_000, state, LATE);
-    // 50% discount + AU resident brackets ⇒ a modest effective rate, not 0.99.
-    assert.ok(r >= 0 && r < 0.30, `AU CGT effective rate in range, got ${r}`);
+    // LATE (2040) is past the 1 Jul 2027 CGT reform (design 57): no 50% discount,
+    // 30% minimum tax + Medicare ⇒ ~0.32 effective, not the 0.99 fallback.
+    assert.ok(r >= 0.30 && r < 0.35, `AU CGT effective rate in reform range, got ${r}`);
     assert.notEqual(r, 0.99, 'used the AU engine, not the configured fallback');
   });
 

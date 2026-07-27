@@ -37,6 +37,12 @@ export class Holding {
    *                                                  null/absent for a country ⇒ that country uses `costBasis`.
    *                                                  Country-agnostic; see design 36 §12.2.
    * @param {Date|null}   [opts.purchaseDate=null]  - Acquisition date; null = "carried in from scenario boot"
+   * @param {number|null} [opts.acquisitionPriceLevel=null]
+   *                                                - AU price level (state.inflationAccumulator.AU) at acquisition,
+   *                                                  used as the CGT cost-base indexation base for the FY2027 AU CGT
+   *                                                  reform (design 57 §6.3). null = not stamped ⇒ no indexation
+   *                                                  (index factor 1). The 1 Jul 2027 deemed cost base reset (design
+   *                                                  57 §6.4) restamps this alongside costBaseByCountry.AU.
    * @param {string|null} [opts.rateKey=null]       - Lookup into state.effectiveGrowthRates; resolved on register if null
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
    * @param {number|null} [opts.dividendYield=null] - Per-holding annual dividend yield; null = fall back to the
@@ -61,6 +67,7 @@ export class Holding {
     costBasis            = 0,
     costBaseByCountry    = null,
     purchaseDate         = null,
+    acquisitionPriceLevel = null,
     rateKey              = null,
     label                = '',
     dividendYield        = null,
@@ -75,6 +82,7 @@ export class Holding {
     this.costBasis            = costBasis;
     this.costBaseByCountry    = costBaseByCountry;
     this.purchaseDate         = purchaseDate;
+    this.acquisitionPriceLevel = acquisitionPriceLevel;
     this.rateKey              = rateKey;
     this.label                = label;
     this.dividendYield        = dividendYield;
@@ -93,6 +101,7 @@ export class Holding {
       costBasis:           this.costBasis,
       costBaseByCountry:   this.costBaseByCountry ? { ...this.costBaseByCountry } : null,
       purchaseDate:        this.purchaseDate ? this.purchaseDate.toISOString() : null,
+      acquisitionPriceLevel: this.acquisitionPriceLevel,
       rateKey:             this.rateKey,
       label:               this.label,
       dividendYield:       this.dividendYield,
@@ -116,6 +125,7 @@ export class Holding {
       costBasis:     d.costBasis   ?? 0,
       costBaseByCountry: /** @type {Object<string,number>|null} */ (d.costBaseByCountry ? { ...d.costBaseByCountry } : null),
       purchaseDate:  d.purchaseDate ? new Date(d.purchaseDate) : null,
+      acquisitionPriceLevel: d.acquisitionPriceLevel ?? null,
       rateKey:       d.rateKey ?? null,
       label:         d.label   ?? '',
       dividendYield: d.dividendYield ?? null,

@@ -10,6 +10,7 @@ import { AuAccountModule2024 } from './finance/account-rules/au/au-account-modul
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 } from './finance/account-rules/au/au-account-module-2026.js';
 import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from './finance/account-rules/au/au-brokerage-classes.js';
+import { AuCgtBasisResetHandler, AuCgtBasisResetReducer } from './finance/account-rules/au/au-cgt-reset-classes.js';
 import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au-fixed-income-classes.js';
 import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
@@ -201,8 +202,11 @@ import { AuTaxDocument2026 } from './finance/tax/au/au-tax-document-2026.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
+import { AuTaxModule2027 } from './finance/tax/au/au-tax-module-2027.js';
 import { AuTaxRates2024 } from './finance/tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxRates2026 } from './finance/tax/au/au-tax-rates-2026.js';
+import { AuTaxRates2027 } from './finance/tax/au/au-tax-rates-2027.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
@@ -442,6 +446,8 @@ export const Finance = {
   AuDividendUnfrankedNonResidentHandler,
   AuStockEarningsHandler,
   AuStockWithdrawalHandler,
+  AuCgtBasisResetHandler,
+  AuCgtBasisResetReducer,
   AuFixedIncomeEarningsApplyReducer,
   AuSeIncomeApplyReducer,
   AuWagesIncomeApplyReducer,
@@ -877,8 +883,11 @@ export const Finance = {
   AuTaxModule2024,
   AuTaxModule2025,
   AuTaxModule2026,
+  AuTaxModule2027,
   AuTaxRates2024,
   AuTaxRates2025,
+  AuTaxRates2026,
+  AuTaxRates2027,
   AuTaxRatesBase,
   BaseTaxDocumentModule,
   BaseTaxModule,

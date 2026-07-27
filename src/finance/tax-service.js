@@ -28,6 +28,7 @@ import { UsTaxModule2026 }       from './tax/us/us-tax-module-2026.js';
 import { AuTaxModule2024 }       from './tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 }       from './tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 }       from './tax/au/au-tax-module-2026.js';
+import { AuTaxModule2027 }       from './tax/au/au-tax-module-2027.js';
 
 import { UsAccountModule2024 }   from './account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 }   from './account-rules/us/us-account-module-2025.js';
@@ -66,6 +67,7 @@ export class TaxService {
     this._taxEngine.register(new AuTaxModule2024());
     this._taxEngine.register(new AuTaxModule2025());
     this._taxEngine.register(new AuTaxModule2026());
+    this._taxEngine.register(new AuTaxModule2027());
 
     // Register all known account modules
     this._accountRulesEngine.register(new UsAccountModule2024());

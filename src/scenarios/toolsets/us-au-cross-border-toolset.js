@@ -179,6 +179,7 @@ export const US_AU_CROSS_BORDER = {
         citizen:               person.citizen               ?? ['US'],
         residency:             startingResidency,
         residencyState:        person.residencyState         ?? null,  // US state of residency (design 34)
+        incomeSupportRecipient: person.incomeSupportRecipient ?? false, // AU CGT 30% min-tax exemption (design 57 §6.6)
       };
     }
 

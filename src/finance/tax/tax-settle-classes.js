@@ -17,13 +17,14 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
 // YTD fields reset to zero after each annual settlement, keyed by country code.
 const YTD_FIELDS = {
   US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD', 'ftcYTD'],
-  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
+  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
 };
 
 // Per-person AU accumulator maps reset to zero after each AU settlement.
 const PER_PERSON_AU_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
   'auPersonCapitalGainsYTD',
+  'auPersonRealCapitalGainsYTD',
   'auPersonFrankingCreditYTD',
   'auPersonNonResidentWithholdingYTD',
   'auPersonSuperTaxYTD',

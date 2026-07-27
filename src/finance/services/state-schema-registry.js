@@ -232,6 +232,7 @@ export class StateSchemaRegistry {
     // AU YTD
     this.register('auOrdinaryIncomeYTD',         ParameterValueType.currency('AUD'));
     this.register('auCapitalGainsYTD',           ParameterValueType.currency('AUD'));
+    this.register('auRealCapitalGainsYTD',       ParameterValueType.currency('AUD'));
     this.register('auNonResidentWithholdingYTD', ParameterValueType.currency('AUD'));
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
@@ -239,6 +240,7 @@ export class StateSchemaRegistry {
     // AU per-person YTD (design 10 §Phase 3) — jurisdiction-fixed AUD
     this.registerPattern('auPersonOrdinaryIncomeYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonCapitalGainsYTD.*',           ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonRealCapitalGainsYTD.*',       ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
