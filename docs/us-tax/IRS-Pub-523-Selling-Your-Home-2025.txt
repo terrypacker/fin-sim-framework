@@ -1,0 +1,1840 @@
+                                                                        Future Developments
+Publication 523                                                         For the latest information about developments related to
+                                                                        Pub. 523, such as legislation enacted after it was
+
+Selling Your
+                                                                        published, go to IRS.gov/Pub523.
+
+
+
+
+Home                                                                    What’s New
+                                                                        Credit for energy efficient home improvements re-
+                                                                        quires an identification number. Beginning January 1,
+For use in preparing                                                    2025, if you are claiming the energy efficient home im-
+
+2025 Returns
+                                                                        provement credit for specified property placed into service
+                                                                        in 2025, you must include the four-character alphanumeric
+                                                                        unique qualified manufacturer identification number
+                                                                        (QMID) for each item. Home energy tax credits are de-
+                                                                        tailed in Energy credits and subsidies.
+                                                                        Termination of certain energy credits after 2025. P.L.
+                                                                        119-21, commonly known as the One Big Beautiful Bill Act
+                                                                        (OBBBA), sections 70505 and 70506, modifies several
+                                                                        energy credits and deductions. The energy efficient home
+                                                                        improvement and residential clean energy credit are both
+                                                                        set to expire after 2025. Both credits are allowed for quali-
+                                                                        fying property with installation completed before 2026. For
+                                                                        construction or reconstruction of a structure, if your origi-
+                                                                        nal use of the structure begins after 2025, you can't claim
+                                                                        the residential clean energy credit.
+                                                                        Opportunity zones. P.L. 119-21, commonly known as
+                                                                        the OBBBA, section 70421, revises certain Opportunity
+                                                                        Zone rules in Internal Revenue Code sections 1400Z-1
+                                                                        and 1400Z-2.
+
+
+
+                                                                        Reminders
+                                                                        Special rules for capital gains invested in Qualified
+                                                                        Opportunity Funds. Effective December 22, 2017, sec-
+                                                                        tion 1400Z-2 introduced a temporary deferral of inclusion
+                                                                        in gross income for capital gains invested in Qualified Op-
+                                                                        portunity Funds and permanent exclusion of capital gains
+                                                                        from the sale or exchange of an investment in the Quali-
+                                                                        fied Opportunity Fund if the investment is held for at least
+                                                                        10 years. For more information, see the Instructions for
+                                                                        Form 8949.
+                                                                        Extension of the exclusion of canceled or forgiven
+                                                                        mortgage debt from income. The exclusion of income
+                                                                        for mortgage debt canceled or forgiven was extended
+                                                                        through December 31, 2025. The indebtedness dis-
+                                                                        charged must generally be on a qualified principal resi-
+                                                                        dence and based on an agreement, in writing, prior to
+                                                                        January 1, 2026. See Report as ordinary income on Form
+                                                                        1040, 1040-SR, or 1040-NR applicable canceled or for-
+                                                                        given mortgage debt, later.
+                                                                        Potential depreciation recapture for additional depre-
+ Get forms and other information faster and easier at:                  ciation deductions. The recapture rules of section 1250
+ • IRS.gov (English)             • IRS.gov/Korean (한국어)
+ • IRS.gov/Spanish (Español)     • IRS.gov/Russian (Pусский)            tax certain gains from the sale or other disposition of real
+ • IRS.gov/Chinese (中文)          • IRS.gov/Vietnamese (Tiếng Việt)      property as ordinary income and not capital gain to the ex-
+                                                                        tent the gain is due to depreciation previously claimed in
+                                                                        excess of straight-line for section 1250 realty held more
+                                               Publication 523 (2025) Catalog Number 15044W
+Feb 26, 2026                           Department of the Treasury Internal Revenue Service www.irs.gov
+than a year. Form 4797 is used to report the recapture         Don’t resubmit requests you’ve already sent us. You can
+amount. See Pub. 544.                                          get forms and publications faster online.
+Photographs of missing children. The IRS is a proud
+partner with the National Center for Missing & Exploited       Useful Items
+Children® (NCMEC). Photographs of missing children se-         You may want to see:
+lected by the Center may appear in this publication on pa-
+ges that would otherwise be blank. You can help bring           Publication
+these children home by looking at the photographs and
+                                                                   504 Divorced or Separated Individuals
+calling 1-800-THE-LOST (1-800-843-5678) if you recog-
+                                                                        504
+
+
+
+
+nize a child.                                                      505 Tax Withholding and Estimated Tax
+                                                                        505
+
+
+
+
+                                                                   527 Residential Rental Property
+                                                                        527
+
+
+
+
+Introduction                                                       530 Tax Information for Homeowners
+                                                                        530
+
+
+
+
+                                                                   537 Installment Sales
+This publication explains the tax rules that apply when you
+                                                                        537
+
+
+
+
+sell or otherwise give up ownership of a home. If you meet         544 Sales and Other Dispositions of Assets
+certain conditions, you may exclude the first $250,000 of
+                                                                        544
+
+
+
+
+gain from the sale of your home from your income and               547 Casualties, Disasters, and Thefts
+                                                                        547
+
+
+
+
+avoid paying taxes on it. The exclusion is increased to            551 Basis of Assets
+$500,000 for a married couple filing jointly.
+                                                                        551
+
+
+
+
+   This publication also has worksheets for calculations           587 Business Use of Your Home
+                                                                        587
+
+
+
+
+relating to the sale of your home. It will show you how to:
+                                                                   936 Home Mortgage Interest Deduction
+                                                                        936
+
+
+
+
+ 1. Figure your maximum exclusion, using Worksheet 1,
+                                                                   4681 Canceled Debts, Foreclosures,
+ 2. Determine if you have a gain or loss on the sale or ex-            Repossessions, and Abandonments
+                                                                              4681
+
+
+
+
+    change of your home, using Worksheet 2,
+                                                                   5797 Home Energy Tax Credits
+ 3. Figure how much of any gain is taxable (if any) using
+                                                                              5797
+
+
+
+
+    Worksheet 3, and                                            Form (and Instructions)
+ 4. Report the transaction correctly on your tax return, us-       Schedule A (Form 1040) Itemized Deductions        Schedule A (Form 1040)
+
+
+
+
+    ing guidance included in Worksheet 3.
+                                                                   Schedule B (Form 1040) Interest and Ordinary
+                                                                       Dividends
+                                                                                                                  Schedule B (Form 1040)
+
+
+
+
+Comments and suggestions. We welcome your com-
+ments about this publication and suggestions for future            Schedule D (Form 1040) Capital Gains and Losses
+editions.
+                                                                                                                                              Schedule D (Form 1040)
+
+
+
+
+   You can send us comments through IRS.gov/                       982 Reduction of Tax Attributes Due to Discharge of
+                                                                       Indebtedness (and Section 1082 Basis
+                                                                        982
+
+
+
+
+FormComments. Or, you can write to the Internal Revenue
+Service, Tax Forms and Publications, 1111 Constitution                 Adjustment)
+Ave. NW, IR-6526, Washington, DC 20224.
+                                                                   1040 U.S. Individual Income Tax Return
+   Although we can’t respond individually to each com-
+                                                                              1040
+
+
+
+
+ment received, we do appreciate your feedback and will             1040-NR U.S. Nonresident Alien Income Tax Return
+consider your comments and suggestions as we revise
+                                                                                                        1040-NR
+
+
+
+
+our tax forms, instructions, and publications. Don’t send          1040-SR U.S. Income Tax Return for Seniors
+                                                                                              1040-SR
+
+
+
+
+tax questions, tax returns, or payments to the above ad-           1099-S Proceeds From Real Estate Transactions
+dress.
+                                                                                     1099-S
+
+
+
+
+                                                                   4797 Sales of Business Property
+   Getting answers to your tax questions. If you have
+                                                                              4797
+
+
+
+
+a tax question not answered by this publication or the How         5695 Residential Energy Credits
+                                                                              5695
+
+
+
+
+To Get Tax Help section at the end of this publication, go
+                                                                   6252 Installment Sale Income
+to the IRS Interactive Tax Assistant page at IRS.gov/
+                                                                              6252
+
+
+
+
+Help/ITA where you can find topics by using the search             8822 Change of Address
+feature or viewing the categories listed.
+                                                                              8822
+
+
+
+
+                                                                   8824 Like-Kind Exchanges
+   Getting tax forms, instructions, and publications.
+                                                                              8824
+
+
+
+
+Go to IRS.gov/Forms to download current and prior-year             8828 Recapture of Federal Mortgage Subsidy
+                                                                              8828
+
+
+
+
+forms, instructions, and publications.                             8908 Energy Efficient Home Credit
+                                                                              8908
+
+
+
+
+   Ordering tax forms, instructions, and publications.             8949 Sales and Other Dispositions of Capital Assets
+Go to IRS.gov/OrderForms to order current forms, instruc-
+                                                                              8949
+
+
+
+
+tions, and publications; call 800-829-3676 to order                W-2 Wage and Tax Statement
+                                                                        W-2
+
+
+
+
+prior-year forms and instructions. The IRS will process
+                                                                   W-7 Application for IRS Individual Taxpayer
+your order for forms and publications as soon as possible.
+                                                                       Identification Number
+                                                                        W-7
+
+
+
+
+2                                                                                                                                                                      Publication 523 (2025)
+                                                                        2. Where you bank,
+Does Your Home Sale Qualify                                             3. The residence of one or more family members,
+                                                                           and
+for the Exclusion of Gain?                                              4. Recreational clubs or religious organizations of
+The tax code recognizes the importance of home owner-                      which you are a member.
+ship by allowing you to exclude gain when you sell your                Finally, the exclusion can apply to many different types
+main home. To qualify for the maximum exclusion of gain            of housing facilities. A single-family home, a condomin-
+($250,000 or $500,000 if married filing jointly), you must         ium, a cooperative apartment, a mobile home, and a
+meet the Eligibility Test, explained later. To qualify for a       houseboat each may be a main home and therefore qual-
+partial exclusion of gain, meaning an exclusion of gain            ify for the exclusion.
+less than the full amount, you must meet one of the situa-
+tions listed in Does Your Home Qualify for a Partial Exclu-
+sion of Gain, explained later.                                     Eligibility Test
+  Before considering the Eligibility Test or whether your
+home qualifies for a partial exclusion, you should consider        The Eligibility Test determines whether you are eligible for
+some preliminary items.                                            the maximum exclusion of gain ($250,000 or $500,000 if
+                                                                   married filing jointly).
+Transfer of your home to a spouse or an ex-spouse.
+Generally, if you transferred your home (or share of a             Eligibility Step 1—Automatic
+jointly owned home) to a spouse or ex-spouse as part of a          Disqualification
+divorce settlement, you are considered to have no gain or
+loss. You have nothing to report from the transfer and this        Determine whether any of the automatic disqualifica-
+entire publication doesn’t apply to you. However, if your          tions apply. Your home sale isn’t eligible for the exclu-
+spouse or ex-spouse is a nonresident alien, then you likely        sion if ANY of the following are true.
+will have a gain or loss from the transfer and the tests in
+this publication apply.                                             • You acquired the property through a like-kind ex-
+                                                                       change (section 1031 exchange) during the past 5
+Home’s date of sale. To determine if you meet the Eligi-               years. See Pub. 544, Sales and Other Dispositions of
+bility Test or qualify for a partial exclusion, you will need to       Assets.
+know the home’s date of sale, meaning when you sold it. If          • You are subject to expatriate tax. For more information
+you received Form 1099-S, Proceeds From Real Estate                    about expatriate tax, see chapter 4 of Pub. 519, U.S.
+Transactions, the date of sale appears in box 1. If you                Tax Guide for Aliens.
+didn’t receive Form 1099-S, the date of sale is either the
+                                                                     If any of these conditions are true, the exclusion doesn’t
+date the title transferred or the date the economic burdens
+                                                                   apply. Skip to Figuring Gain or Loss, later.
+and benefits of ownership shifted to the buyer, whichever
+date is earlier. In most cases, these dates are the same.
+                                                                   Eligibility Step 2—Ownership
+Sale of your main home. You may take the exclusion,
+whether maximum or partial, only on the sale of a home             Determine whether you meet the ownership require-
+that is your principal residence, meaning your main home.          ment. If you owned the home for at least 24 months (2
+An individual has only one main home at a time. If you             years) out of the last 5 years leading up to the date of sale
+own and live in just one home, then that property is your          (date of the closing), you meet the ownership requirement.
+main home. If you own or live in more than one home, then          For a married couple filing jointly, only one spouse has to
+you must apply a “facts and circumstances” test to deter-          meet the ownership requirement.
+mine which property is your main home. While the most
+important factor is where you spend the most time, other           Eligibility Step 3—Residence
+factors are relevant as well. They are listed below. The
+more of these factors that are true of a home, the more            Determine whether you meet the residence require-
+likely that it is your main home.                                  ment. If you owned the home and used it as your resi-
+                                                                   dence for at least 24 months of the previous 5 years, you
+ • The address listed on your:                                     meet the residence requirement. The 24 months of resi-
+     1. U.S. Postal Service address,                               dence can fall anywhere within the 5-year period, and it
+                                                                   doesn't have to be a single block of time. All that is re-
+     2. Voter Registration Card,                                   quired is a total of 24 months (730 days) of residence dur-
+     3. Federal and state tax returns, and                         ing the 5-year period. Unlike the ownership requirement,
+                                                                   each spouse must meet the residence requirement indi-
+     4. Driver’s license or car registration.                      vidually for a married couple filing jointly to get the full ex-
+ • The home is near:                                               clusion.
+
+     1. Where you work,                                               If you were ever away from home, you need to de-
+                                                                   termine whether that time counts toward your residence
+
+Publication 523 (2025)                                                                                                           3
+requirement. A vacation or other short absence counts as          Separated or divorced taxpayers. If you were separa-
+time you lived at home (even if you rented out your home          ted or divorced prior to the sale of the home, you can treat
+while you were gone).                                             the home as your residence if:
+   If you become physically or mentally unable to                  • You are a sole or joint owner, and
+care for yourself, and you used the residence as your              • Your spouse or former spouse is allowed to live in the
+main home for at least 12 months in the 5 years preceding             home under a divorce or separation instrument and
+the sale or exchange, any time you spent living in a care             uses the home as his or her main home.
+facility (such as a nursing home) counts toward your
+2-year residence requirement, so long as the facility has a          For property owned by a spouse or former spouse, the
+license from a state or other political entity to care for peo-   term “divorce or separation instrument” means:
+ple with your condition.                                             (a). A decree of divorce or separate maintenance or a
+                                                                     written instrument incident to such a decree;
+Eligibility Step 4—Look-Back                                         (b). A written separation agreement; or
+Determine whether you meet the look-back require-                      (c). A decree not described in (a) that requires a
+ment. If you didn't sell another home during the 2-year                spouse to make payments for the support or mainte-
+period before the date of sale (or if you did sell another             nance of the other spouse.
+home during this period but didn't take an exclusion of the          If your home was transferred to you by a spouse or
+gain earned from it), you meet the look-back requirement.         ex-spouse (whether in connection with a divorce or not),
+You may take the exclusion only once during a 2-year pe-          you can count any time when your spouse owned the
+riod.                                                             home as time when you owned it. However, you must
+                                                                  meet the residence requirement on your own. If you
+Eligibility Step 5—Exceptions to the                              owned your home prior to your marriage and after your di-
+Eligibility Test                                                  vorce or separation and your spouse or former spouse
+                                                                  isn’t allowed to live in the home under a divorce or separa-
+There are some exceptions to the Eligibility Test. If any of      tion instrument, you can count any time that you owned
+the following situations apply to you, read on to see if they     the home, solely or jointly with your spouse, as time when
+may affect your qualification. If none of these situations        you owned it. However, you must meet the residence re-
+apply, skip to Step 6.                                            quirement on your own.
+    • A separation or divorce occurred during the ownership
+                                                                  Surviving spouses. If you are a surviving spouse who
+      of the home. See Separated or divorced taxpayers.
+                                                                  doesn't meet the 2-year ownership and residence require-
+    • The death of a spouse occurred during the ownership         ments on your own, consider the following rule. If you
+      of the home. See Surviving spouses.                         haven’t remarried at the time of the sale, then you may in-
+    • You were a service member during the ownership of           clude any time when your late spouse owned and lived in
+      the home. See Service, Intelligence, and Peace Corps        the home, even if without you, to meet the ownership and
+      personnel.                                                  residence requirements.
+                                                                     Also, you may be able to increase your exclusion
+    • The sale involved vacant land. See Vacant land next         amount from $250,000 to $500,000. You may take the
+      to home.                                                    higher exclusion if you meet all of the following conditions.
+    • Your previous home was destroyed or condemned.               1. You sell your home within 2 years of the death of your
+      See Home destroyed or condemned—considerations                  spouse.
+      for benefits.
+                                                                   2. You haven’t remarried at the time of the sale.
+    • You owned a remainder interest, meaning the right to
+      own a home in the future, and you sold that right. See       3. Neither you nor your late spouse took the exclusion
+      Remainder interest.                                             on another home sold less than 2 years before the
+                                                                      date of the current home sale.
+    • You acquired or are relinquishing the home in a
+      like-kind exchange. See Like-kind/1031 exchange.             4. You meet the 2-year ownership and residence re-
+    • You used a portion of the real property, separate from          quirements (including your late spouse‘s times of
+      the living space, for business or rental use, and you           ownership and residence, if applicable).
+      didn’t use any of the separate portion for residential      Service, Intelligence, and Peace Corps personnel. If
+      use for 2 years out of the 5 years leading up to the        you or your spouse are a member of the Uniformed Serv-
+      sale. See Property Used Partly for Business or Rental.      ices or the Foreign Service, an employee of the intelli-
+    • You or your spouse (or former spouse) used the entire       gence community of the United States, or an employee,
+      property as a vacation home or rental after 2008. See       enrolled volunteer or volunteer leader of the Peace Corps,
+      Business or Rental Use of Home.                             you may choose to suspend the 5-year test period for
+                                                                  ownership and residence when you’re on qualified official
+                                                                  extended duty. This means you may be able to meet the
+                                                                  2-year residence test even if, because of your service, you
+
+4                                                                                                    Publication 523 (2025)
+didn’t actually live in your home for at least the 2 years           Example 1. You bought a home on May 1, 2008. You
+during the 5-year period ending on the date of sale. Make         used it as your main home until August 27, 2011. On Au-
+the election by filing your tax return for the year of the sale   gust 28, 2011, you went on qualified official extended duty
+or exchange of your main home, and exclude the gain               with the Navy. You didn’t live in the house again before
+from your taxable income.                                         selling it on August 1, 2024. You choose to use the entire
+                                                                  10-year suspension period. Therefore, the suspension pe-
+  Qualified extended duty. You are on qualified exten-
+                                                                  riod would extend back from August 1, 2024, to August 2,
+ded duty if:
+                                                                  2014, and the 5-year test period would extend back to Au-
+ • You are called or ordered to active duty for an indefi-        gust 2, 2009. During that period, you owned the house all
+    nite period or for a definite period of more than 90          5 years and lived in it as your main home from August 2,
+    days.                                                         2009, until August 28, 2011, a period of more than 24
+ • You are serving at a duty station at least 50 miles from       months. You meet the ownership and use tests because
+    your main home, or you are living in government quar-         you owned and lived in the home for at least 2 years dur-
+    ters under government orders.                                 ing this test period.
+
+ • You are one of the following:                                     Example 2. You bought and moved into a home in
+     1. A member of the armed forces (Army, Navy, Air             2016. You lived in it as your main home for 31/2 years. For
+        Force, Marine Corps, Space Force, Coast Guard);           the next 6 years, you didn’t live in it because you were on
+                                                                  qualified official extended duty with the Army. You then
+     2. A member of the commissioned corps of the Na-             sold the home at a gain in 2025. To meet the use test, you
+        tional Oceanic and Atmospheric Administration             choose to suspend the 5-year test period for the 6 years
+        (NOAA) or the Public Health Service;                      you were on qualified official extended duty. This means
+     3. A Foreign Service chief of mission, ambassa-              you can disregard those 6 years. Therefore, your 5-year
+        dor-at-large, or officer;                                 test period consists of the 5 years before you went on
+                                                                  qualified official extended duty. You meet the ownership
+     4. A member of the Senior Foreign Service or the             and use tests because you owned and lived in the home
+        Foreign Service personnel;                                for 31/2 years during this test period.
+     5. An employee, enrolled volunteer, or enrolled vol-         Vacant land next to home. You can include the sale of
+        unteer leader of the Peace Corps serving outside          vacant land adjacent to the land on which your home sits
+        the United States; or                                     as part of a sale of your home if ALL of the following are
+     6. An employee of the intelligence community,                true.
+        meaning:                                                   • You owned and used the vacant land as part of your
+         a. The Office of the Director of National Intelli-           home.
+            gence, the Central Intelligence Agency, the            • The sale of the vacant land and the sale of your home
+            National Security Agency, the Defense Intelli-            occurred within 2 years of each other.
+            gence Agency, the National Geospatial-Intelli-
+            gence Agency, or the National Reconnais-               • Both sales either meet the Eligibility Test or qualify for
+            sance Office;                                             partial tax benefits, as described earlier.
+         b. Any other office within the Department of De-            Also, if your sale of vacant land meets all these require-
+            fense for the collection of specialized national      ments, you must treat that sale and the sale of your home
+            intelligence through reconnaissance pro-              as a single transaction for tax purposes, meaning that you
+            grams;                                                may apply the exclusion only once.
+
+         c. Any of the intelligence elements of the Army,            Note: However, if you move your home from the land
+            Navy, Air Force, Marine Corps, Federal Bureau         on which it stood (meaning you relocate the actual physi-
+            of Investigation, Department of the Treasury,         cal structure), then that land no longer counts as part of
+            Department of Energy, and Coast Guard;                your home. For example, if you move a mobile home to a
+                                                                  new lot and sell the old lot, then you can’t treat the sale of
+         d. The Bureau of Intelligence and Research of
+                                                                  the old lot as the sale of your home.
+            the Department of State; or
+         e. Any of the elements of the Department of              Home destroyed or condemned—considerations for
+            Homeland Security concerned with the analy-           benefits. If an earlier home of yours was destroyed or
+            ses of foreign intelligence information.              condemned, you may be able to count your time there to-
+   Period of suspension. The period of suspension                 ward the ownership and residence test.
+can’t last more than 10 years. Together, the 10-year sus-            If your home was destroyed, see Pub. 547, Casualties,
+pension period and the 5-year test period can be as long          Disasters, or Thefts. If your home was condemned, see
+as, but no more than, 15 years. You can’t suspend the             Pub. 544, Sales and Other Disposition of Assets.
+5-year period for more than one property at a time. You
+can revoke your choice to suspend the 5-year period at
+any time.
+
+Publication 523 (2025)                                                                                                        5
+Remainder interest. The sale of a remainder interest in           For more information about like-kind exchanges, see Pub.
+your home is eligible for the exclusion only if both of the       544.
+following conditions are met.                                         For additional information about the intersection of sec-
+                                                                  tions 121 and 1031, see Revenue Procedure 2005-14,
+    • The buyer isn’t a “related party.” A related party can be
+                                                                  2005-7      I.R.B.     528,    available   at    IRS.gov/irb/
+      a related person or a related corporation, trust, part-
+                                                                  2005-07_IRB#RP-2005-14.
+      nership, or other entity that you control or in which you
+                                                                      Note, however, that any period after 2008 during which
+      have an interest.
+                                                                  the property isn’t used as a principal residence is, with
+    • You haven't previously sold an interest in the home for     certain exceptions, considered nonqualified use of that
+      which you took the exclusion.                               property for which gain allocable to such period may not
+                                                                  be excluded, in accordance with section 121(b)(5). This
+Like-kind/1031 exchange. If you sold a home that you              includes property that is separate from the main property
+acquired in a like-kind exchange, then the following test         and not a part of the living area of the main home that isn’t
+applies.                                                          used as a principal residence for a period after 2008. See
+   You can’t claim the exclusion if:                              section 121(b)(5)(C). See also Revenue Procedure
+ 1. Either (a) or (b) applies:                                    2005-14 for examples that illustrate how to allocate basis
+                                                                  and gain realized in an exchange that is also eligible for
+       a. You acquired your home in a like-kind exchange          section 121 exclusion, as well as details of depreciation
+          (also known as a section 1031 exchange), or             recapture. See Form 8824 and its instructions for more de-
+       b. Your basis in your home is determined by refer-         tails. For additional information, see Property Used Partly
+          ence to a previous owner’s basis, and that previ-       for Business or Rental and Business or Rental Use of
+          ous owner acquired the property in a like-kind ex-      Home, later.
+          change (for example, the owner acquired the
+          home and then gave it to you); and                      Eligibility Step 6—Final Determination of
+ 2. You sold the home within 5 years of the date your
+                                                                  Eligibility
+    home was acquired in the like-kind exchange.                  If you meet the ownership, residence, and look-back re-
+   A main home isn’t available for exchange because the           quirements, taking the exceptions into account, then you
+exchange must be between like-kind real property held for         meet the Eligibility Test. Your home sale qualifies for the
+productive use in a trade or business or for investment.          maximum exclusion. Skip to Worksheet 1, later.
+Also, real property held primarily for sale isn’t eligible for
+deferral of gain under section 1031. For an exchange of              If you didn’t meet the Eligibility Test, then your home
+rental property that was later converted to personal use as       isn’t eligible for the maximum exclusion, but you should
+a main home, there is a 5-year holding period required un-        continue to Does Your Home Qualify for a Partial Exclu-
+der section 121(d)(10). A separate 2-year holding period          sion of Gain.
+is required for exchanges between related persons under
+section 1031(f). See Pub. 544.                                    Does Your Home Qualify for a Partial
+   If you convert your main home to a rental property (or         Exclusion of Gain?
+use a portion of the living area for productive use in a
+trade or business as in Revenue Procedure 2005-14, ex-            If you don't meet the Eligibility Test, you may still qualify for
+amples 3–6), the exchange rules under section 1031 and            a partial exclusion of gain. You can meet the requirements
+exclusion of income rules under section 121 may both ap-          for a partial exclusion if the main reason for your home
+ply.                                                              sale was a change in workplace location, a health issue,
+   If the requirements of both sections 1031 and 121 are          or an unforeseeable event.
+met, the section 121 exclusion is applied first to realized
+gain; section 1031 then applies, including any gain attrib-       Work-Related Move
+utable to depreciation deductions. Any cash received in
+exchange for the rental property is taken into account only       You meet the requirements for a partial exclusion if any of
+to the extent the cash exceeds the section 121 excluded           the following events occurred during your time of owner-
+gain on the rental property given up in the exchange. The         ship and residence in the home.
+period before the exchange that is after the last date the
+                                                                   • You took or were transferred to a new job in a work lo-
+property was used as a main home isn’t considered non-                cation at least 50 miles farther from the home than
+qualified use for purposes of the proration rules of section          your old work location. For example, your old work lo-
+121. To figure basis of the property received in the ex-              cation was 15 miles from the home and your new work
+change (replacement property), any gain excluded under                location is 65 miles from the home.
+section 121 is added to your basis of your replacement
+property, similar to the treatment of recognized gain. You         • You had no previous work location and you began a
+can’t convert the replacement property to a main home                 new job at least 50 miles from the home.
+immediately after the exchange per section 1031(a)(1),             • Either of the above is true of your spouse, a co-owner
+which requires that replacement property be held either               of the home, or anyone else for whom the home was
+for investment or for productive use in a trade or business.          their residence.
+
+6                                                                                                      Publication 523 (2025)
+Health-Related Move                                                  1. Died;
+
+You meet the requirements for a partial exclusion if any of          2. Became divorced or legally separated or were is-
+the following health-related events occurred during your                sued a separate decree to pay maintenance (sup-
+time of ownership and residence in the home.                            port) to the other spouse;
+
+ • You moved to obtain, provide, or facilitate diagnosis,            3. Gave birth to two or more children from the same
+   cure, mitigation, or treatment of disease, illness, or in-           pregnancy;
+   jury for yourself or a family member.                             4. Became eligible for unemployment compensation;
+ • You moved to obtain or provide medical or personal                5. Became unable, because of a change in employ-
+   care for a family member suffering from a disease, ill-              ment status, to pay basic living expenses for the
+   ness, or injury. A family member includes your:                      household (including expenses for food, clothing,
+     1. Parent, grandparent, stepmother, stepfather;                    housing, medication, transportation, taxes,
+                                                                        court-ordered payments, and expenses reasona-
+     2. Child (including adopted child, eligible foster
+                                                                        bly necessary for making an income); and
+        child, and stepchild), grandchild;
+                                                                     6. An event is determined to be an unforeseeable
+     3. Brother, sister, stepsibling;
+                                                                        event in IRS published guidance.
+     4. Mother-in-law, father-in-law, brother-in-law, sis-
+        ter-in-law, son-in-law, daughter-in-law; and            Other Facts and Circumstances
+     5. Uncle, aunt, nephew, or niece.
+                                                                Even if your situation doesn’t match any of the standard
+ • A doctor recommended a change in residence for you           requirements described above, you still may qualify for an
+   because you were experiencing a health problem.              exception. You may qualify if you can demonstrate the pri-
+ • The above is true of your spouse, a co-owner of the          mary reason for sale, based on facts and circumstances,
+   home, or anyone else for whom the home was their             is work related, health related, or unforeseeable. Impor-
+   residence.                                                   tant factors are:
+                                                                 • The situation causing the sale arose during the time
+Unforeseeable Events                                               you owned and used your property as your residence;
+
+You meet the standard requirements if any of the following       • You sold your home not long after the situation arose;
+events occurred during the time you owned and lived in           • You couldn’t have reasonably anticipated the situation
+the home you sold.                                                 when you bought the home;
+ • Your home was destroyed or condemned.                         • You began to experience significant financial difficulty
+ • Your home suffered a casualty loss because of a natu-           maintaining the home; and
+   ral or man-made disaster or an act of terrorism. (It          • The home became significantly less suitable as a
+   doesn’t matter whether the loss is deductible on your           main home for you and your family for a specific rea-
+   tax return.)                                                    son.
+ • You, your spouse, a co-owner of the home, or anyone
+   else for whom the home was their residence:
+
+
+
+
+Publication 523 (2025)                                                                                                     7
+Worksheet 1. Find Your Exclusion Limit                                                                                        Keep for Your Records
+    Use this worksheet only if no automatic disqualifications apply, and take all exceptions into account.
+A) Determine if you are eligible for the maximum exclusion limit.
+Status         You are eligible for the maximum exclusion if...                                                Maximum If you’re not eligible for
+                                                                                                               exclusion the maximum exclusion
+                                                                                                                         limit, then you should…
+Married        Both spouses meet the residence and look-back requirements $500,000                                                 Determine if either spouse is
+filing jointly and one or both spouses meet the ownership requirement.                                                             eligible for the full limit as a
+                                                                                                                                   single person. If not,
+                                                                                                                                   determine if either spouse is
+                                                                                                                                   eligible for a partial
+                                                                                                                                   exclusion.
+Single,    You meet the residence, ownership, and look-back                                                    $250,000            Determine if you are eligible
+married    requirements.                                                                                                           for a partial exclusion.
+filing
+separately
+Surviving       1. You sell your home within 2 years of the death of your                                      $500,000            Determine if you are eligible
+spouse             spouse.                                                                                                         for the full limit as a single
+                                                                                                                                   person. If not, determine if
+                2. You haven't remarried at the time of the sale.                                                                  you are eligible for a partial
+                3. Neither you nor your late spouse took the exclusion on                                                          exclusion.
+                   another home sold less than 2 years before the date of the
+                   current home sale.
+                4. You meet the 2-year ownership and residence
+                   requirements (including your late spouse‘s times of
+                   ownership and residence, if applicable).
+B) Complete this section only if you have determined that you aren’t eligible for the maximum exclusion but
+are eligible for a partial exclusion. If you are eligible for a partial exclusion, use this section to determine
+your exclusion limit.
+Step 1        Determine the shortest of the following 3 periods:
+              1. Your time of residence in the home during the 5-year period leading up to the sale . . . .
+              2. Your time of ownership of the home leading up to the sale . . . . . . . . . . . . . . . . . . . . . . . . . . .
+              3. The time that has elapsed between the sale and the date you last sold a home for which
+              you took the exclusion, if applicable . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Step 2        Take the smallest period from Step 1 (you may use days or months) and divide that number
+              by 730 (if using days) or 24 (if using months) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Step 3        Multiply the result from Step 2 by $250,000. This is the amount of your reduced exclusion.
+              For married filing jointly, continue to step 4. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Step 4        Repeat Steps 1–3 for your spouse and add the two results                                   ............................
+C) Your exclusion limit is $___________. Only gain in excess of this amount is taxable, unless you have gain from
+full or partial business or rental use. For partial use as a business or rental, see Property Used Partly for Business or
+Rental. For use of the entire property for business, rental, vacation, or any other use (other than personal use as a
+main home), see Business or Rental Use of Home.
+                                                                                           A positive number indicates a gain; a negative number
+Figuring Gain or Loss                                                                   indicates a loss.
+                                                                                           Certain events during your ownership, such as use of
+To figure the gain or loss on the sale of your main home,                               your home for business purposes or your making improve-
+you must know the selling price, the amount realized, and                               ments to it, can affect your gain or loss. They are ex-
+the adjusted basis. Subtract the adjusted basis from the                                plained in this section.
+amount realized to get your gain or loss.                                                  See Worksheet 2, later, for steps you should follow to
+                                                                                        figure your gain or loss.
+                 Selling price
+               − Selling expenses                                                       Basis Adjustments—Details and
+                 Amount realized                                                        Exceptions
+               − Adjusted basis
+                 Gain or loss                                                           You should include many, but not all, costs associated with
+                                                                                        the purchase and maintenance of your home in the basis
+
+8                                                                                                                                           Publication 523 (2025)
+of your home. For more information on determining basis,            6. Legal fees directly connected with building the
+see Pub. 551, Basis of Assets.                                         house.
+
+Fees and Closing Costs                                            Your cost includes your down payment and any debt
+                                                               such as a first or second mortgage or notes you gave the
+Some settlement fees and closing costs you can include         seller or builder. It also includes certain settlement or clos-
+in your basis are:                                             ing costs. In addition, you must generally reduce your ba-
+                                                               sis by points the seller paid you.
+ • Abstract fees (abstract of title fees),
+                                                                  If you built all or part of your house yourself, its basis is
+ • Charges for installing utility services,
+                                                               the total amount it cost you to complete it. Don’t include in
+ • Legal fees (including fees for the title search and pre-    the cost of the house:
+   paring the sales contract and deed),
+                                                                • The value of your own labor, or
+ • Recording fees,
+                                                                • The value of any other labor for which you didn’t pay.
+ • Survey fees,
+                                                               Costs owed by the seller that you paid. You can in-
+ • Transfer or stamp taxes, and                                clude in your basis any amounts the seller owes that you
+ • Owner’s title insurance.                                    agree to pay (as long as the seller doesn’t reimburse you),
+                                                               such as:
+   Settlement costs don’t include amounts placed in es-
+crow for the future payment of items such as taxes and in-
+                                                                • Any real estate taxes owed up through the day before
+                                                                   the sale date,
+surance.
+                                                                • Back interest owed by the seller,
+   Some settlement fees and closing costs you can’t in-
+                                                                • The seller‘s title recording or mortgage fees,
+clude in your basis are:
+                                                                • Charges for improvements or repairs that are the sell-
+ • Fire and casualty insurance premiums,                           er’s responsibility (for example, lead paint removal),
+ • Rent for occupancy of the house before closing,                 and
+ • Charges for utilities or other services related to occu-     • Sales commissions (for example, payment to the
+   pancy of the house before closing,                              seller‘s real estate agent).
+ • Any fee or cost that you deducted as a moving ex-
+   pense (allowed for certain fees and costs before            Improvements
+   1994),
+                                                               Improvements add to the value of your home, prolong its
+ • Charges connected with getting a mortgage loan,             useful life, or adapt it to new uses. You add the cost of ad-
+   such as:                                                    ditions and improvements to the basis of your property.
+     1. Mortgage insurance premiums (including funding           The following chart lists some examples of improve-
+        fees connected with loans guaranteed by the De-        ments.
+        partment of Veterans Affairs),
+     2. Loan assumption fees,
+     3. Cost of a credit report,
+     4. Fee for an appraisal required by a lender,
+     5. Points (discount points, loan origination fees), and
+ • Fees for refinancing a mortgage.
+Construction. If you contracted to have your house built
+on the land you own, your basis is:
+ • The cost of the land, plus
+ • The amount it cost you to complete the house, includ-
+   ing:
+     1. The cost of labor and materials,
+     2. Any amounts paid to a contractor,
+     3. Any architect’s fees,
+     4. Building permit charges,
+     5. Utility meter and connection charges, and
+
+Publication 523 (2025)                                                                                                       9
+Examples of Improvements That Increase                              amount you spend on repairs that restore the property to
+Basis                                                               its pre-casualty condition. However, you must adjust your
+                                                                    basis by any amount of insurance reimbursement you re-
+ Additions                         Systems                          ceive or expect to receive for casualty losses. See Work-
+ Bedroom                           Heating system                   sheet 2, line 5.
+ Bathroom                          Central air conditioning
+ Deck                              Furnace                          Energy credits and subsidies. If you included in your
+ Garage                            Duct work                        basis the cost of any energy-related improvements (such
+ Porch                             Central humidifier               as a solar energy system) and you received any tax cred-
+ Patio                             Central vacuum                   its or subsidies related to those improvements, you must
+                                                                    subtract those credits or subsidies from your total basis.
+                                   Air/water filtration systems
+                                                                    Examples include:
+                                   Wiring
+                                   Security system                   • 1977–1987: Credit for home energy improvements;
+ Lawn & Grounds                    Lawn sprinkler system             • 1992–present: Direct or indirect subsidy from a public
+ Landscaping                                                           utility for installations or modifications aimed at lower-
+ Driveway                                                              ing a home’s electricity or natural gas usage or better
+ Walkway                                                               managing its energy demand;
+ Fence
+ Retaining wall
+                                                                     • 2006–2025: Credit for certain residential clean energy
+                                                                       (previously the residential energy efficient property
+ Swimming pool
+                                                                       credit), for expenditures made for qualified energy
+                                                                       property, such as qualified solar electric, solar water
+ Exterior                          Plumbing                            heating, fuel cell, small wind energy, and geothermal
+ Storm windows/doors               Septic system                       heat pump property; and battery storage technology;
+ New roof                          Water heater
+ New siding                        Soft water system
+                                                                     • 2006–2007, 2009–2025: Credit for qualified energy ef-
+                                                                       ficiency home improvements (previously the nonbusi-
+ Satellite dish                    Filtration system                   ness property credit), generally for expenditures or
+                                                                       property placed in service for exterior windows, sky-
+ Insulation                        Interior                            lights, exterior doors, heat pumps, heat pump water
+ Attic                             Built-in appliances                 heaters, biomass stoves, and biomass boilers. A prod-
+ Walls                             Kitchen modernization               uct identification number is required in 2025; and
+ Floors                            Flooring
+ Pipes and duct work               Wall-to-wall carpeting            • 2023–2025: Credit for home energy audits, involving
+                                                                       an inspection and written report for a main home to
+                                   Fireplace
+                                                                       identify cost-effective energy efficiency improvements.
+                                                                       Beginning January 1, 2024, the audits must be con-
+Repairs done as part of larger project. You can in-                    ducted and prepared by (or under the supervision of)
+clude repair-type work if it is done as part of an extensive           a certified home energy auditor.
+remodeling or restoration job. For example, replacing bro-
+ken windowpanes is a repair, but replacing the same win-               See the Instructions for Form 5695 for detailed informa-
+dow as part of a project of replacing all the windows in            tion on improvements and credit percentages in specific
+your home counts as an improvement.                                 tax years.
+
+Examples of improvements you CAN’T include in                       Home Acquired Through a Trade
+your basis. You can’t include:
+                                                                    Traded for another home. When you trade your home
+ • Any costs of repairs or maintenance that are neces-              for a new one, you are treated as having sold your home
+     sary to keep your home in good condition but don’t
+                                                                    and purchased a new one. Your sale price is the trade-in
+     add to its value or prolong its life. Examples include
+                                                                    value you received for your home plus any mortgage or
+     painting (interior or exterior), fixing leaks, filling holes
+                                                                    other debt that the person taking your home as a trade-in
+     or cracks, or replacing broken hardware;
+                                                                    assumed (took over) from you as part of the deal.
+ • Any costs of any improvements that are no longer part
+     of your home (for example, wall-to-wall carpeting that         Traded for other property. If you paid for your home by
+     you installed but later replaced);                             trading other property for it, the starting basis of your
+                                                                    home is usually the fair market value of the property you
+ • Any costs of any improvements with a life expectancy,            traded.
+     when installed, of less than 1 year.
+   Exception. The entire job is considered an improve-              Home Foreclosed, Repossessed, or
+ment if items that would otherwise be considered repairs            Abandoned
+are done as part of an extensive remodeling or restoration
+of your home. For example, if you have a casualty and               If your home was foreclosed on, repossessed, or aban-
+your home is damaged, increase your basis by the                    doned, you may have ordinary income, gain, or loss. See
+
+10                                                                                                     Publication 523 (2025)
+Pub. 4681, Canceled Debts, Foreclosures, Reposses-               Table 1. Exceptions to Using a Donor’s
+sions, and Abandonments.                                         Adjusted Basis for a Home Received as a
+   If you used part of your home for business or rental pur-     Gift
+poses, see Foreclosures and Repossessions in chapter 1            IF...             AND...                 THEN...
+of Pub. 544, for examples of how to figure gain or loss.
+                                                                  at the time of    your usage of the      you must use the fair market
+                                                                  the gift, the     donor’s adjusted       value of the home at the time
+Home Destroyed or Condemned                                       donor’s           basis as your basis    of the gift as your basis (if
+                                                                  adjusted basis    results in a loss,     using the fair market value
+You have a disposition when your home is destroyed or             in the home                              results in a gain for you, then
+condemned and you receive other property or money in              was more than                            you don’t need to recognize
+payment, such as insurance or a condemnation award.               the home’s fair                          that gain).
+This is treated as a sale and you may be able to exclude          market value,
+all or part of any gain that you have. If your home was de-       at the time of  the donor paid gift      you figure your basis by
+stroyed, see Pub. 547. If your home was condemned, see            the gift, the   tax on the gift of the   starting with the donor’s
+Pub. 544.                                                         donor’s         home,                    adjusted basis at the time of
+                                                                  adjusted basis                           the gift and adding the federal
+                                                                  in the home                              gift tax paid due to the
+Home Received in Divorce                                          was less than                            increase in value of the home
+                                                                  the home’s fair                          (see Regulations section
+Home acquired after July 18, 1984. If your former                 market value,                            1.1015-5 for further details on
+spouse was the sole owner, your starting basis is the                                                      this calculation).
+same as your former spouse’s adjusted basis just before
+you received the home. If you co-owned the home with
+your spouse, add the adjusted basis of your spouse’s             Home Inherited
+half-share in the home to the adjusted basis of your own         Home acquired from a decedent who died before or
+half-share to get your starting basis. (In most cases, the       after 2010. If you inherited your home from a decedent
+adjusted basis of the two half-shares will be the same.)         who died before or after 2010, your basis is the fair market
+The rules apply whether or not you received anything in          value of the property on the date of the decedent‘s death
+exchange for the home.                                           (or the later alternate valuation date chosen by the per-
+Home acquired on or before July 18, 1984. Your start-            sonal representative of the estate). If a federal estate tax
+ing basis will usually be the home’s fair market value at the    return (Form 706) was filed or required to be filed, the
+time you acquired it from your spouse or ex-spouse.              value of the property listed on the estate tax return is your
+   For more information, see Pub. 504, Divorced or Sepa-         basis. If Form 706 didn’t have to be filed, your basis in the
+rated Individuals. If you or your spouse or ex-spouse lived      home is the same as its appraised value at the date of
+in a community property state, see Pub. 555, Community           death, for purposes of state inheritance or transmission
+Property.                                                        taxes. See section 1014 for details.
+                                                                    Surviving spouse. If you are a surviving spouse and
+Home Received as a Gift                                          you owned your home jointly, your basis in the home will
+                                                                 change. The new basis for the interest your spouse owned
+If you received your home as a gift, you should keep re-         will be its fair market value on the date of death (or alter-
+cords of the date you received it. Record the adjusted ba-       nate valuation date). The basis in your interest will remain
+sis of the donor at the time of the gift and the fair market     the same. Your new basis in the home is the total of these
+value of the home at the time of the gift. Also ask if the do-   two amounts.
+nor paid any gift tax. As a general rule, you will use the do-      If you and your spouse owned the home either as ten-
+nor’s adjusted basis at the time of the gift as your basis.      ants by the entirety or as joint tenants with right of survi-
+However, see Table 1 below to determine if any excep-            vorship, you will each be considered to have owned
+tions to this rule listed in the “IF” column apply.              one-half of the home.
+
+                                                                     Example. Your jointly owned home (owned as joint
+                                                                 tenants with right of survivorship) had an adjusted basis of
+                                                                 $50,000 on the date of your spouse’s death, and the fair
+                                                                 market value on that date was $100,000. Your new basis
+                                                                 in the home is $75,000 ($25,000 for one-half of the adjus-
+                                                                 ted basis plus $50,000 for one-half of the fair market
+                                                                 value).
+                                                                    Community property. In community property states
+                                                                 (Arizona, California, Idaho, Louisiana, Nevada, New Mex-
+                                                                 ico, Texas, Washington, and Wisconsin), each spouse is
+                                                                 usually considered to own half of the community property.
+                                                                 When either spouse dies, the total fair market value of the
+
+
+Publication 523 (2025)                                                                                                                       11
+community property becomes the basis of the entire prop-          Logan claimed depreciation deductions of $2,000 during
+erty, including the part belonging to the surviving spouse.       the period that the house is owned. Logan sells the house
+For this rule to apply, at least half the value of the com-       in 2016, realizing a gain of $13,000. Logan has no other
+munity property interest must be includible in the dece-          section 1231 or capital gains or losses for 2016. Logan
+dent’s gross estate, whether or not the estate must file a        must recognize $2,000 of the gain as unrecaptured sec-
+return.                                                           tion 1250 gain. Logan completes Form 4797 to report the
+   For more information about community property, see             amount of depreciation recapture, if any. Logan may ex-
+Pub. 555, Community Property.                                     clude the remaining $11,000 of the gain from the sale of
+                                                                  the house because Logan is not required to allocate gain
+   Inherited property in 2010. If you are selling a home
+                                                                  to the business use within the dwelling unit. See Regula-
+in which you acquired an interest from a decedent who
+                                                                  tions section 1.121-1(e). See also Determine any depreci-
+died in 2010, see Pub. 4895, Tax Treatment of Property
+                                                                  ation amounts you may need to recapture for guidance on
+Acquired From a Decedent Dying in 2010, available at
+                                                                  reporting depreciation previously deducted.
+IRS.gov/pub/irs-prior/p4895--2011.pdf, to determine your
+basis.                                                            Space separate from the living area. You generally
+                                                                  can’t exclude gain on the separate portion of your property
+Property Used Partly for Business or                              used for business or to produce rental income. Regula-
+Rental                                                            tions section 1.121-1(e) provides that the use of a sepa-
+                                                                  rate portion of your home for business or rental purposes
+Calculation. If you use property partly as a home and             doesn’t qualify for exclusion under section 121, and this
+partly for business or to produce rental income, the treat-       may affect your gain or loss calculations. See Regulations
+ment of any gain on the sale depends partly on whether            section 1.121-1(e). Examples are:
+the business or rental part of the property is part of your        • A working farm on which your house was located,
+home or separate from it. If you fail to meet the ownership
+and use tests, or if you used a separate portion of your           • A duplex in which you lived in one unit and rented the
+home for business or rental purposes during your owner-               other, or
+ship, this may affect your gain or loss calculations. If a por-    • A store building with an upstairs apartment in which
+tion of the property was used for residential purposes and            you lived.
+another portion of the property, separate from the dwelling
+                                                                     You can’t exclude gain on the separate part of your
+unit, was used for nonresidential purposes, then only the
+                                                                  property used for business or to produce rental income
+gain allocable to the residential portion is excludable un-
+                                                                  unless you owned and lived in that part of your property
+der Section 121. The Section 121 exclusion is reduced to
+                                                                  for at least 2 years during the 5-year period ending on the
+the extent of any depreciation adjustments in connection
+                                                                  date of the sale. If you don’t meet the use test for the sep-
+with the rental or business use of your residence. For de-
+                                                                  arate business or rental part of the property, an allocation
+tails and an example, see Recapturing Depreciation, later.
+                                                                  of the gain on the sale is required. For this purpose, you
+Treatment of any gain also depends on the use during the
+                                                                  must allocate the basis of the property and the amount re-
+5 years leading up to the sale. To figure the portion of the
+                                                                  alized between the residential and nonresidential portions
+gain allocated to the period of nonresidential use, see
+                                                                  of the property using the same method of allocation that
+Business or rental usage calculations, later. See also
+                                                                  you used to determine depreciation adjustments. See the
+Worksheet 2.
+                                                                  Example for allocating residential and nonresidential por-
+Space within the living area. If the part of your property        tions of the property. Report the sale of the business or
+used for business or to produce rental income is within           rental part on Form 4797. For more information about us-
+your home, such as a room used as a home office for a             ing any part of your home for business or as a rental prop-
+business, you do not need to allocate gain on the sale of         erty, see Pub. 587, Business Use of Your Home, and Pub.
+the property between the business part of the property            527, Residential Rental Property.
+and the part used as a home. In addition, you do not need
+                                                                  Space formerly used as business or rental. Note that
+to report the sale of the business or rental part on Form
+                                                                  space formerly used as business or rental will qualify for
+4797. This is true whether or not you were entitled to claim
+                                                                  exclusion under section 121 if the space was converted to
+any depreciation. However, you can’t exclude the portion
+                                                                  the taxpayer’s principal residence for a total of 2 years or
+of gain equal to any section 1250(b)(3) depreciation ad-
+                                                                  more, as long as the use as the principal residence was
+justments allowed or allowable after May 6, 1997, which
+                                                                  within the 5 years leading up to the sale. See Regulations
+must be recaptured and reported under section 1250. See
+                                                                  section 1.121-1(a). However, depreciation deductions
+Regulations section 1.121-1(d). See also Recapturing De-
+                                                                  claimed during the previous business use must be repor-
+preciation, later. Other examples of space within the living
+                                                                  ted on line 5a of Worksheet 2 and recognized as unrecap-
+area include a rented spare bedroom and attic space
+                                                                  tured section 1250 gain. No separate Business worksheet
+used as a home office.
+                                                                  is needed because there are no current business expen-
+   Example of nonresidential use within a dwelling                ses. See Regulations section 1.121-1(d). See also the In-
+unit. Logan, an attorney, buys a house in 2013. The               structions for Form 4797, and the Instructions for Sched-
+house is a single dwelling unit but Logan uses a portion of       ule D (Form 1040). For information on unrecaptured
+the house exclusively as a law office on a regular basis.         section 1250 gain, see Recapturing Depreciation, later.
+
+12                                                                                                   Publication 523 (2025)
+Business or rental usage calculations. If you use                   Use the percentage method for all items that don’t re-
+property partly as a home and partly for business or to             quire the dollar-amount or depreciation methods.
+produce rental income and the business or rental portion            The total you get on line 7 on your “Business” copy of
+isn’t within the home’s living area, you need to make sepa-     Worksheet 2 is the gain or loss related to the business or
+rate gain/loss calculations for the business and residence      rental portion of the property you sold.
+portions of your property. Make three copies of all pages           Next, complete your “Home” worksheet. For each num-
+of Worksheet 2. Label one copy “Total,” one copy “Home,”        ber, take the number from your “Total” worksheet, subtract
+and one copy “Business or Rental.”                              the number from your “Business or Rental” worksheet,
+   Complete your “Total” worksheet using the figures for        and enter the result in your “Home” worksheet (for exam-
+your property as a whole. Include the total amount you re-      ple, subtract the number on line 1f of the "Business or
+ceived, all of your basis adjustments, etc. Include the cost    Rental" worksheet from the number on line 1f of your "To-
+of all improvements, whether you made them to the busi-         tal" worksheet), and enter the result on your "Home" work-
+ness space or the residential space.                            sheet.
+   Determine your “business or rental percentage,” mean-            Now figure the totals on your “Home” worksheet. The
+ing the percentage of your property that you used for busi-     total you get on line 7 on the “Home” copy of Worksheet 2
+ness or rental. Section 121 requires you to recognize de-       is the gain or loss related to the home portion of the prop-
+preciation claimed on a home after May 6, 1997. If you          erty you sold.
+were entitled to take depreciation deductions because you           Review the results of your “Home” and “Business”
+used a portion of your home for business purposes or as         worksheets to determine your next step. When you have
+rental property, you can’t exclude the part of your gain        completed each worksheet, you will know whether you
+equal to any depreciation allowed or allowable as a de-         have a gain or loss on each part of your property. It is pos-
+duction for periods after May 6, 1997.                          sible to have a gain on both parts, a loss on both parts, or
+   If you used part of your home for business or rental af-     a gain on one part and a loss on the other. For more infor-
+ter May 6, 1997, you may need to pay back (“recapture”)         mation about using any part of your home for business or
+some or all of the depreciation deductions you were enti-       as a rental property, see Pub. 587, Business Use of Your
+tled to take on your property. “Recapturing” depreciation       Home, and Pub. 527, Residential Rental Property.
+means you must include it as ordinary income on your tax
+return. See Regulations section 1.1250-1 for limitations. If       Example. The following example demonstrates sepa-
+you took depreciation on your home on past tax returns,         rate calculations for business and residential uses.
+use the same business or rental percentage that you used           Stacey owns property that consists of a house, a sta-
+in determining how much depreciation to take. If you didn’t     ble, and 35 acres. Stacey uses the stable and 28 acres for
+take depreciation on your home on past tax returns, com-        nonresidential purposes for more than 3 years during the
+pare the size of your business or rental space to the size      5-year period preceding the sale. Stacey uses the entire
+of the whole property and express this as a percentage.         house and the remaining 7 acres as a principal residence
+For example, if you have a building with three equal-sized      for at least 2 years during the 5-year period preceding the
+stories, and you live in the top two stories and use the        sale. For periods after May 6, 1997, Stacey claims depre-
+ground floor for a store, then you are using one-third of the   ciation deductions of $9,000 for the nonresidential use of
+property and your business percentage is 33.3%.                 the stable. Stacey sells the entire property in 2014, realiz-
+   For each number on your “Total” worksheet, figure the        ing a gain of $24,000. Stacey has no other section 1231 or
+business-related portion of that number and enter it on         capital gains or losses for 2014.
+your “Business or Rental” worksheet. You may use differ-           Because the stable and the 28 acres used in the busi-
+ent methods to determine the business portion of different      ness are separate from the dwelling unit, the allocation
+numbers. Here are the three possible methods and the            rules apply. Stacey must allocate the basis and amount re-
+circumstances under which each method applies.                  alized between the portion of the property used as a prin-
+ • Dollar-amount method. Where a figure consists of             cipal residence and the portion used for nonresidential
+    specific dollar amounts that relate to either the resi-     purposes based on their respective FMVs. Stacey creates
+    dence portion or the business portion of the property,      three copies of Worksheet 2 and titles them “Business or
+    the figure must be broken down by these dollar              Rental,” “Home,” and “Total” to allocate basis and the
+    amounts. For example, if the figure for improvements        amount realized for the different uses of the property.
+    to the property was $100,000 and all of that applied to        Stacey determines that $14,000 of the gain is allocable
+    the residence portion, then the business portion of the     to the nonresidential-use portion of the property by com-
+    improvements would be zero.                                 pleting the copy of Worksheet 2 entitled “Business or
+                                                                Rental.” Stacey determines that $10,000 of the gain is allo-
+ • “100% rule” for depreciation. The first item under           cable to the portion of the property used as a residence by
+    line 5a in Worksheet 2 is a business depreciation item.     completing the copy of Worksheet 2 entitled “Home.” Sta-
+    Any figure for this item is 100% a business figure.         cey must recognize the $14,000 of gain allocable to the
+ • Percentage method. Where a figure applies to the             nonresidential-use portion of the property ($9,000 of
+    property as a whole (such as the sale price), the busi-     which is unrecaptured section 1250 gain, and $5,000 of
+    ness or rental portion is the figure multiplied by the      which is adjusted net capital gain). Stacey reports gain as-
+    business portion percentage you calculated earlier.         sociated with the nonresidential-use portion of the prop-
+                                                                erty on Form 4797. Stacey may have to complete Form
+
+Publication 523 (2025)                                                                                                    13
+8949 and Schedule D (Form 1040). See Sale of Home           the $10,000 gain from the residence portion is less than
+Used for Business, in the Instructions for Form 4797. See   the maximum amount available for exclusion from Work-
+also the Instructions for Form 8949, and the Instructions   sheet 1. The $10,000 gain on the property may be exclu-
+for Schedule D (Form 1040). For information on the treat-   ded.
+ment of unrecaptured section 1250 gain, see Recapturing
+Depreciation, later.                                           Complete Worksheet 2. Then see Table 2 to determine
+   Stacey transfers the gain from the “Home” worksheet to   your next steps. Worksheet 2 is used to figure the adjus-
+Worksheet 3, reviews the maximum amount available for       ted basis of your home and your gain or (loss). You will fig-
+exclusion as figured on Worksheet 1, and determines that    ure your taxable gain (if any) on Worksheet 3, later.
+
+
+
+
+14                                                                                             Publication 523 (2025)
+Worksheet 2. How To Figure Your Gain or Loss
+   DO NOT use this worksheet to determine your basis if you acquired an interest in your home from a decedent who
+died in 2010 and whose executor filed Form 8939. See Home acquired from a decedent who died before or after 2010.
+If you have questions as you work through these step-by-step instructions or want examples of costs that can and can’t
+be included, see Basis Adjustments—Details and Exceptions.
+  • If married filing jointly, figure gain or loss for both spouses together. If single or married filing separately,
+      figure gain or loss as an individual.
+  • If the home you sold had multiple owners, your gain or loss is the gain or loss on the entire sale multiplied by
+      your percentage of ownership.
+  • If you used any portion of the property for business or rental purposes, see Property Used Partly for
+      Business or Rental. See also Business or Rental Use of Home.
+1. Determine the sale price. This is everything you received for selling your home.
+    a. All money (currency, check, wire transfer) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . a.
+    b. The fair market value of any other property or services you received, including digital
+         assets . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . b.
+    c. The value of any notes, mortgages, or other debts that the buyer agreed to assume (take over)
+         as part of the sale . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . c.
+    d. Any real estate taxes the buyer paid on your behalf . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . d.
+    e. Any amount you received for granting an option to buy your home, if the option was
+         exercised . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . e.
+     f. Add lines 1a through 1e. This is your sale price . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . f.
+          • If you received payment for personal property, DON’T include it in the sale price.
+          • If you received payment or reimbursement from your employer because of a job
+             transfer, DON’T include the payment as part of the selling price. Your employer will include
+             it as wages in box 1 of your Form W-2.
+          • If you received Form 1099-S, the gross proceeds for the sale price should appear in
+             box 2. If box 4 is checked, the sale price included noncash payments, and you need to
+             determine the value of these and add them to the figure in box 2.
+          • If you didn’t receive Form 1099-S, refer to your real estate transaction documents for
+             the total amount you received for your home.
+ 2. Determine your selling expenses. These are the costs directly associated with selling your home.
+    a. Any sales commissions (for example, a real estate agent’s sales commission) . . . . . . . . . . . . . . . a.
+    b. Any advertising fees . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . b.
+    c. Any legal fees . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . c.
+    d. Any mortgage points or other loan charges you paid that would normally have been the buyer’s
+       responsibility . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . d.
+    e. Any other fees or costs to sell your home . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . e.
+    f. Add lines 2a through 2e. These are your selling expenses . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . f.
+ 3. Figure your “amount realized” (sale price minus selling expenses).
+          Line 1f minus line 2f . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3.
+ 4. Determine your “total basis” (the total amount you invested in your home). This includes what you paid
+    for your home as well as other money you may have spent that added to its value.
+    a. The amount you paid for your home (or if you built your home, the cost of the land). Include any
+        down payment and any amount you borrowed to pay for the home. For cooperative
+        apartments, include the value of the corporation stock you purchased. If you acquired your
+        home through inheritance, gift, bargain sale, trade, or anything except a fair market purchase,
+        see Basis Adjustments—Details and Exceptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . a.
+    b. Any settlement fees or closing costs you paid when you bought your home, except for
+        financing-related costs (such as seller-paid points). The settlement statement should list the
+        fees related to buying the home. See Basis Adjustments—Details and Exceptions and Fees
+        and Closing Costs . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . b.
+    c. Any real estate taxes or other costs you paid on behalf of the seller you bought your home from
+        (and for which the seller never paid you back) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . c.
+    d. Any amounts you spent on construction or other improvements that are still part of your home
+        at the time of sale (not including costs of maintenance and repairs). See Basis
+        Adjustments—Details and Exceptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . d.
+    e. Any amounts you spent to repair damage to your home or the land on which it sits . . . . . . . . . . . e.
+     f. Any special assessments for local improvements (such as special tax or condominium
+        association assessments that aren’t merely for repairs or maintenance) . . . . . . . . . . . . . . . . . . . . . f.
+    g. Add lines 4a through 4f. This is your total basis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . g.
+
+
+
+Publication 523 (2025)                                                                                                                                                            15
+Worksheet 2. How To Figure Your Gain or Loss (continued)
+5. Determine your “basis adjustments” (any payments, credits, or benefits you may need to deduct from
+   your basis).
+   a. Any depreciation you took or were allowed to take for the use of your home for business or
+      rental purposes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . a.
+   b. Any casualty losses (such as flood or fire damage) you claimed as a deduction on a federal
+      tax return . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . b.
+   c. Any insurance payments you received or expect to receive for casualty losses . . . . . . . . . . . . . . c.
+   d. Any payments you received for granting an easement, conservation restriction, or
+      right-of-way . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . d.
+   e. Any energy credits or subsidies that effectively paid you back for improvements you included
+      in your total basis, including home energy audits by a certified home energy auditor. See
+      Basis Adjustments—Details and Exceptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . e.
+   f. Any adoption credits you claimed or any nontaxable payments from an employer-sponsored
+      adoption assistance program . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . f.
+   g. Any real estate taxes the seller paid on your behalf (and for which you never paid the seller
+      back). If you reimburse the seller, it doesn’t affect basis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . g.
+   h. Any mortgage points the seller paid for you when you bought your home, if one of the
+      following is true . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . h.
+        • You bought your home between January 1, 1991, and April 3, 1994, AND you deducted
+           the points as home mortgage interest in the year paid, or
+        • You bought your home after April 3, 1994 (regardless of whether you deducted the points).
+   i. Any canceled or forgiven mortgage debt amount on a qualified principal residence that was
+      excluded before January 1, 2026 (or as part of an arrangement evidenced in writing before
+      January 1, 2026) or due to a bankruptcy or insolvency and that you didn’t have to declare as
+      income. (See Pub. 4681.) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i.
+   j. Any sales tax you paid on your home (such as for a mobile home or houseboat) and then
+      claimed as a deduction on a federal tax return . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . j.
+   k. The value of any temporary housing the builder of your home provided for you . . . . . . . . . . . . . . k.
+        • Use this equation: Contract price × Value of temporary housing ÷ (Value of temporary
+           housing + Value of new home)
+   l. Any gain you postponed from the sale of a previous home sold before May 7, 1997 . . . . . . . . . l.
+   m. Add lines 5a through 5l. This is your basis adjustment . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . m.
+6. Figure your “adjusted basis” (total basis minus basis adjustments).
+      Line 4g minus line 5m . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   6.
+       • If your adjusted basis is less than zero and you went through a mortgage workout or
+          other process resulting in forgiveness or cancellation of mortgage debt (“discharge of
+          qualified principal residence indebtedness”), don’t count any portion of your canceled
+          debt that is bringing your basis below zero.
+7. Figure your gain or loss (amount realized minus adjusted basis).
+      Line 3 minus line 6 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7.
+        • If the number is negative (adjusted basis is greater than amount realized), you sold your
+           home at a loss. You can’t deduct this loss, but you don’t need to pay any tax on the money
+           you received from selling your home. Skip to Reporting Your Home Sale, later.
+        • If the number is positive, you sold your home at a gain. Skip to How Much Is Taxable,
+           later, to see if Worksheet 3 is required.
+      If this is your separate worksheet for business use, don’t follow guidance on line 7. Report the
+      gain on Form 4797 because this gain is not excluded under section 121.
+
+
+
+
+16                                                                                                                                                     Publication 523 (2025)
+Table 2. Does Your Home or Business Show a Gain or a Loss?
+ IF...                       THEN...
+ your “Home” worksheet       follow the instructions at the end of line 7, under Worksheet 2 for “If the number is negative.”
+ shows a loss,
+ your “Home” worksheet       see How Much Is Taxable? and Worksheet 3 to find out how much of the gain on your “Home”
+ shows a gain,               worksheet is taxable.
+ your “Business”             DON’T follow the instructions at the end of line 7, under Worksheet 2. Instead, report the loss from
+ worksheet shows a loss,     your “Business” worksheet on Form 4797, Sales of Business Property. Note: Your loss may be
+                             limited. See the Instructions for Form 4797.
+ your “Business”             you can’t exclude any of the gain shown on your “Business” worksheet. DON’T follow the instructions
+ worksheet shows a gain,     at the end of line 7, under Worksheet 2. Instead, report the gain from your “Business” worksheet on
+                             Form 4797.
+
+
+Business or Rental Use of Home                                       portion of the gain allocated to the period of nonqualified
+                                                                     use, see Worksheet 3.
+Nonqualified use of entire property after 2008. If you
+fail to meet the requirements to qualify for the $250,000 or            Example. Finley buys a property on January 1, 2020,
+$500,000 exclusion, you may still qualify for a reduced ex-          for $400,000 and uses the entire property as rental prop-
+clusion. If you fail to meet the ownership and use tests, or         erty for 2 years, claiming $20,000 of depreciation deduc-
+if, after 2008, you (your spouse or former spouse) didn’t            tions and reducing the property’s basis to $380,000. On
+use your home as a principal residence, this type of usage           January 1, 2022, Finley converts the property to a princi-
+may affect your gain or loss calculations.                           pal residence. Finley moves out on January 1, 2024, and
+    Gain from the sale or exchange of your main home isn’t           sells the property for $700,000 on January 1, 2025. The
+excludable from income if it is allocable to periods of non-         total gain on the sale is $320,000 ($700,000 − ($400,000
+qualified use. Nonqualified use means any period after               − $20,000)). Finley completes Worksheet 2, and enters
+2008 when neither you nor your spouse (or former                     $20,000 on line 5a so that line 7 reports $320,000.
+spouse) used the property as your main home, with cer-                  Finley transfers the $320,000 net gain from line 7 of
+tain exceptions.                                                     Worksheet 2 to Worksheet 3. Finley completes Section A
+                                                                     of Worksheet 3 and takes the amount from line 7 of Work-
+Exceptions. A period of nonqualified use does not in-                sheet 2, $320,000, and subtracts $20,000 for deprecia-
+clude:                                                               tion. Finley enters $300,000 ($320,000 - $20,000 depreci-
+                                                                     ation) in Step 3 (Section A). Moving to Section B of
+ 1. Any portion of the 5-year period ending on the date of           Worksheet 3, Finley has $300,000 in net gain that is po-
+    the sale or exchange after the last date you or your             tentially excluded, except for the period of nonqualified
+    spouse (or former spouse) used the property as your              use. The rental period occurred for 2 out of 5 years that
+    main home;                                                       Finley owned the property and met the use test by using
+ 2. Any period (not to exceed 10 years) during which you             the home as a principal residence for 2 years (January 1,
+    (or your spouse) are serving on qualified official ex-           2022, to January 1, 2024). Note that the rental period oc-
+    tended duty:                                                     curred before Finley moved back into the home to fulfill the
+                                                                     required 2-year personal use requirement.
+         a. As a member of the uniformed services;                      In Section B of Worksheet 3, Finley allocates 40% (2/5,
+         b. As a member of the Foreign Service of the Uni-           or 2 years out of 5) of the remaining $300,000 gain, or
+         ted States; or                                              $120,000, to nonqualified use ($300,000 - $120,000 =
+                                                                     $180,000). The $120,000 nonqualified use gain is ineligi-
+         c. As an employee of the intelligence community;
+                                                                     ble for the section 121 exclusion and is reported as
+         and
+                                                                     long-term capital gain on Schedule D (Form 1040). The
+ 3. Any other period of temporary absence (not to exceed             $180,000 of the remaining gain is excluded from gross in-
+    an aggregate period of 2 years) due to change of em-             come, as reported in Section C of Worksheet 3. The bal-
+    ployment, health conditions, or other unforeseen cir-            ance of the $250,000 exclusion can’t be used. The
+    cumstances as may be specified by the IRS. See Eli-              $20,000 attributable to the depreciation deduction is sub-
+    gibility Step 5 Exceptions to the Eligibility Test, and          ject to recapture under section 1250. See Determine any
+    Does Your Home Sale Qualify for the Exclusion of                 depreciation amounts you may need to recapture to figure
+    Gain?, earlier.                                                  the amount to report as ordinary income on Form 4797.
+                                                                     For information on reporting $120,000 of nonqualified use
+   Gain from depreciation for periods after May 6, 1997,
+                                                                     gain (long-term capital gain), see the Instructions for
+isn't taken into account to determine gain from nonquali-
+                                                                     Schedule D (Form 1040).
+fied use. Such gain is not accounted for in determining the
+amount of gain allocated to nonqualified use. To figure the
+
+
+Publication 523 (2025)                                                                                                              17
+    Example. Taylor buys a residence on January 1,                • You aren’t subject to the expatriate tax.
+2020, for $400,000 and immediately begins using it as a
+                                                                  • You owned the home for at least 2 of the last 5 years
+principal residence. Taylor moves out on January 1, 2023,            and lived in the home for at least 2 (1 if you become
+and immediately begins to rent the home. On December                 disabled) of the last 5 years leading up to the date of
+1, 2024, Taylor sells the property for $600,000. Based on            the sale.*
+the facts presented, note that the rental period after Tay-
+lor’s last qualified use is not considered nonqualified use       • For the 2 years before the date of the current sale, you
+because nonqualified use during the 5-year period ending             didn’t sell another home on which you claimed the ex-
+on the date of the sale doesn’t include the time between             clusion.
+when Taylor last used the property as Taylor’s principal          • You didn’t use a portion of the home outside of the liv-
+residence and when Taylor sold the property. See section             ing area, for business or rental purposes.
+121(b)(5)(C)(ii). Because Taylor met the ownership and
+use tests, Taylor can exclude gain up to $250,000. Taylor         • You didn’t use the entire property for business or
+had deducted $27,000 for depreciation for the period of              rental purposes or as a second home after 2008.
+rental to a third party. Taylor can’t exclude the part of the     • The sale doesn’t involve the transfer of vacant land or
+gain equal to the depreciation claimed after May 6, 1997,            a remainder interest.**
+for renting the house ($27,000). This is unrecaptured sec-
+                                                                    *If this condition isn’t met, your home sale may qualify
+tion 1250 gain.
+                                                                 for a partial exclusion. The sale must involve one of the fol-
+    After subtracting depreciation from net gain, Taylor’s
+                                                                 lowing events experienced by you, your spouse, a
+net gain reported in Worksheet 3, Section A, Step 3 is
+                                                                 co-owner, or anyone else for whom the home was their
+$200,000, calculated as follows: Taylor had completed
+                                                                 residence: a work-related move, a health-related move, a
+Worksheet 2 and reported $600,000 on line 1, $400,000
+                                                                 death, a divorce, a pregnancy with multiple children, a
+on line 4a, and $27,000 on line 5a. Taylor computed fig-
+                                                                 change in employment status, a change in unemployment
+ures on Worksheet 2 and reported $227,000 on line 7
+                                                                 compensation eligibility, or other unusual event.
+($600,000 - ($400,000 - $27,000)). Taylor transferred the
+                                                                    **The transfer of vacant land or of a remainder interest
+result from line 7 to Worksheet 3. Taylor completed Sec-
+                                                                 may qualify for the maximum exclusion, but special rules
+tion A to enter net gain and subtract the $27,000 of depre-
+                                                                 apply in those situations.
+ciation deductions taken. Taylor entered $200,000 in Step
+                                                                    For a step-by-step guide to determining whether your
+3 of Section A. Taylor skipped Section B because there is
+                                                                 home sale qualifies for the maximum exclusion, see Does
+no nonqualified use based on the exception under section
+                                                                 Your Home Sale Qualify for the Exclusion of Gain?, earlier.
+121(b)(5)(C)(ii). Taylor completed Section C for the col-
+umn “you completed Section A but skipped Section B”                 If you qualify for an exclusion on your home sale, up to
+and took the figure from Section A, Step 3 and entered           $250,000 ($500,000 if married and filing jointly) of your
+$200,000. The entire $200,000 gain is excludable from            gain will be tax free. If your gain is more than that amount,
+gross income because any period after the last qualified         or if you qualify only for a partial exclusion, then some of
+use doesn’t constitute nonqualified use.                         your gain may be taxable. This section contains
+    After subtracting depreciation from net gain in Work-        step-by-step instructions for figuring out how much of your
+sheet 2, line 7, if Taylor’s net gain had exceeded the maxi-     gain is taxable. See Worksheet 3, later, for assistance in
+mum exclusion amount for a single filer, any capital gain        determining your taxable gain.
+above the threshold ($250,000) would have been reported
+on Schedule D (Form 1040) as long-term capital gain.                If you determined in Does Your Home Sale Qualify for
+However, Taylor must report the $27,000 depreciation on          the Exclusion of Gain, earlier, that your home sale doesn't
+Form 4797. See the Instructions for Form 4797. For infor-        qualify for any exclusion (either full or partial), then your
+mation on the treatment of unrecaptured section 1250             entire gain is taxable. If you don’t have a gain, you owe no
+gain, see Recapturing Depreciation, later. See also Pub.         tax on the sale. In either case, you don’t need to complete
+544 for information on depreciation recapture.                   Worksheet 3 and you can skip to Reporting Your Home
+    For more information about using any part of your home       Sale, later.
+for business or as a rental property, including information
+about depreciation deductions, see Pub. 587, Business            Recapturing Depreciation
+Use of Your Home, and Pub. 527, Residential Rental Prop-
+erty. See also Pub. 946, How to Depreciate Property.             If you were entitled to take depreciation deductions be-
+                                                                 cause you used your home for business purposes or as
+                                                                 rental property, you cannot exclude the part of your gain
+How Much Is Taxable?                                             equal to any depreciation allowed or allowable as a de-
+                                                                 duction for periods after May 6, 1997. However, If you
+                                                                 used all of your home for business or rental, you may also
+Review of the Eligibility Test. Generally, your home
+                                                                 have to pay back (“recapture”) some or all of the deprecia-
+sale qualifies for the maximum exclusion if all of the follow-
+                                                                 tion you were entitled to take on your property. “Recaptur-
+ing conditions are true.
+                                                                 ing” depreciation means you must include it as ordinary in-
+ • You didn’t acquire the property through a like-kind ex-       come on your tax return. See Additional Depreciation in
+     change in the past 5 years.
+
+
+18                                                                                                  Publication 523 (2025)
+Pub. 544 for more information about depreciation recap-                                     riod of nonqualified use. Because Cartier met the owner-
+ture.                                                                                       ship and use tests, Cartier can exclude gain up to
+   See Determine any depreciation amounts you may                                           $250,000. However, Cartier can’t exclude the part of the
+need to recapture, later, for more detail.                                                  gain equal to the depreciation Cartier claimed or could
+                                                                                            have claimed for renting the house.
+Example. Cartier owned and used a house as a main                                              Worksheet 3 is used to help you figure taxable gain on
+home from 2017 through 2020. On January 1, 2021, Cart-                                      the sale or exchange of your home (if any) and how to re-
+ier moved to another state. Cartier rented the home from                                    port it.
+that date until April 30, 2023, when Cartier sold it. During
+the 5-year period ending on the date of sale (May 1,                                        Tip: If you completed “Business or Rental” and “Home”
+2018–April 30, 2023), Cartier owned and lived in the                                        versions of your gain/loss worksheet, as described in
+house for more than 2 years. Because the period of non-                                     Property Used Partly for Business or Rental, earlier, com-
+qualified use doesn’t include any part of the 5-year period                                 plete Worksheet 3 only for the “Home” version.
+after the last date Cartier lived in the home, there is no pe-
+Worksheet 3. Determine if You Have Taxable Gain
+   If you completed “Business or Rental” and “Home” versions of your gain/loss worksheet, as described in Property
+Used Partly for Business or Rental, earlier, complete Worksheet 3 only for the “Home” version. However, the section 121
+exclusion is reduced to the extent of any depreciation adjustments in connection with the business use of your residence.
+Worksheet 2 allocated a separate portion of the property used for Business or Rental, if any, to figure the amount of gain
+potentially excluded under section 121. Worksheet 3 helps you figure how much of the gain calculated in Worksheet 2 will
+be excluded under section 121 based, in part, on whether you, your spouse, or a former spouse used the entire property
+as your principal residence or for another purpose, for example, for rental use or as a second home or a vacation home.
+
+
+ Section A. Depreciation. Determine your net gain. Complete this section only if you used all or part of your
+ home for business or rental purposes between May 7, 1997, and the date of sale. Otherwise, skip to Section
+ B.
+ Step 1             Enter your gain from line 7 of Worksheet 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Step 2             List the total of all depreciation deductions that you took or could have taken
+                    for the use of all or part of your home for business or rental purposes
+                    between May 7, 1997, and the date of sale. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Step 3             Subtract the sum of Step 2 from the amount listed in Section A, Step 1. This
+                    is your net gain . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Section B. Determine your nonqualified use gain. Complete this section only if the following apply: a) During
+ the time you owned the property there were periods of nonqualified use when neither you nor your spouse
+ (or your former spouse) used the entire property as your main home; b) the periods of nonqualified use
+ occurred after 2008; c) the periods of nonqualified use occurred before the last day the entire property was
+ used as your or your spouse’s (or your former spouse) main home prior to the date of sale. Do not include
+ any period of nonqualified use that occurred after the last day that you or your spouse (or former spouse)
+ used the entire property as your main home during the 5-year period prior to the date of sale.* Otherwise,
+ skip to Section C.
+ *Note: If the period of nonuse was 1) for an aggregate of 2 years or less and due to a change in employment, a health
+ condition, or other “unforeseen circumstance” described in Does Your Home Qualify for a Partial Exclusion of Gain,
+ earlier; or 2) for 10 years or less and due to a “stop the clock” exception for certain military, intelligence, and Peace
+ Corps personnel described in Service, Intelligence, and Peace Corps Personnel, earlier, then you may skip Section B.
+ Step 1             Enter the amount from Section A, Step 3, or, if you skipped Section A, your
+                    gain from line 7 of Worksheet 2, earlier . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Step 2             Enter the total number of days after 2008 and before the date of sale that
+                    neither you nor your spouse (or former spouse) used the entire home as a
+                    main residence. Do not include any days that occurred after the last day that
+                    you or your spouse (or former spouse) used the entire property as your main
+                    home during the 5-year period prior to the date of sale. This number is your
+                    nonuse days . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Step 3             Enter the total number of days you owned your home (counting all days, not
+                    just days after 2008). This number is your number of days owned . . . . . . . . . .
+ Step 4             Divide the nonuse days by the days owned. This number is your
+                    nonresidence factor . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ Step 5             Multiply the decimal from Section B, Step 4, by the amount listed in Section
+                    B, Step 1. This number is your nonqualified use gain . . . . . . . . . . . . . . . . . . . . .
+ Section C. Determine your gain that is eligible for exclusion.
+
+Publication 523 (2025)                                                                                                                                 19
+ IF...                            THEN your gain that is eligible for exclusion is …
+ you skipped Sections A & B       the amount of your gain from line 7 of Worksheet 2.
+ you completed Section A but your net gain from Section A, Step 3.
+ skipped Section B
+ you completed                    the amount from Section B, Step 1, less your nonqualified use
+ Section B but                    gain from Section B, Step 5.
+ skipped Section
+ A
+ you completed                    your net gain from Section A, Step 3, less your nonqualified use
+ Sections A & B                   gain from Section B, Step 5.
+ Your gain that is eligible for exclusion is $ _______________
+ Section D. Determine if you have taxable gain.
+ IF...                            THEN …
+ your gain that is eligible for   your gain that is eligible for exclusion from your income is not to be reported on your tax
+ exclusion from Section C is      return. The Reporting Your Home Sale section only applies to your nonqualified use
+ less than or equal to your       gain. However, you may need to complete Form 8949 if Form 1099-S was received.
+ exclusion limit from             See Reporting Gain or Loss on Your Home Sale, later.
+ Worksheet 1, Section C
+ your gain that is eligible for   some of your gain isn’t excludable, and you may owe tax on it. See Reporting Your
+ exclusion from Section C is      Home Sale for instructions on how to report the gain on your tax return.
+ greater than your exclusion
+ limit from Worksheet 1,
+ Section C
+                                                                      to receive a larger gain from the sale of that property. If
+Reporting Your Home Sale                                              you later choose to report, rather than exclude, your
+                                                                      taxable gain, you can undo that choice by filing an
+                                                                      amended return within 3 years of the due date of your
+This section tells you how to report taxable gain, take de-           return for the year of the sale, excluding extensions.
+ductions relating to your home sale, and report income
+other than the gain that you may have received from your            If NONE of the three bullets above is true, you don’t
+home sale.                                                       need to report your home sale on your tax return. If you
+                                                                 didn’t make separate home and business calculations on
+   This section also covers special circumstances that ap-       your property, skip to Reporting Deductions Related to
+ply to some home sellers.                                        Your Home Sale, later.
+   What records to keep. Any time you buy real estate,              If ANY of the three bullets above is true, skip to Deter-
+you should keep records to document the property’s ad-           mine whether your home sale is an installment sale, later.
+justed basis. In general, keep these records until 3 years         If you made separate gain/loss calculations for
+after the due date for your tax return for the year in which     business and residence portions of your property,
+you sold your home.                                              you may have to use Form 4797 to report the sale of the
+                                                                 business or rental part. See Property Used Partly for Busi-
+Reporting Gain or Loss on Your Home                              ness or Rental, earlier.
+Sale                                                             Determine any depreciation amounts you may need
+Determine whether you need to report the gain from               to recapture. The exclusion of gain doesn't apply to any
+your home. You need to report the gain if ANY of the fol-        gain from depreciation adjustments attributable to periods
+lowing is true.                                                  after May 6, 1997. Such gain is not accounted for in deter-
+                                                                 mining the amount of gain allocated to business or rental
+ • You have taxable gain on your home sale (or on the            use. You must adjust basis for depreciation deducted in
+     residential portion of your property if you made sepa-      earlier years. If you didn't deduct any depreciation, de-
+     rate calculations for home and business) and don’t          crease your basis by the amount you could have deduc-
+     qualify to exclude all of the gain.                         ted. For information on depreciation deductions associ-
+ • You received a Form 1099-S. If so, you must report the        ated with business or rental use of a principal residence,
+     sale on Form 8949 even if you have no taxable gain to       see Pub. 946.
+     report. See Instructions for Form 8949 and Instruc-            For depreciation deducted during periods of rental or
+     tions for Schedule D (Form 1040) for more details.          business use, the adjustment to basis will affect net gain
+                                                                 or loss. Upon the sale of real property held more than a
+ • You wish to report your gain as a taxable gain even           year, additional depreciation in excess of the straight-line
+     though some or all of it is eligible for exclusion. You     method are taxed as ordinary income if the property was
+     may wish to do this if, for example, you plan to sell an-   held more than a year. Net gain in excess of the maximum
+     other main home within the next 2 years and are likely
+
+20                                                                                                    Publication 523 (2025)
+excludable (for your filing status) is taxed at the applicable   Complete Schedule D (Form 1040), Capital Gains and
+capital gains rate. See the Instructions for Form 4797 and       Losses. Using the information on Form 8949, report on
+for Schedule D (Form 1040) to figure the total amount of         Schedule D (Form 1040) the gain or loss on your home as
+depreciation deductions for any period when the property         a capital gain or loss. Follow the instructions for Sched-
+was used for business or rental. See Additional Deprecia-        ule D when completing the form.
+tion in Pub. 544 for guidance on the potential recapture of         If you have any taxable gain from the sale of your home,
+additional depreciation deductions.                              you may have to increase your withholding or make esti-
+                                                                 mated tax payments. See Pub. 505, Tax Withholding and
+Determine whether your home sale is an installment               Estimated Tax.
+sale. If you finance the buyer’s purchase of your home
+(you hold a note, mortgage, or other financial agreement),
+you probably have an installment sale. You may be able to
+                                                                 Reporting Deductions Related to Your
+report any nonexcludable gain on an installment basis.           Home Sale
+However, generally where a seller of property reports
+profit on the installment method, any recapturable depre-        If you aren’t itemizing deductions on your return for the
+ciation gain recognized must all be reported for the year of     year in which you sold your home, skip to Reporting Other
+the installment sale. Use Form 6252, Installment Sale In-        Income Related to Your Home Sale, later.
+come, to report the sale.
+   For more information, see Pub. 537, Installment Sales.           There is no tax deduction for transfer taxes, stamp
+                                                                 taxes, or other taxes, fees, and charges you paid when
+Report any interest you receive from the buyer. If the           you sold your home. However, if you paid these amounts
+buyer is making payments to you over time (as when you           as the seller, you can treat these taxes and fees as selling
+provide seller financing), then you must generally report        expenses. If you pay these amounts as the buyer, include
+part of each payment as interest on your tax return. Report      them in your cost basis of the property.
+the interest portion of the payment as ordinary income on
+Form 1040 or 1040-SR, line 2b, or Schedule NEC (Form             Determine the amount of real estate tax deductions
+1040-NR) if a nonresident alien. If the buyer is using the       associated with your home sale. Depending on your
+property as a first or second home, also report the interest     circumstances, you may need to figure your real estate tax
+on Schedule B (Form 1040), Interest and Ordinary Divi-           deductions differently. See the discussion that follows for
+dends, and provide the buyer’s name, address, and social         more information.
+security number (SSN). If you don’t show the buyer’s                If you didn’t receive a Form 1099-S, use the follow-
+name, address, and SSN you may have to pay a $50 pen-            ing method to compute your real estate tax deduction,
+alty.                                                            which may be different from the amount of real estate tax
+   If you’re a nonresident or resident alien who                 you actually paid.
+doesn’t have and isn’t eligible to get a SSN, you may             • Divide the number of days you owned the property
+be issued an individual taxpayer identification number                during the year of sale, not counting the date of sale,
+(ITIN). If you don’t have an ITIN, apply for one by filing            by 365 (or 366 for a leap year).
+Form W-7, Application for IRS Individual Taxpayer Identifi-
+cation Number. If needed, a nonresident or resident alien         • Multiply that figure by the amount of real estate tax
+                                                                      due on the home during the 12-month billing cycle that
+buyer can apply for an ITIN as well.
+                                                                      contains the date of sale. The result is the amount of
+Complete Form 8949, Sales and Other Dispositions                      real estate tax you can deduct as an itemized deduc-
+of Capital Assets. Use Form 8949 to report gain from                  tion.
+the sale or disposition of the personal-use portion of your
+                                                                    Example. The real estate tax on Jackie and Pat
+home if you can’t exclude the gain. If you received Form
+                                                                 White’s home was $620 for the year. Their real property
+1099-S, report the transaction on Form 8949. See the In-
+                                                                 tax year was the calendar year, with payment due August
+structions for Form 8949.
+                                                                 3, 2025. They sold the home on May 6, 2025. Jackie and
+   Reporting recognized gain. If you have gain that              Pat are considered to have paid a proportionate share of
+can’t be excluded, you must generally report it on Form          the real estate taxes on the home even though they didn’t
+8949, Sales and Other Dispositions of Capital Assets, and        actually pay them to the taxing authority.
+Schedule D (Form 1040), Capital Gains and Losses. Re-               Jackie and Pat owned their home during the 2025 real
+port the sale on Part I or Part II of Form 8949 as a             property tax year for 125 days (January 1 to May 5, the
+short-term or long-term transaction, depending on how            day before the sale). They figure their deduction for taxes
+long you owned the home. In addition, you may be able to         as follows.
+temporarily defer capital gains invested in a Qualified Op-
+portunity Fund (QOF). You may also be able to perma-             1.   Total real estate taxes for the real property tax year . .       $620
+nently exclude capital gains from the sale or exchange of        2.   Number of days in the real property tax year that you
+an investment in a QOF if the investment is held for at               owned the property . . . . . . . . . . . . . . . . . . . . . .    125
+least 10 years. For more information, see the Instructions       3.   Divide line 2 by 365 (366 if leap year) . . . . . . . . . . .    0.342
+for Form 8949.                                                   4.   Multiply line 1 by line 3. This is your deduction. Enter it
+                                                                      on line 5b of Schedule A (Form 1040) . . . . . . . . . . .       $212
+
+
+Publication 523 (2025)                                                                                                                    21
+Since the buyers paid all of the taxes, Jackie and Pat also      Determine any amounts you may have received in
+include the $212 in the home’s selling price. The buyers         federal mortgage subsidies in the 9 years leading up
+add the $212 to their basis in the home. The buyers can          to the date of sale. If you financed your home under a
+deduct $408 ($620 – $212) as an itemized deduction, the          federally subsidized program (loans from tax-exempt
+taxes for the part of the year they owned the home.              qualified mortgage bonds or loans with mortgage credit
+                                                                 certificates), you may have to recapture all or part of the
+   If you received a Form 1099-S, start with the amount
+                                                                 benefit you received from that program upon the sale or
+of real estate tax you actually paid in the year of sale. Sub-
+                                                                 other transfer of ownership of your home. You recapture
+tract the buyer’s share of real estate tax, as shown in
+                                                                 the benefit by increasing your federal income tax for the
+box 6. The result is the amount you can use in figuring
+                                                                 year of the sale. You may have to pay this recapture tax
+your itemized deductions.
+                                                                 even if you can exclude your gain from income under the
+  If you didn’t already deduct all your mortgage                 rules discussed earlier; that exclusion doesn’t affect the
+points on an earlier tax return, you may be able to de-          recapture tax.
+duct them on your tax return for the year of sale. See Pub.         See Form 8828, Recapture of Federal Mortgage Sub-
+936, Home Mortgage Interest Deduction.                           sidy, to find out how much to repay or whether you qualify
+                                                                 for any exceptions.
+Report on Schedule A (Form 1040), Itemized Deduc-                   If you did receive any federal mortgage subsidies, you
+tions, any itemized real estate deduction. Follow the            must file Form 8828 with your tax return whether you sold
+Instructions for Schedule A when completing the form.            your home at a loss or a gain. If you had a loss, you won't
+                                                                 have to pay back any subsidy.
+Reporting Other Income Related to
+Your Home Sale
+                                                                 How To Get Tax Help
+Report as ordinary income on Form 1040, 1040-SR,
+or 1040-NR any amounts received from selling per-                If you have questions about a tax issue; need help prepar-
+sonal property. If you sold furniture, drapes, lawn equip-       ing your tax return; or want to download free publications,
+ment, a washer/dryer, or other property that wasn’t a per-       forms, or instructions, go to IRS.gov to find resources that
+manent part of your home, report the amount you received         can help you right away.
+for the items as ordinary income. Report this amount on
+Schedule 1 (Form 1040), line 8z, or Schedule NEC (Form           Tax reform. Tax reform legislation impacting federal
+1040-NR) if a nonresident alien. The selling price of your       taxes, credits, and deductions was enacted in P.L. 119-21,
+home doesn’t include amounts you received for personal           commonly known as the One Big Beautiful Bill Act, on July
+property sold with your home.                                    4, 2025. Go to IRS.gov/OBBB for more information and
+                                                                 updates on how this legislation affects your taxes.
+Report as ordinary income on Form 1040, 1040-SR,
+or 1040-NR any amounts received for sales of ex-                 Preparing and filing your tax return. After receiving all
+pired options to purchase your property. If you gran-            your wage and earnings statements (Forms W-2, W-2G,
+ted someone an option to buy your home and it expired in         1099-R, 1099-MISC, 1099-NEC, etc.); unemployment
+the year of sale, report the amount you received for the         compensation statements (by mail or in a digital format) or
+option as ordinary income. Report this amount on Sched-          other government payment statements (Form 1099-G);
+ule 1 (Form 1040), line 8z, or Schedule NEC (Form                and interest, dividend, and retirement statements from
+1040-NR) if a nonresident alien.                                 banks and investment firms (Forms 1099), you have sev-
+                                                                 eral options to choose from to prepare and file your tax re-
+Report as ordinary income on Form 1040, 1040-SR,                 turn. You can prepare the tax return yourself, see if you
+or 1040-NR applicable canceled or forgiven mort-                 qualify for free tax preparation, or hire a tax professional to
+gage debt. If you went through a mortgage workout, fore-         prepare your return.
+closure, or other process in which a lender forgave or can-
+celed mortgage debt on your home, then you must                  Free options for tax preparation. Your options for pre-
+generally report the amount of forgiven or canceled debt         paring and filing your return online or in your local com-
+as income on your tax return. However, if you had a written      munity, if you qualify, include the following.
+agreement for the forgiveness of the debt in place before         • Free File. This program lets you prepare and file your
+January 1, 2026, then you may be able to exclude the for-            federal individual income tax return for free using soft-
+given amount from your income. For more information,                 ware or Free File Fillable Forms. However, state tax
+see Pub. 4681, Canceled Debts, Foreclosures, Reposses-               preparation may not be available through Free File. Go
+sions, and Abandonments.                                             to IRS.gov/FreeFile to see if you qualify for free online
+                                                                     federal tax preparation, e-filing, and direct deposit or
+Paying Back Credits and Subsidies                                    payment options.
+
+If you received any homebuyer credits or federal mortgage         • VITA. The Volunteer Income Tax Assistance (VITA)
+subsidies, you may have to pay back (“recapture”) some               program offers free tax help to people with
+or all of the amount by increasing your tax payment.                 low-to-moderate incomes, persons with disabilities,
+                                                                     and limited-English-speaking taxpayers who need
+
+22                                                                                                   Publication 523 (2025)
+   help preparing their own tax returns. Go to IRS.gov/        If you choose to have someone prepare your tax return,
+   VITA, download the free IRS2Go app, or call                 choose that preparer wisely. A paid tax preparer is:
+   800-906-9887 for information on free tax return prepa-
+                                                                • Primarily responsible for the overall substantive accu-
+   ration.
+                                                                   racy of your return,
+ • TCE. The Tax Counseling for the Elderly (TCE) pro-           • Required to sign the return, and
+   gram offers free tax help for all taxpayers, particularly
+   those who are 60 years of age and older. TCE volun-          • Required to include their preparer tax identification
+   teers specialize in answering questions about pen-              number (PTIN).
+   sions and retirement-related issues unique to seniors.               Although the tax preparer always signs the return,
+   Go to IRS.gov/TCE or download the free IRS2Go app                    you’re ultimately responsible for providing all the
+   for information on free tax return preparation.               !
+                                                                CAUTION information required for the preparer to accurately
+
+ • MilTax. Members of the U.S. Armed Forces and quali-         prepare your return and for the accuracy of every item re-
+   fied veterans may use MilTax, a free tax service of-        ported on the return. Anyone paid to prepare tax returns
+   fered by the Department of Defense through Military         for others should have a thorough understanding of tax
+   OneSource. For more information, go to                      matters. For more information on how to choose a tax pre-
+   MilitaryOneSource (MilitaryOneSource.mil/MilTax).           parer, go to Tips for Choosing a Tax Preparer on IRS.gov.
+      Also, the IRS offers Free Fillable Forms, which can
+   be completed online and then e-filed regardless of in-
+   come.                                                       Employers can register to use Business Services On-
+                                                               line. The Social Security Administration (SSA) offers on-
+Using online tools to help prepare your return. Go to          line service at SSA.gov/employer for fast, free, and secure
+IRS.gov/Tools for the following.                               W-2 filing options to CPAs, accountants, enrolled agents,
+                                                               and individuals who process Form W-2, Wage and Tax
+ • The Earned Income Tax Credit Assistant (IRS.gov/            Statement; and Form W-2c, Corrected Wage and Tax
+   EITCAssistant) determines if you’re eligible for the
+                                                               Statement.
+   earned income credit (EITC).
+ • The Online EIN Application (IRS.gov/EIN) helps you          Business tax account. If you are a sole proprietor, a
+   get an employer identification number (EIN) at no           partnership, an S corporation, a C corporation, or a sin-
+   cost.                                                       gle-member limited liability company (LLC), you can view
+                                                               your tax information on record with the IRS and do more
+ • The Tax Withholding Estimator (IRS.gov/W4App)               with a business tax account. Go to IRS.gov/
+   makes it easier for you to estimate the federal income      BusinessAccount for more information.
+   tax you want your employer to withhold from your pay-
+   check. This is tax withholding. See how your withhold-      IRS social media. Go to IRS.gov/SocialMedia to see the
+   ing affects your refund, take-home pay, or tax due.         various social media tools the IRS uses to share the latest
+ • The Sales Tax Deduction Calculator (IRS.gov/                information on tax changes, scam alerts, initiatives, prod-
+   SalesTax) figures the amount you can claim if you           ucts, and services. At the IRS, privacy and security are our
+   itemize deductions on Schedule A (Form 1040).               highest priority. We use these tools to share public infor-
+                                                               mation with you. Don’t post your social security number
+        Getting answers to your tax questions. On              (SSN) or other confidential information on social media
+        IRS.gov, you can get up-to-date information on         sites. Always protect your identity when using any social
+        current events and changes in tax law.                 networking site.
+ • IRS.gov/Help: A variety of tools to help you get an-           The following IRS YouTube channels provide short, in-
+   swers to some of the most common tax questions.             formative videos on various tax-related topics in English
+                                                               and ASL.
+ • IRS.gov/ITA: The Interactive Tax Assistant, a tool that
+   will ask you questions and, based on your input, pro-        • Youtube.com/irsvideos.
+   vide answers on a number of tax topics.                      • Youtube.com/irsvideosASL.
+ • IRS.gov/Forms: Find forms, instructions, and publica-
+   tions. You will find details on the most recent tax         Over-the-Phone Interpreter (OPI) Service. The IRS of-
+   changes and interactive links to help you find answers      fers the OPI Service to taxpayers needing language inter-
+   to your questions.                                          pretation. The OPI Service is available at Taxpayer Assis-
+                                                               tance Centers (TACs), most IRS offices, and every
+ • You may also be able to access tax information in your      VITA/TCE tax return site. This service is available in Span-
+   e-filing software.                                          ish, Mandarin, Cantonese, Korean, Vietnamese, Russian,
+                                                               and Haitian Creole.
+Need someone to prepare your tax return? There are             Accessibility Helpline available for taxpayers with
+various types of tax return preparers, including enrolled      disabilities. Taxpayers who need information about ac-
+agents, certified public accountants (CPAs), accountants,      cessibility services can call 833-690-0598. The Accessi-
+and many others who don’t have professional credentials.       bility Helpline can answer questions related to current and
+                                                               future accessibility products and services available in
+
+Publication 523 (2025)                                                                                                    23
+alternative media formats (for example, braille-ready, large   the filing season. You can get a transcript, review your
+print, audio, etc.). The Accessibility Helpline does not       most recently filed tax return, and get your adjusted gross
+have access to your IRS account. For help with tax law, re-    income. Create or access your online account at IRS.gov/
+funds, or account-related issues, go to IRS.gov/               Account.
+LetUsHelp.
+                                                               Tax Pro Account. This tool lets your tax professional
+Alternative media preference. Form 9000, Alternative           submit an authorization request to access your individual
+Media Preference, or Form 9000(SP) allows you to elect to      taxpayer IRS OLA. For more information, go to IRS.gov/
+receive certain types of written correspondence in the fol-    TaxProAccount.
+lowing formats.
+                                                               Using direct deposit. The safest and easiest way to re-
+ • Standard Print.                                             ceive a tax refund is to e-file and choose direct deposit,
+ • Large Print.                                                which securely and electronically transfers your refund di-
+                                                               rectly into your financial account. Direct deposit also
+ • Braille.                                                    avoids the possibility that your check could be lost, stolen,
+ • Audio (MP3).                                                destroyed, or returned undeliverable to the IRS. Eight in
+ • Plain Text File (TXT).                                      10 taxpayers use direct deposit to receive their refunds. If
+                                                               you don’t have a bank account, go to IRS.gov/
+ • Braille-Ready File (BRF).                                   DirectDeposit for more information on where to find a bank
+                                                               or credit union that can open an account online.
+Disasters. Go to IRS.gov/DisasterRelief to review the
+available disaster tax relief.                                 Reporting and resolving your tax-related identity
+                                                               theft issues.
+Getting tax forms and publications. Go to IRS.gov/
+Forms to view, download, or print all the forms, instruc-       • Tax-related identity theft happens when someone
+tions, and publications you may need. Or you can go to             steals your personal information to commit tax fraud.
+IRS.gov/OrderForms to place an order.                              Your taxes can be affected if your SSN is used to file a
+                                                                   fraudulent return or to claim a refund or credit.
+Mobile-friendly forms. You’ll need an IRS Online Ac-
+count (OLA) to complete mobile-friendly forms that require      • The IRS doesn’t initiate contact with taxpayers by
+                                                                   email, text messages (including shortened links), tele-
+signatures. You’ll have the option to submit your form(s)
+                                                                   phone calls, or social media channels to request or
+online or download a copy for mailing. You’ll need scans of
+                                                                   verify personal or financial information. This includes
+your documents to support your submission. Go to
+                                                                   requests for personal identification numbers (PINs),
+IRS.gov/MobileFriendlyForms for more information.
+                                                                   passwords, or similar information for credit cards,
+Getting tax publications and instructions in eBook                 banks, or other financial accounts.
+format. Download and view most tax publications and in-         • Go to IRS.gov/IdentityTheft, the IRS Identity Theft
+structions (including the Instructions for Form 1040) on           Central webpage, for information on identity theft and
+mobile devices as eBooks at IRS.gov/eBooks.                        data security protection for taxpayers, tax professio-
+   IRS eBooks have been tested using Apple’s iBooks for            nals, and businesses. If your SSN has been lost or
+iPad. Our eBooks haven’t been tested on other dedicated            stolen or you suspect you’re a victim of tax-related
+eBook readers, and eBook functionality may not operate             identity theft, you can learn what steps you should
+as intended.                                                       take.
+Access your online account (individual taxpayers                • Get an Identity Protection PIN (IP PIN). IP PINs are
+only). Go to IRS.gov/Account to securely access infor-             six-digit numbers assigned to taxpayers to help pre-
+mation about your federal tax account.                             vent the misuse of their SSNs on fraudulent federal in-
+                                                                   come tax returns. When you have an IP PIN, it pre-
+ • View the amount you owe and a breakdown by tax                  vents someone else from filing a tax return with your
+     year.                                                         SSN. To learn more, go to IRS.gov/IPPIN.
+ • See payment plan details or apply for a new payment
+     plan.                                                     Ways to check on the status of your refund.
+ • Make a payment or view 5 years of payment history            • Go to IRS.gov/Refunds.
+     and any pending or scheduled payments.                     • Download the official IRS2Go app to your mobile de-
+ • Access your tax records, including key data from your           vice to check your refund status.
+     most recent tax return, and transcripts.                   • Call the automated refund hotline at 800-829-1954.
+ • View digital copies of select notices from the IRS.                 The IRS can’t issue refunds before mid-February
+ • Approve or reject authorization requests from tax pro-        !     for returns that claimed the EITC or the additional
+                                                               CAUTION child tax credit (ACTC). This applies to the entire
+     fessionals.
+                                                               refund, not just the portion associated with these credits.
+Get a transcript of your return. With an online account,
+you can access a variety of information to help you during
+
+24                                                                                                Publication 523 (2025)
+Making a tax payment. The IRS recommends paying                IRS Document Upload Tool. You may be able to use
+electronically whenever possible. Options to pay electroni-    the Document Upload Tool to respond digitally to eligible
+cally are included in the list below. Payments of U.S. tax     IRS notices and letters by securely uploading required
+must be remitted to the IRS in U.S. dollars. Digital assets    documents online through IRS.gov. For more information,
+are not accepted. Go to IRS.gov/Payments for information       go to IRS.gov/DUT.
+on how to make a payment using any of the following op-
+tions.                                                         Schedule LEP. You can use Schedule LEP (Form 1040),
+                                                               Request for Change in Language Preference, to state a
+ • IRS Direct Pay: Pay taxes from your bank account. It’s      preference to receive notices, letters, or other written com-
+   free and secure, and no sign-in is required. You can        munications from the IRS in an alternative language. You
+   change or cancel within 2 days of scheduled payment.        may not immediately receive written communications in
+ • Debit Card, Credit Card, or Digital Wallet: Choose an       the requested language. The IRS’s commitment to LEP
+   approved payment processor to pay online or by              taxpayers is part of a multi-year timeline that began pro-
+   phone.                                                      viding translations in 2023. You will continue to receive
+                                                               communications, including notices and letters, in English
+ • Electronic Funds Withdrawal: Schedule a payment             until they are translated to your preferred language.
+   when filing your federal taxes using tax return prepara-
+   tion software or through a tax professional.                Contacting your local TAC. Keep in mind, many ques-
+ • Electronic Federal Tax Payment System: This is the          tions can be answered on IRS.gov without visiting a TAC.
+   best option for businesses. Enrollment is required.         Go to IRS.gov/LetUsHelp for the topics people ask about
+                                                               most. If you still need help, TACs provide tax help when a
+ • Check or Money Order: Mail your payment to the ad-          tax issue can’t be handled online or by phone. All TACs
+   dress listed on the notice or instructions.                 now provide service by appointment, so you’ll know in ad-
+ • Cash: You may be able to pay your taxes with cash at        vance that you can get the service you need without long
+   a participating retail store.                               wait times. Before you visit, go to IRS.gov/TAC to find the
+                                                               nearest TAC and to check hours, available services, and
+ • Same-Day Wire: You may be able to do same-day               appointment options. Or, on the IRS2Go app, under the
+   wire from your financial institution. Contact your finan-
+                                                               Stay Connected tab, choose the Contact Us option and
+   cial institution for availability, cost, and time frames.
+                                                               click on “Local Offices.”
+   Note: The IRS uses the latest encryption technology to        ————————————————————————
+ensure that the electronic payments you make online, by           Below is a message to you from the Taxpayer Advocate
+phone, or from a mobile device using the IRS2Go app are        Service, an independent organization established by Con-
+safe and secure. Paying electronically is quick and easy.      gress.
+What if I can’t pay now? Go to IRS.gov/Payments for
+more information about your options.                           The Taxpayer Advocate Service (TAS)
+ • Apply for an online payment agreement (IRS.gov/             Is Here To Help You
+   OPA) to meet your tax obligation in monthly install-        What Is the Taxpayer Advocate Service?
+   ments if you can’t pay your taxes in full today. Once
+   you complete the online process, you will receive im-       The Taxpayer Advocate Service (TAS) is an independent
+   mediate notification of whether your agreement has          organization within the Internal Revenue Service (IRS).
+   been approved.                                              TAS helps taxpayers resolve problems with the IRS,
+ • Use the Offer in Compromise Pre-Qualifier to see if         makes administrative and legislative recommendations to
+   you can settle your tax debt for less than the full         prevent or correct the problems, and protects taxpayer
+   amount you owe. For more information on the Offer in        rights. We work to ensure that every taxpayer is treated
+   Compromise program, go to IRS.gov/OIC.                      fairly and that you know and understand your rights under
+                                                               the Taxpayer Bill of Rights. We are Your Voice at the IRS.
+Filing an amended return. Go to IRS.gov/1040X for in-
+formation and updates.                                         How Can TAS Help Me?
+Checking the status of your amended return. Go to              TAS can help you resolve problems that you haven’t been
+IRS.gov/WMAR to track the status of Form 1040-X amen-          able to resolve with the IRS on your own. Always try to re-
+ded returns.                                                   solve your problem with the IRS first, but if you can’t, then
+        It can take up to 3 weeks from the date you filed      come to TAS. Our services are free.
+  !     your amended return for it to show up in our sys-       • TAS helps all taxpayers (and their representatives), in-
+CAUTION tem, and processing it can take up to 16 weeks.            cluding individuals, businesses, and exempt organiza-
+                                                                   tions. You may be eligible for TAS help if your IRS
+Understanding an IRS notice or letter you’ve re-                   problem is causing financial difficulty, if you’ve tried
+ceived. Go to IRS.gov/Notices to find additional informa-          and been unable to resolve your issue with the IRS, or
+tion about responding to an IRS notice or letter.                  if you believe an IRS system, process, or procedure
+                                                                   just isn’t working as it should.
+
+Publication 523 (2025)                                                                                                   25
+ • To get help any time with general tax topics, visit          • Check your local directory, or
+     www.TaxpayerAdvocate.IRS.gov. The site can help
+                                                                • Call TAS toll free at 877-777-4778.
+     you with common tax issues and situations, such as
+     what to do if you make a mistake on your return or if
+     you get a notice from the IRS.                            What Are My Rights as a Taxpayer?
+ • TAS works to resolve large-scale (systemic) problems        The Taxpayer Bill of Rights describes ten basic rights that
+     that affect many taxpayers. You can report systemic is-   all taxpayers have when dealing with the IRS. Go to
+     sues at www.IRS.gov/SAMS. (Be sure not to include         www.TaxpayerAdvocate.IRS.gov/Taxpayer-Rights              for
+     any personal identifiable information.)                   more information about the rights, what they mean to you,
+                                                               and how they apply to specific situations you may encoun-
+How Do I Contact TAS?                                          ter with the IRS. TAS strives to protect taxpayer rights and
+                                                               ensure the IRS is administering the tax law in a fair and
+TAS has offices in every state, the District of Columbia,      equitable way.
+and Puerto Rico. To find your local advocate’s number:
+ • Go to www.TaxpayerAdvocate.IRS.gov/Contact-Us,
+
+
+
+
+26                                                                                                Publication 523 (2025)
+                        To help us develop a more useful index, please let us know if you have ideas for index entries.
+Index                   See “Comments and Suggestions” in the “Introduction” for the ways you can reach us.
+
+                                               Subsidies 10
+A                                           exclusion of canceled or forgiven mortgage   N
+                                               debt 1
+Armed Service Members 5                     Exclusion of gain 3                          Nonresident or resident alien 21
+Assistance (See Tax help)
+Automatic disqualification 3
+                                            F                                            O
+Away from home 3
+                                            Federal mortgage subsidies 22                Ownership 3
+                                            Form 8949 21                                 Ownership requirement 3
+B
+                                            Future developments 1
+Basis adjustments:                                                                       P
+  Adjusted basis 8
+                                            G                                            Paying back credits 22
+Business or Rental use of home 12
+                                            Gain or loss 8                               Paying back subsidies 22
+                                              Exclusion of gain 3                        Peace Corps Members 5
+C                                                                                        Publications (See Tax help)
+Capital Gains:
+                                            H
+   Qualified Opportunity Funds 1                                                         R
+Closing costs 9                             Home acquired through a trade 10
+                                            Home inherited 11                            Remodeling 10
+Community property:
+                                            Home received as gift 11                     Rental use of home 17
+   Basis determination 11
+                                            Home sale:                                   Repairs 10
+Condemnation:
+                                              Reporting requirements 20                  Reporting home sale deductions 21
+   Basis 11
+                                            Houseboat:                                   Reporting other income related to home
+   Sale price 11                                                                           sale 22
+Condominium:                                  As main home 3
+                                                                                         Reporting taxable gain or loss 20
+   As main home 3                                                                        Residence 3
+Cooperative apartment:                      I                                            Residence requirement 3
+   As main home 3                           Improvements 9
+                                            Inheritance:                                 S
+D                                              Home received as 11
+                                                                                         Seller costs 9
+Death of Spouse 4                           Installment sale 21
+                                                                                         Settlement fees 9
+Depreciation:                               Interest reporting 21
+                                                                                         Spouse:
+   Home used for business or rental                                                         Death of (See Surviving spouse)
+      purposes 18                           L                                            Surviving spouse:
+Destruction:
+                                            Look-back requirement 4                         Basis determination 11
+   Basis 11
+                                            Look-back requirement exceptions 4
+   Sale price 11
+Disability:
+                                                                                         T
+   Mentally disabled 4
+                                            M                                            Tax help 22
+   Physically disabled 4                    Main home:                                   Taxable gain 18
+Divorce 11                                     Defined 3                                 Transfer of home 3
+                                               Factors used to determine 3
+E                                           Missing children, photographs of 2           W
+                                            Mobile home:
+Eligibility test 3                                                                       Widowed Taxpayers 4
+                                               As main home 3
+Energy:
+                                            More than one home 3
+   Credit 10
+
+
+
+
+Publication 523 (2025)                                                                                                            27
+
