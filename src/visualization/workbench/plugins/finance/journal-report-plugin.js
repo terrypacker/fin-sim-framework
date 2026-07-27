@@ -220,9 +220,12 @@ export class JournalReportPlugin extends WorkbenchComponent {
     const svc          = this._services();
     const typeRegistry = svc?.typeRegistry  ?? null;
     const periodService = svc?.periodService ?? null;
-    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry, periodService) : null;
-    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry, periodService) : null;
-    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry, periodService) : null;
+    // The schema registry carries the stateKey → display-name map (design 70), so
+    // reports can label a group by its account name without touching g.key.
+    const schemaRegistry = svc?.schemaRegistry ?? null;
+    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry, periodService, schemaRegistry) : null;
+    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry, periodService, schemaRegistry) : null;
+    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry, periodService, schemaRegistry) : null;
     this._groups    = [];
     this._grandTotal = null;
     this._expandedKeys.clear();
@@ -280,7 +283,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
           dedupeBy:   def.dedupeBy,
         });
 
-    this._groups     = def.decorate(result.groups);
+    this._groups     = def.decorate(result.groups, api);
     this._grandTotal = result.grandTotal;
 
     if (this._mounted) this._renderResults();
@@ -521,11 +524,15 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
     if (facet.optionsSource === 'account') {
       const accounts = svc.accountService?.getAll?.() ?? [];
+      // Design 70: the facet dropdown reads the shared resolver, so a name shown
+      // here is byte-identical to the one on the report rows (and disambiguated
+      // the same way when two accounts share a name).
+      const reg = svc.schemaRegistry;
       return accounts
         .filter(a => a.stateKey)
         .map(a => ({
           value: a.stateKey,
-          label: _accountLabel(a),
+          label: reg?.displayNameFor?.(a.stateKey) ?? _accountLabel(a),
         }));
     }
     if (facet.optionsSource === 'person') {
@@ -601,11 +608,16 @@ export class JournalReportPlugin extends WorkbenchComponent {
       // Render each group-by key in its own <td> so each column header aligns
       // with actual data.  The expand affordance lives in the first cell only.
       const keyCells = groupByFields.map((f, i) => {
-        const v = String(g.key[f] ?? '—');
+        // A definition's decorate() may attach a human label (an account name)
+        // alongside the key; the key itself stays the identity and is kept
+        // reachable as the cell tooltip (design 70 §6.2).
+        const raw   = String(g.key[f] ?? '—');
+        const label = g.labels?.[f] ?? raw;
+        const tip   = label === raw ? '' : ` title='${_safeAttr(raw)}'`;
         if (i === 0) {
-          return `<td class="jr-td jr-td--expand"><div class="jr-expand-inner"><button class="jr-expand-btn">${isExpanded ? '▼' : '▶'}</button><span class="jr-group-label">${_esc(v)}</span></div></td>`;
+          return `<td class="jr-td jr-td--expand"><div class="jr-expand-inner"><button class="jr-expand-btn">${isExpanded ? '▼' : '▶'}</button><span class="jr-group-label"${tip}>${_esc(label)}</span></div></td>`;
         }
-        return `<td class="jr-td">${_esc(v)}</td>`;
+        return `<td class="jr-td"${tip}>${_esc(label)}</td>`;
       }).join('');
 
       rows.push(`
@@ -794,6 +806,11 @@ function _multiselectSummary(options, selected, label) {
   }
   return `${selected.length} selected`;
 }
+/**
+ * Fallback account label for when no schema registry is wired (a bare plugin in
+ * a test harness). The registry's displayNameFor() is the canonical rule and
+ * uses exactly this shape — design 70 §5 lifted it out of here.
+ */
 function _accountLabel(account) {
   const country = account.country ? `${account.country} ` : '';
   const name    = account.name || account.stateKey;

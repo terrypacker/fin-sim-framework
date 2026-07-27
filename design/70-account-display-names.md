@@ -1,7 +1,7 @@
 # 70 — Account display names (show the name, keep the key)
 
-**Status: PROPOSED** (Axis A only — a display-name layer; key generation and key migration
-are explicitly out of scope, §9). A `stateKey` is the simulation's durable *identity* for an
+**Status: IMPLEMENTED** (all four phases, §8; Axis A only — key generation and key migration
+remain out of scope, §9). A `stateKey` is the simulation's durable *identity* for an
 account/asset, but it currently leaks into user-facing surfaces as if it were a *label* — the
 State/Metrics panel and the Journal reports show `usSavings2Account` / `beq1IraAccount` instead of
 "Shared Checking" / "Marge IRA". This design introduces one shared **stateKey → display-name
@@ -190,31 +190,60 @@ name (the state panel already owns both — §6.1).
   the misleading key invisible to the user; fixing the *generator* to derive from name/type is Axis B
   (§9), not needed once the name shows.
 
-## 8. Phasing
-- **P1 — resolver.** Extend `StateSchemaRegistry.registerAccount` (+ the asset/person siblings) to
-  retain `{ name, kind }`, add `displayNameFor(stateKey)` using the lifted `_accountLabel` rule, and
-  add `accountBalanceKeys()` (the registered `…balance` account keys, for §14.6). Populated by the
-  existing `_registerDisplayCurrencies` walk. Unit-test: inherited keys, duplicate-name
-  disambiguation, and the `?? toLabel` fallback for unregistered keys.
-- **P2 — State/Metrics panel.** Swap the section/row/history labels to `displayNameFor(k) ?? k`
-  (`state-panel-view.js:353, 271, 360, 722`), passing `alreadyLabel` when a name resolves so it isn't
-  re-beautified. **No new wiring** — the view already holds `this._schemaRegistry`. Viz test that an
-  account section renders its name (and a bare metric still renders `toLabel`).
-- **P3 — Journal names.** Thread the schema registry into the three `JournalQueryApi` constructions
-  (`journal-report-plugin.js:223-225`); extend the `decorate(groups, api)` hook so the per-account
-  reports attach `g.labels.stateKey` = resolved name; render `g.labels?.[f] ?? g.key[f]` in
-  `_renderResults`. Replace the private `_accountLabel` with the registry rule. Viz test that a
-  Cash-Flow-by-Account group row shows "Shared Checking", not `usSavings2Account.balance`.
-- **P4 — §14.6 retire.** Default the per-account reports' account scope to `api.accountBalanceKeys()`
-  and drop the `contains 'account.balance'` substring (`report-definition-registry.js:328, 369, 404,
-  439, 637, 726`). Regression test that a non-`…Account` inherited key (e.g. `beq1_a1`) now selects
-  into Cash-Flow-by-Account, and that existing `…Account`-keyed reports are byte-identical.
+## 8. Phasing — ALL COMPLETE
+
+**Decisions locked at implementation** (the doc left these open):
+- **Label rule** = country-prefixed `${country} ${name}` (the lifted `_accountLabel`), so the state
+  panel, the journal rows, and the facet dropdown read a record identically. A countryless record
+  renders the bare name; a nameless one falls back to its own stateKey.
+- **Duplicate names** = collision-only suffix: unique names are never decorated; colliding ones take
+  `· <owner>` when the owner separates them, else `· <stateKey>`. Labels are therefore derived
+  **lazily** — persons register *after* accounts in `_registerDisplayCurrencies`, so a label computed
+  eagerly at `registerAccount` could not see the owner name that disambiguates it.
+- **Key visibility** = the raw key is kept as a `title=` tooltip on section headers, field/static
+  rows, the history-modal title, and renamed journal group cells.
+- **Coverage** = accounts + real property / collectibles / equities + persons + inline bequest assets
+  (which are plain descriptors, not model instances, so `_registerDisplayCurrencies` calls
+  `registerDisplayRecord` for them explicitly; `kind` follows `__type` so a bequeathed property is
+  not mistaken for an account by `accountBalanceKeys()`).
+
+- **P1 — resolver. DONE.** `StateSchemaRegistry.registerDisplayRecord(stateKey, record, kind)` retains
+  `{ name, country, ownerId, kind }`; `registerAccount` / `registerAsset` / `registerPerson` call it
+  for free, and `_registerDisplayCurrencies` calls it directly for inline bequest assets.
+  `displayNameFor(stateKey)` returns the label or **null** (callers own the `?? toLabel` fallback);
+  `accountBalanceKeys()` returns the `<sk>.balance` paths of account-kind records. Labels are built in
+  one lazy `_rebuildLabels()` pass, invalidated by any new registration. 16 unit tests
+  (`tests/unit/display-name-resolver.test.mjs`).
+- **P2 — State/Metrics panel. DONE.** `_displayName(path)` on the view resolves section headers,
+  numeric rows, static rows, and metric rows (`renderState` / `_renderMetricsPanel`), passing
+  `alreadyLabel` so a resolved name is not re-beautified. Added `_pathLabel(path)`, which resolves the
+  *owning* record for a field path — `usSavings2Account.balance` → "US Shared Checking — Balance" —
+  and backs the history-modal title. No new wiring, as predicted. 8 viz tests.
+- **P3 — Journal names. DONE.** `JournalQueryApi` takes the schema registry as a 4th ctor arg and
+  exposes `displayNameFor()` / `accountBalanceKeys()`; the plugin passes `svc.schemaRegistry` to all
+  three constructions and calls `def.decorate(result.groups, api)`. The four stateKey-grouped reports
+  share `_labelAccountGroups(groups, api)`, which sets `g.labels.stateKey` via `_accountKeyOf()` and
+  leaves `g.key` untouched (asserted by test — expand-to-entries keys off it). `_renderResults` renders
+  `g.labels?.[f] ?? g.key[f]` with the raw key as the cell tooltip. The facet dropdown now reads the
+  resolver too, so filter and rows agree; `_accountLabel` survives only as the no-registry fallback.
+  4 viz tests.
+- **P4 — §14.6 retire. DONE.** All six sites now call `_appendAccountBalanceScope(conditions,
+  accountStateKeys, api)`, an exact `in` over the selected accounts' `.balance` paths, defaulting to
+  `api.accountBalanceKeys()`. This is *more* precise than the substring it replaces (which also
+  depended on `contains` being case-insensitive), and it degrades to the old substring when no
+  registry is bound to the api. 4 unit tests, including both regression directions.
+
+**Verified**: 3707 unit / 892 viz green; reference golden unmoved (headless
+`fin-sim-scenarios.json` net worth 27,569,102).
 
 ## 9. Deferred / documented-only
 - **Axis B — key generation ergonomics** (separate design): derive a *new* account's key from its
   **name-at-creation** (slugified) instead of its role, and/or a user-editable key field, both with a
   `…Account` guard (so §14.6-style invisibility can't be reintroduced). Freezes at creation (a rename
   never re-keys). Existing keys are **not** touched — the §70 display layer makes their spelling moot.
+- **`scripts/run-scenario.mjs` tables** still print raw stateKeys. It reads the runtime state map
+  directly and is a headless dev tool, not one of the §1 user-facing surfaces, so it was left alone;
+  routing it through the resolver is a one-line follow-up if the raw keys ever get in the way.
 - **Full key migration** (existing `usSavings2Account` → readable): breaking (param keys + journal
   history); needs an alias map + rewrite pass + history-continuity strategy. Not planned — the display
   layer removes the motivation.

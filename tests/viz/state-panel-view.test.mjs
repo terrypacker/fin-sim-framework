@@ -714,3 +714,87 @@ test('_formatActionPayload: falls back to plain dump without TypeRegistry', () =
   const out = panel._formatActionPayload({ type: 'X', data: { amount: 1000 } });
   assert.ok(out.includes('"amount": 1000'));
 });
+
+// ─── Display names (design 70 §6.1) ─────────────────────────────────────────
+
+/**
+ * Panel wired to a real StateSchemaRegistry carrying display records, so the
+ * reroute is exercised against the actual resolver (and the registry's value
+ * formatting still works alongside it).
+ */
+function namedPanel(names) {
+  const panel = makePanel();
+  const reg   = new StateSchemaRegistry();
+  for (const [stateKey, { name, country, kind }] of Object.entries(names)) {
+    reg.registerDisplayRecord(stateKey, { name, country }, kind ?? 'account');
+  }
+  panel.schemaRegistry = reg;
+  return panel;
+}
+
+test('renderState: an account section renders its display name, not the beautified key', () => {
+  const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  const c = document.createElement('div');
+  panel.renderState({ usSavings2Account: { balance: 5 } }, c);
+  const header = c.querySelector('.lsp-section-label');
+  assert.strictEqual(header.textContent, 'US Shared Checking');
+  assert.strictEqual(header.title, 'usSavings2Account', 'raw stateKey stays reachable on hover');
+});
+
+test('renderState: an unnamed section still renders toLabel(key) — nothing regresses', () => {
+  const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  const c = document.createElement('div');
+  panel.renderState({ effectiveGrowthRates: { EQUITY_US: 0.07 } }, c);
+  assert.strictEqual(c.querySelector('.lsp-section-label').textContent, 'Effective Growth Rates');
+});
+
+test('renderState: sub-field rows keep their own field labels under a named section', () => {
+  const panel = namedPanel({ beq1IraAccount: { name: "Mother's IRA", country: 'US' } });
+  panel._expandedSections.add('beq1IraAccount');
+  const c = document.createElement('div');
+  panel.renderState({ beq1IraAccount: { balance: 5 } }, c);
+  assert.strictEqual(c.querySelector('.lsp-section-label').textContent, "US Mother's IRA");
+  const labels = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.textContent);
+  assert.ok(labels.includes('Balance'), 'the field row still names the field');
+});
+
+test('renderState: a named numeric leaf and static leaf both use the display name', () => {
+  const panel = namedPanel({ 'people.p1': { name: 'Marge', kind: 'person' } });
+  const c = document.createElement('div');
+  panel._expandedSections.add('people');
+  panel.renderState({ people: { p1: 7 } }, c);
+  const lbl = c.querySelector('.lsp-metric-label');
+  assert.strictEqual(lbl.textContent, 'Marge');
+});
+
+test('renderState: a static (non-numeric) row exposes its path as a tooltip', () => {
+  const panel = makePanel();
+  const c = document.createElement('div');
+  panel.renderState({ residency: 'AU' }, c);
+  const lbl = c.querySelector('.lsp-static-row .lsp-metric-label');
+  assert.strictEqual(lbl.textContent, 'Residency');
+  assert.strictEqual(lbl.title, 'residency');
+});
+
+test('_renderMetricsPanel: a per-account balance metric shows the account name', () => {
+  const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  const c = document.createElement('div');
+  panel._renderMetricsPanel({ usSavings2Account: 1000, netWorth: 5000 }, c);
+  const labels = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.textContent);
+  assert.ok(labels.includes('US Shared Checking'), 'account metric renamed');
+  assert.ok(labels.includes('Net Worth'),          'a true metric keeps toLabel');
+});
+
+test('_pathLabel: resolves the owning record and keeps the field name', () => {
+  const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  assert.strictEqual(panel._pathLabel('usSavings2Account.balance'), 'US Shared Checking — Balance');
+  assert.strictEqual(panel._pathLabel('usSavings2Account'),         'US Shared Checking');
+  assert.strictEqual(panel._pathLabel('cumulativeTaxesPaid'),       'Cumulative Taxes Paid');
+});
+
+test('display names are inert without a schema registry', () => {
+  const panel = makePanel();
+  const c = document.createElement('div');
+  panel.renderState({ usSavings2Account: { balance: 5 } }, c);
+  assert.strictEqual(c.querySelector('.lsp-section-label').textContent, 'Us Savings2 Account');
+});
