@@ -140,6 +140,15 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // distributions) which NIIT excludes. Capital/collectible gains are already
     // isolated and added to NII at computeTax time, not here.
     this.usNetInvestmentIncomeYTD = 0;
+    // §469 passive activity accounting (design 86 G5), USD. The two YTD figures are
+    // SIGNED net rental results — all activity, and the foreign-source subset that has
+    // to leave the passive §904 basket with it. Both reset at the US settle.
+    this.usPassiveActivityIncomeYTD        = 0;
+    this.usForeignPassiveActivityIncomeYTD = 0;
+    // Suspended passive losses carried forward under §469(b). NOT a YTD field:
+    // deliberately outside the settle reset, because surviving the year boundary is
+    // the point. Released against later passive income.
+    this.usPassiveLossCarryforward         = 0;
     this.usPenaltyYTD = 0;
     this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;
@@ -207,6 +216,12 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auPersonNrWithholdingInterestYTD          = _zeroes();
     this.auPersonNrWithholdingUnfrankedDividendYTD = _zeroes();
     this.auPersonSuperTaxYTD                = _zeroes();
+    // Div 36 carried-forward tax losses, AUD (design 86 G1). NOT a YTD accumulator:
+    // deliberately absent from the settle reset lists, because surviving the year
+    // boundary is the entire point. Per-person because Australia has no joint
+    // assessment — one spouse's loss cannot shelter the other's income, and design 76
+    // exists precisely because splitting a household scalar by headcount mis-attributes.
+    this.auPersonTaxLossPool                = _zeroes();
     // AU-source *earned* income (wages/SE) per person — backs the per-person
     // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.
     this.auPersonEarnedIncomeYTD            = _zeroes();

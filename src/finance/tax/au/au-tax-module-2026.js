@@ -204,6 +204,13 @@ export class AuTaxModule2026 extends BaseTaxModule {
           usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
           foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          // §469 (design 86 G5): rental activity is passive PER SE. Tracked signed,
+          // and ALSO in the foreign companion — an AU property is foreign-source, so a
+          // suspended loss must leave the passive §904 basket as well, or the basket
+          // accumulators stop partitioning gross income and the limitation assertion
+          // fires (G5b).
+          usPassiveActivityIncomeYTD:        (state.usPassiveActivityIncomeYTD ?? 0) + usd,
+          usForeignPassiveActivityIncomeYTD: (state.usForeignPassiveActivityIncomeYTD ?? 0) + usd,
         };
         // Resident or not, AU-situs rent is AU assessable income on the marginal
         // bracket path — the resident schedule for a resident, the foreign-resident

@@ -165,6 +165,11 @@ export function buildGridModel({ spec, results }) {
     notes: spec.notes ?? null,
     axisNames, rowAxis, colAxis, reduceAxis, panelAxes,
     metric: reduceAxis ? `frontier along ${reduceAxis}` : (rep.metric ?? 'pass/fail'),
+    // What the frontier VALUES are denominated in. A reduce axis can be money
+    // (spendTotal), a rate (equityShift) or a year (retire / saleYear), and a reader
+    // cannot tell which from the number alone: a return frontier of -0.03 formatted as
+    // money reads "$0" and silently makes every rate-reduced grid look inert.
+    reduceUnit: unitForLever(spec.axes?.[reduceAxis]?.lever),
     panels,
     warnings: [...new Set(warnings)],
     errors: results.filter(r => r.error).length,
@@ -177,6 +182,26 @@ export function buildGridModel({ spec, results }) {
     labelOf, idOf, byId, cellAt,
     leverValues: leverValues({ spec, axisNames, reduceAxis, labelOf, idOf, byId, cellAt }),
   };
+}
+
+/**
+ * The unit a lever's values are expressed in, so a frontier can be FORMATTED rather
+ * than assumed to be dollars. Matched on the lever path, which is the only thing a
+ * spec states about what it is sweeping.
+ *
+ * `rate` values are fractions (0.01 = one point), so they render as points, not
+ * percentages of themselves. Unknown levers fall back to `number`, which prints the
+ * raw value — wrong-looking is better than confidently mis-denominated.
+ */
+export function unitForLever(lever) {
+  if (!lever) return 'number';
+  if (/^(spendTotal|monthlyExpenses)$/.test(lever))          return 'money';
+  if (/^(equityShift)$/.test(lever))                         return 'rate';
+  if (/(^|\.)(retire|moveYear)($|\.)/.test(lever))           return 'year';
+  if (/(saleYear|Year)$/.test(lever))                        return 'year';
+  if (/(Rate|Spread|primeSpread|growthRate)$/i.test(lever))   return 'rate';
+  if (/(balance|value|Cost|amount)$/i.test(lever))           return 'money';
+  return 'number';
 }
 
 /**

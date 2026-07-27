@@ -95,7 +95,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
   computeTax(state) {
     const {
-      usOrdinaryIncomeYTD    = 0,
+      usOrdinaryIncomeYTD: _usOrdinaryIncomeRaw = 0,
       usNegativeIncomeYTD    = 0,
       usCapitalGainsYTD      = 0,
       usCollectibleGainsYTD  = 0,
@@ -104,6 +104,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usSsWagesYTD           = 0,
       usFilingSingle         = false,
     } = state;
+
+    // Step 0a: §469 passive activity loss limitation (design 86 G5/G5b).
+    // Applied before anything else reads income, because it changes what income IS.
+    const pal = _computePassiveLossLimitation(state);
+    const usOrdinaryIncomeYTD = _usOrdinaryIncomeRaw + pal.adjustment;
 
     const brackets     = usFilingSingle ? this._brackets_single     : this._brackets_mfj;
     const ltcgBrackets = usFilingSingle ? this._ltcg_single         : this._ltcg_mfj;
@@ -263,7 +268,15 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // invariants catch it immediately.
       generalGross:    Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) + (state.usSourceGeneralUsdYTD ?? 0)),
       generalExcluded: Math.max(0, feieExcluded),
-      passiveGross:    Math.max(0, (state.foreignPassiveIncomeYTD ?? 0) + (state.usSourcePassiveUsdYTD ?? 0)),
+      // The §469 adjustment must reach the basket too, or the partition breaks.
+      // A suspended loss is removed from `usOrdinaryIncomeYTD` (hence from
+      // `grossIncomeAllSources`), so leaving it inside the passive accumulator — where
+      // the Math.max floors it away — makes the general basket's gross exceed total
+      // gross income and the §904 denominator collapse to zero. That is precisely the
+      // invariant violation design 86 G5b records; suspending the loss in both places
+      // is what restores `Σ basket gross ≤ grossIncomeAllSources`.
+      passiveGross:    Math.max(0, (state.foreignPassiveIncomeYTD ?? 0) + (state.usSourcePassiveUsdYTD ?? 0)
+                                   + pal.foreignAdjustment),
     });
     const credits      = ftc.credit;
     // Total gross tax includes NIIT; net liability credits the FTC against the
@@ -321,6 +334,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       netLiability,
       effectiveRate,
       marginalRate,
+      // §469 suspended-loss pool (design 86 G5). `closing` is what the settle
+      // reducer persists; the rest is the return's own arithmetic.
+      passiveLoss: pal,
       brackets: this._bracketBreakdown({
         filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
         ltcgStacked, ltcgBase, collectibles, collectiblesTax,
@@ -331,6 +347,19 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       }),
       lineItems: [
         { label: 'Gross Ordinary Income',               amount:  usOrdinaryIncomeYTD },
+        // §469 (design 86 G5). Shown only when there is something to show, so an
+        // ordinary return is unchanged. `Gross Ordinary Income` above is already net
+        // of these; the lines exist so a reader can see WHY a rental loss did not
+        // reduce this year's income, and how much is waiting to be released.
+        ...(pal.suspended > 0
+          ? [{ label: 'Passive Loss Suspended (§469)',  amount:  pal.suspended }]
+          : []),
+        ...(pal.released > 0
+          ? [{ label: 'Suspended Passive Loss Released', amount: -pal.released }]
+          : []),
+        ...(pal.closing > 0
+          ? [{ label: 'Suspended Passive Losses — carried forward', amount: pal.closing }]
+          : []),
         { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
         ...(seDeduction > 0
           ? [{ label: '½ Self-Employment Tax Deduction', amount: -seDeduction }]
@@ -625,6 +654,80 @@ function _ftcStrict() {
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) return false;
   } catch { /* import.meta.env absent */ }
   return true;
+}
+
+/**
+ * IRC §469 passive activity loss limitation — design 86 G5.
+ *
+ * Rental activity is passive **per se** under §469(c)(2), so a net rental loss cannot
+ * offset wages, interest, dividends or gains. It is *suspended* and carried forward
+ * under §469(b) until the taxpayer has passive income to absorb it, or disposes of
+ * the activity. Before this, the signed rental result went straight into
+ * `usOrdinaryIncomeYTD` and a foreign rental loss reduced US ordinary income without
+ * limit — driving it negative in a measured run.
+ *
+ * ─── why this also fixes the §904 partition (G5b) ────────────────────────────
+ * The unlimited loss reduced `usOrdinaryIncomeYTD`, hence `grossIncomeAllSources`,
+ * while the same loss inside `foreignPassiveIncomeYTD` was floored away by the
+ * `Math.max(0, …)` that forms the basket gross. Total gross income therefore fell
+ * BELOW the general basket's own gross, the baskets stopped partitioning income, and
+ * `totalTaxable` collapsed to zero with a positive numerator still sitting on it —
+ * tripping `_assertFtcInvariants`. Suspending the loss removes it from both places at
+ * once, which is what restores `Σ basket gross ≤ grossIncomeAllSources`.
+ *
+ * ─── the §469(i) allowance is deliberately not modelled ──────────────────────
+ * §469(i) lets an actively-participating individual deduct up to \$25,000 of rental
+ * loss against non-passive income, but it phases out over \$100,000–\$150,000 MAGI and
+ * is gone entirely above \$150,000. It also requires active participation, which a
+ * foreign rental managed by an agent generally fails. Modelling it would add a
+ * phase-out cliff that almost never binds for this model's taxpayers; the omission is
+ * conservative (it suspends slightly more loss than a real return might).
+ *
+ * ─── release on disposal is likewise not modelled ────────────────────────────
+ * §469(g) frees the whole suspended pool on a fully taxable disposition of the
+ * activity. The engine has no activity-level disposal signal — a property sale is a
+ * CGT event with no link back to the rental. So the pool is released only against
+ * later passive income. That defers relief rather than destroying it, and it is the
+ * one place this treatment is materially harsher than the statute; recorded here
+ * rather than hidden.
+ *
+ * Pure — the caller persists `closing` at the settle. This runs inside a computeTax
+ * that is itself re-run on counterfactual states (the FITO handoff), so it must never
+ * draw down the pool it was handed.
+ *
+ * @param {object} state
+ * @returns {{ opening: number, netPassive: number, suspended: number, released: number,
+ *             closing: number, adjustment: number, foreignAdjustment: number }}
+ *   `adjustment` is added to `usOrdinaryIncomeYTD`; `foreignAdjustment` is its
+ *   foreign-source share, added to the passive basket's gross.
+ */
+export function _computePassiveLossLimitation(state) {
+  const opening    = Math.max(0, state?.usPassiveLossCarryforward ?? 0);
+  const netPassive = state?.usPassiveActivityIncomeYTD ?? 0;
+  const foreignNet = state?.usForeignPassiveActivityIncomeYTD ?? 0;
+
+  // A loss year suspends the whole net loss; a profit year releases as much of the
+  // pool as it can absorb. The two are mutually exclusive by construction.
+  const suspended = Math.max(0, -netPassive);
+  const released  = Math.min(opening, Math.max(0, netPassive));
+  const closing   = opening + suspended - released;
+
+  // `adjustment` ADDS BACK the suspended loss (raising income) and SUBTRACTS the
+  // released loss (lowering it), so income moves in the opposite direction to the pool.
+  const adjustment = suspended - released;
+
+  // The share of the adjustment that belongs to the foreign passive basket. A loss
+  // year apportions by the foreign share of the loss; a release apportions by the
+  // foreign share of the income absorbing it. Both fall back to 1 when the split is
+  // unavailable — every rental in the cross-border scenarios this serves is foreign,
+  // so over-attributing to the foreign basket is the safe default: it keeps the
+  // basket gross from exceeding total gross income, which is the invariant at stake.
+  const share = (part, whole) => (Math.abs(whole) > 1e-9 ? Math.min(1, Math.max(0, part / whole)) : 1);
+  const foreignAdjustment = netPassive < 0
+    ? suspended * share(Math.max(0, -foreignNet), suspended)
+    : -released * share(Math.max(0, foreignNet), Math.max(0, netPassive));
+
+  return { opening, netPassive, suspended, released, closing, adjustment, foreignAdjustment };
 }
 
 /**

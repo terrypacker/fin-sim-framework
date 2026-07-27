@@ -323,6 +323,14 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonNrWithholdingInterestYTD.*',          ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNrWithholdingUnfrankedDividendYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
+    // design 86 G1 — Div 36 carried-forward tax losses, per person. Not a YTD field:
+    // it deliberately survives the settle reset.
+    this.registerPattern('auPersonTaxLossPool.*',               ParameterValueType.currency('AUD'));
+    // design 86 G5 — §469 passive activity accounting, USD. The two YTD figures are
+    // signed net rental results; the carryforward survives the settle reset.
+    this.register('usPassiveActivityIncomeYTD',        ParameterValueType.currency('USD'));
+    this.register('usForeignPassiveActivityIncomeYTD', ParameterValueType.currency('USD'));
+    this.register('usPassiveLossCarryforward',         ParameterValueType.currency('USD'));
     // FEIE cap accumulator (design 52 §4.2): AU-source *earned* income only
     // (wages/SE), per person — distinct from auPersonOrdinaryIncomeYTD which mixes
     // wages with AU interest/rent and so cannot back the per-person FEIE cap.

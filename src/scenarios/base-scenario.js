@@ -14,6 +14,7 @@ import {EventBus} from "../simulation-framework/event-bus.js";
 import {DerivedMetricsRegistry} from "../simulation-framework/derived-metrics-registry.js";
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
+import {deriveOffsetCapacity} from "../finance/derived-metrics/offset-capacity.js";
 import {roundRecordField} from "./params/record-field-rounding.js";
 
 /**
@@ -314,6 +315,9 @@ export class BaseScenario extends SimGraphNode {
     const derivedMetrics = new DerivedMetricsRegistry();
     derivedMetrics.register(deriveNetWorth);
     derivedMetrics.register(deriveNetLiquidity);
+    // Design 86 G4 — offset capital that is neither invested nor offsetting. Both
+    // figures are 0 when the plan holds no offset account, so this is inert otherwise.
+    derivedMetrics.register(deriveOffsetCapacity);
 
     // Per-run execution bus. The Simulation publishes execution telemetry
     // (EXECUTION_*, BREAKPOINT_HIT) onto its own bus, NOT the persistent
