@@ -166,10 +166,25 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const collectibles    = Math.max(0, usCollectibleGainsYTD);
     const collectiblesTax = collectibles * COLLECTIBLES_RATE;
 
-    // Step 5: Chapter-1 gross income-tax liability including early-withdrawal
-    // penalties (pre-NIIT). This is the base the §904 FTC limitation applies to.
-    const penaltyTax         = Math.max(0, usPenaltyYTD);
-    const grossTaxBeforeNiit = ordinaryTax + capitalGainsTax + collectiblesTax + penaltyTax;
+    // Step 5: the Chapter-1 income tax, split in two because only one half is the
+    // §904 limitation base (design 83 G2).
+    //
+    //   regularTax — the "regular tax liability" of IRC §26(b)(1): Form 1040 line 16
+    //     plus Schedule 2 line 1z. Form 1116 line 20 asks for exactly this ("your
+    //     total U.S. income tax against which the credit is allowed … Don't include
+    //     any taxes listed in section 26(b)(2)").
+    //   penaltyTax — the §72(t) additional tax on early withdrawals. A §26(b)(2) tax,
+    //     reported in Schedule 2 **Part II** and not on line 1z, so the FTC may not be
+    //     credited against it. It is still tax owed: it stays inside grossTax and is
+    //     added to netLiability *after* the credit, on the same side of the line as
+    //     NIIT / SECA / Additional Medicare below.
+    //
+    // Before design 83 the penalty sat in the limitation base, which inflated the
+    // §904 limit in exactly the years a penalty was incurred — CY2030 of the
+    // reference run had a base 12× larger than the true one.
+    const penaltyTax  = Math.max(0, usPenaltyYTD);
+    const regularTax  = ordinaryTax + capitalGainsTax + collectiblesTax;
+    const chapter1Tax = regularTax + penaltyTax;
 
     // Step 5b: Net Investment Income Tax (IRC §1411) — a flat 3.8% surtax on the
     // lesser of net investment income and (MAGI − statutory threshold). NII is
@@ -194,34 +209,73 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const niitBase            = Math.max(0, Math.min(netInvestmentIncome, magi - niitThreshold));
     const niitTax             = niitBase * this._niitRate;
 
+    // Step 5c: the two Form 1116 line-3 inputs that turn a *gross* basket income
+    // into a foreign *taxable* income (design 83 G1).
+    //
+    //   3e — gross income from all sources, before any deduction. The instructions
+    //     are explicit that lines 3d and 3e both "include any foreign earned income
+    //     you have excluded on Form 2555", so this is deliberately NOT net of FEIE
+    //     (line 1a is; the apportionment fraction is not).
+    //   3c — the deductions that don't definitely relate to any class of income:
+    //     the standard deduction (line 3a) plus, per line 3b, "any other deductions
+    //     that don't definitely relate to any specific type of income (for example,
+    //     deductions shown on Schedule 1 (Form 1040), Part II, Adjustments to
+    //     Income)" — which is where both the ½-SE-tax deduction and this model's
+    //     usNegativeIncomeYTD (deductible IRA/401k contributions) live.
+    //
+    // Including all three is what makes the limitation footable: the identity
+    //   totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE
+    // holds exactly, so Σ basket numerators can never exceed the denominator and
+    // the §904 fractions cannot sum past 1. Apportioning the standard deduction
+    // alone would leave the SE and contribution deductions unallocated and the
+    // fractions could still overshoot.
+    const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles;
+    const grossIncomeAllSources = Math.max(0, totalGrossIncome);
+    const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD);
+
     // Step 6: Foreign Tax Credit — per §904 basket (design 52 §4.3). Replaces the
     // pre-52 `min(ftcYTD, grossTax)` income-credit hack: credit the *actual* AU
     // tax paid on AU-source income (funded into ftcCurrent*/ftcPool* at the AU
-    // settle), capped per basket by grossTax × foreignBasketIncome / totalTaxable,
+    // settle), capped per basket by grossTax × foreignTaxableIncome / totalTaxable,
     // drawing current-year foreign tax first then carryover vintages oldest→newest.
-    // The limitation base is the Chapter-1 tax only (grossTaxBeforeNiit); NIIT is
-    // deliberately excluded (it is not creditable against foreign tax).
+    // The limitation base is the §26(b)(1) regular tax only; NIIT, SECA, the
+    // Additional Medicare surtax and the §72(t) penalty are all outside it.
     const ftc          = this._computeFtc(state, {
-      grossTax: grossTaxBeforeNiit,
+      grossTax: regularTax,
       totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles,
-      generalNumerator: Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) - feieExcluded),
-      passiveNumerator: Math.max(0, state.foreignPassiveIncomeYTD ?? 0),
-      // Design 72 §1: US-source income that AU also taxed, re-sourced to foreign
-      // by treaty. These accumulators are populated (in USD) by the US module's
-      // classifiers only on the AU-resident branch, so this is 0 for a pure-US run
-      // and the basket stays inert.
-      resourcedNumerator: Math.max(0, (state.usSourceOrdinaryUsdYTD ?? 0) + (state.usSourceCapGainsUsdYTD ?? 0)),
+      grossIncomeAllSources,
+      unrelatedDeductions,
+      // Per basket: gross foreign income in the category (Form 1116 line 3d) and
+      // the part of it excluded on Form 2555 (removed at line 1a, but NOT from 3d).
+      //
+      // Design 83 G3: each basket is genuinely-foreign income PLUS the US-source
+      // income re-sourced to foreign by Art. 27(1)(c), booked to general or passive
+      // by character in the US classifiers. There is no third "re-sourced by treaty"
+      // basket — see _computeFtc.
+      //
+      // The re-sourced half is kept in its own accumulators rather than added
+      // straight into foreign*IncomeYTD, for one load-bearing reason: the FITO
+      // handoff in UsTaxSettleHandler re-runs this whole computation on a
+      // counterfactual with the US-source income removed, and it has to be able to
+      // remove it from the BASKETS too. Merged in at source, the counterfactual
+      // return would keep claiming limitation room for income it no longer contains
+      // — which is how design 83 G8 went wrong the first time, and the §904
+      // invariants catch it immediately.
+      generalGross:    Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) + (state.usSourceGeneralUsdYTD ?? 0)),
+      generalExcluded: Math.max(0, feieExcluded),
+      passiveGross:    Math.max(0, (state.foreignPassiveIncomeYTD ?? 0) + (state.usSourcePassiveUsdYTD ?? 0)),
     });
     const credits      = ftc.credit;
     // Total gross tax includes NIIT; net liability credits the FTC against the
-    // Chapter-1 tax only, then adds the uncreditable NIIT back on top.
-    // SECA and the Additional Medicare surtax are Chapter-2/2A taxes: not
-    // creditable by the FTC and outside the §904 limitation base — added on top
-    // of net liability exactly like NIIT (design 69 §2.1.4).
-    const grossTax     = grossTaxBeforeNiit + niitTax + selfEmploymentTax + additionalMedicareTax;
-    const netLiability = Math.max(0, grossTaxBeforeNiit - credits) + niitTax + selfEmploymentTax + additionalMedicareTax;
+    // §26(b)(1) regular tax only, then adds the uncreditable taxes back on top.
+    // SECA, the Additional Medicare surtax and the §72(t) penalty are Chapter-2/2A
+    // or §26(b)(2) taxes: not creditable by the FTC and outside the §904 limitation
+    // base — added on top of net liability exactly like NIIT (design 69 §2.1.4,
+    // design 83 G2).
+    const grossTax     = chapter1Tax + niitTax + selfEmploymentTax + additionalMedicareTax;
+    const netLiability = Math.max(0, regularTax - credits)
+      + penaltyTax + niitTax + selfEmploymentTax + additionalMedicareTax;
 
-    const totalGrossIncome = usOrdinaryIncomeYTD + cg + collectibles;
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
     const marginalRate     = _marginalBracketRate(taxableOrdinary, brackets);
 
@@ -257,6 +311,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       selfEmploymentTaxDeduction: seDeduction,
       seNetEarnings:              seNet,
       additionalMedicareTax,
+      // The §26(b)(1) regular tax — the §904 limitation base, and the only tax the
+      // FTC may be credited against. `grossTax` is this plus the §26(b)(2)/Chapter-2A
+      // taxes (§72(t) penalty, NIIT, SECA, Additional Medicare); design 83 G2.
+      regularTax,
       grossTax,
       credits,
       ftc,
@@ -411,34 +469,63 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   }
 
   /**
-   * Per-§904-basket Foreign Tax Credit with 10-year carryforward pools — §4.3.
+   * Per-§904-basket Foreign Tax Credit with 10-year carryforward pools — §4.3,
+   * with the Form 1116 deduction apportionment of design 83 G1.
    *
-   * For each basket (General, Passive):
-   *   frac   = clamp01(basketForeignIncome / totalTaxable)   // post-FEIE
-   *   limit  = grossTax × frac                                // §904 limitation
+   * For each basket (General, Passive — design 83 G3 deleted the third), following
+   * the form's own lines:
+   *   3d     = gross foreign source income in the category (FEIE still in it)
+   *   3f     = 3d ÷ 3e                                       // 3e = gross, all sources
+   *   3g     = 3c × 3f                                       // ratable share of deductions
+   *   line 7 = (3d − FEIE) − 3g                              // foreign TAXABLE income
+   *   frac   = clamp01(line 7 ÷ totalTaxable)
+   *   limit  = grossTax × frac                               // §904 limitation
    *   avail  = currentYearForeignTax + Σ pool vintages
    *   credit = min(avail, limit)
    * then draw the credit down current-year-first, carryover oldest→newest, bank
    * the unused current-year remainder as a new vintage, and expire vintages >10y.
    * Pure: returns the credit breakdown AND the resulting pool state; the settle
    * reducer persists nextPool{General,Passive}.
+   *
+   * Before G1 the numerator was the *gross* basket income while the denominator was
+   * net of the standard deduction, so the fractions could sum well past 1 — CY2034 of
+   * the reference run produced a single fraction of 5.157. See _assertFtcInvariants.
    */
-  _computeFtc(state, { grossTax, totalTaxable, generalNumerator, passiveNumerator, resourcedNumerator = 0 }) {
+  _computeFtc(state, {
+    grossTax, totalTaxable,
+    grossIncomeAllSources = 0, unrelatedDeductions = 0,
+    generalGross = 0, generalExcluded = 0,
+    passiveGross = 0,
+  }) {
     const currentCY = state.currentPeriods?.US?.startMs != null
       ? new Date(state.currentPeriods.US.startMs).getUTCFullYear()
       : 0;
 
-    // Overall §904 headroom. Each basket's limitation is grossTax × its own income
-    // fraction, but because `totalTaxable` is net of deductions while the numerators
-    // are not, the per-basket fractions can sum past 1 — which would credit more than
-    // the US tax actually due and break the return's footing (gross + credits = net).
-    // So baskets draw against a shared remaining-headroom budget, in declaration
-    // order. The re-sourced basket is processed last: the treaty grants an
-    // *additional* credit on top of the ordinary baskets, so it is the one that
-    // should be squeezed when headroom runs out, and its unused foreign tax stays
-    // banked in its own pool rather than vanishing.
+    // Overall §904 headroom. With G1's apportionment the fractions provably sum to
+    // ≤ 1, so this can no longer bind on that account — but it stays as a hard
+    // backstop against crediting more than the US tax actually due, which would
+    // break the return's footing (gross + credits = net). Baskets draw in
+    // declaration order; whichever runs second keeps its unused foreign tax banked
+    // in its own pool rather than losing it.
     let headroom = Math.max(0, grossTax);
-    const basket = (numerator, currentTax, pool) => {
+
+    // Form 1116 line 3g. The fraction 3f uses GROSS foreign income — including
+    // anything excluded on Form 2555, which lines 3d and 3e both keep even though
+    // line 1a drops it.
+    const apportionedShare = (gross) => grossIncomeAllSources > 0
+      ? unrelatedDeductions * Math.min(1, gross / grossIncomeAllSources)
+      : 0;
+
+    const basket = (gross, excluded, currentTax, pool) => {
+      const apportionedDeduction = apportionedShare(gross);
+      // Form 1116 line 7 — foreign TAXABLE income: gross in the category, less the
+      // Form 2555 exclusion, less the ratable share of unrelated deductions.
+      //
+      // The zero clamp is an approximation: a real return would carry the shortfall
+      // as an overall foreign loss subject to §904(f) recapture in later years,
+      // which this model does not track. It bites only in thin-income years, where
+      // the absolute dollars are smallest — design 83 §10 records it as accepted.
+      const numerator = Math.max(0, gross - excluded - apportionedDeduction);
       const frac  = totalTaxable > 0 ? Math.min(1, Math.max(0, numerator / totalTaxable)) : 0;
       const limit = Math.min(Math.max(0, grossTax) * frac, headroom);
       const poolTotal = Object.values(pool).reduce((s, v) => s + v, 0);
@@ -447,27 +534,43 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       headroom = Math.max(0, headroom - credit);
       const { nextPool, currentYearUsed, carryoverUsed } = _drawDownBasket(currentTax, pool, credit, currentCY);
       const carryforwardRemaining = Object.values(nextPool).reduce((s, v) => s + v, 0);
-      return { numerator, frac, limit, currentTax, poolTotal, avail, credit,
+      return { gross, excluded, apportionedDeduction, numerator, frac, limit,
+               currentTax, poolTotal, avail, credit,
                currentYearUsed, carryoverUsed, carryforwardRemaining, nextPool };
     };
 
-    const general = basket(generalNumerator, state.ftcCurrentGeneral ?? 0, state.ftcPoolGeneral ?? {});
-    const passive = basket(passiveNumerator, state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
-    // Design 72 §1 — "certain income re-sourced by treaty" (Form 1116 category F).
-    // Its own §904 basket: the numerator is the US-source income the treaty partner
-    // also taxed, re-sourced to foreign for limitation purposes only. Without this
-    // basket, AU tax on US-source income has no limitation room to sit against and
-    // is stranded forever, making the two countries' taxes additive.
-    const resourced = basket(resourcedNumerator, state.ftcCurrentResourced ?? 0, state.ftcPoolResourced ?? {});
-    const hasActivity = general.avail > 0 || passive.avail > 0 || resourced.avail > 0
-      || generalNumerator > 0 || passiveNumerator > 0 || resourcedNumerator > 0;
+    // Design 83 G3 — two baskets, not three. The "certain income re-sourced by
+    // treaty" category (Form 1116 category F) used to be a third basket here, on the
+    // reading that Art. 27(1)(c) re-sourcing needs its own limitation. It does not,
+    // for THIS taxpayer: Reg. §1.904-4(k)(1)(iv)(A) disapplies §904(d)(6) and
+    // ¶(k)(1) entirely for relief *"solely applicable to U.S. citizens who are
+    // residents of the other Contracting State"*, which is Art. 22(4)'s opening
+    // clause. Re-sourced income lands in general or passive by its own character;
+    // the US classifiers book it there directly.
+    //
+    // G4 — the vintage pools followed. `ftcPoolResourced` is folded into the general
+    // pool below rather than migrated by category, because the pools record only
+    // amount and vintage. A simulator has no filed return to preserve, so a
+    // re-derived run is the accurate answer and the fold exists only so a SAVED
+    // state carrying a resourced balance does not silently lose it.
+    // G4 option A+C: re-derive, and heal rather than migrate. A run from simStart
+    // never populates these, so on a fresh run both are empty and the fold is a
+    // no-op; a SAVED state written before G3 carries real balances, and folding them
+    // into general (the residual §904 category) is the bounded, one-line answer.
+    // Apportioning each vintage by its year's general/passive income ratio — option
+    // B — buys accuracy no simulator needs, since re-running is free and exact.
+    const general = basket(generalGross, generalExcluded,
+      (state.ftcCurrentGeneral ?? 0) + (state.ftcCurrentResourced ?? 0),
+      _mergeVintagePools(state.ftcPoolGeneral ?? {}, state.ftcPoolResourced ?? {}));
+    const passive = basket(passiveGross, 0,               state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
+    const hasActivity = general.avail > 0 || passive.avail > 0
+      || general.numerator > 0 || passive.numerator > 0;
 
-    return {
-      credit: general.credit + passive.credit + resourced.credit,
-      general, passive, resourced,
+    const result = {
+      credit: general.credit + passive.credit,
+      general, passive,
       nextPoolGeneral:   general.nextPool,
       nextPoolPassive:   passive.nextPool,
-      nextPoolResourced: resourced.nextPool,
       hasActivity,
       // The two denominators of the §904 limitation. Without them a reader can see
       // `frac` and `limit` but cannot check either, since neither the ratio's
@@ -475,11 +578,103 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // (design 71 §13).
       totalTaxable,
       limitationBase: grossTax,
+      grossIncomeAllSources,
+      unrelatedDeductions,
     };
+    _assertFtcInvariants(result);
+    return result;
   }
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
+
+/** Tolerance for the §904 invariants, in USD. Float noise only, not a fudge. */
+const FTC_INVARIANT_EPSILON = 0.01;
+
+/**
+ * Sum two { [vintageCY]: USD } pools key-wise — design 83 G4.
+ *
+ * Only ever used to fold the deleted re-sourced pool into general. Returns a fresh
+ * object; neither input is mutated, because both are live state and the journal
+ * stores diffs by reference (see [[journal-diff-live-alias]]).
+ */
+function _mergeVintagePools(a, b) {
+  if (!b || Object.keys(b).length === 0) return a;
+  const out = { ...a };
+  for (const [vintage, amount] of Object.entries(b)) {
+    out[vintage] = (out[vintage] ?? 0) + amount;
+  }
+  return out;
+}
+
+/**
+ * True in dev/test, false in a production build — mirrors the AU_ATTRIBUTION_STRICT
+ * gate in tax-settle-service.js. A broken §904 limitation is a programming error
+ * being introduced right now and is worth failing on at the point of introduction;
+ * a user's run should survive it.
+ */
+function _ftcStrict() {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.FTC_LIMITATION_STRICT === 'off') return false;
+      if (process.env.FTC_LIMITATION_STRICT === 'on')  return true;
+      if (process.env.NODE_ENV === 'production') return false;
+    }
+  } catch { /* no process (browser) */ }
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) return false;
+  } catch { /* import.meta.env absent */ }
+  return true;
+}
+
+/**
+ * The §904 invariants — design 83 §8. None of these were asserted before, and
+ * `npm run crossfoot` cannot see them: it only checks worksheet lines carrying a
+ * `drillReport` link, and no §904 line has one. A limitation fraction of 5.157 sat
+ * in a shipped export for weeks because nothing here was checked.
+ *
+ * 1. each basket's foreign taxable income ≤ the total taxable income it divides by;
+ * 2. the fractions sum to ≤ 1 (they partition one taxpayer's income);
+ * 3. total credit ≤ the limitation base.
+ *
+ * (1) and (2) hold by construction once the unrelated deductions are apportioned
+ * (G1): the identity totalTaxable = grossIncomeAllSources − unrelatedDeductions −
+ * FEIE makes Σ numerators ≤ totalTaxable exact. So a failure here means the basket
+ * accumulators no longer partition gross income — a classifier double-counting or
+ * routing income to a basket without adding it to the US totals — which is a real
+ * bug worth stopping on, not a rounding issue.
+ *
+ * Warn-then-throw rather than a bare throw so the message names the offender; in a
+ * production build it degrades to a console warning.
+ */
+function _assertFtcInvariants(ftc) {
+  const { totalTaxable, limitationBase, general, passive } = ftc;
+  const baskets = [['general', general], ['passive', passive]]
+    .filter(([, b]) => b != null);
+
+  const failures = [];
+  for (const [name, b] of baskets) {
+    if (b.numerator > totalTaxable + FTC_INVARIANT_EPSILON) {
+      failures.push(`${name} numerator ${b.numerator.toFixed(2)} exceeds §904 denominator ${totalTaxable.toFixed(2)}`);
+    }
+  }
+  const fracSum = baskets.reduce((s, [, b]) => s + b.frac, 0);
+  if (fracSum > 1 + FTC_INVARIANT_EPSILON) {
+    failures.push(`§904 fractions sum to ${fracSum.toFixed(5)}, which exceeds 1`);
+  }
+  if (ftc.credit > limitationBase + FTC_INVARIANT_EPSILON) {
+    failures.push(`credit ${ftc.credit.toFixed(2)} exceeds the limitation base ${limitationBase.toFixed(2)}`);
+  }
+  if (failures.length === 0) return;
+
+  const message = `§904 limitation invariant violated — ${failures.join('; ')}. `
+    + `Gross income all sources ${ftc.grossIncomeAllSources?.toFixed(2)}, `
+    + `unrelated deductions ${ftc.unrelatedDeductions?.toFixed(2)}, `
+    + `basket gross ${baskets.map(([n, b]) => `${n}=${b.gross?.toFixed(2)}`).join(' ')}. `
+    + 'The basket accumulators should partition gross income (design 83 §8).';
+  if (_ftcStrict()) throw new Error(message);
+  console.warn(message);
+}
 
 /**
  * Draw `creditUsed` from a basket's foreign-tax sources and return the updated

@@ -360,7 +360,33 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       const totalGrossIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
 
+      // Design 83 G10 — the effective AU rate on this year's capital gains, which is
+      // the input IRC §865(g)(2) needs on the US side. That paragraph treats a US
+      // citizen as a *nonresident* for personal-property sourcing (making the gain
+      // FOREIGN source under §865(a)(2)) only *"unless an income tax equal to at
+      // least 10 percent of the gain derived from such sale is actually paid to a
+      // foreign country"*. So the US return cannot classify these gains without
+      // knowing what Australia actually charged on them.
+      //
+      // Measured the same with/without way as the §770-75 FITO limit, for the same
+      // reason: the CGT discount and the bracket the gain lands in make any
+      // proportional split wrong. Null when there were no gains — the caller must
+      // not read that as "0%", which would fail the test.
+      const grossCapitalGains = Math.max(0, auCapitalGainsYTD);
+      let auCgtEffectiveRate = null;
+      if (grossCapitalGains > 0) {
+        const withoutGains = this._assessResidentPreFito({
+          ...state,
+          auCapitalGainsYTD:      0,
+          auDiscountableGainsYTD: 0,
+          ...('auRealCapitalGainsYTD' in state ? { auRealCapitalGainsYTD: 0 } : {}),
+        }).netLiabilityPreFito;
+        auCgtEffectiveRate =
+          Math.max(0, a.netLiabilityPreFito - withoutGains) / grossCapitalGains;
+      }
+
       return {
+        auCgtEffectiveRate,
         inputs: {
           ordinaryIncome:         auOrdinaryIncomeYTD,
           capitalGains:           auCapitalGainsYTD,

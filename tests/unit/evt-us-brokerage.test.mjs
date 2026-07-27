@@ -299,7 +299,12 @@ test('EVT-15: Stock sale IS AU capital gains taxable if person is AU resident', 
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(auGainsFor(sim.state), 5000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.usSourceCapGainsUsdYTD > 0);
+  // Design 83 G10 — this gain is on PERSONAL property, so §865(a) sources it by the
+  // seller's residence: for an AU-resident US citizen it is FOREIGN source, not
+  // US-source re-sourced. It lands in the §904 passive basket directly and stays
+  // OUT of the Art. 22(2) removal set (Australia is not crediting US tax on it).
+  assert.strictEqual(sim.state.usSourceCapGainsUsdYTD ?? 0, 0);
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0);
 });
 
 test('EVT-15: Stock sale is NOT AU taxable if person is not AU resident', () => {

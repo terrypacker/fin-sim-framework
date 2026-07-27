@@ -89,6 +89,10 @@ export class CashSleeveInterestApplyReducer extends Reducer {
         ...withUs,
         ...patch,
         usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+        usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + amount,
+        // Design 83 G10 part 2 — subset tag: Art. 11(2) caps the US tax Australia
+        // may credit under Art. 22(2) at 10% of the gross interest.
+        usSourceInterestUsdYTD: (state.usSourceInterestUsdYTD ?? 0) + amount,
       });
     }
     return this.newState(withUs);
