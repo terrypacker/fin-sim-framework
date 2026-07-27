@@ -204,33 +204,18 @@ describe('BOND_LADDER lever wiring (§G8 Phase C)', () => {
 
 // ─── Full-sim e2e: the strategy ladders the real brokerage bonds (§10.7) ─────────
 
-import { ServiceRegistry }        from '../../src/services/service-registry.js';
-import { BaseScenario }           from '../../src/scenarios/base-scenario.js';
-import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
-import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
-
-function runScenario(params, mutateCfg) {
-  ServiceRegistry.resetAll();
-  const services = ServiceRegistry.getInstance();
-  const cfg = IntlRetirementScenario.buildDefaultConfig(params, undefined, undefined);
-  if (mutateCfg) mutateCfg(cfg);
-  const scenario = new BaseScenario({
-    context: services.simulationContext, initialState: cfg.initialState ?? {},
-    simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
-  });
-  scenario.buildSim();
-  new ScenarioLoader().load(cfg, services);
-  return scenario.sim;
-}
+import { loadScenarioSim } from '../helpers/scenario-harness.js';
 
 test('LADDER-E2E: selecting BOND_LADDER materializes the brokerage bonds into a rolling ladder', () => {
-  // behavioralStrategies is a toolset-contributed param, so set it on cfg.parameters
-  // directly (buildDefaultConfig's override arg only threads core scenario params).
-  const sim = runScenario({ monthlyExpenses: 0, inflationAdjust: false }, (cfg) => {
-    cfg.parameters.behavioralStrategies = ['BOND_LADDER'];
-    cfg.parameters.bondLadderRungs = 6;
+  // behavioralStrategies / bondLadderRungs are toolset-contributed params;
+  // buildDefaultConfig forwards them straight from the override bag (no cfg poke).
+  const { sim } = loadScenarioSim({
+    params: {
+      monthlyExpenses: 0, inflationAdjust: false,
+      behavioralStrategies: ['BOND_LADDER'], bondLadderRungs: 6,
+    },
+    stepTo: new Date(Date.UTC(2028, 0, 2)),   // past a couple of period advances
   });
-  sim.stepTo(new Date(Date.UTC(2028, 0, 2)));   // past a couple of period advances
 
   const acct  = sim.state.usStockAccount;
   const bonds = acct.holdings.filter(h => h.allocation === 'BOND');

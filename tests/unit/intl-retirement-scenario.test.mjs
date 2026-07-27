@@ -1310,3 +1310,40 @@ test('AGE-BAND-1: AGE_BANDED bends real discretionary spending down vs FIXED bas
   assert.ok(bandSim.state.ageBandSpending.appliedFactor < 1.0,
     `appliedFactor ${bandSim.state.ageBandSpending?.appliedFactor} should be < 1.0`);
 });
+
+// ─── buildDefaultConfig forwards toolset-contributed param overrides ──────────
+//
+// The parameters map is hand-enumerated for core scenario params. Toolset params
+// (behavioralStrategies, bondLadderRungs, shocks, …) used to be silently dropped
+// from an override bag, making buildDefaultConfig({ behavioralStrategies:[…] }) a
+// no-op. It now forwards any override key a toolset's paramSchema owns.
+
+test('PARAM-FWD: a toolset-contributed override is forwarded onto parameters', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({
+    behavioralStrategies: ['BOND_LADDER'],
+    bondLadderRungs: 7,
+  });
+  assert.deepEqual(cfg.parameters.behavioralStrategies, ['BOND_LADDER']);
+  assert.equal(cfg.parameters.bondLadderRungs, 7);
+});
+
+test('PARAM-FWD: an unspecified toolset param is not emitted (reference scenario unchanged)', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({});
+  // Absent from the override bag ⇒ not forwarded, so the toolset schema default
+  // applies and the emitted parameters map is byte-identical to before the fix.
+  assert.ok(!('behavioralStrategies' in cfg.parameters));
+  assert.ok(!('bondLadderRungs' in cfg.parameters));
+  assert.ok(!('shocks' in cfg.parameters));
+});
+
+test('PARAM-FWD: a non-toolset (typo) override key is not leaked', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ notARealParam: 42 });
+  assert.ok(!('notARealParam' in cfg.parameters));
+});
+
+test('PARAM-FWD: a scenario input key is transformed, never forwarded raw', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ usInflationRate: 0.09 });
+  // usInflationRate feeds the emitted `inflationRate`; it must not appear raw.
+  assert.ok(!('usInflationRate' in cfg.parameters));
+  assert.equal(cfg.parameters.inflationRate, 0.09);
+});
