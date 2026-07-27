@@ -10,6 +10,10 @@
 
 import { ASSET_CLASS, assetClassForAllocation, exposureCountryForRateKey } from './asset-class.js';
 import { resolveDefaultAllocation } from '../holdings/default-allocations.js';
+// The SAME valuation FX helper computeNetWorth uses (design 82 §5.1a) — the cube's
+// total has to equal net worth (THE INVARIANT below), so the two cannot be allowed to
+// hold different conventions. It used to be a private copy guarded by a comment.
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 /**
  * allocation-cube.js — reduce one simulation state to a flat table of allocation facts.
@@ -79,28 +83,6 @@ export const CUBE_SOURCE = Object.freeze({
 
 const DEFAULT_BALANCE_TOLERANCE = 1; // currency units; below this, drift is rounding
 
-/**
- * Convert an amount from `currency` into `baseCurrency` using the state's effective
- * rates.
- *
- * Deliberately mirrors computeNetWorth's convention exactly — pair id
- * `${base}_${quote}` and DIVIDE — so the cube's total and `metrics.netWorth` cannot
- * disagree about what a dollar is. If that convention ever changes, the two must
- * change together; the honest fix at that point is to share one helper, which is
- * not done today only to keep this module off the golden-locked metric's path.
- */
-function _toBase(amount, currency, baseCurrency, state) {
-  if (!Number.isFinite(amount)) return 0;
-  if (!currency || currency === baseCurrency) return amount;
-  const rate = state?.effectiveExchangeRates?.[`${baseCurrency}_${currency}`] ?? 1;
-  return rate ? amount / rate : amount;
-}
-
-/** The currency code of a state entry. Accounts carry `currency` as a `{code}` object. */
-function _currencyOf(entry, baseCurrency) {
-  return entry?.currency?.code ?? entry?.currency ?? baseCurrency;
-}
-
 const _round = n => +(Number(n) || 0).toFixed(2);
 
 /**
@@ -158,7 +140,7 @@ export function buildAllocationCube(state, opts = {}) {
     stateKey, entry, source, assetClass, allocation = null, rateKey = null,
     marketValueLocal, costBasisLocal = null, holdingCount = 0, inferred = false,
   }) => {
-    const currency = _currencyOf(entry, baseCurrency);
+    const currency = currencyOf(entry, baseCurrency);
     // The wrapper's jurisdiction and the market it is exposed to are different
     // questions; emit both columns rather than picking one and calling it "country".
     // An unrecognised rateKey (undefined) falls back to the domicile; a deliberately
@@ -181,11 +163,11 @@ export function buildAllocationCube(state, opts = {}) {
       rateKey,
       holdingCount,
       marketValueLocal: _round(marketValueLocal),
-      marketValue:      _round(_toBase(marketValueLocal, currency, baseCurrency, state)),
+      marketValue:      _round(toBaseCurrency(marketValueLocal, currency, baseCurrency, state)),
       costBasisLocal:   costBasisLocal == null ? null : _round(costBasisLocal),
       costBasis:        costBasisLocal == null
         ? null
-        : _round(_toBase(costBasisLocal, currency, baseCurrency, state)),
+        : _round(toBaseCurrency(costBasisLocal, currency, baseCurrency, state)),
       inferred,
     });
   };
@@ -302,7 +284,7 @@ function _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTo
   for (const h of holdings) {
     const allocation = h?.allocation ?? null;
     const rateKey    = h?.rateKey ?? null;
-    const key        = `${allocation} ${rateKey}`;
+    const key        = `${allocation}\u0000${rateKey}`;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = { allocation, rateKey, marketValue: 0, costBasis: 0, count: 0 };

@@ -31,8 +31,21 @@
  * SimulationHistory takes a snapshot every N *events* (`snapshotInterval`, default 12),
  * NOT on a calendar. Reading the cube off snapshots is nearly free and gives an x-axis
  * whose sample dates drift with event volume and differ between scenarios, so two runs
- * cannot be laid side by side. This steps to each 31 December instead: comparable
- * across runs, aligned with the rebalance/tax cadence, and cheap enough at ~45 samples.
+ * cannot be laid side by side. This samples each calendar year-end instead: comparable
+ * across runs, aligned with the rebalance/tax cadence, ~45 samples.
+ *
+ * It gets them from the RUN, via `samplerCadence: 'year-boundary'` (design 82 §4/§5.1b),
+ * not from a private stepTo loop — the same seam the workbench plugin and Monte Carlo
+ * sample through, so the page and the app cannot disagree about *when* they looked. The
+ * instant is identical either way (the state after the last event dated in year Y), which
+ * is why the conversion left every figure unchanged.
+ *
+ * One property to hold while reading any chart here: the annual investment family hangs
+ * off the 1 JANUARY period advance, so a 31 December sample is taken BEFORE that year's
+ * growth is credited (design 82 §5.2). Every point sits at the same place in the annual
+ * cycle, so the charts are self-consistent — but a year label lags the growth it names,
+ * and a terminal sample at a mid-year horizon sits on the far side of that cascade. The
+ * Provenance section calls out any sample that is not a 31 December boundary.
  *
  * ─── what it will NOT do ─────────────────────────────────────────────────────
  *
@@ -40,7 +53,8 @@
  * rate. Two consequences worth holding: a flat AUD sleeve shrinks on this chart as USD
  * strengthens, and a 2070 dollar is not a 2026 dollar. The 100% view is immune to both
  * (shares are unitless), which is the main reason it leads the page. Real-terms
- * restatement is deliberately out of scope here — see design 60.
+ * restatement is deliberately out of scope here — see design 79 (renumbered from 60, which
+ * collided with the cash-sleeve-yield design).
  *
  * It also does not interpret. Every number is a group-by of the cube, computed with the
  * same src/finance/allocation-reporting modules the workbench plugin will use, so the
@@ -55,10 +69,11 @@ import { createRequire }                                      from 'node:module'
 import { loadBaseConfig }         from '../lib/scenario-source.mjs';
 import { openSim, quiet }         from '../lib/run.mjs';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
-import { buildAllocationCube }    from '../../src/finance/allocation-reporting/allocation-cube.js';
 import { buildAllocationSeries, mixAt } from '../../src/finance/allocation-reporting/allocation-grouping.js';
 import { ASSET_CLASS }            from '../../src/finance/allocation-reporting/asset-class.js';
-import { computeNetWorth }        from '../../src/finance/derived-metrics/net-worth.js';
+import { createAllocationSampler, samplesToRows, samplesToTargetRows, lastYearEndIndex } from '../../src/finance/allocation-reporting/allocation-sampler.js';
+import { targetedStateKeys, driftAgainstTarget } from '../../src/finance/allocation-reporting/target-cube.js';
+import { ASSET_CLASS_COLOR, PALETTE_CYCLE }       from '../../src/finance/allocation-reporting/allocation-palette.js';
 
 const USAGE = `
 allocation-report.mjs — asset allocation over time, as one HTML page.
@@ -84,8 +99,6 @@ const BASE         = 'USD';
 // ─── run + sample ────────────────────────────────────────────────────────────
 
 const { cfg, source } = loadBaseConfig({ file: scenarioFile });
-const sim   = openSim(cfg, { telemetry: 'off' });
-const reg   = ServiceRegistry.getInstance().schemaRegistry;
 const start = new Date(cfg.simStart);
 const end   = new Date(cfg.simEnd);
 
@@ -93,33 +106,31 @@ const rows      = [];   // the cube, every sample date concatenated
 const tieOut    = [];   // per-sample reconciliation against net worth
 const nameByKey = new Map();
 
+// The sampler is SHARED with the workbench panel (allocation-sampler.js), not written
+// here: design 82 §4 binds every consumer to one sample instant, and §5.1's module
+// binds them to one record shape, so the page and the app cannot disagree about a
+// share. This replaced a private loop that re-`stepTo`'d each 31 December — identical
+// instant, identical numbers, one fewer way to drift.
+const sim = openSim(cfg, {
+  telemetry: 'off',
+  sampler: createAllocationSampler({
+    baseCurrency: BASE,
+    displayNameFor: k => reg.displayNameFor(k),
+  }),
+  samplerCadence: 'year-boundary',
+});
+const reg = ServiceRegistry.getInstance().schemaRegistry;
+
 process.stderr.write(`sampling ${source} year-ends ${start.getUTCFullYear()}…${end.getUTCFullYear()}\n`);
 
-for (let year = start.getUTCFullYear(); year <= end.getUTCFullYear(); year++) {
-  const at = new Date(Date.UTC(year, 11, 31));
-  // stepTo past simEnd throws (the world is only half-alive out there); stop short.
-  if (at > end) break;
-  if (at < start) continue;
+quiet(() => sim.stepTo(end));
 
-  quiet(() => sim.stepTo(at));
-
-  const sample = buildAllocationCube(sim.state, {
-    date: at, baseCurrency: BASE,
-    displayNameFor: k => reg.displayNameFor(k),
-  });
-  rows.push(...sample);
-  for (const row of sample) nameByKey.set(row.stateKey, row.name);
-
-  const cubeTotal = sample.reduce((s, r) => s + r.marketValue, 0);
-  const netWorth  = computeNetWorth(sim.state, BASE);
-  tieOut.push({
-    year, at,
-    cubeTotal, netWorth,
-    delta:     +(cubeTotal - netWorth).toFixed(2),
-    inferred:  sample.filter(r => r.inferred).length,
-    reconciled: sample.filter(r => r.source === 'reconciliation')
-                      .reduce((s, r) => s + Math.abs(r.marketValue), 0),
-  });
+rows.push(...samplesToRows(sim.samples));
+const targetRows = samplesToTargetRows(sim.samples);
+for (const row of rows) nameByKey.set(row.stateKey, row.name);
+for (const sample of sim.samples) {
+  const { rows: _rows, ...tie } = sample;
+  tieOut.push(tie);
 }
 
 if (rows.length === 0) { console.error('no samples produced — check simStart/simEnd'); process.exit(2); }
@@ -159,6 +170,28 @@ const views = {
   byAccount:  { abs: view({ by: ['name'] }),                         pct: view({ by: ['name'], normalize: true }) },
 };
 
+// ─── target vs realized (design 82 §7) ───────────────────────────────────────
+//
+// Both sides are held to the SAME accounts — the ones the rebalancer manages. Measuring a
+// portfolio target against a book that also holds a house and a company stake would report
+// a "drift" that is really two different questions side by side.
+const targeted   = targetedStateKeys(targetRows);
+const inTargeted = r => targeted.has(r.stateKey);
+const targetViews = targetRows.length === 0 ? null : {
+  // Realized uses holdings only: that is the reducer's own basis, and a reconciliation
+  // residual would show drift it was never looking at.
+  actual: view({ filter: r => inTargeted(r) && r.source === 'holding', normalize: true }),
+  target: (() => {
+    const built = buildAllocationSeries(targetRows, { filter: inTargeted, normalize: true });
+    return {
+      dates:  built.dates.map(d => d.toISOString().slice(0, 10)),
+      keys:   built.keys,
+      series: built.series,
+      totals: built.totals,
+    };
+  })(),
+};
+
 const perAccount = {};
 for (const key of accountKeys) {
   perAccount[key] = {
@@ -178,6 +211,10 @@ const drift = Object.keys({ ...firstMix, ...lastMix })
   .sort((a, b) => Math.abs(b.move) - Math.abs(a.move));
 
 const worstTie   = tieOut.reduce((w, t) => (Math.abs(t.delta) > Math.abs(w.delta) ? t : w), tieOut[0]);
+// Samples that are NOT a 31 December year boundary — i.e. the terminal flush when the
+// run's horizon falls mid-year. Named on the page rather than silently drawn: that
+// point covers a partial year, so the step into it is not comparable with the others.
+const offBoundary = tieOut.filter(t => t.at.getUTCMonth() !== 11 || t.at.getUTCDate() !== 31);
 const inferredAny  = tieOut.some(t => t.inferred > 0);
 const reconciledAny = tieOut.some(t => t.reconciled > 0.5);
 
@@ -197,26 +234,18 @@ const money = n => (n == null ? '—' : (n < 0 ? '−' : '') + '$' + Math.abs(Ma
 const pct   = (r, dp = 1) => (r == null ? '—' : `${(r * 100).toFixed(dp)}%`);
 const when  = ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
 
-/** Fixed colour per asset class, so a band never changes colour between charts. */
-const CLASS_COLOR = {
-  [ASSET_CLASS.EQUITY]:         '#2a78d6',
-  [ASSET_CLASS.BOND]:           '#4f9d69',
-  [ASSET_CLASS.CASH]:           '#8d8b84',
-  [ASSET_CLASS.GOLD]:           '#d8a13a',
-  [ASSET_CLASS.REAL_ESTATE]:    '#a05fc0',
-  [ASSET_CLASS.PRIVATE_EQUITY]: '#dd7a3c',
-  [ASSET_CLASS.COLLECTIBLE]:    '#3fa8a0',
-  [ASSET_CLASS.LIABILITY]:      '#e34948',
-  [ASSET_CLASS.UNKNOWN]:        '#b6b4ab',
-};
-const CYCLE = ['#2a78d6', '#4f9d69', '#d8a13a', '#a05fc0', '#dd7a3c', '#3fa8a0', '#e34948', '#8d8b84', '#6b7fd7', '#b1873f'];
+// Fixed colour per asset class, so a band never changes colour between charts — and,
+// via the shared module, means the same class in the workbench panel (§6). The light
+// tuning is the one for this page's background.
+const CLASS_COLOR = ASSET_CLASS_COLOR;
+const CYCLE       = PALETTE_CYCLE;
 
 const require   = createRequire(import.meta.url);
 const echartsJs = readFileSync(require.resolve('echarts/dist/echarts.min.js'), 'utf8')
   .replace(/<\/script>/gi, '<\\/script>');   // never let the payload close its own tag
 
 const payload = {
-  views, perAccount,
+  views, perAccount, targetViews,
   accountOrder: accountKeys,
   classColor: CLASS_COLOR,
   cycle: CYCLE,
@@ -255,6 +284,13 @@ sections.push(`<section id="provenance"><h2>Provenance</h2>
   ${inferredAny && !reconciledAny
     ? `<div class="alert warn"><strong>Some accounts carry no holdings.</strong> Their class is
        inferred from the account role/type rather than read, and is charted as a single band.</div>` : ''}
+  ${offBoundary.length > 0
+    ? `<div class="alert warn"><strong>${offBoundary.length} sample${offBoundary.length > 1 ? 's are' : ' is'} not a
+       31 December boundary</strong> (${esc(offBoundary.map(t => t.at.toISOString().slice(0, 10)).join(', '))}).
+       That is the state at the run's horizon, kept because the end of the plan is the most-quoted
+       point on the page — but it covers a partial year and sits <em>after</em> the 1 January
+       period-advance cascade that credits the year's investment growth, so the step into it is
+       not a year-over-year move like every other step on these charts.</div>` : ''}
   <table class="plain"><tbody>
     <tr><th>source</th><td class="mono">${esc(source)}</td></tr>
     <tr><th>horizon</th><td class="mono">${esc(start.toISOString().slice(0, 10))} → ${esc(end.toISOString().slice(0, 10))} · ${tieOut.length} year-end samples</td></tr>
@@ -298,6 +334,63 @@ sections.push(`<section id="total"><h2>Total allocation</h2>
   routinely disagree and the toggle is the point.</p>
   ${chartBlock('chart-total', 'Gross assets by class',
     `<label class="chk"><input type="checkbox" data-net="chart-total"> include liabilities (net worth)</label>`)}
+</section>`);
+
+// The overlay that makes the page diagnostic instead of descriptive (design 82 §7).
+// Read at the last 31 DECEMBER, not the last sample. The rebalance fires on the 1 January
+// period advance, so a horizon sample dated 1 January reports 0.0% drift for every class —
+// perfectly on policy at the one instant it cannot be otherwise.
+const driftIdx = targetViews
+  ? lastYearEndIndex(targetViews.actual.dates.map(d => new Date(d + 'T00:00:00Z')))
+  : -1;
+const driftDate = driftIdx >= 0 ? targetViews.actual.dates[driftIdx] : null;
+const driftNow = targetViews
+  ? driftAgainstTarget(
+      Object.fromEntries(targetViews.actual.keys.map(k => [k, targetViews.actual.series[k][driftIdx]])),
+      Object.fromEntries(targetViews.target.keys.map(k => {
+        const j = targetViews.target.dates.indexOf(driftDate);
+        return [k, j >= 0 ? targetViews.target.series[k][j] : 0];
+      })),
+      targetRows)
+  : null;
+
+sections.push(`<section id="target"><h2>Target vs realized</h2>
+  ${targetViews ? `
+  <p class="lede">Solid is what the plan HOLDS; dashed is what it was AIMING at
+  (<code>account.targetComposition</code>, stamped every period by the rebalancer). The gap is
+  drift — and where it exceeds the rebalancer's own band, the book is out of policy at that
+  sample.</p>
+  <div class="alert ok"><strong>Both sides cover the same ${targeted.size} rebalanced
+  account${targeted.size === 1 ? '' : 's'}.</strong> A target exists only where the rebalancer
+  manages the money, so the house, the company stake and the collectibles are excluded from
+  <em>both</em> lines. Comparing a portfolio target against the whole book would report a gap
+  that is really two different questions.</div>
+  ${chartBlock('chart-target', 'Realized (solid) vs target (dashed)', '')}
+  <p class="notes">Samples are 31 December, and the rebalance fires on the 1 January period
+  advance — so each point is the drift accumulated over that year, read just BEFORE it is
+  corrected. That is the useful instant: it shows how far the band actually let the book move.
+  ${driftNow?.band != null ? `Band shown: ±${pct(driftNow.band)} (the tightest in play; sheltered
+  accounts run tighter than taxable ones).` : ''}</p>
+  <div class="scroll"><table class="plain">
+    <thead><tr><th>class</th><th class="num">realized</th><th class="num">target</th>
+      <th class="num">drift</th><th>status</th></tr></thead>
+    <tbody>${driftNow.rows.filter(r => r.realized > 0.0005 || r.target > 0.0005).map(r => `<tr>
+      <th>${esc(r.key)}</th>
+      <td class="num">${pct(r.realized)}</td>
+      <td class="num">${pct(r.target)}</td>
+      <td class="num">${(r.drift >= 0 ? '+' : '−')}${pct(Math.abs(r.drift))}</td>
+      <td>${r.breach ? '<strong>out of band</strong>' : 'within band'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <p class="notes">Figures at the last <strong>year-end</strong> (${esc(driftDate ?? '')}), not at the
+  run horizon: a horizon sample dated 1 January is taken immediately after the rebalance and
+  reports 0.0% drift for every class — perfectly on policy at the one instant it cannot be
+  otherwise.</p>
+  ` : `
+  <div class="alert warn"><strong>No account carries a target composition in this run.</strong>
+  Nothing stamped <code>account.targetComposition</code>, so there is nothing to compare against
+  — set an allocation strategy to make this section report drift rather than nothing.</div>
+  `}
 </section>`);
 
 sections.push(`<section id="country"><h2>By country</h2>
@@ -358,6 +451,7 @@ const nav = [
   { id: 'provenance', label: 'Provenance' },
   { id: 'headlines',  label: 'Headlines' },
   { id: 'total',      label: 'Total' },
+  { id: 'target',     label: 'Target vs realized' },
   { id: 'country',    label: 'By country' },
   { id: 'account',    label: 'By account' },
   { id: 'ratekey',    label: 'By return series' },
@@ -541,6 +635,8 @@ const state  = {
   'chart-account': { mode: 'pct', src: '__all__' },
   'chart-ratekey': { mode: 'pct', src: 'rateKey' },
 };
+// Only registered when the run produced targets; otherwise the section renders a note.
+if (DATA.targetViews) state['chart-target'] = { mode: 'pct', src: '__target__' };
 
 function viewFor(id) {
   const s = state[id];
@@ -550,9 +646,78 @@ function viewFor(id) {
   return DATA.views[s.src][s.mode];
 }
 
+/**
+ * Realized vs target (design 82 §7): lines, not stacked areas.
+ *
+ * Two stacked areas cannot be compared by eye — it asks the reader to judge band
+ * thicknesses at different offsets — and the question here is each class's distance from
+ * its target, which is exactly what a solid line against a dashed one shows.
+ */
+function targetOptionFor(mode) {
+  const share = mode === 'pct';
+  const T = DATA.targetViews;
+  const dates = T.actual.dates;
+  const at = new Map(T.target.dates.map((d, i) => [d, i]));
+  const align = key => dates.map(d => {
+    const i = at.get(d);
+    return i === undefined ? null : T.target.series[key][i];
+  });
+  const fmt = v => (v == null ? '—' : share ? (v * 100).toFixed(1) + '%' : money(v));
+  const keys = [...new Set([...T.actual.keys, ...T.target.keys])];
+
+  return {
+    animation: false,
+    backgroundColor: 'transparent',
+    textStyle: { color: ink(), fontFamily: 'system-ui,-apple-system,sans-serif' },
+    grid: { left: 62, right: 18, top: 12, bottom: 68 },
+    legend: { type: 'scroll', bottom: 0, itemHeight: 9, itemWidth: 12,
+              textStyle: { color: ink(), fontSize: 11 } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: ink(), opacity: .35 } },
+      formatter(params) {
+        if (!params.length) return '';
+        const byKey = new Map();
+        for (const p of params) {
+          const key = p.seriesName.replace(/ (actual|target)$/, '');
+          const slot = byKey.get(key) || { marker: p.marker };
+          slot[p.seriesName.endsWith('target') ? 'target' : 'actual'] = p.value;
+          byKey.set(key, slot);
+        }
+        const lines = [...byKey.entries()]
+          .filter(([, v]) => (v.actual || 0) > 0 || (v.target || 0) > 0)
+          .map(([key, v]) => v.marker + ' ' + key + ' <strong>' + fmt(v.actual) +
+            '</strong> <span style="opacity:.65">vs ' + fmt(v.target) + '</span>');
+        return '<strong>' + params[0].axisValue.slice(0, 4) + '</strong><br>' + lines.join('<br>');
+      },
+    },
+    xAxis: { type: 'category', boundaryGap: false, data: dates.map(d => d.slice(0, 4)),
+             axisLine: { lineStyle: { color: line() } },
+             axisLabel: { color: ink(), fontSize: 11 } },
+    yAxis: { type: 'value', min: 0, max: share ? 1 : null,
+             splitLine: { lineStyle: { color: line() } },
+             axisLabel: { color: ink(), fontSize: 11,
+                          formatter: v => (share ? Math.round(v * 100) + '%' : compact(v)) } },
+    series: keys.flatMap((key, i) => {
+      const color = colorFor(key, i);
+      return [
+        { name: key + ' actual', type: 'line', showSymbol: false, smooth: false,
+          lineStyle: { width: 2, color }, itemStyle: { color },
+          emphasis: { focus: 'series' }, data: T.actual.series[key] || dates.map(() => 0) },
+        { name: key + ' target', type: 'line', showSymbol: false, smooth: false,
+          lineStyle: { width: 1, type: 'dashed', color }, itemStyle: { color },
+          emphasis: { focus: 'series' }, data: align(key) },
+      ];
+    }),
+  };
+}
+
 function draw(id) {
   if (!charts[id]) charts[id] = echarts.init(document.getElementById(id), null, { renderer: 'canvas' });
-  charts[id].setOption(optionFor(viewFor(id), state[id].mode), true);
+  const option = id === 'chart-target'
+    ? targetOptionFor(state[id].mode)
+    : optionFor(viewFor(id), state[id].mode);
+  charts[id].setOption(option, true);
 }
 
 for (const id of Object.keys(state)) draw(id);
