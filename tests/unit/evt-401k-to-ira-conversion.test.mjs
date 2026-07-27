@@ -251,18 +251,41 @@ test('Toolset: does NOT schedule conversion when owner has no IRA', () => {
   assert.strictEqual(sim.state.k401Account.balance, 100_000);
 });
 
-test('Toolset: conversion param overrides (year/month/day) replace retirement date', () => {
+test('Toolset: conversion param overrides (year/month/day) can delay past retirement date', () => {
   const { sim } = loadToolsetScenario(makeConfig({
     conversionEnabled: true,
     retirementDate:    '2030-06-15',
-    conversionYear:    2028,
+    conversionYear:    2031,
     conversionMonth:   3,
     conversionDay:     10,
   }));
 
-  // Conversion should fire on 2028-03-10 (not 2030-06-15)
-  sim.stepTo(new Date(2028, 3, 1));
+  // Not yet — override is 2031-03-10, later than the 2030-06-15 retirement date
+  sim.stepTo(new Date(2030, 6, 1));
+  assert.strictEqual(sim.state.k401Account.balance, 100_000);
 
+  // Conversion should fire on 2031-03-10
+  sim.stepTo(new Date(2031, 3, 1));
+  assert.strictEqual(sim.state.k401Account.balance, 0);
+  assert.strictEqual(sim.state.iraAccount.balance, 100_000);
+});
+
+test('Toolset: conversion date before retirement is clamped up to retirement (no in-service rollover)', () => {
+  const { sim } = loadToolsetScenario(makeConfig({
+    conversionEnabled: true,
+    retirementDate:    '2030-06-15',
+    conversionYear:    2027,
+    conversionMonth:   1,
+    conversionDay:     1,
+  }));
+
+  // Must NOT convert on the requested (illegal, still-working) 2027-01-01 date...
+  sim.stepTo(new Date(2027, 5, 1));
+  assert.strictEqual(sim.state.k401Account.balance, 100_000);
+  assert.strictEqual(sim.state.iraAccount.balance, 0);
+
+  // ...it fires no earlier than the 2030-06-15 retirement (separation) date.
+  sim.stepTo(new Date(2030, 6, 1));
   assert.strictEqual(sim.state.k401Account.balance, 0);
   assert.strictEqual(sim.state.iraAccount.balance, 100_000);
 });
@@ -333,6 +356,7 @@ test('EVT-53: k401 earnings stay at 0 after conversion with non-zero growth rate
     k401GrowthRate: 0.07,
     iraGrowthRate:  0.07,
     conversionEnabled: true,
+    retirementDate: '2027-01-01', // separation date — makes the 2027 conversion legal
     conversionYear:  2027, conversionMonth: 1, conversionDay: 1,
   }));
 

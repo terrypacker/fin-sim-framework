@@ -589,10 +589,19 @@ export const US_RETIREMENT = {
         const month = (p.k401ToIraConversionMonth ?? (retirement.getUTCMonth() + 1)) - 1;
         const day   = p.k401ToIraConversionDay   ?? retirement.getUTCDate();
 
+        // Legal gate: a 401(k) can only be rolled over to an IRA after separating
+        // from the sponsoring employer. This model has a single job per person,
+        // so separation is the owner's retirement date. Clamp any requested
+        // conversion date that lands before retirement up to the retirement date —
+        // an in-service rollover while still working is not permitted. Later dates
+        // (deliberately delaying the rollover) are still honored.
+        const requested = new Date(Date.UTC(year, month, day));
+        const convDate  = requested < retirement ? retirement : requested;
+
         schedules.push(new OneOffEvent({
           name:    `401(k)→IRA Conversion (${owner.name})`,
           type:    'K401_TO_IRA_CONVERSION',
-          date:    new Date(Date.UTC(year, month, day)),
+          date:    convDate,
           data:    { k401Key: k401.stateKey, iraKey: ownerIra.stateKey },
           enabled: true,
           color:   '#BF360C',
