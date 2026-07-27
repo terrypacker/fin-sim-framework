@@ -205,6 +205,23 @@ export const DRAWDOWN_ROLE_LABELS = {
 };
 
 /**
+ * Restrict the Lever-B weighted roles to those actually backed by an account
+ * (design 58 build-time filter). A weighted role with no account is a *phantom*
+ * search dimension: nothing consumes its synthesized rank, so the objective is
+ * flat along it. Sweeping it only wastes solver budget, yields a non-identifiable
+ * weight, and pollutes the displayed draw order with a role the plan can't hold.
+ *
+ * `presentRoles` is any iterable (or Set) of the roles present among the
+ * scenario's accounts — typically `accounts.map(a => a.role)`. The result is the
+ * intersection in canonical DRAWDOWN_WEIGHT_ROLES order. Cash roles are handled
+ * separately (they always rank 0) and are not returned here.
+ */
+export function presentDrawdownWeightRoles(presentRoles) {
+  const present = presentRoles instanceof Set ? presentRoles : new Set(presentRoles ?? []);
+  return DRAWDOWN_WEIGHT_ROLES.filter(role => present.has(role));
+}
+
+/**
  * Convert a named strategy into a Lever-B weight vector (role → weight in (0,1))
  * whose ascending sort reproduces the strategy's investment-role order. Each named
  * strategy is therefore one point in the weight space — this is what lets the
