@@ -351,7 +351,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['WAGES_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Design 69: US wages are Social-Security-covered wages that fill the SS
+        // wage base ahead of any self-employment income (SECA coordination).
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
+          usSsWagesYTD:        (state.usSsWagesYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const audAmount = toAUD(amount, 'USD', state);
           const removal = {
@@ -369,20 +375,32 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
-      // EVT-48: US self-employment income — US-source ordinary income; AU ordinary
-      //         income if resident, relieved by FITO.
+      // EVT-48 / design 69: US self-employment income — US-source ordinary income
+      //         AND US self-employment tax base (SECA); AU ordinary income if
+      //         resident, relieved by FITO. usSeEarningsYTD is the net SE earnings
+      //         accumulator consumed by computeTax()'s SECA computation. AU per-
+      //         person attribution mirrors WAGES_INCOME_TAX.
       ['SE_INCOME_US_TAX', (state, action) => {
-        const { amount, residency } = action;
+        const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
+          usSeEarningsYTD:     (state.usSeEarningsYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
-          next = {
-            ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+          const removal = {
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
             usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          if (personKey && state.auPersonOrdinaryIncomeYTD) {
+            const personMap = { ...state.auPersonOrdinaryIncomeYTD };
+            personMap[personKey] = (personMap[personKey] ?? 0) + aud;
+            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ...removal };
+          } else {
+            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + aud, ...removal };
+          }
         }
         return next;
       }],
@@ -392,7 +410,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['BONUS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Design 69: a bonus is W-2 wages — Social-Security-covered, fills the base.
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
+          usSsWagesYTD:        (state.usSsWagesYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
           next = {

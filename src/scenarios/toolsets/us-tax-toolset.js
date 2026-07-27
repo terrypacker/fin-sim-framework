@@ -71,6 +71,10 @@ export const US_TAX = {
       usNegativeIncomeYTD: 0,
       usCapitalGainsYTD:   0,
       usPenaltyYTD:        0,
+      // Self-employment tax (SECA) accumulators — design 69. Net SE earnings and
+      // SS-covered wages (the latter fills the SS wage base ahead of SE income).
+      usSeEarningsYTD:     0,
+      usSsWagesYTD:        0,
       usFilingSingle:      filingSingle,
       // Cross-border relief accumulators (design 52) — initialised so the runtime
       // state (and the journal state-diff) always carries them, matching

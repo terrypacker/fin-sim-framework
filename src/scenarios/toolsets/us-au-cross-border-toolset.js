@@ -178,6 +178,8 @@ export const US_AU_CROSS_BORDER = {
         name:                  person.name,
         birthDate:             person.birthDate,
         monthlyWage:           person.monthlyWage           ?? 0,
+        // Self-employment flag (design 69) — routes monthlyWage through the SE path.
+        selfEmployed:          person.selfEmployed          ?? false,
         // Native currency of the wage (design 50) — drives MonthlyWagesHandler's
         // US vs AU routing. MUST be projected here or every wage reads as USD.
         wageCurrency:          person.wageCurrency          ?? 'USD',

@@ -63,6 +63,7 @@ export class PersonEditor extends BaseComponent {
     el.querySelector('[data-id="lifeExpectancy"]').value        = this._node?.lifeExpectancy        ?? 90;
     el.querySelector('[data-id="socialSecurityMonthly"]').value = this._node?.socialSecurityMonthly ?? 2800;
     el.querySelector('[data-id="monthlyWage"]').value           = this._node?.monthlyWage           ?? 0;
+    el.querySelector('[data-id="selfEmployed"]').checked         = this._node?.selfEmployed          ?? false;
 
     // Per-field native currency (design 10 §Phase 5). Default from residency /
     // citizenship when the person carries no explicit code.
@@ -127,6 +128,7 @@ export class PersonEditor extends BaseComponent {
       lifeExpectancy:        Number(el.querySelector('[data-id="lifeExpectancy"]').value),
       socialSecurityMonthly: Number(el.querySelector('[data-id="socialSecurityMonthly"]').value),
       monthlyWage:           Number(el.querySelector('[data-id="monthlyWage"]').value),
+      selfEmployed:          el.querySelector('[data-id="selfEmployed"]').checked,
       retirementDate:        el.querySelector('[data-id="retirementDate"]').value,
       ssCurrency:            el.querySelector('[data-id="ssCurrency"]').value,
       wageCurrency:          el.querySelector('[data-id="wageCurrency"]').value,

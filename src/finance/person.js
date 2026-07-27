@@ -30,6 +30,9 @@ export class Person extends SimGraphNode {
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
    * @param {number}      [opts.monthlyWage=0]             - gross wages/month in wageCurrency (0 = not employed)
+   * @param {boolean}     [opts.selfEmployed=false]        - When true, monthlyWage is self-employment income
+   *                                                         (sole trader / 1099) routed through the SE path
+   *                                                         instead of wages; incurs US SECA tax (design 69)
    * @param {Date}        [opts.retirementDate]            - Date wages stop; defaults to 2040-01-01
    * @param {string}      [opts.wageCurrency]              - Native currency of monthlyWage; defaults from residency
    * @param {string}      [opts.ssCurrency]                - Native currency of socialSecurityMonthly; defaults from residency
@@ -43,6 +46,10 @@ export class Person extends SimGraphNode {
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
     this.monthlyWage           = opts.monthlyWage           ?? 0;
+    // Self-employment flag (design 69): when true, monthlyWage is treated as
+    // self-employment income (sole trader / 1099) — routed through the SE path
+    // by MonthlyWagesHandler and subject to US SECA tax.
+    this.selfEmployed          = opts.selfEmployed          ?? false;
     this.retirementDate        = opts.retirementDate        ?? new Date(Date.UTC(2040, 0, 1));
     // Per-field native currency (design 10 §Phase 5), individually overridable;
     // each defaults to the residency/citizenship currency.

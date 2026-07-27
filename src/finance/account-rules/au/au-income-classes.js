@@ -37,8 +37,10 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey } = action;
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
+    const { amount, residency, personKey, targetKey } = action;
+    // Credit the transaction account the handler resolved (design 69, parity with
+    // AU wages); fall back to the single AU cash pool for legacy actions.
+    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
     return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, residency, personKey }]);
   }
 }

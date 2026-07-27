@@ -67,6 +67,22 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _niitThresholdMfj    = 250_000;
   _niitThresholdSingle = 200_000;
 
+  /**
+   * Self-employment tax (SECA, IRC §1401) — design 69. Net SE earnings are the
+   * gross SE income × 0.9235 (the §1402(a)(12) employer-half deduction). The
+   * Social Security (OASDI) portion is capped at the annual _ficaWageBase (which
+   * IS inflation-indexed), coordinated with SS-covered wages that fill the base
+   * first; the Medicare (HI) portion is uncapped. The Additional Medicare surtax
+   * (IRC §1401(b)(2)) is 0.9% on earned income over a statutory threshold; like
+   * the NIIT thresholds it is fixed by statute and NOT inflation-indexed.
+   */
+  _seNetFactor              = 0.9235;
+  _seSsRate                 = 0.124;
+  _seMedicareRate           = 0.029;
+  _addlMedicareRate         = 0.009;
+  _addlMedicareThresholdMfj    = 250_000;
+  _addlMedicareThresholdSingle = 200_000;
+
   computeTax(state) {
     const {
       usOrdinaryIncomeYTD    = 0,
@@ -74,6 +90,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usCapitalGainsYTD      = 0,
       usCollectibleGainsYTD  = 0,
       usPenaltyYTD           = 0,
+      usSeEarningsYTD        = 0,
+      usSsWagesYTD           = 0,
       usFilingSingle         = false,
     } = state;
 
@@ -82,8 +100,27 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const stdDeduction = usFilingSingle ? this._stdDeduction_single : this._stdDeduction_mfj;
     const filingStatus = usFilingSingle ? 'Single' : 'Married Filing Jointly';
 
-    // Step 1: AGI and taxable ordinary income
-    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD;
+    // Step 0: Self-employment tax (SECA, IRC §1401) — design 69. Computed first
+    // because half the regular SE tax is an above-the-line deduction reducing AGI
+    // (IRC §164(f)). This is NOT circular: SECA depends only on SE earnings and
+    // SS-covered wages, never on AGI. See §2.1 of design/69.
+    const seNet          = Math.max(0, usSeEarningsYTD) * this._seNetFactor;
+    const ssWages        = Math.max(0, usSsWagesYTD);
+    const ssBaseLeft     = Math.max(0, this._ficaWageBase - ssWages);   // wage base filled by W-2 wages first
+    const seSsTax        = Math.min(seNet, ssBaseLeft) * this._seSsRate;
+    const seMedicareTax  = seNet * this._seMedicareRate;
+    const selfEmploymentTax = seSsTax + seMedicareTax;                  // regular SE tax (half deductible)
+    const seDeduction    = selfEmploymentTax * 0.5;
+
+    // Additional Medicare surtax (IRC §1401(b)(2)) — 0.9% on combined earned
+    // income (Medicare wages + net SE earnings) over the statutory threshold.
+    const addlMedThreshold  = usFilingSingle ? this._addlMedicareThresholdSingle : this._addlMedicareThresholdMfj;
+    const earnedForAddlMed  = ssWages + seNet;
+    const additionalMedicareTax = Math.max(0, earnedForAddlMed - addlMedThreshold) * this._addlMedicareRate;
+
+    // Step 1: AGI and taxable ordinary income (AGI reduced by the ½ SE-tax
+    // deduction — the surtax is not deductible).
+    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction;
     const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
     // Step 1b: FEIE (Form 2555) — exclude foreign *earned* income up to the cap
@@ -153,8 +190,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const credits      = ftc.credit;
     // Total gross tax includes NIIT; net liability credits the FTC against the
     // Chapter-1 tax only, then adds the uncreditable NIIT back on top.
-    const grossTax     = grossTaxBeforeNiit + niitTax;
-    const netLiability = Math.max(0, grossTaxBeforeNiit - credits) + niitTax;
+    // SECA and the Additional Medicare surtax are Chapter-2/2A taxes: not
+    // creditable by the FTC and outside the §904 limitation base — added on top
+    // of net liability exactly like NIIT (design 69 §2.1.4).
+    const grossTax     = grossTaxBeforeNiit + niitTax + selfEmploymentTax + additionalMedicareTax;
+    const netLiability = Math.max(0, grossTaxBeforeNiit - credits) + niitTax + selfEmploymentTax + additionalMedicareTax;
 
     const totalGrossIncome = usOrdinaryIncomeYTD + cg + collectibles;
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -183,6 +223,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       modifiedAgi: magi,
       niitThreshold,
       niitTax,
+      selfEmploymentTax,
+      selfEmploymentTaxDeduction: seDeduction,
+      seNetEarnings:              seNet,
+      additionalMedicareTax,
       grossTax,
       credits,
       ftc,
@@ -192,6 +236,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       lineItems: [
         { label: 'Gross Ordinary Income',               amount:  usOrdinaryIncomeYTD },
         { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
+        ...(seDeduction > 0
+          ? [{ label: '½ Self-Employment Tax Deduction', amount: -seDeduction }]
+          : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },
         { label: 'Taxable Ordinary Income',             amount:  taxableOrdinary },
@@ -204,6 +251,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         { label: 'Early Withdrawal Penalties',          amount:  penaltyTax },
         ...(niitTax > 0
           ? [{ label: 'Net Investment Income Tax (3.8%)', amount: niitTax }]
+          : []),
+        ...(selfEmploymentTax > 0
+          ? [{ label: 'Self-Employment Tax (SECA)',       amount: selfEmploymentTax }]
+          : []),
+        ...(additionalMedicareTax > 0
+          ? [{ label: 'Additional Medicare Tax (0.9%)',   amount: additionalMedicareTax }]
           : []),
         { label: 'Gross Tax',                           amount:  grossTax },
         ...(ftc.hasActivity
