@@ -11,6 +11,19 @@
 /**
  * cross-border-relief-scenario.test.mjs — design 52 behavioral lock-in.
  *
+ * NOTE (2026-08-07): the real tripwire for this scenario is now
+ * `tests/unit/golden-scenarios.test.mjs`, which pins the ENTIRE end state of the
+ * same run against `tests/fixtures/golden-cross-border-reference.json`. The two
+ * ±1% assertions below are kept because they carry intent the fixture cannot —
+ * "a large DOWNWARD tax swing means the ftcYTD over-relief has returned" — and
+ * because the comment block that follows is the provenance log for every regold.
+ *
+ * They are not, however, sufficient. Of the 17 regolds documented below, NINE
+ * moved both metrics by under 1% and would have left this test green; they were
+ * measured by hand, outside it. Measured directly: moving `moveYear` 2031→2032
+ * shifts 71 state fields but net worth by only +0.0155%, and adding \$1/month of
+ * spending shifts 22 fields at −0.0046%. Both pass here and both fail the fixture.
+ *
  * The relief flip (real §904 FTC + FITO replacing the ftcYTD over-relief hack)
  * moved lifetime tax and ending wealth for every cross-border scenario, but NO
  * pre-existing golden asserted a post-credit cross-border liability — so the

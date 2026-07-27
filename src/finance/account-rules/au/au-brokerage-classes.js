@@ -21,8 +21,14 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
 // ─── Reducers ─────────────────────────────────────────────────────────────────
 
 /**
- * EVT-26: AU franked dividend (resident) — stays in account, increases all bases.
- * Chains AU_DIVIDEND_FRANKED_RESIDENT_TAX.
+ * EVT-26: AU franked dividend (resident) — stays in account. Chains
+ * AU_DIVIDEND_FRANKED_RESIDENT_TAX.
+ *
+ * Credits `balance` ONLY. `auStockAccount` is a brokerage, and a brokerage has no
+ * contribution/earnings ledger — its basis lives per-lot on `Holding.costBasis`
+ * (design 53 §2). `contributionBasis`/`earningsBasis` are the retirement-wrapper
+ * deferral ledger, and ScenarioLoader's `_normalizeRetirementBasis` deliberately
+ * skips brokerage roles, so on this account they are `undefined`.
  */
 export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer {
   static type        = 'AuDividendFrankedResidentApplyReducer';
@@ -78,11 +84,18 @@ export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceRedu
     return this.newState(
       state,
       {
+        // Credits `balance` ONLY, matching the resident sibling above. This used to
+        // also add `action.amount` to `contributionBasis` and `earningsBasis` —
+        // following the (now corrected) "increases all bases" note on EVT-26. Those
+        // fields are `undefined` on a brokerage account, so `undefined + amount`
+        // wrote NaN into state on the first non-resident franked dividend and it
+        // stayed NaN for the rest of the run. Nothing recomputed them, and
+        // ScenarioSerializer's `account.earningsBasis ?? 0` does not catch NaN
+        // (nullish coalescing only guards null/undefined), so a save taken after
+        // such a run persisted the NaN as JSON `null`.
         [key]: {
           ...sa,
-          balance:           sa.balance           + action.amount,
-          contributionBasis: sa.contributionBasis + action.amount,
-          earningsBasis:     sa.earningsBasis     + action.amount,
+          balance: sa.balance + action.amount,
         },
       },
       [{ type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', amount: action.amount, stateKey: key }]

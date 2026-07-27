@@ -141,6 +141,23 @@ for (const [label, Reducer, type] of [
     assert.equal(next.auStockAccount.balance, 40700);
     assert.equal(state.auStockAccount.balance, 40000, 'I1');
   });
+
+  // The seed account above has no contribution/earnings ledger — correctly, since a
+  // brokerage carries basis per-lot on Holding.costBasis (design 53 §2), and
+  // ScenarioLoader skips brokerage roles when deriving that ledger. A reducer that
+  // nonetheless does `sa.contributionBasis + amount` therefore writes NaN, which is
+  // sticky (nothing recomputes it) and survives a save, because ScenarioSerializer's
+  // `?? 0` guard only catches null/undefined. EVT-27 did exactly this and the
+  // balance-only assertion above could not see it — the reference scenario carried
+  // NaN in auStockAccount for 24 years.
+  test(`${label}: writes no non-finite field onto a brokerage with no basis ledger`, () => {
+    const state = { auStockAccount: acct('auStockAccount', 40000, 'AUD') };
+    const next = new Reducer({}).reduce(state, { type, amount: 700 });
+    const bad = Object.entries(next.auStockAccount)
+      .filter(([, v]) => typeof v === 'number' && !Number.isFinite(v))
+      .map(([k, v]) => `${k}=${v}`);
+    assert.deepEqual(bad, [], `non-finite field(s) written: ${bad.join(', ')}`);
+  });
 }
 
 test('AuStockEarnings: scalar balance increment, input not mutated (I1)', () => {
