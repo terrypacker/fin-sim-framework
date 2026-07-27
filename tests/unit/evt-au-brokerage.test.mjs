@@ -208,8 +208,11 @@ test('EVT-29: Unfranked dividend (non-resident) is AU non-resident withholding t
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
-  assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 1000);
+  // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used.
+  // Design 73 Gap 2: unfranked dividends keep the 15% Art 10(2) rate, but in their
+  // own typed bucket rather than pooled with interest (which is capped at 10%).
+  assert.strictEqual(sim.state.auPersonNrWithholdingUnfrankedDividendYTD?.['primary'], 1000);
+  assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
   assert.ok(sim.state.foreignPassiveIncomeYTD > 0);
 });

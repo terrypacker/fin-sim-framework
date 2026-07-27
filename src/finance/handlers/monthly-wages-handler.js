@@ -19,14 +19,26 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * for each person whose monthlyWage > 0 and whose retirementDate has not yet
  * been reached. Stops emitting wages for a person on or after their retirementDate.
  *
- * The wage is routed by the person's `wageCurrency` (design 50), which is the
- * *source/denomination* of the wage and is independent of the earner's residency:
- *   - USD wage → WAGES_INCOME_APPLY → US cash pool (US-source ordinary income).
- *   - AUD wage → AU_WAGES_INCOME_APPLY → AU cash pool as native AUD (AU-source).
+ * The wage is routed by the person's `wageCurrency` (design 50), which is purely a
+ * *denomination* concern and is independent of both the earner's residency and the
+ * source of the income:
+ *   - USD wage → WAGES_INCOME_APPLY → US cash pool, as native USD.
+ *   - AUD wage → AU_WAGES_INCOME_APPLY → AU cash pool, as native AUD.
  * The matching *ApplyReducer credits the correct-currency account and chains the
- * per-country tax action; the tax module keys AU treatment off the earner's
- * residency (non-resident withholding for a US resident, ordinary income for an
- * AU resident). The deposit is the native wage figure — no FX coercion.
+ * per-country tax action. The deposit is the native wage figure — no FX coercion.
+ *
+ * Design 73 Gap 1: currency is NOT a proxy for source. Source of employment income
+ * is the place the services are performed, so `workCountry` is stamped on the apply
+ * action and carried to the tax reducer, which branches on source first and
+ * residency second. Left null it follows the earner's residency at accrual, so a
+ * scenario that never sets it behaves exactly as before.
+ *
+ * KNOWN LIMITATION: routing is still by currency, so a USD-paid wage for work
+ * performed in Australia emits no AU action and Australia assesses nothing —
+ * unchanged from before, and wrong. Fixing it means emitting the AU tax action off
+ * `workCountry` while the cash still follows `wageCurrency`, decoupling the tax
+ * action from the cash-flow action. `workCountry` is stamped on BOTH apply types so
+ * that change is a reducer-side one when it comes.
  *
  * @param {object} [opts]
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
@@ -78,8 +90,11 @@ export class MonthlyWagesHandler extends HandlerEntry {
         ? (isAud ? 'SE_INCOME_AU_APPLY' : 'SE_INCOME_US_APPLY')
         : (isAud ? 'AU_WAGES_INCOME_APPLY' : 'WAGES_INCOME_APPLY');
       const label = isSelfEmployed ? 'Self-Employment' : 'Wages';
+      // Where the work is actually performed (design 73 Gap 1). Unset ⇒ the earner
+      // works where they live, resolved at accrual so it tracks a mid-sim move.
+      const workCountry = person.workCountry ?? person.residency ?? null;
       actions.push(
-        { type: applyType, amount: wage, residency: person.residency ?? null, personKey: key, targetKey },
+        { type: applyType, amount: wage, residency: person.residency ?? null, personKey: key, targetKey, workCountry },
         new FieldValueAction(`wages_${key}`, `${person.name || key} ${label}`, wage),
       );
       touched.add(targetKey);

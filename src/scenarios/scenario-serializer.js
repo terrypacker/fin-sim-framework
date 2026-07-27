@@ -983,6 +983,8 @@ export class ScenarioSerializer {
       retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
                                ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
       wageCurrency:          person.wageCurrency ?? null,
+      // design 73 Gap 1 — where the employment is exercised; null = follow residency
+      workCountry:           person.workCountry  ?? null,
       ssCurrency:            person.ssCurrency   ?? null,
       incomeSupportRecipient: person.incomeSupportRecipient ?? false,
     };
@@ -1142,6 +1144,7 @@ export class ScenarioSerializer {
       selfEmployed:          d.selfEmployed ?? false,
       retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
       wageCurrency:          d.wageCurrency ?? undefined,
+      workCountry:           d.workCountry  ?? null,
       ssCurrency:            d.ssCurrency   ?? undefined,
       incomeSupportRecipient: d.incomeSupportRecipient ?? false,
     });

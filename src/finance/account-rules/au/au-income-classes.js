@@ -46,19 +46,25 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
 }
 
 /**
- * Design 50: AU-source Wages — credit AU cash pool (native AUD), chain
+ * Design 50: Wages **paid in AUD** — credit AU cash pool (native AUD), chain
  * AU_WAGES_INCOME_TAX.
  *
  * Fired by MonthlyWagesHandler for any person whose `wageCurrency` is AUD, so an
  * AU-denominated wage lands in the AUD savings account as AUD (not coerced into
- * USD in the US pool). The chained AU_WAGES_INCOME_TAX carries the earner's
- * `personKey` and `residency`: a US-resident earner takes the AU non-resident
- * withholding path, an AU-resident earner takes the AU ordinary-income path —
- * both always also feed US worldwide ordinary income.
+ * USD in the US pool).
+ *
+ * Design 73 Gap 1: this reducer is about the wage's *denomination*, NOT its source.
+ * It was documented as "AU-source wages", and that misleading docstring is what let
+ * the defect survive review: an Australian employer can pay AUD to someone who
+ * never sets foot in Australia, and that wage is not AU-source. The chained
+ * AU_WAGES_INCOME_TAX therefore carries `workCountry` — where the employment is
+ * actually exercised — alongside `personKey` and `residency`, and branches on
+ * source first. Crediting AUD to an AU account is a cash-flow fact; it says nothing
+ * about which country may tax the wage.
  */
 export class AuWagesIncomeApplyReducer extends AccountServiceReducer {
   static type        = 'AuWagesIncomeApplyReducer';
-  static description = 'Credits the AU cash pool with AU-source wages (native AUD); chains AU_WAGES_INCOME_TAX.';
+  static description = 'Credits the AU cash pool with wages paid in AUD (native AUD); chains AU_WAGES_INCOME_TAX.';
   static actionType  = 'AU_WAGES_INCOME_APPLY';
 
   constructor({ accountService, stateRegistry }) {
@@ -70,11 +76,13 @@ export class AuWagesIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey } = action;
+    const { amount, residency, personKey, targetKey, workCountry } = action;
     // Credit the transaction account the handler resolved; fall back to the single
     // AU cash pool for legacy actions saved without a targetKey.
     this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
-    return this.newState(state, {}, [{ type: 'AU_WAGES_INCOME_TAX', amount, residency, personKey }]);
+    // `workCountry` is absent on actions saved before design 73; the tax reducer
+    // falls back to residency, which is the pre-73 assumption for a resident earner.
+    return this.newState(state, {}, [{ type: 'AU_WAGES_INCOME_TAX', amount, residency, personKey, workCountry }]);
   }
 }
 

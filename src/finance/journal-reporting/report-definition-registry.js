@@ -260,6 +260,14 @@ class NrWithholdingIncomeBySourceDef extends ReportDefinition {
         conditions: [
           { op: 'contains', field: 'changedFields', value: 'auNonResidentWithholdingYTD'       },
           { op: 'contains', field: 'changedFields', value: 'auPersonNonResidentWithholdingYTD' },
+          // design 73 Gap 2 — the typed accumulators the interest and unfranked
+          // dividend feeders moved to. The drill explains the total withholding
+          // income line, so it must union every field that feeds it or it would
+          // silently under-foot the line it hangs off.
+          { op: 'contains', field: 'changedFields', value: 'auNrWithholdingInterestYTD'                },
+          { op: 'contains', field: 'changedFields', value: 'auPersonNrWithholdingInterestYTD'          },
+          { op: 'contains', field: 'changedFields', value: 'auNrWithholdingUnfrankedDividendYTD'       },
+          { op: 'contains', field: 'changedFields', value: 'auPersonNrWithholdingUnfrankedDividendYTD' },
         ],
       },
     ];

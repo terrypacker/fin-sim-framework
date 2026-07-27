@@ -56,12 +56,15 @@ test('toCcy: missing rate falls back to the native amount (never silent 1:1 misl
 
 // ─── AU module: AUD-source → USD buckets converted, AU buckets native ─────────
 
-test('AU_WAGES_INCOME_TAX (US-resident earner): AUD wage normalized into USD buckets, AU NR bucket native', () => {
+test('AU_WAGES_INCOME_TAX (US-resident earner, AU-performed work): USD buckets converted, AU bucket native', () => {
+  // workCountry 'AU' is now what puts the wage on the AU return (design 73 Gap 1);
+  // a US resident performing the work IN Australia is the case where Australia has
+  // a taxing right, so both the AU accumulator and the §904 general basket are fed.
   const fn = auFns.get('AU_WAGES_INCOME_TAX');
-  const next = fn(withRate(zeroTax()), { type: 'AU_WAGES_INCOME_TAX', amount: 2000, residency: 'US', personKey: 'spouse' });
-  assert.strictEqual(next.usOrdinaryIncomeYTD, 2000 / RATE);            // AUD → USD
-  assert.strictEqual(next.foreignGeneralIncomeYTD, 2000 / RATE);                        // ftc is USD-canonical
-  assert.strictEqual(next.auNonResidentWithholdingYTD, 2000);          // AU bucket stays native AUD
+  const next = fn(withRate(zeroTax()), { type: 'AU_WAGES_INCOME_TAX', amount: 2000, residency: 'US', personKey: 'spouse', workCountry: 'AU' });
+  assert.strictEqual(next.usOrdinaryIncomeYTD, 2000 / RATE);           // AUD → USD
+  assert.strictEqual(next.foreignGeneralIncomeYTD, 2000 / RATE);       // ftc is USD-canonical
+  assert.strictEqual(next.auOrdinaryIncomeYTD, 2000);                  // AU bucket stays native AUD
 });
 
 test('AU_SAVINGS_EARNINGS_TAX (AU resident): AUD interest → USD worldwide bucket converted, AU ordinary native', () => {
@@ -94,7 +97,7 @@ test('STOCK_WITHDRAWAL_TAX (AU resident): USD gain → AUD CGT bucket converted,
 
 test('AU_WAGES_INCOME_TAX with no recorded rate accrues the native amount (no throw)', () => {
   const fn = auFns.get('AU_WAGES_INCOME_TAX');
-  const next = fn(zeroTax(), { type: 'AU_WAGES_INCOME_TAX', amount: 2000, residency: 'US', personKey: 'spouse' });
+  const next = fn(zeroTax(), { type: 'AU_WAGES_INCOME_TAX', amount: 2000, residency: 'US', personKey: 'spouse', workCountry: 'AU' });
   assert.strictEqual(next.usOrdinaryIncomeYTD, 2000);                 // native fallback
-  assert.strictEqual(next.auNonResidentWithholdingYTD, 2000);
+  assert.strictEqual(next.auOrdinaryIncomeYTD, 2000);
 });

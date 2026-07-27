@@ -82,6 +82,10 @@ export const AU_TAX = {
       auDiscountableGainsYTD:           0,   // CGT 50%-discount-eligible slice (design 62 §4)
       auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
       auNonResidentWithholdingYTD:      0,
+      // Per-type non-resident final withholding (design 73 Gap 2): interest at the
+      // Art 11(2) 10% cap, unfranked dividends at the Art 10(2) 15% cap.
+      auNrWithholdingInterestYTD:          0,
+      auNrWithholdingUnfrankedDividendYTD: 0,
       auSuperTaxYTD:                    0,
       auFrankingCreditYTD:              0,
       auPersonOrdinaryIncomeYTD:        {},
@@ -89,6 +93,8 @@ export const AU_TAX = {
       auPersonDiscountableGainsYTD:     {},
       auPersonRealCapitalGainsYTD:      {},
       auPersonNonResidentWithholdingYTD:{},
+      auPersonNrWithholdingInterestYTD:          {},
+      auPersonNrWithholdingUnfrankedDividendYTD: {},
       auPersonSuperTaxYTD:              {},
       auPersonFrankingCreditYTD:        {},
       auPersonEarnedIncomeYTD:          {},   // FEIE cap accumulator (design 52 §4.2)
@@ -101,6 +107,8 @@ export const AU_TAX = {
       state.auPersonDiscountableGainsYTD[p.id] = 0;
       state.auPersonRealCapitalGainsYTD[p.id] = 0;
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
+      state.auPersonNrWithholdingInterestYTD[p.id] = 0;
+      state.auPersonNrWithholdingUnfrankedDividendYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;
       state.auPersonFrankingCreditYTD[p.id] = 0;
       state.auPersonEarnedIncomeYTD[p.id] = 0;

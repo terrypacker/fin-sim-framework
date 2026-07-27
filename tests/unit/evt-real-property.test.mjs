@@ -274,7 +274,7 @@ test('EVT-33: AU house sale records US capital gain (sale price - cost basis)', 
   assert.strictEqual(cgDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
 });
 
-test('EVT-33: AU house sale is always AU taxable at non-resident withholding rate', () => {
+test('EVT-33: a foreign resident\'s AU house sale is assessable at NR marginal rates', () => {
   const { sim } = loadToolsetScenario(CROSS_BORDER_HOUSE_JSON);
   //Step past planned sale year: 2027
   assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
@@ -288,10 +288,22 @@ test('EVT-33: AU house sale is always AU taxable at non-resident withholding rat
   const auTaxJournalEntry = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(auTaxJournalEntry);
   assert.ok(auTaxJournalEntry.length > 0);
-  //state.auPersonNonResidentWithholdingYTD.primary
-  const nrDiff = findDiff(auTaxJournalEntry[0], 'auPersonNonResidentWithholdingYTD.primary');
-  assert.ok(nrDiff, 'auPersonNonResidentWithholdingYTD.primary diff should be recorded');
-  assert.strictEqual(nrDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
+  // Design 73 Gap 2 step 3: real property is Taxable Australian Property, so a
+  // foreign resident's gain is *assessable* income on a lodged return at NR
+  // marginal rates (s855-10, [R3, R5]) — not final withholding. It lands in the
+  // capital-gains accumulator the non-resident bracket path already reads.
+  const gain = AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis;
+  const cgDiff = findDiff(auTaxJournalEntry[0], 'auPersonCapitalGainsYTD.primary');
+  assert.ok(cgDiff, 'auPersonCapitalGainsYTD.primary diff should be recorded');
+  assert.strictEqual(cgDiff.delta, gain);
+
+  // ...and NOT in the flat-rate withholding pool, which roughly halved it.
+  assert.strictEqual(findDiff(auTaxJournalEntry[0], 'auPersonNonResidentWithholdingYTD.primary'), undefined);
+
+  // No discountable slice: the discount is apportioned by days of Australian
+  // residence (s115-105/110/115), and this holding has none. Feeding zero is
+  // exact here and conservative for a straddling holding — see design/62.
+  assert.strictEqual(findDiff(auTaxJournalEntry[0], 'auPersonDiscountableGainsYTD.primary'), undefined);
 });
 
 test('EVT-33: AU house sale generates a Foreign Tax Credit', () => {

@@ -103,14 +103,27 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Ordinary Income',                 amount: inputs.ordinaryIncome,           drillReport: drill('ordinary-income-by-source') },
             { label: 'Capital Gains (no CGT discount)', amount: inputs.capitalGains,             drillReport: drill('capital-gains-by-disposal') },
             { label: 'Total Assessable Income',         amount: taxDetail.assessableIncome },
+            // Withholding income is stated as a total with its per-type slices as
+            // SUBLINEs beneath it (design 73 Gap 2): the types carry different final
+            // rates, so a reader checking the tax lines below needs to see which base
+            // each rate is applied to. `sub: true` keeps them out of the footing sums.
             { label: 'Non-Resident Withholding Income', amount: inputs.nonResidentWithholding,   drillReport: drill('nr-withholding-income-by-source') },
+            { label: 'Interest',                        amount: inputs.nrWithholdingInterest,          sub: true },
+            { label: 'Unfranked Dividends',             amount: inputs.nrWithholdingUnfrankedDividend, sub: true },
+            ...(inputs.nrWithholdingPooled
+              ? [{ label: 'Other (pooled)',             amount: inputs.nrWithholdingPooled,            sub: true }]
+              : []),
           ],
         },
         {
           heading: 'Tax Computation',
           lineItems: [
             { label: 'Tax on Income (Non-Resident Brackets)', amount: taxDetail.baseTax,                  bands: taxDetail.brackets?.ordinary },
-            { label: 'Non-Resident Withholding Tax (15%)',    amount: taxDetail.nonResidentWithholdingTax, flat: taxDetail.brackets?.nonResidentWithholding ?? undefined },
+            // One line per withholding type, each stating its own final rate against
+            // the base it is applied to. Built by the rates module alongside the rate
+            // table itself (design 73 Gap 2), so a label can never name a rate the
+            // computation did not use.
+            ...(taxDetail.nrWithholdingLines ?? []),
             { label: 'Super Tax',                             amount: inputs.superTax },
             // The non-resident section previously stopped short of a total, so its
             // lines had nothing to foot against (design 71 §11.4). Gross Tax is the

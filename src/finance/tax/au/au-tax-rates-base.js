@@ -17,7 +17,18 @@ import {
   flatRateBand,
 } from '../bracket-schedule.js';
 
-/** Flat withholding rate on non-resident withholding income (ATO). */
+/**
+ * Legacy flat withholding rate on the undifferentiated non-resident withholding
+ * pool (design 73 Gap 2). 15% is the AU–US treaty rate for portfolio *unfranked
+ * dividends* and nothing else; it was generalised into a constant named for the
+ * whole bucket, which then over-taxed interest by half again and roughly halved
+ * the tax on non-resident capital gains.
+ *
+ * The typed feeders now book into `_nrWithholdingRates` below. This constant
+ * survives only for `auNonResidentWithholdingYTD`, whose remaining feeders (AU
+ * capital gains, non-resident wages) are drained by design 73 Gap 2 step 3 and
+ * Gap 1 respectively. When the last feeder goes, so does this.
+ */
 const NR_WITHHOLDING_RATE = 0.15;
 
 /**
@@ -62,6 +73,50 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
   _medicareLevy = { rate: 0.02, lowerThreshold: 26_000, phaseInRate: 0.10 };
   /** Flat CGT discount rate (ATO Division 115). FY≤2026 = 50%. */
   _cgtDiscountRate = 0.5;
+  /**
+   * Final withholding rates by income type, for a **US-resident individual**
+   * (design 73 Gap 2 step 1). Subclasses may override per financial year the way
+   * `_brackets` already is.
+   *
+   * For interest, unfranked dividends and royalties the withholding genuinely is
+   * a *final* tax, which is why that income is kept off the assessable-income
+   * return entirely rather than added to `assessableIncome`.
+   *
+   * Rates are the AU–US treaty caps, verified against the US Treasury Technical
+   * Explanations of the 1982 Convention [R9] and the 2001 Protocol [R13]:
+   *   interest          Art 11(2), capped at 10%. Australia's *statutory* rate on
+   *                     interest paid to non-residents is also 10%, so treaty and
+   *                     domestic law coincide and there is no rate anywhere in the
+   *                     system that could produce 15%. The Protocol replaced Art 11
+   *                     but kept the 10% cap; its 0% tier reaches only governments,
+   *                     central banks and unrelated financial institutions — never
+   *                     an individual depositor.
+   *   unfrankedDividend Art 10(2), capped at 15% for a resident of the other State.
+   *                     The Protocol's 5% and 0% tiers BOTH require a *corporate*
+   *                     beneficial owner, so a natural person always falls to 15%.
+   *                     This model taxes individuals: 15% is the only dividend rate
+   *                     it can ever need — do not build the tiering.
+   *   frankedDividend   Exempt from dividend withholding **by statute** under the
+   *                     imputation system [R13]. Present as a guard: the model has
+   *                     no franked non-resident feeder today, and if one lands it
+   *                     must not inherit a non-zero default.
+   *   royalty           Art 12(2), cut from 10% to 5% by Art 8(a) of the Protocol.
+   *                     The only year-sensitive entry — 10% before the Protocol's
+   *                     2003 entry into force — but every registered FY is post-2003,
+   *                     so 5% holds for all of them. Not yet fed by any income type.
+   *
+   * Statutory (no-treaty) fallbacks would be 0.10 / 0.30 / 0 / 0.30. They are not
+   * modelled: the reduced rates above apply *because* the recipient is a US
+   * resident, and this model's scope is exactly the two treaty countries. A third
+   * country would force a real per-counterparty treaty lookup keyed off the
+   * recipient's residence — this table is where that lookup would land.
+   */
+  _nrWithholdingRates = {
+    interest:          0.10,
+    unfrankedDividend: 0.15,
+    frankedDividend:   0,
+    royalty:           0.05,
+  };
 
   /**
    * Year-specific CGT relief for resident net capital gains.
@@ -95,6 +150,45 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
   /** Display label for the CGT relief line item. FY2027+ overrides this. */
   _cgtReliefLabel() {
     return 'CGT 50% Discount';
+  }
+
+  /**
+   * The withholding lines of a non-resident return, one per income type at its own
+   * final rate (design 73 Gap 2). Labels carry the rate so the reader can check the
+   * line without the bracket columns.
+   *
+   * The two typed lines are always emitted, zero or not: their presence is what
+   * tells a reader that interest and dividends are taxed differently, which is the
+   * whole point of the split. The residual pooled line appears only while it still
+   * has a feeder, so it vanishes from the return once Gap 2 step 3 and Gap 1 have
+   * drained it rather than lingering as a permanent 0.00.
+   *
+   * Each line carries its own `flat` band. The document renders these as-is, so the
+   * label and the rate it names can never drift apart — both are built here, from
+   * the one rate table.
+   */
+  _nrWithholdingLineItems({ interestIncome, interestTax, unfrankedDivIncome, unfrankedDivTax, pooledIncome, pooledTax }) {
+    const pct = r => `${+(r * 100).toFixed(2)}%`;
+    const { interest, unfrankedDividend } = this._nrWithholdingRates;
+    return [
+      {
+        label: `Withholding Tax — Interest (${pct(interest)})`,
+        amount: interestTax,
+        flat:   flatRateBand(interest, interestIncome, interestTax),
+      },
+      {
+        label: `Withholding Tax — Unfranked Dividends (${pct(unfrankedDividend)})`,
+        amount: unfrankedDivTax,
+        flat:   flatRateBand(unfrankedDividend, unfrankedDivIncome, unfrankedDivTax),
+      },
+      ...(pooledTax !== 0
+        ? [{
+            label: `Non-Resident Withholding Tax (${pct(NR_WITHHOLDING_RATE)})`,
+            amount: pooledTax,
+            flat:   flatRateBand(NR_WITHHOLDING_RATE, pooledIncome, pooledTax),
+          }]
+        : []),
+    ];
   }
 
   /**
@@ -282,16 +376,39 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         ],
       };
     } else {
-      // Non-resident: no CGT discount; NR withholding income taxed at flat 15% rate
+      // Non-resident: no CGT discount; withholding income taxed at its own final
+      // rate per income type (design 73 Gap 2), NOT at one pooled rate.
       const totalIncome              = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const assessableIncome         = Math.max(0, totalIncome);
       const nrSchedule               = applyBracketsDetailed(assessableIncome, this._nonResidentBrackets);
       const baseTax                  = nrSchedule.tax;
-      const nonResidentWithholdingTax = auNonResidentWithholdingYTD * NR_WITHHOLDING_RATE;
+
+      const {
+        auNrWithholdingInterestYTD          = 0,
+        auNrWithholdingUnfrankedDividendYTD = 0,
+      } = state;
+      const rates              = this._nrWithholdingRates;
+      const interestTax        = auNrWithholdingInterestYTD          * rates.interest;
+      const unfrankedDivTax    = auNrWithholdingUnfrankedDividendYTD * rates.unfrankedDividend;
+      // The residual untyped pool. Drained to zero by Gap 2 step 3 (capital gains)
+      // and Gap 1 (wages); until then its feeders keep the pre-73 flat rate so each
+      // step's effect can be measured on its own.
+      const pooledTax          = auNonResidentWithholdingYTD * NR_WITHHOLDING_RATE;
+      const withholdingIncome  = auNrWithholdingInterestYTD
+                               + auNrWithholdingUnfrankedDividendYTD
+                               + auNonResidentWithholdingYTD;
+      const nonResidentWithholdingTax = interestTax + unfrankedDivTax + pooledTax;
+
+      const nrWithholdingLines = this._nrWithholdingLineItems({
+        interestIncome:     auNrWithholdingInterestYTD,          interestTax,
+        unfrankedDivIncome: auNrWithholdingUnfrankedDividendYTD, unfrankedDivTax,
+        pooledIncome:       auNonResidentWithholdingYTD,         pooledTax,
+      });
+
       const grossTax                 = Math.max(0, baseTax) + auSuperTaxYTD + nonResidentWithholdingTax;
       const netLiability             = grossTax;
 
-      const totalGrossIncome   = totalIncome + auNonResidentWithholdingYTD;
+      const totalGrossIncome   = totalIncome + withholdingIncome;
       const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
       const marginalRate       = _marginalBracketRate(assessableIncome, this._nonResidentBrackets);
 
@@ -299,7 +416,13 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         inputs: {
           ordinaryIncome:         auOrdinaryIncomeYTD,
           capitalGains:           auCapitalGainsYTD,
-          nonResidentWithholding: auNonResidentWithholdingYTD,
+          // Total withholding income across every type — what the reader thinks of
+          // as "the withholding line". The per-type slices sit beside it so the
+          // document can state each rate against the base it actually applies to.
+          nonResidentWithholding: withholdingIncome,
+          nrWithholdingInterest:          auNrWithholdingInterestYTD,
+          nrWithholdingUnfrankedDividend: auNrWithholdingUnfrankedDividendYTD,
+          nrWithholdingPooled:            auNonResidentWithholdingYTD,
           superTax:               auSuperTaxYTD,
           frankingCredits:        auFrankingCreditYTD,
           isResident:             false,
@@ -312,6 +435,12 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         medicareLevy:             0,
         frankingOffset:           0,
         nonResidentWithholdingTax,
+        nrWithholdingInterestTax:          interestTax,
+        nrWithholdingUnfrankedDividendTax: unfrankedDivTax,
+        nrWithholdingPooledTax:            pooledTax,
+        // The withholding tax lines, label + amount + flat band already paired, for
+        // the document to render without re-deriving any of the three.
+        nrWithholdingLines,
         grossTax,
         credits:                  0,
         netLiability,
@@ -325,15 +454,22 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           ordinary:     nrSchedule.bands,
           capitalGains: null,
           medicareLevy: null,          // non-residents pay no Medicare levy
+          // One band per withholding type: each states the rate against the base it
+          // is actually applied to, so the exported row keeps `rate × income = tax`
+          // true. A single pooled band could not — the pool mixes rates.
+          nrWithholdingInterest: flatRateBand(
+            rates.interest, auNrWithholdingInterestYTD, interestTax),
+          nrWithholdingUnfrankedDividend: flatRateBand(
+            rates.unfrankedDividend, auNrWithholdingUnfrankedDividendYTD, unfrankedDivTax),
           nonResidentWithholding: flatRateBand(
-            NR_WITHHOLDING_RATE, auNonResidentWithholdingYTD, nonResidentWithholdingTax),
+            NR_WITHHOLDING_RATE, auNonResidentWithholdingYTD, pooledTax),
         },
         lineItems: [
           { label: 'Ordinary Income',                         amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (no CGT discount)',         amount:  auCapitalGainsYTD },
           { label: 'Total Assessable Income',                 amount:  assessableIncome },
           { label: 'Tax on Income (Non-Resident Brackets)',   amount:  baseTax },
-          { label: 'Non-Resident Withholding Tax (15%)',      amount:  nonResidentWithholdingTax },
+          ...nrWithholdingLines,
           { label: 'Super Tax',                               amount:  auSuperTaxYTD },
           { label: 'Net Tax Liability',                       amount:  netLiability },
         ],

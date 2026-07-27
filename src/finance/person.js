@@ -35,6 +35,14 @@ export class Person extends SimGraphNode {
    *                                                         instead of wages; incurs US SECA tax (design 69)
    * @param {Date}        [opts.retirementDate]            - Date wages stop; defaults to 2040-01-01
    * @param {string}      [opts.wageCurrency]              - Native currency of monthlyWage; defaults from residency
+   * @param {string|null} [opts.workCountry=null]          - Country where the employment is actually EXERCISED
+   *                                                         ('US'|'AU'). This — not the payment currency, the
+   *                                                         payer's residence, or the account the money lands in
+   *                                                         — determines the source of employment income
+   *                                                         (FCT v French (1957) 98 CLR 398; AU–US treaty Art 15).
+   *                                                         null = follow the earner's residency as it stands when
+   *                                                         the wage accrues, which is the common case and keeps
+   *                                                         existing scenarios unchanged (design 73 Gap 1).
    * @param {string}      [opts.ssCurrency]                - Native currency of socialSecurityMonthly; defaults from residency
    */
   constructor(id = null, birthDate, opts = {}) {
@@ -54,6 +62,12 @@ export class Person extends SimGraphNode {
     // Per-field native currency (design 10 §Phase 5), individually overridable;
     // each defaults to the residency/citizenship currency.
     this.wageCurrency          = opts.wageCurrency          ?? defaultCurrencyForCountry(this.residency);
+    // Design 73 Gap 1: source of employment income is the place the services are
+    // performed. Currency was standing in for it, which is not a proxy at all —
+    // an Australian employer can pay AUD to someone who never sets foot in
+    // Australia. Left null the earner is assumed to work where they live; set it
+    // to model a cross-border commuter or a remote worker paid from abroad.
+    this.workCountry           = opts.workCountry           ?? null;
     this.ssCurrency            = opts.ssCurrency            ?? defaultCurrencyForCountry(this.residency);
     // AU CGT reform (design 57 §6.6): recipients of means-tested income support
     // (Age Pension / JobSeeker) are exempt from the 30% CGT minimum tax.

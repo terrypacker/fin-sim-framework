@@ -108,12 +108,14 @@ test('TE-1: super tax stacks on top of ordinary income tax', () => {
 // TE-2: Non-Resident Withholding — AU: 15% flat rate
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('TE-2: NR savings earnings classifier sets auNonResidentWithholdingYTD to gross amount', () => {
+test('TE-2: NR savings earnings classifier books gross interest to the interest withholding bucket', () => {
+  // Design 73 Gap 2: interest is withheld at its own Art 11(2) rate (10%), so it
+  // books to the typed accumulator, not the undifferentiated 15% pool.
   const auModule = new AuTaxModule2026();
   const fn = getFn(auModule, 'AU_SAVINGS_EARNINGS_TAX');
-  const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, auNonResidentWithholdingYTD: 0, ftcYTD: 0 };
+  const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, auNrWithholdingInterestYTD: 0, ftcYTD: 0 };
   const s1 = fn(s0, { amount: 600, residency: null });
-  assert.strictEqual(s1.auNonResidentWithholdingYTD, 600);
+  assert.strictEqual(s1.auNrWithholdingInterestYTD, 600);
 });
 
 test('TE-2: rates module applies 15% to auNonResidentWithholdingYTD', () => {
@@ -129,6 +131,103 @@ test('TE-2: NR withholding rate is exactly 15%', () => {
   const tax5000 = auRates.computeTax(auState({ people: { primary: { residency: 'US' } }, auNonResidentWithholdingYTD: 5000 })).netLiability;
   assert.strictEqual(tax1000, 150);
   assert.strictEqual(tax5000, 750);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TE-2b: Per-type NR withholding rates (design 73 Gap 2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('TE-2b: interest and unfranked dividends are withheld at DIFFERENT rates in the same year', () => {
+  // The defect this guards: one constant named for the whole bucket (0.15, the
+  // Art 10(2) *dividend* cap) was applied to every withholding type, over-taxing
+  // interest by half again. If the rates are ever re-pooled, equal bases would
+  // produce equal tax and this fails.
+  const nr = extra => auState({ people: { primary: { residency: 'US' } }, ...extra });
+
+  const interestOnly = auRates.computeTax(nr({ auNrWithholdingInterestYTD: 10000 })).netLiability;
+  const dividendOnly = auRates.computeTax(nr({ auNrWithholdingUnfrankedDividendYTD: 10000 })).netLiability;
+
+  assert.strictEqual(interestOnly, 1000);  // Art 11(2) — 10%
+  assert.strictEqual(dividendOnly, 1500);  // Art 10(2) — 15%
+  assert.notStrictEqual(interestOnly, dividendOnly);
+
+  // Both in one year: each base is taxed at its own rate, not at a blended one.
+  const both = auRates.computeTax(nr({
+    auNrWithholdingInterestYTD:          10000,
+    auNrWithholdingUnfrankedDividendYTD: 10000,
+  }));
+  assert.strictEqual(both.netLiability, 2500);
+  // ...and the income line still reports the full base across every type.
+  assert.strictEqual(both.inputs.nonResidentWithholding, 20000);
+});
+
+test('TE-2b: each withholding line states the rate it actually applied', () => {
+  // The CSV is self-checking only if `rate × income = tax` holds on the row. A
+  // pooled band could not satisfy that once the pool mixes rates.
+  const detail = auRates.computeTax(auState({
+    people: { primary: { residency: 'US' } },
+    auNrWithholdingInterestYTD:          8000,
+    auNrWithholdingUnfrankedDividendYTD: 4000,
+  }));
+
+  for (const line of detail.nrWithholdingLines) {
+    assert.ok(line.flat, `"${line.label}" should carry a flat band`);
+    assert.ok(Math.abs(line.flat.rate * line.flat.income - line.amount) < 1e-9,
+      `"${line.label}": ${line.flat.rate} × ${line.flat.income} != ${line.amount}`);
+  }
+  // The label names the same rate the band applied — they are built together.
+  const interest = detail.nrWithholdingLines.find(l => /Interest/.test(l.label));
+  assert.match(interest.label, /10%/);
+  assert.strictEqual(interest.flat.rate, 0.10);
+});
+
+test('TE-2b: a foreign resident\'s TAP gain is taxed at marginal rates, not a 15% final tax', () => {
+  // Design 73 Gap 2 step 3. A gain on Taxable Australian Property is assessable
+  // income of a foreign resident (s855-10), taxed on the NR bracket schedule —
+  // 30% from the first dollar, no tax-free threshold, no Medicare levy [R3].
+  // The pooled 15% final tax roughly halved it.
+  const detail = auRates.computeTax(auState({
+    people: { primary: { residency: 'US' } },
+    auCapitalGainsYTD: 100_000,
+  }));
+
+  assert.strictEqual(detail.assessableIncome, 100_000);
+  assert.strictEqual(detail.baseTax, 30_000);        // 100k × 30%, not 15k
+  assert.strictEqual(detail.medicareLevy, 0);        // no Medicare levy for a foreign resident
+  assert.strictEqual(detail.cgtDiscount, 0);         // and no discount on this path
+  assert.strictEqual(detail.netLiability, 30_000);
+});
+
+test('TE-2b: the NR bracket path is fed at all — line 5 of the AU return', () => {
+  // The defect was not that the bracket path computed the wrong number: it was
+  // that no feeder ever wrote auOrdinaryIncomeYTD or auCapitalGainsYTD while
+  // non-resident, so "Tax on Income (Non-Resident Brackets)" read 0.00 in every
+  // non-resident year of a 44-year export while income was diverted into a flat
+  // withholding bucket. Guard that the path is reachable from both accumulators.
+  const nrOrdinary = auRates.computeTax(auState({
+    people: { primary: { residency: 'US' } }, auOrdinaryIncomeYTD: 50_000,
+  }));
+  assert.strictEqual(nrOrdinary.baseTax, 15_000);    // 50k × 30%
+
+  const nrGain = auRates.computeTax(auState({
+    people: { primary: { residency: 'US' } }, auCapitalGainsYTD: 50_000,
+  }));
+  assert.strictEqual(nrGain.baseTax, 15_000);
+
+  // They stack on one bracket run rather than being taxed separately.
+  const both = auRates.computeTax(auState({
+    people: { primary: { residency: 'US' } },
+    auOrdinaryIncomeYTD: 100_000, auCapitalGainsYTD: 100_000,
+  }));
+  // 135,000 × 30% + 55,000 × 37% + 10,000 × 45% = 40,500 + 20,350 + 4,500
+  assert.strictEqual(both.baseTax, 65_350);
+});
+
+test('TE-2b: franked dividends carry a zero withholding rate (statutory exemption)', () => {
+  // No feeder books franked dividends today. The entry exists so that if one
+  // lands it cannot silently inherit a non-zero default: under the imputation
+  // system franked dividends are exempt from AU dividend withholding by statute.
+  assert.strictEqual(auRates._nrWithholdingRates.frankedDividend, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

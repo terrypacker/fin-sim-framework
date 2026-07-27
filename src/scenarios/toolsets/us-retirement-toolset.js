@@ -381,6 +381,7 @@ export const US_RETIREMENT = {
         monthlyWage:           person.monthlyWage           ?? 0,
         selfEmployed:          person.selfEmployed          ?? false, // design 69
         wageCurrency:          person.wageCurrency          ?? 'USD',
+        workCountry:           person.workCountry           ?? null, // design 73 Gap 1
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
