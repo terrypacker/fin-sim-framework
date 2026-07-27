@@ -201,6 +201,99 @@ test('TE-4: AU CGT discount is exactly 50% (half the gain is taxable)', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// TE-4b: LTCG bracket stacking — gains must sit on top of ordinary income
+//         (IRC §1(h)), not be taxed from $0.
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('TE-4b: MFJ LTCG stacked on $200k ordinary income — no 0% bracket available', () => {
+  // Taxable ordinary: $200k - $30k std ded = $170k, already past the 0% LTCG
+  // ceiling ($96,700). The $100k gain sits entirely in the 15% band:
+  //   _applyBrackets(170k + 100k) = _applyBrackets(270k)
+  //     [0, 96700] @ 0% = 0 | [96700, 270000] @ 15% = 173300 * 0.15 = 25995
+  //   _applyBrackets(170k)
+  //     [0, 96700] @ 0% = 0 | [96700, 170000] @ 15% = 73300 * 0.15 = 10995
+  //   capitalGainsTax = 25995 - 10995 = 15000
+  const { capitalGainsTax, netLiability } = usRates.computeTax(
+    usState({ usOrdinaryIncomeYTD: 200_000, usCapitalGainsYTD: 100_000 }),
+  );
+  assert.strictEqual(capitalGainsTax, 15_000);
+  // Ordinary tax: 23850*0.10 + (96950-23850)*0.12 + (170000-96950)*0.22 = 27228
+  assert.strictEqual(netLiability, 27_228 + 15_000);
+});
+
+test('TE-4b: MFJ LTCG fully in 0% bracket when ordinary income is low', () => {
+  // Taxable ordinary: $50k - $30k = $20k; gain $40k → total $60k < $96,700
+  // Both _applyBrackets calls return 0 → capitalGainsTax = 0
+  const { capitalGainsTax } = usRates.computeTax(
+    usState({ usOrdinaryIncomeYTD: 50_000, usCapitalGainsYTD: 40_000 }),
+  );
+  assert.strictEqual(capitalGainsTax, 0);
+});
+
+test('TE-4b: MFJ LTCG spanning 15% and 20% brackets', () => {
+  // Taxable ordinary: $200k - $30k = $170k; gain $650k → total $820k
+  //   _applyBrackets(820k):
+  //     [0, 96700] @ 0% = 0
+  //     [96700, 600050] @ 15% = 503350 * 0.15 = 75502.50
+  //     [600050, 820000] @ 20% = 219950 * 0.20 = 43990
+  //     total = 119492.50
+  //   _applyBrackets(170k) = 10995 (from previous test)
+  //   capitalGainsTax = 119492.50 - 10995 = 108497.50
+  const { capitalGainsTax } = usRates.computeTax(
+    usState({ usOrdinaryIncomeYTD: 200_000, usCapitalGainsYTD: 650_000 }),
+  );
+  assert.strictEqual(capitalGainsTax, 108_497.50);
+});
+
+test('TE-4b: single filer LTCG also stacks on ordinary income', () => {
+  // Taxable ordinary: $100k - $15k = $85k; gain $50k → total $135k
+  // Single LTCG brackets: 0% @ 0, 15% @ 48350, 20% @ 533400
+  //   _applyBrackets(135k, single_ltcg):
+  //     [0, 48350] @ 0% = 0
+  //     [48350, 135000] @ 15% = 86650 * 0.15 = 12997.50
+  //   _applyBrackets(85k, single_ltcg):
+  //     [0, 48350] @ 0% = 0
+  //     [48350, 85000] @ 15% = 36650 * 0.15 = 5497.50
+  //   capitalGainsTax = 12997.50 - 5497.50 = 7500
+  const { capitalGainsTax } = usRates.computeTax(
+    usState({ usOrdinaryIncomeYTD: 100_000, usCapitalGainsYTD: 50_000, usFilingSingle: true }),
+  );
+  assert.strictEqual(capitalGainsTax, 7_500);
+});
+
+test('TE-4b: stacking with FEIE — gains sit above FEIE-reduced ordinary income', () => {
+  // FEIE excludes $80k of foreign earned income from taxable ordinary.
+  // Without FEIE: taxable ord = ($200k - $30k) = $170k
+  // With FEIE:    taxable ord = ($170k - $80k) = $90k
+  // Gain $100k → total $190k
+  //   _applyBrackets(190k, ltcg_mfj):
+  //     [0, 96700] @ 0% = 0
+  //     [96700, 190000] @ 15% = 93300 * 0.15 = 13995
+  //   _applyBrackets(90k, ltcg_mfj) = 0  (90k < 96700)
+  //   capitalGainsTax = 13995
+  const { capitalGainsTax } = usRates.computeTax(
+    usState({
+      usOrdinaryIncomeYTD: 200_000,
+      usCapitalGainsYTD:   100_000,
+      usFeieElected:       true,
+      people:              { primary: { residency: 'AU' } },
+      auPersonEarnedIncomeYTD: { primary: 80_000 },
+      effectiveExchangeRates:  { USD_AUD: 1 },
+    }),
+  );
+  assert.strictEqual(capitalGainsTax, 13_995);
+});
+
+test('TE-4b: zero ordinary income stacking matches pre-fix zero-ordinary behavior', () => {
+  // When there is no ordinary income, stacking is a no-op (stack on $0 = direct).
+  // This verifies the fix does not regress the simple case.
+  const { capitalGainsTax } = usRates.computeTax(
+    usState({ usCapitalGainsYTD: 200_000 }),
+  );
+  assert.strictEqual(capitalGainsTax, 15_495);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // TE-5: Non-Resident Tax Rates — AU: different brackets, NO 50% CGT discount
 // ══════════════════════════════════════════════════════════════════════════════
 
