@@ -28,7 +28,7 @@ export class AuTaxRates2025 extends AuTaxRatesBase {
     // Resident rates (ATO FY2025-26)
     this._brackets = [
       [        0, 0.00],
-      [   18_200, 0.19],
+      [   18_200, 0.16],  // Stage 3 rate for this band (was left at the pre-2024 19%)
       [   45_000, 0.30],  // 30% bracket extended to $135k (was 32.5% to $120k)
       [  135_000, 0.37],
       [  190_000, 0.45],
@@ -36,7 +36,7 @@ export class AuTaxRates2025 extends AuTaxRatesBase {
 
     // Non-resident rates — unchanged from FY2024-25 (ATO FY2025-26)
     this._nonResidentBrackets = [
-      [        0, 0.325],
+      [        0, 0.30],
       [  135_000, 0.37],
       [  190_000, 0.45],
     ];

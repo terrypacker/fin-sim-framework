@@ -161,8 +161,8 @@ const auFitoState = (usTaxPaidAud) => ({
 test('FITO-1: AU tax drops by the US tax paid, capped by the with/without limit', () => {
   const noRelief = new AuTaxRates2025().computeTax(auFitoState(0));
   const withFito = new AuTaxRates2025().computeTax(auFitoState(15_000));
-  // pre-FITO 23,592 (baseTax 21,592 + medicare 2,000); without-US-source 4,942 → limit 18,650.
-  assert.ok(Math.abs(withFito.fitoLimit - 18_650) < 0.5, `limit ${withFito.fitoLimit}`);
+  // pre-FITO 22,788 (baseTax 20,788 + medicare 2,000); without-US-source 4,288 → limit 18,500.
+  assert.ok(Math.abs(withFito.fitoLimit - 18_500) < 0.5, `limit ${withFito.fitoLimit}`);
   assert.equal(withFito.fito, 15_000, 'US tax fully credited (below the limit)');
   assert.equal(withFito.fitoDeMinimis, false);
   assert.ok(Math.abs((noRelief.netLiability - withFito.netLiability) - 15_000) < 0.5, 'AU tax falls by the US tax paid');
@@ -170,7 +170,7 @@ test('FITO-1: AU tax drops by the US tax paid, capped by the with/without limit'
 
 test('FITO: excess over the limit is lost (no carryforward)', () => {
   const r = new AuTaxRates2025().computeTax(auFitoState(20_000));
-  assert.ok(Math.abs(r.fito - 18_650) < 0.5, 'offset capped at the limit; the 1,350 excess is lost');
+  assert.ok(Math.abs(r.fito - 18_500) < 0.5, 'offset capped at the limit; the 1,500 excess is lost');
 });
 
 test('FITO-2: A$1,000 de-minimis offsets in full and skips the limit calc', () => {
