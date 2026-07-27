@@ -148,7 +148,7 @@ import { buildReportRows, rowsToCsv, generateReportCsv } from './finance/journal
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computeNetWorthUsd, computeHouseValueUsd, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
@@ -278,7 +278,7 @@ import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-serv
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
-import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
@@ -893,6 +893,7 @@ export const Finance = {
   JournalReportingService,
   DEFAULT_MC_VARIABLE_CONFIGS,
   CENTER_SOURCES,
+  refineCenterSource,
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   computeHouseValueUsd,
@@ -1140,6 +1141,7 @@ export const Finance = {
   AuTaxSettleHandler,
   UsTaxSettleApplyReducer,
   AuTaxSettleApplyReducer,
+  DRAWDOWN_TAX_ACTION_TYPES,
   UsTaxPaymentDebitReducer,
   AuTaxPaymentDebitReducer,
   TAX_SETTLE_ACTION_TYPES,

@@ -66,11 +66,20 @@ export class ReplenishSavingsReducer extends Reducer {
       return this.newState(state, {}, [...balanceActions, ...crossBorderTransfers, ...pendingTaxActions]);
     } catch (e) {
       if (!(e instanceof InsufficientFundsError)) throw e;
-      return this.newState(state, {}, [{
-        type:          'INTL_TRANSFER_APPLY',
-        direction:     isAu ? 'US_TO_AU' : 'AU_TO_US',
-        targetDeficit: e.remaining,
-      }]);
+      // Exhausting the domestic accounts is not a no-op: the draw emptied each one
+      // on the way down, realizing gains and taxable distributions. Carry those
+      // accruals (and their balance/journal records) forward alongside the
+      // escalation, or the household escapes tax on everything it just sold.
+      const { drawnKeys = [], pendingTaxActions = [], crossBorderTransfers = [] } = e.partial;
+      const balanceActions = drawnKeys.map(k => new RecordBalanceAction(`${k}.balance`, k));
+      return this.newState(state, {}, [
+        ...balanceActions, ...crossBorderTransfers, ...pendingTaxActions,
+        {
+          type:          'INTL_TRANSFER_APPLY',
+          direction:     isAu ? 'US_TO_AU' : 'AU_TO_US',
+          targetDeficit: e.remaining,
+        },
+      ]);
     }
   }
 }

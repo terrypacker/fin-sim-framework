@@ -492,7 +492,11 @@ export class AccountService extends AssetService {
    *
    * Throws InsufficientFundsError if the deficit cannot be fully covered after
    * exhausting all eligible and early-withdrawal accounts.  State is partially
-   * mutated up to the point of exhaustion.
+   * mutated up to the point of exhaustion — so the error carries a `partial`
+   * field with the same `{drawnKeys, pendingTaxActions, crossBorderTransfers}`
+   * shape as the success return.  A caller that swallows the error must still
+   * drain `e.partial.pendingTaxActions`, or the gains the failed draw realized
+   * escape tax entirely.
    *
    * @param {object}   state      - Current simulation state
    * @param {string}   targetKey  - State key for the savings account to credit
@@ -840,7 +844,12 @@ export class AccountService extends AssetService {
     }
 
     if (remaining > 1e-9) {
-      throw new InsufficientFundsError(country, currency, remaining);
+      // Hand the caller what the draw already did. Phases 1–3 debited every
+      // eligible account on the way to running dry, so `pendingTaxActions` here is
+      // non-empty whenever those draws realized gains or taxable distributions —
+      // tax the household genuinely owes even though the deficit went unmet.
+      throw new InsufficientFundsError(country, currency, remaining,
+        { drawnKeys, pendingTaxActions, crossBorderTransfers });
     }
     return { drawnKeys, pendingTaxActions, crossBorderTransfers };
   }

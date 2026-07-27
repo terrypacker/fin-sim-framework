@@ -114,6 +114,10 @@ export class IntlTransferApplyReducer extends Reducer {
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
+          // The draw ran the funding country dry, but everything it sold on the way
+          // down is still taxable — keep those accruals rather than losing them with
+          // the error (see InsufficientFundsError.partial).
+          pendingTaxActions.push(...e.partial.pendingTaxActions, ...e.partial.crossBorderTransfers);
         }
       }
       const audActual   = Math.min(audNeeded, auAcc.balance);
@@ -136,6 +140,10 @@ export class IntlTransferApplyReducer extends Reducer {
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
+          // The draw ran the funding country dry, but everything it sold on the way
+          // down is still taxable — keep those accruals rather than losing them with
+          // the error (see InsufficientFundsError.partial).
+          pendingTaxActions.push(...e.partial.pendingTaxActions, ...e.partial.crossBorderTransfers);
         }
       }
       const usdActual   = Math.min(usdNeeded, usAcc.balance);

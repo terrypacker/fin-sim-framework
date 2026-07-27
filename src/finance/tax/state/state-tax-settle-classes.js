@@ -15,6 +15,7 @@ import { ACCOUNT_ROLES }       from '../../state/account-roles.js';
 import { StateTaxSettleService } from './state-tax-settle-service.js';
 import { STATE_YTD_FIELDS }    from './state-income-classification.js';
 import { taxFxRate }           from '../tax-fx.js';
+import { DRAWDOWN_TAX_ACTION_TYPES } from '../tax-settle-classes.js';
 
 /**
  * US state tax settlement (design 34 §5) — the state analog of the federal
@@ -95,7 +96,8 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['STATE_TAX_PAYMENT_DEBIT'];
-    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', 'STATE_TAX_PAYMENT_DEBIT', 'OUT_OF_FUNDS'];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', 'STATE_TAX_PAYMENT_DEBIT',
+                                 'OUT_OF_FUNDS', ...DRAWDOWN_TAX_ACTION_TYPES];
   }
 
   static fromJSON(d, services) {
@@ -123,13 +125,20 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     let crossBorderTransfers = [];
+    // Liquidating to raise the state-tax cash is itself taxable; forward the draw's
+    // accruals so they reach next year's YTD buckets. Same reasoning (and the same
+    // settle-then-debit ordering that makes the deferral non-circular) as the
+    // federal debit reducer — see TaxPaymentDebitReducerBase.
+    let pendingTaxActions = [];
     if (shortfall > 0 && !escalated) {
       try {
         // Journal any cross-currency leg of the top-up (design 44 Gap A).
-        ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
+        ({ crossBorderTransfers = [], pendingTaxActions = [] } =
+          this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
-        // Proceed to the cross-border escalation below for the uncoverable part.
+        // Keep what the exhausted draw already realized, then escalate below.
+        ({ crossBorderTransfers = [], pendingTaxActions = [] } = e.partial);
       }
     }
 
@@ -153,6 +162,6 @@ export class StateTaxPaymentDebitReducer extends Reducer {
 
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so the balance change shows in diffs
-    }, [...crossBorderTransfers, ...residualActions]);
+    }, [...crossBorderTransfers, ...pendingTaxActions, ...residualActions]);
   }
 }

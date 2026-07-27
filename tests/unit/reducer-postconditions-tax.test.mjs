@@ -31,6 +31,7 @@ import assert from 'node:assert/strict';
 import { runReducer, assertStateUnchanged } from '../helpers/reducer-postconditions.js';
 import { makeAccount, makeAccountState, makeAction, makeServices, makePeople } from '../helpers/reducer-fixtures.js';
 
+import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 import { DynamicTaxReducer } from '../../src/finance/tax/dynamic-tax-reducer.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../../src/finance/tax/period-advance-classes.js';
 import {
@@ -224,4 +225,65 @@ test('AuTaxPaymentDebitReducer: an unpayable AU tax reports the deficit in AUD (
   assert.ok(oof);
   assert.equal(oof.deficit, 800);
   assert.equal(oof.currency, 'AUD', 'AU settle is denominated in AUD');
+});
+
+// ─── Taxing the funding of the tax ────────────────────────────────────────────
+//
+// Selling assets to raise the cash for a tax bill is itself a taxable event. The
+// draw hands those accruals back as `pendingTaxActions`; the reducer must emit
+// them so they reach the YTD buckets. They land in the FOLLOWING tax year — the
+// sibling settle-apply reducer (PRIORITY.TAX_APPLY) already zeroed this year's
+// buckets before this debit runs at TAX_APPLY + 1 — which is what keeps the
+// model finite instead of circular (more tax ⇒ bigger sale ⇒ more tax).
+// Regression: both debit reducers used to destructure only `crossBorderTransfers`
+// and silently drop the rest, making a locally-funded bill tax-free.
+
+test('UsTaxPaymentDebitReducer: the sale that funds the bill emits its capital gain', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const r = new UsTaxPaymentDebitReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', role: ACCOUNT_ROLES.US_SAVINGS,
+      holdings: [{ id: 'c1', marketValue: 1_000, costBasis: 1_000 }] }),
+    // 50% embedded gain, drawable (age-eligible owner is irrelevant for brokerage).
+    usStockAccount: {
+      ...makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK,
+        holdings: [{ id: 'b1', marketValue: 100_000, costBasis: 50_000 }] }),
+      type: 'brokerage', drawdownPriority: 1,
+    },
+  };
+  const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 11_000 }), DATE,
+    { checkNoMutation: false, balance: true, nonNegative: true });
+
+  assert.equal(next.usSavingsAccount.balance, 0, 'bill paid in full from cash + the draw');
+  assert.equal(next.usStockAccount.balance, 90_000, 'drew the $10,000 shortfall');
+  const gainAction = next.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+  assert.ok(gainAction, "the funding sale's gain must reach the tax engine");
+  assert.equal(Math.round(gainAction.gain), 5_000, '50% of the $10,000 sold');
+});
+
+test('UsTaxPaymentDebitReducer: an EXHAUSTED draw still reports what it realized', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const r = new UsTaxPaymentDebitReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', role: ACCOUNT_ROLES.US_SAVINGS,
+      holdings: [{ id: 'c1', marketValue: 1_000, costBasis: 1_000 }] }),
+    usStockAccount: {
+      ...makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK,
+        holdings: [{ id: 'b1', marketValue: 20_000, costBasis: 10_000 }] }),
+      type: 'brokerage', drawdownPriority: 1,
+    },
+  };
+  // Bill exceeds cash + the whole brokerage → replenishSavings drains it, then throws.
+  const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 50_000 }), DATE,
+    { checkNoMutation: false, balance: true, nonNegative: true });
+
+  assert.equal(next.usStockAccount.balance, 0, 'the failed draw still liquidated everything');
+  const gainAction = next.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+  assert.ok(gainAction, 'gains realized on the way to running dry are still taxable');
+  assert.equal(Math.round(gainAction.gain), 10_000, 'the full embedded gain was realized');
+  assert.ok(next.next.some(a => a.type === 'INTL_TRANSFER_APPLY'), 'residual still escalates');
 });

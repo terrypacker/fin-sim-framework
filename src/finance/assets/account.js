@@ -61,8 +61,15 @@ export class InsufficientFundsError extends Error {
    * @param {string} country   - ISO country code (e.g. 'US', 'AU')
    * @param {string} currency  - Currency code (e.g. 'USD', 'AUD')
    * @param {number} remaining - Amount still unmet after exhausting all accounts
+   * @param {{drawnKeys: string[], pendingTaxActions: object[], crossBorderTransfers: object[]}} [partial]
+   *   What the draw DID accomplish before running dry — the same shape
+   *   replenishSavings returns on success. A failed replenish is not a no-op: it
+   *   drained every eligible account on the way down, and those sales/distributions
+   *   realized real gains and real income. Callers catch this error and carry on,
+   *   so unless they drain `partial` those accruals never reach the tax engine and
+   *   the household is taxed on less than it actually realized.
    */
-  constructor(country, currency, remaining) {
+  constructor(country, currency, remaining, partial = null) {
     super(
       `Insufficient funds: ${remaining.toFixed(2)} ${currency} still needed ` +
       `after exhausting all eligible ${country} accounts`
@@ -71,6 +78,7 @@ export class InsufficientFundsError extends Error {
     this.country   = country;
     this.currency  = currency;
     this.remaining = remaining;
+    this.partial   = partial ?? { drawnKeys: [], pendingTaxActions: [], crossBorderTransfers: [] };
   }
 }
 
