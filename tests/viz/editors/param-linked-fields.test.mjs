@@ -79,6 +79,66 @@ describe('Param-linked editor fields', () => {
     expect('balance' in editor._readForm(editor._rootEl)).toBe(true);
   });
 
+  test('Account isTransactionAccount checkbox routes through its param (read, write, badge, excluded)', () => {
+    const param = { name: 'acct.usChecking.isTransactionAccount', value: false, label: 'Transaction Account',
+                    node: { type: 'account', stateKey: 'usChecking', field: 'isTransactionAccount' } };
+    let changed = 0;
+    const editor = new AccountEditor({
+      container: makeMockContainer(),
+      node: { id: 'c1', name: 'Shared Checking', type: 'checking', country: 'US',
+              stateKey: 'usChecking', currency: { code: 'USD', symbol: '$' }, holdings: [] },
+      people: [],
+      links: new ParamFieldLinks([param]),
+      onParamChange: () => { changed++; },
+    });
+    editor.render();
+    const root = editor._rootEl;
+
+    const box = root.querySelector('[data-id="isTransactionAccount"]');
+    // Row is visible for a cash account and reads the param value (unchecked).
+    expect(box.closest('[data-id="transactionAccountRow"]').style.display).not.toBe('none');
+    expect(box.checked).toBe(false);
+    // Badge present on the field.
+    expect(box.closest('.node-field').querySelector('.param-link-badge')).toBeTruthy();
+
+    // Checking the box writes a boolean to the param, not the service payload.
+    box.checked = true;
+    fire(box, 'change');
+    expect(param.value).toBe(true);
+    expect(changed).toBeGreaterThan(0);
+    expect('isTransactionAccount' in editor._readForm(root)).toBe(false); // owned by the param
+  });
+
+  test('isTransactionAccount row is hidden for non-cash account types', () => {
+    const editor = new AccountEditor({
+      container: makeMockContainer(),
+      node: { id: 'a1', name: 'US Stock', type: 'brokerage', country: 'US',
+              stateKey: 'usStockAccount', currency: { code: 'USD', symbol: '$' }, holdings: [] },
+      people: [], links: new ParamFieldLinks([]),
+    });
+    editor.render();
+    const row = editor._rootEl.querySelector('[data-id="transactionAccountRow"]');
+    expect(row.style.display).toBe('none');
+    // And a brokerage never emits the flag in its payload.
+    expect('isTransactionAccount' in editor._readForm(editor._rootEl)).toBe(false);
+  });
+
+  test('New cash account (no param link) carries the checkbox in its save payload', () => {
+    const editor = new AccountEditor({
+      container: makeMockContainer(),
+      node: null, // brand-new account — no stateKey, so no param link
+      people: [], links: new ParamFieldLinks([]),
+    });
+    editor.render();
+    const root = editor._rootEl;
+    root.querySelector('[data-id="type"]').value = 'checking';
+    editor._applyTypeVisibility(root, 'checking');
+    const box = root.querySelector('[data-id="isTransactionAccount"]');
+    box.checked = true;
+    const data = editor._readForm(root);
+    expect(data.isTransactionAccount).toBe(true); // rides the create payload
+  });
+
   test('Person monthlyWage routes through its param', () => {
     const param = { name: 'primaryWage', value: 8000,
                     node: { type: 'person', id: 'primary', field: 'monthlyWage' } };

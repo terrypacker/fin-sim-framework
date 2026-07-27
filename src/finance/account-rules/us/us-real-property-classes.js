@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
-import { resolveCashKey } from '../cash-routing.js';
+import { resolveDestinationCashKey } from '../cash-routing.js';
 
 const US_PRIMARY_HOME_EXEMPTION = 500_000;
 
@@ -60,7 +60,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const rawGain     = Math.max(0, salePrice - adjustedBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
-    const destKey     = destinationKey ?? resolveCashKey(this.stateRegistry, 'US', state);
+    const destKey     = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
     if (stateKey && state[stateKey]) {

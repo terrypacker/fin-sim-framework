@@ -395,6 +395,22 @@ handlers still names the canonical savings key. That is cosmetic (a per-event ba
 snapshot for reporting) — the **reducer** does the real money routing, and year-end syncs
 capture the true balances. This matches the precedent 6a set for `WagesIncomeHandler`.
 
+**Follow-up fix — stamped-`destinationKey` guard (post-6b).** The proceeds-crediting sale
+reducers (`CompanySaleApplyReducer`, `Us/AuHouseSaleApplyReducer`, `CollectibleSaleApplyReducer`)
+resolved their target as `destinationKey ?? resolveCashKey(...)`, where the *handler* stamps
+`destinationKey` via a state-only `defaultUsCashKey`/`resolveDestinationKey` helper that was
+**not** migrated in 6b (it still returns `usSavingsAccount`→`checkingAccount`, flag-blind). When
+the canonical savings account is **deleted or reflagged** (e.g. converting US Savings to a
+flagged `Shared Checking`), that helper stamps a key absent from `state`; `??` only catches
+`null`, so the absent-but-non-null key slipped through to `transaction(undefined)` →
+`Cannot read properties of undefined (reading 'balance')`, silently dropping the sale proceeds
+(which then starved later years into spurious `OUT_OF_FUNDS`). Fixed with
+`resolveDestinationCashKey(stateRegistry, country, state, destinationKey, ownerId)` in
+`cash-routing.js`: an explicit destination that **exists in state** still wins, otherwise the
+key is re-resolved through the flag-aware `resolveCashKey` chain. All four sale reducers route
+through it (`evt-cash-routing.test.mjs` CASH-8). The handler-side journal `RecordBalanceAction`
+key stays cosmetically legacy (same rationale as above).
+
 **Net effect:** flag any one account per country and *all* of that country's cash — in and
 out — flows through it; the former default savings account is spared (accrues its own
 interest only). With nothing flagged the chain returns the SAVINGS-role key, so pre-flag
@@ -587,11 +603,20 @@ intl-transfers; every other cash flow bypassed it (§7.4).*
   levers (`stockBalance`, `rothBalance`, `iraBalance`, …) can no longer sweep an
   account's total balance — parked as known orphans in `param-sweep-schema.test.mjs` and
   tracked in GH #511 alongside the interest-rate-sweep concern.
-- **`minimumBalance` is still static (open, post-6b).** The replenish threshold that drives
-  `REPLENISH_SAVINGS` is not yet templated — it remains the global `usSavingsMinBalance` /
-  `auSavingsMinBalance` params rather than a per-account generated field. Once the transaction
-  account can be any flagged account (§7.4), its floor should travel with it; folding
-  `minimumBalance` into the SAVINGS/CHECKING template is the natural next per-account field.
+- **`minimumBalance` is now per-account (resolved, post-6b).** ~~The replenish threshold that
+  drives `REPLENISH_SAVINGS` is not yet templated.~~ `minimumBalance` is folded into the
+  SAVINGS/CHECKING template as a plain-`Number`, `mc:false`/`opt:true` generated field
+  (`acct.<stateKey>.minimumBalance`), so the floor **travels with the flagged transaction
+  account** (§7.4) instead of being pinned to the canonical savings account. The runtime
+  already read the *resolved* account's own `minimumBalance` (`monthly-expenses-handler.js`,
+  `healthcare-event-handler.js`, `mortgage-payment-classes.js`, `loan-classes.js`) — this
+  closed only the **parameter-surface** gap. The global `usSavingsMinBalance` /
+  `auSavingsMinBalance` static params were retired behind aliases
+  (`usSavingsMinBalance → acct.usSavingsAccount.minimumBalance`, likewise AU); the two
+  optimization targets repoint to the generated keys; `INTL_RETIREMENT_DEFAULTS.*MinBalance`
+  stays as the bootstrap seed. Plain `Number` (not `money:true`): a floor is always in the
+  account's native currency and never cross-currency-converted, so the currency is inferred
+  from the account. Covered by `scenario-param-generator.test.mjs` GEN-12.
 - **Prebuilt scenario role.** `buildDefaultConfig` remains the *seed* (the default
   records + global params); it is no longer the *enumerator* of per-record params.
   The Overview's "pivot away from rigid prebuilts" is realized by making the record

@@ -14,6 +14,9 @@ import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
+// Cash account types eligible to be flagged the country's transaction account
+// (design 55 §7). Only these expose the isTransactionAccount checkbox + param.
+const CASH_TYPES       = new Set(['checking', 'savings']);
 // Holdings-bearing types (brokerage + retirement) — drive holdings-editor visibility.
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // Types carrying the contribution/earnings ledger — the only ones that show (and
@@ -123,6 +126,7 @@ export class AccountEditor extends BaseComponent {
 
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
+    el.querySelector('[data-id="isTransactionAccount"]').checked = !!this._node?.isTransactionAccount;
 
     const dp = this._node?.drawdownPriority;
     el.querySelector('[data-id="drawdownPriority"]').value = dp ?? '';
@@ -188,23 +192,25 @@ export class AccountEditor extends BaseComponent {
     // the user's value on Rebuild instead of overwriting it with the stale param.
     // getParamFor returns null for account types without the param, so listing it
     // unconditionally is safe.
+    const toNumber = (raw) => Number(raw) || 0;
     const candidates = [
-      { dataId: 'minimumBalance',    field: 'minimumBalance' },
-      { dataId: 'contributionBasis', field: 'contributionBasis' },
+      { dataId: 'minimumBalance',      field: 'minimumBalance',      coerce: toNumber },
+      { dataId: 'contributionBasis',   field: 'contributionBasis',   coerce: toNumber },
+      // Boolean transaction-account flag (§7) — the checkbox passes its `.checked`.
+      { dataId: 'isTransactionAccount', field: 'isTransactionAccount', coerce: (raw) => !!raw },
     ];
     // `balance` is param-linked only when it is a free scalar. When holdings drive the
     // balance it is computed (and no balance param is generated), so linking would
     // mislead — see _syncBalance / the generator skip.
-    if (this._holdings.length === 0) candidates.push({ dataId: 'balance', field: 'balance' });
+    if (this._holdings.length === 0) candidates.push({ dataId: 'balance', field: 'balance', coerce: toNumber });
 
-    for (const { dataId, field } of candidates) {
+    for (const { dataId, field, coerce } of candidates) {
       const param = this._links.getParamFor('account', stateKey, field);
       if (!param) continue;
       const input   = el.querySelector(`[data-id="${dataId}"]`);
       const labelEl = input?.closest('.node-field')?.querySelector('label');
       bindParamLinkedField({
-        input, labelEl, param,
-        coerce:   (raw) => Number(raw) || 0,
+        input, labelEl, param, coerce,
         onChange: () => this.onParamChange?.(),
         onOpen:   (p) => this.onOpenParam?.(p),
       });
@@ -417,6 +423,12 @@ export class AccountEditor extends BaseComponent {
       data.contributionBasis = el.querySelector('[data-id="contributionBasis"]').value;
       data.earningsBasis     = el.querySelector('[data-id="earningsBasis"]').value;
     }
+    // Transaction-account flag (design 55 §7) — cash accounts only. When param-linked
+    // it is dropped below (owned by the scenario param); a brand-new account has no
+    // param yet, so the flag rides the create payload.
+    if (CASH_TYPES.has(type)) {
+      data.isTransactionAccount = el.querySelector('[data-id="isTransactionAccount"]').checked;
+    }
     // Offset link (design 53 §3 / 54 P3) — the property whose loan this offset reduces.
     if (type === 'offset') {
       data.offsetsPropertyKey = el.querySelector('[data-id="offsetsPropertyKey"]').value || null;
@@ -432,6 +444,9 @@ export class AccountEditor extends BaseComponent {
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
+    // The transaction-account flag only applies to cash accounts (§7).
+    const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
+    if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';
     const offsetFields = el.querySelector('[data-id="offsetFields"]');
     if (offsetFields) offsetFields.style.display = type === 'offset' ? '' : 'none';
 

@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
-import { resolveCashKey } from '../cash-routing.js';
+import { resolveCashKey, resolveDestinationCashKey } from '../cash-routing.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -171,7 +171,7 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
-    const destKey = destinationKey ?? resolveCashKey(this.stateRegistry, 'US', state);
+    const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
     if (stateKey && state[stateKey] != null) {

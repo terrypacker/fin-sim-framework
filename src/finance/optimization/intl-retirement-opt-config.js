@@ -89,7 +89,7 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
 
   // ── Cash buffer thresholds ────────────────────────────────────────────────
   {
-    paramKey: 'usSavingsMinBalance',
+    paramKey: 'acct.usSavingsAccount.minimumBalance',
     label:    'US Savings Min Balance (USD)',
     type:     OPT_PARAM_TYPES.INTEGER,
     min: 10_000, max: 100_000, step: 10_000,
@@ -97,7 +97,7 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
   {
-    paramKey: 'auSavingsMinBalance',
+    paramKey: 'acct.auSavingsAccount.minimumBalance',
     label:    'AU Savings Min Balance (AUD)',
     type:     OPT_PARAM_TYPES.INTEGER,
     min: 10_000, max: 100_000, step: 10_000,

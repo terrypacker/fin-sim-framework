@@ -22,19 +22,24 @@
  * @param {HTMLElement} o.input         value input / select element
  * @param {HTMLElement} [o.labelEl]     the field's <label> (badge is appended)
  * @param {object}      o.param         the backing param (its `value` is mutated)
- * @param {(raw:string)=>*} [o.coerce]  coerce the raw input value before storing
+ * @param {(raw:string|boolean)=>*} [o.coerce]  coerce the raw input value before
+ *        storing (a checkbox passes its boolean `.checked`; other inputs pass `.value`)
  * @param {()=>void}    [o.onChange]    called after the param is written
  * @param {(param:object)=>void} [o.onOpen]  called when the 🔗 badge is clicked
  */
 export function bindParamLinkedField({ input, labelEl, param, coerce, onChange, onOpen }) {
   if (!input || !param) return;
 
-  // Show the param value (source of truth), not the domain object's field.
-  input.value = _toInputValue(input, param.value);
+  const isCheckbox = input.type === 'checkbox';
 
-  const evt = (input.tagName === 'SELECT' || input.type === 'date') ? 'change' : 'input';
+  // Show the param value (source of truth), not the domain object's field.
+  if (isCheckbox) input.checked = !!param.value;
+  else            input.value   = _toInputValue(input, param.value);
+
+  const evt = (isCheckbox || input.tagName === 'SELECT' || input.type === 'date') ? 'change' : 'input';
   input.addEventListener(evt, () => {
-    param.value = coerce ? coerce(input.value) : input.value;
+    const raw = isCheckbox ? input.checked : input.value;
+    param.value = coerce ? coerce(raw) : raw;
     onChange?.();
   });
 
