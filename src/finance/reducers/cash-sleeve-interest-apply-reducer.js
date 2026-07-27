@@ -59,7 +59,14 @@ export class CashSleeveInterestApplyReducer extends Reducer {
 
     // taxMode === 'us' — US ordinary income (federal + state). When AU-resident,
     // AU taxes it worldwide and relieves the US tax via FITO (design 52).
-    const withUs = { ...base, usOrdinaryIncomeYTD: (state.usOrdinaryIncomeYTD ?? 0) + amount };
+    // Money-market interest is net investment income (IRC §1411(c)(1)(A)(i)) →
+    // NIIT base. Only the 'us' taxMode books US ordinary income; 'deferred'
+    // (401k/IRA/Roth/super) and 'au' returned earlier, so they never reach here.
+    const withUs = {
+      ...base,
+      usOrdinaryIncomeYTD:       (state.usOrdinaryIncomeYTD ?? 0) + amount,
+      usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+    };
     if (residency === 'AU') {
       return this.newState({
         ...withUs,

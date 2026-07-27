@@ -63,7 +63,14 @@ function runDefaultIntlRetirement() {
 // present-zero trap) are fixed. A large downward swing in tax would mean the 50%
 // discount (or a spurious 100% CGT relief) has silently returned. A ±1% band
 // absorbs incidental FX/rounding drift.
-const EXPECTED_LIFETIME_TAX = 1_093_514;
+//
+// NIIT (IRC §1411): the 3.8% Net Investment Income Tax now applies in the
+// high-income US years (US-resident stretch, when MAGI clears the $250k MFJ
+// threshold and there is investment income/gains). It is a Chapter-2A surtax
+// outside the FTC system, so it lifts lifetime tax by ~$28k (+2.6%) to
+// ~1,121,674 — an UPWARD move (an added surtax), leaving ending net worth
+// within the ±1% band. A downward swing would still signal over-relief.
+const EXPECTED_LIFETIME_TAX = 1_121_674;
 const EXPECTED_NET_WORTH     = 11_522_944;
 const TOL = 0.01;
 

@@ -56,6 +56,17 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
    */
   _feieCap = 0;
 
+  /**
+   * Net Investment Income Tax (IRC §1411) — a flat 3.8% Chapter-2A surtax on the
+   * lesser of net investment income and the excess of MAGI over a statutory
+   * threshold. The thresholds are fixed by statute and, unlike the income-tax
+   * brackets, are NOT inflation-indexed — so they are intentionally omitted from
+   * the InflationAdjustedUsTaxRates scaling list and stay constant across years.
+   */
+  _niitRate            = 0.038;
+  _niitThresholdMfj    = 250_000;
+  _niitThresholdSingle = 200_000;
+
   computeTax(state) {
     const {
       usOrdinaryIncomeYTD    = 0,
@@ -102,23 +113,48 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const collectibles    = Math.max(0, usCollectibleGainsYTD);
     const collectiblesTax = collectibles * 0.28;
 
-    // Step 5: gross liability including early-withdrawal penalties
-    const penaltyTax = Math.max(0, usPenaltyYTD);
-    const grossTax   = ordinaryTax + capitalGainsTax + collectiblesTax + penaltyTax;
+    // Step 5: Chapter-1 gross income-tax liability including early-withdrawal
+    // penalties (pre-NIIT). This is the base the §904 FTC limitation applies to.
+    const penaltyTax         = Math.max(0, usPenaltyYTD);
+    const grossTaxBeforeNiit = ordinaryTax + capitalGainsTax + collectiblesTax + penaltyTax;
+
+    // Step 5b: Net Investment Income Tax (IRC §1411) — a flat 3.8% surtax on the
+    // lesser of net investment income and (MAGI − statutory threshold). NII is
+    // interest/dividends/coupons/net-rents (usNetInvestmentIncomeYTD) plus net
+    // capital gains and collectible gains; distributions from qualified
+    // retirement plans, wages and Social Security are excluded by construction
+    // (they never enter usNetInvestmentIncomeYTD). MAGI = AGI + the §911 FEIE
+    // add-back (§1411(d)(1)); with no FEIE this is just AGI. NIIT is a Chapter-2A
+    // tax OUTSIDE the foreign tax credit system, so it is excluded from the FTC
+    // limitation base and added on top of net liability — the FTC can never
+    // offset it (per the design decision for cross-border years).
+    const niitThreshold       = usFilingSingle ? this._niitThresholdSingle : this._niitThresholdMfj;
+    const netInvestmentIncome = Math.max(0, (state.usNetInvestmentIncomeYTD ?? 0) + cg + collectibles);
+    // MAGI = AGI + FEIE add-back (§1411(d)). This model's `agi` is ordinary-only
+    // (capital/collectible gains are tracked in separate buckets and never folded
+    // into it), so the gains — which are part of true AGI — are added back here.
+    const magi                = agi + cg + collectibles + feieExcluded;
+    const niitBase            = Math.max(0, Math.min(netInvestmentIncome, magi - niitThreshold));
+    const niitTax             = niitBase * this._niitRate;
 
     // Step 6: Foreign Tax Credit — per §904 basket (design 52 §4.3). Replaces the
     // pre-52 `min(ftcYTD, grossTax)` income-credit hack: credit the *actual* AU
     // tax paid on AU-source income (funded into ftcCurrent*/ftcPool* at the AU
     // settle), capped per basket by grossTax × foreignBasketIncome / totalTaxable,
     // drawing current-year foreign tax first then carryover vintages oldest→newest.
+    // The limitation base is the Chapter-1 tax only (grossTaxBeforeNiit); NIIT is
+    // deliberately excluded (it is not creditable against foreign tax).
     const ftc          = this._computeFtc(state, {
-      grossTax,
+      grossTax: grossTaxBeforeNiit,
       totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles,
       generalNumerator: Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) - feieExcluded),
       passiveNumerator: Math.max(0, state.foreignPassiveIncomeYTD ?? 0),
     });
     const credits      = ftc.credit;
-    const netLiability = Math.max(0, grossTax - credits);
+    // Total gross tax includes NIIT; net liability credits the FTC against the
+    // Chapter-1 tax only, then adds the uncreditable NIIT back on top.
+    const grossTax     = grossTaxBeforeNiit + niitTax;
+    const netLiability = Math.max(0, grossTaxBeforeNiit - credits) + niitTax;
 
     const totalGrossIncome = usOrdinaryIncomeYTD + cg + collectibles;
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -143,6 +179,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       capitalGainsTax,
       collectiblesTax,
       penaltyTax,
+      netInvestmentIncome,
+      modifiedAgi: magi,
+      niitThreshold,
+      niitTax,
       grossTax,
       credits,
       ftc,
@@ -162,6 +202,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         { label: 'Long-Term Capital Gains Tax',         amount:  capitalGainsTax },
         { label: 'Collectibles Tax (28%)',              amount:  collectiblesTax },
         { label: 'Early Withdrawal Penalties',          amount:  penaltyTax },
+        ...(niitTax > 0
+          ? [{ label: 'Net Investment Income Tax (3.8%)', amount: niitTax }]
+          : []),
         { label: 'Gross Tax',                           amount:  grossTax },
         ...(ftc.hasActivity
           ? [

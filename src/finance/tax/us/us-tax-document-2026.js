@@ -70,6 +70,9 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Long-Term Capital Gains Tax', amount: taxDetail.capitalGainsTax },
             { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
+            ...(taxDetail.niitTax > 0
+              ? [{ label: 'Net Investment Income Tax (Form 8960, 3.8%)', amount: taxDetail.niitTax }]
+              : []),
             { label: 'Gross Tax',                   amount: taxDetail.grossTax },
           ],
         },

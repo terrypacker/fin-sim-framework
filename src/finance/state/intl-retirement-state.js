@@ -133,6 +133,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usOrdinaryIncomeYTD = 0;
     this.usNegativeIncomeYTD = 0;
     this.usCapitalGainsYTD = 0;
+    // Net investment income slice of usOrdinaryIncomeYTD — the interest,
+    // dividend, bond-coupon and net-rental dollars that are subject to the 3.8%
+    // Net Investment Income Tax (IRC §1411). Tracked in parallel because
+    // usOrdinaryIncomeYTD also holds non-investment income (wages, SS, retirement
+    // distributions) which NIIT excludes. Capital/collectible gains are already
+    // isolated and added to NII at computeTax time, not here.
+    this.usNetInvestmentIncomeYTD = 0;
     this.usPenaltyYTD = 0;
     this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;

@@ -59,7 +59,12 @@ export class UsSavingsInterestCreditReducer extends Reducer {
     this.accountService.transaction(state[key], action.amount, date);
 
     const usNext = (state.usOrdinaryIncomeYTD ?? 0) + action.amount;
-    const base   = { ...state, usOrdinaryIncomeYTD: usNext };
+    // Savings interest is net investment income (IRC §1411(c)(1)(A)(i)) → NIIT base.
+    const base   = {
+      ...state,
+      usOrdinaryIncomeYTD:       usNext,
+      usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + action.amount,
+    };
 
     const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
     if (state.people?.[personKey]?.residency === 'AU') {

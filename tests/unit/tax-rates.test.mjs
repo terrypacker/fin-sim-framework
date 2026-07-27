@@ -217,8 +217,10 @@ test('TE-4b: MFJ LTCG stacked on $200k ordinary income — no 0% bracket availab
     usState({ usOrdinaryIncomeYTD: 200_000, usCapitalGainsYTD: 100_000 }),
   );
   assert.strictEqual(capitalGainsTax, 15_000);
-  // Ordinary tax: 23850*0.10 + (96950-23850)*0.12 + (170000-96950)*0.22 = 27228
-  assert.strictEqual(netLiability, 27_228 + 15_000);
+  // Ordinary tax: 23850*0.10 + (96950-23850)*0.12 + (170000-96950)*0.22 = 27228.
+  // NIIT (IRC §1411): MAGI = 200k ordinary + 100k gains = 300k; excess over the
+  // $250k MFJ threshold = 50k; NII = 100k gains → 3.8% × min(100k, 50k) = 1900.
+  assert.strictEqual(netLiability, 27_228 + 15_000 + 1_900);
 });
 
 test('TE-4b: MFJ LTCG fully in 0% bracket when ordinary income is low', () => {

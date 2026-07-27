@@ -164,7 +164,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Interest is net investment income (IRC §1411(c)(1)(A)(i)) → NIIT base.
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
           next = {
@@ -182,7 +187,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['STOCK_DIVIDEND_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Dividends are net investment income (IRC §1411(c)(1)(A)(i)) → NIIT base.
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
           next = {
@@ -202,7 +212,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['BOND_COUPON_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Bond coupon interest is net investment income (IRC §1411(c)(1)(A)(i)) →
+        // NIIT base. The state-only Treasury exemption is orthogonal to NIIT.
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
           next = {
@@ -279,7 +295,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['US_RENTAL_INCOME_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        // Net rental income is net investment income (IRC §1411(c)(1)(A)(i)) →
+        // NIIT base. `amount` may be negative (a rental loss), which correctly
+        // reduces the aggregate NII pool before it is floored at 0 in computeTax.
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+        };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
           next = {
