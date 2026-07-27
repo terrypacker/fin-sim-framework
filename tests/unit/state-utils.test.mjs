@@ -11,7 +11,7 @@
 // ─── Helper ───────────────────────────────────────────────────────────────────
 import assert   from 'node:assert/strict';
 import { test } from 'node:test';
-import { diffStates } from "../../src/simulation-framework/state-utils.js";
+import { diffStates, MutationTracker } from "../../src/simulation-framework/state-utils.js";
 
 // ─── diffStates ───────────────────────────────────────────────────────────────
 
@@ -104,4 +104,69 @@ test('diffStates: structural sharing — same primitive reference short-circuits
   const next  = { a: 1, b: 2 };
   // identical by value — no changes expected
   assert.deepEqual(diffStates(prev, next), []);
+});
+
+// ─── Journal immutability: object/array leaves must be detached from live state ──
+//
+// Regression for the holdings-activity bug: a savings account's single synthetic
+// holding is rescaled in place (holdings[0].marketValue = …) on every event. The
+// journal's stateDiff `after` used to store a live reference to that array, so a
+// later in-place mutation silently rewrote every past entry to the final value —
+// making the Holdings "Activity" ledger show wrong deltas / BUY-vs-SELL kinds.
+
+test('diffStates: object/array `after` is a detached snapshot, immune to later in-place mutation', () => {
+  const prev = { acct: { holdings: [{ id: 'h1', marketValue: 100 }] } };
+  const liveHolding = { id: 'h1', marketValue: 200 };
+  const next = { acct: { holdings: [liveHolding] } };   // `next.acct.holdings` is live state
+
+  const changes = diffStates(prev, next);
+  const diff = changes.find(c => c.field === 'acct.holdings');
+  assert.ok(diff, 'holdings change is recorded');
+  assert.strictEqual(diff.after[0].marketValue, 200, 'after reflects value at diff time');
+  assert.notStrictEqual(diff.after, next.acct.holdings, 'after must not alias the live array');
+
+  // A later event rescales the same holding in place and adds another holding.
+  liveHolding.marketValue = 999;
+  next.acct.holdings.push({ id: 'h2', marketValue: 1 });
+
+  // The recorded diff is a durable historical record and must NOT change.
+  assert.strictEqual(diff.after.length, 1, 'after array is detached from the live array');
+  assert.strictEqual(diff.after[0].marketValue, 200, 'after value is frozen at diff time');
+});
+
+test('diffStates: object `before` is also detached from a live prev reference', () => {
+  const liveBefore = { balance: 100, holdings: [{ id: 'h1', marketValue: 100 }] };
+  const prev = { acct: liveBefore };
+  const next = { acct: { balance: 200, holdings: [{ id: 'h1', marketValue: 200 }] } };
+
+  const diff = diffStates(prev, next).find(c => c.field === 'acct.holdings');
+  assert.ok(diff);
+  liveBefore.holdings[0].marketValue = 777;   // mutate the live prev afterwards
+  assert.strictEqual(diff.before[0].marketValue, 100, 'before is frozen at diff time');
+});
+
+// ─── MutationTracker ────────────────────────────────────────────────────────────
+
+test('MutationTracker: object before/after are detached snapshots', () => {
+  MutationTracker.begin();
+  const before = [{ id: 'h1', marketValue: 100 }];
+  const after  = [{ id: 'h1', marketValue: 200 }];
+  MutationTracker.record('acct.holdings', before, after);
+  // Mutate the live arrays after recording but before flush.
+  after[0].marketValue = 999;
+  before[0].marketValue = 777;
+  const sd = MutationTracker.flush();
+
+  assert.strictEqual(sd[0].after[0].marketValue, 200, 'after snapshot is frozen at record time');
+  assert.strictEqual(sd[0].before[0].marketValue, 100, 'before snapshot is frozen at record time');
+  assert.notStrictEqual(sd[0].after, after, 'after must not alias the live array');
+});
+
+test('MutationTracker: primitive values pass through unchanged with delta', () => {
+  MutationTracker.begin();
+  MutationTracker.record('acct.balance', 100, 250);
+  const sd = MutationTracker.flush();
+  assert.strictEqual(sd[0].before, 100);
+  assert.strictEqual(sd[0].after, 250);
+  assert.strictEqual(sd[0].delta, 150);
 });
