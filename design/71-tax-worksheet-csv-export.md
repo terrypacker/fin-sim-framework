@@ -399,6 +399,44 @@ income beneath it.
 | 2 | **DONE** — Flattener | `tax-worksheet-export.js` — `buildTaxWorksheetRows` + `toCsv` (§4); `bands`/`flat` attached in the 1040 module (§4.0) | `tax-worksheet-export.test.mjs` TWE-1…TWE-15, incl. tie-out against a real 7-year run and CSV-vs-popup line-for-line |
 | 3 | **DONE** — 1040 document fixes | SECA (+ SS/Medicare `sub` rows), Additional Medicare, ½ SE deduction added to `us-tax-document-2026.js` (§2.2); FEIE line switched to the new `feieApplied` (§7.1) | `us-1040-document-footing.test.mjs` F1040-1…F1040-6 — footing asserted directly, so the document cannot silently drift from the engine again |
 | 4 | **DONE** — Headless script | `scripts/export-tax-csv.mjs`, `npm run export:tax`; `--reference` runs the built-in scenario with zero setup; `--check` runs `verifyWorksheetRows` | Reference run exports 422 rows over 15 tax years, 30 bracket schedules, all §6 checks passing |
+| 5 | **DONE** — Multi-year drill reports | `--drill-reports <all\|id[,id]>` (§7.3); shared `run-report.js` + `report-csv.js` + `drill-report-export.js` | One file per report covering every settled year; `drill-report-export.test.mjs` |
+
+### 7.3 Drill reports export one file per report, all years inside
+
+The workbench panel scopes a report to **one** period at a time, so its download button can only ever
+produce a single year — useless for validating a 30-year run. `--drill-reports` stacks the years
+itself: every row leads with a `taxYear` column, and each report becomes one CSV in `--drill-out`
+(default `./drill-reports/`) alongside a `_manifest.csv` naming what was written. An empty report is
+recorded in the manifest with zero rows rather than written as an empty file, so "no rows" is
+distinguishable from "nothing to say".
+
+Two shapes of report, one output contract:
+
+- Reports that already group by `year` (`tax-paid-by-year` and friends) run **once** over the whole
+  simulation; their `year` key is promoted to `taxYear`.
+- Every other report is run **once per settled period**, with the period's tax year and label stamped
+  on its rows. Facets other than `cc`/`period` are left unset, which each definition reads as "All".
+
+`taxYear` follows the convention each return is filed under: the calendar year for US, the
+fiscal-year **start** year for AU (`2025` = FY2025-26). That is what the worksheet CSV carries, so a
+drill file and the worksheet join on `(taxYear, cc)` without an off-by-one — the period rollup keys
+AU years by their end year, and restating it here is what design 73 §0.4 fixed. A report whose cc is
+implicit rather than faceted declares its basis via `ReportDefinition.yearCc`.
+
+Period buckets come from a country's settle entries, so they never overlap. A report with a `cc`
+facet runs once per requested country against that country's own tax years; a report without one (the
+per-account reports) uses the first requested country's tax years as its bucket basis — US calendar
+years and AU fiscal years would otherwise double-count the same entries into one file.
+
+`--drill-detail groups` (default) emits one row per group per year, carrying the aggregates the
+definition declares — the pivot-friendly validation shape. `--drill-detail entries` emits one row per
+contributing journal entry, which is what the panel's own download gives you.
+
+**The UI and the export are the same computation.** Running a report used to live only inside the
+plugin's `_runQuery()`, and CSV generation only inside its `_generateCsv()`. Both were lifted into
+`run-report.js` and `report-csv.js`, which the plugin now calls — so a drill report exported from the
+command line cannot drift from the one on screen. That is the same guarantee §2.1 makes for the
+worksheet rows against the tax popup.
 
 ### 7.2 The §6 checks are executable, not just documented
 

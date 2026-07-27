@@ -455,20 +455,29 @@ test('capital-gains-by-disposal: AU report includes US-asset disposals realized 
 
   const entries = [
     // US stock sale realized while AU-resident — feeds auCapitalGainsYTD via the
-    // US tax module's isAuResident branch, but the action is cc 'US'. The old
-    // `familyTypes('CAPITAL_GAINS', { cc: 'AU' })` filter dropped it; it must
-    // appear now.
-    entry({ actionType: 'STOCK_WITHDRAWAL_TAX',    data: { gain: 40000,    proceeds: 100000, residency: 'AU', description: 'usStockAccount' } }),
-    // Native AU stock sale, AU-resident.
-    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain: 23371.89, proceeds:  60000, residency: 'AU', description: 'auStockAccount' } }),
+    // US tax module's isAuResident branch, but the action is cc 'US'. The payload
+    // `gain` stays in USD (40000) while the accumulator takes the AUD-converted
+    // figure (60000): the report must report what the AU return assesses.
+    entry({
+      actionType: 'STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 40000, proceeds: 100000, residency: 'AU', description: 'usStockAccount' },
+      stateDiff:  [{ field: 'auCapitalGainsYTD', before: 0, after: 60000, delta: 60000 }],
+    }),
+    // Native AU stock sale, AU-resident — payload and accumulator agree (both AUD).
+    entry({
+      actionType: 'AU_STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 23371.89, proceeds: 60000, residency: 'AU', description: 'auStockAccount' },
+      stateDiff:  [{ field: 'auCapitalGainsYTD', before: 60000, after: 83371.89, delta: 23371.89 }],
+    }),
   ];
 
   const { groups, grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
   const types = groups.map(g => g.key.actionType).sort();
   assert.ok(types.includes('STOCK_WITHDRAWAL_TAX'),    'US-cc disposal must appear in the AU report');
   assert.ok(types.includes('AU_STOCK_WITHDRAWAL_TAX'), 'AU-cc disposal must appear in the AU report');
-  // Ties out to the "Capital Gains (before discount)" line (= auCapitalGainsYTD).
-  assert.strictEqual(Math.round(grandTotal * 100) / 100, 63371.89);
+  // Ties out to the "Capital Gains (before discount)" line (= auCapitalGainsYTD)
+  // in AUD — 40000 USD would leave the line short by the exchange rate (§0b.1).
+  assert.strictEqual(Math.round(grandTotal * 100) / 100, 83371.89);
 });
 
 test('capital-gains-by-disposal: AU report excludes non-resident disposals (they route to NR withholding)', async () => {
@@ -476,14 +485,24 @@ test('capital-gains-by-disposal: AU report excludes non-resident disposals (they
   const def = reg.get('capital-gains-by-disposal');
 
   const entries = [
-    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain: 10000, proceeds: 30000, residency: 'AU' } }),
-    // Non-resident disposal: gain accrues to auNonResidentWithholdingYTD, not
-    // auCapitalGainsYTD — must NOT show on the AU capital-gains report.
-    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain:  5000, proceeds: 20000, residency: 'US' } }),
+    entry({
+      actionType: 'AU_STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 10000, proceeds: 30000, residency: 'AU' },
+      stateDiff:  [{ field: 'auCapitalGainsYTD', before: 0, after: 10000, delta: 10000 }],
+    }),
+    // Non-resident disposal: the gain accrues to auNonResidentWithholdingYTD, never
+    // to auCapitalGainsYTD. Selecting on the accumulator excludes it by construction,
+    // so the report no longer needs a `residency` predicate to approximate the rule —
+    // which is what made mid-year move years disagree with the return (§0b.1).
+    entry({
+      actionType: 'AU_STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 5000, proceeds: 20000, residency: 'US' },
+      stateDiff:  [{ field: 'auNonResidentWithholdingYTD', before: 0, after: 5000, delta: 5000 }],
+    }),
   ];
 
   const { grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
-  assert.strictEqual(grandTotal, 10000, 'only resident-realized gains belong to the AU line');
+  assert.strictEqual(grandTotal, 10000, 'only gains the AU line actually assesses');
 });
 
 test('capital-gains-by-disposal: US report sums every disposal incl gain-only types, regardless of residency', async () => {
@@ -491,13 +510,25 @@ test('capital-gains-by-disposal: US report sums every disposal incl gain-only ty
   const def = reg.get('capital-gains-by-disposal');
 
   const entries = [
-    entry({ actionType: 'STOCK_WITHDRAWAL_TAX',  data: { gain: 40000, proceeds: 100000, residency: 'AU', description: 'usStockAccount' } }),
+    entry({
+      actionType: 'STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 40000, proceeds: 100000, residency: 'AU', description: 'usStockAccount' },
+      stateDiff:  [{ field: 'usCapitalGainsYTD', before: 0, after: 40000, delta: 40000 }],
+    }),
     // House sale carries no `residency` and (historically) no `proceeds` field —
     // the old `proceeds > 0` filter dropped it. After normalising taxableGain →
     // gain it must be summed.
-    entry({ actionType: 'US_HOUSE_SALE_TAX',     data: { gain: 50000, proceeds: 800000, description: 'usHouse' } }),
+    entry({
+      actionType: 'US_HOUSE_SALE_TAX',
+      data:       { gain: 50000, proceeds: 800000, description: 'usHouse' },
+      stateDiff:  [{ field: 'usCapitalGainsYTD', before: 40000, after: 90000, delta: 50000 }],
+    }),
     // Collectible sale carries gain but no proceeds — also previously dropped.
-    entry({ actionType: 'COLLECTIBLE_SALE_TAX',  data: { gain:  5000, residency: 'US' } }),
+    entry({
+      actionType: 'COLLECTIBLE_SALE_TAX',
+      data:       { gain: 5000, residency: 'US' },
+      stateDiff:  [{ field: 'usCapitalGainsYTD', before: 90000, after: 95000, delta: 5000 }],
+    }),
   ];
 
   const { groups, grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
@@ -512,28 +543,64 @@ test('capital-gains-by-disposal: US report sums every disposal incl gain-only ty
   assert.strictEqual(collectible.proceeds, 0, 'gain-only row sums to 0 proceeds, not NaN');
 });
 
-test('capital-gains-by-disposal: dedupes the reducer fan-out so one disposal counts once', async () => {
+test('capital-gains-by-disposal: the accumulator predicate collapses the reducer fan-out without deduping', async () => {
   const reg = new ReportDefinitionRegistry();
   const def = reg.get('capital-gains-by-disposal');
-  assert.strictEqual(def.dedupeBy, 'instanceId', 'CG report must dedupe by instanceId');
+  assert.strictEqual(def.dedupeBy, null,
+    'the stateKey predicate already selects one row per disposal per jurisdiction');
 
-  // ONE house sale (gain 350000), journaled 3× — one row per TAX_CALC reducer
-  // (dynamic:US, state:classify, dynamic:AU) — all sharing the action instanceId
-  // and carrying the identical `gain`/`proceeds` payload. Without dedupe the sum
-  // and count triple; with dedupe they reflect the single disposal.
+  // ONE house sale, journaled 3× — one row per TAX_CALC reducer (dynamic:US,
+  // state:classify, dynamic:AU) — all sharing the instanceId and the identical
+  // payload. Only the US reducer's entry accrues usCapitalGainsYTD; the state
+  // reducer writes its own accumulator and the AU one writes nothing. Selecting
+  // on the accumulator therefore counts the disposal once by construction.
   const entries = [
-    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
-    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
-    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
+    entry({
+      actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1',
+      data:      { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' },
+      stateDiff: [{ field: 'usCapitalGainsYTD', before: 0, after: 350000, delta: 350000 }],
+    }),
+    entry({
+      actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1',
+      data:      { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' },
+      stateDiff: [{ field: 'stateCapitalGainsYTD', before: 0, after: 350000, delta: 350000 }],
+    }),
+    entry({
+      actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1',
+      data:      { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' },
+      stateDiff: [],
+    }),
   ];
 
   const { groups, grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
   assert.strictEqual(groups.length, 1);
   const g = groups[0];
-  assert.strictEqual(g.total, 350000, 'gain summed once, not tripled');
-  assert.strictEqual(g.count, 1, 'one distinct disposal, not three journal rows');
-  assert.strictEqual(g.proceeds, 1200000, 'proceeds summed once');
+  assert.strictEqual(g.total, 350000, 'gain counted once, not tripled');
+  assert.strictEqual(g.count, 1, 'one accruing row, not three journal rows');
+  assert.strictEqual(g.proceeds, 1200000, 'proceeds counted once');
   assert.strictEqual(grandTotal, 350000);
+});
+
+test('capital-gains-by-disposal: a disposal splitting across shared and per-person accumulators keeps both legs', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('capital-gains-by-disposal');
+
+  // The reason the report must NOT dedupe by instanceId: one action can accrue to
+  // both the shared pool and a per-person map, and the AU return assesses their
+  // sum. Deduping would collapse the two legs to one and lose half the gain.
+  const entries = [
+    entry({
+      actionType: 'AU_STOCK_WITHDRAWAL_TAX', instanceId: 'disposal-1',
+      data:      { gain: 30000, proceeds: 90000, residency: 'AU', description: 'auStockAccount' },
+      stateDiff: [
+        { field: 'auCapitalGainsYTD',            before: 0, after: 18000, delta: 18000 },
+        { field: 'auPersonCapitalGainsYTD.p-1',  before: 0, after: 12000, delta: 12000 },
+      ],
+    }),
+  ];
+
+  const { grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
+  assert.strictEqual(grandTotal, 30000, 'shared 18000 + per-person 12000');
 });
 
 // ─── Facet sanity ────────────────────────────────────────────────────────────
@@ -728,11 +795,79 @@ test('person multiselect on ordinary-income-by-source filters by personKey', asy
   assert.strictEqual(onlyP1.grandTotal, 12000);
 });
 
+test('ordinary-income-by-source: AU unions the per-person accumulator with the shared pool', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('ordinary-income-by-source');
+
+  // AU income lands in two places. Migrated types (rental, savings) write
+  // straight into the per-person map; un-migrated ones (dividends, coupons) go
+  // to the shared household pool. The AU return assesses the union, so the drill
+  // that explains its gross line has to as well — before design 73 §0.5 the
+  // per-person half was invisible and pre-move years reported nothing at all.
+  const entries = [
+    entry({
+      actionType: 'AU_RENTAL_INCOME_TAX',
+      data:       { amount: 9000, cc: 'AU', personKey: 'p-1' },
+      stateDiff:  [{ field: 'auPersonOrdinaryIncomeYTD.p-1', before: 0, after: 9000, delta: 9000 }],
+    }),
+    entry({
+      actionType: 'AU_SAVINGS_EARNINGS_TAX',
+      data:       { amount: 1000, cc: 'AU', personKey: 'p-2' },
+      stateDiff:  [{ field: 'auPersonOrdinaryIncomeYTD.p-2', before: 0, after: 1000, delta: 1000 }],
+    }),
+    entry({
+      actionType: 'STOCK_DIVIDEND_TAX',
+      data:       { amount: 4000, cc: 'AU' },
+      stateDiff:  [{ field: 'auOrdinaryIncomeYTD', before: 0, after: 4000, delta: 4000 }],
+    }),
+    // The settle resets both accumulators; its negative deltas must stay excluded
+    // or the gross line nets to zero.
+    entry({
+      actionType: 'AU_TAX_SETTLE_APPLY',
+      data:       { cc: 'AU' },
+      stateDiff:  [
+        { field: 'auOrdinaryIncomeYTD',          before: 4000, after: 0, delta: -4000 },
+        { field: 'auPersonOrdinaryIncomeYTD.p-1', before: 9000, after: 0, delta: -9000 },
+      ],
+    }),
+  ];
+
+  const { grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
+  assert.strictEqual(grandTotal, 14000, 'per-person 9000 + 1000 and shared 4000');
+
+  // The per-person rows still respect the person facet.
+  const { grandTotal: p1 } = await runDef(def, { cc: 'AU', period: null, personKeys: ['p-1'] }, entries);
+  assert.strictEqual(p1, 9000);
+});
+
+test('ordinary-income-by-source: the US side has no per-person map, so the union is inert', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('ordinary-income-by-source');
+
+  const entries = [
+    entry({
+      actionType: 'WAGES_INCOME_TAX',
+      data:       { amount: 12000, cc: 'US' },
+      stateDiff:  [{ field: 'usOrdinaryIncomeYTD', before: 0, after: 12000, delta: 12000 }],
+    }),
+    // A same-named AU per-person field must NOT leak into the US report.
+    entry({
+      actionType: 'AU_RENTAL_INCOME_TAX',
+      data:       { amount: 5000, cc: 'AU' },
+      stateDiff:  [{ field: 'auPersonOrdinaryIncomeYTD.p-1', before: 0, after: 5000, delta: 5000 }],
+    }),
+  ];
+
+  const { grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  assert.strictEqual(grandTotal, 12000);
+});
+
 // ─── AuTaxByPersonYearDef ────────────────────────────────────────────────────
 
-function auSettleEntry({ date, personTaxDetails }) {
+function auSettleEntry({ date, personTaxDetails, instanceId }) {
   return entry({
     date,
+    instanceId,
     actionType: 'AU_TAX_SETTLE_APPLY',
     data: { tax: personTaxDetails.reduce((s, p) => s + p.taxDetail.netLiability, 0), personTaxDetails },
   });
@@ -773,6 +908,32 @@ test('au-tax-by-person-year: fans out personTaxDetails and groups by year + pers
   assert.strictEqual(byKey['2027|Alice'], 13000);
   assert.strictEqual(byKey['2027|Bob'],   9500);
   assert.strictEqual(grandTotal, 12000 + 8000 + 13000 + 9500);
+});
+
+test('au-tax-by-person-year: dedupes the reducer fan-out so each person is not charged the household total', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('au-tax-by-person-year');
+  assert.strictEqual(def.dedupeBy, 'instanceId');
+
+  // ONE settle action, journaled by both reducers that consume
+  // AU_TAX_SETTLE_APPLY (the settle reducer and AccumulateTaxesPaidReducer) —
+  // two entries sharing an instanceId. The per-person projection then fans each
+  // of them out per person. Undeduped, Alice sums to 24000 (2 × her own
+  // liability, which happens to equal the household total) instead of 12000.
+  const details = [
+    { personKey: 'p-1', personName: 'Alice', taxDetail: { netLiability: 12000 } },
+    { personKey: 'p-2', personName: 'Bob',   taxDetail: { netLiability:  8000 } },
+  ];
+  const entries = [
+    auSettleEntry({ date: new Date(Date.UTC(2026, 5, 30)), personTaxDetails: details, instanceId: 'settle-1' }),
+    auSettleEntry({ date: new Date(Date.UTC(2026, 5, 30)), personTaxDetails: details, instanceId: 'settle-1' }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { period: null }, entries);
+  const byKey = Object.fromEntries(groups.map(g => [`${g.key.year}|${g.key.personName}`, g.total]));
+  assert.strictEqual(byKey['2026|Alice'], 12000, 'counted once, not once per reducer');
+  assert.strictEqual(byKey['2026|Bob'],    8000);
+  assert.strictEqual(grandTotal, 20000, 'household total, not double it');
 });
 
 test('au-tax-by-person-year: personKeys facet narrows to selected people', async () => {

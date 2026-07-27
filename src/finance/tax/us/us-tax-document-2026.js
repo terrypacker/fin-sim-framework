@@ -87,13 +87,34 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Long-Term Capital Gains Tax', amount: taxDetail.capitalGainsTax, bands: br.ltcg },
             { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax, flat: br.collectibles },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
+            // The drill hangs off the NII sub-row, NOT the tax line (design 73
+            // §0b.2). What `niit-base-by-component` explains is the §1411 base —
+            // linking it to the tax made a reader (and the cross-foot) compare a
+            // 694k report against a 26k line. The two sub-rows are also the whole
+            // computation: the tax applies to the LESSER of NII and MAGI over the
+            // threshold, so without them a year where the MAGI cap binds cannot be
+            // reconciled at 3.8% of anything shown.
             ...(taxDetail.niitTax > 0
-              ? [{
-                  label: 'Net Investment Income Tax (Form 8960, 3.8%)',
-                  amount: taxDetail.niitTax,
-                  flat: br.niit,
-                  drillReport: drill('niit-base-by-component'),
-                }]
+              ? [
+                  {
+                    label: 'Net Investment Income Tax (Form 8960, 3.8%)',
+                    amount: taxDetail.niitTax,
+                    flat: br.niit,
+                  },
+                  {
+                    label: 'Net Investment Income (Form 8960 line 12)',
+                    amount: br.niit?.netInvestmentIncome,
+                    sub: true,
+                    drillReport: drill('niit-base-by-component'),
+                  },
+                  {
+                    label: 'MAGI over §1411 threshold',
+                    amount: br.niit?.magi != null && br.niit?.threshold != null
+                      ? Math.max(0, br.niit.magi - br.niit.threshold)
+                      : undefined,
+                    sub: true,
+                  },
+                ]
               : []),
             // SECA and the Additional Medicare surtax are inside grossTax but were
             // never listed, so for a self-employed filer the visible lines did not

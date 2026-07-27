@@ -26,6 +26,7 @@
     "diff": "node scripts/diff-scenarios.mjs",
     "sweep": "node scripts/sweep-scenario.mjs",
     "export:tax": "node scripts/export-tax-csv.mjs",
+    "crossfoot": "node scripts/crossfoot-drill-reports.mjs",
     "probe:residency-cgt": "node scripts/probe-residency-cgt.mjs",
     "probe:foreign-property-cgt": "node scripts/probe-foreign-property-cgt.mjs"
   },
