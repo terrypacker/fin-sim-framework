@@ -275,6 +275,191 @@ export const DEFAULT_DRAWDOWN_WEIGHT_PARAMS = Object.fromEntries(
   Object.entries(DEFAULT_DRAWDOWN_WEIGHTS).map(
     ([role, w]) => [drawdownWeightKey(role), w]));
 
+// ─── Lever A — optimizable holding-allocation mix (design 61 §4-A) ─────────────
+
+/**
+ * The sentinel `allocationStrategy` value that activates the Lever-A continuous
+ * weight vector. When selected, the TARGET_ALLOCATION registry entry synthesizes
+ * the rebalance target from the per-class `allocWeight::<CLASS>` params (via
+ * stick-breaking) instead of reading the `Object` `rebalanceTargetAllocation`
+ * param. The default is `STATIC`, so existing scenarios are unaffected.
+ */
+export const ALLOCATION_OPTIMIZED_MODE = 'OPTIMIZED';
+
+/**
+ * The searchable allocation classes, in a FIXED order — the LAST class is the
+ * stick-breaking *residual* (it carries no param; its share is `1 − Σ` of the
+ * others). CASH is included as a first-class target, not a leftover (design 61
+ * §OQ2): holding cash through a crash is a deliberate, optimizable choice.
+ */
+export const ALLOC_WEIGHT_CLASSES = [
+  ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD,
+];
+
+/** Param-key prefix for the per-class Lever-A weights. */
+export const ALLOC_WEIGHT_PREFIX = 'allocWeight';
+
+/**
+ * Separator between the prefix and the class in a weight key, giving
+ * `allocWeight::EQUITY`. A `::` (not a `.`) is REQUIRED for the same reason as the
+ * design-58 drawdown weights ([[optimizer-param-key-dot-collision]]): the
+ * MC/Opt/MPC candidate path applies params through `set()`, which splits on `.`/`[`
+ * and refuses to create a missing `allocWeight` parent, so a dotted key would be
+ * silently dropped and the axis inert. `::` keeps it a single flat token.
+ */
+export const ALLOC_WEIGHT_SEP = '::';
+
+/** The param key for a class's Lever-A weight, e.g. `allocWeight::EQUITY`. */
+export function allocWeightKey(cls) {
+  return `${ALLOC_WEIGHT_PREFIX}${ALLOC_WEIGHT_SEP}${cls}`;
+}
+
+/**
+ * Human-readable labels for the allocation classes (UI param labels).
+ */
+export const ALLOC_WEIGHT_CLASS_LABELS = {
+  [ALLOCATION.EQUITY]: 'Equity',
+  [ALLOCATION.BOND]:   'Bond',
+  [ALLOCATION.CASH]:   'Cash',
+  [ALLOCATION.GOLD]:   'Gold',
+};
+
+/**
+ * Named allocation presets → warm-starts. Each is a point in mix space that seeds
+ * the solver (the Lever-B `drawdownWeightsFromStrategy` analog). Weights sum to 1.
+ */
+export const ALLOCATION_PRESETS = {
+  SIXTY_FORTY: { EQUITY: 0.60, BOND: 0.40, CASH: 0.00, GOLD: 0.00 },
+  ALL_WEATHER: { EQUITY: 0.30, BOND: 0.40, CASH: 0.15, GOLD: 0.15 },
+  EQUITY_TILT: { EQUITY: 0.80, BOND: 0.15, CASH: 0.05, GOLD: 0.00 },
+};
+
+/**
+ * Default target mix — the 60/40 that the legacy `rebalanceTargetAllocation`
+ * default (`{EQUITY:0.60, BOND:0.40}`) also expresses, so `OPTIMIZED` with untuned
+ * weights reproduces today's opportunistic-rebalance target.
+ */
+export const DEFAULT_ALLOC_WEIGHTS = ALLOCATION_PRESETS.SIXTY_FORTY;
+
+/** Clamp a value into [0,1] (NaN → 0). */
+function clamp01(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+/**
+ * Synthesize a target allocation distribution (summing to 1) from the per-class
+ * `allocWeight::<CLASS>` params using **stick-breaking** (design 61 §4-A / OQ1).
+ *
+ * Stick-breaking is a bijection onto the simplex with NO scale-degenerate ray (the
+ * pathology a naive `w_i / Σ w_j` normalization would introduce) and NO `Σ≤1`
+ * constraint to project (which a naive `share_K = 1−Σ` residual would need, since
+ * CEM samples the box freely). Each of the first `K−1` classes takes a fraction of
+ * the *remaining* stick; the last class is the residual.
+ *
+ * @param {object}  parameters      - flat param map carrying `allocWeight::<CLASS>`
+ * @param {Set|null} presentClasses - build-time filter of reachable classes (§ G4);
+ *                                     null keeps all four
+ * @returns {object} { EQUITY, BOND, CASH, GOLD } fractions summing to 1
+ */
+export function synthesizeTargetAllocation(parameters, presentClasses = null) {
+  const classes = presentClasses
+    ? ALLOC_WEIGHT_CLASSES.filter(c => presentClasses.has(c))
+    : [...ALLOC_WEIGHT_CLASSES];
+  const shares = {};
+  if (classes.length === 0) return shares;
+  let remaining = 1;
+  for (let i = 0; i < classes.length - 1; i++) {
+    const cls = classes[i];
+    const w = clamp01(parameters?.[allocWeightKey(cls)] ?? DEFAULT_ALLOC_WEIGHTS[cls] ?? 0);
+    shares[cls] = +(remaining * w).toFixed(6);
+    remaining  = +(remaining - shares[cls]).toFixed(6);
+  }
+  shares[classes[classes.length - 1]] = +Math.max(0, remaining).toFixed(6);
+  return shares;
+}
+
+/**
+ * Invert a target mix into the stick-breaking `allocWeight::<CLASS>` params that
+ * reproduce it (the warm-start; twin of `drawdownWeightsFromStrategy`). For each of
+ * the first `K−1` classes, the weight is its share divided by the stick remaining
+ * before it; the residual (last) class carries no param. A degenerate stick
+ * (remaining ≈ 0) yields weight 0.
+ *
+ * @param {object} mix - { EQUITY, BOND, CASH, GOLD } fractions (need not sum to 1)
+ * @returns {object} flat map of `allocWeight::<CLASS>` → weight in [0,1]
+ */
+export function allocWeightsFromMix(mix = DEFAULT_ALLOC_WEIGHTS) {
+  const out = {};
+  let remaining = 1;
+  for (let i = 0; i < ALLOC_WEIGHT_CLASSES.length - 1; i++) {
+    const cls   = ALLOC_WEIGHT_CLASSES[i];
+    const share = Math.max(0, Number(mix?.[cls] ?? 0));
+    const w     = remaining > 1e-9 ? clamp01(share / remaining) : 0;
+    out[allocWeightKey(cls)] = +w.toFixed(4);
+    remaining = Math.max(0, remaining - share);
+  }
+  return out;
+}
+
+/** Warm-start weights for a named preset (design 61 §4-A). */
+export function allocWeightsFromPreset(name) {
+  const mix = ALLOCATION_PRESETS[name];
+  return mix ? allocWeightsFromMix(mix) : null;
+}
+
+/**
+ * Restrict the searchable allocation classes to those actually reachable given the
+ * scenario's accounts/holdings (design 61 §G4 — the design-58 build-time filter
+ * analog). A class no account can hold is a *phantom* search dimension: nothing
+ * consumes its weight, so the objective is flat along it. Phase 1 has every
+ * equity-served account able to hold the four classes, so the default (all present)
+ * is correct; the hook exists so later phases can prune (e.g. no GOLD-eligible
+ * account).
+ *
+ * @param {object[]} [accounts] - scenario accounts (unused in Phase 1; reserved)
+ * @param {object[]} [holdings] - reserved for a holdings-derived filter
+ * @returns {Set<string>} reachable ALLOCATION classes, in canonical order membership
+ */
+export function presentAllocations(_accounts = null, _holdings = null) {
+  return new Set(ALLOC_WEIGHT_CLASSES);
+}
+
+/**
+ * Build the per-class `allocWeight::<CLASS>` param-schema entries (design 61 §4-A).
+ * Continuous [0,1] Number params, opt-swept, gated on `allocationStrategy=OPTIMIZED`
+ * AND the `TARGET_ALLOCATION` behavioral strategy being selected. One entry per
+ * NON-residual class (the last class in ALLOC_WEIGHT_CLASSES is the stick-breaking
+ * residual and carries no param).
+ */
+export function buildAllocWeightSchema() {
+  const warmStart = allocWeightsFromMix(DEFAULT_ALLOC_WEIGHTS);
+  // Every class except the residual (last) gets a searchable weight.
+  return ALLOC_WEIGHT_CLASSES.slice(0, -1).map(cls => ({
+    key: allocWeightKey(cls),
+    label: `Allocation Weight — ${ALLOC_WEIGHT_CLASS_LABELS[cls] ?? cls}`,
+    type: 'Number', group: 'Allocation',
+    min: 0, max: 1, step: 0.05,
+    mc: false, opt: true,
+    defaultValue: warmStart[allocWeightKey(cls)],
+    // Only meaningful when the allocation lever is selected AND its strategy is
+    // OPTIMIZED — hide otherwise (the second clause alone would leak into scenarios
+    // that never selected TARGET_ALLOCATION if allocationStrategy were left OPTIMIZED).
+    visibleWhen: [
+      { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      { param: 'allocationStrategy',   equals:   ALLOCATION_OPTIMIZED_MODE },
+    ],
+    description: `Stick-breaking weight for the ${ALLOC_WEIGHT_CLASS_LABELS[cls] ?? cls} ` +
+      `sleeve (0–1). Active only when Allocation Strategy is OPTIMIZED. The applied ` +
+      `target mix is synthesized from all class weights and always sums to 1; ` +
+      `${ALLOC_WEIGHT_CLASS_LABELS[ALLOC_WEIGHT_CLASSES.at(-1)]} is the residual.`,
+  }));
+}
+
+/** Flat map of the default `allocWeight::<CLASS>` param key → value. */
+export const DEFAULT_ALLOC_WEIGHT_PARAMS = allocWeightsFromMix(DEFAULT_ALLOC_WEIGHTS);
+
 /**
  * Default parameters for the International Retirement scenario.
  * Any field can be overridden via the params argument to buildSim().
