@@ -23,12 +23,12 @@ The bakes are *faithful* — their errors are a ±1-year step shift, an ε-colla
 
 ### What to build
 
-| | Item | Why | Where |
+| # | Item | Why | Where |
 |---|---|---|---|
-| 1 | **F1 — block an infeasible harvest before apply** | Required. Nothing checks solvency today, and §2.6 shows the goal metric *cannot* substitute: a ruined plan and a perfect spend-down both read \$0. `design/81` also depends on this for promoting a variant. | §4.1 |
-| 2 | **U5 — expose solver budget + seed as cockpit controls** | Both hardcoded with no UI. Small, self-contained, independent of everything else. | §10.1 |
+| 1 | ~~**F1 — block an infeasible harvest before apply**~~ **DONE** | Required. Nothing checked solvency, and §2.6 shows the goal metric *cannot* substitute: a ruined plan and a perfect spend-down both read \$0. `design/81` also depends on this for promoting a variant. | §4.1 |
+| 2 | ~~**U5 — expose solver budget + seed as cockpit controls**~~ **DONE** | Both hardcoded with no UI. Small, self-contained, independent of everything else. | §10.1 |
 
-That is the whole remaining scope of this document. Everything else is done, refuted, or has moved.
+**Both landed 2026-07-26 — this document's scope is complete.** Everything else is done, refuted, or has moved.
 
 ### What NOT to build
 
@@ -42,6 +42,8 @@ That is the whole remaining scope of this document. Everything else is done, ref
 
 ### Already landed
 
+- **F1** feasibility gate — `checkHarvestFeasibility` / `foldHarvestPlan` / `feasibilityOfResult` / `describeFeasibility` in `src/finance/mpc/harvest-feasibility.js`, wired into the cockpit's harvest preview (blocking red banner + a labelled override), with the headless twin in `verify-harvest.mjs`. Tests: `tests/unit/harvest-feasibility.test.mjs` + four gate tests in `tests/viz/mpc-cockpit-plugin.test.mjs`. See §4.1 for what shipped and what deliberately did not.
+- **U5** solver budget + seed controls — one Budget and one Seed input feeding all three call sites, with a live evals/dimension readout. §10.1.
 - **U2** feasibility-first ranking — `feasibilityFirst` on `OptimizationProblem` (default off ⇒ OPT path byte-identical; default on for the cockpit), `advise()` returns a `feasibility` block, records stamp `extra.feasibility`. Tests in `tests/unit/feasibility-first.test.mjs`. **Byte-identical at budget 64** — insurance, not a fix.
 - **F5** ruin diagnostics on the decision record — landed with U2.
 - **`replayDecisions`** (`src/finance/mpc/replay.js`) + `tests/unit/mpc-replay.test.mjs`. This is what produced §2.11, and it is the foundation of `design/81`.
@@ -385,7 +387,16 @@ One secondary finding worth recording: `_deficitPenalty` subtracts `snapshot.sta
 
 ### 4.1 F1 — Feasibility is a gate, not a warning
 
-Today §13.7's verify is **post-hoc and optional** ("offer a one-click check" after apply). Invert it.
+**IMPLEMENTED 2026-07-26.** What shipped, and the two places it differs from the sketch below:
+
+- `src/finance/mpc/harvest-feasibility.js` — `checkHarvestFeasibility({ plan, baseParams, simStart, simEnd, cfgTemplate })` folds the plan onto a copy of the params and runs it from t₀ through the same `OptimizationProblem` compile path the cockpit rolls out on. Solvency comes from `infeasibilityOf` (U2), not a second solvency test.
+- `foldHarvestPlan` folds **every** entry plus the enabling params — the sibling `foldScheduleBakes` deliberately folds only SCHEDULE entries because RESOLVE must not pin the POINT ones first. A unit test asserts `foldHarvestPlan(base, plan)` is byte-equal to what `applyHarvestPlan` writes, so the checked bag cannot drift from the written one. `withIncluded` was exported from `harvest-apply.js` to make that one implementation rather than two.
+- **Three states, not two.** `feasible: null` ("could not verify") is distinct from `false`. A check that throws must not become a silent veto on the user's own plan, so it enables the copy and says so on the panel.
+- **`result.outOfFundsDate` did not exist.** `cockpit-controller.js:1303` and `:1374` already read it into `advice.feasibility` and `extra.feasibility`; `_readResult` never emitted it, so both were dead and stamped `null`. Added to `_readResult` — the deficit fields say how badly a plan failed, and only this says *when*, which is the one fact the panel can put in front of a user.
+- **Panel** — the verdict renders above the diff (`.mpc-hv-feas`), an infeasible plan disables **Copy to scenario**, and the override checkbox appears only when blocked, labelled *"Copy anyway — this plan runs out in Apr 2051"*. `_applyHarvest` re-checks rather than trusting the disabled attribute.
+- **Verified against the motivating pair**: harvesting `scenarios/fin-sim-decisions.json` (44 epochs, 9 levers) onto `scenarios/fin-sim-die-with.json` is **blocked**, reporting **2051-04-30 · \$5,705,589 · 194 months** — §2.11's ground truth to the dollar. Those files are gitignored, so that check is not a committed test; the committed tests stub the rollout through a `makeProblem` DI seam and the fixture check is reproducible from the scratch script in the session log.
+
+*Original sketch follows.* Today §13.7's verify is **post-hoc and optional** ("offer a one-click check" after apply). Invert it.
 
 - `applyHarvestPlan` gains a **pre-apply feasibility check**: run the candidate plan from t₀ at the run's seed and assert `cumulativeDeficit === 0` and no `OUT_OF_FUNDS` event.
 - An infeasible plan is a **blocking red state** in the review panel, naming the ruin date and the first month of shortfall — not a line in the warnings list.
@@ -485,7 +496,7 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 ## 7. Testing sketch
 
-- `harvest-feasibility.test.mjs` — a harvest plan whose baked scenario goes `OUT_OF_FUNDS` is **blocked** by `applyHarvestPlan`; the plan reports the ruin date; the explicit override applies it anyway.
+- `harvest-feasibility.test.mjs` — **DONE.** A harvest plan whose baked scenario goes `OUT_OF_FUNDS` is **blocked** before the writer runs; the plan reports the ruin date; the explicit override applies it anyway (the block/override half lives in `tests/viz/mpc-cockpit-plugin.test.mjs`, where the panel is). Also pins the fold against `applyHarvestPlan`'s output and the "unverifiable ≠ infeasible" third state.
 - `resolve-margin.test.mjs` — RESOLVE with a min-liquidity floor returns a solvent static point on a scenario where the unconstrained RESOLVE does not; the floor is inert (byte-identical result) when the unconstrained solution already clears it.
 - `bridge-reserve.test.mjs` — `bridgeReserve = N` preserves ≥ N years of pre-access spending in taxable across the access age; `N = 0` reproduces today's behaviour exactly.
 - `drawdown-schedule.test.mjs` — a statutory-knot `drawdownWeightSchedule` resolves to the pre-access weights before the knot and the post-access weights after; an empty schedule falls back to the static `drawdownWeight::*` (the design 61 glidepath fallback pattern).
@@ -511,7 +522,7 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 - [ ] **1a** — `minForwardLiquidity` accumulator + `projectedRuinDate`; stamp both on each decision record (F5). **Now the highest-value item**: it answers §2.5's open question directly, and if the controller's own epochs were already projecting ruin, that is a controller defect the cockpit has been hiding, not a harvest defect.
 - [ ] **1b** — Full effective param set per epoch in the record, alongside the `controlParams` delta (keep the delta authoritative — a mid-run manual edit must not be replayed as a controller decision).
 - [ ] **1c** — `replayDecisions(records, { runId })` in `src/finance/mpc/`, plus the `A′ ≡ A` invariant test (F6).
-- [ ] **1d** — Pre-apply feasibility gate in `applyHarvestPlan` + blocking red state in the review panel + `verify-harvest.mjs` (F1).
+- [x] **1d** — Pre-apply feasibility gate + blocking red state in the review panel + `verify-harvest.mjs` (F1). *Landed 2026-07-26 — as a check ABOVE `applyHarvestPlan`, not inside it: the writer stays pure and synchronous (§4.1).*
 - [ ] **1e** — Boundary-crossing statistic in the POINT warning (D3).
 
 **P2 — Fix it cheaply (objective-level, no plant)** — expected to resolve most of the failure.
@@ -547,8 +558,8 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 | Item | State | Rationale |
 |---|---|---|
-| **F1** block an infeasible harvest before apply | **TODO — priority 1** | Nothing checks solvency today; §2.6 shows the goal metric cannot substitute. `design/81` depends on it to promote a variant. §4.1 |
-| **U5** budget + seed cockpit controls | **TODO — priority 2** | Hardcoded, no UI. Absorbs U4's evals/dimension readout. §10.1 |
+| **F1** block an infeasible harvest before apply | **DONE** (2026-07-26) | Verified to block the motivating harvest at 2051-04-30 / \$5,705,589 / 194 months. `design/81` inherits it as its Phase-5 promotion gate — the check takes a *plan*, and a one-entry plan is a valid input. §4.1 |
+| **U5** budget + seed cockpit controls | **DONE** (2026-07-26) | One Budget + one Seed feeding Advise, Auto and the harvest RESOLVE, with the evals/dimension readout U4 item 1 asked for. §10.1 |
 | **U2** feasibility-first ranking | **DONE** | Correct, tested, byte-identical at budget 64. Insurance, not a fix — matters once U5 lets a user lower the budget. |
 | **F5** ruin diagnostics on the record | **DONE** | Landed with U2 as `extra.feasibility`. |
 | **P1-1b** per-epoch effective params | **MOVED** → `design/81` Phase 1a | Prerequisite there; index-keyed decisions re-key silently without it. |
@@ -563,7 +574,9 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 
 ### 10.1 U5 detail — budget and seed
 
-`mpc-cockpit-plugin.js` hardcodes `budget: 64, seed: 1` at `:573` (manual Advise) and `:708` (Auto), and `budget: 48, seed: 1` at `:907` (the harvest RESOLVE). Nothing surfaces either. Two consequences the user cannot currently act on:
+**IMPLEMENTED 2026-07-26.** One `Budget` and one `Seed` input in the toolbar, read by a single `_solverOptions()` accessor that feeds all three call sites — so the harvest RESOLVE now searches at the same budget as the run it is harvesting instead of a quieter 48 nobody could see. Defaults stay 64/1 (what the app has been running, and the budget §2.10 measured the controller feasible at). Beside them, a live **evals/dimension** readout — `64 evals · 4.9/dim (13 vars)` — computed from the selected levers' `buildVariables` *before* the first Advise, and flagged warm below 10/dim. Junk input falls back to the defaults rather than handing the solver a `NaN` budget.
+
+*Original analysis follows.* `mpc-cockpit-plugin.js` hardcodes `budget: 64, seed: 1` at `:573` (manual Advise) and `:708` (Auto), and `budget: 48, seed: 1` at `:907` (the harvest RESOLVE). Nothing surfaces either. Two consequences the user cannot currently act on:
 
 - **Budget is fixed while the search space is not.** A one-lever run is 1 variable; §2.9's 8-lever run is 13+. A fixed 64 is ~64 evals/dimension in the first case and ~4.9 in the second — a thorough search and a sparse one wearing the same number, with no way to notice or compensate. Pair the control with a live **evals/dimension** readout so sparsity is visible *before* the run rather than inferred from a bad answer after it. This is U4's item 1, and the control is what makes it actionable.
 - **`seed: 1` everywhere means every Auto run explores the identical trajectory.** Reproducibility is the right default, but with no way to vary it, solver variance is invisible: a plan that only works on seed 1 looks exactly like a robust one. A seed control is also the cheapest form of the out-of-sample check design 39 §13.7 asks for.

@@ -37,6 +37,7 @@ import { harvestDecisions }         from '../../src/finance/mpc/harvest.js';
 import { applyHarvestPlan }         from '../../src/finance/mpc/harvest-apply.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved }
   from '../../src/finance/mpc/harvest-resolve.js';
+import { feasibilityOfResult }      from '../../src/finance/mpc/harvest-feasibility.js';
 
 /** Run `fn` with the sim's per-run console chatter silenced. */
 export function quiet(fn) {
@@ -146,15 +147,16 @@ export async function harvestLab({
   const bakedScenario = { params: paramsToArray(baseParams) };
   applyHarvestPlan(bakedScenario, plan);
   const bakedParams = paramsToBag(bakedScenario.params);
-  const b = runFromT0({ baseParams: bakedParams, objective, simStart, simEnd })
-    .result?.[metric.key] ?? null;
+  const bRun = runFromT0({ baseParams: bakedParams, objective, simStart, simEnd });
+  const b = bRun.result?.[metric.key] ?? null;
 
   let c = null;
+  let cRun = null;
   if (resolved) {
     const staticScenario = { params: paramsToArray(baseParams) };
     applyHarvestPlan(staticScenario, mergeResolved(plan, resolved));
-    c = runFromT0({ baseParams: paramsToBag(staticScenario.params), objective, simStart, simEnd })
-      .result?.[metric.key] ?? null;
+    cRun = runFromT0({ baseParams: paramsToBag(staticScenario.params), objective, simStart, simEnd });
+    c = cRun.result?.[metric.key] ?? null;
   }
 
   return {
@@ -162,20 +164,57 @@ export async function harvestLab({
     committedParams: controller.committed,
     bakedParams,
     terminals: { before: before.result?.[metric.key] ?? null, a, b, c },
+    // Design 80 F1 — solvency per arm, on its OWN axis. The drift below cannot
+    // carry it: under a die-with-zero goal a bankrupt plan and a perfect
+    // spend-down both terminate at $0, so a Δ% on the goal metric reads ≈0 for
+    // exactly the failure this reports (§2.6).
+    feasibility: {
+      before: feasibilityOfResult(before.result),
+      b:      feasibilityOfResult(bRun.result),
+      c:      cRun ? feasibilityOfResult(cRun.result) : null,
+      // A is the controller's own last-epoch projection, scored against its
+      // snapshot rather than from t₀ — reported for completeness, not comparable
+      // to B/C on shortfall magnitude (§3: the A term is windowed, B is not).
+      a: records[records.length - 1]?.result
+        ? feasibilityOfResult(records[records.length - 1].result) : null,
+    },
     voTV: (Number.isFinite(b) && Number.isFinite(c)) ? b - c : null,
     voFB: (Number.isFinite(a) && Number.isFinite(b)) ? a - b : null,
   };
 }
 
+/** One-line solvency verdict for an arm (design 80 F1). */
+export function fmtFeasibility(f) {
+  if (!f) return '';
+  if (f.feasible) return '✅ solvent';
+  const when = f.outOfFundsDate ? String(new Date(f.outOfFundsDate).toISOString()).slice(0, 10) : 'mid-plan';
+  return `❌ RUIN ${when} (${f.deficitMonths}mo, ${fmtUsd(f.cumulativeDeficit)})`;
+}
+
 /** Print the shared A/B/C report. */
 export function report({ title, out }) {
-  const { metric, terminals: t, plan } = out;
+  const { metric, terminals: t, plan, feasibility: f } = out;
   const rel = (x, base) => (Number.isFinite(x) && Number.isFinite(base) && base !== 0 ? (x - base) / Math.abs(base) : null);
 
   console.log(`\n=== ${title} ===`);
   console.log(`  goal metric: ${metric.label} (${metric.key})`);
   console.log(`  run: ${plan.epochs} epoch(s) · ${String(plan.epochRange[0]).slice(0, 10)} → ${String(plan.epochRange[1]).slice(0, 10)}`
     + ` · levers: ${plan.levers.join(', ')}`);
+
+  // FEASIBILITY FIRST (design 80 D1) — before any terminal or drift, because a
+  // plan that runs out of money is not a slightly-worse version of one that
+  // doesn't, and the drift below cannot distinguish them.
+  if (f) {
+    console.log('');
+    console.log('  feasibility (design 80 F1):');
+    console.log(`    baseline (before harvest)    : ${fmtFeasibility(f.before)}`);
+    console.log(`    B · baked schedule from t₀   : ${fmtFeasibility(f.b)}`);
+    if (f.c) console.log(`    C · best static (RESOLVE)    : ${fmtFeasibility(f.c)}`);
+    if (f.b && !f.b.feasible) {
+      console.log('    ⛔ THE HARVEST IS INFEASIBLE — the drift figures below are not meaningful.');
+    }
+  }
+
   console.log('');
   console.log(`  before harvest (baseline)      : ${fmtUsd(t.before)}`);
   console.log(`  A · MPC committed (closed-loop): ${fmtUsd(t.a)}`);

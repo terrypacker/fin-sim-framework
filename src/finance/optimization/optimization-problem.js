@@ -537,6 +537,11 @@ export class OptimizationProblem {
       scenarioFailed:    state.scenarioFailed    ?? false,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,
+      // WHEN the plan ran dry (design 80 F1). The deficit fields say how badly a
+      // rollout failed; only this says when, which is the one fact a user can act
+      // on ("this plan runs out in Apr 2051"). Stamped by SetOutOfFundsDateReducer
+      // on the FIRST occurrence, so it survives the 194 months that follow.
+      outOfFundsDate:    state.outOfFundsDate    ?? null,
       rothFinalBalance:  (state.rothAccount?.balance ?? 0) + (state.spouseRothAccount?.balance ?? 0),
       // Lifetime running accumulators (design 38 §5), USD-normalized.
       cumulativeTaxesPaid:  state.cumulativeTaxesPaid   ?? 0,
