@@ -77,6 +77,46 @@ function _roundRecordField(field, val) {
 }
 
 /**
+ * Lever B (design 58 §4-B): synthesize a strategy priority map (role → rank) from
+ * the per-role weight params carried on an `accountPriority` node's WEIGHTED mode.
+ * The draw order is the ascending sort of the weights (lowest drawn first); cash
+ * roles are pinned to rank 0 (drawn first). A missing/NaN weight falls back to the
+ * node's `weightDefaults`, then 0.5, so a partially-swept vector still resolves.
+ * Ties preserve the node's `weightRoles` declaration order (stable sort) — those
+ * siblings land in one tier for Lever C to split.
+ *
+ * Weight keys use a `::` separator (`drawdownWeight::roth-ira`), NOT a dot, so they
+ * are a single flat token everywhere: the UI params→parameters sync writes the
+ * literal key, and the MC/Opt/MPC candidate path's `set()` (which splits on `.`/`[`
+ * and refuses to create intermediate nodes) also writes it flat. A dotted key would
+ * be silently dropped by `set()` — `set(p, 'drawdownWeight.roth-ira', v)` no-ops
+ * because `p.drawdownWeight` doesn't pre-exist — leaving the Lever-B axis inert
+ * through the solver and under MPC. The node carries `weightKeySep`.
+ *
+ * Exported for the Lever-B online cockpit control (design 58 §11.3 Phase 3-MPC):
+ * its live `actuate` re-stamps the running sim's per-account `drawdownPriority`
+ * from the committed weights using this SAME role→rank synthesis, so advise/apply
+ * and the live sim cannot drift.
+ */
+export function synthesizeWeightedPriorities(node, parameters = {}) {
+  const prefix   = node.weightKeyPrefix ?? 'drawdownWeight';
+  const sep      = node.weightKeySep ?? '::';
+  const roles    = Array.isArray(node.weightRoles) ? node.weightRoles : [];
+  const defaults = node.weightDefaults ?? {};
+  const weighted = roles.map(role => {
+    const raw = Number(parameters?.[`${prefix}${sep}${role}`]);
+    const w   = Number.isFinite(raw) ? raw
+              : (Number.isFinite(defaults[role]) ? defaults[role] : 0.5);
+    return { role, w };
+  });
+  weighted.sort((a, b) => a.w - b.w);   // ascending = draw order; stable tie-break
+  const priorities = {};
+  for (const role of (node.cashRoles ?? [])) priorities[role] = 0;   // cash first
+  weighted.forEach(({ role }, i) => { priorities[role] = i + 1; });
+  return priorities;
+}
+
+/**
  * ScenarioLoader — single entry point for restoring a scenario configuration
  * into the simulation services.
  *
@@ -457,7 +497,19 @@ export class ScenarioLoader {
           if (s?.name) strategies[s.name] = s.roles ?? {};
         }
       }
-      const priorities = strategies[val];
+      // Lever B (design 58 §4-B): the WEIGHTED sentinel synthesizes the role→rank
+      // map from the per-role `<weightKeyPrefix>.<role>` params — the drawdown
+      // order is the ascending sort of the weights (lowest drawn first). This is
+      // the optimizer's "search the order" mode: a smooth, role-stable encoding
+      // the solver tunes directly. Same-role siblings share a weight → one tier
+      // (Lever C splits it). Cash roles always rank 0 (drawn first). Reuses the
+      // rest of this cascade (eligibility set, owner banding) unchanged.
+      let priorities;
+      if (node.weightMode && val === node.weightMode) {
+        priorities = synthesizeWeightedPriorities(node, cfg.parameters);
+      } else {
+        priorities = strategies[val];
+      }
       if (priorities) {
         // A selected strategy is authoritative over drawdown-eligible accounts:
         // each gets its mapped rank (+ owner band) or is cleared to null when the

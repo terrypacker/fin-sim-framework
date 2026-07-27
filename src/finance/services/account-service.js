@@ -613,14 +613,73 @@ export class AccountService extends AssetService {
         }
         if (drawnThisPass < 1e-9) break;
       }
-    } else {
-      // Ordered: walk sources in drawdownPriority order, draining each fully.
+    } else if ((state.withinTierDraw ?? 'SEQUENTIAL') === 'SEQUENTIAL') {
+      // Ordered, SEQUENTIAL within a tier (default): walk sources in
+      // drawdownPriority order, draining each fully before the next. Byte-identical
+      // to the pre-Lever-C behavior.
       for (const [key, account] of sources) {
         if (remaining < 1e-9) break;
         if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
         remaining -= this._drawPenaltyFree(
           targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
         );
+      }
+    } else {
+      // Ordered, but split each priority tier per `withinTierDraw` (design 58
+      // Lever C). Tiers are maximal runs of already-sorted sources sharing an
+      // effective priority (same cash-bucket band + drawdownPriority — e.g. two
+      // Roths under POOLED, or two roles tied by a Lever-B weight). EQUAL splits the
+      // tier's target evenly across members; PROPORTIONAL splits by available
+      // balance at draw time. Both cap each leg at its availability and redistribute
+      // the residual (loop) — and each leg still runs through _drawPenaltyFree, so
+      // per-account eligibility, minimumBalance floors, cross-border fx/fee, and the
+      // per-account tax actions all apply per leg. Tiers advance in order, so the
+      // policy only reshuffles *within* a tier, never across tiers. (RMDs are
+      // event-driven per-account distributions, independent of this deficit path, so
+      // OQ4's per-account RMD floor is unaffected.)
+      const equal = state.withinTierDraw === 'EQUAL';
+      const tierKeyOf = ([, v]) => {
+        const cashTier = cashBucketActive ? (_CASH_FIRST_ROLES.has(v.role) ? 0 : 1) : 0;
+        return `${cashTier}:${v.drawdownPriority}`;
+      };
+      for (let i = 0; i < sources.length && remaining >= 1e-9;) {
+        // Gather the maximal run of same-tier sources starting at i.
+        const key0 = tierKeyOf(sources[i]);
+        let j = i;
+        while (j < sources.length && tierKeyOf(sources[j]) === key0) j++;
+        const tier = sources.slice(i, j);
+        i = j;
+
+        // Split this tier's draw across its members, redistributing the residual
+        // left by capped members. Mirrors the global PROPORTIONAL loop's guard.
+        let guard = 0;
+        while (remaining >= 1e-9 && guard++ < 100) {
+          const avail = tier
+            .map(([key, account]) => {
+              const eligible = eligibleOf(account);
+              const fx = fxOf(account);
+              // Availability weighted to target currency so cross-border members
+              // contribute fairly (identical to the global PROPORTIONAL path).
+              return { key, account, eligible, fx, amt: this._penaltyFreeAvailable(account, eligible) * fx };
+            })
+            .filter(s => s.amt > 1e-9 && !isDeferredTaxable(s.account));
+          const total = avail.reduce((sum, a) => sum + a.amt, 0);
+          if (total < 1e-9) break;
+
+          const target = Math.min(remaining, total);
+          let drawnThisPass = 0;
+          for (const s of avail) {
+            if (remaining < 1e-9) break;
+            const weight = equal ? (1 / avail.length) : (s.amt / total);
+            const want = Math.min(target * weight, remaining);
+            const got  = this._drawPenaltyFree(
+              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account)
+            );
+            remaining     -= got;
+            drawnThisPass += got;
+          }
+          if (drawnThisPass < 1e-9) break;
+        }
       }
     }
 
