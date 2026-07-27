@@ -187,10 +187,17 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // so a property owned outright by one spouse was taxed half to each.
       ['AU_RENTAL_INCOME_TAX', (state, action) => {
         const { amount, ownershipType, ownerId, owners } = action;
+        // Net rental income is net investment income for a US person on their
+        // worldwide return (IRC §1411(c)(1)(A)(i)) → NIIT base, mirroring
+        // US_RENTAL_INCOME_TAX. The amount stays SIGNED into the NII pool so a
+        // rental loss reduces aggregate NII before it is floored at 0 in computeTax.
+        // The FTC cannot offset NIIT, so AU-taxed rent still bears the 3.8% surtax.
+        const usd = toUSD(amount, 'AUD', state);
         let next = {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state),
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
         };
         // Resident or not, AU-situs rent is AU assessable income on the marginal
         // bracket path — the resident schedule for a resident, the foreign-resident
@@ -219,11 +226,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auSavingsAccount != null;
+        // AU-source interest is net investment income for a US person
+        // (IRC §1411(c)(1)(A)(i)) → NIIT base, mirroring FIXED_INCOME_EARNINGS_TAX.
+        // The FTC cannot offset NIIT, so AU-taxed interest still bears the 3.8% surtax.
         const usd = toUSD(amount, 'AUD', state);
         let next = {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
         };
         if (isAuResident) {
           next = {
@@ -255,11 +266,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auFixedIncomeAccount != null;
+        // AU-source interest is net investment income for a US person
+        // (IRC §1411(c)(1)(A)(i)) → NIIT base, as with AU_SAVINGS_EARNINGS_TAX.
         const usd = toUSD(amount, 'AUD', state);
         let next = {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
         };
         if (isAuResident) {
           next = {
@@ -324,11 +338,16 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_FRANKED_RESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
+        // → NIIT base, mirroring STOCK_DIVIDEND_TAX. The NII slice is the cash
+        // dividend the US recognises (the AU franking gross-up is not US income), so
+        // it matches `usd`. The FTC cannot offset NIIT.
         const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auFrankingCreditYTD: state.auFrankingCreditYTD + action.amount }),
@@ -339,11 +358,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
+        // → NIIT base, mirroring STOCK_DIVIDEND_TAX.
         const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + action.amount }),
@@ -358,11 +380,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // individual always falls to 15% and there is no tiering to model.
       ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
+        // → NIIT base, mirroring STOCK_DIVIDEND_TAX.
         const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonNrWithholdingUnfrankedDividendYTD: accumulateByOwnership(state.auPersonNrWithholdingUnfrankedDividendYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auNrWithholdingUnfrankedDividendYTD: (state.auNrWithholdingUnfrankedDividendYTD ?? 0) + action.amount }),

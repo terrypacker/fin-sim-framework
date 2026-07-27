@@ -30,6 +30,7 @@ import assert   from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
+import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
 
 const usRates = new UsTaxRates2025();
 
@@ -94,6 +95,51 @@ test('EVT-NIIT: non-investment ordinary income does NOT feed usNetInvestmentInco
   ];
   for (const [type, action] of nonInvestment) {
     const s0 = usState();
+    const next = getFn(m, type)(s0, action);
+    assert.equal(next.usNetInvestmentIncomeYTD ?? 0, 0, `${type} must not touch NII bucket`);
+  }
+});
+
+// A US person is taxed on WORLDWIDE net investment income, so AU-source interest,
+// dividends and net rents feed usNetInvestmentIncomeYTD too. No effectiveExchangeRates
+// on the state ⇒ toUSD falls back 1:1, so the AUD `amount` lands unscaled in the
+// (USD) NII bucket — exactly what we assert.
+test('EVT-NIIT: AU-source investment income feeds usNetInvestmentIncomeYTD (worldwide)', () => {
+  const m = new AuTaxModule2026();
+  const auInvestmentActions = [
+    ['AU_SAVINGS_EARNINGS_TAX',                1_000],
+    ['AU_FIXED_INCOME_EARNINGS_TAX',           1_500],
+    ['AU_RENTAL_INCOME_TAX',                   2_000],
+    ['AU_DIVIDEND_FRANKED_RESIDENT_TAX',       2_500],
+    ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',     3_000],
+    ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX',  3_500],
+  ];
+  for (const [type, amount] of auInvestmentActions) {
+    const s0 = usState({ auOrdinaryIncomeYTD: 0, auFrankingCreditYTD: 0 });
+    const next = getFn(m, type)(s0, { amount, residency: 'AU' });
+    assert.equal(next.usNetInvestmentIncomeYTD, amount, `${type} → NII bucket`);
+    // Also lands in worldwide ordinary income (the MAGI side).
+    assert.equal(next.usOrdinaryIncomeYTD, amount, `${type} → ordinary bucket`);
+  }
+});
+
+test('EVT-NIIT: an AU rental loss reduces the NII pool (signed)', () => {
+  const m = new AuTaxModule2026();
+  const s0 = usState({ usNetInvestmentIncomeYTD: 5_000, usOrdinaryIncomeYTD: 5_000, auOrdinaryIncomeYTD: 0 });
+  const next = getFn(m, 'AU_RENTAL_INCOME_TAX')(s0, { amount: -2_000, residency: 'AU' });
+  assert.equal(next.usNetInvestmentIncomeYTD, 3_000);
+});
+
+test('EVT-NIIT: AU non-investment income does NOT feed usNetInvestmentIncomeYTD', () => {
+  const m = new AuTaxModule2026();
+  // AU wages and AU super earnings are worldwide US income but not NII (wages are
+  // earned income; super earnings are treated as pension-type income outside §1411).
+  const nonInvestment = [
+    ['AU_WAGES_INCOME_TAX',            { amount: 80_000, residency: 'AU' }],
+    ['SUPER_WITHDRAWAL_EARNINGS_TAX',  { amount: 30_000, residency: 'US' }],
+  ];
+  for (const [type, action] of nonInvestment) {
+    const s0 = usState({ auOrdinaryIncomeYTD: 0 });
     const next = getFn(m, type)(s0, action);
     assert.equal(next.usNetInvestmentIncomeYTD ?? 0, 0, `${type} must not touch NII bucket`);
   }
