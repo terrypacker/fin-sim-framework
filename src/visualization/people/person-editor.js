@@ -11,6 +11,7 @@
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
+import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 
 /**
  * PersonEditor — renders the person edit form from tpl-person-editor into a
@@ -59,6 +60,19 @@ export class PersonEditor extends BaseComponent {
     const citizenSel = el.querySelector('[data-id="citizen"]');
     const citizens   = this._node?.citizen ?? ['US'];
     for (const opt of citizenSel.options) opt.selected = citizens.includes(opt.value);
+
+    // US state of residency (design 34) — optional, options from the shared
+    // US_STATES list. null/undefined selects the blank "None" option; it must not
+    // fall back to a state, or an unconfigured person would silently acquire a
+    // state income tax.
+    const stateSel = el.querySelector('[data-id="residencyState"]');
+    for (const [value, label] of usStateOptionPairs({ blankLabel: 'None', labelStyle: 'codeAndName' })) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      stateSel.appendChild(opt);
+    }
+    stateSel.value = this._node?.residencyState ?? '';
 
     el.querySelector('[data-id="lifeExpectancy"]').value        = this._node?.lifeExpectancy        ?? 90;
     el.querySelector('[data-id="socialSecurityMonthly"]').value = this._node?.socialSecurityMonthly ?? 2800;
@@ -109,6 +123,11 @@ export class PersonEditor extends BaseComponent {
     const candidates = [
       { dataId: 'monthlyWage',    field: 'monthlyWage',    coerce: (raw) => Number(raw) || 0 },
       { dataId: 'retirementDate', field: 'retirementDate', coerce: (raw) => raw },
+      // The scenario's `residencyState` param links to the PRIMARY person only
+      // (its Enum options are '' plus US_STATE_CODES, so blank stays '' rather
+      // than null here). A person with no such param — the spouse — edits the
+      // field directly.
+      { dataId: 'residencyState', field: 'residencyState', coerce: (raw) => raw || '' },
     ];
     for (const { dataId, field, coerce } of candidates) {
       const param = this._links.getParamFor('person', id, field);
@@ -131,6 +150,9 @@ export class PersonEditor extends BaseComponent {
       name:                  el.querySelector('[data-id="name"]').value.trim(),
       birthDate:             el.querySelector('[data-id="birthDate"]').value,
       citizen:               [...citizenSel.selectedOptions].map(o => o.value),
+      // "" ⇒ no state of residency. Normalised to null to match Person's default
+      // shape, which primaryResidencyState() reads as "no state income tax".
+      residencyState:        el.querySelector('[data-id="residencyState"]').value || null,
       lifeExpectancy:        Number(el.querySelector('[data-id="lifeExpectancy"]').value),
       socialSecurityMonthly: Number(el.querySelector('[data-id="socialSecurityMonthly"]').value),
       monthlyWage:           Number(el.querySelector('[data-id="monthlyWage"]').value),

@@ -41,6 +41,7 @@ import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES,
          SLEEVE_WEIGHT_MODE, sleeveWeightKey } from '../finance/holdings/holdings-selection.js';
 import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
 import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
+import { US_STATE_CODES }      from '../finance/tax/state/us-states.js';
 
 /**
  * Cash band — savings/checking roles are ranked ahead of every investment role
@@ -670,9 +671,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // '' / null = no state configured (no state income tax). The categorical
     // options make it an optimization/MC axis (design 34 §9).
     key: 'residencyState', label: 'US Residency State',
-    type: 'Enum', options: ['', 'NE', 'HI', 'SD'], group: 'US Tax', mc: true, opt: true,
+    type: 'Enum', options: ['', ...US_STATE_CODES], group: 'US Tax', mc: true, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.residencyState ?? '',
-    description: 'US state of residency for state income tax (NE, HI, SD). Blank = none.',
+    description: `US state of residency for state income tax (${US_STATE_CODES.join(', ')}). Blank = none.`,
     node: { type: 'person', id: 'primary', field: 'residencyState' },
   },
 

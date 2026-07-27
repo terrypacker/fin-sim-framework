@@ -88,6 +88,18 @@ export class StateTaxSettleService {
     return Object.keys(this._modules).some(k => k.startsWith(stateCode + '_'));
   }
 
+  /**
+   * Distinct state codes with at least one rates module registered — the tax
+   * layer's own answer to "which states does this model support". US_STATES
+   * (us-states.js) is the selectable list shown in the UI and param enums; the
+   * two must agree, which state-tax-rates.test.mjs asserts.
+   *
+   * @returns {string[]}
+   */
+  get stateCodes() {
+    return [...new Set(Object.keys(this._modules).map(k => k.split('_')[0]))];
+  }
+
   // ─── Private ───────────────────────────────────────────────────────────────
 
   _getModule(stateCode, state) {

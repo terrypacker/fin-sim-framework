@@ -10,13 +10,16 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
+import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 
 const RELATIONSHIPS = [
   ['immediate', 'Immediate (Class 1 — child/parent/sibling)'],
   ['remote',    'Remote (Class 2 — aunt/uncle/niece/nephew)'],
   ['unrelated', 'Unrelated (Class 3)'],
 ];
-const SITUS = [['', '— none —'], ['NE', 'Nebraska'], ['HI', 'Hawaii'], ['SD', 'South Dakota']];
+// Decedent situs — the same modelled US states as everywhere else (only NE
+// currently levies an inheritance tax; the others are inert but selectable).
+const SITUS = usStateOptionPairs({ blankLabel: '— none —' });
 const ASSET_TYPES = [
   ['BrokerageAccount',      'Brokerage'],
   ['TraditionalIRAAccount', 'Traditional IRA'],

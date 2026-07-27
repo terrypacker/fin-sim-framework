@@ -284,6 +284,7 @@ import { STATE_INCOME_ROUTING, STATE_YTD_FIELDS, StateIncomeClassificationReduce
 import { StateTaxDocumentReporter } from './finance/tax/state/state-tax-document.js';
 import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from './finance/tax/state/state-tax-settle-classes.js';
 import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
+import { US_STATES, US_STATE_CODES, usStateName, usStateOptionPairs } from './finance/tax/state/us-states.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
@@ -1194,6 +1195,10 @@ export const Finance = {
   StateTaxSettleApplyReducer,
   StateTaxPaymentDebitReducer,
   StateTaxSettleService,
+  US_STATES,
+  US_STATE_CODES,
+  usStateName,
+  usStateOptionPairs,
   TaxDocumentRegistry,
   TaxEngine,
   toCcy,

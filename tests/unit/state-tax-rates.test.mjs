@@ -24,6 +24,8 @@ import { HiStateTaxRates2024 }   from '../../src/finance/tax/state/hi/hi-state-t
 import { SdStateTaxRates2024 }   from '../../src/finance/tax/state/sd/sd-state-tax-rates-2024.js';
 import { StateTaxSettleService } from '../../src/finance/tax/state/state-tax-settle-service.js';
 import { StateTaxDocumentReporter } from '../../src/finance/tax/state/state-tax-document.js';
+import { US_STATES, US_STATE_CODES, usStateName, usStateOptionPairs }
+  from '../../src/finance/tax/state/us-states.js';
 
 const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} ≈ ${b}`);
 
@@ -201,6 +203,32 @@ test('document reporter returns null when there is no state taxDetail', () => {
   const reporter = new StateTaxDocumentReporter();
   assert.equal(reporter.generate({ action: { type: 'STATE_TAX_SETTLE_APPLY', data: {} } }), null);
   assert.equal(reporter.generate({ action: { type: 'STATE_TAX_SETTLE_APPLY', data: { taxDetail: { stateCode: null } } } }), null);
+});
+
+// ── Shared state list (us-states.js) ──────────────────────────────────────────
+
+test('US_STATES matches the states with rates modules registered', () => {
+  // The one guard against drift: the UI selects and param enums are built from
+  // US_STATES, so a rates module added without listing it here would leave the
+  // state unselectable (and a listed state with no module would compute zero).
+  const registered = new StateTaxSettleService().stateCodes;
+  assert.deepEqual([...US_STATE_CODES].sort(), [...registered].sort());
+});
+
+test('us-states helpers: names and select option pairs', () => {
+  assert.equal(usStateName('NE'), 'Nebraska');
+  assert.equal(usStateName('XX'), null);
+  assert.equal(usStateName(null), null);
+
+  // No blank option unless asked for — a caller that forgets it would otherwise
+  // silently make "no state of residency" unselectable.
+  assert.deepEqual(usStateOptionPairs().map(([v]) => v), [...US_STATE_CODES]);
+  const withBlank = usStateOptionPairs({ blankLabel: 'None', labelStyle: 'codeAndName' });
+  assert.deepEqual(withBlank[0], ['', 'None']);
+  assert.deepEqual(withBlank[1], ['NE', 'NE — Nebraska']);
+
+  // Frozen so a consumer cannot mutate the shared list out from under the rest.
+  assert.throws(() => US_STATES.push({ code: 'XX', name: 'Nowhere' }));
 });
 
 test('settle service returns zero when no state configured or primary is abroad', () => {

@@ -560,6 +560,15 @@
           </select>
         </div>
         <div class="node-field">
+          <label>US State</label>
+          <!-- Optional sub-jurisdiction of residency='US' (design 34). Blank = no
+               state of residency (e.g. a military base, or a non-US resident) ⇒ no
+               state income tax. Options are filled in by PersonEditor from
+               US_STATES (finance/tax/state/us-states.js) — the one list of
+               modelled states — so this select stays empty here. -->
+          <select data-id="residencyState" title="US state of residency, for state income tax. Leave blank when there is no state of residency (e.g. stationed on a military base, or living outside the US) — a blank state means no state income tax. The household's active state is the primary person's (design 34)."></select>
+        </div>
+        <div class="node-field">
           <label>Life Exp.</label>
           <input type="number" data-id="lifeExpectancy" value="90"/>
         </div>

@@ -20,6 +20,7 @@ export class PeopleController {
 
   /**
    * @param {{ name: string, birthDate: string, citizen: string[],
+   *           residencyState: string|null,
    *           lifeExpectancy: number, socialSecurityMonthly: number,
    *           monthlyWage: number, retirementDate: string }} data
    * @returns {import('../../finance/person.js').Person}
@@ -28,6 +29,7 @@ export class PeopleController {
     return this._service.createPerson(new Date(data.birthDate), {
       name:                  data.name,
       citizen:               data.citizen,
+      residencyState:        data.residencyState ?? null,   // US state of residency (design 34); null = none
       lifeExpectancy:        Number(data.lifeExpectancy),
       socialSecurityMonthly: Number(data.socialSecurityMonthly),
       monthlyWage:           Number(data.monthlyWage ?? 0),
@@ -51,6 +53,9 @@ export class PeopleController {
     if (normalized.monthlyWage           != null) normalized.monthlyWage           = Number(normalized.monthlyWage);
     if (normalized.selfEmployed          != null) normalized.selfEmployed          = Boolean(normalized.selfEmployed);
     if (normalized.retirementDate)                normalized.retirementDate        = new Date(normalized.retirementDate);
+    // '' (the editor's "None" option) means no state of residency — store the
+    // null Person uses, so state-tax lookups see one shape only.
+    if (normalized.residencyState === '')         normalized.residencyState        = null;
     return this._service.updatePerson(id, normalized);
   }
 
