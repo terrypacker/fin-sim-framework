@@ -44,6 +44,61 @@ function extractYearlyTimeSeries(sim) {
 }
 
 /**
+ * Path-shape diagnostics for one MC iteration (design 74 §5.2). Computed from the
+ * yearly net-worth series so it characterizes the *shape* of the path, not just its
+ * endpoint — the readout sequence-of-returns risk needs. Robust to short/degenerate
+ * series (returns nulls rather than NaN/Infinity).
+ *
+ *   - netWorthCagr    — realized geometric growth of net worth start→end ("realized
+ *                       geometric mean" in §5.2). null when either endpoint ≤ 0.
+ *   - worst5yrCagr    — the worst rolling 5-year annualized growth. The classic
+ *                       sequence-risk window: a bad early 5 years is far more damaging
+ *                       to a decumulating portfolio than the same 5 years late.
+ *   - maxDrawdown     — deepest peak-to-trough decline as a fraction of the peak, [0,1].
+ *   - decadeNetWorthUsd — net worth ~10 years in (min(10, last)); the aggregate step
+ *                       marks whether this was below the cross-path median (§5.2's
+ *                       "first decade below median" — the direct sequence-risk flag).
+ */
+export function computePathShape(timeSeries) {
+  const nw = (timeSeries ?? []).map(p => p.netWorthUsd);
+  const empty = { netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null };
+  if (nw.length < 2) return empty;
+
+  const years = nw.length - 1;
+  const first = nw[0];
+  const last  = nw[nw.length - 1];
+  const netWorthCagr = (first > 0 && last > 0) ? Math.pow(last / first, 1 / years) - 1 : null;
+
+  // Worst rolling 5-year annualized growth (skips windows straddling non-positive NW).
+  let worst5yrCagr = null;
+  for (let t = 0; t + 5 < nw.length; t++) {
+    const a = nw[t], b = nw[t + 5];
+    if (a > 0 && b > 0) {
+      const cagr = Math.pow(b / a, 1 / 5) - 1;
+      worst5yrCagr = worst5yrCagr === null ? cagr : Math.min(worst5yrCagr, cagr);
+    }
+  }
+
+  // Deepest peak-to-trough decline as a fraction of the running peak.
+  let peak = -Infinity, maxDrawdown = 0;
+  for (const v of nw) {
+    if (v > peak) peak = v;
+    if (peak > 0) maxDrawdown = Math.max(maxDrawdown, (peak - v) / peak);
+  }
+
+  const decadeNetWorthUsd = nw[Math.min(10, nw.length - 1)];
+  return { netWorthCagr, worst5yrCagr, maxDrawdown, decadeNetWorthUsd };
+}
+
+/** Median of a numeric array (ignoring null/undefined/NaN); null when empty. */
+function median(xs) {
+  const v = xs.filter(x => x != null && Number.isFinite(x)).sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
+/**
  * Standalone seeded PRNG — same algorithm as Simulation.createRNG().
  * Used to produce per-iteration reproducible samples from distributions.
  */
@@ -120,7 +175,7 @@ export class IntlRetirementMcRunner {
     const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
 
     const runner = new ScenarioRunner({
-      createSimulation: (params) => {
+      createSimulation: (params, seed) => {
         // Isolated per-iteration registry: never touches the singleton, so the
         // user's active config graph + UI bindings stay intact across MC runs.
         const registry = new ServiceRegistry();
@@ -130,7 +185,14 @@ export class IntlRetirementMcRunner {
           simStart,
           simEnd,
         });
-        scenario.buildSim();
+        // Per-iteration seed so each path draws its OWN in-loop stochastic sequence
+        // (design 74 §5.2). Previously the seed was dropped here and every iteration
+        // ran at the default seed 1 — so with a stochastic path ON, all iterations
+        // drew the IDENTICAL return sequence and sequence-of-returns risk collapsed to
+        // a single ordering. The seed is the ScenarioRunner iteration index (i + 1),
+        // so a run is reproducible and the scalar-param sampling rng (makeSeededRng,
+        // same index) and the in-loop path share the iteration.
+        scenario.buildSim({ seed });
 
         const cfg = structuredClone(cfgTemplate);
         // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
@@ -200,7 +262,34 @@ export class IntlRetirementMcRunner {
       cumulativeDeficit: r.result.cumulativeDeficit,
       deficitMonths:     r.result.deficitMonths,
       timeSeries:        r.result.timeSeries,
+      pathShape:         computePathShape(r.result.timeSeries),
     }));
+
+    // Sequence-of-returns readout (design 74 §5.2). Mark each path against the
+    // cross-path median net worth at ~10 years, then split the failure rate by it: if
+    // a below-median first decade carries a materially higher failure rate, the risk
+    // that's biting IS sequence-of-returns, not the terminal average. This is the
+    // number §5.2 calls "the one worth reporting".
+    const medianDecadeNetWorthUsd = median(runs.map(r => r.pathShape.decadeNetWorthUsd));
+    let belowN = 0, belowFail = 0, aboveN = 0, aboveFail = 0;
+    if (medianDecadeNetWorthUsd != null) {
+      for (const r of runs) {
+        const d = r.pathShape.decadeNetWorthUsd;
+        if (d == null) continue;
+        const below = d < medianDecadeNetWorthUsd;
+        if (below) { belowN++; if (r.scenarioFailed) belowFail++; }
+        else       { aboveN++; if (r.scenarioFailed) aboveFail++; }
+        r.firstDecadeBelowMedian = below;
+      }
+    }
+    summary.pathShape = {
+      medianNetWorthCagr:      median(runs.map(r => r.pathShape.netWorthCagr)),
+      medianWorst5yrCagr:      median(runs.map(r => r.pathShape.worst5yrCagr)),
+      medianMaxDrawdown:       median(runs.map(r => r.pathShape.maxDrawdown)),
+      medianDecadeNetWorthUsd,
+      failureRateBelowMedianDecade: belowN ? belowFail / belowN : null,
+      failureRateAboveMedianDecade: aboveN ? aboveFail / aboveN : null,
+    };
 
     return { runs, summary };
   }

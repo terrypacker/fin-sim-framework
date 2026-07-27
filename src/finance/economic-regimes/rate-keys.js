@@ -95,6 +95,40 @@ export const RATE_KEY_CLASS_MEMBERS = Object.freeze({
 });
 
 /**
+ * Equity SLEEVES for stochastic return paths (design 74 §4). The per-account-type
+ * *member* keys (not the `EQUITY_US/AU` class keys) are the granularity a market
+ * factor is folded onto — each sleeve carries its own base growth rate and its own
+ * beta on the shared market shock. Frozen in a **stable, sorted** order: the
+ * EquityReturnTickHandler iterates this list to draw optional idiosyncratic terms,
+ * so the order must never change or the RNG cursor (hence every subsequent draw)
+ * would shift (design 74 §4 ⚠️).
+ */
+export const EQUITY_SLEEVES = Object.freeze([
+  RATE_KEYS.EQUITY_AU_STOCK,
+  RATE_KEYS.EQUITY_AU_SUPER,
+  RATE_KEYS.EQUITY_US_BROKERAGE,
+  RATE_KEYS.EQUITY_US_IRA,
+  RATE_KEYS.EQUITY_US_K401,
+  RATE_KEYS.EQUITY_US_ROTH,
+]);
+
+/**
+ * Default per-sleeve beta on the shared market factor (design 74 §4, Option B).
+ * US large-cap sleeves ride the factor 1:1; a diversified AU balance and (more so)
+ * a super balance are less volatile, so they load below 1 out of the box — giving
+ * per-sleeve behaviour without any config (design 74 §8 Q1). Overridable via the
+ * `equityReturnBeta` param; a sleeve absent here defaults to 1.0.
+ */
+export const DEFAULT_EQUITY_BETA = Object.freeze({
+  [RATE_KEYS.EQUITY_US_ROTH]:      1.0,
+  [RATE_KEYS.EQUITY_US_IRA]:       1.0,
+  [RATE_KEYS.EQUITY_US_K401]:      1.0,
+  [RATE_KEYS.EQUITY_US_BROKERAGE]: 1.0,
+  [RATE_KEYS.EQUITY_AU_STOCK]:     0.9,
+  [RATE_KEYS.EQUITY_AU_SUPER]:     0.7,
+});
+
+/**
  * Map from ACCOUNT_ROLES values to their corresponding RATE_KEYS entry.
  * Used by the ECONOMIC_REGIMES toolset to build rateKeyToStateKeys maps
  * from the scenario's registered accounts.
