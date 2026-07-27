@@ -30,6 +30,8 @@ import {
 import {
   DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, sleeveWeightKey,
 } from '../holdings/holdings-selection.js';
+import { ALLOCATION_SCHEDULE }      from '../behavioral/rebalance-to-target-reducer.js';
+import { HARVEST_FORMS, collapseConsecutive, ageAt, requiresIncludes } from './harvest.js';
 
 /**
  * The set of account roles actually present in a live sim state — every entry
@@ -100,12 +102,85 @@ export const COCKPIT_CONTROLS = {
       return `Set monthly spend${_bandWhen(v)} to ${fmtUsd(_toNominal(candidate[v.paramKey], _effectiveYear(v, ctx), ctx))}/mo`;
     },
     liveActuatable: true,
+    // EnumMulti: the strategy list must CONTAIN the mode, not be replaced by it
+    // (that would silently drop the user's other active spending strategies).
+    harvestRequires: { spendingStrategy: requiresIncludes('EXPLICIT_BANDS') },
     /**
-     * Forward-effective live actuation (design 39 Step 5b / Phase B): re-wire the
-     * running ExplicitBandsSpendingReducer's band amount and persist it to the
-     * active scenario param. The realized past (journal/state) is untouched; the
-     * change bites at the next period advance via the reducer's appliedAmount
-     * re-pin. Returns true when it actually hit the live plan.
+     * SCHEDULE bake (design 39 §13.6.1) — the run's per-epoch amounts become the
+     * band table, which is already an age-keyed step schedule.
+     *
+     * The lever tunes the band ACTIVE AT "now", so each epoch's committed amount
+     * is what the plan spent from that epoch until the next decision — exactly a
+     * band boundary. Rules:
+     *   - one { startAge, monthlyAmount } per epoch, `startAge` = the primary's
+     *     age at asOfDate (or the targeted band's own startAge when the decision
+     *     was aimed at a band not yet entered — then it bites at that age, not now);
+     *   - consecutive equal amounts collapse (|Δ| ≤ ε, default $1);
+     *   - two epochs in the same age-year: last wins;
+     *   - bands starting BELOW the first epoch's age are PRESERVED — that is the
+     *     pre-MPC plan for the realized past, which the run never re-decided.
+     * Units pass through unchanged: lever, param and reducer all speak real
+     * base-year USD.
+     */
+    harvest: ({ epochs, baseParams, birth, epsilon }) => {
+      const eps  = epsilon?.spending ?? 1;
+      const warnings = [];
+      const points = [];
+      for (const e of epochs) {
+        const v = e.vars?.[0];
+        const amount = v ? e.candidate?.[v.paramKey] : undefined;
+        if (!Number.isFinite(Number(amount))) continue;
+        // A decision aimed at a band the person has NOT yet entered takes effect
+        // at that band's startAge (the cockpit stamps `_future`/`_startAge`), so
+        // key it there rather than at "now".
+        const age = (v?._future && Number.isFinite(v?._startAge))
+          ? v._startAge
+          : ageAt(birth?.birthDate, e.asOfDate);
+        if (!Number.isFinite(age)) continue;
+        // Same age-year → last wins.
+        if (points.length && points[points.length - 1].key === age) points.pop();
+        points.push({ key: age, value: Number(amount) });
+      }
+      if (!points.length) {
+        return { form: HARVEST_FORMS.SCHEDULE, params: {}, warnings:
+          ['Monthly Spending: no dated decisions could be keyed to an age (missing birth date?) — nothing harvested.'] };
+      }
+
+      const collapsed = collapseConsecutive(points, (a, b) => Math.abs(a - b), eps);
+      const firstAge  = collapsed[0].key;
+      // Preserve the pre-MPC plan for ages the run never re-decided.
+      const prior = (Array.isArray(baseParams?.spendingExpenseBands) ? baseParams.spendingExpenseBands : [])
+        .filter(b => Number.isFinite(b?.startAge) && b.startAge < firstAge)
+        .map(b => ({ ...b }));
+      const bands = [
+        ...prior,
+        ...collapsed.map(p => ({ startAge: p.key, monthlyAmount: p.value })),
+      ].sort((a, b) => a.startAge - b.startAge);
+
+      if (collapsed.length < points.length) {
+        warnings.push(`Monthly Spending: ${points.length} decisions collapsed to ${collapsed.length} band(s) `
+          + `(consecutive amounts within $${eps}).`);
+      }
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { spendingExpenseBands: bands },
+        labels: { spendingExpenseBands:
+          collapsed.map(p => `age ${p.key} ${fmtUsd(p.value)}`).join(' · ') },
+        varied: { spendingExpenseBands: collapsed.length > 1 },
+        warnings,
+      };
+    },
+    /**
+     * Forward-effective LIVE-VALUE SYNC (design 39 Step 5b / Phase B; §13 H3):
+     * re-wire the running ExplicitBandsSpendingReducer's band amount and mirror it
+     * onto the active scenario param so the next Advise rollout — which recompiles
+     * from params — sees the live plan. This is NOT the persistence path: it keeps
+     * projection and live sim consistent within a run, and leaves only the LAST
+     * epoch's amount on one band. Baking the run into a re-runnable scenario is
+     * `harvest` above (§13.1's table is the record of the difference).
+     * The realized past (journal/state) is untouched; the change bites at the next
+     * period advance via the reducer's appliedAmount re-pin. Returns true when it
+     * actually hit the live plan.
      */
     actuate: ({ services, scenario, candidate, vars }) => {
       const v = vars?.[0];
@@ -221,9 +296,50 @@ export const COCKPIT_CONTROLS = {
       if (t == null || t <= 0) return 'No Roth conversion this year';
       return `Fill ordinary income to ${fmtUsd(_toNominal(t, v?._year, ctx))}/yr`;
     },
+    harvestRequires: { rothConversionEnabled: true },
     /**
-     * Forward-effective live actuation (design 39 Step 10). Unlike SPENDING (a
-     * persistent reducer), Roth conversion is driven by scheduled
+     * SCHEDULE bake (design 39 §13.6.2) — the union of every epoch's decided year,
+     * positive targets only (absence == skip-year, matching the toolset).
+     *
+     * This is already the shape `actuate` accumulates, so the harvest is
+     * IDEMPOTENT here — it re-derives the schedule from the log rather than
+     * trusting the side effect, which also covers the case where the user edited
+     * or reverted the param mid-run.
+     */
+    harvest: ({ epochs }) => {
+      const byYear = new Map();
+      let dropped = 0;
+      for (const e of epochs) {
+        const v = e.vars?.[0];
+        const year   = v?._year;
+        const target = v ? e.candidate?.[v.paramKey] : undefined;
+        if (!Number.isFinite(year) || !Number.isFinite(Number(target))) continue;
+        if (Number(target) > 0) byYear.set(year, Number(target));
+        else { byYear.delete(year); dropped++; }     // decided NOT to convert
+      }
+      const sched = [...byYear.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([year, incomeTarget]) => ({ year, incomeTarget }));
+      const warnings = [];
+      if (!sched.length) {
+        warnings.push('Roth Conversion: every epoch decided against converting — the harvested schedule is empty '
+          + '(the scenario falls back to its start/end window on the next Rebuild).');
+      }
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { rothConversionSchedule: sched },
+        labels: { rothConversionSchedule: sched.length
+          ? `${sched.length} year(s): ${sched.slice(0, 3).map(s => `${s.year} ${fmtUsd(s.incomeTarget)}`).join(' · ')}`
+            + (sched.length > 3 ? ' …' : '')
+          : 'no conversion years' },
+        varied: { rothConversionSchedule: sched.length > 1 },
+        warnings: dropped ? [...warnings,
+          `Roth Conversion: ${dropped} skip-year decision(s) recorded as "no conversion" (year omitted).`] : warnings,
+      };
+    },
+    /**
+     * Forward-effective LIVE-VALUE SYNC (design 39 Step 10; §13 H3). Unlike
+     * SPENDING (a persistent reducer), Roth conversion is driven by scheduled
      * ROTH_CONVERSION_POLICY_EVALUATE events, and SimulationSync's event-update
      * path unschedules by *type* (would wipe every year's conversion). So we
      * re-wire directly:
@@ -375,9 +491,41 @@ export const COCKPIT_CONTROLS = {
       if (rtAmt > 0) parts.push(`${fmtUsd(_toNominal(rtAmt, year, ctx))} Roth`);
       return `Withdraw ${parts.join(' + ')} early → brokerage`;
     },
+    harvestRequires: { earlyWithdrawalEnabled: true },
     /**
-     * Forward-effective live actuation (design 45 Phase 3), mirroring ROTH: (1)
-     * persist the chosen real per-class amounts into the scenario's
+     * SCHEDULE bake (design 39 §13.6.2) — mirrors ROTH: the union of every epoch's
+     * decided year, entries with any positive class amount only (absence == no
+     * withdrawal). Idempotent against `actuate`'s live-value sync.
+     */
+    harvest: ({ epochs }) => {
+      const byYear = new Map();
+      for (const e of epochs) {
+        const td = e.vars?.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
+        const rt = e.vars?.find(v => v.paramKey.endsWith('.rothAmount'));
+        const year = td?._year ?? rt?._year ?? null;
+        if (!Number.isFinite(year)) continue;
+        const tdAmt = td ? Number(e.candidate?.[td.paramKey] ?? 0) : 0;
+        const rtAmt = rt ? Number(e.candidate?.[rt.paramKey] ?? 0) : 0;
+        if (tdAmt > 0 || rtAmt > 0) byYear.set(year, { year, taxDeferredAmount: tdAmt, rothAmount: rtAmt });
+        else byYear.delete(year);
+      }
+      const sched = [...byYear.values()].sort((a, b) => a.year - b.year);
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { earlyWithdrawalSchedule: sched },
+        labels: { earlyWithdrawalSchedule: sched.length
+          ? `${sched.length} year(s): ${sched.slice(0, 3).map(s =>
+              `${s.year} ${fmtUsd(s.taxDeferredAmount + s.rothAmount)}`).join(' · ')}`
+            + (sched.length > 3 ? ' …' : '')
+          : 'no withdrawal years' },
+        varied: { earlyWithdrawalSchedule: sched.length > 1 },
+        warnings: sched.length ? [] :
+          ['Early Withdrawal: every epoch decided against withdrawing — the harvested schedule is empty.'],
+      };
+    },
+    /**
+     * Forward-effective LIVE-VALUE SYNC (design 45 Phase 3; §13 H3), mirroring
+     * ROTH: (1) mirror the chosen real per-class amounts onto the scenario's
      * earlyWithdrawalSchedule param, and (2) re-wire the future queued
      * SCHEDULED_EARLY_WITHDRAWAL events for the year via the SAME shared helper the
      * rollout uses (advise == apply). Returns true when it moved a live event.
@@ -450,11 +598,13 @@ export const COCKPIT_CONTROLS = {
         : 'Drain the current residence country first (LOCAL_FIRST)';
     },
     /**
-     * Forward-effective live actuation (design 58 §11.2, leg 3): re-stamp the
-     * running sim's `crossBorderDrawdown` state field so AccountService
-     * .replenishSavings honors the committed mode from the next draw, and persist
-     * it to the active scenario param so future Advise rollouts (which recompile
-     * from params) and the live sim agree. The realized past is untouched — the
+     * Forward-effective LIVE-VALUE SYNC (design 58 §11.2, leg 3; design 39 §13 H3):
+     * re-stamp the running sim's `crossBorderDrawdown` state field so AccountService
+     * .replenishSavings honors the committed mode from the next draw, and mirror
+     * it onto the active scenario param so future Advise rollouts (which recompile
+     * from params) and the live sim agree. NOT the persistence path — over a run it
+     * leaves only the LAST epoch's mode; the harvest (§13.6.3, POINT + warning) is
+     * what bakes a decision into a re-runnable scenario. The realized past is untouched — the
      * change bites forward, mirroring the projection's `_seededSim` re-stamp.
      */
     actuate: ({ services, scenario, candidate, vars }) => {
@@ -497,10 +647,11 @@ export const COCKPIT_CONTROLS = {
       }
     },
     /**
-     * Forward-effective live actuation (design 58 §11.2, leg 3): re-stamp the
-     * running sim's `withinTierDraw` state field so AccountService.replenishSavings
-     * splits shared tiers by the committed policy from the next draw, and persist
-     * it to the active scenario param. Realized past untouched — the projection's
+     * Forward-effective LIVE-VALUE SYNC (design 58 §11.2, leg 3; design 39 §13 H3):
+     * re-stamp the running sim's `withinTierDraw` state field so AccountService
+     * .replenishSavings splits shared tiers by the committed policy from the next
+     * draw, and mirror it onto the active scenario param. Last-epoch-wins over a
+     * run; the harvest (§13.6.3) is the persistence path. Realized past untouched — the projection's
      * `_seededSim` re-stamp is the twin.
      */
     actuate: ({ services, scenario, candidate, vars }) => {
@@ -530,6 +681,10 @@ export const COCKPIT_CONTROLS = {
     // only then (every other strategy fixes it). Gate + surface the requirement.
     appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE,
     requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
+    // No `harvest` hook ⇒ the POINT default (§13.6.3): last-epoch weights + a
+    // quantified collapse warning. A faithful bake needs an age-keyed
+    // `drawdownWeightSchedule` that does not exist yet (§13.6.5, gated on VoTV).
+    harvestRequires: { drawdownStrategy: DRAWDOWN_WEIGHT_MODE },
     // One CONTINUOUS variable per investment role; the draw order is the ascending
     // sort of the committed weights. Same-role siblings share a weight → one tier.
     // One CONTINUOUS variable per investment role an account backs (design 58
@@ -557,8 +712,8 @@ export const COCKPIT_CONTROLS = {
       return ranked.length ? `Draw order: ${ranked.join(' → ')}` : 'Drawdown order unchanged';
     },
     /**
-     * Forward-effective live actuation (design 58 §11.3 leg 3): persist each
-     * committed weight to its scenario param, and re-stamp the running sim's
+     * Forward-effective LIVE-VALUE SYNC (design 58 §11.3 leg 3; design 39 §13 H3):
+     * mirror each committed weight onto its scenario param, and re-stamp the running sim's
      * per-account `drawdownPriority` from the weights using the SAME role→rank
      * synthesis the compile cascade uses (synthesizeWeightedPriorities) + the
      * configured owner banding — so replenishSavings honors the new order from the
@@ -623,6 +778,7 @@ export const COCKPIT_CONTROLS = {
     // sell order only then (FIFO/TAX_COST/PRESERVE_GROWTH fix it). Gate + surface why.
     appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE,
     requirement: 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.',
+    harvestRequires: { drawdownSleeveOrder: SLEEVE_WEIGHT_MODE },
     // One CONTINUOUS variable per drawdown sleeve class; the sell order is the
     // ascending sort of the committed weights.
     buildVariables: ({ range }) => DRAWDOWN_SLEEVE_CLASSES.map(cls => ({
@@ -643,8 +799,8 @@ export const COCKPIT_CONTROLS = {
       return ranked.length ? `Sell order: ${ranked.join(' → ')}` : 'Sleeve order unchanged';
     },
     /**
-     * Forward-effective live actuation (design 65 Phase 4): persist each committed
-     * weight to its scenario param, then re-wire the running sim's state selection
+     * Forward-effective LIVE-VALUE SYNC (design 65 Phase 4; design 39 §13 H3): mirror
+     * each committed weight onto its scenario param, then re-wire the running sim's state selection
      * fields (drawdownSleeveOrder=WEIGHTED + drawdownSleeveWeights) so the disposal
      * primitive honors the new sell order from the next draw. No per-account re-stamp
      * (the policy is read fresh from state each draw) — the projection's twin is the
@@ -721,9 +877,105 @@ export const COCKPIT_CONTROLS = {
         .map(c => `${ALLOC_WEIGHT_CLASS_LABELS[c] ?? c} ${Math.round((mix[c] ?? 0) * 100)}%`);
       return parts.length ? `Target mix: ${parts.join(' / ')}` : 'Allocation mix unchanged';
     },
+    harvestRequires: {
+      behavioralStrategies: requiresIncludes('TARGET_ALLOCATION'),
+      allocationSchedule:   ALLOCATION_SCHEDULE.GLIDEPATH,
+    },
     /**
-     * Forward-effective live actuation (design 61 §7 leg 3): persist each committed
-     * weight to its scenario param, then re-wire the running RebalanceToTargetReducer's
+     * SCHEDULE bake → GLIDEPATH anchors (design 39 §13.6.4; closes design 61 §7 /
+     * OQ7). The plant half already exists and was unused: `allocationSchedule =
+     * GLIDEPATH` + `allocationGlidepath: [{ age, weights }]`, interpolated by the
+     * primary's age in `RebalanceToTargetReducer.resolveScheduledTarget`.
+     *
+     * Four rules, three load-bearing for fidelity:
+     *  1. Anchor the SYNTHESIZED mix (what the run actually held), not the raw
+     *     stick-breaking weights — the weights aren't a mix and don't interpolate.
+     *  2. ε-collapse on L1 distance over the simplex (default 0.02) — the same
+     *     hold-band idea design 61 §7 uses against CGT-churning flip-flop, reused
+     *     here to keep the anchor table legible.
+     *  3. STEP-FAITHFUL by default. `interpolateGlidepath` BLENDS linearly between
+     *     anchors, but the MPC held each mix flat until the next decision. So emit
+     *     paired anchors — {age_i, mix_i} and {age_{i+1}−δ, mix_i} — to reproduce
+     *     the run. `allocationSmooth` emits one anchor per epoch instead (more
+     *     legible, not what the run did); §13.7's verify quantifies the difference.
+     *  4. PREPEND a start anchor at the plan's start age carrying the pre-run
+     *     static mix. `interpolateGlidepath` CLAMPS below the first anchor, so
+     *     without this a from-t₀ re-run would apply the first MPC epoch's mix to
+     *     the entire realized past — silently rewriting years the run never decided.
+     *
+     * The last committed mix is also kept in `allocWeight::*`, the reducer's
+     * `targetAllocation` fallback when the glidepath is empty.
+     */
+    harvest: ({ epochs, baseParams, birth, epsilon, simStart }) => {
+      const eps    = epsilon?.allocation ?? 0.02;
+      const smooth = epsilon?.allocationSmooth === true;
+      const warnings = [];
+
+      const points = [];
+      for (const e of epochs) {
+        const age = ageAt(birth?.birthDate, e.asOfDate);
+        if (!Number.isFinite(age)) continue;
+        const present = new Set((e.vars ?? []).map(v => v._class).filter(Boolean));
+        const mix = synthesizeTargetAllocation(e.candidate ?? {}, present.size ? present : null);
+        if (!mix || !Object.keys(mix).length) continue;
+        if (points.length && points[points.length - 1].key === age) points.pop();
+        points.push({ key: age, value: mix });
+      }
+      if (!points.length) {
+        return { form: HARVEST_FORMS.SCHEDULE, params: {}, warnings:
+          ['Allocation Mix: no dated decisions could be keyed to an age (missing birth date?) — nothing harvested.'] };
+      }
+
+      const collapsed = collapseConsecutive(points, _mixL1, eps);
+      if (collapsed.length < points.length) {
+        warnings.push(`Allocation Mix: ${points.length} decisions collapsed to ${collapsed.length} anchor(s) `
+          + `(consecutive mixes within L1 ${eps}).`);
+      }
+
+      // (4) Prepend the pre-run mix at the plan's start age, so the clamp below the
+      //     first anchor replays the realized past rather than the first decision.
+      const anchors = [];
+      const startAge = ageAt(birth?.birthDate, simStart);
+      const priorMix = _priorTargetMix(baseParams);
+      if (Number.isFinite(startAge) && startAge < collapsed[0].key && priorMix) {
+        anchors.push({ age: startAge, weights: priorMix });
+      } else if (!Number.isFinite(startAge)) {
+        warnings.push('Allocation Mix: plan start age unknown — no leading anchor was added, so a re-run '
+          + 'applies the first harvested mix to the years before the run started.');
+      }
+
+      // (3) Step-faithful pairs, unless the user asked for a smooth glidepath.
+      const DELTA = 0.01;   // sub-year shim: hold the mix flat right up to the next anchor
+      for (let i = 0; i < collapsed.length; i++) {
+        const p = collapsed[i];
+        anchors.push({ age: p.key, weights: p.value });
+        const next = collapsed[i + 1];
+        if (!smooth && next && next.key - p.key > DELTA) {
+          anchors.push({ age: +(next.key - DELTA).toFixed(2), weights: p.value });
+        }
+      }
+
+      // Keep the last mix in the weight params (the reducer's static fallback).
+      const lastEpoch = epochs[epochs.length - 1];
+      const weightParams = {};
+      for (const v of (lastEpoch?.vars ?? [])) {
+        const w = lastEpoch.candidate?.[v.paramKey];
+        if (w != null) weightParams[v.paramKey] = w;
+      }
+
+      return {
+        form: HARVEST_FORMS.SCHEDULE,
+        params: { allocationGlidepath: anchors, ...weightParams },
+        labels: {
+          allocationGlidepath: collapsed.map(p => `age ${p.key} ${_mixLabel(p.value)}`).join(' → '),
+        },
+        varied: { allocationGlidepath: collapsed.length > 1 },
+        warnings,
+      };
+    },
+    /**
+     * Forward-effective LIVE-VALUE SYNC (design 61 §7 leg 3; §13 H3): mirror each
+     * committed weight onto its scenario param, then re-wire the running RebalanceToTargetReducer's
      * `targetAllocation` to the freshly synthesized mix so the next rebalance honors it.
      * No per-account state re-stamp is needed (the target is reducer-resident), so
      * Advise/Apply/live agree without a projection shim. Realized past untouched.
@@ -763,6 +1015,7 @@ export const COCKPIT_CONTROLS = {
     liveActuatable: true,
     appliesTo: (bp) => _hasStrategy(bp?.behavioralStrategies, 'BOND_LADDER'),
     requirement: 'Select the BOND_LADDER behavioral strategy (Scenario panel) to tune the ladder length online.',
+    harvestRequires: { behavioralStrategies: requiresIncludes('BOND_LADDER') },
     buildVariables: ({ range }) => [{
       paramKey: 'bondLadderRungs',
       type:     OPT_PARAM_TYPES.INTEGER,
@@ -776,8 +1029,9 @@ export const COCKPIT_CONTROLS = {
       return Number.isFinite(n) ? `Ladder length: ${n} rungs (≈${n}-year)` : 'Ladder length unchanged';
     },
     /**
-     * Forward-effective live actuation: persist the committed rung count to its scenario
-     * param, then re-wire the running BondLadderReducer's `targetRungs` so it re-shapes
+     * Forward-effective LIVE-VALUE SYNC (design 39 §13 H3): mirror the committed rung
+     * count onto its scenario param, then re-wire the running BondLadderReducer's
+     * `targetRungs` so it re-shapes
      * the ladder on the next period. Reducer-resident target ⇒ no per-account re-stamp.
      */
     actuate: ({ services, scenario, candidate }) => {
@@ -823,11 +1077,21 @@ export class CockpitController {
     graph        = null,       // optional Graph for DERIVES_FROM recording
     parentId     = null,       // parent scenario id for the audit trail
     horizonYears = null,       // sliding prediction window H (design 41); null = full horizon
+    runId        = null,       // cockpit run this controller's epochs belong to (§13.2)
+    decisionStore = null,      // optional DecisionRecordRegistry — durable log (§13 H4)
   } = {}) {
     this.simStart     = simStart;
     this.simEnd       = simEnd;
-    this.baseParams   = { ...baseParams };
-    this.committed    = { ...baseParams };
+    // DEEP copies, not spreads. `apply()` writes committed values through the
+    // path-aware `set()` (e.g. `spendingExpenseBands[0].monthlyAmount`), which
+    // mutates the CONTAINER — and a spread shares every nested array/object with
+    // the caller. In the cockpit that caller is `_paramsToMap(scenario.params)`,
+    // so a shallow copy let each epoch silently rewrite the ACTIVE SCENARIO's
+    // band table / schedule entries in place: an undeclared write outside the
+    // actuate + harvest paths, which also made the harvest diff's "from" side show
+    // the mutated value instead of the pre-run one (found by scripts/lab/verify-harvest.mjs).
+    this.baseParams   = _deepCopyParams(baseParams);
+    this.committed    = _deepCopyParams(baseParams);
     this.cfgTemplate  = cfgTemplate;
     this.objective    = objective;
     // Multi-lever (design 45 §8): the controller searches a SET of controls whose
@@ -840,6 +1104,11 @@ export class CockpitController {
     this.graph        = graph;
     this.parentId     = parentId;
     this.horizonYears = horizonYears;
+    // The cockpit re-creates this controller after every Apply and every clock
+    // step, so the run identity CANNOT live here — it is minted by the surface
+    // that outlives the epochs (the plugin) and threaded through (§13.2).
+    this.runId        = runId;
+    this.decisionStore = decisionStore;
 
     this.snapshot    = null;   // the "now"
     this.lastAdvice  = null;
@@ -1047,13 +1316,22 @@ export class CockpitController {
       // show the value the goal anchored on (not just net worth) — even after the
       // user switches goals (records made under different goals stay correct).
       const metric = objectivePrimaryMetric(this.objective);
+      const variables = this._variables();
       recordDecisionRecord({
         graph: this.graph, parentId: this.parentId, id: recordId,
-        name: this.describeRecordMove(candidate ?? {}, this._variables()),
+        name: this.describeRecordMove(candidate ?? {}, variables),
         controlParams: candidate, asOfDate: this.snapshot.date,
         simStart: this.simStart, simEnd: this.simEnd, result,
+        // Harvest source metadata (§13.2): which run, which levers, and the
+        // variable descriptors needed to re-key the values onto schedule params.
+        runId:       this.runId,
+        controlKeys: this.controls.map(c => c.key),
+        controlVars: variables,
         extra: { goalMetric: { key: metric.key, label: metric.label } },
       });
+      // Mirror the layer to durable storage so an un-harvested run survives a
+      // reload (§13 H4). The graph stays the source of truth.
+      this.decisionStore?.persist?.();
     }
     return { result, committedParams: { ...this.committed }, recordId };
   }
@@ -1121,6 +1399,56 @@ export class CockpitController {
 function fmtUsd(n) {
   if (n == null || !Number.isFinite(n)) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+}
+
+/**
+ * Copy a flat params bag so nested containers are OURS to mutate. Param values are
+ * JSON-ish (numbers, strings, band tables, schedules, mix maps), so a structured
+ * clone is right; anything exotic falls back to the shared reference rather than
+ * throwing — a controller that can't be constructed is worse than one that shares
+ * an oddball value it will never write through.
+ */
+function _deepCopyParams(bag) {
+  const out = {};
+  for (const [k, v] of Object.entries(bag ?? {})) {
+    if (v && typeof v === 'object') {
+      try { out[k] = structuredClone(v); }
+      catch { out[k] = v; }
+    } else out[k] = v;
+  }
+  return out;
+}
+
+/** L1 distance between two allocation mixes over the union of their classes —
+ *  the "did the mix really move?" metric for the glidepath ε-collapse (§13.6.4). */
+function _mixL1(a, b) {
+  const classes = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+  let d = 0;
+  for (const c of classes) d += Math.abs((a?.[c] ?? 0) - (b?.[c] ?? 0));
+  return d;
+}
+
+/** "E70 / B25 / C5" — a compact mix for the harvest diff. */
+function _mixLabel(mix) {
+  return ALLOC_WEIGHT_CLASSES
+    .filter(c => (mix?.[c] ?? 0) > 0.005)
+    .map(c => `${(ALLOC_WEIGHT_CLASS_LABELS[c] ?? c).slice(0, 1)}${Math.round((mix[c] ?? 0) * 100)}`)
+    .join('/');
+}
+
+/**
+ * The target mix the scenario used BEFORE the run — the glidepath's leading
+ * anchor (§13.6.4 rule 4). Under OPTIMIZED the mix is synthesized from the
+ * `allocWeight::*` params; otherwise it is the explicit `rebalanceTargetAllocation`
+ * object. Null when neither is configured (then no leading anchor is emitted).
+ */
+function _priorTargetMix(baseParams) {
+  if (baseParams?.allocationStrategy === ALLOCATION_OPTIMIZED_MODE) {
+    const mix = synthesizeTargetAllocation(baseParams ?? {}, null);
+    return mix && Object.keys(mix).length ? mix : null;
+  }
+  const t = baseParams?.rebalanceTargetAllocation;
+  return t && typeof t === 'object' && Object.keys(t).length ? { ...t } : null;
 }
 
 /**

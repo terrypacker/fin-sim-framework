@@ -221,6 +221,14 @@ export class WorkbenchApp extends BaseComponent {
       this._wbShell.activatePlugin('cross-action-query');
     });
 
+    // Re-render the Scenario panel's params list when a non-UI writer edits the
+    // active scenario's param values in place — today the MPC harvest (design 39
+    // §13.5). The panel holds that array by reference, so the values would
+    // otherwise change underneath it while the editors keep showing the old ones.
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.PARAMS_CHANGED, () => {
+      this.scenarioTabPresenter?.refreshParams();
+    });
+
     // Show action detail when a row in the cross-action-query panel is clicked.
     this._wbShell.runtime.bus.subscribe(WB_EVENTS.ACTION_ENTRY_OPEN, ({ entry }) => {
       this._statePanelView.showNodeDetail(entry);

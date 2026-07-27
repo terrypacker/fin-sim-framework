@@ -13,7 +13,10 @@ import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { CockpitController, COCKPIT_CONTROLS } from '../../../../finance/mpc/cockpit-controller.js';
 import { RolloutWorkerPool } from '../../../../finance/optimization/parallel/rollout-worker-pool.js';
-import { readDecisionRecords } from '../../../../finance/mpc/apply-forward.js';
+import { readDecisionRecords, readDecisionRuns } from '../../../../finance/mpc/apply-forward.js';
+import { harvestDecisions, COLLAPSE_RULES } from '../../../../finance/mpc/harvest.js';
+import { applyHarvestPlan } from '../../../../finance/mpc/harvest-apply.js';
+import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from '../../../../finance/mpc/harvest-resolve.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
   OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey, resolveTerminalKey, terminalAxesFor,
@@ -61,6 +64,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._autoRunning      = false;  // autopilot loop active
     this._workerPool       = undefined;  // design 46 Phase 0.5: lazy, plugin-owned, reused across epochs
     this._parallel         = true;   // parallelize solver rollouts (bit-identical; toggle for A/B)
+    this._runId            = null;   // current cockpit run (design 39 §13.2); null ⇒ mint on next use
+    this._harvestPlan      = null;   // the plan under review in the harvest panel
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -130,6 +135,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <button class="btn btn-sm btn-primary" data-mpc="advise">Advise next move</button>
         <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
+        <button class="btn btn-sm" data-mpc="harvest" title="Copy this run's decisions back into the loaded scenario's parameters (design 39 §13)" disabled>Copy to scenario…</button>
       </div>
 
       <div class="mpc-toolbar mpc-range" data-mpc="range-row">
@@ -160,6 +166,20 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
       <div class="mpc-fan" data-mpc="fan" style="display:none"></div>
 
+      <!-- Harvest review (design 39 §13.8): nothing is written to the scenario
+           until the user reads this diff and approves it. -->
+      <div class="mpc-harvest" data-mpc="harvest-panel" style="display:none">
+        <div class="mpc-harvest-head">
+          <span data-mpc="harvest-title">Copy to scenario</span>
+          <label class="mpc-field mpc-harvest-opt" title="Re-solve the best STATIC value over the whole run for levers with no schedule form, instead of freezing the last epoch's decision (design 39 §13.6.6). Costs one optimizer run.">
+            <input type="checkbox" data-mpc="harvest-resolve"> Re-solve static levers
+          </label>
+          <button class="btn btn-sm btn-primary" data-mpc="harvest-apply">Copy to scenario</button>
+          <button class="btn btn-sm" data-mpc="harvest-cancel">Cancel</button>
+        </div>
+        <div class="mpc-harvest-body" data-mpc="harvest-body"></div>
+      </div>
+
       <div class="mpc-savepoints" data-mpc="savepoints" style="display:none">
         <div class="mpc-savepoints-head">MPC Save Points <span class="mpc-savepoints-sub">decision log · inspect only</span>
           <button class="btn btn-sm btn-warn mpc-savepoints-clear" data-mpc="clear-savepoints" title="Delete the decision log. The log persists across Rebuilds by design; this empties it on demand.">Delete</button>
@@ -180,17 +200,23 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('advance', 'click',  () => this._advance());
     this._bind('auto',    'click',  () => this._auto());
     this._bind('apply',   'click',  () => this._apply());
+    this._bind('harvest',        'click', () => this._openHarvest());
+    this._bind('harvest-apply',  'click', () => this._applyHarvest());
+    this._bind('harvest-cancel', 'click', () => this._closeHarvest());
+    this._bind('harvest-resolve','change', () => this._openHarvest());   // re-price the preview
     this._bind('control', 'change', () => {
       this._controller?.setControls(this._currentControls());
       this._applyControlDefaultRange();   // each lever has its own natural range
       this._controller?.setControlRange(this._currentRange());
       this._syncRangeEnabled();
       this._syncLeverApplicability();
+      this._endRun();     // a different lever set is a different run (§13 H1)
     });
     this._bind('objective','change',() => {
       this._syncObjectiveAxes();
       this._controller?.setObjective(this._currentObjective());
       this._syncHorizonEnabled();        // some goals can't use a window (full-horizon only)
+      this._endRun();     // decisions made under a different goal aren't one schedule
     });
     this._bind('axis-running', 'change', () => { this._controller?.setObjective(this._currentObjective()); this._syncHorizonEnabled(); });
     this._bind('axis-scope',   'change', () => { this._controller?.setObjective(this._currentObjective()); this._syncHorizonEnabled(); });
@@ -206,7 +232,26 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._syncLeverApplicability();
     this._bind('clear-savepoints', 'click', () => this._clearSavePoints());
     this._renderSavePoints();
+    this._syncHarvestEnabled();
   }
+
+  // ─── Run identity (design 39 §13.2) ────────────────────────────────────────
+
+  /**
+   * The current cockpit RUN's id. The controller is re-created after every Apply
+   * and every clock step, so run identity cannot live there — it lives here, on
+   * the surface that outlives the epochs, and is threaded into each controller.
+   *
+   * A run ends (`_endRun`) on a Rebuild, or when the lever set or goal changes:
+   * decisions taken under a different goal or lever set are not one coherent
+   * schedule, and harvest targets exactly one run (§13 H1).
+   */
+  _currentRunId() {
+    if (!this._runId) this._runId = `run:${Date.now()}:${Math.floor(Math.random() * 1e4)}`;
+    return this._runId;
+  }
+
+  _endRun() { this._runId = null; }
 
   /**
    * The window field is only meaningful for windowable goals (terminal-stock
@@ -421,6 +466,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._unsubSimBus = null;
     this._sim = sim ?? null;
     this._controller = null;
+    this._endRun();          // a Rebuild starts a new run (§13.2)
+    this._closeHarvest();
 
     if (sim?.bus) {
       this._unsubSimBus = sim.bus.subscribe(
@@ -505,6 +552,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       horizonYears: this._currentHorizon(),   // sliding prediction window (design 41)
       graph:       svc?.graph ?? null,
       parentId:    scenario.id ?? null,
+      // Harvest plumbing (§13.2): stamp every epoch with the run it belongs to,
+      // and mirror the log to durable storage so an un-harvested run survives a
+      // reload. Both outlive this controller instance.
+      runId:        this._currentRunId(),
+      decisionStore: svc?.decisionRecords ?? null,
     });
     this._controller.setSnapshot(snapshot);
     return this._controller;
@@ -583,6 +635,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     }
     this._clearCard({ keepFan: this._autoRunning });   // keep the fan visible through auto
     this._renderSavePoints();   // the just-recorded decision joins the log
+    this._syncHarvestEnabled(); // ...and makes the run harvestable
     return actuated;
   }
 
@@ -798,6 +851,152 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       </svg>`;
   }
 
+  // ─── Harvest: copy the run back into the scenario (design 39 §13) ──────────
+
+  /** Enable "Copy to scenario…" as soon as the session has a decision to copy. */
+  _syncHarvestEnabled() {
+    const btn = this._q('harvest');
+    if (!btn) return;
+    btn.disabled = readDecisionRuns(this._services()?.graph ?? null).length === 0;
+  }
+
+  /** The run the harvest targets: the current one if it has epochs, else the newest. */
+  _harvestRun() {
+    const runs = readDecisionRuns(this._services()?.graph ?? null);
+    if (!runs.length) return null;
+    return runs.find(r => r.runId === this._runId) ?? runs[0];
+  }
+
+  /**
+   * Build the HarvestPlan and render it for review. Nothing is written here —
+   * §13.8's point is that the user reads the diff (values, enabling-param flips,
+   * collapse warnings) BEFORE approving. Available at any point in a run (§13 H2),
+   * with the epoch range stated so a truncated "first N years" plan is legible.
+   */
+  async _openHarvest() {
+    const run = this._harvestRun();
+    const panel = this._q('harvest-panel');
+    if (!run || !panel) return;
+
+    const scenario = this._services()?.scenarioService?.getActive?.() ?? null;
+    const baseParams = this._baseParams();
+    let plan = harvestDecisions(run.records, {
+      controlsByKey: COCKPIT_CONTROLS,
+      baseParams,
+      birth:    { birthDate: _primaryBirthDate(scenario, this._sim) },
+      simStart: scenario?.simStart ? new Date(scenario.simStart) : null,
+      collapse: COLLAPSE_RULES.LAST,
+    });
+
+    // RESOLVE (§13.6.6): re-solve the best static value for the levers with no
+    // schedule form — AFTER folding the schedule bakes in, so the static value is
+    // optimal *given* them. Opt-in: it costs a full-horizon solve.
+    if (this._q('harvest-resolve')?.checked) {
+      this._renderHarvest(plan, run, { busy: 'Re-solving the best static values over the whole run…' });
+      try {
+        const resolved = await resolveStaticLevers({
+          plan,
+          controlsByKey: COCKPIT_CONTROLS,
+          baseParams:    foldScheduleBakes(baseParams, plan),
+          objective:     this._currentObjective(),
+          simStart:      new Date(scenario.simStart),
+          simEnd:        new Date(scenario.simEnd),
+          cfgTemplate:   scenario,
+          state:         this._sim?.state ?? null,
+          solverKey:     this._currentSolver(),
+          solverOptions: { budget: 48, seed: 1 },
+          workerPool:    this._pool(),
+        });
+        plan = mergeResolved(plan, resolved);
+      } catch (err) {
+        plan.warnings = [...(plan.warnings ?? []),
+          `Re-solve failed (${err?.message ?? err}) — keeping the last-epoch values.`];
+      }
+    }
+
+    this._harvestPlan = plan;
+    this._renderHarvest(plan, run);
+    panel.style.display = '';
+  }
+
+  _closeHarvest() {
+    this._harvestPlan = null;
+    const panel = this._q('harvest-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  /**
+   * Execute the reviewed plan against the loaded scenario, then tell the Scenario
+   * panel to re-render (it holds the params array by reference). Deliberately does
+   * NOT Rebuild — that re-runs from t₀ and throws away the cockpit's realized
+   * "now", which the user may still be working from (§13.8).
+   */
+  _applyHarvest() {
+    const plan = this._harvestPlan;
+    const scenario = this._services()?.scenarioService?.getActive?.() ?? null;
+    if (!plan || !scenario) return;
+
+    let res;
+    try {
+      res = applyHarvestPlan(scenario, plan);
+    } catch (err) {
+      this._setNow(`Copy failed: ${err?.message ?? err}`);
+      return;
+    }
+
+    this._runtime?.bus?.publish({ type: WB_EVENTS.PARAMS_CHANGED, scenario, source: 'mpc-harvest' });
+
+    const bits = [`${res.applied.length} param(s) updated`];
+    if (res.created.length)  bits.push(`${res.created.length} created`);
+    if (res.requires.length) bits.push(`${res.requires.length} enabling param(s) set`);
+    if (res.skipped.length)  bits.push(`${res.skipped.length} skipped`);
+    this._setNow(`Copied to “${scenario.name ?? 'scenario'}”: ${bits.join(', ')} — Rebuild to run it, then Save.`);
+    this._closeHarvest();
+  }
+
+  /** Render the plan as the review table (§13.8). */
+  _renderHarvest(plan, run, { busy = null } = {}) {
+    const body  = this._q('harvest-body');
+    const title = this._q('harvest-title');
+    if (!body) return;
+
+    if (title) {
+      const range = plan.epochRange?.[0] && plan.epochRange?.[1]
+        ? `${_fmtDate(plan.epochRange[0])} → ${_fmtDate(plan.epochRange[1])}` : '—';
+      title.textContent = `Harvest run · ${plan.epochs} epoch(s) · ${range}`
+        + (plan.goal?.label ? ` · Goal: ${plan.goal.label}` : '');
+    }
+
+    const rows = (plan.entries ?? []).map(e => `
+      <li class="mpc-hv-row">
+        <span class="mpc-hv-lever">${_esc(e.lever)}</span>
+        <span class="mpc-hv-form mpc-hv-form--${_esc(String(e.form).toLowerCase())}">${_esc(e.form)}</span>
+        <span class="mpc-hv-key" title="${_esc(e.paramKey)}">${_esc(e.paramKey)}</span>
+        <span class="mpc-hv-val">${_esc(e.label ?? _shortVal(e.to))}</span>
+        <span class="mpc-hv-epochs">${e.epochs || ''}</span>
+      </li>`).join('');
+
+    const reqRows = (plan.requires ?? []).map(r => `
+      <li class="mpc-hv-row mpc-hv-row--req">
+        <span class="mpc-hv-lever">${_esc(r.lever ?? '')}</span>
+        <span class="mpc-hv-form mpc-hv-form--enable">ENABLE</span>
+        <span class="mpc-hv-key">${_esc(r.paramKey)}</span>
+        <span class="mpc-hv-val">${_esc(_shortVal(r.from))} → <b>${_esc(_shortVal(r.to?.includes ?? r.to))}</b></span>
+        <span class="mpc-hv-epochs"></span>
+      </li>`).join('');
+
+    const warn = (plan.warnings ?? []).map(w => `<li class="mpc-hv-warn">⚠ ${_esc(w)}</li>`).join('');
+
+    body.innerHTML =
+      (busy ? `<div class="mpc-hv-busy">${_esc(busy)}</div>` : '') +
+      (rows || reqRows
+        ? `<ul class="mpc-hv-list">${rows}${reqRows}</ul>`
+        : `<div class="mpc-hv-empty">Nothing to copy from this run.</div>`) +
+      (warn ? `<ul class="mpc-hv-warns">${warn}</ul>` : '') +
+      `<div class="mpc-hv-note">A copied plan is <b>open-loop</b>: it re-runs deterministically on this path, `
+      + `but it cannot react the way the controller did — under a different seed or Monte Carlo arm it will differ.</div>`;
+  }
+
   /**
    * The "MPC Save Points" log (design 39 Step 5c): the session's decision records,
    * read straight from the shared `decision` graph layer. Inspect-only — date ·
@@ -811,8 +1010,15 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
    * a clean slate without reloading the page.
    */
   _clearSavePoints() {
-    this._services()?.graph?.clearLayer('decision');
+    // Clear the durable store too (§13 H4) — clearing only the graph would leave
+    // the records to re-appear on the next reload.
+    const svc = this._services();
+    if (svc?.decisionRecords) svc.decisionRecords.clear();
+    else svc?.graph?.clearLayer('decision');
+    this._endRun();
+    this._closeHarvest();
     this._renderSavePoints();
+    this._syncHarvestEnabled();
   }
 
   _renderSavePoints() {
@@ -883,6 +1089,28 @@ function _paramsToMap(raw) {
 function _usd(n) {
   if (n == null || !Number.isFinite(n)) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+}
+/**
+ * The primary's birthDate for the age-keyed bakes (§13.6.1/§13.6.4). Prefer the
+ * SCENARIO's persons — the sim state is a disposable projection, and after a
+ * Rebuild the harvest may run without one.
+ */
+function _primaryBirthDate(scenario, sim) {
+  const p = (scenario?.persons ?? []).find(x => x?.birthDate);
+  if (p?.birthDate) return p.birthDate;
+  const people = sim?.state?.people ?? {};
+  return people[Object.keys(people)[0]]?.birthDate ?? sim?.state?.personBirthDate ?? null;
+}
+/** Compact renderer for a harvested value in the review table. */
+function _shortVal(v) {
+  if (v == null) return '—';
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4)));
+  if (Array.isArray(v)) return `${v.length} entr${v.length === 1 ? 'y' : 'ies'}`;
+  if (typeof v === 'object') {
+    try { const s = JSON.stringify(v); return s.length > 60 ? `${s.slice(0, 57)}…` : s; }
+    catch { return '[object]'; }
+  }
+  return String(v);
 }
 /** Format a goal metric by its result key — USD for money fields, plain number for unitless utility. */
 function _fmtMetric(key, n) {

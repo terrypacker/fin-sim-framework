@@ -11,6 +11,11 @@ export const WB_EVENTS = {
   CROSS_ACTION_QUERY_OPEN:    'workbench.cross.action.query.open',
   ACTION_ENTRY_OPEN:          'workbench.action.entry.open',
   DISPLAY_SETTINGS_CHANGED:   'workbench.display.settings.changed',
+  // A non-UI writer changed the active scenario's param VALUES in place (the MPC
+  // harvest, design 39 §13.5 rule 4). The Scenario panel holds that array by
+  // reference, so without this the values change under it and the editors keep
+  // rendering the stale ones.
+  PARAMS_CHANGED:             'workbench.scenario.params.changed',
 };
 
 /**

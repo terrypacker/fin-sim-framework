@@ -306,7 +306,19 @@ saved scenario** — exactly as the SPENDING lever's per-epoch band amounts pers
 into the `spendingExpenseBands` param and re-run deterministically. The mechanism is
 already there: `mpc-controller.js` accumulates each epoch's committed choice into
 `committedParams` (`mergeCandidate`), and each cockpit control's `actuate` persists
-the committed value to a scenario param. For allocation:
+the committed value to a scenario param.
+
+> **Correction (2026-07-25, from the design 39 §13 grounding pass).** The premise
+> above is wrong about SPENDING, and the mechanism is *not* already there.
+> `SPENDING.actuate` writes the epoch's amount onto the **band active at that
+> epoch**, so ~20 epochs leave **last-epoch-wins on one band**, not a per-epoch
+> schedule. Only the schedule-shaped levers (`rothConversionSchedule`,
+> `earlyWithdrawalSchedule`) accumulate correctly, and that is an accident of their
+> param shape. Every scalar lever — including `allocWeight::*` — collapses to its
+> final value silently. The explicit harvest is specified in
+> **design 39 §13** (see §13.1's table).
+
+For allocation:
 - **GLIDEPATH** is the cleanest harvest target — the committed per-epoch mix becomes
   a table of `{age, mix}` anchors (the allocation twin of spending bands), which
   re-runs deterministically with no controller in the loop.
@@ -556,6 +568,13 @@ hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
      `allocWeight::*` *are* flat scenario params (`mergeCandidate` → `committedParams`),
      so a re-run is deterministic with no controller. GLIDEPATH→{age,mix}-anchor /
      REGIME→per-regime-map harvest (baking a schedule back) is future work.
+     **→ Now specified in `design/39-mpc-financial-controller.md` §13** (harvest a
+     completed MPC run back into the loaded scenario), as one cross-lever mechanism
+     rather than an allocation-specific one: §13.6.4 is the GLIDEPATH anchor bake
+     (step-faithful pairs, ε-collapse on L1 mix distance, prepended start anchor so
+     the clamp doesn't rewrite the realized past, `allocationSchedule=GLIDEPATH` as
+     an enabling param); REGIME_CONDITIONED stays deferred there too, pending
+     regime-tagged decision records. Implementation lands as design 39 §11 Step 12.
    - **Hysteresis ε (§7):** NOT implemented — no switching-cost/hold-band infrastructure
      exists for any cockpit lever today (the drift band is the implemented static analog).
      Deferred as cross-cutting MPC infra, not lever-specific.

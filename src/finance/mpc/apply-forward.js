@@ -82,8 +82,21 @@ export function rollForwardWithControls({
  * layer (`'decision'`), never `'scenario'` (design/39 Step 5c). That keeps it out
  * of `byLayer('scenario')` — hence out of `ScenarioRegistry.getUserScenarios()`,
  * the picker, and `fin-sim-scenarios` storage — at the root, with no per-reader
- * filtering. The `decision` layer has no storage backing, so records are
- * session-only (gone on reload); cross-reload persistence is design/39 Option #2.
+ * filtering. `DecisionRecordRegistry` backs the layer with its own
+ * `fin-sim-decisions` storage so an un-harvested run survives a reload (§13 H4).
+ *
+ * **Harvest source (design/39 §13.2).** These records — not the controller — are
+ * what the harvest reads: the controller is rebuilt after every Apply and every
+ * clock step, and its `committed` bag has already collapsed the time dimension.
+ * Three fields make the log self-describing enough to bake back into params:
+ *   - `runId`       — which cockpit run this epoch belongs to (harvest targets ONE
+ *                     run, §13 H1; without it, exploratory runs blend);
+ *   - `controlKeys` — the levers active that epoch, so a mixed-lever log routes
+ *                     each paramKey back to the lever that owns it;
+ *   - `controlVars` — the epoch's variable descriptors (`_role`/`_class`/`_year`/
+ *                     `_bandIndex`/`_effectiveYear`/`_controlKey`). `controlParams`
+ *                     alone is enough to REPLAY but not to RE-KEY onto a band table
+ *                     whose indices the harvest is about to rewrite.
  *
  * Minimal by design: the rich comparison surface is the Step 5 cockpit's concern;
  * this just lays the graph trail.
@@ -100,6 +113,9 @@ export function recordDecisionRecord({
   simStart,
   simEnd,
   result,
+  runId       = null,
+  controlKeys = [],
+  controlVars = [],
   extra = {},
 }) {
   if (!graph) throw new Error('recordDecisionRecord requires a graph');
@@ -116,6 +132,11 @@ export function recordDecisionRecord({
     result:   result ?? null,
     simStart: toIso(simStart),
     simEnd:   toIso(simEnd),
+    runId,
+    controlKeys,
+    // Strip functions/undefined: descriptors must survive JSON round-tripping to
+    // storage, and a solver-built variable may carry non-serializable extras.
+    controlVars: controlVars.map(v => JSON.parse(JSON.stringify(v ?? {}))),
     ...extra,
   });
 
@@ -135,12 +156,54 @@ export function recordDecisionRecord({
  * of any one CockpitController's lifecycle. Not loadable scenarios — just a log.
  *
  * @param {object} graph - the shared Graph.
- * @returns {Array<{ id: string, asOfDate: string, move: string, result: object|null, goalMetric: {key:string,label:string}|null }>}
+ * @param {object} [opts]
+ * @param {string} [opts.runId] - keep only this run's epochs (design/39 §13 H1).
+ * @returns {Array<{ id, asOfDate, move, result, goalMetric, runId, controlKeys, controlVars, controlParams }>}
  */
-export function readDecisionRecords(graph) {
+export function readDecisionRecords(graph, { runId = null } = {}) {
   if (!graph) return [];
   return graph.byLayer('decision')
+    .filter(n => runId == null || n.runId === runId)
     .map(n => ({ id: n.id, asOfDate: n.asOfDate, move: n.name, result: n.result ?? null,
-                 goalMetric: n.goalMetric ?? null }))
+                 goalMetric: n.goalMetric ?? null,
+                 runId: n.runId ?? null,
+                 controlKeys:   n.controlKeys   ?? [],
+                 controlVars:   n.controlVars   ?? [],
+                 controlParams: n.controlParams ?? {} }))
     .sort((a, b) => String(a.asOfDate).localeCompare(String(b.asOfDate)));
+}
+
+/**
+ * The session's decision records grouped into RUNS, newest first — the harvest
+ * picker's model (§13 H1: harvest targets one run, no cross-run merge).
+ *
+ * Records predating the `runId` stamp (or written outside a cockpit run) collect
+ * under a single `null` run so the log stays complete and harvestable.
+ *
+ * @returns {Array<{ runId, epochs: number, first: string, last: string, levers: string[],
+ *                   goal: {key,label}|null, records: object[] }>}
+ */
+export function readDecisionRuns(graph) {
+  const byRun = new Map();
+  for (const r of readDecisionRecords(graph)) {
+    const key = r.runId ?? null;
+    if (!byRun.has(key)) byRun.set(key, []);
+    byRun.get(key).push(r);
+  }
+  const runs = [...byRun.entries()].map(([runId, records]) => ({
+    runId,
+    epochs: records.length,
+    first:  records[0]?.asOfDate ?? null,
+    last:   records[records.length - 1]?.asOfDate ?? null,
+    levers: [...new Set(records.flatMap(r => r.controlKeys ?? []))],
+    goal:   records[records.length - 1]?.goalMetric ?? null,
+    records,
+  }));
+  // Newest run first: by the run's LAST epoch, so a run resumed later still sorts
+  // by its most recent activity. `null`-run (legacy/unstamped) sorts last.
+  return runs.sort((a, b) => {
+    if (a.runId == null) return 1;
+    if (b.runId == null) return -1;
+    return String(b.last).localeCompare(String(a.last));
+  });
 }

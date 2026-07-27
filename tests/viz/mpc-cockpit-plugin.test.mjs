@@ -513,3 +513,150 @@ test('MpcCockpitPlugin._overrideCandidate: blank input ⇒ null (use recommendat
   plugin._q('override').value = '';
   assert.equal(plugin._overrideCandidate(), null);
 });
+
+// ─── harvest: copy the run back into the scenario (design 39 §13) ────────────
+
+/** A cockpit whose services carry a graph + an active scenario we can harvest into. */
+function mountHarvestPlugin({ params = [], persons = [{ birthDate: '1978-04-15' }] } = {}) {
+  const graph = new Graph();
+  const scenario = {
+    id: 'u:1', name: 'Test', params, persons,
+    simStart: '2026-01-01', simEnd: '2046-01-01',
+  };
+  const published = [];
+  const plugin = new MpcCockpitPlugin({ bus: { subscribe() {}, publish: (e) => published.push(e) } });
+  plugin.setServices({ graph, scenarioService: { getActive: () => scenario } });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  plugin.mount(container);
+  return { plugin, graph, scenario, published };
+}
+
+function addSpendingEpoch(graph, { year, amount, runId = 'run:test' }) {
+  recordDecisionRecord({
+    graph, id: `mpc:${year}`, runId,
+    asOfDate: new Date(Date.UTC(year, 5, 1)),
+    controlParams: { 'spendingExpenseBands[0].monthlyAmount': amount },
+    controlKeys: ['SPENDING'],
+    controlVars: [{ paramKey: 'spendingExpenseBands[0].monthlyAmount', _bandIndex: 0, _controlKey: 'SPENDING' }],
+    name: `spend ${amount}`,
+  });
+}
+
+test('MpcCockpitPlugin: the harvest button renders and starts disabled', () => {
+  const { plugin } = mountHarvestPlugin();
+  const btn = plugin._q('harvest');
+  assert.ok(btn, 'copy-to-scenario button');
+  assert.equal(btn.disabled, true, 'nothing to copy yet');
+});
+
+test('MpcCockpitPlugin: the harvest button enables once the session has decisions', () => {
+  const { plugin, graph } = mountHarvestPlugin();
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  plugin._syncHarvestEnabled();
+  assert.equal(plugin._q('harvest').disabled, false);
+});
+
+test('MpcCockpitPlugin: opening the harvest renders the reviewable diff, writing nothing', async () => {
+  const params = [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] },
+                  { name: 'spendingStrategy', type: 'EnumMulti', value: ['FIXED'] }];
+  const { plugin, graph, scenario } = mountHarvestPlugin({ params });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  addSpendingEpoch(graph, { year: 2031, amount: 8000 });
+
+  await plugin._openHarvest();
+
+  assert.notEqual(plugin._q('harvest-panel').style.display, 'none', 'panel is shown');
+  const body = plugin._q('harvest-body').textContent;
+  assert.match(body, /spendingExpenseBands/);
+  assert.match(body, /SCHEDULE/);
+  assert.match(body, /ENABLE/, 'the enabling param flip is shown before approval');
+  // Nothing written yet — review first (§13.8).
+  assert.deepStrictEqual(scenario.params.find(p => p.name === 'spendingExpenseBands').value, []);
+  assert.deepStrictEqual(scenario.params.find(p => p.name === 'spendingStrategy').value, ['FIXED']);
+});
+
+test('MpcCockpitPlugin: applying the harvest writes the params and publishes PARAMS_CHANGED', async () => {
+  const params = [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] },
+                  { name: 'spendingStrategy', type: 'EnumMulti', value: ['FIXED'] }];
+  const { plugin, graph, scenario, published } = mountHarvestPlugin({ params });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  addSpendingEpoch(graph, { year: 2031, amount: 8000 });
+
+  await plugin._openHarvest();
+  plugin._applyHarvest();
+
+  const bands = scenario.params.find(p => p.name === 'spendingExpenseBands').value;
+  assert.deepStrictEqual(bands, [
+    { startAge: 52, monthlyAmount: 6000 },
+    { startAge: 53, monthlyAmount: 8000 },
+  ]);
+  // The enabling param rode along, without dropping the user's other strategy.
+  assert.deepStrictEqual(scenario.params.find(p => p.name === 'spendingStrategy').value,
+    ['FIXED', 'EXPLICIT_BANDS']);
+  assert.equal(scenario.harvestedFrom.runId, 'run:test');
+  assert.ok(published.some(e => e.type === 'workbench.scenario.params.changed'),
+    'the Scenario panel is told to re-render');
+  assert.equal(plugin._q('harvest-panel').style.display, 'none', 'panel closes after applying');
+});
+
+test('MpcCockpitPlugin: the harvest does NOT rebuild or save', async () => {
+  const { plugin, graph, scenario } = mountHarvestPlugin({
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  await plugin._openHarvest();
+  plugin._applyHarvest();
+  // The confirmation tells the user what to do next rather than doing it for them.
+  assert.match(plugin._q('now').textContent, /Rebuild to run it, then Save/);
+  assert.equal(scenario.rebuilt, undefined);
+});
+
+test('MpcCockpitPlugin: cancel closes the panel and discards the plan', async () => {
+  const { plugin, graph } = mountHarvestPlugin({
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  await plugin._openHarvest();
+  plugin._closeHarvest();
+  assert.equal(plugin._q('harvest-panel').style.display, 'none');
+  assert.equal(plugin._harvestPlan, null);
+});
+
+test('MpcCockpitPlugin: a POINT lever shows its collapse warning in the review', async () => {
+  const { plugin, graph } = mountHarvestPlugin({ params: [] });
+  for (const [i, mode] of ['GLOBAL', 'LOCAL_FIRST', 'GLOBAL'].entries()) {
+    recordDecisionRecord({
+      graph, id: `mpc:x${i}`, runId: 'run:test',
+      asOfDate: new Date(Date.UTC(2030 + i, 0, 1)),
+      controlParams: { crossBorderDrawdown: mode },
+      controlKeys: ['DRAWDOWN_XBORDER'],
+      controlVars: [{ paramKey: 'crossBorderDrawdown', _controlKey: 'DRAWDOWN_XBORDER' }],
+    });
+  }
+  await plugin._openHarvest();
+  const body = plugin._q('harvest-body').textContent;
+  assert.match(body, /POINT/);
+  assert.match(body, /changed in 2 of 3 epochs/);
+  assert.match(body, /open-loop/, 'the fidelity caveat is on the panel, not just the doc');
+});
+
+test('MpcCockpitPlugin: run identity is minted lazily and ended by a lever change', () => {
+  const { plugin } = mountHarvestPlugin();
+  const first = plugin._currentRunId();
+  assert.equal(plugin._currentRunId(), first, 'stable within a run');
+  // Changing the lever set ends the run — those epochs aren't one schedule.
+  plugin._endRun();
+  assert.notEqual(plugin._currentRunId(), first);
+});
+
+test('MpcCockpitPlugin: harvest targets the newest run, not a blend of runs', async () => {
+  const { plugin, graph } = mountHarvestPlugin({
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 1111, runId: 'run:old' });
+  addSpendingEpoch(graph, { year: 2035, amount: 2222, runId: 'run:new' });
+  await plugin._openHarvest();
+  assert.equal(plugin._harvestPlan.runId, 'run:new');
+  assert.equal(plugin._harvestPlan.epochs, 1);
+});
