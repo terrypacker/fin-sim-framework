@@ -27,6 +27,16 @@ import { UsTaxRates2025 }         from '../../src/finance/tax/us/us-tax-rates-20
 import { AuTaxRates2025 }         from '../../src/finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2027 }         from '../../src/finance/tax/au/au-tax-rates-2027.js';
 
+import { TypeRegistry as _TypeRegistry } from '../../src/simulation-framework/type-registry.js';
+import { US_INCOME as _US_INCOME }       from '../../src/scenarios/toolsets/us-income-toolset.js';
+
+/** Minimal registry carrying the disposal action declarations under test. */
+function buildTypeRegistryForDisposals() {
+  const reg = new _TypeRegistry();
+  reg.registerToolset(_US_INCOME);
+  return reg;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function usDetail(overrides = {}) {
@@ -628,4 +638,166 @@ test('TaxDocumentRegistry: AU house sale journal entry included in CGT schedule'
   assert.strictEqual(cgt.table.rows.length, 1);
   assert.strictEqual(cgt.table.rows[0][0], 'Primary Residence');
   assert.strictEqual(cgt.table.rows[0][3], 800_000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Sale-record extraction — action×reducer fan-out
+//
+// Every action is journaled once PER CONSUMING REDUCER, and the sale actions have
+// three consumers apiece (`dynamic:US:…`, `state:classify:…`, `dynamic:AU:…`), so a
+// single disposal appears three times in the raw journal under one shared
+// `action.instanceId`. The extractors walk raw entries, so without collapsing on
+// that id every figure on Schedule D / Form 8949 / the AU CGT Schedule is tripled —
+// while Form 1040 line 6, which reads the YTD accumulator instead, stays correct.
+// Measured on CY2034 of the reference plan: 156 raw entries vs 52 distinct actions,
+// gain 19,428.45 against a true 6,476.15.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** One disposal as the journal really records it: N entries, one shared instanceId. */
+function fanOut(type, data, { instanceId, reducers, dateMs = Date.UTC(2026, 3, 1) }) {
+  return reducers.map(name => ({
+    date:    new Date(dateMs),
+    action:  { type, data, instanceId },
+    reducer: { name },
+  }));
+}
+
+test('Schedule D / 8949 count a fanned-out disposal once, not once per reducer', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('STOCK_WITHDRAWAL_TAX',
+      { gain: 20_000, proceeds: 55_000, costBasis: 35_000, description: 'Brokerage' },
+      { instanceId: 'i-sale-1',
+        reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX', 'state:classify:STOCK_WITHDRAWAL_TAX',
+                   'dynamic:AU:STOCK_WITHDRAWAL_TAX'] }),
+    settleEntry,
+  ];
+
+  const [, schedD, f8949] = registry.generate(settleEntry, journal);
+  const amountOf = label => schedD.sections
+    .flatMap(s => s.lineItems).find(li => li.label.startsWith(label)).amount;
+
+  assert.strictEqual(f8949.table.rows.length, 1, 'one disposal ⇒ one Form 8949 row');
+  assert.strictEqual(amountOf('Net Long-Term Gain'), 20_000, 'gain must not triple');
+  assert.strictEqual(amountOf('Total Proceeds'),     55_000, 'proceeds must not triple');
+  assert.strictEqual(amountOf('Total Cost Basis'),   35_000, 'cost basis must not triple');
+});
+
+test('the AU CGT Schedule collapses the same fan-out', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  const journal     = [
+    ...fanOut('AU_STOCK_WITHDRAWAL_TAX',
+      { gain: 20_000, proceeds: 55_000, costBasis: 35_000, description: 'AU Stock Account' },
+      { instanceId: 'i-au-sale-1',
+        reducers: ['dynamic:AU:AU_STOCK_WITHDRAWAL_TAX', 'state:classify:AU_STOCK_WITHDRAWAL_TAX'] }),
+    settleEntry,
+  ];
+
+  const docs = registry.generate(settleEntry, journal);
+  assert.strictEqual(docs[1].table.rows.length, 1, 'one disposal ⇒ one CGT Schedule row');
+  assert.strictEqual(docs[1].table.totals[3], 55_000, 'proceeds must not double');
+});
+
+test('distinct disposals are still counted separately when they share a reducer', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 30_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('STOCK_WITHDRAWAL_TAX', { gain: 20_000, proceeds: 55_000, costBasis: 35_000 },
+      { instanceId: 'i-a', reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX', 'state:classify:STOCK_WITHDRAWAL_TAX'] }),
+    ...fanOut('STOCK_WITHDRAWAL_TAX', { gain: 10_000, proceeds: 25_000, costBasis: 15_000 },
+      { instanceId: 'i-b', reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX', 'state:classify:STOCK_WITHDRAWAL_TAX'] }),
+    settleEntry,
+  ];
+
+  const [, schedD, f8949] = registry.generate(settleEntry, journal);
+  const gain = schedD.sections.flatMap(s => s.lineItems)
+    .find(li => li.label.startsWith('Net Long-Term Gain')).amount;
+  assert.strictEqual(f8949.table.rows.length, 2, 'two distinct disposals ⇒ two rows');
+  assert.strictEqual(gain, 30_000);
+});
+
+test('a main-home sale reaches Schedule D with the §121 exclusion as a code-H adjustment', () => {
+  const registry    = new TaxDocumentRegistry();
+  // Sale price 1,150,000 on a 500,000 basis ⇒ 650,000 economic gain; MFJ §121
+  // excludes 500,000, so the action reports a TAXABLE gain of 150,000.
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 150_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('US_HOUSE_SALE_TAX',
+      { gain: 150_000, proceeds: 1_150_000, costBasis: 500_000, description: 'usHouse' },
+      { instanceId: 'i-house', reducers: ['dynamic:US:US_HOUSE_SALE_TAX', 'state:classify:US_HOUSE_SALE_TAX'] }),
+    settleEntry,
+  ];
+
+  const [, schedD, f8949] = registry.generate(settleEntry, journal);
+  const amountOf = label => schedD.sections
+    .flatMap(s => s.lineItems).find(li => li.label.startsWith(label)).amount;
+
+  // Reported GROSS, with the exclusion carried in column (g) — not netted away.
+  assert.strictEqual(amountOf('Total Proceeds'),   1_150_000);
+  assert.strictEqual(amountOf('Total Cost Basis'),   500_000);
+  assert.strictEqual(amountOf('Adjustments to Gain or Loss'), -500_000,
+    '§121 exclusion belongs in column (g) as a negative number');
+  assert.strictEqual(amountOf('Net Long-Term Gain'), 150_000);
+
+  // Schedule D column (h) identity: (d) − (e) + (g).
+  assert.strictEqual(
+    amountOf('Total Proceeds') - amountOf('Total Cost Basis') + amountOf('Adjustments to Gain or Loss'),
+    amountOf('Net Long-Term Gain'));
+
+  const [row] = f8949.table.rows;
+  assert.strictEqual(row[5], 'H',       'main-home exclusion carries Form 8949 code H');
+  assert.strictEqual(row[6], -500_000,  'column (g) adjustment is negative');
+});
+
+test('an ordinary sale needs no adjustment and carries no code', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('STOCK_WITHDRAWAL_TAX', { gain: 20_000, proceeds: 55_000, costBasis: 35_000 },
+      { instanceId: 'i-s', reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX'] }),
+    settleEntry,
+  ];
+  const [, schedD, f8949] = registry.generate(settleEntry, journal);
+  const adj = schedD.sections.flatMap(s => s.lineItems)
+    .find(li => li.label.startsWith('Adjustments to Gain or Loss')).amount;
+  assert.strictEqual(adj, 0);
+  assert.strictEqual(f8949.table.rows[0][5], '');
+});
+
+test('company-equity disposals reach Schedule D too', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 90_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('COMPANY_SALE_TAX', { gain: 90_000, proceeds: 120_000, costBasis: 30_000, description: 'MIP units' },
+      { instanceId: 'i-co', reducers: ['dynamic:US:COMPANY_SALE_TAX'] }),
+    settleEntry,
+  ];
+  const [, schedD] = registry.generate(settleEntry, journal);
+  const gain = schedD.sections.flatMap(s => s.lineItems)
+    .find(li => li.label.startsWith('Net Long-Term Gain')).amount;
+  assert.strictEqual(gain, 90_000);
+});
+
+test('COMPANY_SALE_TAX declares the sale detail Schedule D needs', () => {
+  // pickPayload keeps ONLY declared fields, so an undeclared proceeds/costBasis is
+  // dropped between the reducer and the journal and the disposal silently vanishes
+  // from the schedules while still reaching Form 1040 line 6.
+  const reg = buildTypeRegistryForDisposals();
+  const payload = reg.pickPayload({
+    type: 'COMPANY_SALE_TAX', gain: 300_000, proceeds: 1_200_000,
+    costBasis: 900_000, description: 'mipEquity', undeclaredProbe: 'dropped',
+  });
+  assert.strictEqual(payload.proceeds,  1_200_000);
+  assert.strictEqual(payload.costBasis,   900_000);
+  assert.strictEqual(payload.description, 'mipEquity');
+  assert.strictEqual(payload.undeclaredProbe, undefined,
+    'undeclared fields must drop, else this test proves nothing');
 });

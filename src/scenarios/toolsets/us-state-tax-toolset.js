@@ -56,7 +56,10 @@ export const US_STATE_TAX = {
       { type: 'STATE_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number() } },
       { type: 'STATE_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
-        fields: { amount: ValueType.currency('USD') } },
+        // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
+        // unfunded part of this same bill. Declared so "US State Tax by Year" and
+        // "Tax Paid by Year" can exclude it rather than double-count.
+        fields: { amount: ValueType.currency('USD'), escalated: ValueType.boolean() } },
       { type: 'CHANGE_STATE_RESIDENCY_APPLY', cc: 'US',
         fields: { destination: ValueType.text() } },
     ],

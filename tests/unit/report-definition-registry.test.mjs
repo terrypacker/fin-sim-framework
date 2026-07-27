@@ -24,6 +24,9 @@ import { JournalQueryApi }            from '../../src/finance/journal-query-api.
 import { TypeRegistry }               from '../../src/simulation-framework/type-registry.js';
 import { ReportDefinitionRegistry }   from '../../src/finance/journal-reporting/report-definition-registry.js';
 import { StateSchemaRegistry }        from '../../src/finance/services/state-schema-registry.js';
+import { UsTaxPaymentDebitReducer }   from '../../src/finance/tax/tax-settle-classes.js';
+import { runReducer }                 from '../helpers/reducer-postconditions.js';
+import { makeAccount, makeAction, makeServices, makePeople } from '../helpers/reducer-fixtures.js';
 
 // All toolsets — registered once so familyTypes() resolves correctly.
 import { US_BANKING }        from '../../src/scenarios/toolsets/us-banking-toolset.js';
@@ -34,6 +37,7 @@ import { US_REAL_PROPERTY }  from '../../src/scenarios/toolsets/us-real-property
 import { US_RETIREMENT }     from '../../src/scenarios/toolsets/us-retirement-toolset.js';
 import { US_ROTH_CONVERSION } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { US_TAX }            from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_STATE_TAX }      from '../../src/scenarios/toolsets/us-state-tax-toolset.js';
 import { AU_BANKING }        from '../../src/scenarios/toolsets/au-banking-toolset.js';
 import { AU_BROKERAGE }      from '../../src/scenarios/toolsets/au-brokerage-toolset.js';
 import { AU_INCOME }         from '../../src/scenarios/toolsets/au-income-toolset.js';
@@ -45,7 +49,7 @@ function buildTypeRegistry() {
   const reg = new TypeRegistry();
   for (const t of [
     US_BANKING, US_BROKERAGE, US_COLLECTIBLES, US_INCOME, US_REAL_PROPERTY,
-    US_RETIREMENT, US_ROTH_CONVERSION, US_TAX,
+    US_RETIREMENT, US_ROTH_CONVERSION, US_TAX, US_STATE_TAX,
     AU_BANKING, AU_BROKERAGE, AU_INCOME, AU_REAL_PROPERTY, AU_RETIREMENT, AU_TAX,
   ]) reg.registerToolset(t);
   return reg;
@@ -381,6 +385,98 @@ test('tax-paid-by-year: cc facet filters to a single country', async () => {
 
   const { grandTotal: auTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
   assert.strictEqual(auTotal, 8000);
+});
+
+// A tax bill larger than same-country cash is paid in two passes: the original
+// debit pays what the balance covers, then TaxPaymentDebitReducerBase re-issues
+// the uncovered residual as a SECOND action carrying `escalated: true`, after an
+// INTL_TRANSFER_APPLY tops the account up. Both passes journal a
+// TAX_PAYMENT_DEBIT entry, but between them they move ONE liability: the original
+// action's `amount` is already the whole bill and the escalated one is a slice of
+// it. Summing both double-counts the covered part.
+test('tax-paid-by-year: escalated re-issues do not double-count the liability', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('tax-paid-by-year');
+
+  // AU cash covered 1,984.43 of a 21,760.89 bill; 19,776.47 escalated across the border.
+  const entries = [
+    entry({ date: new Date(Date.UTC(2034, 5, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT',
+            data: { amount: 21760.89 } }),
+    entry({ date: new Date(Date.UTC(2034, 5, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT',
+            data: { amount: 19776.47, escalated: true } }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
+  assert.strictEqual(grandTotal, 21760.89, 'the year reports the bill once, not bill + residual');
+  assert.strictEqual(groups[0].count, 1, 'the escalated re-issue is not a second payment');
+});
+
+// The exclusion above only bites if `escalated` actually reaches the journal.
+// pickPayload keeps ONLY fields declared in the owning toolset, so an undeclared
+// flag is dropped between the reducer and the entry — the query would then read
+// `undefined` on every row and match everything, silently restoring the
+// double-count. Assert the declaration end of that contract, since the helper
+// above builds `data` directly and cannot see it.
+test('the payment-debit toolsets declare `escalated` so pickPayload keeps it', () => {
+  for (const type of ['AU_TAX_PAYMENT_DEBIT', 'US_TAX_PAYMENT_DEBIT', 'STATE_TAX_PAYMENT_DEBIT']) {
+    const currency = type === 'AU_TAX_PAYMENT_DEBIT' ? 'AUD' : 'USD';
+    const payload  = _typeRegistry.pickPayload({
+      type, amount: 100, escalated: true, currency, undeclaredProbe: 'dropped',
+    });
+    assert.strictEqual(payload.escalated, true, `${type} must carry escalated into action.data`);
+    assert.strictEqual(payload.amount,     100, `${type} must still carry amount`);
+    // Proves the allowlist is actually in force here: if this registry had fallen
+    // back to the permissive heuristic, `escalated` would survive undeclared and
+    // the assertion above would pass without proving anything.
+    assert.strictEqual(payload.undeclaredProbe, undefined,
+      `${type}: undeclared fields must be dropped, else this test proves nothing`);
+  }
+});
+
+// End-to-end over the seam the two tests above split between them: drive the REAL
+// reducer into a short balance, take the actions it actually emits, push them
+// through the real pickPayload into real journal entries, and report on those. If
+// any link drops `escalated` — the toolset declaration, the payload pick, or the
+// row projection — the total silently reverts to bill + residual.
+test('escalated exclusion survives reducer → pickPayload → journal → report', async () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount',
+                                    holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
+  };
+  const date   = new Date(Date.UTC(2030, 11, 31));
+  const first  = makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 });
+  const out    = runReducer(new UsTaxPaymentDebitReducer(services), state, first, date,
+                            { checkNoMutation: false });
+  const reissue = out.next.find(a => a.type === 'US_TAX_PAYMENT_DEBIT' && a.escalated);
+  assert.ok(reissue, 'precondition: the short balance escalated a re-issue');
+
+  // Journal both passes exactly as Simulation does — payload via pickPayload.
+  const entries = [first, reissue].map(a => entry({
+    date, actionType: a.type, data: _typeRegistry.pickPayload({ ...a, type: a.type }),
+  }));
+
+  const def = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const { grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  assert.strictEqual(grandTotal, 320,
+    `expected the 320 bill once; got ${grandTotal} (320 + the ${Math.round(reissue.amount)} residual means a link dropped \`escalated\`)`);
+});
+
+test('state-tax-by-year: escalated re-issues do not double-count the liability', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('state-tax-by-year');
+
+  const entries = [
+    entry({ date: new Date(Date.UTC(2028, 11, 31)), actionType: 'STATE_TAX_PAYMENT_DEBIT',
+            data: { amount: 5998.64 } }),
+    entry({ date: new Date(Date.UTC(2028, 11, 31)), actionType: 'STATE_TAX_PAYMENT_DEBIT',
+            data: { amount: 4000.00, escalated: true } }),
+  ];
+
+  const { grandTotal } = await runDef(def, { period: null }, entries);
+  assert.strictEqual(grandTotal, 5998.64);
 });
 
 // ─── RothConversionsByYearDef ────────────────────────────────────────────────

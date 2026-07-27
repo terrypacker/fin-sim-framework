@@ -156,6 +156,30 @@ function _appendInFilter(conditions, field, values) {
 }
 
 /**
+ * Drop the escalated re-issue of a tax payment debit.
+ *
+ * When a tax bill exceeds same-country cash, TaxPaymentDebitReducerBase debits
+ * what the balance covers, wires the rest across the border
+ * (INTL_TRANSFER_APPLY), then re-issues ITSELF for the uncovered residual with
+ * `escalated: true`. Both passes journal a TAX_PAYMENT_DEBIT entry, so a report
+ * summing `amount` sees the full bill once (the original action) plus the
+ * residual again (the re-issue) — the funded part counted twice. The two passes
+ * move one liability between them, and the original action's `amount` is already
+ * all of it, so the re-issue is the row to drop.
+ *
+ * Consequence worth knowing: the surviving row carries the liability ASSESSED,
+ * which equals cash paid only while the household stays solvent. If even the
+ * cross-border sweep falls short the shortfall is reported separately as
+ * OUT_OF_FUNDS, and this report still shows the full bill. Netting that off
+ * would need the realized debit on the entry; no action field carries it today.
+ *
+ * @param {Array<object>} conditions
+ */
+function _appendNotEscalated(conditions) {
+  conditions.push({ op: 'not', condition: { op: 'eq', field: 'escalated', value: true } });
+}
+
+/**
  * Push an account-stateKey filter for per-diff rows. The journal-row `stateKey`
  * is a dotted state path like `usSavingsAccount.balance`; each Account
  * registers a `stateKey` prefix like `usSavingsAccount`. We OR together
@@ -613,7 +637,7 @@ class DebitsFromAccountDef extends ReportDefinition {
 class TaxPaidByYearDef extends ReportDefinition {
   get id()          { return 'tax-paid-by-year'; }
   get title()       { return 'Tax Paid by Year'; }
-  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down.'; }
+  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries, excluding cross-border escalated re-issues). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down.'; }
 
   get facets() {
     return [
@@ -647,10 +671,12 @@ class TaxPaidByYearDef extends ReportDefinition {
     // the same-day window; the date-bounded tax-year window keeps it.
     const periodAst   = api.periodOfTaxYear(period);
     const actionTypes = api.familyTypes('TAX_PAYMENT_DEBIT', { cc });
-    return { op: 'and', conditions: [
+    const conditions  = [
       periodAst,
       { op: 'in', field: 'actionType', value: actionTypes },
-    ] };
+    ];
+    _appendNotEscalated(conditions);
+    return { op: 'and', conditions };
   }
 }
 
@@ -662,7 +688,7 @@ class TaxPaidByYearDef extends ReportDefinition {
 class StateTaxByYearDef extends ReportDefinition {
   get id()          { return 'state-tax-by-year'; }
   get title()       { return 'US State Tax by Year'; }
-  get description() { return 'US state income tax debited from cash by year (STATE_TAX_PAYMENT_DEBIT entries). The active state follows the primary person\'s residency state.'; }
+  get description() { return 'US state income tax debited from cash by year (STATE_TAX_PAYMENT_DEBIT entries, excluding cross-border escalated re-issues). The active state follows the primary person\'s residency state.'; }
 
   get facets() {
     return [
@@ -687,10 +713,12 @@ class StateTaxByYearDef extends ReportDefinition {
     // Tax-year semantics: STATE_TAX_PAYMENT_DEBIT is chained from
     // STATE_TAX_SETTLE_APPLY (Dec 31) and shares its date with a higher seq.
     const periodAst = api.periodOfTaxYear(period);
-    return { op: 'and', conditions: [
+    const conditions = [
       periodAst,
       { op: 'eq', field: 'actionType', value: 'STATE_TAX_PAYMENT_DEBIT' },
-    ] };
+    ];
+    _appendNotEscalated(conditions);
+    return { op: 'and', conditions };
   }
 }
 
