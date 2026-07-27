@@ -1,7 +1,7 @@
 # 86 — Leveraged property fidelity: loss carryforward, interest-only debt, and interest deductibility
 
-**Status** (2026-08-05): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3).
-Phase table in §5. Full suite green (4,503 + 996).
+**Status** (2026-08-06): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3).
+§8.6's study is **RUN** (§10.1). Phase table in §5. Full suite green (4,506 + 996).
 
 **P6's UI surface landed last** (2026-08-05) and is written up in §9. It closed the
 last gap between "the engine can do it" and "a person can author it", and closing it
@@ -18,8 +18,31 @@ a nominated account) — plus it promotes **G7** from unscheduled to load-bearin
 **P7 and P8 are now BUILT** (2026-08-05), so every gap in this document is closed
 except G3's standalone-loan half. Full suite green at that point (4,487 + 977).
 
-**What is left is in §10** — and it is not engine work. §8's question is unanswered
-because the study has not been run, not because anything is missing to run it with.
+**§8.6's study has now been RUN** (2026-08-06) — the thing the whole document exists
+for. Method and what it changed are in §10.1; the corrections it forced are folded into
+§8.4 and §8.7 where they belong. The headline is that the offset prices as **insurance,
+not as a return bet**: near-zero carrying cost, a thin positive median on wealth, and
+protection concentrated in the bad tail — at the studied facility size, zero worlds in
+which parking the facility made solvency *worse*, against a nonzero count it rescued.
+(That last property is **size-dependent** and does not extend to arbitrarily large
+facilities — §10.4.) Most of the earlier return-framed advantage turned out to be two
+study artefacts, not economics.
+
+Running it also added one lever (`offset.fromBalance`, §10.1) and three method rules
+that generalize beyond this document: a dated shock must be an axis and never a
+constant; every stochastic consumer shares one RNG, so an FX-process comparison has to
+switch the others off; and a deterministic grid systematically **overstates** an option
+because the arm holding more risk has no upside tail to express.
+
+**What is left is in §10**, and it is genuinely small: G3's standalone-loan half
+(§10.2), §7's open questions, and the **facility-size** question §8.2 poses. The
+original arms all fixed the facility at one size, so "how big should the loan be" was
+asked and never answered; the `fromBalance` lever makes it expressible and **both views
+are now run**. The wealth view supports only a threshold claim — below a certain size
+the facility does no work — because above it the ordering between sizes is unstable.
+The solvency view is cleaner and is the answer: rescue count climbs with size and is
+still climbing at the largest size tested, so **no ceiling was found**. What stops that
+being "borrow the maximum" is in §10.4, and it matters.
 
 Found while designing a study of AU mortgage **offset accounts** — whether cash is
 better parked in an offset (earning the loan rate, certain and untaxed) or invested
@@ -742,6 +765,14 @@ Three blockers were identified; **all three are now closed.**
   existing result — those answer the return question, which is FX-insensitive by
   construction — but it does mean every result predating §8 is *silent* on this one,
   rather than negative on it. Turning the process on is a parameter, not a change.
+
+  **Measured (§10.1): this is true of the FX leg and only the FX leg.** §8.1 names
+  three, and under a pinned rate the other two still bite hard — an offset draw is not
+  a disposal in either jurisdiction where a sale is one in both, and a forced
+  liquidation still lands in the worlds where the plan is already failing. Most of the
+  option's measured value turned out to be those two. So the blocker was real for the
+  reason stated, but the pinned-rate results were *understating* the option rather than
+  saying nothing about it.
 - **No dated, currency-denominated expense** — G8, built as P7.
 - **No targeted funding** — G9, built as P7.
 
@@ -783,6 +814,27 @@ does so at the moment cash is tightest — the payment steps up precisely when t
 for drawing has not gone away. Any arm that exercises must run G6 live, and a study that
 holds G6 fixed because "it was inert last time" will silently understate the cost of
 exercising.
+
+**Measured (§10.1): the interaction is larger than that, and it does not need an
+exercise to fire.** An offset is the loan's *default payment source* —
+`resolvePaymentSourceKey` prefers an explicit `paymentSourceKey`, then a same-currency
+offset on the loan's property. So the moment the IO period ends and P&I begins, every
+payment drains the offset. The drawable balance therefore follows the amortisation
+schedule down to zero, and **the option has a maturity nobody authored**: not the
+loan's stated maturity, but the date the offset runs out.
+
+That is what makes the exercise value strongly timing-dependent. Early, with the offset
+near full, it is worth several percent of terminal after-tax wealth. Late, the offset
+cannot cover the need, the draw falls through to the same liquidation the other arm
+performs, and the two arms converge — the option is worth almost nothing, not because
+the need got cheaper but because the right to draw has amortised away. A study that
+exercises at one date is measuring one point on a decaying curve.
+
+It also makes the surface a **step function in the size of the need**, with steps at two
+balance-sheet boundaries: the drawable balance itself (a draw that empties the offset
+un-offsets the loan for its remaining life), and the point at which the selling arm
+exhausts domestic cash and its cascade reaches the tax-gated wrappers. Quote the
+surface, never a single break-even number.
 
 P8 adds a second interaction of the same shape. §988 recognizes nothing on a
 fully-offset or interest-only loan (§3 G7), so exchange gain and loss are **also** zero
@@ -916,29 +968,76 @@ unmodellable; borrow-against-the-rental always was and still is.
 
 Ordered by what unblocks what, not by size. Nothing below is in flight.
 
-### 10.1 Run §8.6's study — the only thing the document exists for
+### 10.1 §8.6's study — **RUN.** What it took, and what it changed
 
-Every engine gap this document opened is now closed and authorable. **The offset
-question is unanswered purely because the study has not been run.** §8.6 specifies it:
-a break-even on exercise, three paired arms on shared seeds (draw the offset / sell
-foreign assets and convert / a no-expense control), `MEAN_REVERTING` FX primary with
-`RANDOM_WALK` as a sensitivity and `fxVolatility` an axis in both (§8.5).
+The study is built and executed: four paired grids plus a paths-based Monte Carlo, with
+the FX process on, G6 live in every arm, and `randomSeed` a real axis. The spec, the
+runner and the numbers live outside this repo's public tree, as plan figures always do.
+What belongs here is the method, because **most of the effort went into establishing
+that the arms measured what they claimed**, and three of the four things that had to be
+fixed fail silently.
 
-Three things to carry in, all of which the document has already paid for once:
+**A new lever: `offset.<key>.fromBalance`.** Studying a facility larger than the one a
+scenario authors raises the liability via the `loan` lever — and the proceeds have to
+land somewhere in *every* arm. They did not. Raising an offset with no `deployTo`
+credits the difference (correctly: it is the loan proceeds), while the arm that deploys
+the facility starts from the authored balance and carries the extra debt without the
+extra asset. `fromBalance` credits the drawn facility first, so both arms hold the same
+pot. Regression in `tests/unit/variant-loan-offset.test.mjs`, including a case that
+pins the defect itself so a spec omitting `fromBalance` cannot be mistaken for one that
+does not need it.
 
-- **Turn the FX process on.** Every result predating §8 was run with `fxProcessModel:
-  NONE`, under which the option is worth *identically zero* and §988 recognizes nothing.
-  Those results are silent on this question, not negative on it.
-- **Run G6 live in any arm that exercises** (§8.7). With the offset full the term is
-  inert, so it is tempting to hold it fixed; exercising re-exposes the plan to the
-  IO-expiry step-up at precisely the moment cash is tightest, and §988 arrives
-  concentrated in the same act.
-- **Vary `randomSeed`** (§8.8). A seed sweep on the old code returned eight identical
-  results, which reads as robustness and was one path measured eight times.
+**A dated crash is not a background condition.** The plan this was run against authors a
+dated market crash. The arm that deploys holds more equity, so the crash lands on it
+harder — and it accounted for *most* of the apparent advantage of parking the money.
+Removing it moved the no-exercise delta by an order of magnitude. It is an axis in the
+surface grid and removed outright everywhere else; a study that holds it fixed is making
+a statement about one foreseen date.
 
-Expect this to be a long run; the repo's standing habit is to ship the runner and the
-spec, write the re-run instructions into the decision doc, and not block a session on
-it.
+**Stochastic consumers share one RNG, so switching one on re-orders the others.** A
+property's `BERNOULLI` repair model draws from the same seeded `sim.rng` as FX, the
+yield curve and equity paths. Two consequences, both fatal to an FX comparison: under
+`fxProcessModel: NONE` the seed axis is *not* inert, so "NONE is the control" was false;
+and turning FX on shifts the repair draws, so NONE-vs-live at a fixed seed is not
+holding repairs constant. Any grid comparing FX process models must switch every other
+stochastic consumer off — after which the FX-pinned panel is byte-identical across every
+seed, which is the check that it is a control at all.
+
+**One seed is one world.** §8.8 fixed the seed reaching the RNG; it did not make a
+single seeded run a result. A one-seed FX grid produced sign-flipped cells that the
+twelve-world view showed to be that seed's outlier. Paired grids over a stochastic
+process need reducing over the world axis — median *and* the count of worlds whose sign
+agrees — not one panel per seed.
+
+**Four findings that change what §8 says about itself.** Three are written up where they
+belong: §8.4's claim that the option is worth zero under a pinned rate is true only of
+the FX leg (see the note added there); §8.7's IO interaction is larger and differently
+shaped than described (see the note added there); and the carrying cost, once the arms
+are matched and the dated crash removed, is approximately zero — which is §8's own
+opening premise measured rather than asserted, and *not* what the earlier return-framed
+study reported.
+
+The fourth is about **which run to believe**, and it is a general lesson rather than a
+§8 one. The deterministic grids and the paths-based Monte Carlo disagree about the
+*direction* of the exercise value in the size of the need: the grids say it grows, the
+Monte Carlo says it shrinks. Both are right about their own world. A grid holds the
+return fixed, so the arm holding more equity has no upside tail to express and the
+option looks uniformly good; with sampled paths that tail is real, and in the good
+worlds it swamps everything the option saves. **A deterministic surface systematically
+overstates an option**, and overstates it more the larger the exercise. Quote the paths
+run.
+
+What survives both is the shape §8 predicted and the return framing did not: near-zero
+premium, a thin positive median on wealth with roughly a third of worlds mildly behind,
+and — the cleanest number in the study — **zero worlds in which holding the facility
+made solvency worse**, across every need size, against a nonzero count it rescued. An
+insurance payoff, concentrated in the bad tail, which is §8.1's ordering of the three
+legs confirmed rather than assumed.
+
+**Consequence for the earlier return study.** It predates `fromBalance` and holds the
+dated crash fixed, so its magnitudes do not stand. Re-running it is mechanical — add
+`fromBalance` to every arm that sets an offset balance, clear the dated shock — and the
+instructions are written into that study's own run sheet rather than here.
 
 ### 10.2 G3 error 1 — a standalone investment loan deducts nothing
 
@@ -964,7 +1063,57 @@ at once (s8-1 and §988(e)(3)). §8's tax argument leans on the answer.
 Q2 (does an AU loss pool survive a residency change?) is the one most likely to bite a
 cross-border run silently.
 
-### 10.4 Smaller, genuinely optional
+### 10.4 Facility size — answered on both views; no ceiling found
+
+§8.2 states the sizing rule ("an option is sized to the exposure it covers, not to what
+you can service") and then no arm ever tested it: every run to date fixes the facility
+at one size. The `fromBalance` lever built in §10.1 is what makes a size axis
+expressible at all, so this is now reachable rather than blocked.
+
+**It needs a per-size grid, not an axis.** Sizing moves two lever paths in lockstep —
+the loan's balance (the liability) and the offset's `fromBalance` (the proceeds) — and a
+`variant-grid` axis writes one dotted path. One grid per size keeps them matched by
+construction, and the zero-size grid is a free control: with no facility there is
+nothing to place, so the paired delta must be *exactly* zero at every other axis.
+
+The wealth view is run, and it supports exactly one claim: **there is a threshold, and
+below it the facility does no work.** The smallest facility tested sits at or below zero
+for every need that fits inside it, while every larger one is clearly positive at every
+need. Above the threshold the ordering between sizes is *not* stable — it inverts with
+the size of the need, and the cell-to-cell moves along a row exceed the differences
+between columns, which is the same step-function behaviour §8.7 describes. Anyone
+quoting an optimum off that surface is reading noise. It also prices neither
+serviceability nor lender IO caps, and a deterministic grid overstates an option
+anyway (§10.1).
+
+**The solvency view settles it, and it is the cleaner of the two.** Measured against a
+no-facility baseline on shared seeds, the count of worlds a facility *rescues* climbs
+monotonically with its size and **is still climbing at the largest size tested** — so
+the sweep found no ceiling, and the experiment has not yet reached its own constraint.
+The smallest facility tested is inert on both metrics, which is the one place the wealth
+and solvency views agree exactly. The counts are small (single-digit worlds out of
+several hundred), so the finding is directional: *more facility is more insurance over
+the range tested*, not a ranking of adjacent sizes.
+
+Two things stop that being a recommendation to borrow the maximum. The constraint that
+actually binds — **serviceability at origination** — is not represented in the model at
+all, so this is a floor on the answer rather than a target. And §10.1's headline claim,
+that parking the facility never made a world insolvent, is measured at *one* size and
+**does not extend upward**: on the park-versus-deploy contrast the reverse-rescue count
+goes from zero at the smaller facilities to nonzero at the larger ones. A bigger
+facility is worth having and simultaneously raises the cost of getting the parking
+discipline wrong. That mechanism is unexplained and worth finding, because the
+insurance framing depends on it.
+
+Two refinements the study wants and does not have. First, **the need should be sampled,
+not dated** — every arm uses one need of known size and timing, which answers "what is
+this facility worth given this shock" rather than "how big should the facility be".
+Second, and larger: §8.7's drain has an **authorable escape** that nothing has tested.
+An offset is only the loan's *default* payment source; `paymentSourceKey` overrides it.
+Pointing the loan at an ordinary cash account would stop P&I consuming the cover, which
+may be worth more than any sizing decision and is a single field.
+
+### 10.5 Smaller, genuinely optional
 
 - **§6's "an offset earns no yield" regression** is still unwritten. The behaviour is
   correct and stands entirely on the *absence* of a wiring, which is exactly the kind of

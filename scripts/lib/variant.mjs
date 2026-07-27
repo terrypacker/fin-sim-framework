@@ -36,7 +36,8 @@
  *   loan              {loanKey: {...}}  per-loan overrides (balance, payment, rate,
  *                                       interestOnly) — works on a synthesized
  *                                       mortgage or a standalone LoanAccount
- *   offset            {offsetKey: {...}} offset balance, and where the freed cash goes
+ *   offset            {offsetKey: {...}} offset balance, the drawn facility, and where
+ *                                      the freed cash goes
  *   expenseEvents     [{...}]          dated one-off expenses in a chosen currency,
  *                                      optionally funded from a nominated account
  *                                      (design 86 G8/G9); APPENDS and auto-enables
@@ -448,9 +449,23 @@ function loanKeys(cfg) {
 /**
  * Offset-account overrides, keyed by the offset's state key.
  *
+ *   fromBalance      number       the DRAWN FACILITY: seed the offset here first
  *   balance          number       the offset's cash balance
  *   deployTo         stateKey     where the DIFFERENCE goes (see below)
  *   drawdownPriority number|null  where the offset sits in the liquidation order
+ *
+ * **`fromBalance` is what makes a facility-size axis honest.** Studying a facility
+ * larger than the one the scenario authors means the `loan` lever raises the
+ * liability — and the proceeds have to land somewhere in EVERY arm, not just the one
+ * that parks them. Set `fromBalance` to the facility size in both arms:
+ *
+ *   park:   { fromBalance: F, balance: F }
+ *   deploy: { fromBalance: F, balance: 0, deployTo: 'usStockAccount' }
+ *
+ * Omit it and the parking arm receives the uplift (raising an offset with no
+ * `deployTo` credits the difference, which is right — it IS the loan proceeds) while
+ * the deploying arm starts from the authored balance and is short the uplift for the
+ * whole horizon. That is not a small bias: it compounds.
  *
  * **`drawdownPriority` on an offset is a DECISION, not a detail.** It is tempting to
  * reason that an offset is a transaction account, so the money is liquid, so it ought
@@ -486,6 +501,16 @@ function loanKeys(cfg) {
 export function applyOffset(cfg, stateKey, o = {}) {
   const target = resolveAccountPair(cfg, stateKey, 'offset lever');
   if ('drawdownPriority' in o) target.setField('drawdownPriority', o.drawdownPriority);
+  // `fromBalance` credits the DRAWN FACILITY to the offset before anything is moved
+  // out of it, and it is what makes a facility-size axis wealth-matched. Drawing a
+  // loan is two entries: the `loan` lever writes the liability, this writes the cash.
+  // Without it, only the arm that PARKS the proceeds ever receives them: raising the
+  // offset with no `deployTo` credits the difference (correctly, as loan proceeds),
+  // while the arm that deploys starts from the offset's authored balance and is short
+  // the uplift for the whole horizon. On the study that found this (design 86 §8.6) the
+  // head start compounded for the full 44-year horizon and was larger than the effect
+  // the arms had been built to measure.
+  if (o.fromBalance != null) target.setBalance(o.fromBalance);
   if (o.balance == null) return;
   const before = target.balance();
   const delta  = before - o.balance;      // > 0 ⇒ this much leaves the offset (source currency)
