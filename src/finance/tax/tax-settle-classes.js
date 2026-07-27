@@ -395,6 +395,10 @@ export const DRAWDOWN_TAX_ACTION_TYPES = Object.freeze([
   'STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX',
   'K401_WITHDRAWAL_TAX', 'IRA_WITHDRAWAL_CONTRIB_TAX', 'IRA_WITHDRAWAL_EARNINGS_TAX',
   'ROTH_WITHDRAWAL_EARNINGS_TAX', 'SUPER_WITHDRAWAL_EARNINGS_TAX',
+  // Design 84 G9: a drawdown that reaches a Roth's converted principal reports it
+  // on the EVT-43/44 twins — the recapture penalty and the s99B-assessable share
+  // that s99B(2)(a) denies the corpus exemption to.
+  'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',
 ]);
 
 class TaxPaymentDebitReducerBase extends Reducer {

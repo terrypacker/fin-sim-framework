@@ -20,6 +20,20 @@
 export const money = (n) => (n == null ? '—' : (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n)).toLocaleString());
 export const millions = (n) => (n == null ? '—' : '$' + (n / 1e6).toFixed(1) + 'm');
 export const thousands = (n) => (n == null ? '—' : '$' + Math.round(n / 1000) + 'k');
+/**
+ * Auto-scaled signed money, for values whose magnitude is not known in advance —
+ * paired DELTAS especially, which can be a few thousand in one world and tens of
+ * millions in another. `thousands()` renders the latter as an unreadable "$-133299k".
+ */
+export const moneyAuto = (n) => {
+  if (n == null) return '—';
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(2)}m`;
+  if (a >= 1e3) return `${sign}$${Math.round(a / 1000)}k`;
+  return `${sign}$${Math.round(a)}`;
+};
+
 export const pct = (r, dp = 1) => (r == null ? '—' : `${(r * 100).toFixed(dp)}%`);
 
 /** Percentile by nearest-rank. Small-n friendly and never interpolates a value that no path produced. */

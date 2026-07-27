@@ -446,8 +446,16 @@ export class ScenarioLoader {
    * @private
    */
   _normalizeRetirementBasis(cfg) {
+    // Design 84 G2 — how much of a wrapper's OPENING earnings to treat as already
+    // derived. 1 (default) reproduces the pre-G2 s99B charge on the opening slice, so
+    // G2 changes only what the sim itself accrues; 0 asserts the whole opening balance
+    // is unrealised appreciation. The truth is between, unknowable from the plan, and
+    // therefore a sweep axis rather than a number to guess.
+    const raw = cfg?.parameters?.openingDerivedFraction
+      ?? (cfg?.params ?? []).find(p => p?.name === 'openingDerivedFraction')?.value;
+    const openingDerivedFraction = Number.isFinite(raw) ? raw : 1;
     for (const acct of (Array.isArray(cfg.accounts) ? cfg.accounts : [])) {
-      if (acct && RETIREMENT_ROLES.has(acct.role)) deriveEarningsBasis(acct);
+      if (acct && RETIREMENT_ROLES.has(acct.role)) deriveEarningsBasis(acct, { openingDerivedFraction });
     }
   }
 

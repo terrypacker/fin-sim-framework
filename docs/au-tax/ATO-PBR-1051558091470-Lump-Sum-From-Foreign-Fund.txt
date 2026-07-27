@@ -1,0 +1,186 @@
+ATO Private Binding Ruling (edited version) — Authorisation Number 1051558091470
+Source: https://www.ato.gov.au/law/view/print?DocID=EV%2F1051558091470
+        (retrieved 2026-08-04 as PDF, converted with `pdftotext -layout`;
+         ato.gov.au returns 403 to programmatic fetch, so it must be saved by hand)
+Lump sum payment from a foreign fund — s99B corpus vs earnings, and whether a rollover
+from one foreign fund into another arrives as corpus. Question 2 is the design/84 G11
+question verbatim, and the answer is No.
+
+STATUS — read before relying on it. ARCHIVED edited version, dated 6 August 2019. It is
+not binding, is not precedent, binds nobody but its applicant, and carries the ATO's own
+banner that it "should not be regarded as indicative of the ATO's current views". The
+current general guidance on s99B is TD 2024/9 and PCG 2024/3, whose material addition is
+that the ONUS of substantiating a corpus reduction sits with the resident beneficiary.
+Note also that "the accounts do not meet the definition of a 'Foreign Superannuation fund'"
+appears in the FACTS, not the reasoning — it was accepted as given, not ruled on.
+====================================================================================================
+
+                                                                      
+  Disclaimer
+  This edited version has been archived due to the length of
+  time since original publication. It should not be regarded as
+  indicative of the ATO's current views. The law may have
+  changed since original publication, and views in the edited
+  version may also be affected by subsequent precedents and
+  new approaches to the application of the law.
+
+
+  You cannot rely on this record in your tax affairs. It is not
+  binding and provides you with no protection (including from
+  any underpaid tax, penalty or interest). In addition, this record
+  is not an authority for the purposes of establishing a
+  reasonably arguable position for you to apply to your own
+  circumstances. For more information on the status of edited
+  versions of private advice and reasons we publish them, see
+  PS LA 2008/4.
+
+
+Edited version of private advice
+
+
+Authorisation Number: 1051558091470
+
+
+Date of advice: 6 August 2019
+
+
+Ruling
+
+
+Subject: Lump sum payment from a foreign fund
+
+
+Question 1
+Are all of the earnings on the account assessable under section 99B of the
+Income Tax Assessment Act 1936 (ITAA 1936)?
+
+
+Answer
+
+
+Yes
+
+
+Question 2
+
+
+Is the whole amount rolled over from the Fund A to the account considered
+corpus?
+
+
+Answer
+
+
+No
+
+
+This ruling applies for the following period:
+
+
+Year ending 30 June 20XX
+
+
+The scheme commences on:
+
+
+1 July 20XX
+
+
+Relevant facts and circumstances
+
+
+You are a resident of Australia for taxation purposes.
+
+
+You are a permanent resident of Australia.
+
+
+You worked in the overseas country for XX years.
+
+
+You and your employer made contributions to your pension account.
+
+
+In 20XX, while a foreign resident, you rolled a portion of your Fund A into an
+account.
+The accounts do not meet the definition of a 'Foreign Superannuation fund'
+under Australian tax law as they allow for pre-retirement withdrawals.
+
+
+Relevant legislative provisions
+
+
+Income Tax Assessment Act 1936 section 99B
+
+
+Income Tax Assessment Act 1936 subsection 99B(1)
+
+
+Income Tax Assessment Act 1936 paragraph 99B(2)(a)
+
+
+Income Tax Assessment Act 1997 subsection 995-1(1)
+
+
+Reasons for decision
+
+
+Section 99B of the ITAA 1936 deals with the receipt of trust income 'not
+previously subject to tax' in Australia and applies where an Australian
+resident taxpayer receives a lump sum payment from a foreign retirement or
+investment fund. Section 99B takes precedence over section 97 of the ITAA
+1936 in assessing these types of payments.
+
+
+Subsection 99B(1) of the ITAA 1936 provides that where an amount, being
+property of a trust estate, is paid to, or applied for the benefit of a
+beneficiary of the trust who was a resident at any time during the year of
+income, the amount is to be included in the assessable income of the
+beneficiary.
+
+
+However, subsection 99B(2) of the ITAA 1936 modifies the rule in
+subsection 99B(1) and has the effect that the amount to be included in
+assessable income is not to include any amount that represents the corpus
+of the trust, but not an amount that is attributable to income of the trust
+which would have been included in the assessable income of a resident
+taxpayer if it had been derived by that taxpayer.
+
+
+Consequently, the assessable amount is the total amount received less any
+amounts deposited to the fund (the corpus) by the taxpayer, or on their
+behalf. The rule is that the taxpayer is taxed only on the earnings of the
+investment on withdrawal, not on the corpus returned to them. Any earnings
+in the funds are only assessable in Australia on withdrawal from the funds.
+
+
+The whole amount that was rolled into the account from the Fund A fund
+would not be corpus in the account. You would need to pay tax on the
+interest amount from the Fund A fund when it was withdrawn from the IRA
+account.
+
+
+The whole amount of the earnings is assessable in Australia not just the
+earnings that accrued from when you became a resident of Australia for
+taxation purposes.
+
+
+This is consistent with the Commissioners view in ATO ID 2011/93.
+
+
+The earnings must be included in your Australian tax return in the year you
+withdraw the lump sum amount from the fund.
+
+
+
+
+Copyright notice
+
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+
+You are free to copy, adapt, modify, transmit and distribute material on this
+website as you wish (but not in any way that suggests the ATO or the
+Commonwealth endorses you or any of your services or products).
+

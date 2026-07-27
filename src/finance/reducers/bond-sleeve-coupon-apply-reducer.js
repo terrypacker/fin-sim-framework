@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { mergeCouponReinvestLots } from '../holdings/holdings-earnings.js';
+import { creditDerivedIncome } from '../assets/investment-account.js';
 
 /**
  * Handles BOND_SLEEVE_COUPON_APPLY actions — coupon interest on the BOND sleeve of
@@ -64,9 +65,10 @@ export class BondSleeveCouponApplyReducer extends Reducer {
         year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
       });
       const balance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-      nextAcct = { ...acct, holdings, balance };
+      // Design 84 G2 — a coupon is DERIVED income; the ledger moves with the balance.
+      nextAcct = { ...acct, ...creditDerivedIncome(acct, amount), holdings, balance };
     } else {
-      nextAcct = { ...acct, balance: acct.balance + amount };
+      nextAcct = { ...acct, ...creditDerivedIncome(acct, amount), balance: acct.balance + amount };
     }
     const base = { ...state, [key]: nextAcct };
 

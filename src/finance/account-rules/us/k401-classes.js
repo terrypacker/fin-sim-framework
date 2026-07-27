@@ -15,6 +15,7 @@ import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -79,11 +80,26 @@ export class K401EarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const key = action.stateKey ?? 'k401Account';
     const ka = state[key];
+    // Negative year: charge the loss to earnings before corpus (design 84 G12).
+    const ledger = action.amount < 0
+      ? debitLedgerForLoss(ka, -action.amount)
+      : { earningsBasis: ka.earningsBasis + action.amount, contributionBasis: ka.contributionBasis };
+    // Design 84 G2 — the yield slice of this year's return is DERIVED income and
+    // joins the s99B pool; the appreciation slice does not. On a losing year
+    // `debitLedgerForLoss` has already clamped the pool to the reduced earnings, so
+    // only a gain year adds. Absent `derivedAmount` (legacy/serialized actions) ⇒ 0,
+    // i.e. pre-G2 behaviour.
+    if (Number.isFinite(ka.derivedIncomeBasis)) {
+      ledger.derivedIncomeBasis = Math.min(
+        Math.max(0, (ka.derivedIncomeBasis) + Math.max(0, action.derivedAmount ?? 0)),
+        Math.max(0, ledger.earningsBasis),
+      );
+    }
     return this.newState(state, {
       [key]: {
         ...ka,
-        balance:       ka.balance       + action.amount,
-        earningsBasis: ka.earningsBasis + action.amount,
+        ...ledger,
+        balance: Math.max(0, ka.balance + action.amount),
       },
     });
   }
@@ -120,6 +136,8 @@ export class K401WithdrawalApplyReducer extends AccountServiceReducer {
           ...ka,
           balance:           newBalance,
           earningsBasis:     ka.earningsBasis     - fromEarnings,
+          // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
+          ...drawDerivedProRata(ka, fromEarnings),
           contributionBasis: ka.contributionBasis - fromContrib,
           holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
@@ -228,6 +246,8 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
           ...ka,
           balance:           newBalance,
           earningsBasis:     ka.earningsBasis     - fromEarnings,
+          // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
+          ...drawDerivedProRata(ka, fromEarnings),
           contributionBasis: ka.contributionBasis - fromContrib,
           holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
@@ -365,6 +385,11 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
       balance:           ira.balance           + amount,
       contributionBasis: ira.contributionBasis + fromContrib,
       earningsBasis:     ira.earningsBasis     + fromEarnings,
+      // Design 84 G9/G2 — earnings derived by the SOURCE wrapper stay derived when
+      // they cross into the destination; a rollover does not un-derive them.
+      ...(Number.isFinite(ira.derivedIncomeBasis)
+        ? { derivedIncomeBasis: +((ira.derivedIncomeBasis + Math.min(fromEarnings, k401.derivedIncomeBasis ?? fromEarnings))).toFixed(2) }
+        : {}),
     };
     if (Array.isArray(ira.holdings) && ira.holdings.length > 0) {
       if (ira.balance > 0) {

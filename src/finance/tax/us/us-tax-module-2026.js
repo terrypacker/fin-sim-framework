@@ -131,15 +131,24 @@ export class UsTaxModule2026 extends BaseTaxModule {
       //        no US tax for AU to relieve via FITO. This is the well-documented
       //        Roth "double-tax with no relief" outcome for Australian residents.
       ['ROTH_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
-        const { amount, penaltyAmount, residency } = action;
+        const { amount, penaltyAmount, residency, auAssessableAmount } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (isAuResident) {
+          // Design 84 G2 — s99B reaches "amounts derived by the trust estate", so the
+          // assessable base is the DERIVED slice of the earnings drawn, not all of
+          // them: unrealised appreciation is derived by nobody. `auAssessableAmount` is
+          // stamped by the apply reducer from the wrapper's own composition. Null
+          // (no ledger / pre-G2 saved action) ⇒ assess everything, as before.
+          //
+          // The §72(t) penalty above is untouched — it is a US rule about earnings,
+          // and it does not care how Australia characterises them.
+          const assessable = Number.isFinite(auAssessableAmount) ? auAssessableAmount : amount;
           // Design 76 Gap B — attributed to the Roth's owner. No US-source removal
           // set is fed here on purpose: the US levies no income tax on these
           // earnings, so there is no US tax for the FITO limit to relieve.
           next = bookAuResident(state, next, action, 'rothAccount', {
-            auOrdinaryIncomeYTD: toAUD(amount, 'USD', state),
+            auOrdinaryIncomeYTD: toAUD(assessable, 'USD', state),
           });
         }
         return next;

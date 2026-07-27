@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer }  from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }                              from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction }     from '../../../simulation-framework/actions.js';
-import { debitIra }                                  from './ira-rollover-classes.js';
+import { debitIra, proRataIraSplit }                 from './ira-rollover-classes.js';
 
 /**
  * Roth Conversion — EVT-52
@@ -70,20 +70,44 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
     // Jan 1 of its conversion year). Lots are kept in chronological (FIFO) order.
     const conversionMs = date instanceof Date ? date.getTime() : (date ?? null);
 
-    // s99B provenance: the conversion draws IRA contributions first, then earnings
-    // (mirrors debitIra). The IRA-earnings portion is pre-tax money that "would
-    // have been assessable if derived directly by an AU resident", so it does NOT
-    // qualify for the s99B corpus exemption — record it as the lot's taxableAmount
-    // so EVT-43 can assess it in AU when that converted principal is later drawn.
-    const fromContrib   = Math.min(amount, ira?.contributionBasis ?? 0);
-    const taxableAmount = +Math.min(amount - fromContrib, ira?.earningsBasis ?? 0).toFixed(2);
+    // ─── s99B provenance: the conversion CARRIES it (design 84, Option 2b) ─────
+    //
+    // A conversion does not launder the source IRA's earnings into corpus. ATO
+    // private advice 1051558091470 (checked into `docs/au-tax/`) answers exactly
+    // this question — "Is the whole amount rolled over from Fund A to the account
+    // considered corpus?" — with **No**: "the whole amount that was rolled into the
+    // account from the Fund A fund would not be corpus in the account. You would
+    // need to pay tax on the interest amount from the Fund A fund when it was
+    // withdrawn." Corpus is "the total amount received less any amounts deposited
+    // to the fund by the taxpayer, or on their behalf".
+    //
+    // So the two components travel to their own homes: the IRA's contributions are
+    // deposited money and land as Roth CORPUS; the IRA's earnings are trust income
+    // and land as Roth EARNINGS, where the ledger already assesses them on
+    // withdrawal (EVT-44). That is why this reducer no longer stamps an
+    // `taxableAmount` on the lot: the AU character now lives in the buckets, which
+    // every withdrawal path reads, rather than in a per-lot annotation only the
+    // conversion-aware paths knew to look at.
+    //
+    // PRO-RATA, not contributions-first. Two reasons. IRC §408(d)(2) aggregates all
+    // traditional IRAs and makes any distribution proportional — the taxpayer does
+    // not get to send the basis out first. And contributions-first quietly collapses
+    // this whole treatment back into "the rollover is all corpus" for any conversion
+    // smaller than the IRA's contribution basis, which is the position the ruling
+    // rejects.
+    const { fromContrib, fromEarnings } = proRataIraSplit(ira, amount);
 
     // Maintain §4.4 invariant: scale Roth holdings up to absorb the incoming amount.
     const newRoth = {
       ...roth,
-      balance:              roth.balance                      + amount,
-      rolloverContribBasis: (roth.rolloverContribBasis ?? 0) + amount,
-      rolloverConversions:  [ ...(roth.rolloverConversions ?? []), { amount, conversionMs, taxableAmount } ],
+      balance:               roth.balance                       + amount,
+      rolloverContribBasis:  (roth.rolloverContribBasis  ?? 0) + fromContrib,
+      rolloverEarningsBasis: (roth.rolloverEarningsBasis ?? 0) + fromEarnings,
+      // The lot tracks the CORPUS leg only, because that is the bucket
+      // `computeConversionRecapture` FIFO-consumes; its `amount` must tie to
+      // `rolloverContribBasis` or the two desync. `taxableAmount: 0` is now always
+      // right — the assessable leg went to `rolloverEarningsBasis` instead.
+      rolloverConversions:  [ ...(roth.rolloverConversions ?? []), { amount: fromContrib, conversionMs, taxableAmount: 0 } ],
     };
     if (Array.isArray(roth.holdings) && roth.holdings.length > 0) {
       if (roth.balance > 0) {
@@ -104,7 +128,10 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
 
     return this.newState(
       state,
-      { [iraKey]: debitIra(state[iraKey], amount), [rothKey]: newRoth },
+      // Debit the IRA on the SAME basis the Roth was credited on, or the two
+      // ledgers describe different transactions and the IRA's remaining
+      // composition no longer matches what was taken out of it.
+      { [iraKey]: debitIra(state[iraKey], amount, { proRata: true }), [rothKey]: newRoth },
       [{ type: 'ROTH_CONVERSION_TAX', amount, residency }]
     );
   }

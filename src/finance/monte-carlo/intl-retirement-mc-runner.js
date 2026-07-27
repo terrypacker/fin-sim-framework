@@ -18,6 +18,7 @@ import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './in
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { get, set }                   from './mc-param-paths.js';
 import { computeNetWorth }            from '../derived-metrics/net-worth.js';
+import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../derived-metrics/after-tax.js';
 import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
 import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
 import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
@@ -347,6 +348,14 @@ export class IntlRetirementMcRunner {
     // see no params at all for that (very common) source.
     const templateParams = scenarioParamValues(rawTemplate);
 
+    // After-tax scoring options (design 84 §6.4a). Assigned below, once `base` is
+    // resolved — `evaluate` cannot close over it directly because the ScenarioRunner is
+    // constructed before the param layering runs, and `evaluate` only ever fires inside
+    // the iteration loop that follows. These are METRIC params (rate method, assumed
+    // gain fraction), not economic ones, so they are not perturbed per path and one
+    // provider is correct for the whole run.
+    let afterTaxOpts = afterTaxOptionsFromParams({});
+
     const runner = new ScenarioRunner({
       createSimulation: (params, seed) => {
         // Isolated per-iteration registry: never touches the singleton, so the
@@ -405,6 +414,14 @@ export class IntlRetirementMcRunner {
         return scenario.sim;
       },
       evaluate: (sim) => ({
+        // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
+        // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
+        // sits (a decant, a conversion, a wrapper swap) that is the wrong scoreboard
+        // and it favours holding by construction; G1 fixed it on the grid path and the
+        // MC path was never followed. Built from the shared factory so a grid cell, an
+        // optimizer score and an MC path are one number.
+        afterTaxNetWorthUsd: computeAfterTaxNetWorth(sim.state, simEnd, afterTaxOpts),
+        cumulativeTaxesPaid: sim.state.cumulativeTaxesPaid ?? 0,
         finalNetWorthUsd:  computeNetWorthUsd(sim.state),
         finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
         scenarioFailed:    sim.state.scenarioFailed    ?? false,
@@ -440,6 +457,7 @@ export class IntlRetirementMcRunner {
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
     const balanceCenters = resolveBalanceCenters(cfgTemplate);
     const base = { ...schemaDefaults, ...templateParams, ...balanceCenters, ...baseParams, endDate: simEnd };
+    afterTaxOpts = afterTaxOptionsFromParams(base);
     const variables  = this.mcConfig.buildVariables(base);
     const provenance = summarizeProvenance(variables, { ownParams: templateParams, schemaDefaults });
 
@@ -468,6 +486,8 @@ export class IntlRetirementMcRunner {
       seed:              r.seed,
       params:            r.params,
       finalNetWorthUsd:  r.result.finalNetWorthUsd,
+      afterTaxNetWorthUsd: r.result.afterTaxNetWorthUsd,
+      cumulativeTaxesPaid: r.result.cumulativeTaxesPaid,
       finalNetLiquidity: r.result.finalNetLiquidity,
       scenarioFailed:    r.result.scenarioFailed,
       outOfFundsDate:    r.result.outOfFundsDate,

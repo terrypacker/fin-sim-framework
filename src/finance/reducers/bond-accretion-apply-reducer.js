@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { creditDerivedIncome } from '../assets/investment-account.js';
 
 /**
  * Handles BOND_ACCRETION_APPLY actions — the imputed, non-cash principal growth of
@@ -51,7 +52,8 @@ export class BondAccretionApplyReducer extends Reducer {
     const acct = state[key];
     if (!acct || !amount) return this.newState(state);
 
-    const base = { ...state, [key]: { ...acct, balance: acct.balance + amount } };
+    // Design 84 G2 — accretion is DERIVED income; raise the ledger with the balance.
+    const base = { ...state, [key]: { ...acct, ...creditDerivedIncome(acct, amount), balance: acct.balance + amount } };
 
     if (taxMode === 'deferred') {
       // 401k / IRA / Roth / super — no immediate tax; taxed (or not, for Roth) on withdrawal.
