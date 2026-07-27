@@ -485,7 +485,7 @@ Phase A ladders are correct and self-maintaining, but the design-61 allocation l
 does not *know* they are ladders:
 
 - **Buy side.** When 61 rebalances **into** bonds, `RebalanceToTargetApplyReducer`
-  `_addProRata`'s the new $ across existing BOND holdings (grows every rung evenly —
+  `_addProRata`'s the new \$ across existing BOND holdings (grows every rung evenly —
   acceptable) or `_newSleeve`'s a single **perpetual fund** rung when none exist
   (breaks the ladder shape). Phase B: if the account carries a **ladder-intent tag**
   (`account.bondLadderIntent = { rungs, spacing, term, roll, taxExemption }`), route
@@ -837,7 +837,7 @@ SLV-6/7 updated (source stays at par, reinvest lot appears).
 **Step 4 — golden re-baseline (folded into Steps 2–3).** §G10a moved the golden +0.024%
 NW / +0.061% tax (re-pinned in Step 2). §G10b is **INERT on the default golden**: it
 creates 14 reinvest lots but the prevailing yield ≈ the seeded 0.04 coupon and the only
-reinvesting sleeve (k401) is tax-deferred, so NW moved $1 (rounding), tax unchanged.
+reinvesting sleeve (k401) is tax-deferred, so NW moved \$1 (rounding), tax unchanged.
 Golden re-pinned to 11,584,190 / 1,127,909. The lever bites only when the prevailing
 rate diverges from the source coupon (a rate-regime shift) — verified by the §G10b-7
 e2e probe. `MEMORY.md` design-66 note updated.

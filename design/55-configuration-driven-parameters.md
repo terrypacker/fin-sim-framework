@@ -213,7 +213,7 @@ export const COMPANY_EQUITY_PARAM_TEMPLATE = [];
 
 **Label / group derivation.** Labels come from the record's display name +
 field label (`"Roth IRA (Spouse) — Balance"`); groups come from the record so the
-UI naturally clusters per record: `group = \`${country} · ${account.name}\``
+UI naturally clusters per record: `group = \`\${country} · \${account.name}\``
 (e.g. `"US · Roth IRA (Spouse)"`). This gives one collapsible section per record in
 the Scenario editor without any hand-authored group names.
 

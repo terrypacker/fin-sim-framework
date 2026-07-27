@@ -678,20 +678,20 @@ dimension-growth entry in 46's cost model.
 
    ✅ **RESOLVED via prototype** (`scripts/prototype-rebalance-cadence.mjs`, a
    standalone CRN Monte-Carlo isolating tracking-error vs realized-CGT across
-   cadences; grounded on the sim's 15%/20% LTCG). On a $1M→~$6M / 40y book:
+   cadences; grounded on the sim's 15%/20% LTCG). On a \$1M→~\$6M / 40y book:
 
    | cadence (taxable) | trades | track err | **incremental tax to hold the mix** |
    |---|---|---|---|
-   | DRIFT_WIDE (±8pp) | ~9 | 3.0% | **$125k (cheapest)** |
-   | ANNUAL | 40 | 2.4% | $185k (+$60k) |
-   | DRIFT_TIGHT (±2pp) | ~88 | 1.2% | $298k (+$173k) |
+   | DRIFT_WIDE (±8pp) | ~9 | 3.0% | **\$125k (cheapest)** |
+   | ANNUAL | 40 | 2.4% | \$185k (+\$60k) |
+   | DRIFT_TIGHT (±2pp) | ~88 | 1.2% | \$298k (+\$173k) |
 
    *(tax cost isolated as `sheltered.afterTax − taxable.afterTax` per policy under
    common random numbers, minus the unavoidable buy-&-hold latent; ordering held
    across no-crash, 20% LTCG, and a 15y horizon.)* **Decisions:**
    - **Taxable → wide drift-band, NOT annual.** A wide band beats a fixed annual
      schedule *and* a tight band: annual churns ~40 trades even when barely drifted;
-     tight buys 1.8pp of tracking for **$173k** of extra tax — a bad trade. So taxable
+     tight buys 1.8pp of tracking for **\$173k** of extra tax — a bad trade. So taxable
      rebalancing is drift-gated with a **wide** band (the band itself an opt/MPC knob);
      annual-only is *not* adopted.
    - **Sheltered → tight/continuous.** Cadence is ~free, so tight banding buys the
@@ -751,8 +751,8 @@ dimension-growth entry in 46's cost model.
        retirement roles are **absent from the preference list entirely**, so removing the
        guard only promoted them from *excluded* to *unpreferred*. Gold now reaches them
        only via the spillover pass once every preferred home is full. Re-running the
-       reference plan after the reversal, gold placement was **unchanged** (2040: $402k
-       AU super, $455k US brokerage, $0 in any US retirement account). Making it
+       reference plan after the reversal, gold placement was **unchanged** (2040: \$402k
+       AU super, \$455k US brokerage, \$0 in any US retirement account). Making it
        preferred is a separate deliberate change — see §12.2 Q4.
      - Tests asserting *"a gold buy never lands in a US IRA"* (§10) inverted: the new
        assertion is that it **may**, and that the located optimum prefers it while US-
@@ -816,7 +816,7 @@ dimension-growth entry in 46's cost model.
 Surfaced while building the allocation-over-time report (design 82), which charts the
 realized mix and so makes sleeve hygiene visible for the first time.
 
-**D1 — ✅ FIXED: liquidated sleeves left an immortal $0.01 remnant.** Selling a sleeve
+**D1 — ✅ FIXED: liquidated sleeves left an immortal \$0.01 remnant.** Selling a sleeve
 to a target weight that rounds sub-cent left a residual that no later rebalance could
 ever remove, because three thresholds disagreed:
 
@@ -827,7 +827,7 @@ ever remove, because three thresholds disagreed:
 | the apply reducer skips | `delta >= -0.01`, `take <= 0.01` |
 
 Anything in `[0.001, 0.01]` was too large to prune and too small to act on. Measured: a
-$0.01 GOLD sleeve survived **25 consecutive rebalances** against `{EQUITY: 1.0}`. Gross
+\$0.01 GOLD sleeve survived **25 consecutive rebalances** against `{EQUITY: 1.0}`. Gross
 value stayed conserved throughout, so nothing was lost — but the account kept a phantom
 sleeve of a class the policy forbade, which then appears as a permanent band in the
 allocation report and a permanent row in the holdings panel.
@@ -896,14 +896,14 @@ semantic change needing its own decision).
    - a position that **arrives** at a zero-target class without a target change does
      not. Real sources: in-kind inheritance (design 63), a rollover, or simply the other
      classes being drawn down around it. The reference plan shows exactly this shape —
-     gold grew to $1.85M and was removed by *drawdown*, never by rebalancing.
+     gold grew to \$1.85M and was removed by *drawdown*, never by rebalancing.
 
    So the residual question is much smaller than D2 was: **should a zero target carry a
    zero (or tighter) band?** Options: (a) exact — `tgt === 0 && actual > dust` triggers;
    (b) a small absolute floor (say 0.5% of the account) well above the dust threshold;
    (c) accept it — `0 ± band` means "approximately none" and the allocation report
    surfaces the residue. Note (a) fights §OQ3's finding that wide bands beat tight ones
-   by ~$173k of avoided CGT, so forcing a sale of a 5% sleeve purely because its target
+   by ~\$173k of avoided CGT, so forcing a sale of a 5% sleeve purely because its target
    is 0 may be precisely the bad trade that prototype warned about. **Leaning (b) or (c).**
 
    ✅ **RESOLVED 2026-07-29 — (c), accept it; the band is already the configurable knob
@@ -1002,8 +1002,8 @@ semantic change needing its own decision).
    ```
 
    **Both balances are unchanged.** Asset location is achieved by **simultaneous
-   independent internal swaps**, never a transfer: the IRA sells $100k of its own equity
-   and buys $100k of its own gold; the brokerage does the reverse. The book-level mix is
+   independent internal swaps**, never a transfer: the IRA sells \$100k of its own equity
+   and buys \$100k of its own gold; the brokerage does the reverse. The book-level mix is
    identical (90/10) but gold now sits in the shelter. This is structural, not incidental
    — `RebalanceToTargetApplyReducer` is handed **one `stateKey` per action** and patches
    only that account, and `planLocatedTargets` constrains each account's composition to
@@ -1026,10 +1026,10 @@ semantic change needing its own decision).
 
    | gold preference order | terminal NW | vs best |
    |---|---|---|
-   | `IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH` | **$30.45m** | best |
-   | `US_STOCK, AU_STOCK, SUPER, IRA, K401, ROTH` | $28.42m | −$2.03m |
-   | `SUPER, AU_STOCK, US_STOCK` (pre-Q4) | $28.21m | −$2.24m |
-   | `IRA, K401, ROTH, SUPER, …` (**as specified above**) | $25.20m | −$5.25m |
+   | `IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH` | **\$30.45m** | best |
+   | `US_STOCK, AU_STOCK, SUPER, IRA, K401, ROTH` | \$28.42m | −\$2.03m |
+   | `SUPER, AU_STOCK, US_STOCK` (pre-Q4) | \$28.21m | −\$2.24m |
+   | `IRA, K401, ROTH, SUPER, …` (**as specified above**) | \$25.20m | −\$5.25m |
 
    The two rules that fall out, and that the shipped lists follow:
    1. **Tax-DEFERRED first (IRA/401k).** Deferred growth converts to *ordinary income* on
@@ -1038,10 +1038,10 @@ semantic change needing its own decision).
       already heads BOND's list with IRA/K401; gold is bonds-like here, so its policy now
       mirrors bonds'.
    2. **Roth LAST, always.** The Roth is the most valuable shelter (tax-free forever) and
-      must hold the highest-growth asset. Ranking it third is most of that −$5.25m.
+      must hold the highest-growth asset. Ranking it third is most of that −\$5.25m.
 
    Shipped: US `[IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH]`, AU `[SUPER, IRA, K401,
-   AU_STOCK, US_STOCK, ROTH]`. Net effect on the reference plan vs pre-Q4: **+$1.93m
+   AU_STOCK, US_STOCK, ROTH]`. Net effect on the reference plan vs pre-Q4: **+\$1.93m
    terminal (+6.9%)**, and the residency flip is visible in the cube — 2027 (US resident)
    gold sits in the Traditional IRAs and Roths; by 2035 (post-2031 move) it has been walked
    to AU super, lazily via the drift band rather than forced on the move date (§OQ4b).

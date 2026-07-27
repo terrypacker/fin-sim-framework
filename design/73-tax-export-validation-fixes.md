@@ -473,7 +473,7 @@ What is wrong is the single rate, and which income types were let into the bucke
   foreign resident for the whole ownership period. This matters here because the reference scenario
   has people moving between residencies mid-ownership, which is precisely the apportioned case.
 - **Where the 15% on gains probably came from.** **Foreign Resident Capital Gains Withholding** is
-  15% since 1 January 2025, with the previous $750,000 property threshold removed so it applies to
+  15% since 1 January 2025, with the previous \$750,000 property threshold removed so it applies to
   every property sale [R10]. It really is 15% — but it is a *collection* mechanism: the vendor
   claims it as a credit on assessment and is refunded any excess [R10]. A payment on account, not a
   final tax. Modelling it as the final liability is the single largest under-taxation in this
@@ -646,12 +646,12 @@ Suite grew 3797 → 3811 unit, 906 viz, green throughout.
 | 4 — `workCountry` | `50489a9` | unmoved | unmoved | unchanged |
 | 5 — NR rental | `4133705` | unmoved | unmoved | unchanged |
 
-**Only step 2 moved the golden at all, and it moved it UP by $9.42 (+0.001%)** — against the
+**Only step 2 moved the golden at all, and it moved it UP by \$9.42 (+0.001%)** — against the
 expectation in §6 that AU liability would fall. Both halves are right and they are the same
 observation: cutting the interest rate 15% → 10% *does* reduce AU tax in the non-resident years,
 and because that AU tax was the thing generating the US foreign tax credit, the US liability rises
 alongside it by slightly more. The two sides of double-tax relief collapse together — the same
-coupling §1 predicts for the wage. Ending net worth rose $40.85: the AU saving lands in 2026-2030
+coupling §1 predicts for the wage. Ending net worth rose \$40.85: the AU saving lands in 2026-2030
 and compounds for twenty years. Well inside the ±1% band, so
 `cross-border-relief-scenario.test.mjs` was **not** re-pinned; there was no deliberate re-pin to
 record, which is itself the finding.
@@ -684,8 +684,8 @@ for step 3, `WCR-4..7` for step 4, `EVT-RENT-10..12` for step 5.
   foreign-resident marginal brackets and the withholding rates, transcribed **from the authority
   named in §7**, never from our own output — the standing rule from the AU Stage 3 and HI Act 46
   work. The foreign-resident schedule to reproduce (2024‑25 and 2025‑26, unchanged between them
-  [R3]): 30% on $0–$135,000; **$40,500 plus 37c** for each $1 over $135,000 to $190,000;
-  **$60,850 plus 45c** for each $1 over $190,000. No tax-free threshold, no Medicare levy.
+  [R3]): 30% on \$0–\$135,000; **\$40,500 plus 37c** for each \$1 over \$135,000 to \$190,000;
+  **\$60,850 plus 45c** for each \$1 over \$190,000. No tax-free threshold, no Medicare levy.
 - **Export footing.** `npm run export:tax -- <cfg> --cc AU --check` must stay green; the AU return
   for a fully non-resident, US-performed-work year should reduce to all-zero lines.
 - **Golden.** All three gaps move lifetime tax. Expect AU liability to *fall* in the affected
@@ -705,7 +705,7 @@ Every item above is implemented. Where the plan and the code diverge:
 
 - **Mutation-verified the published-base guard, and it exposed a hole in the check itself — a
   bigger one than first diagnosed.** Re-pooling interest at 0.15 fails as expected. But moving the
-  foreign-resident 45% threshold from $190,000 to $195,000 initially **passed**.
+  foreign-resident 45% threshold from \$190,000 to \$195,000 initially **passed**.
 
   The first diagnosis was "a base stated *at* a threshold cannot pin where the band above it
   begins". True, but incomplete. A base at threshold Z is the tax at Z, so it depends only on the
@@ -725,7 +725,7 @@ Every item above is implemented. Where the plan and the code diverge:
   three moving a top threshold, two changing a top rate, one omitting `topRate` — **all six passed
   the pre-fix check and all six fail now.**
 - **A no-tax-free-threshold assertion was added separately.** The cumulative bases all run from
-  $0, so a tax-free band copied across from the resident table would still reproduce every one of
+  \$0, so a tax-free band copied across from the resident table would still reproduce every one of
   them.
 - **The "pro-rated discount for a straddling holding" case is not tested, because it is not
   built** — see the status note at the top. Non-resident gains take no discount at all today.
@@ -753,7 +753,7 @@ web tooling but extract cleanly with `pdftotext -layout`, which is how they were
 | R7 | *FCT v French* (1957) 98 CLR 398 — [ATO Legal database](https://www.ato.gov.au/law/view/print?DocID=JUD/98CLR398/00004&PiT=99991231235958) | Source of wages is the place of performance, even where salary is paid to a bank account in the other country |
 | R8 | ATO ID 2003/438 — [Legal database](https://www.ato.gov.au/law/view/document?docid=AID/AID2003438/00001) | Source is a question of fact; *French* is not an absolute rule (cf. *FCT v Mitchum*) |
 | R9 | **US Treasury Technical Explanation of the 1982 AU–US Convention** — [irs.gov/pub/irs-trty/austtech.pdf](https://www.irs.gov/pub/irs-trty/austtech.pdf) (29pp; read in full via `pdftotext -layout`) | **Primary source, read directly.** Art 6 situs/primary-not-exclusive/net basis; Art 10(2) 15% cap and the 30% no-treaty counterfactual; Art 11(2) 10% cap + "Australia's statutory rate … is generally 10 percent"; Art 11(7) interest source = payer's State; Art 12(2) 10% royalty cap; Art 15(1) residence-only-unless-exercised + the three Art 15(2) conditions; Art 27(1) deemed source; Art 27(2) anti-double-exemption and its §911 example |
-| R10 | ATO — [Foreign resident capital gains withholding overview](https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-gains-tax/foreign-resident-capital-gains-withholding/foreign-resident-capital-gains-withholding-overview) | FRCGW 15% from 1 Jan 2025, $750k threshold removed; credited on assessment, refundable |
+| R10 | ATO — [Foreign resident capital gains withholding overview](https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-gains-tax/foreign-resident-capital-gains-withholding/foreign-resident-capital-gains-withholding-overview) | FRCGW 15% from 1 Jan 2025, \$750k threshold removed; credited on assessment, refundable |
 | R11 | Asena Advisors — [US–AU DTA Article 6: Income from Real Property](https://asenaadvisors.com/blog/dta-article-6-income-from-real-property/) | Superseded by R9. Retained only as a plain-English cross-check |
 | R12 | ATO — [Rental income you must declare](https://www.ato.gov.au/individuals-and-families/investments-and-assets/property-and-land/residential-rental-properties/rental-income-you-must-declare) | Foreign-resident landlords lodge annually and declare **net** rental income |
 | R13 | **US Treasury Technical Explanation of the 2001 Protocol** (signed 27 Sep 2001, released 5 Mar 2003) — [home.treasury.gov](https://home.treasury.gov/system/files/131/Treaty-Australia-Protocol-TE-3-5-2003.pdf) (41pp; read in full via `pdftotext -layout`) | **Primary source, read directly.** Which Convention articles the Protocol amends (see caveat 1); Art 10 replaced — 15% general, 5% and 0% both requiring a *corporate* beneficial owner, franked dividends statutorily exempt; Art 11 replaced but the 10% cap retained, 0% only for governments/central banks/unrelated financial institutions; Art 12(2) royalty cap cut 10% → 5% and the royalty definition narrowed; Art 27 re-sourcing restated |

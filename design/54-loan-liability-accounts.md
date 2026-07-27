@@ -340,8 +340,8 @@ Two defects surfaced running a real AU (Dickson) scenario with an offset:
    account the mortgage direct-debits — the offset should be the default source.
 2. **The payment ignored currency.** `monthlyPayment` is denominated in the **loan's**
    currency (an AU property implies AUD), but `LoanPaymentApplyReducer` debited the cash
-   pool with the raw number via `transaction()` — no FX. An A$2,000 payment debited a USD
-   account **US$2,000** (should be ≈ US$1,290). The interest accrual and the
+   pool with the raw number via `transaction()` — no FX. An A\$2,000 payment debited a USD
+   account **US\$2,000** (should be ≈ US\$1,290). The interest accrual and the
    deficit/replenish math were currency-blind the same way.
 
 **Fix 1 — auto-prefer the linked offset (`resolveLoanCashKey`).** Precedence becomes:
@@ -383,7 +383,7 @@ updates when a `RECORD_BALANCE` snapshot is emitted. `LoanPaymentHandler` snapsh
 **loan** but not the debited cash pool — fine when paying from savings (its own monthly
 interest/wages/expenses events snapshot it), but a linked **offset** has *no* other event
 touching it once it's the payment source, so its metric froze while `state.<offset>.balance`
-correctly dropped. Fix: the handler now also emits `RecordBalanceAction(`${cashKey}.balance`)`
+correctly dropped. Fix: the handler now also emits `RecordBalanceAction(`\${cashKey}.balance`)`
 after the payment (read post-debit/post-replenish at `PRIORITY.METRICS`). Regression: the
 `evt-offset` auto-debit test asserts the RECORD_BALANCE for the offset key is emitted. (Same
 class of bug as the P2 house-sale-payoff loan-metric freeze.)

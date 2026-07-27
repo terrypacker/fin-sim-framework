@@ -138,7 +138,7 @@ This **simplifies** the original sketch: there is no `running(state, step)` call
 
 ### 5.2 New objectives (the user's set)
 
-- **`DIE_WITH_TARGET`** *(headline — "die with zero, or with $XX")*. A `terminalWealthTarget` param (default `0`). Maximize lifetime real consumption subject to terminal net worth landing on the target: `score = lifetimeConsumption − λ · |NW_T − target|` (soft two-sided penalty; `λ` large enough to make the target binding). This is what makes the band solution an **interior** point rather than saturating — spend-early ⇄ leave-less is the whole trade-off.
+- **`DIE_WITH_TARGET`** *(headline — "die with zero, or with \$XX")*. A `terminalWealthTarget` param (default `0`). Maximize lifetime real consumption subject to terminal net worth landing on the target: `score = lifetimeConsumption − λ · |NW_T − target|` (soft two-sided penalty; `λ` large enough to make the target binding). This is what makes the band solution an **interior** point rather than saturating — spend-early ⇄ leave-less is the whole trade-off.
 - **`MAX_NET_WORTH`** / **`MAX_NET_LIQUIDITY`** — already present; reclassified as pure terminal objectives.
 - **`MIN_LIFETIME_TAXES`** *(running)* — minimize total tax paid over life. Requires the accumulator in §5.3.
 

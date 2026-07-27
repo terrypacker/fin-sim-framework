@@ -52,7 +52,7 @@ Three sites, and the round trip between them is the bug:
 So the member's own AU savings account funded the superannuation fund's tax liability, and
 the fund's balance kept compounding as though the tax had never been levied.
 
-Measured on the default `IntlRetirementScenario` (2026–2050): **A$87,435** of lifetime super
+Measured on the default `IntlRetirementScenario` (2026–2050): **A\$87,435** of lifetime super
 fund tax was routed this way.
 
 ## 3. Gap 1 — incidence: the fund pays it, out of fund assets  ✅ FIXED
@@ -67,7 +67,7 @@ they wanted to. In practice a fund's unit price is quoted **net of** this tax, w
 exactly the arithmetic §5.1 now implements.
 
 The one part of the super tax system that *is* personally assessed on the member is
-**Div 293** (an additional 15% on concessional contributions for members over the $250,000
+**Div 293** (an additional 15% on concessional contributions for members over the \$250,000
 income threshold). It is not modelled, and `super-tax-rate.js` carries a comment saying that
 if it is ever added it must NOT go through this path — it is the member's liability.
 
@@ -100,7 +100,7 @@ precisely so a residual `− superTax` would fail.
 ### 3.4 Lifetime tax accounting
 
 `cumulativeTaxesPaid` reads `action.tax`. Taking super tax out of `tax` would have silently
-deleted A$81k of genuinely-paid tax from the lifetime metric — and, worse, handed the
+deleted A\$81k of genuinely-paid tax from the lifetime metric — and, worse, handed the
 `MIN_LIFETIME_TAXES` objective a way to "avoid" tax by shovelling money into super while
 still paying it. The AU settle now also carries `fundTax`, and `AccumulateTaxesPaidReducer`
 adds it. Lifetime tax measures tax *paid*, not tax *invoiced to the member*.
@@ -117,11 +117,11 @@ Default scenario, 2026–2050:
 | lifetime super fund tax (AUD) | 87,435 | 81,021 | −6,414 |
 
 Net worth **fell**, and that is the correct direction: the old model let the super account
-compound on ~A$87k that had already been paid to the ATO. The household is not newly poorer —
+compound on ~A\$87k that had already been paid to the ATO. The household is not newly poorer —
 the previous figure was overstated. The super balance falls furthest (−11.2%) because it is
 the account that had been enjoying the free compounding.
 
-Lifetime super fund tax **fell** (A$87,435 → A$81,021) for the same reason in reverse: a
+Lifetime super fund tax **fell** (A\$87,435 → A\$81,021) for the same reason in reverse: a
 smaller fund earns less, so there is less to tax. Lifetime tax nonetheless **rose**, via
 §3.4's hand-off plus the second-order drawdown differences a smaller super book causes.
 
@@ -131,7 +131,7 @@ smaller fund earns less, so there is less to tax. Lifetime tax nonetheless **ros
 
 `_extraStatePatches` has excluded it since design 52 §4.4, with the comment *"Super tax — not
 a creditable foreign income tax."* Verified empirically before touching anything: a state with
-A$9,000 of super tax and a A$48,570 AU liability staged A$39,570 into the §904 baskets.
+A\$9,000 of super tax and a A\$48,570 AU liability staged A\$39,570 into the §904 baskets.
 
 The reasoning is worth recording, because the comment asserted it without support and the
 question will come back:
@@ -169,10 +169,10 @@ rule and the difference can be large:
   That requires the member to have met a condition of release *and to have actually commenced
   an account-based pension*. Turning 60 permits this; it does not do it. A 62-year-old who
   leaves everything in accumulation still pays 15%.
-- The exemption is capped by the **transfer balance cap** (A$2.0M from 1 July 2025, A$2.1M
+- The exemption is capped by the **transfer balance cap** (A\$2.0M from 1 July 2025, A\$2.1M
   from 1 July 2026, indexed). Anything above the cap must stay in accumulation and **keeps
   being taxed at 15%**. The model exempts the whole balance. On the default scenario the super
-  book ends around A$1.13M, comfortably under, so the simplification is currently harmless —
+  book ends around A\$1.13M, comfortably under, so the simplification is currently harmless —
   but it would silently over-exempt a larger book.
 - A **transition-to-retirement income stream (TRIS)** in the pre-retirement phase gets **no**
   ECPI: its supporting assets are taxed at 15% regardless of when it commenced.
@@ -206,8 +206,8 @@ before it.
 ## 6. Gap 4 — the Medicare levy  ⚠️ OPEN: the research does not support the change
 
 The Medicare levy is currently **inside** the creditable base — it is part of `netLiability`,
-which is what `_extraStatePatches` apportions into the §904 baskets. Verified: on a A$150,000
-resident return, A$3,000 of Medicare levy sits inside the A$39,570 staged as creditable
+which is what `_extraStatePatches` apportions into the §904 baskets. Verified: on a A\$150,000
+resident return, A\$3,000 of Medicare levy sits inside the A\$39,570 staged as creditable
 foreign tax.
 
 Removing it was requested. **It should not be removed without a deliberate decision, because
@@ -248,7 +248,7 @@ visible as one rather than buried in `computeTax`.
 Leave the levy creditable. If it is to be excluded, do it as an **explicit, named, defaulted-off
 switch** (something like `medicareLevyCreditable`, default `true`) rather than silently, so the
 return can still show the levy in gross tax while the FTC seam sees a reduced base — and so the
-$-effect of the assumption is measurable rather than baked in. The seam is the same
+\$-effect of the assumption is measurable rather than baked in. The seam is the same
 `_extraStatePatches` line design 77 §3.3 just simplified; subtracting a per-person Medicare
 levy there is a small change once the decision is made.
 
@@ -270,9 +270,9 @@ rewritten; three are worth calling out.
   delta of **exactly zero** and looked like a broken MPC shim. It was not. Instrumenting
   `AccountService.replenishSavings` showed both rollouts reaching it with the correct committed
   policy (`SEQUENTIAL` / `PROPORTIONAL`) across 81 real deficit draws — the shim was intact; the
-  *scenario* had stopped exercising the lever, because leaving ~A$87k more in AU cash reshaped
+  *scenario* had stopped exercising the lever, because leaving ~A\$87k more in AU cash reshaped
   the draw so that every tier touched now has a single member, and the two policies are then the
-  same walk by definition. The test asserted a **net-worth proxy** ($1,156 on $8.87M — 0.013%,
+  same walk by definition. The test asserted a **net-worth proxy** (\$1,156 on \$8.87M — 0.013%,
   barely over its own `> 1` threshold) for something it could observe directly. It now asserts
   the policy the drawdown engine actually sees. This is the design-65 lesson again: a
   scenario-shaped assertion reports on the scenario, not on the mechanism.
@@ -281,7 +281,7 @@ rewritten; three are worth calling out.
 
 1. **The Medicare levy decision (§6).** Owner's call. Recommendation: leave creditable.
 2. **Transfer balance cap (§4.2).** The pension-phase exemption is applied to the whole balance.
-   Harmless at the default scenario's ~A$1.13M ending super; wrong above ~A$2M. Worth a guard
+   Harmless at the default scenario's ~A\$1.13M ending super; wrong above ~A\$2M. Worth a guard
    or a warning before anyone models a larger super book.
 3. **Div 293.** Not modelled. It is the member's own liability and would go through the normal
    `netLiability` path, *not* the fund-withholding path built here.

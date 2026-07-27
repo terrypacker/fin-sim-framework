@@ -14,7 +14,7 @@ folds `deviation + driftComp` together. Keeping comp separate leaves `equityRetu
 mean-0 (telemetry + Phase-1 tests unchanged). Validated (§6 test 6): at anchor 10% / σ 18%,
 realized geometric mean is **10.07%** under GEOMETRIC vs **8.43%** under NONE (≈ anchor − σ²/2);
 `driftComp` is exactly σ²/2 = 0.0162. End-to-end MC (24-yr): GEOMETRIC median net worth
-$23.8M vs NONE $20.3M. Exact for WHITE_NOISE; slightly over-compensates for MEAN_REVERTING
+\$23.8M vs NONE \$20.3M. Exact for WHITE_NOISE; slightly over-compensates for MEAN_REVERTING
 (lower stationary variance) — documented, accepted. Tests: 6 added to
 `equity-return-paths.test.mjs`.
 
@@ -71,7 +71,7 @@ the difference is precisely the risk a retirement plan exists to manage.
 ### 1.1 Every failure rate the model reports today is a floor
 
 The tranche B/C decision analysis (`scenarios/company-equity-decision.md`) ran 2,400 MC paths
-and reported a **2–4% failure rate** at $10,000/month. That number is not wrong so much as
+and reported a **2–4% failure rate** at \$10,000/month. That number is not wrong so much as
 **structurally optimistic**, and the reason is visible in one line of
 `IntlRetirementMcRunner._perturb()`:
 

@@ -111,7 +111,7 @@ Sequence-of-returns protection. While a `PANIC_SELL_TRIGGER`/`ECONOMIC_STRESS` r
 
 The inverse of `TaxLossHarvest`: in a **low-income year** (projected taxable income below the top of the 0% long-term-capital-gains bracket), realize *gains* up to that ceiling and immediately rebuy — resetting cost basis upward at **zero** tax cost, which shrinks future taxable gains. Mostly tax-bracket-driven rather than regime-driven, but it shares TLH's substrate.
 
-**Mechanism.** Reuses `STOCK_HARVEST_APPLY` (§3.3) with a positive realized gain. Two asymmetries vs. TLH: (a) there is **no wash-sale rule on gains**, so the rebuy can be the *same* security (no `taxLossPartner` needed); (b) it is gated on `projectedTaxableIncome < taxGainHarvestBracketCeiling` (from the tax module) rather than on a price-below-basis test. Realized gain flows through `STOCK_WITHDRAWAL_TAX` as normal — which nets to $0 tax inside the 0% band.
+**Mechanism.** Reuses `STOCK_HARVEST_APPLY` (§3.3) with a positive realized gain. Two asymmetries vs. TLH: (a) there is **no wash-sale rule on gains**, so the rebuy can be the *same* security (no `taxLossPartner` needed); (b) it is gated on `projectedTaxableIncome < taxGainHarvestBracketCeiling` (from the tax module) rather than on a price-below-basis test. Realized gain flows through `STOCK_WITHDRAWAL_TAX` as normal — which nets to \$0 tax inside the 0% band.
 
 ---
 

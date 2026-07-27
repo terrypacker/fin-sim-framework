@@ -101,8 +101,8 @@ Uses real finance handlers and reducers but builds them directly (not via
    - Assert `sim.state.isAuResident === false`.
 
 2. **`MonthlyExpensesHandler` debits `usSavingsAccount` when not AU resident**
-   - Build scenario: US savings account at $30k, `MonthlyExpensesHandler`
-     ($6k/month), `ExpenseDebitReducer`.
+   - Build scenario: US savings account at \$30k, `MonthlyExpensesHandler`
+     (\$6k/month), `ExpenseDebitReducer`.
    - After 3 months: `usSavingsAccount.balance === 12000` (30k − 3×6k).
    - After round-trip: same result.
 
@@ -111,7 +111,7 @@ Uses real finance handlers and reducers but builds them directly (not via
    - Deserialize and assert `account.stateKey === 'usSavingsAccount'`.
 
 4. **`UsSavingsInterestMonthlyHandler` round-trip**
-   - US savings account at $12k, interest rate 3%.
+   - US savings account at \$12k, interest rate 3%.
    - After 3 months: balance matches expected.
    - After round-trip: identical result.
 

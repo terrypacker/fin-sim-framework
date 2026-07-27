@@ -8,7 +8,8 @@
 | **G2** | `earningsBasis` is mark-to-market appreciation, not "amounts derived by the trust estate" | **PROPOSED** |
 | **G3** | Roth-attributable AU tax is not observable — it lands in the undifferentiated ordinary-income bucket | **IMPLEMENTED** (2026-07-31) |
 | **G7** | an age-eligible Roth drawn by the ordinary drawdown path emitted no withdrawal-tax action, so s99B was never assessed | **IMPLEMENTED** (2026-07-31) |
-| **G9** | converted principal drawn on the generic path is invisible to the basis ledger, so its s99B-assessable slice escapes too | **OPEN — G7's remaining half** |
+| **G9** | converted principal drawn on the generic path is invisible to the basis ledger, so its s99B-assessable slice escapes too | **IMPLEMENTED** (2026-08-04) — and the bias ran the *other* way |
+| **G11** | a conversion lot's s99B corpus stamp treats pre-tax IRA principal as corpus, contradicting the US charge on the same dollars | **OPEN — larger than G9, and points the other way** |
 | **G10** | the spouse's AU return does not foot in 9 years — credits appear on the return but are not reflected in the net | **OPEN — pre-existing, not design 84's** |
 | **G8** | a market shock revalues the balance without adjusting the basis ledger, stranding phantom `earningsBasis` | **OPEN** |
 | **G4** | no first-class lever for the Roth leg of the decant schedule | **IMPLEMENTED** (2026-07-31) |
@@ -35,10 +36,20 @@ weakest world), and it trades against everything else a deferred move affects.
 then `scripts/lab/paired-delta.mjs --pair decant`. Never read the level table for the
 move-year grid — see §7b.
 
-**Three open gaps still bias the numbers**, and not all the same way: G2 and G8 overstate
-the cost of holding (flattering the decant); G9 understates it (flattering the hold). None
-is large enough to explain the sign reversal, which is a return-path effect, but the
-margins should not be quoted to two significant figures until G9 at least is closed.
+**The open gaps still bias the numbers**, and not all the same way: G2 and G8 overstate
+the cost of holding (flattering the decant); **G11** understates it (flattering the hold),
+and it is the big one now — bigger than G9 was. None is large enough to explain the sign
+reversal, which is a return-path effect, but the margins should not be quoted to two
+significant figures until G11 is settled.
+
+**G9 is closed, and closing it moved the answer the opposite way from the prediction.**
+This document said G9 understated the cost of holding. On the plan it does the reverse:
+the leak was letting converted principal escape the ledger *and* the ordering was drawing
+assessable earnings when §408A(d)(4)(B) says converted principal comes out first. Fixing
+both took the hold arm's lifetime s99B charge **down** 6%, from A\$341,394 to A\$320,908.
+The prediction was wrong because it assumed the escaping money was assessable; most
+converted principal is corpus. What it exposed instead is G11, which is where the real
+understatement lives.
 
 ---
 
@@ -374,8 +385,8 @@ survived so long.
 
 | | before | after |
 |---|---|---|
-| Roth earnings assessed in AU | A$0 | **A$1,575,239** |
-| AU tax attributable to the Roth | A$0 | **A$341,394** |
+| Roth earnings assessed in AU | A\$0 | **A\$1,575,239** |
+| AU tax attributable to the Roth | A\$0 | **A\$341,394** |
 | effective rate on the slice | — | 21.7% |
 
 **The reporter's leak check stays**, and it is what found G9 below: it cross-checks each
@@ -402,13 +413,120 @@ to assess. The actions and the data exist; only this path fails to emit them.
 Fixing it properly means consuming the `rolloverConversions` lots in order and emitting
 per-lot actions, matching EVT-43's semantics (including its §408A(d)(3)(F) five-year
 clock) — more than the one-case change G7 needed, which is why it is filed separately.
-Direction of the bias is the familiar one: it **understates the cost of holding**.
 
 Note also that `reduceLedgerForWithdrawal`'s doc comment claims it preserves
 `contributionBasis + earningsBasis == balance`. That invariant does not hold for an
 account with rollovers — design 53 §8 defines `earningsBasis` as
 `balance − contributionBasis − rollovers` — so the comment is describing a
 rollover-free account without saying so.
+
+**What landed (2026-08-04).**
+
+- **`computeConversionRecapture` moved to its own framework-free module**
+  (`roth-conversion-lots.js`) and `AccountService` now shares it with the EVT-43
+  reducer. The two paths cannot drift on the FIFO order, the five-year window, or
+  the pro-rata `taxableAmount` because there is only one of each.
+- **`reduceLedgerForWithdrawal` knows all four layers** and draws them in the
+  statutory §408A(d)(4)(B) order: regular contributions → converted principal (FIFO
+  by lot) → earnings. The ordering turned out to matter more than the leak (below).
+  The two earnings pools are drawn `earningsBasis` first; the choice is arbitrary
+  and documented as such, because both are s99B income and both carry §72(t), so no
+  tax consequence turns on it.
+- **Both drawdown paths emit the EVT-43/44 twins**, on EVT-43's own emit test —
+  only when there is a recapture penalty or an AU-assessable share, so a US-resident
+  distribution of seasoned corpus still puts nothing in the journal.
+- **The mirror-image defect in the involuntary under-age branch, found while fixing
+  this.** `replenishSavings` phase 2 declared the whole post-contribution residue to
+  be "earnings", which on a wrapper holding conversions charged §72(t) and full s99B
+  against money that is mostly corpus, and decremented only `earningsBasis` so the
+  rollover buckets were stranded. Same fix, opposite sign.
+- **The gross-up became a fixed point.** Once part of an early draw is unpenalised,
+  `netNeeded / (1 − penaltyRate)` over-draws. The penalty is monotone in the gross
+  with slope ≤ the rate, so iterating converges in a few passes; where the whole
+  draw *is* penalised the fixed point is exactly the old division, which is why no
+  golden moved.
+- **The reporter's leak check counted only earnings actions**, so once the drawdown
+  could finally reach converted principal it flagged every corpus distribution as an
+  escape. It now counts the rollover corpus falling, and the table carries a
+  `convtd $` column — because "how much of this wrapper is conversions" is the
+  question that decides whether a year's withdrawal is assessable at all.
+
+Full suite green (4304 unit + 975 viz); no golden moved, because the reference
+scenarios never draw a rollover-bearing Roth.
+
+**Measured on the plan's hold arm, and the direction is not the one predicted above:**
+
+| | before | after |
+|---|---|---|
+| leak check | fires on 2040: −\$175,158 balance, \$92,107 booked, **\$83,050 unexplained** | **silent** |
+| Roth earnings assessed in AU | A\$1,575,239 | A\$1,510,561 |
+| AU tax attributable to the Roth | A\$341,394 | **A\$320,908** |
+| effective rate on the slice | 21.7% | 21.2% |
+
+Holding got **cheaper**, by A\$20,486 over the lifetime. The paragraph above predicted
+the opposite, and the reason it was wrong is worth keeping: it assumed the escaping
+money was assessable. It is not. Most converted principal is corpus, so the leak was
+letting *corpus* escape a ledger that was then drawing *earnings* in its place — two
+errors that partly cancelled in cash and did not cancel at all in tax. The ordering fix
+is what moved the number; the leak fix is what made the ledger tie.
+
+Which raises the question the fix could not answer on its own: is this plan's converted
+principal really corpus? See G11.
+
+### G11 — a conversion lot's corpus stamp contradicts the US charge on the same dollars
+
+Found by G9, and **larger than G9**. Not fixed — it is a modelling decision, not a bug
+with one obvious repair, and it moves the study's headline.
+
+`RothConversionApplyReducer` stamps each lot's s99B-assessable share as
+
+```js
+const fromContrib   = Math.min(amount, ira?.contributionBasis ?? 0);
+const taxableAmount = Math.min(amount - fromContrib, ira?.earningsBasis ?? 0);
+```
+
+i.e. it treats the source IRA's **contribution basis as after-tax money** and therefore
+as s99B corpus. Meanwhile the very same reducer chains `ROTH_CONVERSION_TAX` for the
+**whole** `amount`, and the US module books all of it as ordinary income.
+
+Both cannot be right. In this engine a Traditional IRA is entirely pre-tax:
+`IRA_CONTRIBUTION_TAX` books every contribution to `usNegativeIncomeYTD`, a deduction,
+and a 401(k) rolled in carries its pre-tax `contributionBasis` across unchanged. There
+is no non-deductible §408(o) / Form 8606 basis in the model. So `contributionBasis` on a
+Traditional IRA is deferred wage income that has never been taxed anywhere — and money
+that "would have been included in the assessable income of a resident who derived it" is
+exactly what s99B(2)(a) refuses the corpus exemption to. The US stamp is right and the
+s99B stamp is wrong.
+
+**It is not hypothetical on this plan.** Traced through the engine:
+
+```
+2027-01-01  K401_TO_IRA_CONVERSION  the whole 401(k) rolls into the IRA,
+                                    carrying $165,704 of PRE-TAX contribution basis
+2028-12-01  ROTH_CONVERSION_APPLY   $164,440 converted — drawn from that basis,
+                                    so the lot is stamped taxableAmount: 0
+2028-12-01  ROTH_CONVERSION_TAX     $164,440 — the whole amount, US ordinary income
+```
+
+So the plan carries \$164,440 of converted principal that Australia currently cannot
+touch, on the strength of a stamp that the same event contradicts. And after G9 that
+principal is the **first** thing the drawdown consumes: the `convtd $` column runs flat
+at \$168k from 2028 to 2036 and empties across 2037–2039, ahead of every assessable
+dollar. The hold arm's cheapest years are cheap because of this.
+
+Order of magnitude if the stamp were corrected: roughly A\$250k of additional assessable
+income landing in years whose marginal rates run 15–40%, so **A\$50–90k of extra lifetime
+tax on the hold arm** — three to four times the size of G9's effect, in the opposite
+direction. That is enough to matter to the decision, which is why it should be settled
+before P6 rather than after.
+
+The fix itself is small — stamp `taxableAmount` at the full conversion amount, matching
+what `ROTH_CONVERSION_TAX` already charges — but it is a *tax-treatment* change on a
+shared path and needs its own decision, its own tests, and a golden re-read. The one
+argument for the present behaviour is a user who seeds `contributionBasis` on a
+Traditional IRA meaning "my after-tax Form 8606 basis"; if that reading is to be
+supported it needs its own field, not a silent reinterpretation of a field the rest of
+the engine treats as pre-tax.
 
 ### G8 — a shock revalues the balance but not the basis ledger
 
@@ -693,9 +811,9 @@ early, and the largest arm — empty it — beats holding by **+4.1%**. Decantin
 every amount tested; there is no interior optimum to find.
 
 **Where the gain comes from, and a cross-check that it is real.** Holding costs
-A$341,394 of s99B tax, all of it falling in a five-year burst in the 2040s when the
+A\$341,394 of s99B tax, all of it falling in a five-year burst in the 2040s when the
 drawdown drains the wrapper. Emptying pre-move costs a single §72(t) charge of about
-US$26k and **A$0** of Australian tax, ever. The headline gain is roughly three times the
+US\$26k and **A\$0** of Australian tax, ever. The headline gain is roughly three times the
 tax avoided, which is the right order: the avoided tax is not merely saved, it stays
 invested for the two-plus decades between the 2040s burst and the horizon. Discounting
 the avoided charge forward at the plan's own growth rate lands in the same neighbourhood
@@ -727,11 +845,13 @@ is monotone and dominates the late-window column nearly everywhere. It does mean
 *timing* sub-dimension is not yet trustworthy, and P5 should resolve it before any claim
 about when to decant is made.
 
-**Known biases, all in the same direction.** G2, G8 and G9 each overstate the cost of
-holding, so all three flatter the winning arm. The margin is large enough that no
-plausible combination of them reverses the direction — but it is large enough to be worth
-re-measuring once G9 lands, and the margin should not be quoted to two significant figures
-until then.
+**Known biases** — as understood at the time, *and since revised*. This paragraph
+originally read "G2, G8 and G9 each overstate the cost of holding, so all three flatter
+the winning arm". G9 has since landed and did the reverse: it took the hold arm's charge
+down 6%, so P4's +4.1% is if anything slightly understated on that account. The
+correction is small. **G11, which G9 uncovered, is not** — it is worth several times G9
+in the other direction, and until it is settled the +4.1% should not be quoted to two
+significant figures.
 
 **A defect this run found in its own instrument.** The first pass showed two "hold" cells
 differing when they could not — same arm, different (inert) window. The `rothDecant` lever
@@ -756,7 +876,7 @@ equally cancels.
 ### The inflation confound is cleared
 
 Neutralising the AU/US inflation differential moves the *level* substantially — the hold
-arm gains roughly $3m — but leaves the *delta* almost untouched (e.g. +5.21% → +5.56% at
+arm gains roughly \$3m — but leaves the *delta* almost untouched (e.g. +5.21% → +5.56% at
 the authored move year, and similarly at every other). **The decant result is not an FX
 artefact wearing a tax costume.** That was the most likely way for this study to be
 fooled, and it is ruled out.
@@ -779,8 +899,8 @@ authored world, and must not be quoted as a general result.
 **Why — and it is not the bug I first suspected.** The obvious hypothesis was G8: a shock
 revalues the balance without adjusting the basis ledger, so a crash inflates the Roth's
 apparent earnings and over-assesses s99B, manufacturing a decant advantage. Measured, the
-opposite holds. **Without** the shock the s99B charge is *larger* — A$690,440 against
-A$341,394 — because an uninterrupted market grows the wrapper bigger before it is drawn.
+opposite holds. **Without** the shock the s99B charge is *larger* — A\$690,440 against
+A\$341,394 — because an uninterrupted market grows the wrapper bigger before it is drawn.
 The decant still loses there.
 
 So the driver is not the size of the s99B charge. It is what the decant **gives up**: a
@@ -877,8 +997,13 @@ not assumed.
   below on its first run.
 - **P3a — G7. ✅ DONE (2026-07-31).** The one-case fix in `_drawPenaltyFree`, plus the
   EW-3 test that encoded the omission and a new EW-3b guard for the AU case.
-- **P3b — G9.** The rollover leg. Not strictly blocking — it shades rather than inverts —
-  but the leak check will keep flagging it until it lands.
+- **P3b — G9. ✅ DONE (2026-08-04).** The rollover leg: shared lot consumption, the
+  §408A(d)(4)(B) ordering, the EVT-43/44 twins on both drawdown paths, the
+  mirror-image defect in the under-age branch, and a fixed-point gross-up. Leak check
+  silent; hold arm A\$341,394 → A\$320,908, i.e. the opposite direction to the one
+  predicted. Surfaced G11.
+- **P3c — G11.** The conversion lot's corpus stamp. Needs a decision before P6, because
+  it is worth several times G9 and pushes the other way.
 - **P4 — study step 1. ✅ DONE (2026-07-31).** Fixed move year, arms A/B/D swept as one
   axis, ledger for the extremes. Result in §7a: decant wins, corner solution, +4.1%.
   Added `afterTaxNW`/`taxPaid` to the shared `summarize()` row and a general money-metric
@@ -887,7 +1012,10 @@ not assumed.
 - **P5 — study step 2. ✅ DONE (2026-07-31).** Move-date axis, paired deltas, four worlds.
   Result in §7b: inflation confound cleared, **shock confound inverts the sign**, P4
   downgraded to world-conditional, arm C the only path-robust strategy.
-- **P6 — study step 3.** Paired-worlds MC on the surviving contrast.
+- **P6 — study step 3.** Paired-worlds MC on the surviving contrast. **Gated on a G11
+  decision**: P6 is expensive and it would price a hold arm whose cheapest years are
+  cheap for a reason the engine contradicts elsewhere. Run it after G11 is settled
+  (either way — "we keep the current stamp, here is why" is a settlement).
 - **P7 — G2** (fidelity follow-up, out of the study's critical path): derived income tracked
   separately from appreciation inside sheltered wrappers; makes
   `rebalanceDriftBandSheltered` an honest lever for an AU resident.

@@ -7,7 +7,7 @@
 
 ## 1. Question
 
-Holding **everything else constant**, what is the effect on terminal (2070) net worth of a US→AU move in 2031? The two scenarios are byte-identical except `moveYear` (2031 vs null), so any difference is *caused by the move alone*. The headline observation that prompted this: the move ended ~$20M vs ~$6M for staying — a 3.3× gap that defied the intuition that emigrating to a higher-tax country should *reduce* wealth.
+Holding **everything else constant**, what is the effect on terminal (2070) net worth of a US→AU move in 2031? The two scenarios are byte-identical except `moveYear` (2031 vs null), so any difference is *caused by the move alone*. The headline observation that prompted this: the move ended ~\$20M vs ~\$6M for staying — a 3.3× gap that defied the intuition that emigrating to a higher-tax country should *reduce* wealth.
 
 ## 2. Method
 
@@ -19,31 +19,31 @@ Holding **everything else constant**, what is the effect on terminal (2070) net 
 
 | | move (2031) | no-move | Δ |
 |---|---|---|---|
-| **With Hawaii state tax** (`residencyState=HI`) | **$10.99M** | **$8.60M** | **+$2.39M (+28%)** |
-| **No state tax** (`residencyState=null`) | $13.14M | **$13.65M** | **−$0.51M (−4%)** |
+| **With Hawaii state tax** (`residencyState=HI`) | **\$10.99M** | **\$8.60M** | **+\$2.39M (+28%)** |
+| **No state tax** (`residencyState=null`) | \$13.14M | **\$13.65M** | **−\$0.51M (−4%)** |
 
-**The move's entire advantage is escaping Hawaii state tax.** Remove state tax and the move *reverses* — staying wins by ~4%, exactly as the "higher-tax country" intuition predicts. Note also that Hawaii state tax costs the *stay* household ~$5M of terminal wealth ($13.65M → $8.60M over 44 years).
+**The move's entire advantage is escaping Hawaii state tax.** Remove state tax and the move *reverses* — staying wins by ~4%, exactly as the "higher-tax country" intuition predicts. Note also that Hawaii state tax costs the *stay* household ~\$5M of terminal wealth (\$13.65M → \$8.60M over 44 years).
 
 ## 4. Tax decomposition (with Hawaii)
 
 | Lifetime tax (USD) | move | no-move | move's Δ |
 |---|---|---|---|
-| US federal | $75K | $161K | **−$86K** — foreign tax credits zero out federal once AU tax is paid |
-| **US state (Hawaii)** | $42K | $184K | **−$141K** — HI residency (≈11% top rate) ends at the 2031 move |
-| Australia | $246K | $128K | +$118K — AU now taxes worldwide income (the "higher-tax country" effect) |
-| **Total** | **$363K** | **$472K** | **−$109K** |
+| US federal | \$75K | \$161K | **−\$86K** — foreign tax credits zero out federal once AU tax is paid |
+| **US state (Hawaii)** | \$42K | \$184K | **−\$141K** — HI residency (≈11% top rate) ends at the 2031 move |
+| Australia | \$246K | \$128K | +\$118K — AU now taxes worldwide income (the "higher-tax country" effect) |
+| **Total** | **\$363K** | **\$472K** | **−\$109K** |
 
-The move pays **$109K less lifetime tax**, dominated by escaping Hawaii. AU genuinely costs *more* (+$118K), but that is outweighed by ending Hawaii (−$141K) and federal via FTC (−$86K).
+The move pays **\$109K less lifetime tax**, dominated by escaping Hawaii. AU genuinely costs *more* (+\$118K), but that is outweighed by ending Hawaii (−\$141K) and federal via FTC (−\$86K).
 
 ## 5. Mechanism
 
 The taxes diverge in the **tax-deferred drawdown decade (2034–2042)**: under `TAX_EFFICIENT` the IRA/401k are drawn in that window, generating ordinary income.
 
-- **No-move**: that income is taxed by US federal + **Hawaii** (~$25–30K/yr).
+- **No-move**: that income is taxed by US federal + **Hawaii** (~\$25–30K/yr).
 - **Move**: as an AU resident the same withdrawals are taxed by AU only (lower net; no Hawaii).
-- After ~2043 both are living on the tax-free Roth + super and pay ~$0 federal/state.
+- After ~2043 both are living on the tax-free Roth + super and pay ~\$0 federal/state.
 
-The ~$109K saved is retained in the portfolio. Because the Roth is drawn **last** (`design/35`), the saving compounds tax-free for ~30 years → the ~$2.4M terminal gap. The effect is super-linear: a modest annual tax edge, leveraged on the longest-compounding account.
+The ~\$109K saved is retained in the portfolio. Because the Roth is drawn **last** (`design/35`), the saving compounds tax-free for ~30 years → the ~\$2.4M terminal gap. The effect is super-linear: a modest annual tax edge, leveraged on the longest-compounding account.
 
 ## 6. Artifacts found and fixed (why the raw number was 3.3×, not 1.28×)
 
@@ -51,9 +51,9 @@ The original 3.3× was mostly *modelling artifacts*, not real economics. Removin
 
 | Artifact | Effect | Fix |
 |---|---|---|
-| **Stranded non-residence cash** | Idle AU savings (~$220K) sat in ~2% cash for a decade while the stay scenario liquidated ~9% growth assets (savings excluded from drawdown + not the residence's spend target). The stay scenario even *failed* (out of funds 2063). | Cash band: savings are first-class in the drawdown order (spent first, floored at `minimumBalance`, liquid across the border). `intl-retirement-scenario.js` `CASH_BAND`, `account-service.js`. |
+| **Stranded non-residence cash** | Idle AU savings (~\$220K) sat in ~2% cash for a decade while the stay scenario liquidated ~9% growth assets (savings excluded from drawdown + not the residence's spend target). The stay scenario even *failed* (out of funds 2063). | Cash band: savings are first-class in the drawdown order (spent first, floored at `minimumBalance`, liquid across the border). `intl-retirement-scenario.js` `CASH_BAND`, `account-service.js`. |
 | **Residency-driven drawdown sequencing** | Under `LOCAL_FIRST`, residency dictated *which* country's accounts drained first, preserving the US Roth in the move case purely by sequencing. | `TAX_EFFICIENT` global drawdown (single tax-treatment order across both countries). `DRAWDOWN_STRATEGIES.TAX_EFFICIENT`, `crossBorderDrawdown=GLOBAL`. |
-| **Inflation skip at the move** | Expense inflation was gated on "the residence country's period advance." A mid-year US→AU move dropped one year's increment at the US(Jan)→AU(Jul) handoff, so move expenses stayed ~3% low *forever* (~$1.6M of the residual). | Inflate expenses on the always-annual US advance at the **residence rate**. `inflation-adjust-reducer.js`. |
+| **Inflation skip at the move** | Expense inflation was gated on "the residence country's period advance." A mid-year US→AU move dropped one year's increment at the US(Jan)→AU(Jul) handoff, so move expenses stayed ~3% low *forever* (~\$1.6M of the residual). | Inflate expenses on the always-annual US advance at the **residence rate**. `inflation-adjust-reducer.js`. |
 
 Progression (TAX_EFFICIENT, move / no-move): raw 3.3× → cash fix 1.47× → inflation fix **1.28×**.
 
@@ -72,9 +72,9 @@ Confirmed by reading the tax modules and by an action-level tally over a full ru
 | Stock sale gain | US capital gain | AU capital gain (CGT) | routed by `residency` |
 
 **Empirical confirmation (full run, both scenarios):**
-- `ROTH_CONVERSION_TAX:US` = $296K base (3 conversions) in **both** — the scenario already runs a Roth-conversion ladder; taxed as US ordinary income. ✓
-- `STOCK_WITHDRAWAL_TAX` = move **$1.95M base @ residency=AU**, no-move **$1.82M @ residency=US** — sale gains correctly follow residency. ✓
-- `SUPER_EARNINGS_TAX` = move $1.44M / no-move $1.28M base, ×15% — super earnings taxed in both. ✓ (but see §8)
+- `ROTH_CONVERSION_TAX:US` = \$296K base (3 conversions) in **both** — the scenario already runs a Roth-conversion ladder; taxed as US ordinary income. ✓
+- `STOCK_WITHDRAWAL_TAX` = move **\$1.95M base @ residency=AU**, no-move **\$1.82M @ residency=US** — sale gains correctly follow residency. ✓
+- `SUPER_EARNINGS_TAX` = move \$1.44M / no-move \$1.28M base, ×15% — super earnings taxed in both. ✓ (but see §8)
 - `ROTH_WITHDRAWAL_EARNINGS_TAX` ≈ 0 — the Roth is drawn **last** and barely touched, so the move's Roth benefit is tax-free **compounding** of the preserved balance, not avoided withdrawal tax.
 
 Net: Roth and conversion treatment is correct and sophisticated (it models the s99B Australian-resident Roth trap). The one suspect is super (§8).
@@ -86,7 +86,7 @@ Net: Roth and conversion treatment is correct and sophisticated (it models the s
 1. **Super pension-phase rate** — `SUPER_TAX_RATE = 0.15` is applied flat to super earnings with **no pension/preservation-phase check** (`au-tax-module-2026.js:14,128`). For retirees 60+ in pension phase, AU super earnings are **tax-free (0%)**. This over-taxes super in *both* scenarios (and slightly more in the move case, which preserves more super). Worth a fix; doesn't change the §3 direction. → **✅ FIXED — see §12.1**
 2. **Deemed-disposal / CGT cost-base reset at the move** — `ChangeResidencyApplyReducer` captures `balanceAtResidencyChange` but it is **never read** for CGT. So AU CGT on later sales is computed from the *original US* cost basis, taxing pre-move appreciation that AU would normally exclude (AU deems assets acquired at market value on becoming resident, ITAA97 s855-45). This **over-taxes the move** on **shares** (the AU stock-gain base is inflated by pre-move appreciation), so §3 is conservative — but it's a real gap. Applies to **non-TAP** assets only: shares get the reset; the AU house is Taxable Australian Property and correctly keeps its original basis; retirement accounts aren't CGT assets. (The 50% CGT discount itself *is* correctly applied.) → **fix: §12.2**
 3. **Hawaii residency termination** assumed clean on emigration (realistic for a genuine relocation).
-4. **Foreign tax credits** assumed to fully relieve US federal once AU tax is paid (model drives federal → ~$0; reasonable).
+4. **Foreign tax credits** assumed to fully relieve US federal once AU tax is paid (model drives federal → ~\$0; reasonable).
 5. **Constant FX** (USD_AUD = 1.55 throughout) — no currency risk modelled.
 6. No move costs, healthcare-cost differences, Medicare/Medibank, or non-financial factors.
 
@@ -116,17 +116,17 @@ Swept `rothConversion{StartYear, EndYear, MaxBracket}` on the move scenario, ter
 
 | window \ max bracket | 12% | 22% | 32% |
 |---|---|---|---|
-| disabled | $12.62M | — | — |
-| **pre-move** 2028–30 | $11.74M | $11.09M | $10.51M |
-| span 2028–35 *(current config @22%)* | $11.63M | **$10.99M** | $10.41M |
-| **post-move** 2032–40 | **$13.17M** | $12.77M | $11.28M |
-| post-retirement 2040–50 | $13.16M | — | — |
+| disabled | \$12.62M | — | — |
+| **pre-move** 2028–30 | \$11.74M | \$11.09M | \$10.51M |
+| span 2028–35 *(current config @22%)* | \$11.63M | **\$10.99M** | \$10.41M |
+| **post-move** 2032–40 | **\$13.17M** | \$12.77M | \$11.28M |
+| post-retirement 2040–50 | \$13.16M | — | — |
 
-- **Best: ~$13.17M** — convert **after the move**, capped at the **12% federal bracket**. That is **+$0.55M over not converting**, and **+$2.18M over the scenario's current (mis-configured) ladder** (2028–35 @22%, which converts *in Hawaii*).
+- **Best: ~\$13.17M** — convert **after the move**, capped at the **12% federal bracket**. That is **+\$0.55M over not converting**, and **+\$2.18M over the scenario's current (mis-configured) ladder** (2028–35 @22%, which converts *in Hawaii*).
 - **Converting before/across the move is worse than not converting at all** — those years are (a) in Hawaii (state tax on the conversion) and (b) high-wage working years (conversions stack at high marginal rates).
-- **Sharp cliff above 12%**: at 15%+ even post-move conversion destroys value ($11.3M @32%). Only fill the low bracket.
+- **Sharp cliff above 12%**: at 15%+ even post-move conversion destroys value (\$11.3M @32%). Only fill the low bracket.
 
-**Without state tax**, the same shape holds (post-move @12% ≈ $15.17M best vs $14.55M disabled, +$0.62M); the *pre-move penalty shrinks* because there is no Hawaii tax to pay on the conversion — confirming the penalty is the state tax.
+**Without state tax**, the same shape holds (post-move @12% ≈ \$15.17M best vs \$14.55M disabled, +\$0.62M); the *pre-move penalty shrinks* because there is no Hawaii tax to pay on the conversion — confirming the penalty is the state tax.
 
 **Takeaway — and it is the opposite of the natural intuition** ("convert before moving so Australia doesn't tax it"):
 - AU does not tax the conversion either way, so there is nothing to escape by converting early.
@@ -135,9 +135,9 @@ Swept `rothConversion{StartYear, EndYear, MaxBracket}` on the move scenario, ter
 
 ## 11. Bottom line
 
-All else equal, the 2031 move **increases terminal wealth by ~28% (~$2.4M) — but only because the household is in Hawaii**: the mechanism is escaping Hawaii's state income tax (and federal via FTC) during the tax-deferred drawdown years, compounded in the last-drawn Roth. Strip out state tax and the move is mildly *negative*, vindicating the original intuition that Australia is the higher-tax jurisdiction.
+All else equal, the 2031 move **increases terminal wealth by ~28% (~\$2.4M) — but only because the household is in Hawaii**: the mechanism is escaping Hawaii's state income tax (and federal via FTC) during the tax-deferred drawdown years, compounded in the last-drawn Roth. Strip out state tax and the move is mildly *negative*, vindicating the original intuition that Australia is the higher-tax jurisdiction.
 
-The controllable lever is **Roth-conversion sequencing**, and the model says to do it **after the move, in low-income years, capped at the 12% federal bracket** (≈ +$0.55M with Hawaii; the scenario's current pre/cross-move ladder is ≈ $2.2M *worse* than this optimum). Converting before the move — the intuitive play — is actively harmful because it pays Hawaii state tax on the conversion.
+The controllable lever is **Roth-conversion sequencing**, and the model says to do it **after the move, in low-income years, capped at the 12% federal bracket** (≈ +\$0.55M with Hawaii; the scenario's current pre/cross-move ladder is ≈ \$2.2M *worse* than this optimum). Converting before the move — the intuitive play — is actively harmful because it pays Hawaii state tax on the conversion.
 
 ---
 

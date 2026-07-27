@@ -133,7 +133,7 @@ reappearing at the very end of the run.
 The behaviour correlates exactly with **whether the destination account survives to end of
 run**. Post-move, the US brokerage acts as the cross-border funding account — the audit ledger
 shows several hundred `INTL_TRANSFER_APPLY` debits sweeping it to fund AU-side spending. In the
-low case it is drained to exactly **$0** before simEnd; in the high case it retains a
+low case it is drained to exactly **\$0** before simEnd; in the high case it retains a
 substantial balance. A marginal dollar earns a cash-like return precisely when parked in an
 account destined for exhaustion.
 
@@ -183,10 +183,10 @@ id form only reaches new saves from scenarios that predate it.
 
 ### Measured impact
 
-On the reference scenario (US→AU move 2031, sale 2032, ±$300k stake), the marginal tranche's
+On the reference scenario (US→AU move 2031, sale 2032, ±\$300k stake), the marginal tranche's
 implied compound rate rises **3.6% → 4.2%/yr** and ending net worth rises ~3.5% in both arms.
 The residual 4.2% is now ordinary economics, not an artifact: the destination brokerage grows
-at 5% with a 2% dividend that is not reinvested, and ~$107k of the $476k proceeds goes to tax
+at 5% with a 2% dividend that is not reinvested, and ~\$107k of the \$476k proceeds goes to tax
 in the sale year. The annual delta now sits in the destination account and compounds smoothly
 at ~5%/yr instead of parking flat in cash for the first three years.
 
@@ -441,7 +441,7 @@ exceeded gross tax). Baskets now draw against a shared remaining-headroom budget
 order, with the re-sourced basket last — the treaty grants an *additional* credit, so it is the
 one that should be squeezed, and its unused foreign tax stays banked in its own pool.
 
-**FITO de-minimis apportionment.** Under the A$1,000 shortcut `fitoLimit` is null, so
+**FITO de-minimis apportionment.** Under the A\$1,000 shortcut `fitoLimit` is null, so
 `_auTaxOnUsSourceIncome` returned 0 — declaring the *entire* AU liability to be tax on AU-source
 income. In a large-realisation year that leaked six figures of AU tax on US-source income into
 the general/passive baskets. Now apportioned by US-source income share when no detail computed a
