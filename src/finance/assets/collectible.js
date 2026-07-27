@@ -18,6 +18,7 @@
  */
 
 import { Asset } from './asset.js';
+import { applyInheritanceMeta } from './inheritance-meta.js';
 
 /**
  * Collectible — market-value asset representing a physical collectible
@@ -74,5 +75,8 @@ export class Collectible extends Asset {
     this.costBaseByCountry        = opts.costBaseByCountry        ?? null;
     this.acquisitionPriceLevel    = opts.acquisitionPriceLevel    ?? null;
     this.acquisitionDateByCountry = opts.acquisitionDateByCountry ?? null;
+    // Inheritance metadata (design 63 §14) — set only on promoted inherited
+    // collectibles; defaults keep every owned collectible byte-for-byte unchanged.
+    applyInheritanceMeta(this, opts);
   }
 }

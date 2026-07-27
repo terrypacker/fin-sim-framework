@@ -18,6 +18,7 @@
  */
 
 import { Asset } from './asset.js';
+import { applyInheritanceMeta } from './inheritance-meta.js';
 
 /**
  * RealProperty — market-value asset representing owned real estate.
@@ -102,5 +103,8 @@ export class RealProperty extends Asset {
     this.costBaseByCountry          = opts.costBaseByCountry          ?? null;
     this.acquisitionPriceLevel      = opts.acquisitionPriceLevel      ?? null;
     this.acquisitionDateByCountry   = opts.acquisitionDateByCountry   ?? null;
+    // Inheritance metadata (design 63 §14) — set only on promoted inherited
+    // property; defaults keep every owned property byte-for-byte unchanged.
+    applyInheritanceMeta(this, opts);
   }
 }

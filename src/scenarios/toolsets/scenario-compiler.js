@@ -163,24 +163,19 @@ export class ScenarioCompiler {
 
   _buildContext(definition, services, parameters, paramSchema) {
     const bequests = services.bequestService?.getAll() ?? [];
-    // Design 63 §13: promote each ACTIVE bequest's inherited brokerage / real
-    // property / collectible into first-class records, injected alongside the
-    // service records so their own toolsets seed, grow, draw, and sell them.
-    // (Transient — not registered with the services, so they never double-serialize.)
-    const promoted = { accounts: [], realProperties: [], collectibles: [] };
-    for (const b of bequests) {
-      const recs = services.bequestService.expandContextRecords(b);
-      promoted.accounts.push(...recs.accounts);
-      promoted.realProperties.push(...recs.realProperties);
-      promoted.collectibles.push(...recs.collectibles);
-    }
+    // Design 63 §14: inherited brokerage / real property / collectible are now
+    // first-class SERVICE records (promoted by ScenarioLoader._promoteBequestAssets
+    // then deserialized into their services), so they arrive through
+    // services.*.getAll() like any owned record — their own
+    // toolsets seed (at 0), grow, draw, and sell them; the INHERIT event funds
+    // them at the date. No transient context-injection (and so no double-serialize).
     return {
       startDate:      new Date(definition.simStart),
       endDate:        new Date(definition.simEnd),
       people:         services.personService?.getAll()         ?? [],
-      accounts:       [...(services.accountService?.getAll()      ?? []), ...promoted.accounts],
-      realProperties: [...(services.realPropertyService?.getAll() ?? []), ...promoted.realProperties],
-      collectibles:   [...(services.collectibleService?.getAll()  ?? []), ...promoted.collectibles],
+      accounts:       services.accountService?.getAll()      ?? [],
+      realProperties: services.realPropertyService?.getAll() ?? [],
+      collectibles:   services.collectibleService?.getAll()  ?? [],
       companyEquities: services.companyEquityService?.getAll() ?? [],
       bequests,
       parameters,

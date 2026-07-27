@@ -620,9 +620,59 @@ registers no records. The reference golden stays unmoved.
 
 ---
 
-## 14. Full first-class integration — the *effective-records* seam
+## 14. Full first-class integration — promote to real records
 
-**Status: PROPOSED.** §13 (P6a/b/c) made inherited brokerage / property / collectible *participate*
+**Status: IMPLEMENTED (P1–P4).** After critical review the **effective-records overlay** below
+(§14.2–§14.6, kept for context) was **rejected** in favor of a simpler, lower-risk architecture:
+**promote inherited assets to real service records.** Rather than an overlay every consumer must be
+rerouted through, inherited **brokerage / real-property / collectible** become ordinary
+`accountService` / `realPropertyService` / `collectibleService` records tagged
+`{ inherited: true, bequestId }`, seeded at value/balance **0** (the FMV rides in `inheritedValue`;
+the `INHERIT` event funds them at the date). Because they are normal records, **every consumer works
+with zero reroutes** — holdings dropdown, journal Cash-Flow-by-Account, state metrics, per-record
+param generation → OPT/MC/MPC/behavior/spending, net worth, drawdown, growth, sale — and this
+**deletes** the overlay, the §13 transient context-injection, the cascade wrinkle, the collision
+reconcile, and the load-order trap.
+
+### 14.0 As-built
+- **Promotion is a loader cfg-transform** (`ScenarioLoader._promoteBequestAssets`, run BEFORE the
+  param cascade so per-record params cascade onto the promoted record — the §14.4 load-order
+  invariant). It hoists each **active** bequest's non-retirement inline assets out of
+  `cfg.bequests[].assets` into `cfg.accounts / realProperties / collectibles`, tagged + seeded at 0.
+  Retirement / super stay inline (SECURE stream / lump-sum). An **inert** bequest (no
+  `inheritanceYear`) is left untouched, so the reference golden is byte-identical.
+- **Link key = the bequest's `stateKey`** (its durable identity — `createBequest` reassigns `id` at
+  deserialize). `BequestService.expand()` reads the promoted records back by `bequestId ===
+  bequest.stateKey` to (a) seed them at 0 in the `INHERITANCE` toolset (authoritative net-worth
+  fallback, identical to the pre-§14 seed) and (b) build their `INHERIT` funding descriptors.
+- **Inheritance metadata** (`inherited, bequestId, inheritedValue, deceasedCostBase,
+  deceasedAcquisitionDate, inheritedFromMainResidence`) is a shared helper
+  (`src/finance/assets/inheritance-meta.js`) applied on the Account / RealProperty / Collectible
+  domain classes + their whitelist serializers (emitted only when `inherited`, so owned records
+  round-trip byte-for-byte).
+- **Params:** promoted brokerage → `acct.<sk>.{growthRate,dividendRate,…}` + role-based drawdown /
+  sleeve levers (role `US_STOCK`/`AU_STOCK`); property/collectible → `prop./coll.<sk>.plannedSaleYear`.
+  The bequest keeps `bequest.<sk>.inheritanceYear` + per-inherited-RA `raAsset.<sk>.*`. The old
+  `INHERITED_SALE_PARAM_TEMPLATE` / `saleAsset.` prefix is **retired**; `plannedSaleYear` was added to
+  `COLLECTIBLE_PARAM_TEMPLATE` (§14.5 collision resolution) so there is one source of the sale-year knob.
+- **Editor:** the bequest editor still authors inline assets (retirement always; brokerage/property/
+  collectible while the bequest is inert). Once active they are promoted — real records edited in the
+  Accounts / Assets panels — and shown read-only in the bequest editor for context. Serialize never
+  double-writes (each asset lives in exactly one place).
+- **v2 unchanged (§14.8):** inherited retirement / super are NOT promoted (role collision with the
+  heir's RMD/contribution/drawdown machinery); they stay inline + SECURE-stream / lump-sum, already
+  optimizer-tunable via `raAsset.*`.
+
+Tests: `evt-inheritance.test.mjs` EVT-63 §14 (loader promotion, single-serialize, per-record OPT
+params) + `serializer-finance-roundtrip.test.mjs` (inheritance-metadata round-trip). Browser-verified:
+an activated default bequest funds at the date (brokerage 0→400k→grows), and the inherited brokerage
+appears in the holdings dropdown, journal facet, state metrics, and Scenario/Optimizer param panels.
+
+---
+
+### 14.1 (original proposal — the effective-records overlay, superseded by §14.0)
+
+§13 (P6a/b/c) made inherited brokerage / property / collectible *participate*
 in the run (net worth, liquidity, drawdown, growth, sale) by injecting them into the **compiler
 context**. But a promoted asset is still **invisible to every tool that discovers accounts from the
 serialized config records** rather than from the runtime context/state — the *tuning* and *reporting*
