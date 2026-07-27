@@ -242,6 +242,13 @@ import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler,
 import { RESIDENCY_COST_BASE_STEP_UP, stepsUpCostBaseOnResidency } from './finance/tax/residency-cost-base-policy.js';
 import { BaseStateTaxRatesModule } from './finance/tax/state/base-state-tax-rates-module.js';
 import { HiStateTaxRates2024 } from './finance/tax/state/hi/hi-state-tax-rates-2024.js';
+import { HiStateTaxRates2025 } from './finance/tax/state/hi/hi-state-tax-rates-2025.js';
+import { HiStateTaxRates2026 } from './finance/tax/state/hi/hi-state-tax-rates-2026.js';
+import { HiStateTaxRates2027 } from './finance/tax/state/hi/hi-state-tax-rates-2027.js';
+import { HiStateTaxRates2028 } from './finance/tax/state/hi/hi-state-tax-rates-2028.js';
+import { HiStateTaxRates2029 } from './finance/tax/state/hi/hi-state-tax-rates-2029.js';
+import { HiStateTaxRates2030 } from './finance/tax/state/hi/hi-state-tax-rates-2030.js';
+import { HiStateTaxRates2031 } from './finance/tax/state/hi/hi-state-tax-rates-2031.js';
 import { NeStateTaxRates2024 } from './finance/tax/state/ne/ne-state-tax-rates-2024.js';
 import { NeStateTaxRates2025 } from './finance/tax/state/ne/ne-state-tax-rates-2025.js';
 import { SdStateTaxRates2024 } from './finance/tax/state/sd/sd-state-tax-rates-2024.js';
@@ -1024,6 +1031,13 @@ export const Finance = {
   stepsUpCostBaseOnResidency,
   BaseStateTaxRatesModule,
   HiStateTaxRates2024,
+  HiStateTaxRates2025,
+  HiStateTaxRates2026,
+  HiStateTaxRates2027,
+  HiStateTaxRates2028,
+  HiStateTaxRates2029,
+  HiStateTaxRates2030,
+  HiStateTaxRates2031,
   NeStateTaxRates2024,
   NeStateTaxRates2025,
   SdStateTaxRates2024,

@@ -12,6 +12,13 @@ import { primaryResidencyState, primaryPersonKey, getResidency } from '../../res
 import { NeStateTaxRates2024 } from './ne/ne-state-tax-rates-2024.js';
 import { NeStateTaxRates2025 } from './ne/ne-state-tax-rates-2025.js';
 import { HiStateTaxRates2024 } from './hi/hi-state-tax-rates-2024.js';
+import { HiStateTaxRates2025 } from './hi/hi-state-tax-rates-2025.js';
+import { HiStateTaxRates2026 } from './hi/hi-state-tax-rates-2026.js';
+import { HiStateTaxRates2027 } from './hi/hi-state-tax-rates-2027.js';
+import { HiStateTaxRates2028 } from './hi/hi-state-tax-rates-2028.js';
+import { HiStateTaxRates2029 } from './hi/hi-state-tax-rates-2029.js';
+import { HiStateTaxRates2030 } from './hi/hi-state-tax-rates-2030.js';
+import { HiStateTaxRates2031 } from './hi/hi-state-tax-rates-2031.js';
 import { SdStateTaxRates2024 } from './sd/sd-state-tax-rates-2024.js';
 
 const ZERO_RESULT = Object.freeze({
@@ -41,6 +48,13 @@ export class StateTaxSettleService {
       new NeStateTaxRates2024(),
       new NeStateTaxRates2025(),
       new HiStateTaxRates2024(),
+      new HiStateTaxRates2025(),
+      new HiStateTaxRates2026(),
+      new HiStateTaxRates2027(),
+      new HiStateTaxRates2028(),
+      new HiStateTaxRates2029(),
+      new HiStateTaxRates2030(),
+      new HiStateTaxRates2031(),
       new SdStateTaxRates2024(),
     ]) {
       this._modules[`${m.stateCode}_${m.year}`] = m;
