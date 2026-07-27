@@ -42,6 +42,10 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     const drill = (reportId) => period
       ? { reportId, params: { cc: 'US', period } }
       : undefined;
+    // Per-band detail from computeTax (design 71 §3.3), attached to the line each
+    // band set explains. The modal ignores these fields; the worksheet export reads
+    // them generically, which is what keeps the flattener country-agnostic (§8).
+    const br = taxDetail.brackets ?? {};
     return {
       title:        `Form 1040 — ${taxYear}`,
       country:      'US',
@@ -53,10 +57,23 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
           lineItems: [
             { label: 'Gross Ordinary Income',               amount:  inputs.grossOrdinaryIncome, drillReport: drill('ordinary-income-by-source')     },
             { label: 'Adjustments (Pre-tax Contributions)', amount: -inputs.adjustments,          drillReport: drill('pretax-adjustments-by-source')  },
+            // Half the SECA liability is an above-the-line deduction (IRC §164(f)),
+            // so without this line AGI does not follow from the lines above it
+            // (design 69, surfaced by design 71 §2.2).
+            ...(taxDetail.selfEmploymentTaxDeduction > 0
+              ? [{ label: '½ Self-Employment Tax Deduction', amount: -taxDetail.selfEmploymentTaxDeduction }]
+              : []),
             { label: 'Adjusted Gross Income',               amount:  taxDetail.adjustedGrossIncome },
             { label: 'Standard Deduction',                  amount: -inputs.standardDeduction },
+            // The exclusion APPLIED (stacking-capped), not the uncapped qualifying
+            // amount — design 71 §7.1. Reporting the uncapped figure overstated the
+            // relief and broke the footing to Taxable Ordinary Income.
             ...(taxDetail.feieExcluded > 0
-              ? [{ label: 'Foreign Earned Income Exclusion (Form 2555)', amount: -taxDetail.feieExcluded }]
+              ? [{
+                  label:  'Foreign Earned Income Exclusion (Form 2555)',
+                  amount: -(taxDetail.feieApplied ?? taxDetail.feieExcluded),
+                  bands:  br.feieStacked,
+                }]
               : []),
             { label: 'Taxable Ordinary Income',             amount:  taxDetail.taxableIncome },
             { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains,         drillReport: drill('capital-gains-by-disposal')     },
@@ -66,12 +83,27 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         {
           heading: 'Tax Computation',
           lineItems: [
-            { label: 'Tax on Ordinary Income',      amount: taxDetail.ordinaryTax },
-            { label: 'Long-Term Capital Gains Tax', amount: taxDetail.capitalGainsTax },
-            { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax },
+            { label: 'Tax on Ordinary Income',      amount: taxDetail.ordinaryTax,     bands: br.ordinary },
+            { label: 'Long-Term Capital Gains Tax', amount: taxDetail.capitalGainsTax, bands: br.ltcg },
+            { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax, flat: br.collectibles },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
             ...(taxDetail.niitTax > 0
-              ? [{ label: 'Net Investment Income Tax (Form 8960, 3.8%)', amount: taxDetail.niitTax }]
+              ? [{ label: 'Net Investment Income Tax (Form 8960, 3.8%)', amount: taxDetail.niitTax, flat: br.niit }]
+              : []),
+            // SECA and the Additional Medicare surtax are inside grossTax but were
+            // never listed, so for a self-employed filer the visible lines did not
+            // sum to the stated total (design 71 §2.2). The SS/Medicare split rides
+            // as sub-rows — they are to SECA what bracket bands are to the ordinary
+            // tax, and `sub: true` keeps them out of any line-footing sum.
+            ...(taxDetail.selfEmploymentTax > 0
+              ? [
+                  { label: 'Self-Employment Tax (Schedule SE)', amount: taxDetail.selfEmploymentTax },
+                  { label: 'Social Security portion (12.4%)',   amount: br.seca?.socialSecurity?.tax, flat: br.seca?.socialSecurity, sub: true },
+                  { label: 'Medicare portion (2.9%)',           amount: br.seca?.medicare?.tax,       flat: br.seca?.medicare,       sub: true },
+                ]
+              : []),
+            ...(taxDetail.additionalMedicareTax > 0
+              ? [{ label: 'Additional Medicare Tax (0.9%)', amount: taxDetail.additionalMedicareTax, flat: br.seca?.additionalMedicare }]
               : []),
             { label: 'Gross Tax',                   amount: taxDetail.grossTax },
           ],
@@ -96,6 +128,7 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
                 { label: 'Foreign Tax Credit', amount: -taxDetail.credits },
               ],
         },
+        ...this._reliefWorksheet(taxDetail),
       ],
       summary: {
         grossIncome:   inputs.grossOrdinaryIncome
@@ -108,6 +141,64 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         marginalRate:  taxDetail.marginalRate,
       },
     };
+  }
+
+  /**
+   * "Worksheet — Foreign Relief" (design 71 §13): the intermediates behind the FEIE
+   * exclusion and the per-§904-basket Foreign Tax Credit.
+   *
+   * These are the two hardest numbers on a cross-border return to check by hand,
+   * because the return states only their *results*: the Credits section shows a
+   * credit but not the limitation that capped it, and the Income section shows an
+   * exclusion but not the cap that trimmed it. Every value here is already computed
+   * by `_computeFtc` / `_computeFeie`; the worksheet just stops hiding them.
+   *
+   * Rows are `WORKSHEET` / `RATE`, never `LINE` — they are supporting arithmetic, not
+   * lines of the return, and must not be summed into it (§5.2). Returns [] when the
+   * return has no foreign activity, so a purely domestic year is unchanged.
+   */
+  _reliefWorksheet(taxDetail) {
+    const ftc  = taxDetail.ftc;
+    const feie = taxDetail.feieExcluded > 0;
+    if (!ftc?.hasActivity && !feie) return [];
+
+    const money = (label, amount) => ({ label, amount, rowType: 'WORKSHEET' });
+    const ratio = (label, amount) => ({ label, amount, rowType: 'RATE' });
+    const lineItems = [];
+
+    if (feie) {
+      lineItems.push(
+        money('FEIE — qualifying foreign earned income', taxDetail.feieExcluded),
+        // The stacking rule caps the exclusion at taxable ordinary income; when the
+        // two differ, the difference is exclusion that could not be used.
+        money('FEIE — excluded (stacking-capped)',       taxDetail.feieApplied ?? taxDetail.feieExcluded),
+      );
+    }
+
+    if (ftc?.hasActivity) {
+      // §904 limitation denominators — `frac` and `limit` cannot be checked without
+      // them, and neither appears anywhere else on the return.
+      lineItems.push(
+        money('§904 limitation base (Chapter-1 gross tax)', ftc.limitationBase),
+        money('§904 total taxable income (denominator)',    ftc.totalTaxable),
+      );
+      for (const [name, basket] of [['General', ftc.general], ['Passive', ftc.passive]]) {
+        lineItems.push(
+          money(`${name} — foreign income in basket`,   basket.numerator),
+          ratio(`${name} — limitation fraction`,        basket.frac),
+          money(`${name} — §904 limit`,                 basket.limit),
+          money(`${name} — current-year foreign tax`,   basket.currentTax),
+          money(`${name} — carryforward pool opening`,  basket.poolTotal),
+          money(`${name} — available (current + pool)`, basket.avail),
+          money(`${name} — credit taken`,               basket.credit),
+          money(`${name} — drawn from current year`,    basket.currentYearUsed),
+          money(`${name} — drawn from carryover`,       basket.carryoverUsed),
+          money(`${name} — carryforward remaining`,     basket.carryforwardRemaining),
+        );
+      }
+    }
+
+    return [{ heading: 'Worksheet — Foreign Relief', lineItems }];
   }
 
   _generateScheduleD(saleRecords, taxYear) {

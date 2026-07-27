@@ -23,6 +23,7 @@
     "requirements": "node scripts/check-requirements.js",
     "requirements:missing": "node scripts/check-requirements.js --missing",
     "scenario": "node scripts/run-scenario.mjs",
+    "export:tax": "node scripts/export-tax-csv.mjs",
     "probe:residency-cgt": "node scripts/probe-residency-cgt.mjs",
     "probe:foreign-property-cgt": "node scripts/probe-foreign-property-cgt.mjs"
   },

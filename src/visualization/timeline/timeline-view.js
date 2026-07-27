@@ -316,8 +316,8 @@ export class TimelineView extends BaseComponent {
           if (treeMode) {
             html.push(...this._renderTreeNodes(items, 0));
           } else {
-            items.forEach(({ entry, idx, sum }, ai) => {
-              html.push(...this._renderFlatAction(entry, idx, sum, ai === items.length - 1));
+            items.forEach(({ entry, idx, sum, taxDoc }, ai) => {
+              html.push(...this._renderFlatAction(entry, idx, sum, ai === items.length - 1, taxDoc));
             });
           }
           html.push('</div>'); // tl-acts
@@ -332,9 +332,9 @@ export class TimelineView extends BaseComponent {
     return html.join('');
   }
 
-  _renderFlatAction(entry, idx, sum, isLast) {
-    const hasTaxDoc = (entry.action.type === 'US_TAX_SETTLE_APPLY' || entry.action.type === 'AU_TAX_SETTLE_APPLY' || entry.action.type === 'STATE_TAX_SETTLE_APPLY') &&
-      (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
+  // `hasTaxDoc` is decided by the controller (one link per SETTLEMENT, not per
+  // reducer — design 71 §11.2) and passed in; the view no longer re-derives it.
+  _renderFlatAction(entry, idx, sum, isLast, hasTaxDoc = false) {
     const cfgBtn = entry.action.nodeId
       ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`
       : '';
@@ -355,8 +355,7 @@ export class TimelineView extends BaseComponent {
       const { entry } = node;
       const isLast    = i === nodes.length - 1;
       const indent    = depth * 16;
-      const hasTaxDoc = (entry.action.type === 'US_TAX_SETTLE_APPLY' || entry.action.type === 'AU_TAX_SETTLE_APPLY' || entry.action.type === 'STATE_TAX_SETTLE_APPLY') &&
-        (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
+      const hasTaxDoc = node.taxDoc === true;   // stamped by the controller
       const cfgBtn = entry.action.nodeId
         ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`
         : '';

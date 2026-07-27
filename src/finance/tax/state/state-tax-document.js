@@ -40,12 +40,7 @@ export class StateTaxDocumentReporter {
       state:        taxDetail.stateCode,
       taxYear,
       filingStatus: taxDetail.filingStatus ?? 'Married Filing Jointly',
-      sections: [
-        {
-          heading: `${taxDetail.stateCode} Resident Return`,
-          lineItems: taxDetail.lineItems ?? [],
-        },
-      ],
+      sections:     this._sections(taxDetail, grossTax),
       summary: {
         grossIncome: (inputs.ordinaryIncome ?? 0)
           + Math.max(0, inputs.pensionIncome ?? 0)
@@ -57,5 +52,49 @@ export class StateTaxDocumentReporter {
         marginalRate:  taxDetail.marginalRate ?? 0,
       },
     };
+  }
+
+  /**
+   * Split the rate module's flat `lineItems` into Income and Tax Computation
+   * sections, mirroring Form 1040 (design 71 §11.3).
+   *
+   * This is not cosmetic. A single mixed section cannot be checked: income lines and
+   * tax lines summed together mean nothing. Split, each section foots — income lines
+   * arrive at Taxable Income, tax lines arrive at Gross Tax — and the generic
+   * worksheet verifier applies to state returns with no state-specific rules.
+   *
+   * A `Gross Tax` line replaces the module's `Net State Tax Liability` line: no state
+   * credits are modeled, so the two are equal, and `Gross Tax` is the label the
+   * footing check keys on. Net liability is not lost — it is the Summary block's
+   * headline, which is where the federal documents put it too.
+   */
+  _sections(taxDetail, grossTax) {
+    const items  = taxDetail.lineItems ?? [];
+    const br     = taxDetail.brackets ?? {};
+    const pick   = labels => items.filter(li => labels.includes(li.label));
+
+    const income = pick([
+      'State Ordinary Income', 'Pension/Retirement Income', 'Pension Excluded',
+      'Social Security (taxable)', 'Capital Gains (in ordinary)',
+      'Standard Deduction', 'Taxable Income',
+    ]);
+
+    const computation = [
+      ...pick(['Tax on Ordinary Income']).map(li => ({ ...li, bands: br.ordinary })),
+      ...pick(['Capital Gains Tax (alternative)']).map(li => ({ ...li, flat: br.capitalGains ?? undefined })),
+      { label: 'Gross Tax', amount: grossTax },
+    ];
+
+    // Fall back to the module's own flat list if the labels ever diverge from what
+    // this reporter expects — a mislabeled line must not silently vanish from the
+    // document. Losing a line is far worse than an unsplit section.
+    if (income.length + computation.length - 1 < items.length - 1) {
+      return [{ heading: `${taxDetail.stateCode} Resident Return`, lineItems: items }];
+    }
+
+    return [
+      { heading: 'Income',          lineItems: income },
+      { heading: 'Tax Computation', lineItems: computation },
+    ];
   }
 }
