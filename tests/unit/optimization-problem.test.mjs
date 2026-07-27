@@ -240,3 +240,76 @@ describe('OptimizationProblem — snapshot rollout', () => {
       `snapshot rollout (${result.finalNetWorthUsd}) must match continuation (${referenceNetWorth})`);
   });
 });
+
+// ─── Base params follow the LOADED SCENARIO ──────────────────────────────────
+//
+// `serializeScenario` carries the typed `cfg.params` list but DROPS the
+// `cfg.parameters` bag, so a template that only has the bag (everything out of
+// buildDefaultConfig, i.e. every headless lab) used to reach _compile with no params
+// at all — the loader then filled schema defaults, and keys absent from the schema
+// (moveYear, the people map) simply went missing. Same defect the MC runner had.
+
+describe('OptimizationProblem — base params come from the cfg template', () => {
+  const simStart = new Date(Date.UTC(2026, 0, 1));
+  const simEnd   = new Date(Date.UTC(2028, 0, 1));
+
+  const makeProblem = (opts) => new OptimizationProblem({
+    variables: [], simStart, simEnd,
+    objective: OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH,
+    ...opts,
+  });
+
+  test('the template parameters bag reaches the rollout', () => {
+    const problem = makeProblem({
+      initialState: { kind: 'compile', cfgTemplate: {
+        parameters: { moveYear: 2029, brokerageGrowthRate: 0.10 },
+      } },
+    });
+    const base = problem._resolveBase();
+    assert.strictEqual(base.moveYear, 2029);
+    assert.strictEqual(base.brokerageGrowthRate, 0.10);
+  });
+
+  test('the typed params list wins over the bag, and the caller wins over both', () => {
+    const problem = makeProblem({
+      baseParams: { moveYear: 2035 },
+      initialState: { kind: 'compile', cfgTemplate: {
+        parameters: { moveYear: 2029, inflationRate: 0.02 },
+        params:     [{ name: 'inflationRate', value: 0.04 }],
+      } },
+    });
+    const base = problem._resolveBase();
+    assert.strictEqual(base.inflationRate, 0.04, 'the editor-owned list is the live store');
+    assert.strictEqual(base.moveYear, 2035, 'an explicit caller override still wins');
+  });
+
+  test('the synthetic default template carries its own params (moveYear is not in the schema)', () => {
+    const base = makeProblem({})._resolveBase();
+    assert.strictEqual(base.moveYear, 2031,
+      'buildDefaultConfig declares a move to AU; dropping it runs a different plan entirely');
+    assert.ok(base.people, 'the people map is not in the param schema and is only carried here');
+  });
+
+  test('a pre-seeded resolved base is not re-merged (worker parity)', () => {
+    // The pool hands each worker `_resolveBase()` plus a pre-serialized template, so
+    // the worker has no template to merge against. It seeds the memo instead — and
+    // must NOT fold the synthetic default's params in underneath, or parallel
+    // rollouts silently run a different world than serial ones. This broke once
+    // already: `rolloutContext` evaluates `_cfgTemplate()` before `_resolveBase()`,
+    // so any guard keyed on "has a serialized template" fires in the wrong order.
+    const problem = makeProblem({ baseParams: { moveYear: 2035 } });
+    problem._resolvedBase = { moveYear: 2035 };
+    assert.deepStrictEqual(problem._resolveBase(), { moveYear: 2035 });
+  });
+
+  test('rolloutContext ships the RESOLVED base, whatever order it is built in', async () => {
+    const { rolloutContext } = await import('../../src/finance/optimization/parallel/rollout-worker-pool.js');
+    const problem = makeProblem({
+      initialState: { kind: 'compile', cfgTemplate: {
+        parameters: { moveYear: 2029 }, params: [], accounts: [], persons: [],
+      } },
+    });
+    // Built cold — no rollout has run, so nothing has memoized the base yet.
+    assert.strictEqual(rolloutContext(problem).baseParams.moveYear, 2029);
+  });
+});

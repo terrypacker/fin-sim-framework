@@ -9,7 +9,7 @@
  */
 
 import { BaseComponent }              from '../components/base-component.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distributions.js';
 
 /**
@@ -21,8 +21,17 @@ import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distribu
  * Call setVariables(vars) after construction to populate with the full dynamic
  * variable list (including per-shock rows from buildVariables()).
  *
+ * A variable's CENTER is the scenario's value for that param unless the user typed
+ * their own. The panel tracks that distinction per row (`centerDirty`) so it can
+ * re-sync untouched rows from the live scenario on every run — otherwise a panel
+ * built at load time keeps sampling a plan the user has since edited away from, and
+ * every number it produces silently describes the old plan. User-set centers are
+ * never overwritten; they are flagged instead (see syncScenarioCenters).
+ *
  * Callbacks:
- *   onRun({ n, variableConfigs }) — fired when the Run button is clicked.
+ *   onRun({ n, variableConfigs })   — fired when the Run button is clicked.
+ *   onResolveScenarioCenters()      — must return Map(paramKey → current scenario
+ *                                     value); used to re-sync untouched centers.
  */
 export class McConfigPanel extends BaseComponent {
   constructor(containerEl) {
@@ -37,6 +46,7 @@ export class McConfigPanel extends BaseComponent {
     this._section    = null;
     this.onRun       = null;
     this.onCopyFromScenario = null;
+    this.onResolveScenarioCenters = null;
 
     this._render();
   }
@@ -67,10 +77,43 @@ export class McConfigPanel extends BaseComponent {
    * null/undefined) are left as-is. Generic by design: any MC variable — present
    * or future — is matched by its resolved paramKey with no per-key wiring.
    *
+   * Unlike syncScenarioCenters() this overwrites user-typed centers too — that is
+   * what the button is for — so it also clears their user-set flag, which puts them
+   * back under automatic re-centring.
+   *
    * @returns {number} count of rows updated
    */
   applyScenarioValues(values) {
+    return this._writeCenters(values, { pristineOnly: false }).updated;
+  }
+
+  /**
+   * Re-sync every UNTOUCHED variable center from the live scenario, and flag the
+   * user-set ones that disagree with it.
+   *
+   * This is what makes re-centring automatic: the panel is built once per scenario
+   * load, so without it any param edited afterwards leaves its MC center behind and
+   * the run silently samples the previous plan. Rows the user typed into are left
+   * exactly as they are — an intentional center is a legitimate thing to sweep — but
+   * they are marked so the divergence is visible rather than invisible.
+   *
+   * @returns {{ updated: number, diverged: Array<{paramKey, center, scenarioValue}> }}
+   */
+  syncScenarioCenters() {
+    const values = this.onResolveScenarioCenters?.();
+    if (!(values instanceof Map)) return { updated: 0, diverged: [] };
+    return this._writeCenters(values, { pristineOnly: true });
+  }
+
+  /**
+   * Write scenario values into row centers.
+   *
+   * `pristineOnly` skips rows whose center the user typed into, and instead reports
+   * them as diverged when their value differs from the scenario's.
+   */
+  _writeCenters(values, { pristineOnly }) {
     let updated = 0;
+    const diverged = [];
     for (const cfg of this._variables) {
       if (!values.has(cfg.paramKey)) continue;
       const v = values.get(cfg.paramKey);
@@ -78,18 +121,60 @@ export class McConfigPanel extends BaseComponent {
       const row = this._rowMap.get(cfg.paramKey);
       if (!row) continue;
       const type = row.typeSel.value;
-      if (type === DISTRIBUTION_TYPES.CONSTANT) {
-        row.valueInp.value = String(v);
-      } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
-        // Date-valued params have no single numeric center to copy into a [min,max]
-        // window — leave the user-set bounds alone.
+      // Date-valued params have no single numeric center to copy into a [min,max]
+      // window — leave the user-set bounds alone.
+      if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) continue;
+      const inp = type === DISTRIBUTION_TYPES.CONSTANT ? row.valueInp : row.meanInp;
+
+      if (pristineOnly && row.centerDirty) {
+        const center    = parseFloat(inp.value);
+        const disagrees = isFinite(center) && typeof v === 'number' && Math.abs(center - v) > 1e-9;
+        if (disagrees) diverged.push({ paramKey: cfg.paramKey, center, scenarioValue: v });
+        this._markDiverged(row, disagrees ? v : null);
         continue;
-      } else {
-        row.meanInp.value = String(v);
       }
+
+      inp.value = String(v);
+      row.centerDirty = false;      // the center is the scenario's again
+      this._markDiverged(row, null);
+      this._renderSource(row);
       updated++;
     }
-    return updated;
+    return { updated, diverged };
+  }
+
+  /**
+   * Render a row's center-provenance tag, BEFORE anything is run.
+   *
+   * Answering "is this variable centered on my plan?" only after a run is too late —
+   * you have already spent the compute and read the failure rate. `scenario` is the
+   * normal case and stays quiet; `default` is the one that means the center is tied
+   * to nothing the sim will run, so it is the one styled to be noticed.
+   */
+  _renderSource(row) {
+    const el = row.sourceEl;
+    if (!el) return;
+    const source = row.centerDirty ? 'user' : row.centerSource;
+    const TITLES = {
+      scenario: 'Centered on this scenario\'s own value for the parameter.',
+      schema:   'The scenario carries no value here, so the parameter schema\'s default is used — the same value the simulation runs at.',
+      default:  'Centered on a framework default: neither the scenario nor the schema has a value here, so nothing ties this center to what the simulation runs.',
+      user:     'You typed this center. It is used as-is and is not re-synced from the scenario.',
+      'n/a':    'No single numeric center — this variable is sampled over a date range.',
+    };
+    el.textContent = source && source !== CENTER_SOURCES.SCENARIO ? source : '';
+    el.title       = TITLES[source] ?? '';
+    el.className   = `mc-var-source${source ? ` mc-var-source--${source}` : ''}`;
+  }
+
+  /** Flag (or clear) a row whose user-set center disagrees with the scenario value. */
+  _markDiverged(row, scenarioValue) {
+    const diverged = scenarioValue != null;
+    row.el.classList.toggle('mc-var-diverged', diverged);
+    row.labelEl.title = diverged
+      ? `Center is user-set and differs from the scenario value (${scenarioValue}). `
+        + 'Clear it or use "Copy from Scenario" to sample the plan as written.'
+      : row.labelEl.dataset.label ?? row.labelEl.title;
   }
 
   /**
@@ -126,7 +211,11 @@ export class McConfigPanel extends BaseComponent {
 
       const enabled = row.enabledCb.checked;
       const type    = row.typeSel.value;
-      const out     = { ...cfg, enabled, type };
+      // Carry the center's provenance with it. The panel emits a center for every
+      // row, so without this the runner cannot tell "the user chose 4%" from "this
+      // is just the scenario value the panel copied in" — and every UI run reports
+      // as if the whole variable set had been hand-set.
+      const out     = { ...cfg, enabled, type, centerDirty: !!row.centerDirty, centerSource: row.centerSource };
 
       if (type === DISTRIBUTION_TYPES.CONSTANT) {
         out.value  = parseFloat(row.valueInp.value);
@@ -155,7 +244,9 @@ export class McConfigPanel extends BaseComponent {
       const row = this._rowMap.get(cfg.paramKey);
       if (!row) continue;
       const type = row.typeSel.value;
-      const snap = { enabled: row.enabledCb.checked, type };
+      // centerDirty rides along so a rebuilt row still knows whether its center is
+      // the user's or the scenario's.
+      const snap = { enabled: row.enabledCb.checked, type, centerDirty: row.centerDirty };
       if (type === DISTRIBUTION_TYPES.CONSTANT) {
         snap.value = row.valueInp.value;
       } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
@@ -199,6 +290,9 @@ export class McConfigPanel extends BaseComponent {
     this._section  = shell.querySelector('.mc-var-section');
 
     this.listen(this._runBtn, 'click', () => {
+      // Re-sync untouched centers from the live scenario FIRST, so what runs is
+      // what the panel shows and both are the current plan (see syncScenarioCenters).
+      this.syncScenarioCenters();
       if (this.onRun) this.onRun(this.getConfig());
     });
 
@@ -246,6 +340,7 @@ export class McConfigPanel extends BaseComponent {
       <input type="checkbox" ${cfg.enabled ? 'checked' : ''}
         style="margin:0;cursor:pointer;accent-color:var(--purple);flex-shrink:0" />
       <span class="mc-var-label" title="${cfg.label}">${cfg.label}</span>
+      <span class="mc-var-source"></span>
     `;
     el.appendChild(labelRow);
 
@@ -319,6 +414,22 @@ export class McConfigPanel extends BaseComponent {
     });
 
     const enabledCb = labelRow.querySelector('input[type="checkbox"]');
-    return { el, refs: { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp } };
+    const labelEl   = labelRow.querySelector('.mc-var-label');
+    labelEl.dataset.label = cfg.label ?? '';
+
+    const refs = {
+      el, labelEl, enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp,
+      sourceEl:    labelRow.querySelector('.mc-var-source'),
+      // Where this row's center comes from when the user hasn't touched it.
+      centerSource: cfg.centerSource ?? null,
+      // True once the user types their own center: it must survive a scenario
+      // re-sync (syncScenarioCenters) instead of being silently overwritten.
+      centerDirty: !!cfg.centerDirty,
+    };
+    for (const centerInp of [meanInp, valueInp]) {
+      this.listen(centerInp, 'input', () => { refs.centerDirty = true; this._renderSource(refs); });
+    }
+    this._renderSource(refs);
+    return { el, refs };
   }
 }

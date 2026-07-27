@@ -287,3 +287,58 @@
   padding: 3px 6px;
   margin-top: 2px;
 }
+
+/* ── Provenance ──
+   Results that are NOT centered on the plan as written, and the variable rows
+   responsible, are labelled rather than left to look like any other run. */
+.mc-provenance-banner {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-dim);
+  border-radius: 2px;
+  padding: 4px 6px;
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+.mc-var-diverged .mc-var-label { color: var(--warning); }
+.mc-var-diverged .mc-var-label::after { content: ' ⚠'; }
+
+/* Positive counterpart to the banner: the results say which world they describe,
+   so silence never has to be interpreted. `margin-right:auto` keeps it beside the
+   header while the metric toggle stays pinned right. */
+.mc-provenance-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.mc-provenance-badge--off {
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-color: var(--warning-dim);
+}
+
+/* Per-row center provenance, readable BEFORE a run. `scenario` renders no text at
+   all — it is the normal case, and 40-odd rows each shouting "scenario" would bury
+   the two that aren't. */
+.mc-var-source {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.mc-var-source--default { color: var(--warning); }
+.mc-var-source--user    { color: var(--purple); }

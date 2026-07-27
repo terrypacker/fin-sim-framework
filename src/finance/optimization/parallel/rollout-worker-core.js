@@ -37,6 +37,11 @@ export function initProblem(ctx) {
   // pool sends the already-serialized template; assigning it makes `_cfgTemplate()`
   // skip re-serialization, and `initialState.cfgTemplate` is never consulted.
   p._serializedTemplate = ctx.serializedTemplate;
+  // Likewise the base params arrive already merged with that template's own params
+  // (rolloutContext sends `_resolveBase()`). Seeding the memo is what stops the
+  // worker re-running the merge against a template it doesn't have — which would
+  // silently roll a different world here than on the main thread.
+  p._resolvedBase = ctx.baseParams;
   // The rollout path reads the objective ONLY through `_scoreEnd`'s windowable check
   // (scoring itself stays on the main thread), so a minimal stub is sufficient.
   p.objective = { windowable: ctx.objectiveWindowable };

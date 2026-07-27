@@ -13,6 +13,8 @@ import { OptResultsPanel }    from './opt-results-panel.js';
 import { OptRunsPanel }       from './opt-runs-panel.js';
 import { buildOptVariables }  from '../../finance/optimization/intl-retirement-opt-config.js';
 import { set }                from '../../finance/monte-carlo/mc-param-paths.js';
+import { scenarioParamValues } from '../../finance/param-schema-utils.js';
+import { ServiceRegistry }    from '../../services/service-registry.js';
 import { APP_EVENTS }         from '../app-display-settings.js';
 
 /**
@@ -122,10 +124,26 @@ export class OptimizationPresenter {
     return base;
   }
 
+  /**
+   * The param snapshot the search space is built from and every candidate runs on.
+   *
+   * The ACTIVE CFG is the live record — the scenario editor writes into its typed
+   * `params` array by reference — so it beats the scenario INSTANCE's bag, which is
+   * frozen at the last Rebuild. That staleness is not cosmetic here: `buildOptVariables`
+   * reads these params to synthesize the per-shock / expense-band / Roth-schedule axes
+   * and to evaluate each variable's `visibleWhen`, so a stale snapshot silently drops
+   * whole DIMENSIONS from the search rather than merely mis-labelling one.
+   *
+   * Deliberately NO `resolveBalanceCenters()` here, unlike the MC presenter: MC writes
+   * a value for every variable each iteration and so must carry the true balance,
+   * whereas Opt only writes the keys a candidate actually searches. Injecting balance
+   * keys would push them through the `balanceTarget` alias cascade and rescale holdings
+   * on every rollout for no gain.
+   */
   _resolveBaseParams() {
-    const raw = this._scenario?.params;
-    if (!raw) return {};
-    if (Array.isArray(raw)) return Object.fromEntries(raw.map(p => [p.key, p.value]));
-    return typeof raw === 'object' ? { ...raw } : {};
+    const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    const instance  = this._scenario?.params;
+    const snapshot  = (instance && !Array.isArray(instance)) ? instance : {};
+    return { ...snapshot, ...scenarioParamValues(activeCfg) };
   }
 }

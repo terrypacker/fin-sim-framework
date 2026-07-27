@@ -148,17 +148,24 @@ import { buildReportRows, rowsToCsv, generateReportCsv } from './finance/journal
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computeNetWorthUsd, computeHouseValueUsd, computePathShape, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
+import { computeNetWorthUsd, computeHouseValueUsd, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
-import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords } from './finance/mpc/apply-forward.js';
+import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
+import { DecisionRecordRegistry } from './finance/mpc/decision-record-registry.js';
+import { DecisionRecordStorage } from './finance/mpc/decision-record-storage.js';
+import { applyHarvestPlan, paramKeyOf, readParamValue, upsertParam, inferParamType, withIncluded } from './finance/mpc/harvest-apply.js';
+import { foldHarvestPlan, feasibilityOfResult, checkHarvestFeasibility, describeFeasibility } from './finance/mpc/harvest-feasibility.js';
+import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from './finance/mpc/harvest-resolve.js';
+import { HARVEST_FORMS, COLLAPSE_RULES, requiresIncludes, isIncludesRequirement, requirementSatisfied, harvestDecisions, pointHarvest, collapseConsecutive, ageAt, resolveBirthDate, _internals } from './finance/mpc/harvest.js';
 import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
+import { replayDecisions } from './finance/mpc/replay.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
-import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, objectiveIsWindowable, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
+import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, windowedDeficit, infeasibilityOf, isFeasibleResult, INFEASIBLE_OFFSET, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, objectiveIsWindowable, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { initProblem, runTask, runSeriesTask } from './finance/optimization/parallel/rollout-worker-core.js';
 import { rolloutContext, browserRolloutSpawn, RolloutWorkerPool } from './finance/optimization/parallel/rollout-worker-pool.js';
@@ -172,7 +179,7 @@ import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulat
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
-import { isParamVisible, visibleWhenControllers, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, paramSchemaDefaults, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -358,8 +365,8 @@ import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
-import { BreakpointSignal, SimulationHorizonError, Simulation } from './simulation-framework/simulation.js';
-import { MutationTracker, diffStates } from './simulation-framework/state-utils.js';
+import { BreakpointSignal, SimulationHorizonError, TELEMETRY_LEVELS, Simulation } from './simulation-framework/simulation.js';
+import { deepClone, snapshotForDiff, MutationTracker, diffStates } from './simulation-framework/state-utils.js';
 import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
@@ -397,6 +404,7 @@ import { HandlerEditor } from './visualization/components/handler-editor.js';
 import { MapFilterMultiSelect } from './visualization/components/map-filter-multi-select.js';
 import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
+import { RenderScheduler } from './visualization/components/render-scheduler.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
 import { DecisionGraphPresenter } from './visualization/decision-graph/decision-graph-presenter.js';
 import { DgConfigPanel } from './visualization/decision-graph/dg-config-panel.js';
@@ -884,10 +892,12 @@ export const Finance = {
   runReport,
   JournalReportingService,
   DEFAULT_MC_VARIABLE_CONFIGS,
+  CENTER_SOURCES,
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   computeHouseValueUsd,
   computePathShape,
+  summarizeProvenance,
   IntlRetirementMcRunner,
   CDC_2024,
   AU_2022,
@@ -897,10 +907,38 @@ export const Finance = {
   rollForwardWithControls,
   recordDecisionRecord,
   readDecisionRecords,
+  readDecisionRuns,
   COCKPIT_CONTROLS,
   CockpitController,
+  DecisionRecordRegistry,
+  DecisionRecordStorage,
+  applyHarvestPlan,
+  paramKeyOf,
+  readParamValue,
+  upsertParam,
+  inferParamType,
+  withIncluded,
+  foldHarvestPlan,
+  feasibilityOfResult,
+  checkHarvestFeasibility,
+  describeFeasibility,
+  resolveStaticLevers,
+  foldScheduleBakes,
+  mergeResolved,
+  HARVEST_FORMS,
+  COLLAPSE_RULES,
+  requiresIncludes,
+  isIncludesRequirement,
+  requirementSatisfied,
+  harvestDecisions,
+  pointHarvest,
+  collapseConsecutive,
+  ageAt,
+  resolveBirthDate,
+  _internals,
   runMpc,
   makeInitialSnapshot,
+  replayDecisions,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
   IntlRetirementOptimizer,
@@ -909,6 +947,10 @@ export const Finance = {
   OPT_PARAM_TYPES,
   DEFAULT_TERMINAL_WEALTH_PENALTY,
   DEFAULT_DEFICIT_PENALTY,
+  windowedDeficit,
+  infeasibilityOf,
+  isFeasibleResult,
+  INFEASIBLE_OFFSET,
   DIE_WITH_TARGET_FAMILY,
   DIE_WITH_TARGET_AXES,
   resolveTerminalKey,
@@ -946,6 +988,8 @@ export const Finance = {
   isParamVisible,
   visibleWhenControllers,
   controllableVariables,
+  scenarioParamValues,
+  paramSchemaDefaults,
   indexParamSchema,
   resolveSweepVariables,
   buildMonthPeriod,
@@ -1214,7 +1258,10 @@ export const Engine = {
   SimulationState,
   BreakpointSignal,
   SimulationHorizonError,
+  TELEMETRY_LEVELS,
   Simulation,
+  deepClone,
+  snapshotForDiff,
   MutationTracker,
   diffStates,
   ValueType,
@@ -1358,6 +1405,7 @@ export const Visualization = {
   MapFilterMultiSelect,
   NodeEditModal,
   ReducerEditor,
+  RenderScheduler,
   ConfigurationListComponent,
   DecisionGraphPresenter,
   DgConfigPanel,

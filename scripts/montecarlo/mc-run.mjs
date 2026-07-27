@@ -35,7 +35,8 @@
  *   --drift <mode>      GEOMETRIC (default) | NONE — see below
  *   --property-paths    stochastic property appreciation path
  *   --shock             enable the manufactured single crash (severity + date)
- *   --no-recentre       skip re-centring MC means on the scenario (almost never right)
+ *   --no-recentre       skip the check that MC centers match the scenario. The runner
+ *                       re-centres itself now, so this only silences the verification.
  *
  * ─── choosing a risk model ───────────────────────────────────────────────────
  *
@@ -129,7 +130,7 @@ function describeRisk() {
   parts.push(paths ? `stochastic equity paths (vol ${vol}, drift ${drift})` : 'constant sampled return');
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push('manufactured crash');
-  if (!recentre) parts.push('** MEANS NOT RE-CENTRED **');
+  if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
   return parts.join(' + ');
 }
 
@@ -139,7 +140,7 @@ for (const [order, key] of armKeys.entries()) {
 
   const cfg = buildVariant(base.cfg, levers);
   const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });
-  const { rows, pathShape, ms } = await runArm({ cfg, n, mcConfig, shocks });
+  const { rows, pathShape, provenance, ms } = await runArm({ cfg, n, mcConfig, shocks });
 
   const fails = rows.filter(r => r.failed).length;
   // `order` preserves the spec's arm sequence. mc-report reads a DIRECTORY, so
@@ -148,7 +149,7 @@ for (const [order, key] of armKeys.entries()) {
   // the one the author meant as the reference point.
   writeFileSync(join(outDir, `${key}.json`), JSON.stringify({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
-    riskModel, levers, recentred, pathShape, rows,
+    riskModel, levers, recentred, provenance, pathShape, rows,
   }, null, 1));
 
   const extras = pathShape?.medianHouseCagr != null
@@ -156,7 +157,8 @@ for (const [order, key] of armKeys.entries()) {
     : '';
   console.log(`${key.padEnd(24)} fail ${String(fails).padStart(4)}/${n} `
     + `(${pct(fails / n).padStart(6)})${extras}  ${(ms / 1000).toFixed(0)}s`
-    + (recentred.length ? `  [re-centred ${recentred.length} vars]` : ''));
+    + (recentred.length ? `  [!! ${recentred.length} centers off-scenario]` : ''));
+  for (const line of recentred) console.log(`    !! ${line}`);
 }
 
 console.log(`\nraw rows → ${outDir}/`);

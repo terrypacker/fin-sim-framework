@@ -216,13 +216,19 @@ intended.
 `spendTotal` contributing only the expense level — otherwise a study of what GUARDRAIL
 costs would silently re-measure FIXED spending and find no difference.
 
-**MC variable means come from framework defaults, not your scenario.** A scenario
-assuming 10% returns gets sampled around the framework's 5–7% default, overstating
-every failure rate. `buildMcConfig` re-centres by default; don't pass `--no-recentre`.
+**MC variable centers follow the loaded scenario (fixed).** They used to come from the
+framework defaults unless the caller passed the scenario's params, so a plan assuming
+10% returns was sampled around the framework's 5% default — overstating every failure
+rate — and a *disabled* lever wrote its framework default over the plan's own value.
+`IntlRetirementMcRunner.run()` now seeds its base from the cfgTemplate's own params, so
+this holds with no caller cooperation. `summary.provenance` (persisted per arm, printed
+by `mc-report`) names any center that is *not* the plan's; `--no-recentre` only silences
+`buildMcConfig`'s verification of that.
 
-**MC shock variables need `shocks` passed to `run()`.** Enabling `shocks[0].severity`
-and calling `runner.run({})` builds no shock variables at all, silently, and the arm
-measures a world with no crash in it.
+**MC shock variables need `shocks` in the base params (fixed).** Enabling
+`shocks[0].severity` and calling `runner.run({})` used to build no shock variables at
+all, silently, so the arm measured a world with no crash in it. The runner now reads
+`shocks` off the cfgTemplate; passing `run({ shocks })` still works and still wins.
 
 **One sim per process.** `ServiceRegistry` is a process-global singleton reset on every
 run, so two sims cannot be in flight at once. That is why `parallel.mjs` uses processes

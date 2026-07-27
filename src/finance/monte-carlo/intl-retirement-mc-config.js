@@ -337,6 +337,10 @@ function buildShockMcConfigs(params) {
         stdDev:   0.10,
         group:    'Economic Shocks',
         enabled:  false,
+        // A preset entry with no explicit severity runs at the library's severity, so
+        // that mean IS the effective value — not an unanchored default worth flagging
+        // (see CENTER_SOURCES). Without a preset, 0.4 is arbitrary and stays flagged.
+        effectiveDefault: (entry.severity ?? libraryShock.severity) != null,
       },
       {
         paramKey: `shocks[${i}].startDate`,
@@ -403,6 +407,90 @@ function buildStateMoveMcConfigs(params) {
 }
 
 /**
+ * Where a variable's distribution CENTER came from. A run sampled around the
+ * wrong center is not a weaker answer — it is an answer about a different plan,
+ * and nothing downstream can tell, so every variable carries its provenance.
+ *
+ *   scenario — the loaded scenario's own value at this paramKey. The normal case.
+ *   schema   — the cfg carries no value, so the param SCHEMA default supplied it.
+ *              Still coherent: ScenarioLoader materializes that same default into
+ *              the cfg, so the sim runs at exactly this center.
+ *   override — an explicit user/caller center (panel edit, applyOverride({mean})).
+ *              Deliberate; may legitimately differ from the scenario.
+ *   default  — the framework's hardcoded MC-template mean, used because the
+ *              paramKey isn't resolvable in the params passed to buildVariables().
+ *              The silent-wrong-answer case: nothing ties it to what the sim runs.
+ *   n/a      — no single numeric center (UNIFORM_DATE carries min/max instead).
+ *
+ * `schema` is never emitted by buildVariables — which sees one merged bag and cannot
+ * tell the layers apart — only by refineCenterSource(), given those layers.
+ */
+export const CENTER_SOURCES = {
+  SCENARIO: 'scenario',
+  SCHEMA:   'schema',
+  OVERRIDE: 'override',
+  DEFAULT:  'default',
+  NA:       'n/a',
+};
+
+/**
+ * Split a variable's `scenario` center into `scenario` vs `schema`, given the layers
+ * its value could have come from.
+ *
+ * buildVariables() resolves against ONE merged bag, so it can only say "the value was
+ * there" — it cannot say which layer put it there. Whoever owns the layering calls
+ * this. Both the runner (for `summary.provenance`) and the MC panel (for its per-row
+ * source tag) do, through this one function, so the two can't drift into telling the
+ * user different stories about the same variable.
+ *
+ * @param {object} v                    a resolved variable from buildVariables()
+ * @param {object} [layers]
+ * @param {object} [layers.ownParams]      the loaded scenario's own param bag
+ * @param {object} [layers.schemaDefaults] key → param-schema defaultValue
+ * @returns {string} a CENTER_SOURCES value
+ */
+export function refineCenterSource(v, { ownParams = null, schemaDefaults = null } = {}) {
+  if (v.centerSource === CENTER_SOURCES.SCENARIO
+      && ownParams && !(v.paramKey in ownParams)
+      && schemaDefaults && (v.paramKey in schemaDefaults)) {
+    return CENTER_SOURCES.SCHEMA;
+  }
+  // `effectiveDefault` is a contributor saying "my mean is what the sim runs at
+  // anyway" (e.g. a preset shock's library severity) — coherent, not synthetic.
+  if (v.centerSource === CENTER_SOURCES.DEFAULT && v.effectiveDefault) return CENTER_SOURCES.SCHEMA;
+  return v.centerSource;
+}
+
+/**
+ * Tag one resolved variable with center provenance:
+ *   centerSource   — see CENTER_SOURCES
+ *   center         — the numeric center actually used (undefined for UNIFORM_DATE)
+ *   scenarioValue  — the loaded scenario's value at this paramKey (undefined when absent)
+ *   centerDiverges — center and scenarioValue are both numeric and differ
+ */
+function centerProvenance(resolved, scenarioValue, override) {
+  if (resolved.type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
+    return { centerSource: CENTER_SOURCES.NA, center: undefined, scenarioValue, centerDiverges: false };
+  }
+  const overridden = override.mean !== undefined || override.value !== undefined;
+  const center = resolved.type === DISTRIBUTION_TYPES.CONSTANT ? resolved.value : resolved.mean;
+  // The MC panel emits a center for EVERY row, so a naive read makes every UI run
+  // look like 40 deliberate overrides and hides the ones that actually are. A row
+  // the user never typed into says so (`centerDirty:false`) and carries the source
+  // the panel resolved — honour it, or a synthetic center silently reclassifies as
+  // "the user meant that" the moment it goes through the UI.
+  const declared = overridden && override.centerDirty === false ? override.centerSource : null;
+  const centerSource = declared                 ? declared
+                     : overridden               ? CENTER_SOURCES.OVERRIDE
+                     : scenarioValue !== undefined ? CENTER_SOURCES.SCENARIO
+                     :                               CENTER_SOURCES.DEFAULT;
+  const centerDiverges =
+    typeof center === 'number' && typeof scenarioValue === 'number'
+      && Math.abs(center - scenarioValue) > 1e-9;
+  return { centerSource, center, scenarioValue, centerDiverges };
+}
+
+/**
  * MC configuration for IntlRetirementScenario.
  *
  * Uses a contributor pattern so toolsets (design 26 healthcare, design 27
@@ -441,6 +529,7 @@ export class IntlRetirementMcConfig {
    * - Fills `defaultValue` and resolves `mean` from the scenario value
    *   when the config omits it.
    * - Applies any user overrides stored via applyOverride().
+   * - Tags each variable with `centerSource` provenance (see _centerSource).
    */
   buildVariables(params) {
     const resolved = this.constructor.contributors
@@ -462,7 +551,7 @@ export class IntlRetirementMcConfig {
       .map(cfg => {
         const defaultValue = get(params, cfg.paramKey);
         const override     = this._overrides.get(cfg.paramKey) ?? {};
-        return {
+        const resolved = {
           ...cfg,
           defaultValue,
           // Preset the sweep center to the live scenario value so the panel inputs
@@ -473,6 +562,7 @@ export class IntlRetirementMcConfig {
           value: defaultValue ?? cfg.value,
           ...override,
         };
+        return { ...resolved, ...centerProvenance(resolved, defaultValue, override) };
       });
 
     // Inherit identity (label / options / visibleWhen) from the param schema and

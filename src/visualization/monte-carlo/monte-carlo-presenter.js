@@ -11,8 +11,9 @@
 import { McConfigPanel }           from './mc-config-panel.js';
 import { McResultsPanel }          from './mc-results-panel.js';
 import { McRunsPanel }             from './mc-runs-panel.js';
-import { IntlRetirementMcConfig }  from '../../finance/monte-carlo/intl-retirement-mc-config.js';
-import { resolveBalanceCenters }   from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
 
@@ -43,6 +44,9 @@ export class MonteCarloPresenter {
 
     this._configPanel.onRun              = (config)  => this._onRun(config);
     this._configPanel.onCopyFromScenario = ()        => this._onCopyFromScenario();
+    // Lets the panel re-centre untouched variables on the live scenario at run time,
+    // so a run always describes the plan as it stands rather than as it was loaded.
+    this._configPanel.onResolveScenarioCenters = ()  => this._scenarioCenters();
     this._runsPanel.onRunSelected        = (run)     => this.onReplayRun?.(run);
     this._resultsPanel.onMetricChange = (metric) => {
       if (this._lastResult) {
@@ -50,9 +54,9 @@ export class MonteCarloPresenter {
       }
     };
 
-    // Populate panel with the full dynamic variable list (including per-shock rows)
-    const baseParams = this._resolveBaseParams();
-    this._configPanel.setVariables(new IntlRetirementMcConfig().buildVariables(baseParams));
+    // Populate panel with the full dynamic variable list (including per-shock rows),
+    // each row carrying the provenance of its center.
+    this._configPanel.setVariables(this._resolveVariables());
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
@@ -85,19 +89,38 @@ export class MonteCarloPresenter {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   /**
-   * Copy the live scenario parameter values into the MC variable centers.
+   * The variable list as the RUNNER will resolve it, each row tagged with where its
+   * center comes from (see CENTER_SOURCES).
    *
-   * Rebuilds the variable list against the current scenario params so each
-   * variable carries a freshly-resolved `defaultValue` (the scenario value at its
-   * paramKey). Those become the panel's mean / value inputs. Fully generic: any
-   * MC variable, including ones added later, is covered because its scenario value
-   * flows through buildVariables() — no per-param wiring here.
+   * The schema-defaults layer is added here and NOT in `_resolveBaseParams()` on
+   * purpose. The runner layers it in weakest-first; `_resolveBaseParams()` is handed
+   * to the runner as `baseParams`, its STRONGEST layer, so folding schema defaults
+   * into that would let a stale `stockBalance` default outrank the account's real
+   * balance. Here it only affects what the panel displays — which is exactly the
+   * point, since the panel should show the value the sim will actually run at.
    */
+  _resolveVariables() {
+    const ownParams      = this._resolveBaseParams();
+    const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
+    const vars = new IntlRetirementMcConfig().buildVariables({ ...schemaDefaults, ...ownParams });
+    return vars.map(v => ({ ...v, centerSource: refineCenterSource(v, { ownParams, schemaDefaults }) }));
+  }
+
+  /**
+   * The live scenario's value for every MC variable, as Map(paramKey → value).
+   *
+   * Rebuilds the variable list against the current scenario params so each variable
+   * carries a freshly-resolved `defaultValue` (the scenario value at its paramKey).
+   * Fully generic: any MC variable, including ones added later, is covered because
+   * its scenario value flows through buildVariables() — no per-param wiring here.
+   */
+  _scenarioCenters() {
+    return new Map(this._resolveVariables().map(v => [v.paramKey, v.defaultValue]));
+  }
+
+  /** Copy the live scenario parameter values into the MC variable centers. */
   _onCopyFromScenario() {
-    const params = this._resolveBaseParams();
-    const vars   = new IntlRetirementMcConfig().buildVariables(params);
-    const values = new Map(vars.map(v => [v.paramKey, v.defaultValue]));
-    const count  = this._configPanel.applyScenarioValues(values);
+    const count = this._configPanel.applyScenarioValues(this._scenarioCenters());
     this._configPanel.setStatus(`Copied ${count} scenario value${count === 1 ? '' : 's'} into variable centers.`);
   }
 
@@ -138,18 +161,16 @@ export class MonteCarloPresenter {
    * Returns a plain object suitable for IntlRetirementMcRunner.
    */
   _resolveBaseParams() {
-    const raw = this._scenario?.params;
-    let params = {};
-    if (Array.isArray(raw)) {
-      params = Object.fromEntries(raw.map(p => [p.key, p.value]));
-    } else if (raw && typeof raw === 'object') {
-      params = { ...raw };
-    }
-    // Balance MC levers key on legacy flat keys whose value lives on the account records
-    // (a holdings-bearing balance isn't a plain param), so resolve them from the active
-    // scenario cfg. This makes the panel presets + Copy-from-Scenario show real balances.
-    // Explicit params win over the derived centers.
+    // The ACTIVE CFG is the live record — the scenario editor writes into its typed
+    // `params` array by reference — so it beats the scenario INSTANCE's bag, which is
+    // a snapshot frozen at the last Rebuild. Reading only the instance is how a panel
+    // ends up centered on a plan the user has already edited away from.
     const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
-    return { ...resolveBalanceCenters(activeCfg), ...params };
+    const instance  = this._scenario?.params;
+    const snapshot  = (instance && !Array.isArray(instance)) ? instance : {};
+    // Balance MC levers key on legacy flat keys whose value lives on the account records
+    // (a holdings-bearing balance isn't a plain param), so resolve them from the cfg;
+    // they win over the params bag, which can hold a stale copy.
+    return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveBalanceCenters(activeCfg) };
   }
 }
