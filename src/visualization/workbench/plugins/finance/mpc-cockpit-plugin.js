@@ -16,6 +16,7 @@ import { RolloutWorkerPool } from '../../../../finance/optimization/parallel/rol
 import { readDecisionRecords, readDecisionRuns } from '../../../../finance/mpc/apply-forward.js';
 import { harvestDecisions, COLLAPSE_RULES } from '../../../../finance/mpc/harvest.js';
 import { applyHarvestPlan } from '../../../../finance/mpc/harvest-apply.js';
+import { checkHarvestFeasibility, describeFeasibility } from '../../../../finance/mpc/harvest-feasibility.js';
 import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from '../../../../finance/mpc/harvest-resolve.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
@@ -38,6 +39,26 @@ const OBJECTIVE_OPTIONS = [
   { kind: 'single', key: 'MIN_LIFETIME_TAXES' },
 ];
 const SOLVER_OPTIONS    = ['CEM', 'QP_POLISH', 'PATTERN_SEARCH', 'SIMULATED_ANNEALING', 'GRID', 'RANDOM'];
+
+/**
+ * Solver budget/seed defaults (design 80 U5).
+ *
+ * These were hardcoded at three call sites — 64/1 for manual Advise and Auto,
+ * 48/1 for the harvest RESOLVE — with no UI and no way to notice. U5 makes them
+ * ONE control feeding all three (§10.1: "plumb one budget and one seed through
+ * all three call sites rather than adding a per-path control"), so RESOLVE now
+ * follows the same budget the run was searched at instead of a quieter number.
+ *
+ * 64 is retained as the default because it is what the app has actually been
+ * running, and design 80 §2.10 measured the controller feasible at every epoch
+ * there — the earlier "controller commits ruin" finding was an artifact of a
+ * budget of 20 that the app never used. Lowering this control walks back toward
+ * that regime, which is exactly why the evals/dimension readout ships with it.
+ */
+const DEFAULT_SOLVER_BUDGET = 64;
+const DEFAULT_SOLVER_SEED   = 1;
+/** Below this many evaluations per search dimension, the readout flags sparsity. */
+const SPARSE_EVALS_PER_DIM  = 10;
 
 /**
  * MpcCockpitPlugin — the closed-loop advisor cockpit (design 39 §7).
@@ -66,6 +87,10 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._parallel         = true;   // parallelize solver rollouts (bit-identical; toggle for A/B)
     this._runId            = null;   // current cockpit run (design 39 §13.2); null ⇒ mint on next use
     this._harvestPlan      = null;   // the plan under review in the harvest panel
+    this._harvestFeasible  = null;   // design 80 F1: solvency of the plan under review
+    // DI seam for the F1 gate: the check compiles and runs a whole scenario, which
+    // a DOM test has no business paying for (nor any way to make fail on demand).
+    this._checkFeasibility = checkHarvestFeasibility;
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -132,6 +157,18 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <label class="mpc-field" data-mpc="horizon-field" title="Prediction window: how many years ahead each solve looks (blank = to end of plan)">Horizon (yrs)
           <input class="wb-input mpc-num" type="number" min="1" step="1" data-mpc="horizon" placeholder="Full">
         </label>
+        <!-- Design 80 U5: budget and seed were hardcoded (64/1) with nothing
+             surfacing either. Budget is fixed while the search SPACE is not — a
+             one-lever run is 1 variable, an eight-lever run is 13+ — so the
+             evals/dimension readout sits next to the control and says how sparse
+             this particular search will be BEFORE it runs. -->
+        <label class="mpc-field" title="Solver evaluations per epoch. Higher searches harder and costs proportionally more; the readout beside it is evaluations per search dimension.">Budget
+          <input class="wb-input mpc-num" type="number" min="1" step="8" data-mpc="budget" value="${DEFAULT_SOLVER_BUDGET}">
+        </label>
+        <label class="mpc-field" title="Solver RNG seed. Fixed at 1 everywhere until now, so every run explored the identical trajectory and solver variance was invisible — vary it to check a plan isn't an artifact of one search path.">Seed
+          <input class="wb-input mpc-num" type="number" min="0" step="1" data-mpc="seed" value="${DEFAULT_SOLVER_SEED}">
+        </label>
+        <span class="mpc-hint mpc-evals" data-mpc="evals" title="Search budget per dimension. Below ~10 the search is sparse: it may land marginally outside the feasible set rather than mis-price the trade-off (design 80 §2.9)."></span>
         <button class="btn btn-sm btn-primary" data-mpc="advise">Advise next move</button>
         <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
@@ -174,6 +211,12 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
           <label class="mpc-field mpc-harvest-opt" title="Re-solve the best STATIC value over the whole run for levers with no schedule form, instead of freezing the last epoch's decision (design 39 §13.6.6). Costs one optimizer run.">
             <input type="checkbox" data-mpc="harvest-resolve"> Re-solve static levers
           </label>
+          <!-- Design 80 F1: an infeasible plan BLOCKS the copy. The override is
+               explicit and labelled with the ruin date, because a truncated
+               exploratory harvest (§13 H2) is a legitimate reason to want one. -->
+          <label class="mpc-field mpc-harvest-opt mpc-harvest-override" data-mpc="harvest-override-field" style="display:none">
+            <input type="checkbox" data-mpc="harvest-override"> <span data-mpc="harvest-override-label">Copy anyway</span>
+          </label>
           <button class="btn btn-sm btn-primary" data-mpc="harvest-apply">Copy to scenario</button>
           <button class="btn btn-sm" data-mpc="harvest-cancel">Cancel</button>
         </div>
@@ -204,14 +247,16 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('harvest-apply',  'click', () => this._applyHarvest());
     this._bind('harvest-cancel', 'click', () => this._closeHarvest());
     this._bind('harvest-resolve','change', () => this._openHarvest());   // re-price the preview
+    this._bind('harvest-override','change', () => this._syncHarvestApply());
     this._bind('control', 'change', () => {
       this._controller?.setControls(this._currentControls());
       this._applyControlDefaultRange();   // each lever has its own natural range
       this._controller?.setControlRange(this._currentRange());
       this._syncRangeEnabled();
-      this._syncLeverApplicability();
+      this._syncLeverApplicability();   // also refreshes the evals/dim readout
       this._endRun();     // a different lever set is a different run (§13 H1)
     });
+    this._bind('budget', 'change', () => this._syncEvalsReadout());
     this._bind('objective','change',() => {
       this._syncObjectiveAxes();
       this._controller?.setObjective(this._currentObjective());
@@ -233,6 +278,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('clear-savepoints', 'click', () => this._clearSavePoints());
     this._renderSavePoints();
     this._syncHarvestEnabled();
+    this._syncEvalsReadout();
   }
 
   // ─── Run identity (design 39 §13.2) ────────────────────────────────────────
@@ -322,6 +368,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
    */
   _syncLeverApplicability() {
     const advise = this._q('advise');
+    this._syncEvalsReadout();   // the scenario (hence the variable count) may have changed
     // No scenario/sim yet → fall back to the "run a simulation" prompt.
     if (!this._sim || !this._services()?.scenarioService?.getActive?.()) {
       if (advise) advise.disabled = false;
@@ -525,6 +572,71 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   _currentObjective() { return OPTIMIZATION_OBJECTIVES[this._currentObjectiveKey()] ?? OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET; }
   _currentSolver()    { return this._q('solver')?.value ?? 'CEM'; }
 
+  /**
+   * The solver options for EVERY solve this panel drives — Advise, Auto, and the
+   * harvest RESOLVE (design 80 U5). One accessor is the point: three hardcoded
+   * literals is how the harvest ended up searching at a different budget from the
+   * run it was harvesting.
+   */
+  _solverOptions() {
+    const num = (name, dflt, min) => {
+      const v = Number(this._q(name)?.value);
+      return Number.isFinite(v) && v >= min ? Math.round(v) : dflt;
+    };
+    return {
+      budget: num('budget', DEFAULT_SOLVER_BUDGET, 1),
+      seed:   num('seed',   DEFAULT_SOLVER_SEED,   0),
+    };
+  }
+
+  /**
+   * How many variables the current lever set actually searches over.
+   *
+   * Prefers the live controller (its variables are built against the realized
+   * snapshot, so role/class pruning is accurate); falls back to building them from
+   * the active scenario's params so the readout is live BEFORE the first Advise —
+   * which is the whole point of U5, since sparsity is knowable in advance and was
+   * previously only inferable from a bad answer afterwards. Null when it cannot be
+   * determined (no scenario yet).
+   */
+  _searchDimension() {
+    try {
+      if (this._controller?.snapshot) return this._controller._variables().length;
+      const baseParams = this._baseParams();
+      if (!Object.keys(baseParams).length) return null;
+      const ranges = this._currentControlRanges();
+      const asOf = this._sim?.currentDate ? new Date(this._sim.currentDate) : null;
+      let n = 0;
+      for (const c of this._currentControls()) {
+        const range = this._isMultiLever()
+          ? (ranges[c.key] ?? c.defaultRange ?? null)
+          : (c.numeric ? this._currentRange() : (c.defaultRange ?? null));
+        n += (c.buildVariables?.({ baseParams, state: this._sim?.state ?? null, asOf, range }) ?? []).length;
+      }
+      return n;
+    } catch {
+      return null;   // a lever that can't encode here is not a reason to break the toolbar
+    }
+  }
+
+  /**
+   * Render "64 evals · 4.9/dim" beside the budget control (design 80 U5 / U4 item 1).
+   *
+   * A fixed 64 is a thorough search over one variable and a sparse one over
+   * thirteen, wearing the same number. Saying the ratio out loud is what makes the
+   * budget control actionable rather than a knob with no feedback.
+   */
+  _syncEvalsReadout() {
+    const el = this._q('evals');
+    if (!el) return;
+    const { budget } = this._solverOptions();
+    const dim = this._searchDimension();
+    if (!dim) { el.textContent = `${budget} evals`; el.classList.remove('mpc-evals--sparse'); return; }
+    const per = budget / dim;
+    el.textContent = `${budget} evals · ${per.toFixed(1)}/dim (${dim} var${dim === 1 ? '' : 's'})`;
+    el.classList.toggle('mpc-evals--sparse', per < SPARSE_EVALS_PER_DIM);
+  }
+
   /** Build (or rebuild) the controller seeded from the active sim's "now". */
   _ensureController() {
     if (this._controller) return this._controller;
@@ -570,7 +682,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (!c) { this._setNow('Build/run a scenario first.'); return; }
     this._setBusy(true, 'Searching for the best next move…');
     try {
-      const advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
+      const advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: this._solverOptions(), workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
       this._renderAdvice(advice);
     } catch (err) {
       this._setNow(`Advice failed: ${err?.message ?? err}`);
@@ -705,7 +817,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
         let advice;
         try {
-          advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
+          advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: this._solverOptions(), workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
         } catch (err) {
           this._setNow(`Auto stopped — advice failed: ${err?.message ?? err}`);
           break;
@@ -904,7 +1016,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
           cfgTemplate:   scenario,
           state:         this._sim?.state ?? null,
           solverKey:     this._currentSolver(),
-          solverOptions: { budget: 48, seed: 1 },
+          solverOptions: this._solverOptions(),
           workerPool:    this._pool(),
         });
         plan = mergeResolved(plan, resolved);
@@ -915,14 +1027,61 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     }
 
     this._harvestPlan = plan;
-    this._renderHarvest(plan, run);
+    this._harvestFeasible = null;
+    this._renderHarvest(plan, run, { busy: 'Checking whether the copied plan stays solvent…' });
     panel.style.display = '';
+
+    // F1 (design 80 §4.1): solvency of the plan is checked BEFORE the copy can be
+    // approved, not offered as a post-hoc verify. One full-horizon run — sub-second
+    // on a 44-year scenario — and it runs on preview OPEN, not per checkbox toggle.
+    // Yield a frame first so the table paints before the run blocks the thread.
+    await _nextFrame();
+    if (this._harvestPlan !== plan) return;    // a re-open superseded this preview
+    this._harvestFeasible = this._checkFeasibility({
+      plan,
+      baseParams,
+      simStart:    new Date(scenario.simStart),
+      simEnd:      new Date(scenario.simEnd),
+      cfgTemplate: scenario,
+      objective:   this._currentObjective(),
+    });
+    this._renderHarvest(plan, run);
   }
 
   _closeHarvest() {
     this._harvestPlan = null;
+    this._harvestFeasible = null;
     const panel = this._q('harvest-panel');
     if (panel) panel.style.display = 'none';
+  }
+
+  /**
+   * Gate the Copy button on the F1 check (D1: feasibility precedes fidelity).
+   *
+   * Three states, and the third matters: feasible ⇒ enabled; INFEASIBLE ⇒ blocked
+   * until the user ticks an override labelled with the ruin date; unverifiable
+   * (`feasible === null`, including the pre-check moment) ⇒ enabled, because a
+   * check that failed to run must not become a silent veto on the user's own plan.
+   */
+  _syncHarvestApply() {
+    const btn = this._q('harvest-apply');
+    const field = this._q('harvest-override-field');
+    const box = this._q('harvest-override');
+    const f = this._harvestFeasible;
+    const blocked = f?.feasible === false;
+
+    if (field) field.style.display = blocked ? '' : 'none';
+    if (!blocked && box) box.checked = false;   // never carry an override across previews
+    if (box && blocked) {
+      const label = this._q('harvest-override-label');
+      const when = f.outOfFundsDate ? _fmtDate(f.outOfFundsDate) : 'mid-plan';
+      if (label) label.textContent = `Copy anyway — this plan runs out in ${when}`;
+    }
+    if (btn) {
+      btn.disabled = blocked && !(box?.checked);
+      btn.classList.toggle('btn-warn', blocked && !!box?.checked);
+      btn.textContent = blocked && box?.checked ? 'Copy anyway' : 'Copy to scenario';
+    }
   }
 
   /**
@@ -935,6 +1094,15 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const plan = this._harvestPlan;
     const scenario = this._services()?.scenarioService?.getActive?.() ?? null;
     if (!plan || !scenario) return;
+
+    // F1 is a gate, not a warning: an infeasible plan does not reach the writer
+    // unless the user ticked the labelled override. Re-checked here rather than
+    // trusting the button's disabled state alone (the panel is also driven by
+    // tests and by keyboard activation).
+    if (this._harvestFeasible?.feasible === false && !this._q('harvest-override')?.checked) {
+      this._setNow(`Copy blocked — ${describeFeasibility(this._harvestFeasible, { fmtDate: _fmtDate, fmtUsd: _usd })}`);
+      return;
+    }
 
     let res;
     try {
@@ -989,12 +1157,32 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
     body.innerHTML =
       (busy ? `<div class="mpc-hv-busy">${_esc(busy)}</div>` : '') +
+      this._feasibilityBanner() +
       (rows || reqRows
         ? `<ul class="mpc-hv-list">${rows}${reqRows}</ul>`
         : `<div class="mpc-hv-empty">Nothing to copy from this run.</div>`) +
       (warn ? `<ul class="mpc-hv-warns">${warn}</ul>` : '') +
       `<div class="mpc-hv-note">A copied plan is <b>open-loop</b>: it re-runs deterministically on this path, `
       + `but it cannot react the way the controller did — under a different seed or Monte Carlo arm it will differ.</div>`;
+
+    this._syncHarvestApply();
+  }
+
+  /**
+   * The F1 verdict, ABOVE the diff and never as a percentage (design 80 §2.6 —
+   * the goal metric cannot express it: a ruined plan and a perfect spend-down both
+   * terminate at $0 under a die-with-zero goal, so any Δ% reads ≈0 and passes a
+   * bankrupt plan). Solvency is a separate axis, stated in its own words.
+   */
+  _feasibilityBanner() {
+    const f = this._harvestFeasible;
+    if (!f) return '';
+    const text = describeFeasibility(f, { fmtDate: _fmtDate, fmtUsd: _usd });
+    if (f.feasible === true)  return `<div class="mpc-hv-feas mpc-hv-feas--ok">✅ ${_esc(text)}</div>`;
+    if (f.feasible === null)  return `<div class="mpc-hv-feas mpc-hv-feas--unknown">⚠ ${_esc(text)}</div>`;
+    return `<div class="mpc-hv-feas mpc-hv-feas--bad">⛔ <b>Infeasible.</b> ${_esc(text)}`
+      + ` A controller run can be solvent at every epoch and still bake into a plan that is not:`
+      + ` its margin came from re-deciding each year, and a saved scenario cannot.</div>`;
   }
 
   /**

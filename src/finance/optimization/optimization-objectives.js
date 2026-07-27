@@ -49,13 +49,57 @@ export const DEFAULT_DEFICIT_PENALTY = 100;
 /**
  * Windowed cumulative deficit incurred over the scored horizon: terminal minus
  * the snapshot accumulator (MPC §47), clamped ≥ 0 since deficit is monotonic.
+ * Shared by the `μ · deficit` penalty and by the feasibility-first ranking.
+ */
+export function windowedDeficit(result, snapshot) {
+  return Math.max(0,
+    (result.cumulativeDeficit ?? 0) - (snapshot?.state?.cumulativeDeficit ?? 0));
+}
+
+/**
+ * How infeasible a rollout is, in dollars of shortfall — 0 means feasible.
+ *
+ * `scenarioFailed` and a non-zero windowed deficit are near-synonyms, but not
+ * quite: a plan can be flagged failed on the last step with the shortfall not yet
+ * accumulated, and a plan can inherit `scenarioFailed` from a snapshot whose
+ * deficit is already subtracted out. Treat EITHER as infeasible, and report the
+ * deficit as the magnitude so callers can rank least-bad when nothing is feasible.
+ */
+export function infeasibilityOf(result, snapshot) {
+  const deficit = windowedDeficit(result, snapshot);
+  if (deficit > 0) return deficit;
+  return result?.scenarioFailed ? Number.MIN_VALUE : 0;
+}
+
+/** True when a rollout finished solvent over the scored window. */
+export function isFeasibleResult(result, snapshot) {
+  return infeasibilityOf(result, snapshot) === 0;
+}
+
+/**
+ * Score offset that puts every infeasible candidate strictly below every feasible
+ * one (design 80 U2). Finite by design — CEM refits a Gaussian over its elite set
+ * and a non-finite score poisons the mean/σ update — and far larger than any
+ * realistic |score| or deficit on these scenarios, so the two bands never
+ * interleave.
+ */
+export const INFEASIBLE_OFFSET = 1e15;
+
+/**
  * Returns the penalty term `μ · deficit` to SUBTRACT from a maximize score.
+ *
+ * **Known limit (design 80 §2.7)** — this is the *only* term that grows with the
+ * severity of a failure. The λ terminal term cannot help: for the `liquid` scope
+ * `computeNetLiquidity` bottoms out at 0 (it "reaches zero at the same moment an
+ * OutOfFunds event fires"), so `|terminal − target|` is bounded above by `target`
+ * in the whole insolvent region. The terminal penalty for ruin is therefore
+ * **capped at `λ · target`** however catastrophic the ruin is, and raising the
+ * target raises the cap linearly without ever making it a gradient. Solvency
+ * ranking must not rely on it — see `OptimizationProblem.feasibilityFirst`.
  */
 function _deficitPenalty(result, snapshot) {
-  const deficit = Math.max(0,
-    (result.cumulativeDeficit ?? 0) - (snapshot?.state?.cumulativeDeficit ?? 0));
   const mu = result.deficitPenalty ?? DEFAULT_DEFICIT_PENALTY;
-  return mu * deficit;
+  return mu * windowedDeficit(result, snapshot);
 }
 
 /**
