@@ -27,6 +27,7 @@ import { rescaleHoldingsToBalance, holdingsOutOfSync } from '../finance/holdings
 import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
 import { CompanyEquity } from '../finance/assets/company-equity.js';
+import { Bequest }       from '../finance/assets/bequest.js';
 
 // ─── Framework classes ──────────────────────────────────────────────────────
 import { HandlerEntry }   from '../simulation-framework/handlers.js';
@@ -402,6 +403,7 @@ export class ScenarioSerializer {
       realProperties: (scenario.realProperties ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       companyEquities: (scenario.companyEquities ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
+      bequests:       (scenario.bequests ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  (scenario.actions ?? []).map(n => ScenarioSerializer._serializeAction(n)),
@@ -442,7 +444,7 @@ export class ScenarioSerializer {
   static snapshotServices(services) {
     const {
       eventService, handlerService, actionService, reducerService,
-      personService, accountService, realPropertyService, collectibleService, companyEquityService,
+      personService, accountService, realPropertyService, collectibleService, companyEquityService, bequestService,
     } = services;
     return {
       persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
@@ -450,6 +452,7 @@ export class ScenarioSerializer {
       realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       companyEquities: (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
+      bequests:       (bequestService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:         (eventService?.getAll()          ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers:       (handlerService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
       actions:        (actionService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAction(n)),
@@ -472,13 +475,14 @@ export class ScenarioSerializer {
    * @returns {{ persons, accounts, realProperties, collectibles }}
    */
   static snapshotDomainRecords(services) {
-    const { personService, accountService, realPropertyService, collectibleService, companyEquityService } = services;
+    const { personService, accountService, realPropertyService, collectibleService, companyEquityService, bequestService } = services;
     return {
       persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (accountService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       companyEquities: (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
+      bequests:       (bequestService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
     };
   }
 
@@ -491,7 +495,7 @@ export class ScenarioSerializer {
    * @param {object} services - ServiceRegistry instance
    */
   static deserializePersonsAccounts(config, services) {
-    const { personService, accountService, realPropertyService, collectibleService, companyEquityService } = services;
+    const { personService, accountService, realPropertyService, collectibleService, companyEquityService, bequestService } = services;
     if (personService) {
       for (const d of (config.persons ?? [])) {
         const person = ScenarioSerializer._makePerson(d);
@@ -520,6 +524,12 @@ export class ScenarioSerializer {
       for (const d of (config.companyEquities ?? [])) {
         const eq = ScenarioSerializer._makeCompanyEquity(d);
         companyEquityService.createCompanyEquity(eq);
+      }
+    }
+    if (bequestService) {
+      for (const d of (config.bequests ?? [])) {
+        const bq = ScenarioSerializer._makeBequest(d);
+        bequestService.createBequest(bq);
       }
     }
   }
@@ -877,6 +887,47 @@ export class ScenarioSerializer {
     });
     if (d.stateKey) eq.stateKey = d.stateKey;
     return eq;
+  }
+
+  /**
+   * Serialize a Bequest config container (design 63). The inherited-asset
+   * descriptors are plain, structuredClone-safe objects, so they round-trip
+   * verbatim (deep-cloned to detach from the live record).
+   */
+  static _serializeBequest(b) {
+    return {
+      __type:          'Bequest',
+      id:              b.id,
+      name:            b.name            ?? '',
+      stateKey:        b.stateKey        ?? null,
+      decedentName:    b.decedentName    ?? '',
+      relationship:    b.relationship    ?? 'immediate',
+      decedentState:   b.decedentState   ?? null,
+      heirId:          b.heirId          ?? null,
+      inheritanceYear:  b.inheritanceYear  ?? null,
+      inheritanceMonth: b.inheritanceMonth ?? 0,
+      inheritanceDay:   b.inheritanceDay   ?? 15,
+      paidViaEstate:   b.paidViaEstate   ?? false,
+      assets:          (b.assets ?? []).map(a => ({ ...a })),
+    };
+  }
+
+  static _makeBequest(d) {
+    const bq = new Bequest({
+      id:               d.id,
+      name:             d.name            ?? '',
+      decedentName:     d.decedentName    ?? '',
+      relationship:     d.relationship    ?? 'immediate',
+      decedentState:    d.decedentState   ?? null,
+      heirId:           d.heirId          ?? null,
+      inheritanceYear:  d.inheritanceYear  ?? null,
+      inheritanceMonth: d.inheritanceMonth ?? 0,
+      inheritanceDay:   d.inheritanceDay   ?? 15,
+      paidViaEstate:    d.paidViaEstate   ?? false,
+      assets:           (d.assets ?? []).map(a => ({ ...a })),
+    });
+    if (d.stateKey) bq.stateKey = d.stateKey;
+    return bq;
   }
 
   static _serializePerson(person) {

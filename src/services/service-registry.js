@@ -28,6 +28,7 @@ import { CurrencyConverter } from '../finance/fx/currency-converter.js';
 import { RealPropertyService } from '../finance/services/real-property-service.js';
 import { CollectibleService } from '../finance/services/collectible-service.js';
 import { CompanyEquityService } from '../finance/services/company-equity-service.js';
+import { BequestService } from '../finance/services/bequest-service.js';
 import { TypeRegistry } from '../simulation-framework/type-registry.js';
 import { registerHoldingActionTypes } from '../finance/holdings/holding-actions.js';
 import { HOLDING_REDUCER_CLASSES } from '../finance/holdings/holding-reducers.js';
@@ -68,6 +69,7 @@ export class ServiceRegistry {
     this.realPropertyService    = new RealPropertyService(this.graph, this.graphQueryApi, this.bus);
     this.collectibleService     = new CollectibleService(this.graph, this.graphQueryApi, this.bus);
     this.companyEquityService   = new CompanyEquityService(this.graph, this.graphQueryApi, this.bus);
+    this.bequestService         = new BequestService(this.graph, this.graphQueryApi, this.bus);
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
     this.schemaRegistry     = new StateSchemaRegistry();
@@ -108,6 +110,7 @@ export class ServiceRegistry {
       realPropertyService: this.realPropertyService,
       collectibleService: this.collectibleService,
       companyEquityService: this.companyEquityService,
+      bequestService: this.bequestService,
       stateRegistry: this.stateRegistry,
       schemaRegistry: this.schemaRegistry,
       typeRegistry: this.typeRegistry,

@@ -31,9 +31,13 @@ function _sumMap(map) {
 const YTD_FIELDS = {
   US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
-       'ftcCurrentGeneral', 'ftcCurrentPassive'],
+       'ftcCurrentGeneral', 'ftcCurrentPassive',
+       // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
+       'neInheritanceTaxYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
-       'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD'],
+       'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
+       // design 63 §6.4 — AU super death-benefit tax (reporting bucket; withheld from the net lump sum)
+       'auSuperDeathTaxYTD'],
 };
 
 // Per-person AU accumulator maps reset to zero after each AU settlement.

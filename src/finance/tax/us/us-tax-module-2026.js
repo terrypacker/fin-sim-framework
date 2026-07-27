@@ -50,6 +50,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._iraRolloverReducerFns(),
       ...this._rothRolloverReducerFns(),
       ...this._rothConversionReducerFns(),
+      ...this._inheritanceReducerFns(),
     ]);
   }
 
@@ -539,6 +540,40 @@ export class UsTaxModule2026 extends BaseTaxModule {
         ...state,
         usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
       })],
+    ];
+  }
+
+  _inheritanceReducerFns() {
+    return [
+      // Design 63 §6.5: Nebraska inheritance tax — heir-paid STATE liability keyed
+      // to the decedent's NE situs (the handler computed the class-based amount).
+      // Recorded in neInheritanceTaxYTD; the cash is debited immediately by
+      // InheritanceNeTaxApplyReducer. Not federal, not marginal.
+      ['NE_INHERITANCE_TAX', (state, action) => ({
+        ...state,
+        neInheritanceTaxYTD: (state.neInheritanceTaxYTD ?? 0) + (action.amount ?? 0),
+      })],
+
+      // Design 63 §6.2: SECURE 10-year inherited traditional IRA/401(k)
+      // distribution — IRD, taxed as US ordinary income to the heir (no basis,
+      // no penalty). AU ordinary income (worldwide) if the heir is AU-resident,
+      // relieved by FITO — mirrors the RMD classifiers. Inherited Roth emits no
+      // tax action (tax-free), so it never reaches this classifier.
+      ['INHERITED_RA_DISTRIBUTION_TAX', (state, action) => {
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AU';
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
+          };
+        }
+        return next;
+      }],
     ];
   }
 }
