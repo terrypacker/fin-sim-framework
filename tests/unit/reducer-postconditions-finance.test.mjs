@@ -345,11 +345,12 @@ test('AccountRetitleApplyReducer: no matching owner is a no-op (I7)', () => {
 
 test('PersonDiedApplyReducer: records death and removes person from people (I1)', () => {
   const r = new PersonDiedApplyReducer();
-  const state = { people: { p1: { residency: 'US' }, p2: { residency: 'US' } }, deceased: {} };
-  const next = runReducer(r, state, makeAction('PERSON_DIED_APPLY', { personId: 'p1', date: DATE, taxJurisdiction: 'US' }), DATE, {});
+  const state = { people: { p1: { residency: 'US', name: 'P1', incomeSupportRecipient: true }, p2: { residency: 'US' } }, deceased: {} };
+  const next = runReducer(r, state, makeAction('PERSON_DIED_APPLY', { personId: 'p1', date: DATE, taxJurisdiction: 'US', personName: 'P1', incomeSupportRecipient: true }), DATE, {});
   assert.equal(next.people.p1, undefined, 'deceased removed');
   assert.ok(next.people.p2, 'survivor remains');
-  assert.deepEqual(next.deceased.p1, { date: DATE, taxJurisdiction: 'US' });
+  // Captures name + Age Pension flag for the year-of-death AU settle (design/68 Gap 1).
+  assert.deepEqual(next.deceased.p1, { date: DATE, taxJurisdiction: 'US', name: 'P1', incomeSupportRecipient: true });
 });
 
 test('PersonDiedApplyReducer: absent person does not throw, people map unchanged (I7)', () => {

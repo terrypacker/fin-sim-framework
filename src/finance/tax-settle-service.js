@@ -19,6 +19,20 @@ import {
   InflationAdjustedAuTaxRates,
 } from './tax/inflation-adjusted-tax-rates.js';
 
+// Per-person AU maps whose non-zero balance means a person accrued AU tax
+// exposure this fiscal year. Used by computeAuTaxPerPerson to detect a person
+// who died mid-year (already gone from state.people) but still owes a final-year
+// return (design/68 Gap 1). Franking credits / earned-income views are excluded:
+// they are credits or duplicate views, not a standalone reason to file.
+const AU_PER_PERSON_INCOME_FIELDS = [
+  'auPersonOrdinaryIncomeYTD',
+  'auPersonCapitalGainsYTD',
+  'auPersonDiscountableGainsYTD',
+  'auPersonRealCapitalGainsYTD',
+  'auPersonNonResidentWithholdingYTD',
+  'auPersonSuperTaxYTD',
+];
+
 /**
  * TaxSettleService — year-aware computation of end-of-period tax liability.
  *
@@ -91,7 +105,15 @@ export class TaxSettleService {
   }
 
   /**
-   * Compute AU tax separately for each person in state.people.
+   * Compute AU tax separately for each person who was resident during the fiscal
+   * year — the living residents in state.people PLUS anyone who accrued AU income
+   * this year and has since died (design/68 Gap 1). A person who dies partway
+   * through the year is removed from state.people the moment PERSON_DIED fires,
+   * but their per-person accumulators still hold the pre-death income at settle
+   * time (the reset runs later, in the apply reducer), so their final-year return
+   * must still be filed and its liability debited. Prior-year deaths were already
+   * zeroed at their own settle, so the non-zero-balance check naturally excludes
+   * them and does not dilute numResidents.
    *
    * Each AU YTD field is resolved as:
    *   personValue = auPersonXYTD[key] + auXYTD / numResidents
@@ -107,14 +129,45 @@ export class TaxSettleService {
    * @returns {{ personKey: string, personName: string, taxDetail: TaxComputationResult }[]}
    */
   computeAuTaxPerPerson(state) {
-    const people = state.people ?? {};
-    const residents = Object.entries(people).filter(([, p]) => p != null);
-    const numResidents = Math.max(1, residents.length);
-    const auModule = this._getModule('AU', state);
+    const people   = state.people ?? {};
+    const deceased = state.deceased ?? {};
     const period   = state.currentPeriods?.AU;
+
+    // Resident-of-the-year set: living residents ∪ mid-year-deceased who were AU
+    // residents for part of this fiscal year. Two independent signals so both the
+    // migrated-income and shared-pool-only cases are covered:
+    //   (1) a non-zero per-person AU balance — catches income already migrated to
+    //       the per-person maps (design 52/55).
+    //   (2) an AU-resident death dated inside this fiscal period — catches income
+    //       that only ever lived in the shared pool (no per-person attribution),
+    //       and keeps numResidents correct so the survivor's shared-pool split is
+    //       unchanged from the pre-death allocation.
+    const activeKeys = new Set(Object.keys(people).filter(k => people[k] != null));
+    for (const field of AU_PER_PERSON_INCOME_FIELDS) {
+      const map = state[field];
+      if (!map) continue;
+      for (const [k, v] of Object.entries(map)) {
+        if (v) activeKeys.add(k);
+      }
+    }
+    if (period) {
+      for (const [k, rec] of Object.entries(deceased)) {
+        if (rec?.taxJurisdiction !== 'AU') continue;
+        const t = rec.date instanceof Date ? rec.date.getTime()
+                : (rec.date != null ? new Date(rec.date).getTime() : NaN);
+        if (!Number.isNaN(t) && t >= period.startMs && t < period.endMs) activeKeys.add(k);
+      }
+    }
+
+    const residentKeys = [...activeKeys];
+    const numResidents = Math.max(1, residentKeys.length);
+    const auModule = this._getModule('AU', state);
     const taxYear  = period ? new Date(period.startMs).getUTCFullYear() : undefined;
 
-    return residents.map(([key, person]) => {
+    return residentKeys.map((key) => {
+      // Living person, else the death-captured record (name + Age Pension flag).
+      const person = people[key] ?? deceased[key] ?? {};
+
       const perPersonShare = (map, shared) =>
         (map?.[key] ?? 0) + (shared ?? 0) / numResidents;
 

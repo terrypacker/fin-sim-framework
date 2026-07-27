@@ -17,8 +17,13 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * retitle, etc.) see the updated state.people map immediately.
  *
  * Writes:
- *   state.deceased[personId] = { date, taxJurisdiction }
+ *   state.deceased[personId] = { date, taxJurisdiction, name, incomeSupportRecipient }
  *   state.people  — clone-and-delete (mirrors design-20 mutation pattern)
+ *
+ * `name` and `incomeSupportRecipient` are captured here (from the person, via the
+ * action) because the person is gone from state.people after this reducer runs.
+ * The year-of-death AU settle (design/68 Gap 1) reads them back to file the
+ * deceased's final-year return with the right name and Age Pension CGT exemption.
  */
 export class PersonDiedApplyReducer extends Reducer {
   static description = 'Records death in state.deceased and removes person from state.people.';
@@ -31,9 +36,12 @@ export class PersonDiedApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { personId, date, taxJurisdiction } = action;
+    const { personId, date, taxJurisdiction, personName, incomeSupportRecipient } = action;
 
-    const deceased  = { ...(state.deceased ?? {}), [personId]: { date, taxJurisdiction } };
+    const deceased  = {
+      ...(state.deceased ?? {}),
+      [personId]: { date, taxJurisdiction, name: personName, incomeSupportRecipient: incomeSupportRecipient === true },
+    };
     const newPeople = { ...(state.people ?? {}) };
     delete newPeople[personId];
 
