@@ -602,7 +602,21 @@ Three changes, mirroring the federal path:
 
 3. **Export.** `--cc STATE` resolves to `STATE_TAX_SETTLE_APPLY` through the shared
    `settleActionTypeFor`. No new column is needed: the state rides in `form`
-   (`NE State Income Tax`), and `country`/`currency` stay `US`/`USD`.
+   (`NE State Income Tax`), and `country`/`currency` stay `US`/`USD`. `--cc US,STATE`
+   puts the federal and state returns in one file, told apart by `form`.
+
+   The reference scenario leaves `residencyState` null, so the settle handler emits
+   nothing and `--reference --cc STATE` alone yields no rows — hence `--state <CODE>`,
+   which is the one param the exporter overrides on the reference run:
+
+   ```
+   npm run export:tax -- --reference --state NE --cc STATE --check
+   ```
+
+   The exporter warns when the code has no rates module (only NE/HI/SD do): such a
+   state still settles, at zero, producing summary-only rows that would otherwise look
+   like a valid-but-empty export. The reference household also moves US→AU in 2031,
+   after which state liability is legitimately zero.
 
 Verified end-to-end on Nebraska (CG folded into ordinary) and Hawaii (7.25% alternative CG stated
 inline as a flat-rate line), both passing the §6 footing checks.

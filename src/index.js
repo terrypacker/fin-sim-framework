@@ -235,6 +235,7 @@ import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
+import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBands, flatRateBand } from './finance/tax/bracket-schedule.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
@@ -252,6 +253,8 @@ import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD } from './finance/tax/tax-fx.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
+import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv } from './finance/tax/tax-worksheet-export.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
 import { UsTaxDocument2026 } from './finance/tax/us/us-tax-document-2026.js';
@@ -998,6 +1001,11 @@ export const Finance = {
   BaseTaxDocumentModule,
   BaseTaxModule,
   BaseTaxRatesModule,
+  applyBracketsDetailed,
+  applyBrackets,
+  marginalBracketRate,
+  subtractBands,
+  flatRateBand,
   DynamicTaxReducer,
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
@@ -1032,6 +1040,15 @@ export const Finance = {
   AuTaxSettleApplyReducer,
   UsTaxPaymentDebitReducer,
   AuTaxPaymentDebitReducer,
+  TAX_SETTLE_ACTION_TYPES,
+  settleActionTypeFor,
+  isTaxSettleEntry,
+  primaryTaxSettleEntries,
+  WORKSHEET_COLUMNS,
+  buildTaxWorksheetRows,
+  worksheetRowsFromDocuments,
+  verifyWorksheetRows,
+  toCsv,
   UsTaxDocument2024,
   UsTaxDocument2025,
   UsTaxDocument2026,

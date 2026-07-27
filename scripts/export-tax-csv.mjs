@@ -25,12 +25,25 @@
  *   node scripts/export-tax-csv.mjs --reference > tax.csv
  *   node scripts/export-tax-csv.mjs <file.json> [options] > tax.csv
  *   npm run export:tax -- --reference --check
+ *   npm run export:tax -- --reference --state NE --cc STATE --check
  *
  * Options:
  *   --reference        Run the built-in reference scenario (IntlRetirementScenario)
  *                      instead of loading a file. Handy for a zero-setup baseline.
- *   --cc <US[,AU]>     Country/countries to export. Default US. AU lands with
- *                      design 71 Phase 5; passing it today yields no rows.
+ *   --cc <J[,J]>       Jurisdiction(s) to export: US, AU, STATE. Default US.
+ *                      STATE is the US state return (design 71 §11.3) — one document
+ *                      per settled year for the primary person's residency state.
+ *                      It rides in the `form` column (`NE State Income Tax`); the
+ *                      `country`/`currency` columns stay US/USD, so `--cc US,STATE`
+ *                      puts the federal and state returns in one file and they are
+ *                      told apart by `form`.
+ *   --state <CODE>     Reference-scenario residency state (NE, HI or SD — the states
+ *                      with rates modules). Only meaningful with --reference: the
+ *                      reference scenario has no residency state by default, so
+ *                      `--cc STATE` alone yields no rows. Configs loaded from a file
+ *                      carry their own residencyState; this flag does not override it.
+ *                      Note the reference scenario moves US→AU in 2031, after which
+ *                      state liability is legitimately zero.
  *   --year <Y[,Y]>     Restrict to these tax years. Default: every settled year.
  *   --schedules        Also emit supplementary sections-shaped forms (Schedule D).
  *                      Table-shaped forms (8949, AU CGT Schedule) are never emitted
@@ -51,6 +64,7 @@ import { ServiceRegistry }        from '../src/services/service-registry.js';
 import { BaseScenario }           from '../src/scenarios/base-scenario.js';
 import { ScenarioLoader }         from '../src/scenarios/scenario-loader.js';
 import { IntlRetirementScenario } from '../src/scenarios/intl-retirement-scenario.js';
+import { StateTaxSettleService }  from '../src/finance/tax/state/state-tax-settle-service.js';
 import {
   buildTaxWorksheetRows,
   toCsv,
@@ -61,7 +75,7 @@ import {
 
 function parseArgs(argv) {
   const opts = {
-    file: null, reference: false, cc: ['US'], years: null,
+    file: null, reference: false, cc: ['US'], years: null, state: null,
     schedules: false, to: null, out: null, check: false, first: false, help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -69,6 +83,7 @@ function parseArgs(argv) {
     switch (a) {
       case '--reference': opts.reference = true; break;
       case '--cc':        opts.cc = splitList(argv[++i]).map(s => s.toUpperCase()); break;
+      case '--state':     opts.state = String(argv[++i] ?? '').toUpperCase(); break;
       case '--year':      opts.years = splitList(argv[++i]).map(Number); break;
       case '--schedules': opts.schedules = true; break;
       case '--to':        opts.to = argv[++i]; break;
@@ -92,10 +107,14 @@ const HELP = `export-tax-csv — headless tax worksheet CSV export (design 71)
 Usage:
   node scripts/export-tax-csv.mjs --reference > tax.csv
   node scripts/export-tax-csv.mjs <file.json> [options] > tax.csv
+  node scripts/export-tax-csv.mjs --reference --state NE --cc STATE > state-tax.csv
 
 Options:
   --reference        Run the built-in reference scenario instead of loading a file.
-  --cc <US[,AU]>     Country/countries to export (default US).
+  --cc <J[,J]>       Jurisdictions to export: US, AU, STATE (default US). STATE is the
+                     US state return; it rides in the 'form' column, country stays US.
+  --state <CODE>     Residency state for --reference (NE, HI, SD). Required to get any
+                     STATE rows out of the reference scenario, which has none by default.
   --year <Y[,Y]>     Restrict to these tax years (default: all settled years).
   --schedules        Also emit supplementary forms (Schedule D).
   --to <YYYY-MM-DD>  Stop the run at this date instead of the scenario's simEnd.
@@ -113,10 +132,17 @@ function silenceConsole() {
   return () => { console.log = log; console.warn = warn; };
 }
 
-/** Run the built-in reference scenario; return its journal entries. */
-function runReference(endDate) {
+/**
+ * Run the built-in reference scenario; return its journal entries.
+ *
+ * `residencyState` is the one param the exporter overrides: the reference scenario
+ * leaves it null, so without it the US_STATE_TAX settle handler emits nothing at all
+ * and `--cc STATE` has no settlements to project (design 71 §11.3).
+ */
+function runReference(endDate, residencyState = null) {
   ServiceRegistry.resetAll();
-  const scenario = IntlRetirementScenario.buildAndCompile({});
+  const params   = residencyState ? { residencyState } : {};
+  const scenario = IntlRetirementScenario.buildAndCompile({ params });
   const restore = silenceConsole();
   try { scenario.sim.stepTo(endDate ?? scenario.simEnd); }
   finally { restore(); }
@@ -152,10 +178,21 @@ function main() {
 
   const endDate = opts.to ? new Date(opts.to) : null;
 
+  // A state with no rates module still settles — at zero, with only the summary lines —
+  // so the export would silently look "empty but valid". Say so up front.
+  if (opts.state && !new StateTaxSettleService().hasState(opts.state)) {
+    console.error(`No rates module for state ${opts.state}; it settles at zero`
+      + ' and the export will carry summary lines only. Modeled states: NE, HI, SD.');
+  }
+
   let runs;
   if (opts.reference) {
-    runs = [runReference(endDate)];
+    runs = [runReference(endDate, opts.state)];
   } else {
+    if (opts.state) {
+      console.error('--state applies to --reference only; a loaded config carries its own'
+        + ' residencyState. Ignoring it.');
+    }
     let parsed;
     try { parsed = JSON.parse(readFileSync(opts.file, 'utf8')); }
     catch (e) { console.error(`Failed to read ${opts.file}: ${e.message}`); process.exit(1); }
@@ -173,9 +210,13 @@ function main() {
   }));
 
   if (!rows.length) {
-    console.error(`No tax settlements found for ${opts.cc.join(',')}`
-      + `${opts.years ? ` in ${opts.years.join(',')}` : ''}.`
-      + ' The run may end before the first settle, or the country may not be settled in it.');
+    const yearsNote = opts.years ? ` in ${opts.years.join(',')}` : '';
+    console.error(`No tax settlements found for ${opts.cc.join(',')}${yearsNote}.`
+      + ' The run may end before the first settle, or that jurisdiction may not be settled in it.');
+    if (opts.cc.includes('STATE')) {
+      console.error('For STATE rows the primary person needs a residencyState:'
+        + ' pass --state NE|HI|SD with --reference, or set it in the scenario config.');
+    }
     process.exit(1);
   }
 
