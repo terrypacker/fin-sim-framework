@@ -204,11 +204,12 @@ test('EVT-63: bequests round-trip through the full scenario serializer path', ()
   assert.strictEqual(snap.bequests[0].name, 'Estate');
 });
 
-// Design 63 §14: the promotion to first-class records is a LOADER cfg-transform (so
+// Design 63 §14/§15: the promotion to first-class records is a LOADER cfg-transform (so
 // per-record params cascade — §14.4 load-order invariant). Going through the loader,
-// an active bequest's brokerage / home / art become real service records, the bequest
-// keeps only the retirement IRA inline, and each asset serializes in exactly one place
-// (no double-serialize — the invariant the whole design preserves).
+// an active bequest's brokerage / home / art AND — since §15 (P8) — its retirement IRA
+// become real service records, and each asset serializes in exactly one place (no
+// double-serialize — the invariant the whole design preserves). Only AU super would
+// stay inline (forced lump-sum), and there is none here.
 test('EVT-63 §14: loader promotes inherited assets to real records + serializes them once', () => {
   const { services } = loadToolsetScenario(inheritanceConfig({ decedentState: 'SD' }));
   const acct = services.accountService.getAll().find(a => a.inherited && a.stateKey === 'inheritBrokerage');
@@ -219,14 +220,20 @@ test('EVT-63 §14: loader promotes inherited assets to real records + serializes
     'inherited home is a real real-property record');
   assert.ok(services.collectibleService.getAll().some(c => c.inherited && c.stateKey === 'inheritArt'),
     'inherited art is a real collectible record');
-  // The bequest keeps only the retirement IRA inline; the promoted assets are gone.
+  // Design 63 §15 (P8): the retirement IRA is promoted too — a first-class account under
+  // a DEDICATED `inherited-ira` role (excluded from the heir's RMD/contribution machinery).
+  const ira = services.accountService.getAll().find(a => a.inherited && a.stateKey === 'inheritIra');
+  assert.ok(ira, 'inherited IRA is a real account record (design 63 §15)');
+  assert.strictEqual(ira.role, 'inherited-ira', 'dedicated inherited role');
+  // Nothing stays inline (no AU super in this bequest).
   const bq = services.bequestService.getAll()[0];
-  assert.deepStrictEqual(bq.assets.map(a => a.__type), ['TraditionalIRAAccount']);
+  assert.deepStrictEqual(bq.assets.map(a => a.__type), []);
 
   // No double-serialize: each promoted asset appears in exactly one serialized list.
   const snap = ScenarioSerializer.snapshotServices(services);
-  assert.strictEqual(snap.bequests[0].assets.length, 1, 'only the IRA stays inline');
+  assert.strictEqual(snap.bequests[0].assets.length, 0, 'nothing stays inline');
   assert.strictEqual(snap.accounts.filter(a => a.stateKey === 'inheritBrokerage').length, 1);
+  assert.strictEqual(snap.accounts.filter(a => a.stateKey === 'inheritIra').length, 1);
   assert.strictEqual(snap.realProperties.filter(p => p.stateKey === 'inheritHome').length, 1);
 });
 
@@ -248,8 +255,52 @@ test('EVT-63 §14: promoted inherited assets gain per-record OPT/MC params throu
   assert.ok(keys.has('acct.inheritBrokerage.dividendRate'), 'inherited brokerage dividend-rate override');
   assert.ok(keys.has('prop.inheritHome.plannedSaleYear'),  'inherited home sale-year param');
   assert.ok(keys.has('coll.inheritArt.plannedSaleYear'),   'inherited art sale-year param');
-  // The retirement IRA keeps its inline SECURE-drawdown knobs (raAsset.), not acct.*
-  assert.ok(keys.has('raAsset.inheritIra.distributionMode'), 'inherited IRA distribution strategy');
+  // Design 63 §15 (P8): the promoted retirement IRA keeps its SECURE-drawdown knobs on
+  // raAsset.* AND gains the standard acct.* earnings/priority knobs — disjoint prefixes
+  // (§14.5), so both cascade onto the one promoted record.
+  assert.ok(keys.has('raAsset.inheritIra.distributionMode'), 'inherited IRA distribution strategy (raAsset.)');
+  assert.ok(keys.has('acct.inheritIra.growthRate'),          'promoted inherited IRA earnings knob (acct., §15.6)');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63 §15 (P8a): dedicated-role retirement promotion — visible + stream-preserved
+// ══════════════════════════════════════════════════════════════════════════════
+
+// The promoted inherited RA takes a DEDICATED `inherited-*` role, so it is a first-class
+// visible/tunable account that the heir's role-keyed RMD/contribution machinery skips,
+// while the SECURE 10-year stream (keyed by stateKey) still drains it. Because Option A
+// (§15.4) is balance-only (no growth yet) and there is no lifetime RMD, a deferred RA
+// holds EXACTLY its funded FMV until the year-9 catch-up — a strong "nothing else touches
+// it" assertion.
+test('EVT-63 §15: promoted inherited RA is visible, dedicated-role, and only the SECURE stream drains it', () => {
+  const { sim, services } = loadToolsetScenario(raConfig({ distributionMode: 'maxDefer' }));
+  const ira = services.accountService.getAll().find(a => a.stateKey === 'inheritIra');
+  assert.ok(ira, 'promoted inherited IRA is a first-class service record (visible)');
+  assert.strictEqual(ira.role, 'inherited-ira', 'dedicated role — excluded from the heir\'s IRA machinery');
+  assert.strictEqual(ira.drawdownPriority, null, 'forced-stream-only (out of discretionary drawdown)');
+
+  sim.stepTo(new Date(Date.UTC(2036, 0, 31)));   // deep in the maxDefer window (year ~6)
+  assert.strictEqual(sim.state.inheritIra.balance, 300_000,
+    'held flat: no growth (Option A), no lifetime RMD, no early distribution');
+  // No plain-role RMD/contribution machinery ever fires for the inherited account.
+  assert.strictEqual(sim.journal.getActions('IRA_RMD_APPLY').length, 0, 'no RMD on the inherited RA');
+  assert.strictEqual(sim.journal.getActions('IRA_CONTRIBUTION_APPLY').length, 0, 'no contributions to the inherited RA');
+
+  sim.stepTo(new Date(Date.UTC(2040, 0, 31)));   // past window year 9
+  assert.ok(Math.abs(sim.state.inheritIra.balance) < 1, 'the SECURE year-9 catch-up fully distributes it');
+});
+
+// Round-trip guard: the promoted RA's SECURE-drawdown knobs travel on the domain object
+// (inheritance metadata, design 63 §15) so a user's tuned strategy survives a save/load.
+test('EVT-63 §15: a promoted inherited RA round-trips its dedicated role + SECURE knobs', () => {
+  const { services } = loadToolsetScenario(raConfig({ distributionMode: 'lump', lumpYear: 4 }));
+  const snap = ScenarioSerializer.snapshotServices(services);
+  const rec = snap.accounts.find(a => a.stateKey === 'inheritIra');
+  assert.ok(rec, 'promoted inherited IRA serializes as an account');
+  assert.strictEqual(rec.role, 'inherited-ira');
+  assert.strictEqual(rec.inherited, true);
+  assert.strictEqual(rec.distributionMode, 'lump', 'SECURE strategy survives the round-trip');
+  assert.strictEqual(rec.lumpYear, 4, 'lump-year knob survives the round-trip');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

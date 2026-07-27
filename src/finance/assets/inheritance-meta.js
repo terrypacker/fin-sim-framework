@@ -34,6 +34,15 @@
  *   deceasedCostBase           — AU inherited cost base (no step-up); null ⇒ US step-up only.
  *   deceasedAcquisitionDate    — deceased's acquisition date (ms) for the AU discount/indexation clock.
  *   inheritedFromMainResidence — AU deceased main-residence 2-year CGT exemption (property).
+ *
+ * A promoted inherited RETIREMENT account (design 63 §15) additionally carries its
+ * SECURE 10-year drawdown knobs here — they are inheritance-specific (an owned
+ * account never has them) and must travel onto the domain object so the INHERITANCE
+ * toolset's `_inheritedRaAccounts` can read them off `accountService.getAll()`:
+ *   distributionMode — SECURE strategy id (equal/lump/maxDefer/bracketFill/weights).
+ *   fillCeiling      — bracketFill ordinary-income ceiling (real base-year USD).
+ *   lumpYear         — lump strategy: the window year 0–9 to distribute the whole balance.
+ *   weights          — weights strategy: a 10-element distribution vector.
  */
 export const INHERITANCE_META_FIELDS = Object.freeze([
   'inherited',
@@ -42,6 +51,10 @@ export const INHERITANCE_META_FIELDS = Object.freeze([
   'deceasedCostBase',
   'deceasedAcquisitionDate',
   'inheritedFromMainResidence',
+  'distributionMode',
+  'fillCeiling',
+  'lumpYear',
+  'weights',
 ]);
 
 /**
@@ -58,6 +71,12 @@ export function applyInheritanceMeta(target, opts = {}) {
   target.deceasedCostBase           = opts.deceasedCostBase           ?? null;
   target.deceasedAcquisitionDate    = opts.deceasedAcquisitionDate    ?? null;
   target.inheritedFromMainResidence = opts.inheritedFromMainResidence ?? false;
+  // Promoted inherited-RA SECURE-drawdown knobs (design 63 §15); null on every other
+  // inherited/owned record.
+  target.distributionMode           = opts.distributionMode           ?? null;
+  target.fillCeiling                = opts.fillCeiling                 ?? null;
+  target.lumpYear                   = opts.lumpYear                    ?? null;
+  target.weights                    = opts.weights                    ?? null;
   return target;
 }
 
@@ -75,5 +94,10 @@ export function serializeInheritanceMeta(record) {
   if (record.deceasedCostBase        != null) d.deceasedCostBase        = record.deceasedCostBase;
   if (record.deceasedAcquisitionDate != null) d.deceasedAcquisitionDate = record.deceasedAcquisitionDate;
   if (record.inheritedFromMainResidence)      d.inheritedFromMainResidence = true;
+  // Promoted inherited-RA SECURE-drawdown knobs (design 63 §15) — emitted only when set.
+  if (record.distributionMode        != null) d.distributionMode        = record.distributionMode;
+  if (record.fillCeiling             != null) d.fillCeiling             = record.fillCeiling;
+  if (record.lumpYear                != null) d.lumpYear                = record.lumpYear;
+  if (record.weights                 != null) d.weights                 = record.weights;
   return d;
 }

@@ -170,9 +170,14 @@ test('resolveRateKey: unknown country → null', () => {
 test('DEFAULT_ALLOCATION_BY_ROLE: covers every holdings-bearing ACCOUNT_ROLE', () => {
   // Loan (liability) roles hold no asset allocation — they carry no holdings
   // (design 54); the bootstrap skips them, so no default allocation is needed.
-  const LIABILITY_ROLES = new Set([ACCOUNT_ROLES.US_LOAN, ACCOUNT_ROLES.AU_LOAN]);
+  // Inherited-RA roles (design 63 §15, P8) are balance-only pre-tax pools drained by
+  // the SECURE stream — no holdings either (growth is deferred to §15.4 Option B).
+  const NON_HOLDING_ROLES = new Set([
+    ACCOUNT_ROLES.US_LOAN, ACCOUNT_ROLES.AU_LOAN,
+    ACCOUNT_ROLES.INHERITED_IRA, ACCOUNT_ROLES.INHERITED_K401, ACCOUNT_ROLES.INHERITED_ROTH,
+  ]);
   for (const role of Object.values(ACCOUNT_ROLES)) {
-    if (LIABILITY_ROLES.has(role)) continue;
+    if (NON_HOLDING_ROLES.has(role)) continue;
     assert.ok(DEFAULT_ALLOCATION_BY_ROLE[role], `missing default allocation for role: ${role}`);
   }
 });

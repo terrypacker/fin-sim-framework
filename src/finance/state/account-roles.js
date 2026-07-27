@@ -36,4 +36,25 @@ export const ACCOUNT_ROLES = Object.freeze({
   // loan's interest-bearing principal. Per country for currency + cash-pool.
   US_OFFSET:       'us-offset',
   AU_OFFSET:       'au-offset',
+  // Inherited retirement accounts (design 63 §15, P8) — DEDICATED roles so a promoted
+  // inherited IRA/401(k)/Roth is a first-class, visible, tunable account WITHOUT
+  // colliding with the heir's own RMD / contribution / conversion machinery (all
+  // keyed on the plain IRA/K401/ROTH roles). The SECURE 10-year stream drains them
+  // by stateKey, not role, so it is unaffected; `drawdownPriority: null` keeps them
+  // out of discretionary drawdown (forced-stream-only, §13.4).
+  INHERITED_IRA:   'inherited-ira',
+  INHERITED_K401:  'inherited-k401',
+  INHERITED_ROTH:  'inherited-roth',
 });
+
+/**
+ * The dedicated inherited-retirement roles (design 63 §15). Consumers use this to
+ * recognize a promoted inherited RA — e.g. the INHERITANCE toolset's SECURE-stream
+ * discovery — while the plain-role filters (`role === IRA/K401/ROTH`) that drive RMD
+ * / contributions / conversion simply never match these, excluding them for free.
+ */
+export const INHERITED_RETIREMENT_ROLES = Object.freeze(new Set([
+  ACCOUNT_ROLES.INHERITED_IRA,
+  ACCOUNT_ROLES.INHERITED_K401,
+  ACCOUNT_ROLES.INHERITED_ROTH,
+]));

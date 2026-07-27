@@ -28,6 +28,7 @@ import {
   INHERITED_RA_PARAM_TEMPLATE,
   BALANCE_TARGET,
 } from './record-param-templates.js';
+import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 
 /** Inherited-asset `__type`s that grow per-account SECURE-drawdown params (design
  *  63 §6.2). Super is excluded — it is a forced lump-sum, not an ongoing account.
@@ -135,6 +136,15 @@ export class ScenarioParamGenerator {
         if (INHERITED_RA_TYPES.has(a.__type))
           add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
       }
+    }
+    // Design 63 §15 (P8): a PROMOTED inherited RA lives in cfg.accounts under a
+    // dedicated inherited-* role — still generate its `raAsset.*` SECURE-drawdown knobs
+    // (node `bequestAsset`, keyed by stateKey). These are disjoint from the `acct.*`
+    // earnings/priority knobs the accounts loop above already generates for it (§14.5),
+    // and keeping them here means promotion doesn't strand a user's tuned strategy.
+    for (const a of cfg.accounts ?? []) {
+      if (a.inherited && INHERITED_RETIREMENT_ROLES.has(a.role))
+        add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
     }
     return out;
   }
