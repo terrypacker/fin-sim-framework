@@ -59,16 +59,52 @@ test('LOC-2: the aggregate placement equals the portfolio target', () => {
   }
 });
 
-test('LOC-3: bonds prefer tax-deferred; equity prefers Roth/taxable; gold shelters in super', () => {
+test('LOC-3: bonds prefer tax-deferred; equity prefers Roth/taxable; gold shelters', () => {
   const plan = planLocatedTargets({ accounts: ACCOUNTS,
     portfolioTarget: { EQUITY: 0.5, BOND: 0.3, CASH: 0.1, GOLD: 0.1 } });
   // BOND ($150k) fits entirely in the IRA (deferred) — none in the taxable brokerage.
   assert.ok((plan.get('iraAccount')[ALLOCATION.BOND] ?? 0) > 0, 'bonds in IRA');
   assert.strictEqual(plan.get('usStockAccount')[ALLOCATION.BOND] ?? 0, 0, 'no bonds in taxable brokerage');
-  // GOLD ($50k) sits in super (the only gold-eligible shelter), never in IRA/Roth.
-  assert.ok((plan.get('superAccount')[ALLOCATION.GOLD] ?? 0) > 0, 'gold in super');
+  // GOLD ($50k) is SHELTERED, never left in the taxable brokerage. Which shelter depends
+  // on residency (§12.2 Q4) — the default here is US, whose 28% collectibles rate makes
+  // any tax-advantaged account preferable, so it lands in the IRA rather than super.
+  assert.strictEqual(plan.get('usStockAccount')[ALLOCATION.GOLD] ?? 0, 0, 'gold not left in taxable');
+  const sheltered = ['iraAccount', 'rothAccount', 'superAccount']
+    .reduce((s, k) => s + (plan.get(k)[ALLOCATION.GOLD] ?? 0), 0);
+  assert.ok(near(sheltered, 50000), 'the whole gold sleeve is sheltered');
   // Roth is all-equity (equity's top preference).
   assert.ok(near(plan.get('rothAccount')[ALLOCATION.EQUITY] ?? 0, 100000), 'roth all equity');
+});
+
+test('LOC-3b: gold\'s preferred home follows RESIDENCY (design 61 §12.2 Q4)', () => {
+  const target = { EQUITY: 0.5, BOND: 0.3, CASH: 0.1, GOLD: 0.1 };   // $50k gold
+  const goldIn = (plan, key) => plan.get(key)[ALLOCATION.GOLD] ?? 0;
+
+  // US resident: a taxable gold sale is 28% collectibles, so shelter it — IRA first.
+  const us = planLocatedTargets({ accounts: ACCOUNTS, portfolioTarget: target, residency: 'US' });
+  assert.ok(near(goldIn(us, 'iraAccount'), 50000), 'US resident shelters gold in the IRA');
+  assert.strictEqual(goldIn(us, 'superAccount'), 0);
+
+  // AU resident: bullion is ordinary CPI-indexed AU CGT, and super shelters it best.
+  const au = planLocatedTargets({ accounts: ACCOUNTS, portfolioTarget: target, residency: 'AU' });
+  assert.ok(near(goldIn(au, 'superAccount'), 50000), 'AU resident shelters gold in super');
+  assert.strictEqual(goldIn(au, 'iraAccount'), 0);
+
+  // Both conserve every account's own total — location never moves value between accounts.
+  for (const plan of [us, au]) {
+    for (const a of ACCOUNTS) assert.ok(near(sumComp(plan.get(a.stateKey)), a.total));
+  }
+});
+
+test('LOC-3c: an explicit policy override still wins, per class', () => {
+  // The residency default must not silently override a scenario's authored preference.
+  const plan = planLocatedTargets({
+    accounts: ACCOUNTS, residency: 'US',
+    portfolioTarget: { EQUITY: 0.5, BOND: 0.3, CASH: 0.1, GOLD: 0.1 },
+    policy: { [ALLOCATION.GOLD]: [ACCOUNT_ROLES.US_STOCK] },
+  });
+  assert.ok(near(plan.get('usStockAccount')[ALLOCATION.GOLD] ?? 0, 50000),
+    'the override pins gold to the taxable brokerage');
 });
 
 test('LOC-4: gold MAY land in a US IRA/401k/Roth (bullion ban reversed)', () => {

@@ -20,7 +20,7 @@ import { PanicSellReducer }                    from './panic-sell-reducer.js';
 import { BehavioralPanicSellApplyReducer }     from './behavioral-panic-sell-apply-reducer.js';
 import { ContributionSuspensionToggleReducer } from './contribution-suspension-toggle-reducer.js';
 import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
-import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole } from './rebalance-to-target-reducer.js';
+import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole, assertAuthoredMixes } from './rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
@@ -181,6 +181,11 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     handlers: (_context) => [],
     reducers: (context) => {
       const p = context.parameters;
+      // Design 61 §12.2 Q3 — validate every AUTHORED mix here, at the boundary where
+      // scenario params become reducer config. Throws (no shim) on a partial mix or a
+      // non-unit sum: an absent key is indistinguishable from a deliberate 0, and that
+      // difference decides whether a class is held or liquidated.
+      assertAuthoredMixes(p);
       const accounts = (context.accounts ?? [])
         .filter(a => TAX_ADVANTAGED_ROLES.has(a.role) || TAXABLE_ROLES.has(a.role))
         .map(a => ({ stateKey: a.stateKey, role: a.role }));
