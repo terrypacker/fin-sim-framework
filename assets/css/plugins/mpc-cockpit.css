@@ -77,6 +77,21 @@
 }
 .mpc-range .mpc-field { flex-direction: row; align-items: center; gap: 6px; text-transform: none; }
 .mpc-num { width: 78px; }
+
+/* Per-lever range editor (multi-lever search, design 45 §8 / design 58): each
+   selected NUMERIC lever gets its own Min/Max/Step row, since one shared range
+   can't span their different unit scales. Stack the rows so each lever's controls
+   read as a unit; a label names the lever. Categorical levers get the .mpc-hint
+   note instead. */
+.mpc-range-multi { flex-direction: column; align-items: flex-start; gap: 8px; }
+.mpc-lever-range { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; }
+.mpc-lever-range-label {
+  min-width: 150px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
 /* Trim the chunky native number spinners for a tidier compact field. */
 .mpc-num::-webkit-outer-spin-button,
 .mpc-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

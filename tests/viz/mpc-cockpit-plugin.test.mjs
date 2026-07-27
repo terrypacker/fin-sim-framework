@@ -63,13 +63,40 @@ test('MpcCockpitPlugin: selecting several levers yields a joint control set', ()
   assert.equal(plugin._isMultiLever(), true);
 });
 
-test('MpcCockpitPlugin: multi-lever greys the manual range row (per-lever defaults)', () => {
+test('MpcCockpitPlugin: multi-lever swaps the shared row for a per-lever range editor', () => {
   const plugin = mountPlugin();
   const sel = plugin._q('control');
   for (const o of sel.options) o.selected = ['SPENDING', 'ROTH'].includes(o.value);
   plugin._syncRangeEnabled();
-  assert.equal(plugin._q('rmin').disabled, true, 'range disabled across multiple levers');
-  assert.match(plugin._q('range-title').textContent, /per-lever/i);
+  // Shared single-lever row hidden; the per-lever editor shown.
+  assert.equal(plugin._q('range-row').style.display, 'none');
+  const editor = plugin._q('range-multi');
+  assert.equal(editor.style.display, '');
+  // One row per selected NUMERIC lever (both SPENDING and ROTH are numeric), each
+  // seeded from the lever's defaultRange with its own Min/Max/Step inputs.
+  const rows = [...editor.querySelectorAll('[data-mpc-lever]')];
+  assert.deepStrictEqual(rows.map(r => r.dataset.mpcLever), ['SPENDING', 'ROTH']);
+  const rothRow = rows.find(r => r.dataset.mpcLever === 'ROTH');
+  assert.equal(Number(rothRow.querySelector('[data-r="max"]').value), COCKPIT_CONTROLS.ROTH.defaultRange.max);
+});
+
+test('MpcCockpitPlugin: per-lever range editor lists categorical levers as no-range + reads back ranges', () => {
+  const plugin = mountPlugin();
+  const sel = plugin._q('control');
+  // A numeric lever (SPENDING) + a categorical one (DRAWDOWN_XBORDER, no range).
+  for (const o of sel.options) o.selected = ['SPENDING', 'DRAWDOWN_XBORDER'].includes(o.value);
+  plugin._syncRangeEnabled();
+  const editor = plugin._q('range-multi');
+  const rows = [...editor.querySelectorAll('[data-mpc-lever]')];
+  assert.deepStrictEqual(rows.map(r => r.dataset.mpcLever), ['SPENDING']);   // only the numeric one
+  assert.match(editor.querySelector('.mpc-hint').textContent, /categorical/i);
+  // Editing a row's inputs is read back by _currentControlRanges (min<max enforced).
+  const row = rows[0];
+  row.querySelector('[data-r="min"]').value = '9000';
+  row.querySelector('[data-r="max"]').value = '4000';
+  row.querySelector('[data-r="step"]').value = '250';
+  const ranges = plugin._currentControlRanges();
+  assert.deepStrictEqual(ranges.SPENDING, { min: 4000, max: 9000, step: 250 });   // swapped to min<max
 });
 
 test('MpcCockpitPlugin: a joint search requires every selected lever to apply (reports the first inert)', () => {
