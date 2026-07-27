@@ -26,6 +26,8 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler }        from '../../finance/economic-regimes/equity-return-tick-handler.js';
+import { PropertyReturnStepReducer }      from '../../finance/economic-regimes/property-return-step-reducer.js';
+import { PropertyReturnTickHandler }      from '../../finance/economic-regimes/property-return-tick-handler.js';
 import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
@@ -405,13 +407,14 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
       { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
       { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
+      { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -616,7 +619,76 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         options:      ['GEOMETRIC', 'NONE'],
         defaultValue: 'GEOMETRIC',
-        description:  'How the growth-rate anchor is interpreted once returns are stochastic (design 74 §5.3). Adding a mean-0 shock to a multiplicatively-applied rate lowers the realized geometric (compounded) return by ≈σ²/2. GEOMETRIC (default) adds σ²/2 back per sleeve so the anchor reads as the CAGR you expect to earn and turning volatility on changes only the SPREAD, not the centre. NONE interprets the anchor as an ARITHMETIC mean and leaves the ≈σ²/2 volatility drag in (at σ=0.18 that is ≈−1.6pp/yr). Only used when Stochastic Equity Returns is on.',
+        description:  'How the growth-rate anchor is interpreted once returns are stochastic (design 74 §5.3). Adding a mean-0 shock to a multiplicatively-applied rate lowers the realized geometric (compounded) return by ≈σ²/2. GEOMETRIC (default) adds σ²/2 back per sleeve so the anchor reads as the CAGR you expect to earn and turning volatility on changes only the SPREAD, not the centre. NONE interprets the anchor as an ARITHMETIC mean and leaves the ≈σ²/2 volatility drag in (at σ=0.18 that is ≈−1.6pp/yr). Also governs the stochastic PROPERTY return path (design 75). Only used when Stochastic Equity Returns or Stochastic Property Returns is on.',
+      },
+      {
+        key:          'propertyReturnStochastic',
+        label:        'Stochastic Property Returns',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on (design 75), each real property draws its own appreciation each year from a seeded process instead of ramping at a constant appreciationRate — so a house has real sale-price variance at its sale date (the sequence/timing risk on the binding asset). When Stochastic Equity Returns is ALSO on, property REUSES the same market factor so housing co-moves with equities (design 74 §7); when equity is off, property draws its own market shock. Default betas are near zero (US 0.03 / AU 0.05) because the historical house↔equity correlation is ~0.04 — the joint crash is authored via shocks[], not the beta — so housing is ~99% idiosyncratic. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe.',
+      },
+      {
+        key:          'propertyReturnBeta',
+        label:        'Property Return Betas',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional per-sleeve override of each real-estate sleeve\'s loading on the shared market factor, keyed by rate key (REAL_ESTATE_US, REAL_ESTATE_AU). Absent keys fall back to the near-zero defaults (US 0.03 / AU 0.05). Raise a beta to model a standing correlation with equities; the default assumes almost none (design 75 §4.1). Only used when Stochastic Property Returns is on.',
+      },
+      {
+        key:          'propertyReturnIdioVol',
+        label:        'Property Return Idiosyncratic Volatility',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional per-sleeve idiosyncratic (property-specific) appreciation sd, keyed by rate key. This is where most of a single home\'s price variance comes from under the near-zero betas. Absent ⇒ the defaults (US 0.09 / AU 0.10, giving a total single-home σ ≈ 9–10%). Only used when Stochastic Property Returns is on.',
+      },
+      {
+        // Design 75 §6.4 B. A scalar multiplier on EVERY property sleeve's idiosyncratic vol,
+        // exposed so Monte Carlo can sweep the WIDTH of house-price variance. Housing is ~99%
+        // idiosyncratic under the near-zero betas, so equityReturnVol (which only reaches the
+        // house through β≈0.03) barely moves it — this is the honest housing-vol MC axis. A
+        // scalar in cfg.parameters (unlike the per-property idioVol object) is MC-sweepable.
+        key:          'propertyReturnIdioScale',
+        label:        'Property Idiosyncratic Vol Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on every property sleeve\'s idiosyncratic appreciation vol (design 75 §6.4). 1.0 = the calibrated defaults (US 0.09 / AU 0.10); sweeping it widens/narrows single-home price variance — the sequence/timing risk on the house at its sale date. Only bites when Stochastic Property Returns is on; inert (1.0) otherwise.',
+      },
+      {
+        // Design 75 §6.4 B. Global multiplier on the repair-event median size. Per-property
+        // repairMedian/repairValuePct live in cfg.realProperties and can't be swept directly,
+        // so this cfg.parameters scalar is the MC seam for repair severity.
+        key:          'repairSeverityScale',
+        label:        'House Repair Severity Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on the median size of every stochastic house-repair event (design 75 §5.2/§6.4). 1.0 = each property\'s configured repairMedian/repairValuePct; sweeping it stress-tests how the lumpy repair cost bites liquidity. Only bites when a property has a repair model; inert (1.0) otherwise.',
+      },
+      {
+        // Design 75 §6.4 B. Global multiplier on the repair-event probability/rate.
+        key:          'repairFreqScale',
+        label:        'House Repair Frequency Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on the annual probability (Bernoulli) or rate (Poisson) of a stochastic house repair (design 75 §5.2/§6.4). 1.0 = each property\'s configured repairProb/repairLambda; sweeping it varies how OFTEN the lump lands. Only bites when a property has a repair model; inert (1.0) otherwise.',
       },
       {
         key:          'behavioralStrategies',
@@ -674,6 +746,13 @@ export const ECONOMIC_REGIMES = {
       equityReturnDev:             {},
       equityReturnDriftComp:       {},
       equityReturnMarketDev:       0,
+      // Stochastic property return path (design 75 §4). Per-sleeve mean-0 deviation, the
+      // deterministic σ²/2 drift compensation, and the market factor — seeded empty/0 so
+      // AssetAppreciationHandler adds a zero deviation and runs stay byte-identical unless
+      // `propertyReturnStochastic` is on.
+      propertyReturnDev:           {},
+      propertyReturnDriftComp:     {},
+      propertyReturnMarketDev:     0,
       priorMarkRates:              {},
       priorMarkCurve:              {},
     };
@@ -722,6 +801,23 @@ export const ECONOMIC_REGIMES = {
         startOffset: 1,
         enabled:  true,
         color:    '#EF5350',
+      }));
+    }
+
+    // Optional stochastic property return path (design 75 §4). Annual tick, `order: 1` so it
+    // fires AFTER the equity tick (default order 0) on the same year-end — each event fully
+    // reduces before the next runs, so when sharing the market factor the equity tick has
+    // already stored state.equityReturnMarketDev for this year. Scheduled only when on, so
+    // default runs draw no randomness and stay byte-identical.
+    if (p.propertyReturnStochastic) {
+      events.push(new EventSeries({
+        name:     'Property Return Tick',
+        type:     'PROPERTY_RETURN_TICK',
+        interval: 'year-end',
+        startOffset: 1,
+        order:    1,
+        enabled:  true,
+        color:    '#8D6E63',
       }));
     }
 
@@ -778,6 +874,20 @@ export const ECONOMIC_REGIMES = {
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
           })]
         : []),
+      // Stochastic property return path (design 75 §4) — only when on. `marketVol` matches
+      // equityReturnVol so the property betas mean the same thing whether or not the equity
+      // path is active; `shareMarketFactor` reuses the equity market shock when equity is on.
+      ...(p.propertyReturnStochastic
+        ? [new PropertyReturnTickHandler({
+            marketVol:         p.equityReturnVol   ?? 0.18,
+            model:             p.equityReturnModel ?? 'WHITE_NOISE',
+            beta:              p.propertyReturnBeta    ?? {},
+            idioVol:           p.propertyReturnIdioVol ?? {},
+            idioScale:         p.propertyReturnIdioScale ?? 1,
+            driftComp:         p.equityReturnDriftComp ?? 'GEOMETRIC',
+            shareMarketFactor: !!p.equityReturnStochastic,
+          })]
+        : []),
       ...behavioralHandlers,
     ];
   },
@@ -795,6 +905,7 @@ export const ECONOMIC_REGIMES = {
       new YieldCurveStepReducer(),  // design 67 §6 — stores the stochastic level deviation
       new EquityReturnReducer(),    // design 74 §5.1 — folds the stochastic equity path onto effective growth (11.5)
       new EquityReturnStepReducer(),// design 74 §5.1 — stores the per-sleeve equity deviation
+      new PropertyReturnStepReducer(),// design 75 §4 — stores the per-sleeve property deviation (AssetAppreciationHandler reads it; no fold reducer)
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),
       ...behavioralReducers,

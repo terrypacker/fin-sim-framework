@@ -126,6 +126,19 @@
   gap: 6px;
 }
 
+/* Section divider inside a node editor — a labelled rule that groups related
+   fields (e.g. Rental Income vs. Running Costs & Repairs on the property editor).
+   Shares the look of .holdings-section/.holdings-header. */
+.node-section-head {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #444);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
 /* Holdings table (design 25 §9 read-only display). */
 .holdings-section {
   margin-top: 8px;

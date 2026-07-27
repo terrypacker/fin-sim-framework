@@ -13,6 +13,9 @@ import { ReducerBuilder }       from '../../simulation-framework/builders/reduce
 import { OneOffEvent }          from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }        from '../../finance/state/account-roles.js';
 import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-expenses-handler.js';
+import { HouseRunningCostHandler }      from '../../finance/handlers/house-running-cost-handler.js';
+import { RealPropertyRepairTickHandler } from '../../finance/handlers/real-property-repair-tick-handler.js';
+import { HouseRepairApplyReducer }      from '../../finance/reducers/house-repair-apply-reducer.js';
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
@@ -120,6 +123,17 @@ function _accountToStatePlain(account) {
   return plain;
 }
 
+/** True when any property carries a positive regular running cost (design 75 §5.1). */
+function _hasHouseRunningCost(realProperties) {
+  return (realProperties ?? []).some(pr =>
+    (pr.annualRunningCost ?? 0) > 0 || (pr.runningCostValuePct ?? 0) > 0);
+}
+
+/** True when any property has a stochastic repair model (design 75 §5.2). */
+function _hasHouseRepairs(realProperties) {
+  return (realProperties ?? []).some(pr => (pr.repairModel ?? 'NONE') !== 'NONE');
+}
+
 /**
  * US_RETIREMENT toolset — declarative shape for ScenarioCompiler.
  *
@@ -138,7 +152,7 @@ export const US_RETIREMENT = {
 
   types: {
     handlers: [
-      MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
       DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
@@ -151,7 +165,7 @@ export const US_RETIREMENT = {
       K401AnnualRmdHandler, K401ToIraConversionHandler,
     ],
     reducers: [
-      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer,
+      ExpenseDebitReducer, HouseRepairApplyReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
@@ -207,6 +221,7 @@ export const US_RETIREMENT = {
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
       { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },
+      { type: 'HOUSE_REPAIR_APPLY',         fields: { stateKey: ValueType.text(), amount: ValueType.number(), capitalize: ValueType.number() } },
       { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
     ],
   },
@@ -522,6 +537,28 @@ export const US_RETIREMENT = {
       );
     }
 
+    // Regular house running cost (design 75 §5.1) — a monthly essential debit, scheduled only
+    // when some property carries a positive cost so default scenarios stay byte-identical.
+    if (_hasHouseRunningCost(context.realProperties)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('House Running Cost').type('HOUSE_RUNNING_COST')
+          .interval('month-end').enabled(true).color('#8D6E63').build()
+      );
+    }
+
+    // Stochastic house repairs (design 75 §5.2) — an annual seeded-RNG tick, `order(2)` so it
+    // draws AFTER the equity (0) and property-return (1) ticks and never perturbs their
+    // sequences. Scheduled only when a property has a repair model, so it draws nothing (and is
+    // byte-identical) otherwise.
+    if (_hasHouseRepairs(context.realProperties)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('House Repair').type('HOUSE_REPAIR')
+          .interval('year-end').startOffset(1).order(2).enabled(true).color('#6D4C41').build()
+      );
+    }
+
     if (iraAccounts.length > 0) {
       schedules.push(
         EventBuilder.eventSeries()
@@ -777,6 +814,40 @@ export const US_RETIREMENT = {
     });
     expensesHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
     handlers.push(expensesHandler);
+
+    // House running cost (design 75 §5.1) — iterates ALL properties (both countries); the
+    // debit is residence-aware and each property's base cost is converted from its own
+    // currency. Only wired when the HOUSE_RUNNING_COST event was scheduled (a property has a
+    // positive cost), so it is inert otherwise.
+    const houseCostEvent = context.schedulesById['HOUSE_RUNNING_COST'];
+    if (houseCostEvent) {
+      const runningCostHandler = new HouseRunningCostHandler({
+        stateRegistry:    sr,
+        propertyKeys:     (context.realProperties ?? []).filter(pr => pr.stateKey).map(pr => pr.stateKey),
+        usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+        auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        startDate:        context.startDate,
+      });
+      runningCostHandler.handledEvents.push(houseCostEvent);
+      handlers.push(runningCostHandler);
+    }
+
+    // Stochastic house repairs (design 75 §5.2) — annual seeded-RNG tick over all properties.
+    const houseRepairEvent = context.schedulesById['HOUSE_REPAIR'];
+    if (houseRepairEvent) {
+      const repairHandler = new RealPropertyRepairTickHandler({
+        stateRegistry:    sr,
+        propertyKeys:     (context.realProperties ?? []).filter(pr => pr.stateKey).map(pr => pr.stateKey),
+        usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+        auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        // MC scalers (design 75 §6.4 B) — global multipliers on repair size/frequency, since the
+        // per-property repair fields in cfg.realProperties can't be swept directly. Default 1 ⇒ inert.
+        severityScale:    p.repairSeverityScale ?? 1,
+        freqScale:        p.repairFreqScale     ?? 1,
+      });
+      repairHandler.handledEvents.push(houseRepairEvent);
+      handlers.push(repairHandler);
+    }
 
     // Monthly Wages
     const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
@@ -1086,6 +1157,7 @@ export const US_RETIREMENT = {
     reducers.push(recordMetricReducer);
 
     reducers.push(new ExpenseDebitReducer({ accountService: accountSvc, stateRegistry: sr }));
+    reducers.push(new HouseRepairApplyReducer());   // design 75 §5.2 — tracking + capitalize basis
     reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc, stateRegistry: sr }));
 
     if (usStockAccounts.length > 0) {

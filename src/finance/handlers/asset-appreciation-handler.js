@@ -50,7 +50,14 @@ export class AssetAppreciationHandler extends HandlerEntry {
       if (!entry) continue;
       const value = entry.value ?? 0;
       const rate  = resolveScheduledRate(asset.appreciationSchedule, currentDate, asset.appreciationRate ?? 0);
-      const delta = +(value * rate).toFixed(2);
+      // Stochastic property return path (design 75 §4.2 A2): add the per-sleeve market
+      // deviation + drift compensation to the deterministic rate. `reKey` is set only for
+      // real property (REAL_ESTATE_US/AU); collectibles have no reKey and stay deterministic.
+      // Absent maps (flag off) ⇒ dev 0, so the delta and golden are byte-identical.
+      const dev = asset.reKey
+        ? (state.propertyReturnDev?.[asset.reKey] ?? 0) + (state.propertyReturnDriftComp?.[asset.reKey] ?? 0)
+        : 0;
+      const delta = +(value * (rate + dev)).toFixed(2);
       if (delta === 0) continue;
       actions.push({
         type:     'ASSET_APPRECIATE_APPLY',

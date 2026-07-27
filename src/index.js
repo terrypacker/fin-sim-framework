@@ -81,8 +81,13 @@ import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-re
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
+import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
+import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
+import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
+import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
+import { PropertyReturnTickHandler } from './finance/economic-regimes/property-return-tick-handler.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -91,9 +96,6 @@ import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-re
 import { YieldCurveReducer } from './finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer } from './finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-tick-handler.js';
-import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
-import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
-import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
 import { countryOfRateKey, interpolateSpread, resolveYield, composeYieldCurve, shapeDelta } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
@@ -118,12 +120,14 @@ import { ChangeResidencyHandler } from './finance/handlers/change-residency-hand
 import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
+import { HouseRunningCostHandler } from './finance/handlers/house-running-cost-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
+import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
@@ -139,10 +143,13 @@ import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holding
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
+import { exportDrillReports } from './finance/journal-reporting/drill-report-export.js';
+import { buildReportRows, rowsToCsv, generateReportCsv } from './finance/journal-reporting/report-csv.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
+import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { computeNetWorthUsd, computeHouseValueUsd, computePathShape, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords } from './finance/mpc/apply-forward.js';
@@ -181,6 +188,7 @@ import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-i
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
+import { HouseRepairApplyReducer } from './finance/reducers/house-repair-apply-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer, IntlTransferRecordReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
 import { OutOfFundsReducer } from './finance/reducers/out-of-funds-reducer.js';
@@ -715,10 +723,20 @@ export const Finance = {
   BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
+  EquityReturnReducer,
+  EquityReturnStepReducer,
+  EquityReturnTickHandler,
   PrimeRelinkReducer,
+  PropertyReturnStepReducer,
+  PropertyReturnTickHandler,
   RATE_KEYS,
   RATE_KEY_META,
   RATE_KEY_CLASS_MEMBERS,
+  EQUITY_SLEEVES,
+  DEFAULT_EQUITY_BETA,
+  PROPERTY_SLEEVES,
+  DEFAULT_RE_BETA,
+  DEFAULT_RE_IDIO,
   ROLE_TO_RATE_KEY,
   MEMBER_RATE_KEY_BY_ROLE,
   INTEREST_RATE_KEYS,
@@ -733,9 +751,6 @@ export const Finance = {
   YieldCurveReducer,
   YieldCurveStepReducer,
   YieldCurveTickHandler,
-  EquityReturnReducer,
-  EquityReturnStepReducer,
-  EquityReturnTickHandler,
   countryOfRateKey,
   interpolateSpread,
   resolveYield,
@@ -781,6 +796,7 @@ export const Finance = {
   AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
   SuperEarningsHandler,
+  HouseRunningCostHandler,
   IntlTransferToUsHandler,
   IntlTransferToAuHandler,
   MonthlyExpensesHandler,
@@ -788,6 +804,7 @@ export const Finance = {
   MonthlyWagesHandler,
   MortalityHandler,
   OutOfFundsHandler,
+  RealPropertyRepairTickHandler,
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
@@ -853,12 +870,21 @@ export const Finance = {
   buildHoldingsComparator,
   JournalDataSource,
   JournalQueryApi,
+  exportDrillReports,
+  buildReportRows,
+  rowsToCsv,
+  generateReportCsv,
   ReportDefinition,
   ReportDefinitionRegistry,
+  createReportApis,
+  apiFor,
+  runReport,
   JournalReportingService,
   DEFAULT_MC_VARIABLE_CONFIGS,
   IntlRetirementMcConfig,
   computeNetWorthUsd,
+  computeHouseValueUsd,
+  computePathShape,
   IntlRetirementMcRunner,
   CDC_2024,
   AU_2022,
@@ -937,6 +963,7 @@ export const Finance = {
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
+  HouseRepairApplyReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,
   IntlTransferRecordReducer,

@@ -140,6 +140,29 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Return Paths',             enabled: false,
   },
 
+  // ── House path & running-cost MC scalers (design 75 §6.4 B) ───────────────
+  // The per-property return/repair inputs live in cfg.realProperties (not cfg.parameters), so
+  // they can't be swept directly. These three global scalars in cfg.parameters ARE MC-able and
+  // are threaded into the handlers as multipliers. All center on 1.0 and only bite when the
+  // matching stochastic path/repair model is active in the scenario — inert on single runs and
+  // opt-in (enabled:false) here. `propertyReturnIdioScale` is the honest housing-VOL axis
+  // (equityReturnVol barely reaches the house through β≈0.03, since housing is ~99% idiosyncratic).
+  {
+    paramKey: 'propertyReturnIdioScale', label: 'Property Idiosyncratic Vol Scale',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 1.0, stdDev: 0.2,
+    group: 'Return Paths',             enabled: false,
+  },
+  {
+    paramKey: 'repairSeverityScale',   label: 'House Repair Severity Scale',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 1.0, stdDev: 0.3,
+    group: 'Return Paths',             enabled: false,
+  },
+  {
+    paramKey: 'repairFreqScale',       label: 'House Repair Frequency Scale',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 1.0, stdDev: 0.3,
+    group: 'Return Paths',             enabled: false,
+  },
+
   // ── Inflation rates ───────────────────────────────────────────────────────
   {
     paramKey: 'inflationRate',         label: 'US Inflation Rate',

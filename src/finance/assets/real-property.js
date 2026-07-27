@@ -86,6 +86,19 @@ export class RealProperty extends Asset {
     this.currency                = opts.currency                ?? null;
     this.appreciationSchedule    = opts.appreciationSchedule    ?? null;
     this.market                  = opts.market                  ?? null;
+    // Regular running cost — the deterministic, inflating cost of owning the home beyond
+    // the mortgage (design 75 §5.1). Default 0 ⇒ no cost stream.
+    this.annualRunningCost       = opts.annualRunningCost       ?? 0;
+    this.runningCostValuePct     = opts.runningCostValuePct     ?? 0;
+    this.runningCostGrowth       = opts.runningCostGrowth       ?? 0;
+    // Stochastic repairs — the lumpy cost of owning (design 75 §5.2). Default NONE ⇒ no draw.
+    this.repairModel             = opts.repairModel             ?? 'NONE';   // NONE|BERNOULLI|POISSON|CONTINUOUS
+    this.repairProb              = opts.repairProb              ?? 0;        // Bernoulli annual event probability
+    this.repairLambda            = opts.repairLambda            ?? 0;        // Poisson annual rate
+    this.repairMedian            = opts.repairMedian            ?? 0;        // median severity per event, property currency
+    this.repairSigma             = opts.repairSigma             ?? 0.6;      // lognormal shape
+    this.repairValuePct          = opts.repairValuePct          ?? 0;        // alt. severity anchor: median = pct × value
+    this.capitalizeRepairs       = opts.capitalizeRepairs       ?? 0;        // fraction added to cost basis (design 75 §8 Q6)
     // Rental income (design 48)
     this.rentalEnabled              = opts.rentalEnabled              ?? false;
     this.monthlyRent                = opts.monthlyRent                ?? 0;

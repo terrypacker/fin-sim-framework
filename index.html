@@ -832,6 +832,7 @@
             <option value="">— none —</option>
           </select>
         </div>
+        <div class="node-section-head">Rental Income (design 48)</div>
         <div class="node-field">
           <label>Rental Income</label>
           <input type="checkbox" data-id="rentalEnabled"/>
@@ -860,6 +861,54 @@
         <div class="node-field">
           <label>Deprec. Override</label>
           <input type="number" data-id="annualDepreciationOverride" placeholder="blank = derive" title="Explicit annual depreciation $; blank derives per-country"/>
+        </div>
+
+        <!-- ── Owner-occupied HOLDING COST — separate from rental opex above (design 75) ── -->
+        <div class="node-section-head">Running Costs &amp; Repairs (design 75)</div>
+        <div class="node-field">
+          <label>Annual Running Cost</label>
+          <input type="number" data-id="annualRunningCost" value="0" title="Base-year fixed holding cost (rates + insurance + utilities + servicing) in the property's currency. Inflates each year. 0 = off."/>
+        </div>
+        <div class="node-field">
+          <label>Running Cost % Val.</label>
+          <input type="number" data-id="runningCostValuePct" value="0" step="0.001" title="Optional value-proportional running cost, as a fraction of current value per year (0.005 = 0.5%/yr). Added on top of the fixed cost. 0 = none."/>
+        </div>
+        <div class="node-field">
+          <label>Running Cost Growth</label>
+          <input type="number" data-id="runningCostGrowth" value="0" step="0.001" title="Optional REAL growth of the running cost on top of inflation (0 = tracks inflation exactly)."/>
+        </div>
+        <div class="node-field">
+          <label>Repair Model</label>
+          <select data-id="repairModel" title="Stochastic repair process. NONE = no repairs drawn. BERNOULLI = one big repair some years. POISSON = a variable count per year. CONTINUOUS = a lognormal cost every year.">
+            <option value="NONE">None</option>
+            <option value="BERNOULLI">Bernoulli (one big repair some years)</option>
+            <option value="POISSON">Poisson (variable count / year)</option>
+            <option value="CONTINUOUS">Continuous (every year)</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Repair Prob.</label>
+          <input type="number" data-id="repairProb" value="0" step="0.01" title="Annual probability of a repair (BERNOULLI model), e.g. 0.25 ≈ a big repair every 4 years."/>
+        </div>
+        <div class="node-field">
+          <label>Repair Rate λ</label>
+          <input type="number" data-id="repairLambda" value="0" step="0.1" title="Expected number of repairs per year (POISSON model)."/>
+        </div>
+        <div class="node-field">
+          <label>Repair Median</label>
+          <input type="number" data-id="repairMedian" value="0" title="Median severity per repair event, in the property's currency. Ignored when Repair % Val. is set."/>
+        </div>
+        <div class="node-field">
+          <label>Repair % Val.</label>
+          <input type="number" data-id="repairValuePct" value="0" step="0.001" title="Alternative severity anchor: median repair = this fraction × current value (0.02 ≈ 2% of the house). Overrides Repair Median when > 0."/>
+        </div>
+        <div class="node-field">
+          <label>Repair σ</label>
+          <input type="number" data-id="repairSigma" value="0.6" step="0.05" title="Lognormal shape (tail heaviness) of repair severity. Higher ⇒ fatter tail of large repairs."/>
+        </div>
+        <div class="node-field">
+          <label>Capitalize Frac.</label>
+          <input type="number" data-id="capitalizeRepairs" value="0" step="0.05" title="Fraction of each repair treated as a capital improvement (lifts cost basis, cuts the eventual CGT). 0 = pure maintenance."/>
         </div>
       </div>
       <div class="node-buttons">
