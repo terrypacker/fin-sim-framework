@@ -564,10 +564,15 @@ export const US_RETIREMENT = {
           .name('US Stock Dividends').type('DIVIDEND_SCHEDULED')
           .interval('year-end').startOffset(0).enabled(true).color('#4CAF50').build()
       );
+      // Semi-annual coupons (design 66 §G10a): fires on both half-year ends (Jun 30 /
+      // Dec 31); each firing pays the per-holding fraction of the annual coupon
+      // (`firingsPerYear` tells the handler the stream cadence). Real bonds pay
+      // semi-annually; reinvested halves compound intra-year.
       schedules.push(
         EventBuilder.eventSeries()
           .name('Bond Coupons').type('INTL_BOND_COUPON')
-          .interval('year-end').startOffset(0).enabled(true).color('#8D6E63').build()
+          .interval('semiannual').startOffset(0).enabled(true).color('#8D6E63')
+          .data({ firingsPerYear: 2 }).build()
       );
     }
 
@@ -587,13 +592,15 @@ export const US_RETIREMENT = {
           .interval('month-end').enabled(true).color('#009688').build()
       );
       // Coupon interest on BOND sleeves of equity-served accounts (IRA/401k/Roth/
-      // super/au-stock). One shared annual stream; the US handlers here and the AU
-      // handlers (au-retirement toolset) subscribe to it. US_STOCK brokerage bonds
-      // keep their own INTL_BOND_COUPON stream. Annual, matching couponRate units.
+      // super/au-stock). One shared semi-annual stream (design 66 §G10a); the US
+      // handlers here and the AU handlers (au-retirement toolset) subscribe to it.
+      // US_STOCK brokerage bonds keep their own INTL_BOND_COUPON stream. Fires on both
+      // half-year ends; `firingsPerYear` tells the handler to split each coupon.
       schedules.push(
         EventBuilder.eventSeries()
           .name('Bond Sleeve Coupons').type('BOND_SLEEVE_COUPON')
-          .interval('year-end').startOffset(0).enabled(true).color('#795548').build()
+          .interval('semiannual').startOffset(0).enabled(true).color('#795548')
+          .data({ firingsPerYear: 2 }).build()
       );
       // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
       // (design 66 §G5/§G6). One shared annual stream across brokerage + all

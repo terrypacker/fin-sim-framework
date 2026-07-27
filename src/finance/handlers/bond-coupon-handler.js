@@ -11,7 +11,7 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
-import { computeHoldingsCoupons } from '../holdings/holdings-earnings.js';
+import { computeHoldingsCoupons, couponFiringIndex, resolvePrevailingCouponRate } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles INTL_BOND_COUPON events (design 59).
@@ -80,10 +80,15 @@ export class BondCouponScheduledHandler extends HandlerEntry {
     };
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, federalTaxableAmount, stateTaxableAmount } = computeHoldingsCoupons({
-      state, stateKey, fallbackRate: this.couponRate,
+    // Semi-annual coupons (design 66 §G10a): the stream carries `firingsPerYear`
+    // (2 = semi-annual); each firing pays its per-holding fraction of the annual
+    // coupon. Absent ⇒ 1 (a single annual firing paying the full coupon — pre-G10).
+    const firingsPerYear = data?.firingsPerYear ?? 1;
+    const firingIndex    = couponFiringIndex(date, firingsPerYear);
+    const { amount, federalTaxableAmount, stateTaxableAmount, reinvestBuckets } = computeHoldingsCoupons({
+      state, stateKey, fallbackRate: this.couponRate, firingIndex, firingsPerYear,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
@@ -94,8 +99,17 @@ export class BondCouponScheduledHandler extends HandlerEntry {
       : null;
     const actionType = reinvest ? 'BOND_COUPON_APPLY' : 'BOND_COUPON_CASH_APPLY';
 
+    // §G10b reinvestment risk: reinvested coupons buy a new-vintage lot at the
+    // then-prevailing market yield (not the maturing bond's coupon). Only the
+    // reinvest branch consumes these; the cash-payout branch ignores them.
+    const prevailingRate = resolvePrevailingCouponRate(state, stateKey, this.rateKey) ?? this.couponRate ?? null;
+
     return [
-      { type: actionType, amount, federalTaxableAmount, stateTaxableAmount, residency, stateKey },
+      {
+        type: actionType, amount, federalTaxableAmount, stateTaxableAmount, residency, stateKey,
+        _reinvestBuckets: reinvestBuckets, _prevailingRate: prevailingRate,
+        _reinvestYear: (date ?? new Date()).getUTCFullYear(), _reinvestPurchaseMs: (date ?? new Date()).getTime(),
+      },
       new RecordMetricAction('bond_coupons', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

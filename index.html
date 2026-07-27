@@ -712,6 +712,13 @@
               </select>
             </label>
             <label>Coupon <input class="ladder-input" data-lf="couponRate" type="number" step="0.001" placeholder="market" style="width:5em"/></label>
+            <label title="Coupon frequency — payments per year (design 66 §G10a)">Freq
+              <select class="ladder-input" data-lf="couponFrequency">
+                <option value="1">Annual</option>
+                <option value="2" selected>Semi-ann.</option>
+                <option value="4">Quarterly</option>
+              </select>
+            </label>
             <label title="Roll each maturing rung into a fresh bond at the ladder's full term — a self-perpetuating ladder (design 66 §G8). Off ⇒ rungs fall to cash as they mature (spend-down)."><input class="ladder-input" data-lf="roll" type="checkbox" checked/> Roll</label>
             <label title="Zero-coupon / OID ladder"><input class="ladder-input" data-lf="zeroCoupon" type="checkbox"/> Zero</label>
             <label title="TIPS / inflation-linked ladder"><input class="ladder-input" data-lf="inflationLinked" type="checkbox"/> TIPS</label>

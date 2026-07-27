@@ -648,3 +648,205 @@ and [[design-65-allocation-aware-drawdown]] (which sleeve/lots to sell). Reuses 
 CPI accumulator from [[inflation-wrapper-drops-cgt-reform]] (G5) and the idle
 [[sim-rng-unused-in-loop]] (G7). Mark-to-market lives in design 28 §5
 (`BondPriceAdjustReducer`).
+
+## 11. G10 — Coupon frequency & reinvestment risk (detailed design)
+
+> Status: **COMPLETE** (2026-07-17; all 4 steps of §11.7 — 3612 unit + 875 viz green).
+> Delivered: **A2** (real semi-annual cashflows) + **B2** (reinvest into a new-vintage
+> bond lot at the prevailing yield), default `couponFrequency` **2**. Golden moved
+> +0.024% NW / +0.061% tax (§G10a semi-annual compounding); §G10b is inert on the
+> default golden (prevailing yield ≈ source coupon) but the mechanism is live (14
+> reinvest lots) and verified by the §G10b-7 rate-divergence probe. G10 is two
+> *independent* sub-gaps that share a sentence — **G10a coupon frequency** and **G10b
+> reinvestment risk**. The §4 sizing ("Small; cosmetic") held for G10a; B2 was medium.
+
+### 11.1 What today does (baseline)
+
+Coupons run off **one annual `year-end` stream** each:
+
+- `INTL_BOND_COUPON` → `BondCouponScheduledHandler` for the US brokerage
+  (`usStockAccount`) BOND sleeve;
+- `BOND_SLEEVE_COUPON` → `BondSleeveCouponHandler` for the equity-served shelters
+  (IRA/401k/Roth/super/au-stock).
+
+Both compute `Σ holding.marketValue × (holding.couponRate ?? fallbackRate)` once per
+sim year (`computeHoldingsCoupons`, `holdings-earnings.js`). The result is credited
+via one of two branches (per the `reinvest` param):
+
+- **reinvest = true** → `BOND_COUPON_APPLY` / `BOND_SLEEVE_COUPON_APPLY`:
+  `distributeHoldingsCredit(holdings, coupon)` spreads the coupon back **into the
+  existing BOND lots**, raising their `marketValue`. Next year the (now larger)
+  `marketValue` earns coupon again **at the same `couponRate`** → the reinvested cash
+  compounds at *the bond's own coupon*, regardless of where market rates have moved.
+  This is the "reinvests at the sleeve's own rate" the §4 stub flags.
+- **reinvest = false** → cash path (`BOND_COUPON_CASH_APPLY`): credits the savings
+  account, which already earns the regime-adjusted savings rate. (So the *cash* leg
+  is arguably already "prevailing-rate" reinvestment; the gap is really on the
+  reinvest-in-place leg.)
+
+The then-prevailing market fixed-income yield is available in state as
+`state.effectiveInterestRates[RATE_KEYS.FIXED_INCOME_US|_AU]` (regime-adjusted,
+duration-aware) — this is the concrete field G10b would reinvest at.
+
+### 11.2 G10a — Coupon frequency
+
+Real Treasuries/corporates pay **semi-annual** coupons; the model pays one annual
+lump. Two ways to represent it, with opposite golden profiles:
+
+- **Option A1 — cosmetic frequency field (golden UNMOVED).** Add
+  `Holding.couponFrequency` (∈ {1,2,4}, default 2 for realism *display*, or 1 to
+  preserve today's number). Keep the single annual event; `couponFrequency` is
+  carried for round-trip + shown in the account editor / holdings panel, but the
+  *annual* coupon math is unchanged (`Σ mv × couponRate`, paid once). This is the
+  literal "cosmetic" reading: the label is right, the cashflow timing is unchanged,
+  **the golden does not move**, no re-baseline.
+- **Option A2 — real semi-annual cashflows (golden MOVES).** Add a second scheduled
+  firing (mid-year) so the coupon pays in two halves of `mv × couponRate / frequency`.
+  Reuses the existing `factor` param on `computeHoldingsGrowth`-style paths; the
+  handler pays `couponRate / frequency` per firing. Under **reinvest=true** the two
+  half-coupons compound intra-year → a small positive drift; earlier cash under
+  reinvest=false. Both shift the golden and force a re-baseline. The economic size at
+  annual planning resolution is tiny (a half-year of compounding on the coupon of a
+  60/40 book), which is why §4 calls it cosmetic — but it is **not golden-neutral**.
+
+### 11.3 G10b — Reinvestment risk
+
+The substantive gap: reinvested coupons should buy exposure at the **then-prevailing
+market yield**, not perpetuate the maturing bond's coupon. Three options, increasing
+fidelity/cost:
+
+- **Option B0 — leave as-is (do nothing).** Reinvest-in-place stays at the bond's own
+  coupon. Zero cost; documents that the gap is knowingly deferred. Reinvestment risk
+  is then only *partially* modeled — via the cash leg (reinvest=false) and via G4
+  ladder roll (a matured rung re-issues at the prevailing coupon, §10.3), which
+  together already capture most of it.
+- **Option B1 — route reinvested coupons to the CASH sleeve (small; golden moves
+  only where bonds reinvest).** Instead of `distributeHoldingsCredit` into the BOND
+  lots, credit the account's **CASH sleeve**, which already earns the prevailing
+  money-market rate (design 60). The coupon then compounds at the *current* short
+  rate, and design-61 rebalancing may sweep it back toward target on its own cadence.
+  Faithful, tiny code change, reuses two existing subsystems. Downside: it conflates
+  "reinvest at prevailing" with "hold as cash until rebalanced," and only equity-
+  served accounts have a money-market CASH sleeve.
+- **Option B2 — reinvest into a new-vintage BOND lot (medium; the "correct" model).**
+  Append (or merge into a current-year) BOND lot stamped with
+  `couponRate = effectiveInterestRates[FIXED_INCOME_*]` at the reinvest date. The
+  sleeve becomes a blend of coupon vintages — exactly reinvestment risk, and it
+  dovetails with G4 ladder vintages and G1 yield-lock-in. Downside: lot proliferation
+  (one new lot/year) needs consolidation, and it is no longer "cosmetic."
+
+### 11.4 Golden impact summary
+
+| Sub-gap | Option              | Golden                                              |
+| ------- | ------------------- | --------------------------------------------------- |
+| G10a    | A1 cosmetic field   | **unmoved**                                         |
+| G10a    | A2 real semi-annual | moves (re-baseline)                                 |
+| G10b    | B0 leave-as-is      | unmoved                                             |
+| G10b    | B1 cash-sleeve      | moves (where a golden account reinvests coupons)    |
+| G10b    | B2 new-vintage lot  | moves (re-baseline)                                 |
+
+The default golden **does** hold a 60/40 book with bond sleeves (G3), and the shelter
+sleeves reinvest, so any option other than A1/B0 forces a coordinated re-baseline.
+
+### 11.5 Testing plan
+
+- **G10a A1**: `holdings-roundtrip` carries `couponFrequency`; account-editor input
+  test; a coupon test asserts the annual amount is **unchanged** (cosmetic guard).
+- **G10a A2**: extend `evt-bond-coupon` / `evt-bond-sleeve-coupon` — two firings sum
+  to the annual coupon; reinvest=true shows the intra-year compounding delta.
+- **G10b B1/B2**: an end-to-end probe where prevailing rate ≠ bond coupon shows the
+  reinvested cash compounding at the *prevailing* rate (B1: CASH sleeve grows; B2: a
+  new lot appears at the prevailing coupon), following the `EVT-BOND-SLV` pattern.
+- **Coverage gate**: any new reducer → `reducer-coverage-manifest.js`.
+
+### 11.6 Open decisions (for owner review)
+
+1. **G10a scope** — cosmetic frequency field (A1, golden-neutral) or real semi-annual
+   cashflows (A2, re-baseline)? Given §4's "cosmetic" sizing, A1 is the low-risk default.
+   Answer: **A2 (real semi-annual cashflows).** Model the true half-year coupon timing.
+2. **G10b scope** — leave-as-is (B0), route reinvested coupons to the CASH sleeve (B1),
+   or new-vintage bond lot (B2)? Note G4 ladder-roll + the reinvest=false cash leg
+   already capture much of reinvestment risk, which argues B0/B1.
+   Answer: **B2 (new-vintage bond lot).** Reinvest at the prevailing yield into a fresh
+   lot so the sleeve becomes a real blend of coupon vintages.
+3. **`couponFrequency` default** — 2 (semi-annual, realistic) or 1 (annual, preserves
+   today's numbers)? Under A1 this is display-only either way.
+   Answer: **2 (semi-annual).**
+4. **Ship together or split** — G10a and G10b are independent; do we land the
+   golden-neutral pieces first (A1 and/or B0) and defer any re-baseline, or do one
+   coordinated re-baseline for the behavioral options?
+   Answer: **One coordinated re-baseline** (both A2 and B2 move the golden).
+
+### 11.7 Implementation plan (decisions locked)
+
+Both chosen options move the golden, so G10 lands as **one phase with a single
+re-baseline** at the end. Order the work so the golden is touched exactly once:
+
+**Step 1 — `Holding.couponFrequency` (field plumbing). — DONE (2026-07-17).** Added
+`couponFrequency` (default **2**, `?? 2` for old saves) to `Holding` ctor/toJSON/
+fromJSON; carried through `holdings-roundtrip`. Account-editor BOND row gets a
+frequency `<select>` (Annual/Semi-ann./Quarterly, stored as a Number) in the bond-
+terms cell, plus a Freq selector in the `index.html` ladder-builder form that stamps
+`couponFrequency` on every rung. Display-only — no math change, **golden unmoved**.
+Tests: `holdings-roundtrip` (non-default 4 preserved, absent ⇒ 2); `holdings-
+allocation-inputs` (§G10a row selector reflect/edit-as-Number/default-2/EQUITY-absent,
+ladder-builder stamps freq). 3600 unit + 875 viz green.
+
+**Step 2 — G10a semi-annual cashflows. — DONE (2026-07-17).** Added a `semiannual`
+interval (`intervalFns`/`startSnapFns` in `simulation-adapter.js`) that fires on both
+half-year ends (Jun 30 / Dec 31), computed from the calendar half (not day-preserving
+`addMonths`, which overflows Jun 31 → Jul 1). Both coupon streams (`INTL_BOND_COUPON`,
+`BOND_SLEEVE_COUPON`) switched from `year-end` to `semiannual` and carry
+`data.firingsPerYear:2`. `computeHoldingsCoupons` gained `{firingIndex, firingsPerYear}`
+and multiplies each holding's coupon by `couponFiringFraction(couponFrequency,
+firingIndex, firingsPerYear)` — a holding pays on the last `min(freq, firingsPerYear)`
+firings (back-loaded so an annual bond pays only at year-end) and splits evenly, so the
+firings sum to exactly the annual coupon. `couponFiringIndex(date, firingsPerYear)`
+maps Dec→year-end / Jun→mid-year. Handlers read `date` + `data.firingsPerYear`; default
+(`firingsPerYear:1`) is byte-identical to pre-G10 for every direct caller. Also added
+`semiannual` to the event-editor interval dropdown.
+- **Golden re-pinned** (cross-border-relief): net worth +0.024% (11,581,436 →
+  11,584,191), lifetime tax +0.061% (1,127,223 → 1,127,909) — small upward drift from
+  reinvested mid-year halves compounding intra-year.
+- **Fixed** `evt-state-tax` EVT-STATE-4: its mid-year reconciliation checkpoint was
+  `Date.UTC(2026,5,30)` = **Jun 30**, which now coincides with the first semi-annual
+  coupon whose Treasury slice is federal-taxable-but-state-exempt (legitimately breaks
+  the federal≡state mirror); moved the checkpoint to May 30 (pre-coupon).
+- Tests: `evt-bond-coupon` §G10a-1..4 (fraction/index helpers, split sums to annual,
+  annual-bond pays nothing mid-year) + EVT-BOND-COUPON-6 (e2e: two firings Jun 30 +
+  Dec 31 each half). 3605 unit + 875 viz green.
+
+**Step 3 — G10b reinvest into a new-vintage lot. — DONE (2026-07-17).** New
+`computeHoldingsCoupons().reinvestBuckets` groups the firing's coupon by tax character
+(`taxExemption|issuingState|rateKey`). New `resolvePrevailingCouponRate(state, stateKey,
+rateKey)` (mirrors the G1 `<rateKey>::<stateKey>` stamp) and `mergeCouponReinvestLots(...)`
+(holdings-earnings.js) append/merge a BOND lot per `(bucket × year)`, id
+`reinvest-<stateKey>-<bucket>-<year>`, stamped `couponRate = prevailing yield` and
+inheriting the source's `taxExemption`/`issuingState`/`rateKey`; both semi-annual firings
+of a year merge into that year's lot with an mv-weighted blended rate (distinct years =
+distinct vintages). Both handlers pass `_reinvestBuckets`/`_prevailingRate`/`_reinvestYear`
+on the apply action; `BondCouponApplyReducer` (reinvest branch) and
+`BondSleeveCouponApplyReducer` consume them (Σ mv +coupon, balance re-synced ⇒ §4.4
+holds). The sleeve handler no longer emits per-source `HoldingTransactAction`s. Back-compat:
+absent buckets ⇒ old behavior (`distributeHoldingsCredit` / scalar balance credit), so the
+direct-`reduce` unit tests still pass. Tests: `evt-bond-coupon-reinvest` §G10b-1..7 (rate
+resolution, new-lot-at-prevailing, within-year blend, distinct vintages, per-bucket
+separation, e2e lever-bites where prevailing 6% ≠ source 2%); `evt-bond-sleeve-coupon`
+SLV-6/7 updated (source stays at par, reinvest lot appears).
+
+**Step 4 — golden re-baseline (folded into Steps 2–3).** §G10a moved the golden +0.024%
+NW / +0.061% tax (re-pinned in Step 2). §G10b is **INERT on the default golden**: it
+creates 14 reinvest lots but the prevailing yield ≈ the seeded 0.04 coupon and the only
+reinvesting sleeve (k401) is tax-deferred, so NW moved $1 (rounding), tax unchanged.
+Golden re-pinned to 11,584,190 / 1,127,909. The lever bites only when the prevailing
+rate diverges from the source coupon (a rate-regime shift) — verified by the §G10b-7
+e2e probe. `MEMORY.md` design-66 note updated.
+
+Open sub-decisions deferred to implementation (sensible defaults, revisit if wrong):
+- **Frequency granularity of the stream** — schedule a fixed semi-annual (2×/yr)
+  series and let annual holdings pay only on the year-end firing, vs. a fully general
+  per-frequency scheduler. Default: **fixed 2×/yr**, since default is 2 and quarterly
+  (4) is rare; generalize only if a scenario needs 4/12.
+- **B2 lot rateKey resolution** — reuse the account's `fallbackRateKey`
+  (`FIXED_INCOME_US`/`_AU`) already threaded into the coupon handler; the reinvest
+  lot's yield is that regime-adjusted rate at the firing date.

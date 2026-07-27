@@ -62,6 +62,29 @@ describe('holdings editor — allocation-aware inputs', () => {
     // design 66 §G5/§G6: BOND rows expose the zero-coupon + TIPS accretion toggles.
     expect(cell(root, 'zeroCoupon')).not.toBeNull();
     expect(cell(root, 'inflationLinked')).not.toBeNull();
+    // design 66 §G10a: BOND rows expose the coupon-frequency selector.
+    expect(cell(root, 'couponFrequency')).not.toBeNull();
+  });
+
+  test('BOND §G10a: the coupon-frequency selector reflects the holding and edits write a Number', () => {
+    const editor = editorForHolding({ allocation: 'BOND', couponRate: 0.04, couponFrequency: 4 });
+    const root   = editor._rootEl;
+    const freq   = cell(root, 'couponFrequency');
+    expect(freq).not.toBeNull();
+    expect(freq.value).toBe('4');           // quarterly reflected
+
+    // Changing to annual writes 1 (as a Number, not the string '1') to the holding.
+    freq.value = '1';
+    freq.dispatchEvent(new window.Event('change'));
+    expect(editor._holdings[0].couponFrequency).toBe(1);
+
+    // A holding authored without couponFrequency shows the semi-annual default (2).
+    const dflt = editorForHolding({ allocation: 'BOND', couponRate: 0.04 })._rootEl;
+    expect(cell(dflt, 'couponFrequency').value).toBe('2');
+
+    // An EQUITY row exposes no frequency selector.
+    const eq = editorForHolding({ allocation: 'EQUITY' })._rootEl;
+    expect(cell(eq, 'couponFrequency')).toBeNull();
   });
 
   test('BOND §G5/§G6: the Zero + TIPS checkboxes reflect and edit the accretion flags', () => {
@@ -226,6 +249,7 @@ describe('holdings editor — bond-ladder builder (§G8)', () => {
     lf(root, 'spacing').value   = '1';
     lf(root, 'firstTerm').value = '1';
     lf(root, 'taxExemption').value = 'state';
+    lf(root, 'couponFrequency').value = '4';   // design 66 §G10a: quarterly rungs
     root.querySelector('[data-id="ladderBuildBtn"]').dispatchEvent(new window.Event('click'));
 
     const rungs = editor._holdings.filter(h => h.allocation === 'BOND');
@@ -233,6 +257,8 @@ describe('holdings editor — bond-ladder builder (§G8)', () => {
     expect(rungs.length).toBe(5);
     // Even face split.
     expect(rungs.every(h => h.faceValue === 20000 && h.marketValue === 20000 && h.costBasis === 20000)).toBe(true);
+    // design 66 §G10a: the selected coupon frequency is stamped on every rung (as a Number).
+    expect(rungs.every(h => h.couponFrequency === 4)).toBe(true);
     // Every rung rolls to the SAME ladder-length term: first + (rungs-1)*spacing = 5y.
     expect(rungs.every(h => h.rollAtMaturity === true && h.rollTermYears === 5)).toBe(true);
     // Tax treatment + individual-bond identity carried onto each rung.

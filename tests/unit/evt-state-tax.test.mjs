@@ -71,10 +71,12 @@ test('EVT-STATE-4: state ordinary base reconciles with the federal ordinary base
   // state splits it across buckets (ordinary / pension / gross SS), so for a US
   // resident: usOrdinaryIncomeYTD === stateOrdinaryIncomeYTD + statePensionIncomeYTD
   // + 0.85·stateSsIncomeYTD. A missing income source (this caught US/AU savings
-  // interest) breaks it. Checked in the first half of year 1 — before any tax
-  // settle — so the Dec-31 year-end-dividend straddle (design 34 §13) can't muddy it.
+  // interest) breaks it. Checked EARLY in year 1 — before the first (Jun-30) bond
+  // coupon (design 66 §G10a) whose Treasury slice is federal-taxable but state-EXEMPT
+  // (a legitimate federal-only source that would break the mirror), and before the
+  // Dec-31 year-end-dividend straddle (design 34 §13) / tax settle can muddy it.
   const sim = run({ residencyState: 'HI' });
-  sim.stepTo(new Date(Date.UTC(2026, 5, 30)));
+  sim.stepTo(new Date(Date.UTC(2026, 4, 30)));   // May 30 — pre-coupon
   const s = sim.state;
   assert.equal(s.people.primary.residency, 'US');
   const federalBase = s.usOrdinaryIncomeYTD ?? 0;

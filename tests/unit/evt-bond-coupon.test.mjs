@@ -28,7 +28,7 @@
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
-import { computeHoldingsCoupons } from '../../src/finance/holdings/holdings-earnings.js';
+import { computeHoldingsCoupons, couponFiringFraction, couponFiringIndex } from '../../src/finance/holdings/holdings-earnings.js';
 import { Holding }                 from '../../src/finance/holdings/holding.js';
 
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
@@ -121,6 +121,63 @@ test('EVT-BOND-COUPON-3c: a municipal bond is federally exempt; state-exempt onl
   assert.strictEqual(both.stateTaxableAmount, 0, 'both ⇒ state-exempt regardless of residence');
 });
 
+// ── Unit: semi-annual coupon frequency (design 66 §G10a) ─────────────────────
+
+test('EVT-BOND-COUPON-G10a-1: couponFiringFraction splits by frequency and back-loads annual to year-end', () => {
+  // Semi-annual stream (firingsPerYear = 2): firings [0 = mid-year, 1 = year-end].
+  // freq 2 → half at each firing; freq 1 → nothing mid-year, full at year-end;
+  // freq 4 → capped at the 2 firing points (half each). Each sums to 1.0 over a year.
+  assert.equal(couponFiringFraction(2, 0, 2), 0.5, 'semi-annual pays half mid-year');
+  assert.equal(couponFiringFraction(2, 1, 2), 0.5, 'semi-annual pays half at year-end');
+  assert.equal(couponFiringFraction(1, 0, 2), 0,   'annual bond pays nothing mid-year');
+  assert.equal(couponFiringFraction(1, 1, 2), 1,   'annual bond pays full at year-end');
+  assert.equal(couponFiringFraction(4, 0, 2), 0.5, 'quarterly capped at 2 firings → half');
+  assert.equal(couponFiringFraction(4, 1, 2), 0.5);
+  // Default frequency (undefined ⇒ 2) behaves semi-annual.
+  assert.equal(couponFiringFraction(undefined, 0, 2), 0.5, 'undefined freq defaults to semi-annual');
+  // Single-firing stream (the pre-G10 default) pays the full coupon regardless of freq.
+  assert.equal(couponFiringFraction(2, 0, 1), 1, 'single annual firing pays the full coupon');
+  assert.equal(couponFiringFraction(1, 0, 1), 1);
+});
+
+test('EVT-BOND-COUPON-G10a-2: couponFiringIndex maps Jun 30 → 0 (mid-year) and Dec 31 → year-end', () => {
+  assert.equal(couponFiringIndex(new Date(Date.UTC(2026, 5, 30)), 2), 0, 'Jun 30 is the mid-year firing');
+  assert.equal(couponFiringIndex(new Date(Date.UTC(2026, 11, 31)), 2), 1, 'Dec 31 is the year-end firing');
+  // A single-firing (or dateless) call is always index 0.
+  assert.equal(couponFiringIndex(new Date(Date.UTC(2026, 11, 31)), 1), 0, 'single-firing stream → index 0');
+  assert.equal(couponFiringIndex(null, 2), 0);
+});
+
+test('EVT-BOND-COUPON-G10a-3: a semi-annual stream pays half each firing; the two firings sum to the annual coupon', () => {
+  const state = { acct: { holdings: [
+    { id: 'b1', allocation: 'BOND', marketValue: 10000, couponRate: 0.05, couponFrequency: 2, taxExemption: 'none' },
+  ] } };
+
+  const annual  = computeHoldingsCoupons({ state, stateKey: 'acct', fallbackRate: 0 });                       // pre-G10 single firing
+  const midYear = computeHoldingsCoupons({ state, stateKey: 'acct', fallbackRate: 0, firingIndex: 0, firingsPerYear: 2 });
+  const yearEnd = computeHoldingsCoupons({ state, stateKey: 'acct', fallbackRate: 0, firingIndex: 1, firingsPerYear: 2 });
+
+  assert.equal(annual.amount, 500, 'full annual coupon = 10000 × 0.05');
+  assert.equal(midYear.amount, 250, 'mid-year firing pays half');
+  assert.equal(yearEnd.amount, 250, 'year-end firing pays half');
+  assert.equal(midYear.amount + yearEnd.amount, annual.amount, 'the two halves sum to the annual coupon');
+  assert.equal(midYear.holdingActions.length, 1, 'mid-year firing still reinvests into the sleeve');
+  assert.equal(midYear.holdingActions[0].marketValueDelta, 250, 'holding reinvest delta is the half coupon');
+});
+
+test('EVT-BOND-COUPON-G10a-4: an annual (couponFrequency 1) bond pays nothing at the mid-year firing', () => {
+  const state = { acct: { holdings: [
+    { id: 'b1', allocation: 'BOND', marketValue: 10000, couponRate: 0.05, couponFrequency: 1, taxExemption: 'none' },
+  ] } };
+
+  const midYear = computeHoldingsCoupons({ state, stateKey: 'acct', fallbackRate: 0, firingIndex: 0, firingsPerYear: 2 });
+  const yearEnd = computeHoldingsCoupons({ state, stateKey: 'acct', fallbackRate: 0, firingIndex: 1, firingsPerYear: 2 });
+
+  assert.equal(midYear.amount, 0, 'annual bond pays nothing mid-year');
+  assert.equal(midYear.holdingActions.length, 0, 'and emits no reinvest action mid-year');
+  assert.equal(yearEnd.amount, 500, 'annual bond pays its full coupon at year-end');
+});
+
 // ── Integration: end-to-end through the prebuilt scenario ────────────────────
 
 function run(params, mutateCfg) {
@@ -209,4 +266,37 @@ test('EVT-BOND-COUPON-5: the Treasury flag lowers the state base but not the fed
 
   assert.ok(fedFlag > 0 && Math.abs(fedFlag - fedPlain) < 0.01, 'federal coupon base is unchanged by the Treasury flag');
   assert.ok(stateFlag < statePlain - 0.01, 'flagging Treasury lowers the state-taxable coupon base');
+});
+
+// Distinct coupon firings in a given year, keyed by firing date. Each BOND_COUPON_TAX
+// is journalled twice (generation + reduction phases) with an identical amount, so
+// dedupe by date to recover one economic coupon per firing.
+const couponFiringsInYear = (sim, year) => {
+  const byDate = new Map();
+  for (const e of sim.journal.journal) {
+    if (e.action?.type !== 'BOND_COUPON_TAX') continue;
+    const d = new Date(e.date);
+    if (d.getUTCFullYear() !== year) continue;
+    byDate.set(d.toISOString().slice(0, 10), {
+      month:  d.getUTCMonth(),
+      amount: e.action.amount ?? e.action.data?.amount,
+    });
+  }
+  return [...byDate.values()].sort((a, b) => a.month - b.month);
+};
+
+test('EVT-BOND-COUPON-6 (§G10a): the coupon fires twice in year 1 (Jun 30 + Dec 31), each half, summing to the annual coupon', () => {
+  // Two 100k bonds @ 5% and 4% held from Jan 1 ⇒ 9,000 annual coupon. Cash payout
+  // (no reinvest) keeps market values flat, so each half-year firing is exactly 4,500.
+  const sim = run({ residencyState: 'NE', monthlyExpenses: 0, inflationAdjust: false }, seedBonds(true));
+  sim.stepTo(new Date(Date.UTC(2027, 0, 2)));   // through the whole of year 1
+
+  const y1 = couponFiringsInYear(sim, 2026);
+  assert.equal(y1.length, 2, 'exactly two coupon firings in year 1');
+  assert.deepEqual(y1.map(t => t.month), [5, 11], 'firings land on Jun 30 (m=5) and Dec 31 (m=11)');
+
+  const total = y1.reduce((s, t) => s + t.amount, 0);
+  assert.ok(Math.abs(total - 9000) < 0.01, `two halves sum to the 9,000 annual coupon, got ${total.toFixed(2)}`);
+  assert.ok(Math.abs(y1[0].amount - 4500) < 0.01, 'the mid-year firing is half the annual coupon');
+  assert.ok(Math.abs(y1[1].amount - 4500) < 0.01, 'the year-end firing is the other half');
 });

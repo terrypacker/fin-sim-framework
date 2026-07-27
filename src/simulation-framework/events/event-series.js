@@ -13,7 +13,7 @@ import { BaseEvent } from './base-event.js';
 /**
  * Recurring event series configuration for a scenario.
  *
- * @property {string} interval    - Recurrence: 'monthly' | 'quarterly' | 'annually' | 'month-end' | 'year-end'
+ * @property {string} interval    - Recurrence: 'monthly' | 'quarterly' | 'annually' | 'month-end' | 'year-end' | 'semiannual'
  * @property {number} startOffset - Years after simStart to begin (0 = start immediately)
  * @property {number} [month]     - 1–12: anchor to this calendar month (requires interval='annually')
  * @property {number} [day]       - 1–31: anchor to this day of month  (requires interval='annually')

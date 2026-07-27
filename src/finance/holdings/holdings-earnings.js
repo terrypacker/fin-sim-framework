@@ -279,13 +279,27 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * matching computeHoldingsDividends; a cash-payout caller can ignore them and
  * use only the summed amount.
  *
+ * Semi-annual coupons (design 66 §G10a): when the caller drives the coupon on a
+ * `firingsPerYear`-times-a-year stream (2 = semi-annual), each firing pays only the
+ * per-holding fraction of the annual coupon that accrued in this sub-period, so the
+ * firings across a year sum to the full `marketValue × couponRate`. A holding paying
+ * fewer times than the stream fires (an annual `couponFrequency:1` bond on a
+ * semi-annual stream) pays only on the year-end firing (see `couponFiringFraction`).
+ * The default (`firingsPerYear:1`) pays the full annual coupon in one firing — the
+ * pre-G10 behavior, byte-identical for all direct callers.
+ *
  * @param {object} opts
- * @param {object} opts.state         - Current simulation state
- * @param {string} opts.stateKey      - state[stateKey] is the account
- * @param {number} opts.fallbackRate  - Coupon rate used when a BOND holding has no couponRate
- * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
+ * @param {object} opts.state           - Current simulation state
+ * @param {string} opts.stateKey        - state[stateKey] is the account
+ * @param {number} opts.fallbackRate    - Coupon rate used when a BOND holding has no couponRate
+ * @param {number} [opts.firingIndex=0] - 0-based index of this firing within the year
+ *                                        (0 = first/mid-year half, firingsPerYear−1 = year-end)
+ * @param {number} [opts.firingsPerYear=1] - How many times/year the coupon stream fires
+ * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[], reinvestBuckets: object[] }}
+ *   `reinvestBuckets` groups the coupon by tax character (taxExemption + issuingState
+ *   + rateKey + allocation) for the design 66 §G10b new-vintage reinvestment path.
  */
-export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
+export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIndex = 0, firingsPerYear = 1 }) {
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
   const residentState = primaryResidencyState(state);
@@ -294,11 +308,17 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
   let federalTaxable = 0;
   let stateTaxable   = 0;
   const holdingActions = [];
+  // Group the coupon by tax character so §G10b can reinvest each slice into a
+  // new-vintage lot that keeps the source's taxExemption/rateKey (a Treasury coupon
+  // reinvests into a new Treasury) but takes the prevailing market yield.
+  const bucketMap = new Map();
   for (const h of holdings) {
     if (!h || h.allocation !== 'BOND') continue;
+    const fraction = couponFiringFraction(h.couponFrequency, firingIndex, firingsPerYear);
+    if (fraction === 0) continue;   // this holding pays nothing on this firing
     const mv     = h.marketValue ?? 0;
     const rate   = h.couponRate ?? fallbackRate;
-    const coupon = +(mv * rate).toFixed(2);
+    const coupon = +(mv * rate * fraction).toFixed(2);
     if (coupon === 0) continue;
     total += coupon;
     if (!couponFederalExempt(h))              federalTaxable += coupon;  // munis are federally exempt
@@ -309,13 +329,150 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
       marketValueDelta: coupon,
       costBasisDelta:   0,
     }));
+    const te = h.taxExemption ?? 'none';
+    const bucketKey = `${te}|${h.issuingState ?? ''}|${h.rateKey ?? ''}`;
+    const b = bucketMap.get(bucketKey);
+    if (b) b.amount += coupon;
+    else bucketMap.set(bucketKey, {
+      taxExemption: te, issuingState: h.issuingState ?? null, rateKey: h.rateKey ?? null, amount: coupon,
+    });
   }
+  const reinvestBuckets = [...bucketMap.values()].map(b => ({ ...b, amount: +b.amount.toFixed(2) }));
   return {
+    reinvestBuckets,
     amount:               +total.toFixed(2),
     federalTaxableAmount: +federalTaxable.toFixed(2),
     stateTaxableAmount:   +stateTaxable.toFixed(2),
     holdingActions,
   };
+}
+
+/**
+ * The fraction of a BOND holding's annual coupon paid on one firing of a
+ * `firingsPerYear`-times-a-year coupon stream (design 66 §G10a).
+ *
+ * A holding pays its coupon `freq` (= `couponFrequency`, default 2) times a year. On
+ * a stream that fires `firingsPerYear` times, the holding participates in the LAST
+ * `min(freq, firingsPerYear)` firings of the year (back-loaded so an annual bond pays
+ * at year-end, not mid-year) and splits its annual coupon evenly across them. The
+ * fractions therefore sum to exactly 1 across a year, preserving the annual coupon.
+ *
+ * Examples (firingsPerYear = 2 → firings [0=mid-year, 1=year-end]):
+ *   freq 2 → 0.5 at each firing;   freq 1 → 0 mid-year, 1.0 at year-end;
+ *   freq 4 → 0.5 at each firing (capped at the 2 firing points).
+ * With the default `firingsPerYear = 1`, every holding pays the full annual coupon
+ * on the single firing regardless of `freq` (the pre-G10 behavior).
+ *
+ * @param {number} [couponFrequency=2] - Payments/year for the holding
+ * @param {number} firingIndex         - 0-based index of this firing within the year
+ * @param {number} firingsPerYear      - Firings/year of the stream
+ * @returns {number} fraction of the annual coupon due on this firing (0 ≤ f ≤ 1)
+ */
+export function couponFiringFraction(couponFrequency, firingIndex, firingsPerYear) {
+  const freq = Number.isFinite(couponFrequency) && couponFrequency > 0 ? couponFrequency : 2;
+  const perYear = Number.isFinite(firingsPerYear) && firingsPerYear > 0 ? firingsPerYear : 1;
+  const nPay = Math.min(freq, perYear);                 // firings this holding pays on
+  const firstPayingIndex = perYear - nPay;              // back-loaded toward year-end
+  if (firingIndex < firstPayingIndex) return 0;
+  return 1 / nPay;
+}
+
+/**
+ * Resolve which firing-of-the-year a coupon event represents from its date, for the
+ * semi-annual (2×/yr) coupon stream (design 66 §G10a). Those firings land on the two
+ * half-year ends — Jun 30 (mid-year, index 0) and Dec 31 (year-end, index
+ * firingsPerYear−1). A single-firing (`firingsPerYear ≤ 1`) or dateless call is index 0.
+ *
+ * @param {Date|null} date
+ * @param {number} [firingsPerYear=1]
+ * @returns {number} 0-based firing index within the year
+ */
+export function couponFiringIndex(date, firingsPerYear = 1) {
+  if (!date || firingsPerYear <= 1) return 0;
+  return date.getUTCMonth() === 11 ? firingsPerYear - 1 : 0;   // December = the year-end firing
+}
+
+/**
+ * Resolve the prevailing market yield to stamp on a coupon-reinvestment lot
+ * (design 66 §G10b), from `state.effectiveInterestRates`: the per-account
+ * `<rateKey>::<stateKey>` override wins over the shared `<rateKey>` (mirrors the G1
+ * establish-time stamp). Returns null when neither is present so the caller can fall
+ * back to its own per-account coupon rate.
+ *
+ * @param {object} state
+ * @param {string} stateKey
+ * @param {string|null} rateKey
+ * @returns {number|null}
+ */
+export function resolvePrevailingCouponRate(state, stateKey, rateKey) {
+  const rates = state?.effectiveInterestRates;
+  if (!rates || rateKey == null) return null;
+  const perAcct = (stateKey != null) ? rates[`${rateKey}::${stateKey}`] : undefined;
+  return perAcct ?? rates[rateKey] ?? null;
+}
+
+/**
+ * Reinvest bond coupons into NEW-VINTAGE lots priced at the *then-prevailing* market
+ * yield (design 66 §G10b — reinvestment risk). Rather than crediting the coupon back
+ * into the source bond (which perpetuates its old coupon), each tax-character bucket
+ * (from `computeHoldingsCoupons().reinvestBuckets`) buys a fresh BOND lot stamped with
+ * `prevailingRate`, keeping the source's `taxExemption`/`issuingState`/`rateKey`. The
+ * sleeve becomes a real blend of coupon vintages.
+ *
+ * Consolidation: one lot per `(bucket × year)`, id `reinvest-<stateKey>-<bucket>-<year>`.
+ * Both semi-annual firings of a year merge into that year's lot, blending the coupon
+ * rate by market value (within-year firings are ≈ the same yield). Holdings stay
+ * bounded (≈ one reinvest lot per bucket per year).
+ *
+ * Preserves the §4.4 invariant only in concert with the caller: it raises Σ marketValue
+ * by Σ bucket.amount, so the caller must credit the same total to `balance` (or re-sync
+ * balance to Σ marketValue).
+ *
+ * @param {object[]} holdings - the account's current holdings
+ * @param {object} opts
+ * @param {string} opts.stateKey
+ * @param {object[]} opts.buckets       - reinvestBuckets from computeHoldingsCoupons
+ * @param {number|null} opts.prevailingRate - market yield for the new lots (null ⇒ keep bucket's source rate)
+ * @param {number} opts.year            - calendar year of the firing (vintage key)
+ * @param {number|null} [opts.purchaseMs=null] - firing timestamp for the new lot's purchaseDate
+ * @returns {object[]} new holdings array
+ */
+export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailingRate, year, purchaseMs = null }) {
+  if (!Array.isArray(holdings) || !Array.isArray(buckets) || buckets.length === 0) return holdings ?? [];
+  const next = holdings.slice();
+  for (const b of buckets) {
+    const amount = +(b.amount ?? 0).toFixed(2);
+    if (amount <= 0) continue;
+    const te        = b.taxExemption ?? 'none';
+    const bucketKey = `${te}|${b.issuingState ?? ''}|${b.rateKey ?? ''}`;
+    const lotId     = `reinvest-${stateKey}-${bucketKey}-${year}`;
+    const idx       = next.findIndex(h => h?.id === lotId);
+    if (idx >= 0) {
+      const cur   = next[idx];
+      const curMv = cur.marketValue ?? 0;
+      const newMv = +(curMv + amount).toFixed(2);
+      // mv-weighted blend of this vintage's coupon rate; null prevailing ⇒ keep current.
+      const curRate = cur.couponRate ?? prevailingRate ?? 0;
+      const blended = prevailingRate == null ? curRate
+        : +(((curMv * curRate) + (amount * prevailingRate)) / newMv).toFixed(6);
+      next[idx] = { ...cur, marketValue: newMv, costBasis: +((cur.costBasis ?? 0) + amount).toFixed(2), couponRate: blended };
+    } else {
+      next.push({
+        id:              lotId,
+        allocation:      'BOND',
+        marketValue:     amount,
+        costBasis:       amount,   // a bond's basis = its market value (design 53 P1)
+        couponRate:      prevailingRate ?? null,
+        couponFrequency: 2,        // semi-annual (design 66 §G10a)
+        taxExemption:    te,
+        issuingState:    b.issuingState ?? null,
+        rateKey:         b.rateKey ?? null,
+        purchaseDate:    purchaseMs != null ? new Date(purchaseMs) : null,
+        label:           `Reinvested coupons ${year}`,
+      });
+    }
+  }
+  return next;
 }
 
 const ACCRETION_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;

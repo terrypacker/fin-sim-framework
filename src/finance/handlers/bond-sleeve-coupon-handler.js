@@ -11,7 +11,7 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
-import { computeHoldingsCoupons } from '../holdings/holdings-earnings.js';
+import { computeHoldingsCoupons, couponFiringIndex, resolvePrevailingCouponRate } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles BOND_SLEEVE_COUPON events — coupon interest on the BOND sleeve of an
@@ -85,10 +85,13 @@ export class BondSleeveCouponHandler extends HandlerEntry {
     };
   }
 
-  call({ state }) {
+  call({ state, data, date }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, federalTaxableAmount, stateTaxableAmount, holdingActions } = computeHoldingsCoupons({
-      state, stateKey, fallbackRate: this.couponRate,
+    // Semi-annual coupons (design 66 §G10a) — see BondCouponScheduledHandler.
+    const firingsPerYear = data?.firingsPerYear ?? 1;
+    const firingIndex    = couponFiringIndex(date, firingsPerYear);
+    const { amount, federalTaxableAmount, stateTaxableAmount, reinvestBuckets } = computeHoldingsCoupons({
+      state, stateKey, fallbackRate: this.couponRate, firingIndex, firingsPerYear,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
@@ -97,9 +100,17 @@ export class BondSleeveCouponHandler extends HandlerEntry {
       ? (state.people?.[account.ownerId]?.residency ?? null)
       : (state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null);
 
+    // §G10b reinvestment risk: the coupon reinvests into a new-vintage BOND lot at the
+    // prevailing yield (handled in the apply reducer) rather than growing the source
+    // sleeve — so no per-source HoldingTransactActions are emitted here.
+    const prevailingRate = resolvePrevailingCouponRate(state, stateKey, this.rateKey) ?? this.couponRate ?? null;
+
     return [
-      { type: 'BOND_SLEEVE_COUPON_APPLY', amount, federalTaxableAmount, stateTaxableAmount, stateKey, taxMode: this.taxMode, residency },
-      ...holdingActions,
+      {
+        type: 'BOND_SLEEVE_COUPON_APPLY', amount, federalTaxableAmount, stateTaxableAmount, stateKey, taxMode: this.taxMode, residency,
+        _reinvestBuckets: reinvestBuckets, _prevailingRate: prevailingRate,
+        _reinvestYear: (date ?? new Date()).getUTCFullYear(), _reinvestPurchaseMs: (date ?? new Date()).getTime(),
+      },
       new RecordMetricAction('bond_coupons', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

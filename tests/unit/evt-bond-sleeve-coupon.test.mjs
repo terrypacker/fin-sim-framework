@@ -128,23 +128,31 @@ function seedBondSleeve(role, cfg) {
   return acct;
 }
 
-test('EVT-BOND-SLV-6: an IRA BOND sleeve accrues its coupon at year-end (previously earned zero)', () => {
+test('EVT-BOND-SLV-6: an IRA BOND sleeve reinvests its coupon into a new-vintage lot (§G10b)', () => {
   const sim = run({ residencyState: 'NE', monthlyExpenses: 0, inflationAdjust: false, fixedIncomeInterestRate: 0.05 },
     (cfg) => seedBondSleeve('ira', cfg));
   sim.stepTo(new Date(Date.UTC(2027, 0, 2)));   // past the first year-end
 
   const acct = sim.state.iraAccount;
-  const bond = acct.holdings.find(h => h.id === 'bond-sleeve');
-  assert.ok(bond.marketValue > 100000, `bond sleeve should have grown from its coupon, got ${bond.marketValue}`);
-  assert.ok(Math.abs(acct.balance - bond.marketValue) < 0.01, '§4.4: balance stays synced to the single sleeve');
+  // §G10b: the coupon no longer grows the SOURCE bond; it buys a new-vintage BOND lot
+  // at the prevailing yield. The source stays at par; the account total grows.
+  const source = acct.holdings.find(h => h.id === 'bond-sleeve');
+  assert.ok(Math.abs(source.marketValue - 100000) < 0.01, 'the source sleeve is not grown by the coupon (par preserved)');
+  const reinvestLots = acct.holdings.filter(h => typeof h.id === 'string' && h.id.startsWith('reinvest-'));
+  assert.ok(reinvestLots.length > 0, 'a new-vintage reinvest lot was created for the coupon');
+  assert.ok(reinvestLots.every(h => h.allocation === 'BOND' && h.couponRate > 0), 'reinvest lots are BOND with a stamped prevailing coupon');
+  assert.ok(acct.balance > 100000, `account total grew from the reinvested coupon, got ${acct.balance}`);
+  const sumMv = acct.holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0);
+  assert.ok(Math.abs(acct.balance - sumMv) < 0.01, '§4.4: balance stays synced to Σ holdings');
 });
 
-test('EVT-BOND-SLV-7: a super BOND sleeve accrues its coupon (deferred, no immediate AU tax booked)', () => {
+test('EVT-BOND-SLV-7: a super BOND sleeve reinvests its coupon (deferred, no immediate AU tax booked) (§G10b)', () => {
   const sim = run({ residencyState: 'NE', monthlyExpenses: 0, inflationAdjust: false, auFixedIncomeInterestRate: 0.05 },
     (cfg) => seedBondSleeve('super', cfg));
   sim.stepTo(new Date(Date.UTC(2027, 0, 2)));
 
   const acct = sim.state.superAccount;
-  const bond = acct.holdings.find(h => h.id === 'bond-sleeve');
-  assert.ok(bond.marketValue > 100000, `super bond sleeve should have grown from its coupon, got ${bond.marketValue}`);
+  const reinvestLots = acct.holdings.filter(h => typeof h.id === 'string' && h.id.startsWith('reinvest-'));
+  assert.ok(reinvestLots.length > 0, 'a new-vintage reinvest lot was created for the super coupon');
+  assert.ok(acct.balance > 100000, `super account total grew from the reinvested coupon, got ${acct.balance}`);
 });

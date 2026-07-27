@@ -14,6 +14,7 @@ import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldings } from '../../holdings/holdings-fifo.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
+import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
 import { resolveCashKey } from '../cash-routing.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
@@ -178,13 +179,23 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
     const { amount, federalTaxableAmount, stateTaxableAmount, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
     const sa  = state[key];
+    // §G10b reinvestment risk: when the handler supplies reinvest buckets, the coupon
+    // buys a new-vintage BOND lot at the prevailing yield (not distributed back into the
+    // maturing bond). Balance is credited the same amount either way, so §4.4 holds.
+    const buckets = action._reinvestBuckets;
+    const holdings = (Array.isArray(buckets) && buckets.length)
+      ? mergeCouponReinvestLots(sa.holdings ?? [], {
+          stateKey: key, buckets, prevailingRate: action._prevailingRate,
+          year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
+        })
+      : distributeHoldingsCredit(sa.holdings, amount);   // pre-G10b fallback
     return this.newState(
       state,
       {
         [key]: {
           ...sa,
           balance:  sa.balance + amount,
-          holdings: distributeHoldingsCredit(sa.holdings, amount),
+          holdings,
         },
       },
       [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency }]

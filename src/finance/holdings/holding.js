@@ -63,6 +63,12 @@ export class Holding {
    *                                                  marks to market via `duration`, design 28). null = fall back to
    *                                                  the regime-adjusted rateKey rate (today's floating behavior).
    *                                                  The bond twin of `dividendYield` (design 53 §4).
+   * @param {number} [opts.couponFrequency=2]         - BOND holdings only (design 66 §G10a): how many times per year the
+   *                                                  coupon is paid (1 = annual, 2 = semi-annual [the realistic default
+   *                                                  for Treasuries/corporates], 4 = quarterly). Each firing pays
+   *                                                  `marketValue × couponRate / couponFrequency`; the firings sum to the
+   *                                                  annual coupon. Ignored for non-BOND allocations. Back-compat: an old
+   *                                                  save with no field loads as 2.
    * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
    *                                                - Step-wise appreciation schedule; null = use asset scalar rate
    * @param {number|null} [opts.duration=null]      - Modified duration in years (BOND holdings only);
@@ -151,6 +157,7 @@ export class Holding {
     label                = '',
     dividendYield        = null,
     couponRate           = null,
+    couponFrequency      = 2,
     appreciationSchedule = null,
     duration             = null,
     taxLossPartner       = null,
@@ -175,6 +182,7 @@ export class Holding {
     this.label                = label;
     this.dividendYield        = dividendYield;
     this.couponRate           = couponRate;
+    this.couponFrequency      = couponFrequency;
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
     this.taxLossPartner       = taxLossPartner;
@@ -203,6 +211,7 @@ export class Holding {
       label:               this.label,
       dividendYield:       this.dividendYield,
       couponRate:          this.couponRate,
+      couponFrequency:     this.couponFrequency,
       appreciationSchedule: this.appreciationSchedule
         ? this.appreciationSchedule.map(e => ({
             date: e.date instanceof Date ? e.date.toISOString() : e.date,
@@ -238,6 +247,8 @@ export class Holding {
       label:         d.label   ?? '',
       dividendYield: d.dividendYield ?? null,
       couponRate:    d.couponRate ?? null,
+      // design 66 §G10a: coupon payment frequency. Absent (pre-G10 save) ⇒ 2 (semi-annual).
+      couponFrequency: d.couponFrequency ?? 2,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
