@@ -1,0 +1,2880 @@
+Income Tax Assessment Act 1936
+No. 27, 1936
+
+
+
+
+Compilation No. 192
+
+Compilation date:            1 July 2026
+
+Includes amendments: Act No. 17, 2025, Act No. 57, 2025, Act No.
+                     49, 2026 and Act No. 58, 2026
+
+This compilation is in 7 volumes
+
+Volume 1:       Part I to Part III, Division 3
+                sections 1 to 82KZO
+Volume 2:       Part III, Divisions 3A to 9C
+                sections 82LA to 121L
+Volume 3:       Part III, Division 10E to Part VA, Division 8
+                sections 124ZM to 204
+Volume 4:       Part VIIB to Part X, Division 11
+                sections 251R to 468
+Volume 5:       Schedules
+Volume 6:       Endnotes 1 to 4
+Volume 7:       Endnote 5
+
+Each volume has its own contents
+
+
+
+
+Prepared by the Office of Parliamentary Counsel, Canberra
+
+
+
+
+                  Authorised Version C2026C00333 registered 24/07/2026
+About this compilation
+This compilation
+This is a compilation of the Income Tax Assessment Act 1936 that shows the
+text of the law as amended and in force on 1 July 2026 (the compilation date).
+The notes at the end of this compilation (the endnotes) include information
+about amending laws and the amendment history of provisions of the compiled
+law.
+Uncommenced amendments
+The effect of uncommenced amendments is not shown in the text of the
+compiled law. The details of amendments made up to, but not commenced at,
+the compilation date are underlined in the endnotes. Any uncommenced
+amendments affecting the law are accessible on the Register
+(www.legislation.gov.au).
+Application, saving and transitional provisions
+If the operation of a provision or amendment of the compiled law is affected by
+an application, saving or transitional provision that is not included in this
+compilation, details are included in the endnotes.
+Editorial changes
+For more information about any editorial changes made in this compilation, see
+the endnotes.
+Presentational changes
+The Legislation Act 2003 provides for First Parliamentary Counsel to make
+presentational changes to a compilation. Presentational changes are applied to
+give a more consistent look and feel to legislation published on the Register,
+and enable the user to more easily navigate those documents.
+Modifications
+If the compiled law is modified by another law, the compiled law operates as
+modified but the modification does not amend the text of the law. Accordingly,
+this compilation does not show the text of the compiled law as modified. Any
+modifications affecting the law are accessible on the Register.
+Self-repealing provisions
+If a provision of the compiled law has been repealed in accordance with a
+provision of the law, details are included in the endnotes.
+
+
+
+
+                    Authorised Version C2026C00333 registered 24/07/2026
+Contents
+Endnote 5—Repeal table                                                                           1
+
+
+
+
+                                    Income Tax Assessment Act 1936                                i
+
+Compilation No. 192                                                    Compilation date: 01/07/2026
+
+
+
+
+                      Authorised Version C2026C00333 registered 24/07/2026
+Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                  Endnotes
+
+
+                                                                                             Endnote 5—Repeal table
+
+
+Endnote 5—Repeal table
+The amendment history of the repealed provisions of the Income Tax
+Assessment Act 1936 up to and including the Social Security and Veterans’
+Entitlements Legislation Amendment (Private Trusts and Private Companies—
+Integrity of Means Testing) Act 2000 (No. 132, 2000) appears in the table
+below.
+
+ Provision affected                                         How affected
+
+ s. 5 ...................................................   am. Nos. 17 and 65, 1940; Nos. 58 and 69, 1941; No. 22, 1942; No. 10,
+                                                            1943; No. 3, 1944; No. 6, 1946; Nos. 11 and 63, 1947; No. 48, 1950;
+                                                            No. 44, 1951; Nos. 45 and 81, 1953
+                                                            rs. No. 101, 1956
+                                                            am. No. 65, 1957; Nos. 12 and 85, 1959; No. 18, 1960; No. 17, 1961;
+                                                            No. 39, 1962; No. 69, 1963; No. 110, 1964; No. 103, 1965; No. 50,
+                                                            1966; Nos. 38 and 85, 1967; No. 60, 1968; No. 101, 1969; No. 87,
+                                                            1970; No. 54, 1971
+                                                            rep. No. 164, 1973
+ s. 6D ................................................     ad. No. 46, 1972
+                                                            am. Nos. 51 and 165, 1973; No. 108, 1981
+                                                            rep. No. 107, 1989
+ s. 6E ................................................     ad. No. 138, 1987
+                                                            rep. No. 97, 1989
+ s. 7 ...................................................   am. No. 62, 1955; No. 65, 1957; No. 70, 1959; No. 18, 1960; No. 87,
+                                                            1968; No. 51, 1973
+                                                            rs. No. 164, 1973
+                                                            rep. No. 80, 1975
+ s. 9 ...................................................   rep. No. 1, 1953
+ s. 10 .................................................    am. No. 1, 1953; No. 51, 1973; No. 216, 1973 (as am. by No. 20, 1974)
+                                                            rep. No. 123, 1984
+ ss. 11, 12 .........................................       rep. No. 1, 1953
+ s. 13 .................................................    am. No. 1, 1953; No. 216, 1973 (as am. by No. 20, 1974)
+                                                            rep. No. 123, 1984
+ s. 15 .................................................    rep. No. 87, 1978
+
+
+
+
+                                                             Income Tax Assessment Act 1936                                  1
+
+Compilation No. 192                                                                              Compilation date: 01/07/2026
+
+
+
+
+                                        Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+    Provision affected                                        How affected
+
+    s. 23A ..............................................     ad. No. 50, 1942
+                                                              am. No. 10, 1943
+                                                              rs. No. 45, 1953
+                                                              am. Nos. 18 and 58, 1960; No. 39, 1962; No. 60, 1968; Nos. 51 and
+                                                              164, 1973
+                                                              rep. No. 126, 1974
+    s. 23AAA ........................................         ad. No. 19, 1967
+                                                              rep. No. 65, 1972
+    s. 23AD ...........................................       ad. No. 165, 1973
+                                                              am. No. 56, 1976; No. 57, 1977; No. 108, 1981; No. 106, 1982;
+                                                              No. 103, 1983; Nos. 14 and 123, 1984; No. 49, 1985; No. 173, 1985 (as
+                                                              am. by No. 49, 1986); No. 154, 1986; Nos. 78 and 95, 1988; Nos. 20
+                                                              and 35, 1990; Nos. 48 and 216, 1991
+                                                              rep. No. 100, 1991
+    s. 23B ..............................................     ad. No. 44, 1951
+                                                              rep. No. 101, 1956
+    s. 23F ..............................................     ad. No. 110, 1964
+                                                              rs. No. 103, 1965
+                                                              am. No. 51, 1973; No. 108, 1981; No. 47, 1984
+                                                              rep. No. 138, 1987
+    ss. 23FA, 23FB ...............................            ad. No. 47, 1984
+                                                              rep. No. 138, 1987
+    ss. 23FC, 23FD ...............................            ad. No. 138, 1987
+                                                              rep. No. 97, 1989
+    s. 23M .............................................      ad. No. 11, 1989
+                                                              rep. No. 223, 1992
+    s. 24 .................................................   rep. No. 121, 1997
+    s. 24AA ...........................................       ad. No. 52, 1973
+                                                              rs. No. 205, 1976
+                                                              am. No. 108, 1981
+                                                              rep. No. 107, 1989
+    s. 24A ..............................................     ad. No. 12, 1959
+
+
+
+2                                                              Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                                Compilation date: 01/07/2026
+
+
+
+
+                                          Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                            Endnotes
+
+
+                                                                                        Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+                                                      rs. No. 110, 1964
+                                                      am. No. 51, 1973; No. 108, 1981
+                                                      rep. No. 76, 1984
+ s. 24ABDAA ..................................        ad. No. 191, 1992
+                                                      rep. No. 120, 1995
+ s. 24ABDA .....................................      ad. No. 216, 1991
+                                                      rep. No. 169, 1995
+ s. 24ABK ........................................    ad. No. 100, 1991
+                                                      rep. No. 69, 1992
+ s. 24ABL .........................................   ad. No. 100, 1991
+                                                      rs. No. 216, 1991
+                                                      am. No. 69, 1992; Nos. 56 and 174, 1994
+                                                      rep. No. 1, 1996
+ s. 24ABRA......................................      ad. No. 191, 1992
+                                                      rep. No. 120, 1995
+ s. 24ABX ........................................    ad. No. 100, 1991
+                                                      am. No. 216, 1991
+                                                      rep. No. 69, 1992
+ s. 24ACX ........................................    ad. No. 100, 1991
+                                                      am. No. 191, 1992
+                                                      rep. No. 146, 1995
+ ss. 24AD, 24ADA ...........................          ad. No. 100, 1991
+                                                      rep. No. 146, 1995
+ s. 26AAAA .....................................      ad. No. 19, 1980
+                                                      am. No. 108, 1981
+                                                      rep. No. 41, 1986
+ s. 26AAAB .....................................      ad. No. 175, 1981
+                                                      rep. No. 41, 1986
+ s. 26AAA ........................................    ad. No. 165, 1973
+                                                      am. No. 57, 1978; No. 108, 1981; No. 29, 1982; No. 95, 1988
+                                                      rep. No. 138, 1994
+
+
+
+                                                       Income Tax Assessment Act 1936                                3
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+    Provision affected                                        How affected
+
+    s. 26AAB ........................................         ad. No. 126, 1974
+                                                              rep. No. 80, 1975
+    s. 26AA ...........................................       ad. No. 43, 1954
+                                                              am. No. 126, 1977; No. 108, 1981
+                                                              rep. No. 47, 1984
+    s. 26AE ...........................................       ad. No. 124, 1980
+                                                              am. No. 108, 1981
+                                                              rep. No. 47, 1984
+    s. 30 .................................................   rep. No. 44, 1951
+    s. 31A ..............................................     ad. No. 28, 1953
+                                                              am. No. 51, 1973
+                                                              rep. No. 165, 1973
+    s. 31B ..............................................     ad. No. 50, 1976
+                                                              am. No. 108, 1981
+                                                              rep. No. 107, 1989
+    s. 35 .................................................   rep. No. 44, 1951
+    s. 44A ..............................................     ad. No. 103, 1965
+                                                              am. Nos. 51 and 164, 1973
+                                                              rep. No. 80, 1975
+    s. 45 .................................................   rep. No. 58, 1941
+                                                              ad. No. 11, 1947
+                                                              am. No. 44, 1948; No. 44, 1951; No. 81, 1953; No. 18, 1960; No. 85,
+                                                              1967; No. 4, 1968; Nos. 51 and 164, 1973; No. 80, 1975; No. 108,
+                                                              1981
+                                                              rep. No. 51, 1986
+    s. 46C ..............................................     ad. No. 106, 1982
+                                                              rep. No. 103, 1983
+    s. 50M .............................................      ad. No. 172, 1978
+                                                              rep. No. 107, 1989
+    Heading to Div. 3 of Part III ...........                 rep. No. 172, 1978
+    s. 51AA ...........................................       ad. No. 108, 1960
+
+
+
+
+4                                                              Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                                Compilation date: 01/07/2026
+
+
+
+
+                                          Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                 Endnotes
+
+
+                                                                                             Endnote 5—Repeal table
+
+ Provision affected                                        How affected
+
+                                                           am. No. 51, 1973; No. 108, 1981
+                                                           rep. No. 107, 1989
+ s. 51AB ...........................................       ad. No. 108, 1960
+                                                           am. No. 85, 1967
+                                                           rep. No. 87, 1970
+ s. 51AC ...........................................       ad. No. 27, 1961
+                                                           am. No. 34, 1963; No. 50, 1966; No. 51, 1973; No. 126, 1974; No. 117,
+                                                           1975; Nos. 108 and 111, 1981
+                                                           rep. No. 107, 1989
+ s. 51AGB ........................................         ad. No. 57, 1993
+                                                           am. No. 145, 1995
+                                                           rep. No. 16, 1999
+ s. 51A ..............................................     ad. No. 4, 1945
+                                                           am. No. 63, 1947; No. 44, 1948; No. 44, 1951; No. 108, 1960; No. 94,
+                                                           1961; No. 143, 1965; No. 51, 1973; No. 108, 1981; No. 29, 1982
+                                                           rep. No. 41, 1986
+ ss. 53A–53E ....................................          ad. No. 28, 1944
+                                                           am. No. 51, 1973
+                                                           rep. No. 216, 1973 (as am. by No. 20, 1974)
+ s. 53H ..............................................     ad. No. 57, 1980
+                                                           am. Nos. 108 and 109, 1981; No. 25, 1983
+                                                           rep. No. 107, 1989
+ s. 56A ..............................................     ad. No. 65, 1957
+                                                           am. No. 51, 1973; No. 108, 1981
+                                                           rep. No. 95, 1988
+ s. 57 .................................................   am. No. 65, 1957; No. 51, 1973; No. 108, 1981
+                                                           rep. No. 95, 1988
+ s. 57AA ...........................................       ad. No. 28, 1952
+                                                           am. No. 62, 1955; No. 25, 1956; No. 65, 1957; No. 55, 1958; No. 58,
+                                                           1960; No. 39, 1962; No. 69, 1963; No. 143, 1965; No. 76, 1967; Nos.
+                                                           51 and 165, 1973; No. 108, 1981; No. 95, 1988
+                                                           rep. No. 107, 1989
+
+
+
+                                                            Income Tax Assessment Act 1936                                  5
+
+Compilation No. 192                                                                              Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+    Provision affected                                        How affected
+
+    s. 57AB ...........................................       ad. No. 90, 1952
+                                                              am. No. 65, 1957; Nos. 51 and 165, 1973; No. 216, 1973 (as am. by
+                                                              No. 20, 1974); No. 108, 1981; No. 95, 1988
+                                                              rep. No. 107, 1989
+    s. 57AC ...........................................       ad. No. 80, 1975
+                                                              am. No. 108, 1981; No. 95, 1988
+                                                              rep. No. 107, 1989
+    s. 57AD ...........................................       ad. No. 117, 1975
+                                                              am. No. 50, 1976; No. 108, 1981; No. 95, 1988
+                                                              rep. No. 107, 1989
+    s. 57AE ...........................................       ad. No. 149, 1979
+                                                              am. No. 108, 1981; Nos. 14 and 25, 1983
+                                                              rep. No. 95, 1988
+    s. 57AG ...........................................       ad. No. 124, 1980
+                                                              am. No. 159, 1980; Nos. 108 and 109, 1981; No. 29, 1982; No. 14,
+                                                              1983; No. 14, 1984; No. 95, 1988; No. 107, 1989
+                                                              rep. No. 35, 1992
+    s. 57AH ...........................................       ad. No. 159, 1980
+                                                              am. No. 108, 1981; Nos. 14 and 25, 1983
+                                                              rep. No. 95, 1988
+    s. 57AJ ............................................      ad. No. 108, 1981
+                                                              am. No. 25, 1983; No. 95, 1988
+                                                              rep. No. 107, 1989
+    s. 57AL ...........................................       ad. No. 14, 1983
+                                                              rep. No. 95, 1988
+    s. 57A ..............................................     ad. No. 6, 1946
+                                                              am. No. 66, 1949
+                                                              rep. No. 28, 1952
+    s. 58 .................................................   rep. No. 65, 1957
+                                                              ad. No. 69, 1963
+                                                              am. Nos. 51 and 164, 1973; No. 108, 1981; No. 95, 1988
+
+
+
+
+6                                                              Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                                Compilation date: 01/07/2026
+
+
+
+
+                                          Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                 Endnotes
+
+
+                                                                                             Endnote 5—Repeal table
+
+ Provision affected                                        How affected
+
+                                                           rep. No. 107, 1989
+ ss. 59A–59C....................................           ad. No. 50, 1942
+                                                           rep. No. 65, 1957
+ s. 59D ..............................................     ad. No. 50, 1942
+                                                           am. No. 45, 1953
+                                                           rep. No. 65, 1957
+ s. 59E ..............................................     ad. No. 50, 1942
+                                                           rep. No. 65, 1957
+ s. 62AA ...........................................       ad. No. 39, 1962
+                                                           am. No. 69, 1963; No. 60, 1968; No. 6, 1971; No. 5, 1972; Nos. 51 and
+                                                           165, 1973; No. 108, 1981
+                                                           rep. No. 107, 1989
+ s. 62AB ...........................................       ad. No. 69, 1963
+                                                           am. Nos. 51 and 165, 1973; No. 108, 1981
+                                                           rep. No. 107, 1989
+ s. 62A ..............................................     ad. No. 46, 1938
+                                                           am. No. 57, 1978; No. 108, 1981
+                                                           rep. No. 107, 1989
+ s. 66 .................................................   am. No. 58, 1941
+                                                           rs. No. 3, 1944
+                                                           am. No. 90, 1952
+                                                           rep. No. 110, 1964
+ s. 69 .................................................   rep. No. 101, 1956
+ s. 70 .................................................   rep. No. 101, 1956
+ s. 72A ..............................................     ad. No. 50, 1942
+                                                           am. No. 4, 1945
+                                                           rep. No. 11, 1947
+ s. 72B ..............................................     ad. No. 50, 1942
+                                                           am. No. 10, 1943; No. 28, 1944
+                                                           rep. No. 85, 1959
+
+
+
+
+                                                            Income Tax Assessment Act 1936                                  7
+
+Compilation No. 192                                                                             Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+    Provision affected                                        How affected
+
+    s. 75 .................................................   am. No. 11, 1947; No. 55, 1958; No. 18, 1960; No. 94, 1961; No. 50,
+                                                              1966; No. 76, 1967; No. 93, 1969; Nos. 164 and 165, 1973; No. 216,
+                                                              1973 (as am. by No. 20, 1974); No. 80, 1975; No. 108, 1981
+                                                              rep. No. 107, 1989
+    s. 75C ..............................................     ad. No. 124, 1980
+                                                              am. No. 108, 1981; No. 124, 1984
+                                                              rep. No. 107, 1989
+    s. 76 .................................................   am. No. 69, 1963; No. 165, 1973
+                                                              rep. No. 107, 1989
+    s. 77 .................................................   am. No. 18, 1960; No. 164, 1973; No. 80, 1975; No. 108, 1981;
+                                                              No. 103, 1983
+                                                              rep. No. 107, 1989
+    s. 77A ..............................................     ad. No. 55, 1958
+                                                              rs. No. 70, 1959
+                                                              am. No. 18, 1960; No. 94, 1961; No. 69, 1963; No. 46, 1964; No. 38,
+                                                              1967; No. 60, 1968
+                                                              rep. No. 93, 1969
+    s. 77AA ...........................................       ad. No. 39, 1962
+                                                              am. No. 46, 1964; No. 38, 1967; No. 60, 1968
+                                                              rep. No. 93, 1969
+    s. 77B ..............................................     ad. No. 94, 1961
+                                                              am. No. 60, 1968; No. 51, 1973; No. 108, 1981; No. 168, 1985
+                                                              rep. No. 107, 1989
+    s. 77C ..............................................     ad. No. 60, 1968
+                                                              am. No. 93, 1969; Nos. 51, 52 and 164, 1973; No. 216, 1973 (as am. by
+                                                              No. 20, 1974); No. 108, 1981
+                                                              rep. No. 107, 1989
+    s. 77D ..............................................     ad. No. 93, 1969
+                                                              am. Nos. 51, 52 and 164, 1973; No. 216, 1973 (as am. by No. 20,
+                                                              1974); No. 126, 1974; No. 108, 1981 (as am. by No. 29, 1982);
+                                                              No. 168, 1985; No. 108, 1987
+                                                              rep. No. 107, 1989
+
+
+
+
+8                                                              Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                                Compilation date: 01/07/2026
+
+
+
+
+                                          Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                              Endnote 5—Repeal table
+
+ Provision affected                                        How affected
+
+ s. 77E ..............................................     ad. No. 52, 1973
+                                                           am. No. 164, 1973; No. 108, 1981
+                                                           rep. No. 107, 1989
+ s. 79 .................................................   am. No. 46, 1938; No. 65, 1940; No. 58, 1941
+                                                           rep. No. 22, 1942
+                                                           ad. No. 3, 1944
+                                                           am. No. 90, 1952; No. 18, 1960; No. 94, 1961
+                                                           rs. No. 110, 1964; No. 103, 1965
+                                                           am. No. 51, 1973; No. 108, 1981
+                                                           rep. No. 47, 1984
+ ss. 80C, 80D....................................          ad. No. 110, 1964
+                                                           rs. No. 103, 1965
+                                                           am. No. 50, 1966
+                                                           rep. No. 51, 1973
+ s. 81 .................................................   am. No. 88, 1936; Nos. 17 and 65, 1940
+                                                           rep. No. 22, 1942
+                                                           ad. No. 50, 1942
+                                                           rs. No. 10, 1943
+                                                           am. No. 3, 1944; No. 6, 1946
+                                                           rep. No. 63, 1947
+ s. 81A ..............................................     ad. No. 4, 1952
+                                                           rep. No. 30, 1956
+ Subdiv. B of Div. 3 .........................             ad. No. 48, 1950
+ of Part III (ss. 82A–82H)
+ Subdiv. B of Div. 3 .........................             rep. No. 117, 1975
+ of Part III (ss. 82A, 82B, 82D–82H,
+ 82HA, 82J, 82JAA, 82JA, 82K)
+ s. 82A ..............................................     ad. No. 48, 1950
+                                                           rep. No. 117, 1975
+ s. 82AAB ........................................         ad. No. 110, 1964
+                                                           rep. No. 97, 1989
+
+
+
+
+                                                            Income Tax Assessment Act 1936                                9
+
+Compilation No. 192                                                                             Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+ s. 82AAD ........................................    ad. No. 110, 1964
+                                                      am. No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAE ........................................    ad. No. 110, 1964
+                                                      am. No. 143, 1965; No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAF .........................................   ad. No. 110, 1964
+                                                      am. No. 51, 1973; No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAG ........................................    ad. No. 110, 1964
+                                                      rs. No. 103, 1965
+                                                      am. No. 51, 1973; No. 108, 1981 (as am. by No. 29, 1982)
+                                                      rep. No. 97, 1989
+ ss. 82AAH–82AAJ .........................            ad. No. 110, 1964
+                                                      rs. No. 103, 1965
+                                                      am. No. 51, 1973; No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAK ........................................    ad. No. 110, 1964
+                                                      rs. No. 103, 1965
+                                                      am. No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAL ........................................    ad. No. 110, 1964
+                                                      rs. No. 103, 1965
+                                                      am. No. 51, 1973; No. 108, 1981
+                                                      rep. No. 97, 1989
+ s. 82AAM .......................................     ad. No. 110, 1964
+                                                      rep. No. 97, 1989
+ s. 82AAN ........................................    ad. No. 110, 1964
+                                                      am. No. 103, 1965; No. 51, 1973
+                                                      rep. No. 97, 1989
+ s. 82AAO ........................................    ad. No. 110, 1964
+
+
+
+10                                                     Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                               Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+                                                         rep. No. 103, 1965
+ s. 82AAP .........................................      ad. No. 110, 1964
+                                                         am. No. 103, 1965; No. 51, 1973
+                                                         rep. No. 97, 1989
+ s. 82AA ...........................................     ad. No. 18, 1960
+                                                         am. No. 87, 1968
+                                                         rs. No. 164, 1973
+                                                         rep. No. 80, 1975
+ s. 82AP............................................     ad. No. 50, 1976
+                                                         rep. No. 98, 1992
+ s. 82AW ..........................................      ad. No. 18, 1993
+                                                         rep. No. 82, 1994
+ Subdiv. BA of Div. 3 ......................             ad. No. 57, 1977
+ of Part III (ss. 82B–82D)                               rep. No. 107, 1989
+ s. 82B ..............................................   ad. No. 48, 1950
+                                                         am. No. 45, 1953; No. 65, 1957; No. 69, 1963; No. 143, 1965; No. 76,
+                                                         1967; No. 93, 1971; No. 85, 1972; Nos. 51 and 52, 1973; No. 126,
+                                                         1974
+                                                         rep. No. 117, 1975
+                                                         ad. No. 57, 1977
+                                                         rep. No. 107, 1989
+ s. 82C ..............................................   ad. No. 48, 1950
+                                                         am. No. 45, 1953; No. 65, 1957
+                                                         rep. No. 69, 1963
+                                                         ad. No. 57, 1977
+                                                         am. No. 43, 1979
+                                                         rep. No. 107, 1989
+ s. 82D ..............................................   ad. No. 48, 1950
+                                                         am. No. 45, 1953; No. 65, 1957; No. 18, 1960; No. 69, 1963; No. 143,
+                                                         1965; No. 76, 1967; No. 87, 1968; No. 85, 1972; Nos. 51 and 164,
+                                                         1973; No. 80, 1975
+                                                         rep. No. 117, 1975
+
+
+
+                                                          Income Tax Assessment Act 1936                                 11
+
+Compilation No. 192                                                                           Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+                                                         ad. No. 57, 1977
+                                                         am. No. 108, 1981
+                                                         rep. No. 107, 1989
+ s. 82E ..............................................   ad. No. 48, 1950
+                                                         am. No. 69, 1963; No. 51, 1973
+                                                         rep. No. 117, 1975
+ Subdiv. BB of Div. 3 ......................             ad. No. 57, 1980
+ of Part III (ss.                                        rep. No. 107, 1989
+ 82EA–82EH,
+ 82EJ–82EM)
+ s. 82EA ...........................................     ad. No. 57, 1980
+                                                         rep. No. 107, 1989
+ s. 82EB............................................     ad. No. 57, 1980
+                                                         am. No. 108, 1981; No. 25, 1983
+                                                         rep. No. 107, 1989
+ s. 82EC............................................     ad. No. 57, 1980
+                                                         am. No. 111, 1981
+                                                         rep. No. 107, 1989
+ s. 82ED ...........................................     ad. No. 57, 1980
+                                                         rep. No. 107, 1989
+ s. 82EE ............................................    ad. No. 57, 1980
+                                                         am. No. 108, 1981
+                                                         rep. No. 107, 1989
+ ss. 82EF, 82EG ...............................          ad. No. 57, 1980
+                                                         rep. No. 107, 1989
+ ss. 82EH, 82EJ ................................         ad. No. 57, 1980
+                                                         am. No. 108, 1981
+                                                         rep. No. 107, 1989
+ ss. 82EK, 82EL ...............................          ad. No. 57, 1980
+                                                         rep. No. 107, 1989
+ s. 82EM ...........................................     ad. No. 57, 1980
+
+
+
+
+12                                                        Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                            Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          am. No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 82F ..............................................    ad. No. 48, 1950
+                                                          am. No. 45, 1953; No. 70, 1959; No. 94, 1961
+                                                          rs. No. 69, 1963
+                                                          am. Nos. 51 and 52, 1973; No. 216, 1973 (as am. by No. 20, 1974)
+                                                          rep. No. 117, 1975
+ s. 82G ..............................................    ad. No. 48, 1950
+                                                          am. No. 69, 1963; No. 143, 1965
+                                                          rep. No. 117, 1975
+ s. 82H ..............................................    ad. No. 48, 1950
+                                                          am. No. 101, 1956; No. 70, 1959; No. 143, 1965; No. 76, 1967; No. 51,
+                                                          1973; No. 26, 1974
+                                                          rep. No. 117, 1975
+ s. 82HA ...........................................      ad. No. 101, 1956
+                                                          rep. No. 117, 1975
+ s. 82J ...............................................   ad. No. 90, 1952
+                                                          rs. No. 45, 1953
+                                                          am. No. 101, 1956; No. 69, 1963
+                                                          rs. No. 33, 1965
+                                                          am. No. 143, 1965; No. 93, 1971; Nos. 51 and 52, 1973; No. 126, 1974
+                                                          rep. No. 117, 1975
+ s. 82JAA .........................................       ad. No. 85, 1972
+                                                          am. No. 51, 1973; No. 126, 1974
+                                                          rep. No. 117, 1975
+ s. 82JA ............................................     ad. No. 93, 1971
+                                                          am. No. 216, 1973 (as am. by No. 20, 1974)
+                                                          rep. No. 117, 1975
+ s. 82K ..............................................    ad. No. 69, 1963
+                                                          am. No. 93, 1971; No. 85, 1972; No. 51, 1973
+                                                          rep. No. 117, 1975
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                 13
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                    How affected
+
+ Subdiv. C of Div. 3 .........................         ad. No. 126, 1974
+ of Part III (ss. 82KA, 82KB,                          rep. No. 107, 1989
+ 82KBA, 82KBB, 82KC–82KG)
+ s. 82KA ...........................................   ad. No. 126, 1974
+                                                       am. No. 108, 1981; No. 106, 1982; No. 123, 1984; No. 41, 1986
+                                                       rep. No. 107, 1989
+ s. 82KB ...........................................   ad. No. 126, 1974
+                                                       am. No. 108, 1981
+                                                       rep. No. 107, 1989
+ s. 82KBA ........................................     ad. No. 50, 1976
+                                                       rep. No. 107, 1989
+ s. 82KBB ........................................     ad. No. 123, 1978
+                                                       rep. No. 107, 1989
+ s. 82KC ...........................................   ad. No. 126, 1974
+                                                       rep. No. 107, 1989
+ s. 82KD ...........................................   ad. No. 126, 1974
+                                                       am. No. 108, 1981
+                                                       rep. No. 107, 1989
+ ss. 82KE–82KG ..............................          ad. No. 126, 1974
+                                                       rep. No. 107, 1989
+ Subdiv. E of Div. 3 .........................         ad. No. 108, 1981
+ of Part III (ss.                                      rep. No. 107, 1989
+ 82KM–82KS)
+ s. 82KM ..........................................    ad. No. 108, 1981
+                                                       rep. No. 107, 1989
+ s. 82KN ...........................................   ad. No. 108, 1981
+                                                       am. No. 103, 1983
+                                                       rep. No. 107, 1989
+ ss. 82KO–82KS ..............................          ad. No. 108, 1981
+                                                       rep. No. 107, 1989
+ Note 3 to s. 82KZME(1) .................              rep. No. 90, 2000
+
+
+
+
+14                                                      Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                           Endnotes
+
+
+                                                                                       Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+ Div. 4A of Part III...........................          ad. No. 145, 1995
+ (ss. 89A, 89AA–89AC, 89B, 89C,                          rep. No. 16, 1999
+ 89CA, 89D, 89DA, 89DB, 89E,
+ 89EA, 89EB, 89F, 89FA–89FD,
+ 89G, 89GA–89GH, 89H, 89HA,
+ 89J, 89JA–89JC)
+ Subdiv. A of Div. 4A ......................             ad. No. 145, 1995
+ of Part III (ss. 89A,                                   rep. No. 16, 1999
+ 89AA–89AC)
+ ss. 89A, 89AA–89AC .....................                ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. B of Div. 4A of ..................              ad. No. 145, 1995
+ Part III (s. 89B)                                       rep. No. 16, 1999
+ s. 89B ..............................................   ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. C of Div. 4A of ..................              ad. No. 145, 1995
+ Part III (ss. 89C, 89CA)                                rep. No. 16, 1999
+ ss. 89C, 89CA .................................         ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. D of Div. 4A of .................               ad. No. 145, 1995
+ Part III (ss. 89D, 89DA, 89DB)                          rep. No. 16, 1999
+ ss. 89D, 89DA, 89DB .....................               ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. E of Div. 4A of ..................              ad. No. 145, 1995
+ Part III (ss. 89E, 89EA, 89EB)                          rep. No. 16, 1999
+ ss. 89E, 89EA, 89EB ......................              ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. F of Div. 4A of ..................              ad. No. 145, 1995
+ Part III (ss. 89F,                                      rep. No. 16, 1999
+ 89FA–89FD)
+ s. 89F ..............................................   ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ s. 89FA............................................     ad. No. 145, 1995
+
+
+
+
+                                                          Income Tax Assessment Act 1936                            15
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+                                                         am. No. 41, 1998
+                                                         rep. No. 16, 1999
+ Heading to s. 89FB(2) ....................              am. No. 41, 1998
+                                                         rep. No. 16, 1999
+ ss. 89FB, 89FC ...............................          ad. No. 145, 1995
+                                                         am. No. 41, 1998
+                                                         rep. No. 16, 1999
+ s. 89FD............................................     ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. G of Div. 4A of .................               ad. No. 145, 1995
+ Part III (ss. 89G, 89GA–89GH)                           rep. No. 16, 1999
+ ss. 89G, 89GA–89GH .....................                ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. H of Div. 4A of .................               ad. No. 145, 1995
+ Part III (ss. 89H, 89HA)                                rep. No. 16, 1999
+ ss. 89H, 89HA ................................          ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ Subdiv. J of Div. 4A of ...................             ad. No. 145, 1995
+ Part III (ss. 89J,                                      rep. No. 16, 1999
+ 89JA–89JC)
+ ss. 89J, 89JA–89JC .........................            ad. No. 145, 1995
+                                                         rep. No. 16, 1999
+ s. 93A ..............................................   ad. No. 22, 1942
+                                                         rep. No. 48, 1950
+ s. 95A ..............................................   ad. No. 11, 1947
+                                                         rep. No. 45, 1953
+                                                         ad. No. 126, 1974
+                                                         rep. No. 117, 1975
+ s. 100A ............................................    ad. No. 22, 1942
+                                                         rs. No. 11, 1947
+                                                         rep. No. 48, 1950
+ s. 102AA .........................................      ad. No. 50, 1942
+
+
+
+16                                                        Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                             Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          am. No. 4, 1945
+                                                          rep. No. 85, 1959
+ Div. 6A of Part III...........................           ad. No. 58, 1941
+ (ss. 102A, 102B)                                         rep. No. 48, 1950
+ ss. 102A, 102B................................           ad. No. 58, 1941
+                                                          rep. No. 48, 1950
+ Div. 7 of Part III .............................         rep. No. 90, 1952
+ (ss. 103–109)
+ s. 103 ...............................................   rep. No. 90, 1952
+ s. 103A ............................................     ad. No. 44, 1951
+                                                          rep. No. 90, 1952
+ ss. 103B–103D................................            ad. No. 44, 1951
+                                                          rep. No. 90, 1952
+ s. 104 ...............................................   rep. No. 90, 1952
+ s. 105 ...............................................   am. No. 44, 1948; No. 48, 1950
+                                                          rs. No. 90, 1952
+                                                          am. No. 85, 1959
+                                                          rep. No. 110, 1964
+ s. 106 ...............................................   rep. No. 90, 1952
+ ss. 106A–106D ...............................            ad. No. 51, 1973
+                                                          rep. No. 205, 1976
+ ss. 107–109 .....................................        rep. No. 90, 1952
+ s. 109A ............................................     ad. No. 58, 1941
+                                                          am. No. 3, 1944
+                                                          rep. No. 90, 1952
+ Div. 8 (ss. 110–116DK) ..................                rep. No 89, 2000
+ Heading to Subdiv. A of .................                ad. No. 216, 1991
+ Div. 8 of Part III                                       rep. No. 89, 2000
+
+
+
+
+                                                           Income Tax Assessment Act 1936                             17
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+ s. 110 ...............................................   am. No. 22, 1942; No. 17, 1961; No. 110, 1964; No. 51, 1973; No. 216,
+                                                          1973 (as am. by No. 20, 1974); No. 108, 1981; No. 47, 1984; No. 49,
+                                                          1985; No. 138, 1987; No. 11, 1988; No. 97, 1989 (as am. by No. 105,
+                                                          1989); No. 105, 1989; Nos. 20 and 57, 1990; No. 5, 1991; No. 80,
+                                                          1992; No. 208, 1992 (as am. by No. 7, 1993); Nos. 7, 17 and 82, 1993;
+                                                          No. 5, 1995; Nos. 39, 62 and 121, 1997; No. 46, 1998; Nos. 16 and 44,
+                                                          1999; No. 89, 2000
+                                                          rep. No. 89, 2000
+ s. 110A ............................................     ad. No. 17, 1961
+                                                          am. No. 51, 1973; No. 108, 1981
+                                                          rep. No. 49, 1985
+                                                          ad. No. 89, 2000
+                                                          rep. No. 89, 2000
+ ss. 110B, 110C ................................          ad. No. 105, 1989
+                                                          rep. No. 89, 2000
+ s. 110CA .........................................       ad. No. 82, 1994
+                                                          rep. No. 89, 2000
+ s. 111 ...............................................   rs. No. 47, 1984
+                                                          am. No. 62, 1987; No. 105, 1989; No. 62, 1997
+                                                          rep. No. 89, 2000
+ s. 111A ............................................     ad. No. 105, 1989
+                                                          am. No. 5, 1991; No. 56, 1994
+                                                          rep. No. 56, 1994
+ s. 111AA .........................................       ad. No. 20, 1990
+                                                          am. No. 5, 1991; No. 56, 1994
+                                                          rep. No. 56, 1994
+ s. 111AB .........................................       ad. No. 56, 1994
+                                                          rep. No. 89, 2000
+ Heading to s. 111AC ......................               am. No. 62, 1997
+                                                          rep. No. 89, 2000
+ s. 111AC .........................................       ad. No. 56, 1994
+                                                          am. Nos. 39 and 62, 1997
+
+
+
+
+18                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                             Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                  Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 89, 2000
+ s. 111AD .........................................       ad. No. 56, 1994
+                                                          am. Nos. 39 and 62, 1997
+                                                          rep. No. 89, 2000
+ s. 111B ............................................     ad. No. 105, 1989
+                                                          am. Nos. 39 and 121, 1997
+                                                          rep. No. 89, 2000
+ s. 111C ............................................     ad. No. 105, 1989
+                                                          am. No. 118, 1993; No. 56, 1994; Nos. 39 and 62, 1997
+                                                          rep. No. 89, 2000
+ s. 111D ............................................     ad. No. 105, 1989
+                                                          rep. No. 89, 2000
+ s. 111E ............................................     ad. No. 105, 1989
+                                                          am. No. 121, 1997
+                                                          rep. No. 89, 2000
+ s. 112 ...............................................   am. No. 47, 1984
+                                                          rs. No. 105, 1989 (as am. by No. 56, 1994)
+                                                          am. No. 20, 1990; No. 56, 1994
+                                                          rs. No. 56, 1994
+                                                          am. No. 62, 1997
+                                                          rep. No. 89, 2000
+ s. 112A ............................................     ad. No. 17, 1961
+                                                          am. No. 51, 1973; No. 108, 1981; No. 47, 1984; No. 49, 1985; No. 52,
+                                                          1986; No. 105, 1989; No. 5, 1991; No. 80, 1992; No. 62, 1997; No. 16,
+                                                          1999
+                                                          rep. No. 89, 2000
+ s. 112BA .........................................       ad. No. 56, 1994
+                                                          rep. No. 89, 2000
+ s. 112B ............................................     ad. No. 51, 1986
+                                                          rep. No. 5, 1991
+ s. 112C ............................................     ad. No. 80, 1992
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                 19
+
+Compilation No. 192                                                                             Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          am. No. 16, 1999
+                                                          rep. No. 89, 2000
+ s. 113 ...............................................   rs. No. 17, 1961
+                                                          am. No. 216, 1973 (as am. by No. 20, 1974); No. 108, 1981; No. 105,
+                                                          1989; No. 216, 1991; No. 118, 1993; No. 56, 1994; Nos. 39 and 62,
+                                                          1997
+                                                          rep. No. 89, 2000
+ s. 113A ............................................     ad. No. 56, 1994
+                                                          am. No. 62, 1997
+                                                          rep. No. 89, 2000
+ s. 114 ...............................................   am. No. 108, 1981; No. 16, 1999
+                                                          rep. No. 89, 2000
+ ss. 114A, 114B................................           ad. No. 16, 1999
+                                                          rep. No. 89, 2000
+ s. 115 ...............................................   am. No. 22, 1942
+                                                          rs. No. 17, 1961
+                                                          am. Nos. 51 and 165, 1973; No. 216, 1973 (as am. by No. 20, 1974);
+                                                          No. 126, 1974; No. 108, 1981; No. 47, 1984
+                                                          rs. No. 49, 1985
+                                                          am. No. 51, 1986
+                                                          rep. No. 97, 1989
+ s. 115A ............................................     ad. No. 17, 1961
+                                                          am. No. 51, 1973; No. 216, 1973 (as am. by No. 20, 1974); No. 108,
+                                                          1981; No. 47, 1984
+                                                          rep. No. 49, 1985
+ s. 116 ...............................................   am. No. 47, 1984
+                                                          rep. No. 97, 1989
+ s. 116AA .........................................       ad. No. 165, 1973
+                                                          am. No. 108, 1981; No. 51, 1986
+                                                          rep. No. 62, 1987
+ s. 116A ............................................     ad. No. 17, 1961
+                                                          am. No. 47, 1972; No. 51, 1973; No. 108, 1981
+
+
+
+20                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                             Endnotes
+
+
+                                                                                         Endnote 5—Repeal table
+
+ Provision affected                                    How affected
+
+                                                       rep. No. 49, 1985
+ ss. 116B, 116C ................................       ad. No. 17, 1961
+                                                       am. No. 51, 1973; No. 108, 1981
+                                                       rep. No. 49, 1985
+ s. 116CA .........................................    ad. No. 105, 1989
+                                                       am. No. 62, 1997
+                                                       rep. No. 89, 2000
+ Heading to s. 116CB .......................           rs. No. 46, 1998
+                                                       rep. No. 89, 2000
+ s. 116CB .........................................    ad. No. 105, 1989
+                                                       am. No. 5, 1991; No. 46, 1998; No. 16, 1999; No. 89, 2000
+                                                       rep. No. 89, 2000
+ Heading to s. 116CC .......................           rs. No. 46, 1998
+                                                       rep. No. 89, 2000
+ s. 116CC .........................................    ad. No. 105, 1989
+                                                       am. No. 62, 1997; No. 46, 1998
+                                                       rep. No. 89, 2000
+ Heading to s. 116CD ......................            rs. No. 46, 1998
+                                                       rep. No. 89, 2000
+ s. 116CD .........................................    ad. No. 105, 1989
+                                                       am. No. 62, 1997; No. 46, 1998; No. 89, 2000
+                                                       rep. No. 89, 2000
+ s. 116CE..........................................    ad. No. 105, 1989
+                                                       am. No. 5, 1991; Nos. 62 and 121, 1997; No. 46, 1998; No. 16, 1999
+                                                       rep. No. 89, 2000
+ s. 116CF ..........................................   ad. No. 105, 1989
+                                                       am. No. 118, 1993; No. 56, 1994; No. 62, 1997; No. 46, 1998
+                                                       rep. No. 89, 2000
+ s. 116CG .........................................    ad. No. 105, 1989
+                                                       rep. No. 89, 2000
+ s. 116CH .........................................    ad. No. 105, 1989
+
+
+
+                                                        Income Tax Assessment Act 1936                                21
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+                                                        am. Nos. 39 and 62, 1997
+                                                        rep. No. 89, 2000
+ s. 116CJ ..........................................    ad. No. 105, 1989
+                                                        rep. No. 89, 2000
+ s. 116D ............................................   ad. No. 17, 1961
+                                                        am. No. 108, 1981; No. 101, 1992
+                                                        rep. No. 89, 2000
+ Subdiv. AA of Div. 8 of .................              ad. No. 62, 1997
+ Part III (ss.                                          rep. No. 89, 2000
+ 116DAA–116DAD, 116DADA,
+ 116DAE, 116DAF)
+ s. 116DAA ......................................       ad. No. 62, 1997
+                                                        rep. No. 89, 2000
+ Note to s. 116DAA .........................            rep. No. 44, 1999
+ Notes 1, 2 to s. 116DAA.................               ad. No. 44, 1999
+                                                        rep. No. 89, 2000
+ Heading to s. 116DAB....................               rs. No. 44, 1999
+                                                        rep. No. 89, 2000
+ ss. 116DAB–116DAD, ...................                 ad. No. 62, 1997
+ 116DADA, 116DAE,                                       rep. No. 89, 2000
+ 116DAF
+ Subdiv. B of Div. 8 .........................          ad. No. 216, 1991
+ of Part III (ss. 116DA–116DK)                          rep. No. 89, 2000
+ ss. 116DA, 116DB ..........................            ad. No. 216, 1991
+                                                        rep. No. 89, 2000
+ Heading to s. 116DC ......................             am. No. 62, 1997
+                                                        rep. No. 89, 2000
+ s. 116DC .........................................     ad. No. 216, 1991
+                                                        am. No. 62, 1997
+                                                        rep. No. 89, 2000
+ s. 116DD .........................................     ad. No. 216, 1991
+                                                        rep. No. 89, 2000
+
+
+
+
+22                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                               Endnotes
+
+
+                                                                                         Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ Heading to s. 116DE .......................            am. No. 62, 1997
+                                                        rep. No. 89, 2000
+ s. 116DE .........................................     ad. No. 216, 1991
+                                                        am. No. 62, 1997
+                                                        rep. No. 89, 2000
+ s. 116DF..........................................     ad. No. 216, 1991
+                                                        am. No. 62, 1997
+                                                        rep. No. 89, 2000
+ ss. 116DG–116DJ ...........................            ad. No. 216, 1991
+                                                        rep. No. 89, 2000
+ s. 116DK .........................................     ad. No. 216, 1991
+                                                        am. No. 46, 1998
+                                                        rep. No. 89, 2000
+ Div. 8A of Part III...........................         ad. No. 47, 1984
+ (ss. 116E–116J)                                        rep. No. 89, 2000
+ Heading to Subdiv. A of .................              ad. No. 44, 1999
+ Div. 8A of Part III                                    rep. No. 89, 2000
+ s. 116E ............................................   ad. No. 47, 1984
+                                                        am. Nos. 11 and 87, 1988; No. 105, 1989; No. 57, 1990; Nos. 7, 17, 55
+                                                        and 82, 1993; No. 120, 1995; No. 60, 1996; Nos. 39 and 121, 1997;
+                                                        No. 46, 1998; No. 44, 1999; No. 89, 2000
+                                                        rep. No. 89, 2000
+ s. 116F ............................................   ad. No. 47, 1984
+                                                        rep. No. 89, 2000
+ ss. 116FA, 116FB ...........................           ad. No. 105, 1989
+                                                        rep. No. 89, 2000
+ s. 116FC ..........................................    ad. No. 82, 1994
+                                                        rep. No. 89, 2000
+ s. 116G ............................................   ad. No. 47, 1984
+                                                        am. No. 11, 1988
+                                                        rs. No. 105, 1989
+                                                        am. No. 44, 1999
+
+
+
+                                                         Income Tax Assessment Act 1936                                 23
+
+Compilation No. 192                                                                           Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+                                                        rep. No. 89, 2000
+ Heading to s. 116GA ......................             rs. No. 46, 1998
+                                                        rep. No. 89, 2000
+ s. 116GA .........................................     ad. No. 105, 1989
+                                                        am. No. 120, 1995; No. 46, 1998; No. 44, 1999; No. 89, 2000
+                                                        rep. No. 89, 2000
+ Heading to s. 116GB ......................             rs. No. 46, 1998
+                                                        rep. No. 89, 2000
+ s. 116GB .........................................     ad. No. 105, 1989
+                                                        am. No. 46, 1998; No. 44, 1999; No. 89, 2000
+                                                        rep. No. 89, 2000
+ s. 116GC .........................................     ad. No. 105, 1989
+                                                        am. Nos. 39 and 121, 1997
+                                                        rep. No. 89, 2000
+ s. 116GD .........................................     ad. No. 105, 1989
+                                                        am. No. 44, 1999
+                                                        rep. No. 89, 2000
+ s. 116GE .........................................     ad. No. 56, 1994
+                                                        rep. No. 89, 2000
+ s. 116H ............................................   ad. No. 47, 1984
+                                                        am. No. 56, 1994; No. 44, 1999
+                                                        rep. No. 89, 2000
+ s. 116HA .........................................     ad. No. 105, 1989
+                                                        am. No. 56, 1994
+                                                        rep. No. 56, 1994
+ s. 116HAA ......................................       ad. No. 55, 1993
+                                                        rep. No. 56, 1994
+ Heading to s. 116HAB....................               am. No. 44, 1999
+ ss. 116HAB, 116HAC ....................                ad. No. 56, 1994
+                                                        am. No. 39, 1997; No. 44, 1999
+                                                        rep. No. 89, 2000
+
+
+
+24                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                             Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+ s. 116HAD ......................................        ad. No. 56, 1994
+                                                         rep. No. 89, 2000
+ s. 116HB .........................................      ad. No. 105, 1989
+                                                         am. No. 46, 1998
+                                                         rep. No. 89, 2000
+ s. 116HC .........................................      ad. No. 105, 1989
+                                                         rep. No. 89, 2000
+ s. 116HD .........................................      ad. No. 105, 1989
+                                                         am. No. 39, 1997; No. 44, 1999
+                                                         rep. No. 89, 2000
+ s. 116HE .........................................      ad. No. 105, 1989
+                                                         rep. No. 89, 2000
+ s. 116J .............................................   ad. No. 47, 1984
+                                                         am. No. 35, 1992
+                                                         rep. No. 89, 2000
+ Subdiv. B of Div. 8A ......................             ad. No. 44, 1999
+ of Part III (ss. 116K–116Q)                             rep. No. 89, 2000
+ ss. 116K–116Q ...............................           ad. No. 44, 1999
+                                                         rep. No. 89, 2000
+ Div. 9A of Part III...........................          ad. No. 63, 1947
+ (ss. 121A–121C)                                         rep. No. 62, 1955
+ Div. 9A of Part III...........................          ad. No. 62, 1955
+ (ss. 121A, 121B)
+ Div. 9A of Part III (s. 121A) ..........                rep. No. 154, 1981
+ s. 121A ............................................    ad. No. 63, 1947
+                                                         rs. No. 62, 1955
+                                                         am. No. 51, 1973; No. 108, 1981
+                                                         rep. No. 154, 1981
+ s. 121B ............................................    ad. No. 63, 1947
+                                                         rs. No. 62, 1955
+                                                         rep. No. 65, 1957
+
+
+
+
+                                                          Income Tax Assessment Act 1936                              25
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ s. 121C ............................................   ad. No. 63, 1947
+                                                        rep. No. 62, 1955
+ Heading to Div. 9B of Part III ........                am. No. 47, 1984
+                                                        rep. No. 97, 1989
+ Div. 9B of Part III ...........................        ad. No. 17, 1961
+ (ss. 121B–121E)
+ Div. 9B of Part III ...........................        rep. No. 97, 1989
+ (ss. 121B, 121BA, 121CC, 121D,
+ 121DA, 121DAA, 121DAAA,
+ 121DAB, 121DB–121DD, 121E)
+ s. 121B ............................................   ad. No. 17, 1961
+                                                        rs. No. 110, 1964
+                                                        am. No. 51, 1973; No. 108, 1981; No. 47, 1984; Nos. 49 and 123,
+                                                        1985; No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121BA .........................................     ad. No. 110, 1964
+                                                        am. No. 103, 1965; No. 51, 1973; No. 108, 1981
+                                                        rep. No. 47, 1984
+                                                        ad. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121C ............................................   ad. No. 17, 1961
+                                                        am. No. 110, 1964; No. 51, 1973; No. 108, 1981; No. 54, 1983
+                                                        rep. No. 49, 1985
+                                                        ad. No. 123, 1985
+                                                        rep. No. 138, 1987
+ s. 121CA .........................................     ad. No. 110, 1964
+                                                        am. No. 51, 1973; Nos. 49 and 123, 1985
+                                                        rep. No. 138, 1987
+ s. 121CB .........................................     ad. No. 110, 1964
+                                                        am. No. 51, 1973; No. 108, 1981
+                                                        rs. No. 47, 1984
+                                                        am. No. 123, 1985
+
+
+
+
+26                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                              Endnotes
+
+
+                                                                                          Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+                                                        rep. No. 138, 1987
+ s. 121CC .........................................     ad. No. 123, 1985
+                                                        rs. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121D ............................................   ad. No. 17, 1961
+                                                        rs. No. 110, 1964
+                                                        am. No. 51, 1973; No. 108, 1981
+                                                        rep. No. 49, 1985
+                                                        ad. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DA .........................................     ad. No. 110, 1964
+                                                        am. No. 108, 1981; No. 47, 1984; Nos. 49 and 123, 1985; No. 138,
+                                                        1987
+                                                        rep. No. 97, 1989
+ s. 121DAA ......................................       ad. No. 47, 1984
+                                                        am. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DAAA ...................................         ad. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DAB ......................................       ad. No. 47, 1984
+                                                        am. Nos. 49 and 123, 1985
+                                                        rs. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DB .........................................     ad. No. 110, 1964
+                                                        am. No. 51, 1973; No. 47, 1984; No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DC .........................................     ad. No. 110, 1964
+                                                        am. No. 51, 1973; No. 47, 1984
+                                                        rs. No. 138, 1987
+                                                        rep. No. 97, 1989
+ s. 121DD .........................................     ad. No. 110, 1964
+
+
+
+
+                                                         Income Tax Assessment Act 1936                                27
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          am. No. 103, 1965; No. 47, 1972; No. 51, 1973; No. 126, 1977;
+                                                          No. 106, 1982
+                                                          rs. No. 47, 1984
+                                                          am. No. 138, 1987
+                                                          rep. No. 97, 1989
+ s. 121DE .........................................       ad. No. 110, 1964
+                                                          am. No. 51, 1973; No. 108, 1981
+                                                          rep. No. 49, 1985
+ s. 121E ............................................     ad. No. 17, 1961
+                                                          am. No. 51, 1973
+                                                          rep. No. 97, 1989
+ Div. 10 of Part III ...........................          rep. No. 60, 1968
+ (ss. 122–124)
+ s. 122 ...............................................   rep. No. 60, 1968
+ s. 122AA .........................................       ad. No. 69, 1963
+                                                          rep. No. 60, 1968
+ s. 122AB .........................................       ad. No. 70, 1959
+                                                          rep. No. 60, 1968
+ s. 122E ............................................     ad. No. 60, 1968
+                                                          am. No. 126, 1974; No. 108, 1981
+                                                          rep. No. 107, 1989
+ ss. 122F, 122G ................................          ad. No. 60, 1968
+                                                          am. No. 51, 1973; No. 126, 1974; No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 122NA .........................................       ad. No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 122Q ............................................     ad. No. 60, 1968
+                                                          am. No. 93, 1969; No. 51, 1973; No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 123 ...............................................   rs. No. 44, 1951
+                                                          rep. No. 60, 1968
+
+
+
+
+28                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+ s. 123AA .........................................       ad. No. 11, 1947
+                                                          am. No. 44, 1951; No. 18, 1960; No. 69, 1963
+                                                          rep. No. 60, 1968
+ s. 123A ............................................     ad. No. 30, 1939
+                                                          am. No. 17, 1940; No. 11, 1947; No. 44, 1951; No. 55, 1958; No. 70,
+                                                          1959; No. 18, 1960
+                                                          rep. No. 69, 1963
+ s. 124 ...............................................   rs. No. 44, 1951
+                                                          am. No. 110, 1964
+                                                          rep. No. 60, 1968
+ s. 124A ............................................     ad. No. 44, 1951
+                                                          am. No. 18, 1960
+                                                          rep. No. 60, 1968
+ s. 124AA .........................................       ad. No. 103, 1965
+                                                          rep. No. 60, 1968
+ s. 124B ............................................     ad. No. 44, 1951
+                                                          am. No. 70, 1959
+                                                          rep. No. 60, 1968
+ s. 124C ............................................     ad. No. 44, 1951
+                                                          am. No. 69, 1963
+                                                          rep. No. 60, 1968
+ s. 124D ............................................     ad. No. 28, 1952
+                                                          rep. No. 60, 1968
+ s. 124DA .........................................       ad. No. 39, 1962
+                                                          am. No. 69, 1963; No. 46, 1964
+                                                          rep. No. 60, 1968
+ Div. 10AA of Part III ......................             ad. No. 69, 1963
+ (ss. 124DB–124DH, 124J–124DN)                            rep. No. 126, 1974
+ s. 124AEA ......................................         ad. No. 57, 1978
+                                                          rep. No. 107, 1989
+ s. 124ANA ......................................         ad. No. 108, 1981
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                 29
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                    How affected
+
+                                                       rep. No. 107, 1989
+ s. 124AR .........................................    ad. No. 126, 1974
+                                                       am. No. 205, 1976; No. 57, 1978; No. 24, 1980; Nos. 108, 109 and
+                                                       154, 1981; No. 14, 1983
+                                                       rep. No. 107, 1989
+ s. 124DB .........................................    ad. No. 69, 1963
+                                                       am. No. 164, 1973
+                                                       rep. No. 126, 1974
+ s. 124DC .........................................    ad. No. 69, 1963
+                                                       rep. No. 126, 1974
+ s. 124DD .........................................    ad. No. 69, 1963
+                                                       am. No. 148, 1968; No. 93, 1969; No. 51, 1973
+                                                       rep. No. 126, 1974
+ s. 124DE .........................................    ad. No. 69, 1963
+                                                       am. No. 51, 1973
+                                                       rep. No. 126, 1974
+ s. 124DF..........................................    ad. No. 69, 1963
+                                                       am. No. 103, 1965; No. 50, 1966; No. 93, 1969; No. 51, 1973
+                                                       rep. No. 126, 1974
+ s. 124DG .........................................    ad. No. 69, 1963
+                                                       rep. No. 126, 1974
+ s. 124DH .........................................    ad. No. 69, 1963
+                                                       am. Nos. 51 and 164, 1973
+                                                       rep. No. 126, 1974
+ s. 124DJ ..........................................   ad. No. 69, 1963
+                                                       am. No. 164, 1973
+                                                       rep. No. 126, 1974
+ ss. 124DK, 124DL ..........................           ad. No. 69, 1963
+                                                       rep. No. 126, 1974
+ ss. 124DM, 124DN .........................            ad. No. 69, 1963
+                                                       am. No. 60, 1968; No. 51, 1973
+
+
+
+
+30                                                      Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 126, 1974
+ s. 124ZP ..........................................      ad. No. 98, 1992
+                                                          rep. No. 46, 1998
+ Subheads. to s. 124ZZB(1)–(3) ......                     rep. No. 46, 1998
+ s. 124ZZC .......................................        ad. No. 181, 1994
+                                                          rep. No. 46, 1998
+ s. 125 ...............................................   am. No. 65, 1940; No. 22, 1942; No. 10, 1943; No. 48, 1950; No. 18,
+                                                          1960; No. 69, 1963; Nos. 103 and 143, 1965
+                                                          rep. No. 85, 1967
+                                                          ad. No. 54, 1971
+                                                          am. No. 51, 1973; No. 80, 1975; No. 25, 1983; No. 98, 1992
+                                                          rep. No. 95, 1997
+ Div. 11A of Part III.........................            ad. No. 85, 1959
+ (ss. 128A–128D)                                          rep. No. 85, 1967
+ s. 128E ............................................     ad. No. 85, 1959
+                                                          rep. No. 38, 1967
+ s. 128M ...........................................      ad. No. 54, 1971
+                                                          am. No. 51, 1973; No. 216, 1973 (as am. by No. 20, 1974)
+                                                          rep. No. 138, 1994
+ Div. 11B of Part III .........................           ad. No. 172, 1978
+ (ss. 128S, 128T)                                         rep. No. 58, 1987
+ s. 128S ............................................     ad. No. 172, 1978
+                                                          am. No. 108, 1981
+                                                          rep. No. 58, 1987
+ s. 128T ............................................     ad. No. 172, 1978
+                                                          rep. No. 58, 1987
+ Div. 13 of Part III (s. 136) ..............              rep. No. 29, 1982
+ s. 136 ...............................................   rep. No. 29, 1982
+ Div. 13A of Part III (s. 136A) ........                  ad. No. 126, 1977
+                                                          rep. No. 224, 1992
+ s. 136A ............................................     ad. No. 126, 1977
+                                                          am. No. 123, 1984
+
+
+
+                                                           Income Tax Assessment Act 1936                                 31
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 224, 1992
+ Div. 14 of Part III ...........................          rep. No. 126, 1977
+ (ss. 137–140)
+ s. 137 ...............................................   rep. No. 126, 1977
+ s. 138 ...............................................   am. No. 50, 1942
+                                                          rep. No. 126, 1977
+ s. 139 ...............................................   rep. No. 126, 1977
+ s. 139FH..........................................       ad. No. 169, 1995
+                                                          rep. No. 122, 1997
+ s. 140 ...............................................   am. No. 143, 1965
+                                                          rep. No. 126, 1977
+ s. 158AA .........................................       ad. No. 50, 1966
+                                                          am. No. 51, 1973; No. 126, 1977; No. 57, 1978; No. 108, 1981
+                                                          rep. No. 103, 1983
+ ss. 158AB, 158AC ..........................              ad. No. 50, 1966
+                                                          am. No. 51, 1973
+                                                          rep. No. 126, 1977
+ Div. 16A of Part III.........................            ad. No. 45, 1953
+ (ss. 158B–158E)                                          rep. No. 138, 1987
+ ss. 158B–158E ................................           ad. No. 45, 1953
+                                                          rep. No. 138, 1987
+ Div. 16B of Part III .........................           ad. No. 101, 1969
+ (ss. 159, 159A–159G)                                     rep. No. 107, 1989
+ s. 159 ...............................................   am. No. 88, 1936; No. 65, 1940; No. 58, 1941; No. 22, 1942; No. 11,
+                                                          1947; No. 38, 1950
+                                                          rep. No. 81, 1953
+                                                          ad. No. 101, 1969
+                                                          am. No. 51, 1973; No. 205, 1976; No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 159A ............................................     ad. No. 101, 1969
+                                                          am. No. 51, 1973; No. 205, 1976; No. 108, 1981
+                                                          rep. No. 107, 1989
+
+
+
+32                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                              Endnotes
+
+
+                                                                                          Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ s. 159B ............................................   ad. No. 101, 1969
+                                                        am. No. 51, 1973; No. 108, 1981
+                                                        rep. No. 107, 1989
+ s. 159C ............................................   ad. No. 101, 1969
+                                                        am. No. 51, 1973; No. 205, 1976; No. 108, 1981
+                                                        rep. No. 107, 1989
+ s. 159D ............................................   ad. No. 101, 1969
+                                                        am. No. 51, 1973; No. 216, 1973 (as am. by No. 20, 1974); No. 108,
+                                                        1981
+                                                        rep. No. 107, 1989
+ s. 159E ............................................   ad. No. 101, 1969
+                                                        am. No. 108, 1981
+                                                        rep. No. 107, 1989
+ s. 159F ............................................   ad. No. 101, 1969
+                                                        rep. No. 107, 1989
+ s. 159G ............................................   ad. No. 101, 1969
+                                                        am. No. 51, 1973; No. 108, 1981
+                                                        rep. No. 107, 1989
+ s. 159GB .........................................     ad. No. 205, 1976
+                                                        rep. No. 56, 1989
+ s. 159GZD ......................................       ad. No. 138, 1987
+                                                        am. No. 78, 1988
+                                                        rep. No. 58, 1990
+ ss. 159GZO, 159GZP .....................               ad. No. 138, 1987
+                                                        rep. No. 174, 1997
+ s. 159GZZP .....................................       ad. No. 153, 1988
+                                                        rep. No. 4, 1991
+ s. 159GZZZA..................................          ad. No. 153, 1988
+                                                        rep. No. 4, 1991
+ s. 159GZZZMA ..............................            ad. No. 82, 1994
+                                                        rep. No. 170, 1995
+
+
+
+
+                                                         Income Tax Assessment Act 1936                                 33
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ Subdiv. E of Div. 16K of ................              ad. No. 58, 1990
+ Part III (s. 159GZZZT)                                 rep. No. 46, 1998
+ s. 159GZZZT ..................................         ad. No. 58, 1990
+                                                        rep. No. 46, 1998
+ Subdiv. A of Div. 16L of ................              rep. No 163, 1994
+ Part III
+ s. 159GZZZU..................................          ad. No. 98, 1992
+                                                        am. No. 56, 1994
+                                                        rep. No. 163, 1994
+ ss. 159GZZZV–159GZZZZ ...........                      ad. No. 98, 1992
+                                                        rep. No. 163, 1994
+ ss. 159GZZZZA, 159GZZZZB ......                        ad. No. 98, 1992
+                                                        am. No. 56, 1994
+                                                        rep. No. 163, 1994
+ s. 159GZZZZC ...............................           ad. No. 98, 1992
+                                                        rep. No. 163, 1994
+ s. 159GZZZZD ...............................           ad. No. 98, 1992
+                                                        rep. No. 163, 1994
+ Heading to Subdiv. B of .................              rep. No. 163, 1994
+ Div. 16L of Part III
+ s. 159N ............................................   ad. No. 117, 1975
+                                                        am. No. 56, 1976; No. 126, 1977; No. 108, 1981; No. 106, 1982;
+                                                        No. 103, 1983
+                                                        rep. No. 123, 1985
+ s. 159Q ............................................   ad. No. 117, 1975
+                                                        rep. No. 123, 1985
+ s. 159R ............................................   ad. No. 117, 1975
+                                                        am. Nos. 50 and 53, 1976; No. 124, 1980; No. 108, 1981; No. 54,
+                                                        1983; No. 47, 1984; No. 49, 1985
+                                                        rep. No. 123, 1985
+ s. 159S ............................................   ad. No. 117, 1975
+                                                        rep. No. 53, 1976
+
+
+
+34                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                            Endnotes
+
+
+                                                                                        Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ ss. 159SB–159SE............................            ad. No. 105, 1989
+                                                        rep. No. 7, 1993
+ s. 159SH..........................................     ad. No. 105, 1989
+                                                        rep. No. 7, 1993
+ s. 159SK..........................................     ad. No. 105, 1989
+                                                        rep. No. 208, 1992
+ s. 159SN..........................................     ad. No. 105, 1989
+                                                        am. No. 56, 1994
+                                                        rep. No. 208, 1992
+ ss. 159SP–159SR ............................           ad. No. 105, 1989
+                                                        rep. No. 208, 1992
+ s. 159SV..........................................     ad. No. 105, 1989
+                                                        am. No. 56, 1994
+                                                        rep. No. 208, 1992
+ ss. 159SW–159SY ..........................             ad. No. 105, 1989
+                                                        rep. No. 208, 1992
+ s. 159T ............................................   ad. No. 117, 1975
+                                                        am. Nos. 50 and 56, 1976; No. 108, 1981
+                                                        rep. No. 123, 1985
+ Subdiv. AAC of Div. 17 of .............                ad. No. 135, 1990
+ Part III (ss. 159T,                                    rep. No. 208, 1992
+ 159TA–159TL)
+ ss. 159T, 159TA–159TL ................                 ad. No. 135, 1990
+                                                        rep. No. 208, 1992
+ s. 159V ............................................   ad. No. 117, 1975
+                                                        am. No. 108, 1981
+                                                        rep. No. 123, 1985
+ s. 159W ...........................................    ad. No. 117, 1975
+                                                        rep. No. 123, 1985
+ s. 159X ............................................   ad. No. 117, 1975
+                                                        am. No. 50, 1976
+
+
+
+
+                                                         Income Tax Assessment Act 1936                              35
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+                                                        rep. No. 123, 1985
+ s. 159XA .........................................     ad. No. 109, 1981
+                                                        am. No. 106, 1982; No. 25, 1983
+                                                        rep. No. 123, 1985
+ s. 159Y ............................................   ad. No. 117, 1975
+                                                        rep. No. 123, 1985
+ Subdiv. AA of Div. 17 of ...............               ad. No. 38, 1982
+ Part III (ss. 159ZA–159ZQ)                             rep. No. 138, 1994
+ s. 159ZA .........................................     ad. No. 38, 1982
+                                                        am. No. 49, 1983; No. 135, 1990
+                                                        rep. No. 138, 1994
+ ss. 159ZB–159ZE ...........................            ad. No. 38, 1982
+                                                        rep. No. 138, 1994
+ s. 159ZF ..........................................    ad. No. 38, 1982
+                                                        rs. No. 106, 1982
+                                                        rep. No. 138, 1994
+ ss. 159ZG, 159ZH ..........................            ad. No. 38, 1982
+                                                        rep. No. 138, 1994
+ s. 159ZJ ...........................................   ad. No. 38, 1982
+                                                        am. No. 106, 1982; No. 49, 1983
+                                                        rep. No. 138, 1994
+ s. 159ZK .........................................     ad. No. 38, 1982
+                                                        am. No. 106, 1982; No. 49, 1983; No. 109, 1986
+                                                        rep. No. 138, 1994
+ s. 159ZKA ......................................       ad. No. 49, 1983
+                                                        rep. No. 138, 1994
+ ss. 159ZL, 159ZM ..........................            ad. No. 38, 1982
+                                                        am. No. 106, 1982
+                                                        rep. No. 138, 1994
+ s. 159ZN .........................................     ad. No. 38, 1982
+                                                        am. No. 106, 1982; No. 49, 1983
+
+
+
+
+36                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                 Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 138, 1994
+ s. 159ZNA ......................................         ad. No. 106, 1982
+                                                          am. No. 25, 1983
+                                                          rep. No. 138, 1994
+ ss. 159ZNB, 159ZNC .....................                 ad. No. 106, 1982
+                                                          rep. No. 138, 1994
+ ss. 159ZO, 159ZP ...........................             ad. No. 38, 1982
+                                                          rep. No. 138, 1994
+ s. 159ZQ .........................................       ad. No. 38, 1982
+                                                          am. No. 106, 1982
+                                                          rep. No. 138, 1994
+ s. 160 ...............................................   rs. No. 58, 1941; No. 22, 1942
+                                                          am. No. 50, 1942; No. 10, 1943; No. 28, 1944; No. 4, 1945; No. 6,
+                                                          1946; No. 11, 1947; No. 44, 1948; No. 66, 1949
+                                                          rep. No. 48, 1950
+                                                          ad. No. 44, 1951
+                                                          am. No. 90, 1952; No. 45, 1953; No. 70, 1959; No. 110, 1964; No. 143,
+                                                          1965; No. 50, 1966; No. 76, 1967; No. 51, 1973; No. 126, 1974;
+                                                          No. 117, 1975; Nos. 57 and 126, 1977; No. 108, 1981
+                                                          rep. No. 107, 1989
+ s. 160AA .........................................       ad. No. 58, 1941
+                                                          am. Nos. 22 and 50, 1942; No. 11, 1947
+                                                          rep. No. 48, 1950
+                                                          ad. No. 126, 1974
+                                                          rep. No. 117, 1975
+                                                          ad. No. 123, 1978
+                                                          am. No. 149, 1979; No. 57, 1980; Nos. 108 and 109, 1981; No. 106,
+                                                          1982
+                                                          rs. No. 47, 1984
+                                                          am. Nos. 123 and 129, 1985; Nos. 49 and 109, 1986
+                                                          rep. No. 105, 1989
+ s. 160ABA ......................................         ad. No. 6, 1946
+
+
+
+                                                           Income Tax Assessment Act 1936                                 37
+
+Compilation No. 192                                                                             Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+                                                      rs. No. 44, 1948
+                                                      am. No. 48, 1950; No. 44, 1951; No. 34, 1963; Nos. 51 and 52, 1973;
+                                                      No. 216, 1973 (as am. by No. 20, 1974); No. 36, 1978; No. 108, 1981;
+                                                      No. 123, 1984
+                                                      rep. No. 107, 1989
+ s. 160AC .........................................   ad. No. 22, 1942
+                                                      am. No. 50, 1942
+                                                      rep. No. 48, 1950
+                                                      ad. No. 87, 1968
+                                                      am. No. 18, 1969; Nos. 51 and 165, 1973; No. 216, 1973 (as am. by
+                                                      No. 20, 1974); No. 126, 1974; No. 117, 1975; Nos. 108 and 111, 1981
+                                                      rep. No. 107, 1989
+ s. 160ACA ......................................     ad. No. 57, 1978
+                                                      am. No. 24, 1980; Nos. 108 and 109, 1981; No. 168, 1985; No. 11,
+                                                      1988; No. 129, 1989
+                                                      rep. No. 107, 1989
+ ss. 160ACB, 160ACC .....................             ad. No. 57, 1978
+                                                      rep. No. 107, 1989
+ s. 160ACD ......................................     ad. No. 49, 1985
+                                                      am. No. 24, 1980; No. 108, 1981
+                                                      rep. No. 107, 1989
+ s. 160AE .........................................   ad. No. 22, 1942
+                                                      am. No. 50, 1942; No. 37, 1945
+                                                      rep. No. 48, 1950
+ s. 160AF..........................................   ad. No. 3, 1944
+                                                      rep. No. 85, 1959
+ Div. 18 of Part III ...........................      ad. No. 3, 1944
+ (ss. 160AF–160AH, 160AJ–                             rep. No. 85, 1959
+ 160AM)
+ Div. 18 of Part III ...........................      ad. No. 18, 1960
+ (ss. 160AE–160AG)                                    rs. No. 80, 1975
+ ss. 160AE–160AF ...........................          ad. No. 18, 1960
+
+
+
+
+38                                                     Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                        Endnotes
+
+
+                                                                                    Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+                                                      rs. No. 80, 1975
+                                                      rep. No. 51, 1986
+ s. 160AG .........................................   ad. No. 3, 1944
+                                                      rep. No. 85, 1959
+                                                      ad. No. 18, 1960
+                                                      rs. No. 4, 1968
+                                                      am. No. 51, 1973
+                                                      rs. No. 80, 1975
+                                                      rep. No. 51, 1986
+ ss. 160AH–160AM .........................            ad. No. 3, 1944
+                                                      rep. No. 85, 1959
+ Div. 19 of Part III ...........................      ad. No. 6, 1946
+ (160AN–160AT)                                        rep. No. 85, 1959
+ ss. 160AN, 160AO..........................           ad. No. 6, 1946
+                                                      rep. No. 85, 1959
+ s. 160AP..........................................   ad. No. 6, 1946
+                                                      rep. No. 85, 1959
+                                                      ad. No. 87, 1978
+                                                      am. No. 123, 1984
+                                                      rep. No. 73, 1989
+ s. 160APKB ....................................      ad. No. 216, 1991
+                                                      rep. No. 89, 2000
+ s. 160APM ......................................     ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+ s. 160APN .......................................    ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+ s. 160APNA ....................................      ad. No. 20, 1990
+                                                      rep. No. 216, 1991
+ ss. 160APR–160APT ......................             ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+
+
+
+
+                                                       Income Tax Assessment Act 1936                            39
+
+Compilation No. 192                                                                     Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+ ss. 160APVA, 160APVB................                 ad. No. 48, 1991
+                                                      rep. No. 216, 1991
+ s. 160APVE ....................................      ad. No. 48, 1991
+                                                      rep. No. 216, 1991
+ s. 160APY .......................................    ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+ s. 160APYA ....................................      ad. No. 20, 1990
+                                                      am. No. 4, 1991
+                                                      rep. No. 216, 1991
+ s. 160APYAA .................................        ad. No. 4, 1991
+                                                      rep. No. 216, 1991
+ s. 160AQ .........................................   ad. No. 6, 1946
+                                                      rep. No. 85, 1959
+                                                      ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+ s. 160AQA ......................................     ad. No. 58, 1987
+                                                      rep. No. 216, 1991
+ ss. 160AQCF–160AQCH ...............                  ad. No. 48, 1991
+                                                      rep. No. 216, 1991
+ Subdiv. BB of Div. 7 of ..................           ad. No. 93, 1999
+ Part IIIAA (ss. 160AQZI–                             rep. No. 89, 2000
+ 160AQZK)
+ ss. 160AQZI–160AQZK ................                 ad. No. 93, 1999
+                                                      rep. No. 89, 2000
+ s. 160AR .........................................   ad. No. 6, 1946
+                                                      am. No. 44, 1948; No. 44, 1951
+                                                      rep. No. 85, 1959
+ s. 160AS..........................................   ad. No. 6, 1946
+                                                      rep. No. 85, 1959
+                                                      ad. No. 58, 1987
+                                                      am. No. 5, 1991
+                                                      rep. No. 101, 1992
+
+
+
+40                                                     Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                     Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                              Endnotes
+
+
+                                                                                         Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ s. 160AT .........................................     ad. No. 6, 1946
+                                                        rep. No. 85, 1959
+ s. 160ATE .......................................      ad. No. 79, 2000
+                                                        rep. No. 89, 2000
+ s. 160ATI ........................................     ad. No. 79, 2000
+                                                        rep. No. 89, 2000
+ Part IIIA ..........................................   ad. No. 17, 1940
+ (ss. 160A–160D)                                        rep. No. 44, 1951
+ Part IIIA ..........................................   rep. No. 44, 1951
+ (ss. 160A–160E)
+ s. 160A ............................................   ad. No. 17, 1940
+                                                        rs. No. 3, 1944
+                                                        am. No. 44, 1948
+                                                        rep. No. 44, 1951
+ s. 160B ............................................   ad. No. 17, 1940
+                                                        am. No. 48, 1950
+                                                        rep. No. 44, 1951
+ s. 160C ............................................   ad. No. 17, 1940
+                                                        am. No. 65, 1940; No. 58, 1941; Nos. 22 and 50, 1942; No. 10, 1943;
+                                                        No. 44, 1948
+                                                        rep. No. 44, 1951
+ s. 160D ............................................   ad. No. 17, 1940
+                                                        rep. No. 44, 1951
+ s. 160E ............................................   ad. No. 58, 1941
+                                                        am. Nos. 22 and 50, 1942
+                                                        rs. No. 11, 1947
+                                                        am. No. 63, 1947
+                                                        rep. No. 44, 1951
+ s. 160ZZOA ....................................        ad. No. 35, 1990
+                                                        am. No. 5, 1991
+                                                        rep. No. 48, 1991
+
+
+
+
+                                                         Income Tax Assessment Act 1936                                 41
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+ Part IIIB ..........................................    ad. No. 69, 1941
+ (ss. 160F–160J)                                         rep. No. 22, 1942
+ Part IIIB ..........................................    ad. No. 11, 1947
+ (ss. 160F–160T)                                         rep. No. 81, 1953
+ s. 160F ............................................    ad. No. 69, 1941
+                                                         rep. No. 22, 1942
+                                                         ad. No. 11, 1947
+                                                         am. No. 48, 1950
+                                                         rep. No. 81, 1953
+ ss. 160G, 160H ...............................          ad. No. 69, 1941
+                                                         rep. No. 22, 1942
+                                                         ad. No. 11, 1947
+                                                         rep. No. 81, 1953
+ s. 160J .............................................   ad. No. 69, 1941
+                                                         rep. No. 22, 1942
+                                                         ad. No. 11, 1947
+                                                         am. No. 48, 1950
+                                                         rep. No. 81, 1953
+ s. 160K ............................................    ad. No. 11, 1947
+                                                         am. No. 44, 1948; No. 48, 1950
+                                                         rs. No. 44, 1951
+                                                         am. No. 90, 1952
+                                                         rep. No. 81, 1953
+ ss. 160L, 160M ...............................          ad. No. 11, 1947
+                                                         rep. No. 81, 1953
+ s. 160N ............................................    ad. No. 11, 1947
+                                                         am. No. 48, 1950
+                                                         rep. No. 81,1953
+ s. 160P ............................................    ad. No. 11, 1947
+                                                         rep. No. 81, 1953
+ s. 160Q ............................................    ad. No. 11, 1947
+
+
+
+
+42                                                        Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          am. No. 44, 1948; No. 44, 1951
+                                                          rep. No. 81, 1953
+ ss. 160R, 160S ................................          ad. No. 11, 1947
+                                                          am. No. 48, 1950
+                                                          rep. No. 81, 1953
+ s. 160T ............................................     ad. No. 11, 1947
+                                                          rep. No. 81, 1953
+ s. 160ZLA .......................................        ad. No. 82, 1994
+                                                          rep. No. 170, 1995
+ s. 160ZZPJA ...................................          ad. No. 46, 1998
+                                                          rep. No. 94, 1999
+ s. 160ZZPZAA ...............................             ad. No. 46, 1998
+                                                          rep. No. 94, 1999
+ s. 160ZZRAAAA............................                ad. No. 46, 1998
+                                                          rep. No. 94, 1999
+ Note to s. 160ZZSJ .........................             rep. No. 94, 1999
+ s. 160ZZSQ .....................................         ad. No. 122, 1997
+                                                          rep. No. 94, 1999
+ ss. 161B–161D................................            ad. No. 174, 1997
+                                                          rep. No. 91, 2000
+ s. 161E ............................................     ad. No. 174, 1997
+                                                          am. No. 179, 1999
+                                                          rep. No. 91, 2000
+ s. 163C ............................................     ad. No. 169, 1995
+                                                          rep. No. 11, 1999
+ s. 165 ...............................................   am. No. 10, 1943; No. 51, 1973; No. 123, 1984; No. 78, 1988; No. 174,
+                                                          1997
+                                                          rep. No. 91, 2000
+ s. 170B ............................................     ad. No. 103, 1965
+                                                          am. No. 51, 1973; No. 216, 1973 (as am. by No. 20, 1974); No. 108,
+                                                          1981
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                 43
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 91, 2000
+ Div. 1 of Part V...............................          rep. No. 48, 1986
+ (ss. 178, 180–184)
+ s. 178 ...............................................   am. No. 108, 1981
+                                                          rep. No. 48, 1986
+ s. 179 ...............................................   rep. No. 49, 1985
+ s. 180 ...............................................   am. No. 10, 1943
+                                                          rep. No. 48, 1986
+ s. 181 ...............................................   rep. No. 48, 1986
+ s. 182 ...............................................   am. No. 63, 1947; No. 48, 1950; No. 18, 1955; No. 39, 1957; No. 17,
+                                                          1960; No. 115, 1964; No. 143, 1965; No. 85, 1967
+                                                          rs. No. 123, 1984
+                                                          rep. No. 48, 1986
+ s. 183 ...............................................   am. No. 216, 1973 (as am. by No. 20, 1974); No. 108, 1981
+                                                          rep. No. 48, 1986
+ s. 184 ...............................................   am. No. 216, 1973 (as am. by No. 20, 1974); No. 108, 1981
+                                                          rep. No. 48, 1986
+                                                          ad. No. 23, 1987
+                                                          rs. No. 8, 1988
+                                                          rep. No. 216, 1991
+ s. 184A ............................................     ad. No. 165, 1976
+                                                          am. No. 123, 1984
+                                                          rep. No. 23, 1987
+ s. 184B ............................................     ad. No. 165, 1976
+                                                          rep. No. 123, 1984
+ s. 184C ............................................     ad. No. 165, 1976
+                                                          rep. No. 23, 1987
+ Part V ..............................................    rep. No. 216, 1991
+ (ss. 185–188, 188A, 188B, 189,
+ 189A, 189B, 190, 193, 199, 200B,
+ 201)
+ s. 185 ...............................................   am. No. 108, 1981; No. 48, 1986
+
+
+
+44                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                             Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 216, 1991
+ s. 186 ...............................................   rep. No. 216, 1991
+ s. 187 ...............................................   am. No. 53, 1973; No. 165, 1976; No. 87, 1978; No. 108, 1981
+                                                          rs. No. 48, 1986
+                                                          am. No. 23, 1987
+                                                          rep. No. 216, 1991
+ s. 188 ...............................................   am. No. 143, 1965; No. 108, 1981
+                                                          rs. No. 48, 1986
+                                                          rep. No. 216, 1991
+ s. 188A ............................................     ad. No. 48, 1986
+                                                          rep. No. 216, 1991
+ s. 188B ............................................     ad. No. 48, 1986
+                                                          am. No. 23, 1987
+                                                          rep. No. 216, 1991
+ s. 189 ...............................................   am. No. 143, 1965; No. 108, 1981
+                                                          rs. No. 48, 1986
+                                                          am. No. 23, 1987
+                                                          rep. No. 216, 1991
+ s. 189A ............................................     ad. No. 48, 1986
+                                                          rep. No. 216, 1991
+ s. 189B ............................................     ad. No. 8, 1988
+                                                          rep. No. 216, 1991
+ s. 190 ...............................................   am. Nos. 48 and 112, 1986
+                                                          rep. No. 216, 1991
+ s. 191 ...............................................   rep. No. 48, 1986
+ s. 192 ...............................................   am. No. 216, 1973 (as am. by No. 20, 1974)
+                                                          rep. No. 48, 1986
+ s. 193 ...............................................   am. No. 143, 1965; No. 51, 1973; No. 117, 1975; No. 149, 1979; Nos.
+                                                          108 and 110, 1981; No. 29, 1982; No. 123, 1984; No. 48, 1986
+                                                          rep. No. 216, 1991
+ s. 194 ...............................................   am. No. 108, 1981
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                45
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 48, 1986
+ s. 195 ...............................................   rep. No. 48, 1986
+ s. 196 ...............................................   rs. No. 53, 1973; No. 165, 1976
+                                                          am. No. 87, 1978
+                                                          rep. No. 48, 1986
+ s. 196A ............................................     ad. No. 53, 1973
+                                                          am. No. 165, 1976; No. 48, 1986
+                                                          rep. No. 23, 1987
+ s. 197 ...............................................   am. No. 53, 1973; No. 165, 1976
+                                                          rep. No. 48, 1986
+ s. 198 ...............................................   rs. No. 165, 1976
+                                                          am. No. 48, 1986
+                                                          rep. No. 23, 1987
+ s. 199 ...............................................   rs. No. 165, 1976
+                                                          am. No. 48, 1986; No. 23, 1987
+                                                          rep. No. 216, 1991
+ s. 200 ...............................................   rs. No. 165, 1976
+                                                          rep. No. 23, 1987
+ s. 200A ............................................     ad. No. 19, 1979
+                                                          rep. No. 23, 1987
+ s. 200B ............................................     ad. No. 48, 1986
+                                                          am. No. 23, 1987
+                                                          rep. No. 216, 1991
+ s. 201 ...............................................   am. No. 123, 1984; No. 48, 1986
+                                                          rep. No. 216, 1991
+ s. 202 ...............................................   rs. No. 123, 1984
+                                                          am. No. 46, 1986
+                                                          rep. No. 48, 1986
+ s. 202E ............................................     ad. No. 97, 1988
+                                                          rep. No. 57, 1990
+ s. 202ED .........................................       ad. No. 97, 1988
+
+
+
+46                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                                Endnotes
+
+
+                                                                                            Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 57, 1990
+ s. 203 ...............................................   rep. No. 5, 1937
+                                                          ad. No. 87, 1978
+                                                          rep. No. 73, 1989
+ s. 204A ............................................     ad. No. 87, 1978
+                                                          rep. No. 73, 1989
+ s. 207 ...............................................   am. No. 46, 1938; No. 108, 1981; No. 123, 1982; No. 123, 1984;
+                                                          No. 101, 1992; No. 120, 1995
+                                                          rep. No. 11, 1999
+ s. 207A ............................................     ad. No. 101, 1992
+                                                          am. No. 120, 1995
+                                                          rep. No. 11, 1999
+ s. 208A ............................................     ad. No. 87, 1978
+                                                          rep. No. 73, 1989
+ s. 208B ............................................     ad. No. 87, 1978
+                                                          am. No. 108, 1981; No. 73, 1989
+                                                          rep. No. 11, 1999
+ s. 210 ...............................................   am. No. 46, 1938
+                                                          rep. No. 39, 1962
+ ss. 211, 212 .....................................       rep. No. 39, 1962
+ s. 212A ............................................     ad. No. 48, 1950
+                                                          rep. No. 39, 1962
+ s. 217 ...............................................   am. No. 87, 1978
+                                                          rep. No. 123, 1984
+ s. 220AAV ......................................         ad. No. 47, 1998
+                                                          rep. No. 11, 1999
+ ss. 220AAX, 220AAY ....................                  ad. No. 47, 1998
+                                                          rep. No. 11, 1999
+ s. 220AG .........................................       ad. No. 138, 1994
+                                                          rep. No. 47, 1998
+ s. 220AI ..........................................      ad. No. 138, 1994
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                  47
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 47, 1998
+ s. 220AT .........................................       ad. No. 138, 1994
+                                                          rep. No. 47, 1998
+ s. 220AV .........................................       ad. No. 138, 1994
+                                                          am. No. 47, 1998
+                                                          rep. No. 11, 1999
+ s. 220AW ........................................        ad. No. 138, 1994
+                                                          rep. No. 120, 1995
+ s. 221 ...............................................   rep. No. 58, 1941
+                                                          ad. No. 22, 1942
+                                                          am. No. 6, 1946; No. 43, 1954; No. 85, 1959; No. 143, 1965; No. 50,
+                                                          1966; No. 51, 1973
+                                                          rep. No. 134, 1980
+ s. 221AB .........................................       ad. No. 165, 1973
+                                                          rep. No. 26, 1974
+ s. 221B ............................................     ad. No. 65, 1940
+                                                          rs. No. 63, 1947
+                                                          rep. No. 216, 1991
+ Div. 2 of Part VI .............................          ad. No. 65, 1940
+ (ss. 221A–221H,                                          rep. No. 63, 1947
+ 221J–221H, 221P–221Y)
+ ss. 221A–221E ................................           ad. No. 65, 1940
+                                                          rep. No. 63, 1947
+ s. 221EA .........................................       ad. No. 87, 1978
+                                                          rep. No. 73, 1989
+ s. 221EB..........................................       ad. No. 87, 1978
+                                                          am. No. 108, 1981
+                                                          rep. No. 73, 1989
+ s. 221EC..........................................       ad. No. 45, 1990
+                                                          am. No. 170, 1995
+                                                          rep. No. 47, 1998
+
+
+
+
+48                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                               Endnotes
+
+
+                                                                                          Endnote 5—Repeal table
+
+ Provision affected                                      How affected
+
+ s. 221ED .........................................      ad. No. 45, 1990
+                                                         rep. No. 47, 1998
+ ss. 221EDA–221EDC .....................                 ad. No. 170, 1995
+                                                         rep. No. 47, 1998
+ s. 221F ............................................    ad. No. 65, 1940
+                                                         rep. No. 63, 1947
+ s. 221G ............................................    ad. No. 65, 1940
+                                                         am. No. 3, 1944
+                                                         rs. No. 63, 1947
+                                                         am. No. 44, 1951; No. 143, 1965; No. 51, 1973; No. 87, 1978; No. 108,
+                                                         1981; Nos. 47 and 123, 1984; No. 97, 1988; Nos. 73 and 167, 1989;
+                                                         No. 191, 1992; No. 32, 1993
+                                                         rep. No. 170, 1995
+ s. 221H ............................................    ad. No. 65, 1940
+                                                         rep. No. 63, 1947
+ s. 221HA .........................................      ad. No. 10, 1943
+                                                         rs. No. 3, 1944
+                                                         rep. No. 63, 1947
+ s. 221J .............................................   ad. No. 65, 1940
+                                                         rep. No. 63, 1947
+ s. 221KA .........................................      ad. No. 3, 1944
+                                                         rep. No. 63, 1947
+ s. 221KB .........................................      ad. No. 3, 1944
+                                                         am. No. 4, 1945
+                                                         rep. No. 63, 1947
+ ss. 221KC, 221KD ..........................             ad. No. 3, 1944
+                                                         rep. No. 63, 1947
+ s. 221KE .........................................      ad. No. 28, 1944
+                                                         rep. No. 63, 1947
+ s. 221KF..........................................      ad. No. 11, 1947
+                                                         rep. No. 63, 1947
+
+
+
+
+                                                          Income Tax Assessment Act 1936                                 49
+
+Compilation No. 192                                                                           Compilation date: 01/07/2026
+
+
+
+
+                                      Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+ s. 221L ............................................   ad. No. 65, 1940
+                                                        am. No. 3, 1944
+                                                        rs. No. 63, 1947
+                                                        am. No. 66, 1949; No. 143, 1965; No. 51, 1973; No. 108, 1981;
+                                                        No. 123, 1984
+                                                        rep. No. 170, 1995
+ s. 221M ...........................................    ad. No. 65, 1940
+                                                        am. No. 10, 1943; No. 3, 1944
+                                                        rs. No. 63, 1947
+                                                        am. No. 143, 1965; No. 108, 1981; No. 123, 1984
+                                                        rep. No. 170, 1995
+ s. 221N ............................................   ad. No. 65, 1940
+                                                        rep. No. 63, 1947
+ s. 221NA .........................................     ad. No. 123, 1984
+                                                        am. No. 170, 1995; No. 47, 1998
+                                                        rep. No. 11, 1999
+ s. 221NB .........................................     ad. No. 123, 1984
+                                                        rep. No. 120, 1995
+ s. 221P ............................................   ad. No. 65, 1940
+                                                        rs. No. 63, 1947
+                                                        am. No. 44, 1951; No. 85, 1959; No. 87, 1978; No. 108, 1981; No. 14,
+                                                        1983; No. 123, 1984; No. 154, 1986; No. 73, 1989; No. 3, 1992;
+                                                        No. 32, 1993
+                                                        rep. No. 170, 1995
+ s. 221Q ............................................   ad. No. 65, 1940
+                                                        rs. No. 63, 1947
+                                                        am. No. 216, 1973 (as am. by No. 20, 1974); No. 87, 1978; No. 133,
+                                                        1980; No. 123, 1984; No. 97, 1988; No. 73, 1989
+                                                        rep. No. 170, 1995
+ ss. 221R, 221S ................................        ad. No. 65, 1940
+                                                        rep. No. 63, 1947
+ s. 221TA .........................................     ad. No. 87, 1978
+
+
+
+50                                                       Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                             Endnotes
+
+
+                                                                                           Endnote 5—Repeal table
+
+ Provision affected                                     How affected
+
+                                                        am. No. 108, 1981
+                                                        rep. No. 73, 1989
+ s. 221T ............................................   ad. No. 65, 1940
+                                                        rs. No. 63, 1947
+                                                        am. No. 143, 1965; No. 108, 1981; No. 123, 1984
+                                                        rep. No. 170, 1995
+ ss. 221V–221X ...............................          ad. No. 65, 1940
+                                                        rep. No. 63, 1947
+ s. 221U ............................................   ad. No. 65, 1940
+                                                        am. No. 3, 1944
+                                                        rs. No. 63, 1947
+                                                        am. No. 87, 1978
+                                                        rep. No. 123, 1984
+                                                        ad. No. 49, 1985
+                                                        am. No. 48, 1986
+                                                        rep. No. 216, 1991
+ s. 221Y ............................................   ad. No. 65, 1940
+                                                        rs. No. 63, 1947
+                                                        am. No. 108, 1981; No. 123, 1984
+                                                        rep. No. 170, 1995
+ s. 221YAA ......................................       ad. No. 44, 1951
+                                                        rep. No. 123, 1984
+ s. 221YAB ......................................       ad. No. 85, 1959
+                                                        rep. No. 38, 1967
+ s. 221YBA ......................................       ad. No. 44, 1951
+                                                        rep. No. 85, 1959
+ s. 221YCA ......................................       ad. No. 44, 1951
+                                                        rep. No. 85, 1959
+ s. 221YDBA ...................................         ad. No. 87, 1978
+                                                        am. No. 108, 1981
+                                                        rep. No. 73, 1989
+
+
+
+                                                         Income Tax Assessment Act 1936                               51
+
+Compilation No. 192                                                                          Compilation date: 01/07/2026
+
+
+
+
+                                     Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                   How affected
+
+ s. 221YHAA ...................................       ad. No. 103, 1983
+                                                      am. No. 124, 1984
+                                                      rep. No. 227, 1992
+ s. 221YHE ......................................     ad. No. 14, 1983
+                                                      rep. No. 47, 1984
+ s. 221YHJ .......................................    ad. No. 14, 1983
+                                                      am. Nos. 123 and 124, 1984; No. 154, 1986; Nos. 191 and 227, 1992;
+                                                      No. 32, 1993; No. 170, 1995
+                                                      rep. No. 47, 1998
+ s. 221YHK ......................................     ad. No. 14, 1983
+                                                      am. Nos. 123 and 124, 1984
+                                                      rep. No. 227, 1992
+ s. 221YHLA....................................       ad. No. 123, 1984
+                                                      am. No. 47, 1998
+                                                      rep. No. 11, 1999
+ s. 221YHLB ....................................      ad. No. 123, 1984
+                                                      rep. No. 120, 1995
+ s. 221YHO ......................................     ad. No. 14, 1983
+                                                      rep. No. 123, 1984
+ s. 221YHZF ....................................      ad. No. 154, 1986
+                                                      rep. No. 11, 1999
+ s. 221YHZG....................................       ad. No. 154, 1986
+                                                      rep. No. 120, 1995
+ s. 221YHZLA .................................        ad. No. 35, 1992
+                                                      rep. No. 11, 1999
+ s. 221ZDA ......................................     ad. No. 123, 1984
+                                                      rep. No. 11, 1999
+ s. 221ZDB .......................................    ad. No. 123, 1984
+                                                      rep. No. 120, 1995
+ s. 221ZQ .........................................   ad. No. 14, 1983
+                                                      rep. No. 11, 1999
+
+
+
+
+52                                                     Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                        Compilation date: 01/07/2026
+
+
+
+
+                                    Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                               Endnotes
+
+
+                                                                                             Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+ s. 221ZQA ......................................         ad. No. 123, 1984
+                                                          rep. No. 11, 1999
+ s. 221ZQB .......................................        ad. No. 123, 1984
+                                                          rep. No. 120, 1995
+ ss. 221ZXH–221ZXJ ......................                 ad. No. 85, 1998
+                                                          rep. No. 11, 1999
+ Div. 7 of Part VI .............................          ad. No. 2, 1989
+ (s. 221ZY)                                               rs. No. 138, 1992
+                                                          rep. No. 11, 1999
+ s. 221ZY .........................................       ad. No. 2, 1989
+                                                          rs. No. 138, 1992
+                                                          am. No. 116, 1993; No. 138, 1994; No. 45, 1998; No. 106, 2000
+                                                          rep. No. 11, 1999
+ s. 222AJC........................................        ad. No. 32, 1993
+                                                          am. No. 138, 1994; No. 47, 1998
+                                                          rep. No. 11, 1999
+ s. 223 ...............................................   am. No. 143, 1965; No. 108, 1981
+                                                          rs. No. 123, 1984
+                                                          am. No. 49, 1984; No. 20, 1990; No. 5, 1991
+                                                          rep. No. 101, 1992
+ s. 223A ............................................     ad. No. 62, 1987
+                                                          am. No. 95, 1988
+                                                          rep. No. 30, 1995
+ Part VII ...........................................     rep. No. 123, 1984
+ (ss. 222–251)
+ ss. 222–226 .....................................        rep. No. 123, 1984
+ s. 226A ............................................     ad. No. 101, 1992
+                                                          am. No. 11, 1999
+                                                          rep. No. 91, 2000
+ ss. 227, 228 .....................................       rep. No. 123, 1984
+ s. 229 ...............................................   am. No. 108, 1981
+
+
+
+
+                                                           Income Tax Assessment Act 1936                                 53
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+                                                          rep. No. 123, 1984
+ s. 230 ...............................................   am. No. 143, 1965; No. 87, 1978; No. 108, 1981
+                                                          rep. No. 123, 1984
+ ss. 231, 232 .....................................       am. No. 143, 1965; No. 108, 1981
+                                                          rep. No. 123, 1984
+ s. 233 ...............................................   am. No. 44, 1951; No. 143, 1965; No. 216, 1973 (as am. by No. 20,
+                                                          1974); No. 165, 1976; No. 108, 1981
+                                                          rep. No. 123, 1984
+ s. 234 ...............................................   am. No. 44, 1951; No. 143, 1965; No. 216, 1973 (as am. by No. 20,
+                                                          1974)
+                                                          rs. No. 165, 1976
+                                                          rep. No. 123, 1984
+ s. 235 ...............................................   rs. No. 165, 1976
+                                                          rep. No. 123, 1984
+ s. 236 ...............................................   am. No. 44, 1951; No. 216, 1973 (as am. by No. 20, 1974)
+                                                          rep. No. 123, 1984
+ s. 237 ...............................................   am. No. 44, 1951; No. 216, 1973 (as am. by No. 20, 1974); No. 165,
+                                                          1976
+                                                          rep. No. 123, 1984
+ ss. 238–246 .....................................        rep. No. 123, 1984
+ s. 247 ...............................................   am. No. 34, 1963; No. 108, 1981
+                                                          rep. No. 123, 1984
+ s. 248 ...............................................   am. No. 143, 1965; No. 108, 1981
+                                                          rep. No. 123, 1984
+ ss. 249, 250 .....................................       rep. No. 123, 1984
+ s. 251 ...............................................   am. No. 87, 1978
+                                                          rep. No. 123, 1984
+ s. 251H ............................................     ad. No. 10, 1943
+                                                          rep. No. 216, 1973
+ Part VIIB.........................................       ad. No. 53, 1976
+ (ss. 251–251Z,                                           rep. No. 51, 1983
+ 251ZA–251ZH, 251ZJ)
+
+
+
+54                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+                                                                                                               Endnotes
+
+
+                                                                                            Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+ ss. 251R–251X................................            ad. No. 53, 1976
+                                                          rep. No. 51, 1983
+ s. 251Y ............................................     ad. No. 53, 1976
+                                                          rep. No. 98, 1976
+ s. 251Z ............................................     ad. No. 53, 1976
+                                                          rep. No. 98, 1976
+ ss. 251ZA–251ZE ...........................              ad. No. 53, 1976
+                                                          rep. No. 98, 1976
+ ss. 251ZF, 251ZG ...........................             ad. No. 53, 1976
+                                                          rep. No. 51, 1983
+ s. 251ZH .........................................       ad. No. 53, 1976
+                                                          rs. No. 98, 1976
+                                                          rep. No. 51, 1983
+ s. 251ZJ ...........................................     ad. No. 53, 1976
+                                                          rep. No. 51, 1983
+ s. 253 ...............................................   rep. No. 88, 1936
+ s. 256 ...............................................   am. No. 50, 1942; No. 4, 1968; No. 108, 1981
+                                                          rep. No. 154, 1986
+ s. 261 ...............................................   am. No. 51, 1973; No. 108, 1981
+                                                          rep. No. 76, 1996
+ s. 264B, 264C .................................          ad. No. 174, 1997
+                                                          rep. No. 91, 2000
+ s. 265B ............................................     ad. No. 37, 1945
+                                                          rep. No. 87, 1978
+ s. 279C ............................................     ad. No. 105, 1989
+                                                          rep. No. 61, 1990
+ Note to s. 299A ...............................          rep. No. 44, 1999
+ Notes 1, 2 to s. 299A ......................             ad. No. 44, 1999
+                                                          rep. No. 89, 2000
+ s. 307 ...............................................   ad. No. 105, 1989
+                                                          rep. No. 46, 1998
+
+
+
+                                                           Income Tax Assessment Act 1936                               55
+
+Compilation No. 192                                                                            Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+Endnotes
+
+
+Endnote 5—Repeal table
+
+ Provision affected                                       How affected
+
+ ss. 312–314 .....................................        ad. No. 105, 1989
+                                                          rep. No. 46, 1998
+ ss. 415–417 .....................................        ad. No. 5, 1991
+                                                          am. No. 170, 1995
+                                                          rep. No. 46, 1998
+ s. 420 ...............................................   ad. No. 5, 1991
+                                                          rep. No. 48, 1991
+ s. 431B ............................................     ad. No. 190, 1992
+                                                          rep. No. 138, 1994
+ Div. 8 of Part XI .............................          ad. No. 190, 1992
+ (ss. 512, 513)                                           rep. No. 155, 1997
+ ss. 512, 513 .....................................       ad. No. 190, 1992
+                                                          rep. No. 155, 1997
+ Heading to The Schedule ................                 rep. No. 4, 1945
+ Heading to The First .......................             ad. No. 4, 1945
+ Schedule                                                 rep. No. 51, 1973
+ Heading to The Second...................                 rep. No. 51, 1973
+ Schedule
+ The Third Schedule ........................              ad. No. 11, 1947
+                                                          rep. No. 81, 1953
+ Schedule 6.......................................        ad. No. 190, 1992
+                                                          rep. No. 155, 1997
+
+
+
+
+56                                                         Income Tax Assessment Act 1936
+
+Compilation No. 192                                                                         Compilation date: 01/07/2026
+
+
+
+
+                                       Authorised Version C2026C00333 registered 24/07/2026
+
