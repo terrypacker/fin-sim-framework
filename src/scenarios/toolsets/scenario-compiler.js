@@ -175,8 +175,9 @@ export class ScenarioCompiler {
       stateRegistry:  services.stateRegistry,
       accountService: services.accountService,
       // Needed by ChangeResidencyApplyReducer to step up gold collectibles at the
-      // AU move (design 57 Part 2, Item C).
+      // AU move (design 57 Part 2, Item C) and foreign real property (design 62 §5).
       collectibleService: services.collectibleService,
+      realPropertyService: services.realPropertyService,
       schedulesById:  {},
       // Shared across toolsets — each tax toolset adds its periods here so
       // US and AU periods end up in one service available for journal reports.

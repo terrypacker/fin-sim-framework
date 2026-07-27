@@ -16,6 +16,31 @@ import { resolveDestinationCashKey } from '../cash-routing.js';
 
 const US_PRIMARY_HOME_EXEMPTION = 500_000;
 
+const YEAR_MS       = 365 * 24 * 60 * 60 * 1000;
+const SIX_YEARS_MS  = 6 * YEAR_MS;
+
+/**
+ * AU main-residence exemption fraction for a FOREIGN dwelling of an AU resident
+ * (design 62 §5.3). The person became absent at the deemed-acquisition date (the
+ * move), so ITAA97 s118-145 (the absence rule) applies:
+ *   - not a main residence (investment property) ⇒ 0 (fully assessable);
+ *   - main residence, NOT income-producing ⇒ 1 (indefinite absence exemption);
+ *   - main residence, income-producing (rented) ⇒ the 6-year absence limit, applied
+ *     proportionally: exempt = min(6y, ownership) / ownership from the move to sale.
+ * Simplification: assumes the foreign dwelling retains the exemption (a competing
+ * AU main-residence claim would reduce it; not modeled).
+ *
+ * @returns {number} exempt fraction in [0, 1]
+ */
+export function auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs) {
+  if (!propState?.isPrimaryResidence) return 0;
+  if (deemedAcqMs == null || saleMs == null || saleMs <= deemedAcqMs) return 1;
+  const incomeProducing = propState.rentalEnabled === true && (propState.monthlyRent ?? 0) > 0;
+  if (!incomeProducing) return 1;
+  const ownershipMs = saleMs - deemedAcqMs;
+  return Math.min(SIX_YEARS_MS, ownershipMs) / ownershipMs;
+}
+
 /** Default US cash pool key when no saleDestinationAccount is provided. */
 const defaultUsCashKey = (state) =>
   state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
@@ -50,7 +75,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, mortgageBalance, stateKey, destinationKey } = action;
+    const { salePrice, costBasis, mortgageBalance, stateKey, destinationKey, residency } = action;
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
     // Depreciation taken during the hold reduces the tax basis, so the gain is
@@ -60,6 +85,30 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const rawGain     = Math.max(0, salePrice - adjustedBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
+
+    // AU assessment of the foreign (US) house for an AU resident (design 62 §5):
+    // an AU resident is taxable on worldwide capital gains. The AU gain is measured
+    // from the s855-45 stepped-up basis (market value at the move, stamped on the
+    // property state as costBaseByCountry.AU), reduced by the AU main-residence
+    // exemption. US $500k exclusion stays US-side only. When the property was not
+    // stepped up (domestic/TAP, or not owned at the move) auBasis is absent ⇒ no AU
+    // gain here. Both figures are in the property currency (USD); the AU classifier
+    // converts. Indexation is deferred for property (design 57 §6.4), matching AU_HOUSE.
+    const propState = stateKey ? state[stateKey] : null;
+    const auBasis   = propState?.costBaseByCountry?.AU;
+    let auGain = 0, auDiscountableGain = 0;
+    if (auBasis != null && residency === 'AU') {
+      const saleMs      = state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
+      const deemedAcqMs = propState.acquisitionDateByCountry?.AU ?? null;
+      const auRawGain   = Math.max(0, salePrice - auBasis);
+      const exemptFrac  = auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs);
+      auGain = +(auRawGain * (1 - exemptFrac)).toFixed(2);
+      // CGT 50%-discount eligibility (design 62 §4): held ≥12 months from the deemed
+      // acquisition. The non-exempt slice is discountable only when held long enough.
+      const held12mo = deemedAcqMs != null && saleMs != null && (saleMs - deemedAcqMs) >= YEAR_MS;
+      auDiscountableGain = held12mo ? auGain : 0;
+    }
+
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
@@ -82,6 +131,9 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       [{
         type:        'US_HOUSE_SALE_TAX',
         gain:        taxableGain,
+        auGain,
+        auDiscountableGain,
+        residency,
         proceeds:    salePrice,
         costBasis:   adjustedBasis,
         description: stateKey || 'usHouse',

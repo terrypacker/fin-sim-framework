@@ -97,13 +97,34 @@ export class RealPropertyService extends AssetService {
   }
 
   /**
-   * Snapshots the current value on first residency change (one-time capture).
-   * No-op if already set.
-   * @param {import('../assets/real-property.js').RealProperty} property
+   * Snapshots the current value on first residency change and, for FOREIGN
+   * (non-TAP) property, applies the ITAA97 s855-45 deemed-acquisition step-up
+   * (design 62 §5): the AU cost base resets to market value at the move, and the
+   * deemed-acquisition date + CPI level are stamped (the date also drives the
+   * main-residence 6-year absence clock). DOMESTIC property is Taxable Australian
+   * Property and keeps its original basis — no step-up. Country-agnostic; all
+   * one-time captures (no-op once set). Operates on the live property STATE entry.
+   *
+   * @param {object} property - property domain object OR its projected state entry
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number, asOfMs?: number }} [opts]
    */
-  recordResidencyChange(property) {
-    if (property.balanceAtResidencyChange === null) {
+  recordResidencyChange(property, { country, stepUp, priceLevel, asOfMs } = {}) {
+    if (property.balanceAtResidencyChange == null) {
       property.balanceAtResidencyChange = property.value;
+    }
+    // Only foreign property (country !== destination) is non-TAP and stepped up.
+    if (stepUp && country && property.country && property.country !== country) {
+      const existing = property.costBaseByCountry ?? {};
+      if (existing[country] == null) {
+        property.costBaseByCountry = { ...existing, [country]: property.value ?? 0 };
+        if (priceLevel != null && property.acquisitionPriceLevel == null) {
+          property.acquisitionPriceLevel = priceLevel;
+        }
+        const existingDates = property.acquisitionDateByCountry ?? {};
+        if (asOfMs != null && existingDates[country] == null) {
+          property.acquisitionDateByCountry = { ...existingDates, [country]: asOfMs };
+        }
+      }
     }
   }
 

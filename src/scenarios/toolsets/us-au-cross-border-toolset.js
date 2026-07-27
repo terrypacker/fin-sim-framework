@@ -285,7 +285,7 @@ export const US_AU_CROSS_BORDER = {
       .reducers;
 
     return [
-      new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr, collectibleService: context.collectibleService }),
+      new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr, collectibleService: context.collectibleService, realPropertyService: context.realPropertyService }),
       new IntlTransferApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new IntlTransferRecordReducer(),
       ...fxReducers,

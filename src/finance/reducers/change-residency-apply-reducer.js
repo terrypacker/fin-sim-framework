@@ -35,16 +35,17 @@ export class ChangeResidencyApplyReducer extends Reducer {
   static type        = 'ChangeResidencyApplyReducer';
   static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
-  constructor({ accountService, stateRegistry, collectibleService } = {}) {
+  constructor({ accountService, stateRegistry, collectibleService, realPropertyService } = {}) {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
-    this.accountService     = accountService;
-    this.stateRegistry      = stateRegistry;
-    this.collectibleService = collectibleService;
+    this.accountService      = accountService;
+    this.stateRegistry       = stateRegistry;
+    this.collectibleService  = collectibleService;
+    this.realPropertyService = realPropertyService;
     this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
   }
 
-  static fromJSON(d, { accountService, stateRegistry, collectibleService }) {
-    const r = new this({ accountService, stateRegistry, collectibleService });
+  static fromJSON(d, { accountService, stateRegistry, collectibleService, realPropertyService }) {
+    const r = new this({ accountService, stateRegistry, collectibleService, realPropertyService });
     r.id = d.id;
     return r;
   }
@@ -86,6 +87,23 @@ export class ChangeResidencyApplyReducer extends Reducer {
       }
     }
 
+    // 1c. Foreign (non-TAP) real property gets the s855-45 deemed-acquisition
+    //     step-up too (design 62 §5): its AU cost base resets to market value at the
+    //     move and the deemed-acquisition date/level are stamped (the date drives the
+    //     main-residence 6-year absence clock). Domestic (TAP) property is snapshotted
+    //     but NOT stepped up. Copy-on-write into propertyUpdates so a property state
+    //     entry already recorded in the journal is never mutated in place.
+    const propertyUpdates = {};
+    if (this.realPropertyService) {
+      for (const prop of this.realPropertyService.getAll()) {
+        const ps = prop.stateKey ? state[prop.stateKey] : null;
+        if (ps == null) continue;
+        const clone = { ...ps };
+        this.realPropertyService.recordResidencyChange(clone, { country, stepUp, priceLevel, asOfMs: moveMs });
+        propertyUpdates[prop.stateKey] = clone;
+      }
+    }
+
     // 2. Flip residency to 'AU' for every person; citizen arrays unchanged.
     //    Stamp residencySinceMs (the move date) so the FEIE full-qualifying-year
     //    gate can suppress the exclusion for the partial move-in year (design 52
@@ -103,6 +121,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
 
     return this.newState({
       ...state,
+      ...propertyUpdates,
       people: Object.keys(updatedPeople).length > 0 ? updatedPeople : state.people,
     });
   }
