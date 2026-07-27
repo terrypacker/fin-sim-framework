@@ -192,7 +192,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy; // 'FIFO' | 'LIFO' | 'SPECIFIC' (per design §6.4)
     this.reducedActionTypes   = ['STOCK_WITHDRAWAL_APPLY'];
-    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX'];
+    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX'];
   }
 
   reduce(state, action) {
@@ -208,14 +208,34 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // AU cost-base reset (design 36 §12.2): the realized AU basis sums each lot's
     // stepped-up cost base; no step-up ⇒ falls back to realizedBasis (auGain === gain).
     const realizedAuBasis = r.realizedBasisByCountry?.AU ?? realizedBasis;
-    const gain   = Math.max(0, salePrice - realizedBasis);
-    const auGain = Math.max(0, salePrice - realizedAuBasis);
+
+    // Collectible split (design 56 §7.2): the proceeds/basis attributable to consumed
+    // GOLD lots are taxed at the US 28% collectibles rate (and AU CGT if resident) via
+    // COLLECTIBLE_SALE_TAX; the remainder keeps ordinary brokerage CGT via
+    // STOCK_WITHDRAWAL_TAX. A backward-compatible action-supplied `costBasis` (bare-event
+    // API) has no per-lot allocation, so it can't be split — treat it as all-equity.
+    const collectibleProceeds = action.costBasis != null ? 0 : r.collectibleProceeds;
+    const collectibleBasis    = action.costBasis != null ? 0 : r.collectibleBasis;
+    const collectibleGain     = Math.max(0, collectibleProceeds - collectibleBasis);
+
+    // The equity (non-collectible) portion is the total less the collectible slice.
+    const equityProceeds = +(salePrice - collectibleProceeds).toFixed(2);
+    const equityBasis    = +(realizedBasis - collectibleBasis).toFixed(2);
+    const equityAuBasis  = +(realizedAuBasis - collectibleBasis).toFixed(2);
+    const gain   = Math.max(0, equityProceeds - equityBasis);
+    const auGain = Math.max(0, equityProceeds - equityAuBasis);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], salePrice, null);
 
     const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis
     // above is the authoritative CGT source.
+    const taxActions = [
+      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key },
+    ];
+    if (collectibleGain > 0) {
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, residency });
+    }
     return this.newState(
       state,
       {
@@ -225,7 +245,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key }]
+      taxActions,
     );
   }
 }

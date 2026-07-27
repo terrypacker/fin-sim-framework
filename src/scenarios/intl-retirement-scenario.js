@@ -148,6 +148,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
   initialUsSavings:     30_000,
   usSavingsMinBalance:   3_000,
   usSavingsInterestRate: 0.03,
+  // Fed policy ("Prime") rate (design 56). The prebuilt cash accounts auto-link to
+  // Prime via a value-preserving primeSpread (usSavingsInterestRate − usPrimeRate),
+  // so a Prime sweep moves them out of the box while the un-swept sim is unchanged.
+  usPrimeRate:          0.045,
 
   // US investment accounts
   rothBalance:   80_000,  rothBasis:   60_000,
@@ -173,6 +177,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   iraGrowthRate:    0.07,
   k401GrowthRate:   0.07,
   usStockGrowthRate: 0.05,
+  // Gold commodity growth (design 56 §7) — seeds effectiveGrowthRates.GOLD; a GOLD
+  // holding grows at this rate, decoupled from equity returns and Prime.
+  goldGrowthRate:   0.05,
 
   // Spouse retirement accounts (US)
   spouseRothBalance:  40_000,  spouseRothBasis:  30_000,  spouseRothGrowthRate:  0.07,
@@ -185,6 +192,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // AU accounts
   auSavingsBalance:     50_000,
   auSavingsMinBalance:   3_000,  auSavingsInterestRate: 0.045,
+  // RBA policy ("Prime") rate (design 56) — see usPrimeRate note.
+  auPrimeRate:          0.0435,
   auFixedIncomeBalance:  1_000,  auFixedIncomeInterestRate: 0.04,
   superBalance:        250_000,  superBasis:           180_000,
   auStockBalance:       60_000,  auStockBasis:          40_000,
@@ -570,6 +579,9 @@ export class IntlRetirementScenario extends BaseScenario {
         stateMoveDestination:     p.stateMoveDestination || null,
         // US_BANKING
         usSavingsInterestRate:    p.usSavingsInterestRate,
+        // ECONOMIC_REGIMES — central-bank Prime rates (design 56)
+        usPrimeRate:              p.usPrimeRate,
+        auPrimeRate:              p.auPrimeRate,
         // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
         inflationRate:            p.usInflationRate,
         auInflationRate:          p.auInflationRate,
@@ -577,6 +589,7 @@ export class IntlRetirementScenario extends BaseScenario {
         rothGrowthRate:           p.rothGrowthRate,
         k401GrowthRate:           p.k401GrowthRate,
         brokerageGrowthRate:      p.usStockGrowthRate,
+        goldGrowthRate:           p.goldGrowthRate,
         brokerageDividendRate:    p.stockDividendRate,
         dividendReinvest:         p.stockDividendReinvest,
         fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
@@ -650,6 +663,9 @@ export class IntlRetirementScenario extends BaseScenario {
           name: 'US Savings',             role: ACCOUNT_ROLES.US_SAVINGS,
           balance: p.initialUsSavings, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.usSavingsMinBalance, country: 'US', currency: USD,
+          // Prime-linked (design 56 §11) — value-preserving spread so effective =
+          // Prime + spread = usSavingsInterestRate today, but a Prime sweep moves it.
+          primeSpread: p.usSavingsInterestRate - p.usPrimeRate,
           // Cash band: spent before investments (down to minimumBalance). The
           // active spending target is excluded as a source at runtime regardless.
           drawdownPriority: 0,
@@ -696,6 +712,8 @@ export class IntlRetirementScenario extends BaseScenario {
           name: 'AU Savings',             role: ACCOUNT_ROLES.AU_SAVINGS,
           balance: p.auSavingsBalance, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.auSavingsMinBalance, country: 'AU', currency: AUD,
+          // Prime-linked (design 56 §11) — value-preserving spread (see US Savings).
+          primeSpread: p.auSavingsInterestRate - p.auPrimeRate,
           // Cash band: spent before investments (down to minimumBalance), and
           // repatriated cross-border when it is the non-residence cash pool.
           drawdownPriority: 0,

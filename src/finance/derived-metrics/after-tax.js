@@ -10,6 +10,7 @@
 
 import { isDrawdownAccessible } from './net-liquidity.js';
 import { TaxSettleService }     from '../tax-settle-service.js';
+import { isCollectibleAllocation } from '../holdings/allocation.js';
 
 /**
  * After-tax re-pricing (design/40).
@@ -38,6 +39,7 @@ export const TAX_CLASS = Object.freeze({
   TAXABLE_BASIS: 'TAXABLE_BASIS',  // gains taxed on sale (brokerage)
   CASH:          'CASH',           // already taxed (savings/checking)
   SUPER:         'SUPER',          // jurisdiction-specific (AU super)
+  COLLECTIBLE:   'COLLECTIBLE',    // gold sleeve gain — US 28% collectibles CGT (design 56 §7.3)
 });
 
 const _ROLE_TAX_CLASS = {
@@ -66,6 +68,7 @@ export function taxClassForRole(role, { residency } = {}) { // eslint-disable-li
 
 const DEFAULT_ORDINARY_RATE      = 0.22;
 const DEFAULT_CAP_GAINS_RATE     = 0.15;
+const DEFAULT_COLLECTIBLE_RATE   = 0.28;   // US collectibles (28%) CGT — gold (design 56 §7.3)
 const DEFAULT_ASSUMED_GAIN_FRAC  = 0.5;
 
 /** True when an account is denominated/domiciled in AU (picks the AU rate). */
@@ -88,19 +91,26 @@ function _isAu(account) {
  * @param {number} [cfg.capGainsRate]   - effective long-term cap-gains rate.
  */
 export function defaultRateProvider({
-  ordinaryRate   = DEFAULT_ORDINARY_RATE,
-  ordinaryRateAu = ordinaryRate,
-  capGainsRate   = DEFAULT_CAP_GAINS_RATE,
+  ordinaryRate    = DEFAULT_ORDINARY_RATE,
+  ordinaryRateAu  = ordinaryRate,
+  capGainsRate    = DEFAULT_CAP_GAINS_RATE,
+  collectibleRate = DEFAULT_COLLECTIBLE_RATE,
 } = {}) {
   const ord   = Number.isFinite(ordinaryRate)   ? ordinaryRate   : DEFAULT_ORDINARY_RATE;
   const ordAu = Number.isFinite(ordinaryRateAu) ? ordinaryRateAu : ord;
   const cg    = Number.isFinite(capGainsRate)   ? capGainsRate    : DEFAULT_CAP_GAINS_RATE;
+  const coll  = Number.isFinite(collectibleRate)? collectibleRate : DEFAULT_COLLECTIBLE_RATE;
   return {
     ordinaryLiquidationRate(account /*, amount, state, date */) {
       return _isAu(account) ? ordAu : ord;
     },
     capGainsLiquidationRate(/* account, unrealizedGain, state, date */) {
       return cg;
+    },
+    // Gold sleeve (design 56 §7.3): US collectibles 28%; an AU-domiciled gold sleeve
+    // disposes as an ordinary AU capital gain, so it takes the cap-gains rate there.
+    collectibleLiquidationRate(account /*, gain, state, date */) {
+      return _isAu(account) ? cg : coll;
     },
   };
 }
@@ -125,8 +135,8 @@ export function defaultRateProvider({
  * realized income (not a joint multi-account liquidation), matching the per-entry
  * metric. Joint-liquidation ordering is a later refinement.
  */
-export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate } = {}) {
-  const fallback = defaultRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate });
+export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate, collectibleRate } = {}) {
+  const fallback = defaultRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate, collectibleRate });
   const svc = new TaxSettleService();
   const MIN_AMOUNT = 1;   // below this the effective-rate delta is numerically meaningless
 
@@ -168,19 +178,36 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
       if (_isAu(account)) return engineDelta(computeAu, 'auCapitalGainsYTD', gain, state, fb);
       return engineDelta(computeUs, 'usCapitalGainsYTD', gain, state, fb);
     },
+    // Gold sleeve (design 56 §7.3): a US gold gain stacks on usCollectibleGainsYTD (the
+    // 28%-rate accumulator); an AU-domiciled gold sleeve is an ordinary AU capital gain.
+    collectibleLiquidationRate(account, gain, state, date) {
+      const fb = () => fallback.collectibleLiquidationRate(account, gain, state, date);
+      if (_isAu(account)) return engineDelta(computeAu, 'auCapitalGainsYTD',     gain, state, fb);
+      return engineDelta(computeUs, 'usCollectibleGainsYTD', gain, state, fb);
+    },
   };
 }
 
-/** Unrealized gain of a taxable account: Σ holdings (marketValue − costBasis), or a fraction of balance when basis is unavailable (design/40 Q3). */
-function _unrealizedGain(account, assumedGainFraction) {
+/**
+ * Unrealized gain of a taxable account, split into the **collectible** (gold, US 28%
+ * CGT — design 56 §7.3) and the ordinary cap-gains portions. Σ holdings
+ * (marketValue − costBasis) per bucket; when basis is unavailable (no holdings), the
+ * whole account falls back to a fraction of balance as ordinary cap-gains gain (design
+ * 40 Q3) — a gold-less account is therefore byte-for-byte identical to the pre-56 metric.
+ * @returns {{ collectibleGain: number, capGainsGain: number }}
+ */
+function _unrealizedGainSplit(account, assumedGainFraction) {
   const holdings = account?.holdings;
   if (Array.isArray(holdings) && holdings.length > 0) {
-    let gain = 0;
-    for (const h of holdings) gain += (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
-    return gain;
+    let coll = 0, other = 0;
+    for (const h of holdings) {
+      const g = (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
+      if (isCollectibleAllocation(h?.allocation)) coll += g; else other += g;
+    }
+    return { collectibleGain: Math.max(0, coll), capGainsGain: Math.max(0, other) };
   }
   const frac = Number.isFinite(assumedGainFraction) ? assumedGainFraction : DEFAULT_ASSUMED_GAIN_FRAC;
-  return (account?.balance ?? 0) * frac;
+  return { collectibleGain: 0, capGainsGain: Math.max(0, (account?.balance ?? 0) * frac) };
 }
 
 /**
@@ -229,9 +256,15 @@ export function computeAfterTaxValue(account, state, date, {
     }
 
     case TAX_CLASS.TAXABLE_BASIS: {
-      const gain = Math.max(0, _unrealizedGain(account, assumedGainFraction));
-      const r = rateProvider.capGainsLiquidationRate(account, gain, state, date);
-      return balance - clampRate(r) * gain;
+      // Split the embedded gain: a GOLD sleeve's gain carries the 28% collectibles CGT
+      // (design 56 §7.3), the rest the ordinary cap-gains rate. A gold-less account has
+      // collectibleGain 0, so this is identical to the pre-56 single-rate discount.
+      const { collectibleGain, capGainsGain } = _unrealizedGainSplit(account, assumedGainFraction);
+      const rCg   = rateProvider.capGainsLiquidationRate(account, capGainsGain, state, date);
+      const rColl = (rateProvider.collectibleLiquidationRate
+        ? rateProvider.collectibleLiquidationRate(account, collectibleGain, state, date)
+        : DEFAULT_COLLECTIBLE_RATE);
+      return balance - clampRate(rCg) * capGainsGain - clampRate(rColl) * collectibleGain;
     }
 
     default:

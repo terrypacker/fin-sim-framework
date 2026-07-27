@@ -536,6 +536,8 @@ export class ScenarioTabView {
         valueInput = _buildExpenseBandListEditor(param);
       } else if (param.type === 'RothScheduleList') {
         valueInput = _buildRothScheduleListEditor(param);
+      } else if (param.type === 'PrimeScheduleList') {
+        valueInput = _buildPrimeScheduleListEditor(param);
       } else if (param.type === 'EarlyWithdrawalScheduleList') {
         valueInput = _buildEarlyWithdrawalScheduleListEditor(param);
       } else if (param.type === 'HealthcareEventList') {
@@ -1078,6 +1080,108 @@ function _buildRothScheduleListEditor(param) {
       param.value.push({
         year:         (last?.year ?? new Date().getUTCFullYear()) + 1,
         incomeTarget: 0,
+      });
+      param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── PrimeScheduleList editor (per-year central-bank Prime path, design 56) ───
+
+/**
+ * Build a self-contained DOM editor for a PrimeScheduleList parameter
+ * (`primeSchedule`, design 56 §5 Phase 2b). Each entry is `{ year, PRIME_US, PRIME_AU }`
+ * — the ABSOLUTE central-bank policy rates taking effect that year and holding until the
+ * next row (a step path). Rendered as a three-column row (Year, PRIME_US, PRIME_AU) plus a
+ * remove button, with an "Add Year" button; mirrors the RothScheduleList editor (entries
+ * kept sorted by `year`) so it is not a raw text input showing "[object Object],…".
+ *
+ * An empty rate cell is stored as `null` — the toolset compiler reads `!= null`, so a
+ * blank means "leave that country's Prime at its seed for this step" rather than 0% (ZIRP).
+ * The incoming value is cloned up front so in-place edits never mutate a shared schema
+ * default; a non-array value is coerced to an empty list.
+ */
+function _buildPrimeScheduleListEditor(param) {
+  param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({ ...e }));
+
+  const container = document.createElement('div');
+  container.className = 'age-band-list-editor';   // reuse the shared band-editor styles
+
+  const COLUMNS = [
+    { field: 'year',     label: 'Year',     step: '1',      min: '1900' },
+    { field: 'PRIME_US', label: 'PRIME_US', step: '0.0025', min: '0' },
+    { field: 'PRIME_AU', label: 'PRIME_AU', step: '0.0025', min: '0' },
+  ];
+  const GRID = '1fr 1fr 1fr 26px';   // three fields + remove
+
+  const render = () => {
+    container.innerHTML = '';
+    const entries = param.value;
+
+    const header = document.createElement('div');
+    header.className = 'age-band-row age-band-header';
+    header.style.gridTemplateColumns = GRID;
+    COLUMNS.forEach(({ label }) => {
+      const h = document.createElement('span');
+      h.className = 'age-band-col-label';
+      h.textContent = label;
+      header.appendChild(h);
+    });
+    header.appendChild(document.createElement('span')); // spacer over remove button
+    container.appendChild(header);
+
+    entries.forEach((entry, idx) => {
+      const row = document.createElement('div');
+      row.className = 'age-band-row';
+      row.style.gridTemplateColumns = GRID;
+
+      COLUMNS.forEach(({ field, step, min }) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = step;
+        input.min = min;
+        input.className = 'age-band-input';
+        input.value = entry[field] ?? '';
+        input.addEventListener('change', () => {
+          const raw = input.value;
+          // Year coerces to a number; a blank rate cell stays null (no move that country).
+          entry[field] = raw.trim() === ''
+            ? (field === 'year' ? 0 : null)
+            : parseFloat(raw);
+          if (field === 'year') {
+            param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+            render();
+          }
+        });
+        row.appendChild(input);
+      });
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn age-band-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.title = 'Remove year';
+      rmBtn.addEventListener('click', () => { entries.splice(idx, 1); render(); });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm age-band-add-btn';
+    addBtn.textContent = '+ Add Year';
+    addBtn.addEventListener('click', () => {
+      const last = param.value[param.value.length - 1];
+      param.value.push({
+        year:     (last?.year ?? new Date().getUTCFullYear()) + 1,
+        PRIME_US: 0.045,
+        PRIME_AU: 0.0435,
       });
       param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
       render();

@@ -45,10 +45,22 @@ export const RATE_KEYS = Object.freeze({
   SAVINGS_US:      'SAVINGS_US',
   SAVINGS_AU:      'SAVINGS_AU',
 
+  // Central-bank policy ("Prime") rates (design 56). Per-country, independent.
+  // Cash accounts and variable loans derive their effective rate as
+  // `Prime(country) + account.primeSpread`. These live in effectiveInterestRates.
+  PRIME_US:        'PRIME_US',        // Fed policy rate
+  PRIME_AU:        'PRIME_AU',        // RBA policy rate
+
   // Real estate / collectibles
   REAL_ESTATE_US:  'REAL_ESTATE_US',
   REAL_ESTATE_AU:  'REAL_ESTATE_AU',
   COLLECTIBLE:     'COLLECTIBLE',
+
+  // Gold (design 56 §7) — a commodity return series on its own key, decoupled
+  // from equity forward returns and central-bank Prime. Lives in
+  // effectiveGrowthRates (seeded from the global `goldGrowthRate`), regime-
+  // adjustable like equity but never fanned out from an equity-class shock.
+  GOLD:            'GOLD',
 });
 
 /**
@@ -127,4 +139,37 @@ export const MEMBER_RATE_KEY_BY_ROLE = Object.freeze({
 export const INTEREST_RATE_KEYS = Object.freeze(new Set([
   RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU,
   RATE_KEYS.SAVINGS_US,      RATE_KEYS.SAVINGS_AU,
+  RATE_KEYS.PRIME_US,        RATE_KEYS.PRIME_AU,
 ]));
+
+/**
+ * Cash member rate keys that are Prime-relative (design 56 §4/§5) → their country's
+ * Prime key. A cash account whose member key is here and which carries a `primeSpread`
+ * derives its effective rate as `Prime + primeSpread`; keys absent here (FIXED_INCOME_*,
+ * bonds) are never Prime-linked (Decision 3 excludes bonds). Offset accounts have no
+ * member rate key at all (Decision 7 — they earn nothing), so they never reach this map.
+ */
+export const CASH_PRIME_KEY_BY_RATE_KEY = Object.freeze({
+  [RATE_KEYS.SAVINGS_US]: RATE_KEYS.PRIME_US,
+  [RATE_KEYS.SAVINGS_AU]: RATE_KEYS.PRIME_AU,
+});
+
+/**
+ * Country → its cash (savings) rate key. Used to seed the cash-sleeve rate of a
+ * non-cash account carrying a `primeSpread` (design 56 §6): a `CASH` holding in a
+ * `BROKERAGE` resolves to `SAVINGS_{country}` and reads `SAVINGS_{country}::<stateKey>`.
+ */
+export const SAVINGS_KEY_BY_COUNTRY = Object.freeze({
+  US: RATE_KEYS.SAVINGS_US,
+  AU: RATE_KEYS.SAVINGS_AU,
+});
+
+/**
+ * Country → its central-bank Prime key. Loans read Prime directly from
+ * `state.effectiveInterestRates[PRIME_{country}]` (they are outside the earnings
+ * substrate — design 56 §5 / Phase 3), deriving `Prime(country,t) + loan.primeSpread`.
+ */
+export const PRIME_KEY_BY_COUNTRY = Object.freeze({
+  US: RATE_KEYS.PRIME_US,
+  AU: RATE_KEYS.PRIME_AU,
+});

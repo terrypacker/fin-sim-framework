@@ -11,7 +11,7 @@
 import { PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
-import { findLoanForProperty, effectivePrincipal } from './loan-classes.js';
+import { findLoanForProperty, effectivePrincipal, resolveLoanRate } from './loan-classes.js';
 import { resolveCashKey } from './cash-routing.js';
 
 /** Resolve the US / AU cash pools (savings first, checking fallback). */
@@ -64,7 +64,12 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
   const netCash       = effectiveRent - cashOpex;
 
   const loanPrincipal      = loan ? effectivePrincipal(state, loan.stateKey, loan) : 0;
-  const deductibleInterest = Math.max(0, loanPrincipal * (loan?.interestRate ?? 0) / 12);
+  // The deductible-interest rate is the loan's EFFECTIVE rate (design 56 Phase 3): a
+  // Prime-linked mortgage's deduction tracks `Prime + spread` in lockstep with the
+  // payment accrual (LoanPaymentHandler), so the two never diverge; a fixed loan uses
+  // its absolute rate. `resolveLoanRate` falls back to `loan.interestRate` when state /
+  // Prime is absent, so a null-loan or no-Prime path is unchanged.
+  const deductibleInterest = Math.max(0, loanPrincipal * (loan ? resolveLoanRate(state, loan) : 0) / 12);
 
   const buildingBasis = Math.max(0, (propState.costBasis ?? 0) * (1 - landRatio));
   const annualDep     = override != null

@@ -231,6 +231,12 @@ export const US_RETIREMENT = {
         description: 'Annual growth rate for US brokerage stock accounts',
       },
       {
+        key: 'goldGrowthRate', label: 'Gold Growth Rate',
+        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        defaultValue: 0.05,
+        description: 'Annual commodity growth rate for GOLD holdings (design 56 §7); decoupled from equity returns and central-bank Prime, taxed at the 28% collectibles rate on disposal.',
+      },
+      {
         key: 'brokerageDividendRate', label: 'Brokerage Dividend Rate',
         type: 'Number', group: 'US Retirement', mc: true, opt: true,
         defaultValue: 0.02,

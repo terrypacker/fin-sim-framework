@@ -100,6 +100,9 @@ export class Account extends Asset {
    * @param {number|null}   [opts.interestRate=null]     - Per-account annual interest rate for cash/fixed-income earnings
    *                                                       (design 55 §8); null = global. NOTE: LoanAccount reuses
    *                                                       `interestRate` for its *loan* rate (a different meaning).
+   * @param {number|null}   [opts.primeSpread=null]      - Prime-relative rate spread (design 56); null = not
+   *                                                       Prime-linked (absolute `interestRate` applies). When set,
+   *                                                       the effective rate is `Prime(country) + primeSpread`.
    * @param {boolean}       [opts.isTransactionAccount=false] - Marks this account as the withdraw-from ("transaction")
    *                                                       account for its country of residence (design 55 §7). Exactly
    *                                                       one per country should carry it; MonthlyExpensesHandler /
@@ -126,6 +129,11 @@ export class Account extends Asset {
     this.growthRate     = opts.growthRate     ?? null;
     this.dividendRate   = opts.dividendRate   ?? null;
     this.interestRate   = opts.interestRate   ?? null;
+    // Prime-relative cash/loan rate (design 56). When set, the account's effective
+    // rate is `Prime(country) + primeSpread` (seedPerAccountRates for cash; the loan
+    // payment handler for loans, Phase 3), overriding the absolute `interestRate`.
+    // null → not Prime-linked → the absolute `interestRate` path applies (back-compat).
+    this.primeSpread    = opts.primeSpread    ?? null;
     // Transaction-account flag (design 55 §7). Default false → the debit/replenish
     // target resolver falls back to the SAVINGS role, so legacy scenarios are
     // unchanged. Serialized only when true (see ScenarioSerializer._serializeAccount).

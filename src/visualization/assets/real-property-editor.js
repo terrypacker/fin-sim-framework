@@ -39,7 +39,7 @@ export class RealPropertyEditor extends BaseComponent {
    * }}
    */
   constructor({ parent, container, node, people = [], accounts = [], onSave, onDelete,
-                links = null, onParamChange = null, onOpenParam = null }) {
+                links = null, onParamChange = null, onOpenParam = null, primeRates = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -51,6 +51,36 @@ export class RealPropertyEditor extends BaseComponent {
     this.onParamChange = onParamChange ?? null;
     this.onOpenParam   = onOpenParam   ?? null;
     this._linkedFields = new Set();
+    // Per-country Prime rates (design 56) — used to render the mortgage rate as an
+    // ABSOLUTE the bank quotes and to convert it back to a stored `mortgagePrimeSpread`.
+    this._primeRates   = primeRates;  // { US: number, AU: number } | null
+  }
+
+  /** Format a decimal rate as a percent string, e.g. 0.06 → "6.00%". */
+  _fmtPct(x) { return `${(x * 100).toFixed(2)}%`; }
+
+  /**
+   * The absolute mortgage rate a property currently implies (design 56): Prime(country) +
+   * mortgagePrimeSpread when Prime-linked, else the fixed absolute mortgageInterestRate.
+   */
+  _mortgageRateAbsolute(node, country) {
+    const prime = this._primeRates?.[country];
+    if (node?.mortgagePrimeSpread != null && prime != null) return prime + node.mortgagePrimeSpread;
+    return node?.mortgageInterestRate ?? 0;
+  }
+
+  /** Refresh the "= Prime (x%) + spread" hint under the mortgage-rate input. */
+  _updateMortgageRateHint(el) {
+    const hint = el.querySelector('[data-id="mortgageRateHint"]');
+    if (!hint) return;
+    const country = el.querySelector('[data-id="country"]').value;
+    const prime   = this._primeRates?.[country];
+    const raw     = el.querySelector('[data-id="mortgageInterestRate"]').value;
+    if (raw === '' || raw == null)   { hint.textContent = ''; return; }
+    if (prime == null) { hint.textContent = 'Prime not configured — stored as an absolute rate'; return; }
+    const spread = Number(raw) - prime;
+    const sign   = spread >= 0 ? '+' : '−';
+    hint.textContent = `= Prime (${this._fmtPct(prime)}) ${sign} ${this._fmtPct(Math.abs(spread))}`;
   }
 
   render() {
@@ -84,7 +114,12 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="monthlyRent"]').value          = this._node?.monthlyRent          ?? 0;
     el.querySelector('[data-id="occupancyRate"]').value        = this._node?.occupancyRate         ?? 0.95;
     el.querySelector('[data-id="rentalExpenseRatio"]').value   = this._node?.rentalExpenseRatio    ?? 0.25;
-    el.querySelector('[data-id="mortgageInterestRate"]').value = this._node?.mortgageInterestRate  ?? 0;
+    // Mortgage rate: show the ABSOLUTE the bank quotes (Prime + spread when linked, design 56).
+    el.querySelector('[data-id="mortgageInterestRate"]').value =
+      this._mortgageRateAbsolute(this._node, this._node?.country ?? 'US');
+    this._updateMortgageRateHint(el);
+    this.listen(el.querySelector('[data-id="mortgageInterestRate"]'), 'input', () => this._updateMortgageRateHint(el));
+    this.listen(el.querySelector('[data-id="country"]'), 'change', () => this._updateMortgageRateHint(el));
     el.querySelector('[data-id="landValueRatio"]').value       = this._node?.landValueRatio         ?? 0.2;
     el.querySelector('[data-id="annualDepreciationOverride"]').value =
       this._node?.annualDepreciationOverride ?? '';
@@ -157,6 +192,23 @@ export class RealPropertyEditor extends BaseComponent {
           ? null
           : +el.querySelector('[data-id="annualDepreciationOverride"]').value,
     };
+    // Prime-relative mortgage rate (design 56 Phase 3): the input is the ABSOLUTE rate
+    // the bank quotes; store it as `mortgagePrimeSpread = absolute − Prime(country)` so a
+    // Prime move re-rates the loan (mortgagePrimeSpread wins over the absolute in
+    // resolveLoanRate, so the linked mortgage clears its absolute). Blank → unset. When no
+    // Prime is configured, fall back to the fixed absolute mortgageInterestRate (back-compat).
+    const mtgRaw = el.querySelector('[data-id="mortgageInterestRate"]').value;
+    const prime  = this._primeRates?.[data.country];
+    if (mtgRaw === '' || mtgRaw == null) {
+      data.mortgagePrimeSpread  = null;
+      data.mortgageInterestRate = 0;
+    } else if (prime != null) {
+      data.mortgagePrimeSpread  = Number(mtgRaw) - prime;
+      data.mortgageInterestRate = 0;
+    } else {
+      data.mortgagePrimeSpread  = null;
+      data.mortgageInterestRate = Number(mtgRaw);
+    }
     // Param-backed fields are owned by their scenario param (design/32).
     for (const f of this._linkedFields) delete data[f];
     return data;

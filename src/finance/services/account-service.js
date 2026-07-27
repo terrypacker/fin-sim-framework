@@ -925,13 +925,24 @@ export class AccountService extends AssetService {
         // lot's stepped-up cost base (per-lot costBaseByCountry, stamped at the move by
         // recordResidencyChange); no step-up ⇒ falls back to realizedBasis (auGain === gain).
         const realizedAuBasis = brokerageFifo.realizedBasisByCountry?.AU ?? realizedBasis;
-        const gain   = Math.max(0, withdraw - realizedBasis);
-        const auGain = Math.max(0, withdraw - realizedAuBasis);
+        // Collectible split (design 56 §7.2): GOLD lots consumed in this draw are taxed
+        // at the US 28% collectibles rate (COLLECTIBLE_SALE_TAX) — and AU CGT if resident
+        // — while the rest keeps ordinary brokerage CGT. Mirror the STOCK_WITHDRAWAL_APPLY
+        // reducer so the engine and event-driven disposal paths agree.
+        const collProceeds = brokerageFifo.collectibleProceeds ?? 0;
+        const collBasis    = brokerageFifo.collectibleBasis    ?? 0;
+        const collGain     = Math.max(0, collProceeds - collBasis);
+        const equityProceeds = +(withdraw - collProceeds).toFixed(2);
+        const gain   = Math.max(0, equityProceeds - (realizedBasis   - collBasis));
+        const auGain = Math.max(0, equityProceeds - (realizedAuBasis - collBasis));
         account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency,
-          proceeds: withdraw, costBasis: realizedBasis, description: account.name || key,
+          proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
         });
+        if (collGain > 0) {
+          pendingTaxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collGain, residency });
+        }
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super
         // ≥60, IRA ≥60, 401k ≥59.5). Keep the contribution/earnings ledger in

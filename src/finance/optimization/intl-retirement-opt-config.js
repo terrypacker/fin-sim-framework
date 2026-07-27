@@ -105,6 +105,28 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 
+  // ── Central-bank Prime rates (design 56 Decision 6 / §3.1) ────────────────
+  // Prime is THE systemic rate sweep: one axis per central bank moves every
+  // Prime-linked cash account (and, in Phase 3, variable loan) coherently. The
+  // per-account/global savings interest-rate opt levers are retired in favour of
+  // these (primeSpread stays an idiosyncratic Opt residual, not a systemic sweep).
+  {
+    paramKey: 'usPrimeRate',
+    label:    'US Prime Rate (Fed policy)',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.0, max: 0.10, step: 0.005,
+    group:    'Rates',
+    enabled:  false,
+  },
+  {
+    paramKey: 'auPrimeRate',
+    label:    'AU Prime Rate (RBA policy)',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.0, max: 0.10, step: 0.005,
+    group:    'Rates',
+    enabled:  false,
+  },
+
   // ── Migration timing ──────────────────────────────────────────────────────
   {
     paramKey: 'moveYear',

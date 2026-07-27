@@ -89,6 +89,7 @@ import { RegimeAwareSpendingReducer }    from '../finance/spending/strategies/re
 import { EconomicShockHandler }          from '../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }   from '../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { RegimeApplyReducer }            from '../finance/economic-regimes/regime-apply-reducer.js';
+import { PrimeRelinkReducer }            from '../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }              from '../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
@@ -296,7 +297,7 @@ const _ALL_CLASSES = [
   LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
-  RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
+  RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
   BondPriceAdjustReducer,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,
@@ -667,6 +668,9 @@ export class ScenarioSerializer {
     if (account.growthRate   != null) d.growthRate   = account.growthRate;
     if (account.dividendRate != null) d.dividendRate = account.dividendRate;
     if (account.type !== 'loan' && account.interestRate != null) d.interestRate = account.interestRate;
+    // Prime-relative spread (design 56) — emitted only when set so non-Prime-linked
+    // accounts (null) round-trip byte-for-byte.
+    if (account.primeSpread != null) d.primeSpread = account.primeSpread;
     // Transaction-account flag (design 55 §7) — emitted only when true so legacy
     // accounts (default false) round-trip byte-for-byte.
     if (account.isTransactionAccount) d.isTransactionAccount = true;
@@ -714,6 +718,7 @@ export class ScenarioSerializer {
       occupancyRate:              p.occupancyRate              ?? 0.95,
       rentalExpenseRatio:         p.rentalExpenseRatio         ?? 0.25,
       mortgageInterestRate:       p.mortgageInterestRate       ?? 0,
+      mortgagePrimeSpread:        p.mortgagePrimeSpread        ?? null,
       landValueRatio:             p.landValueRatio             ?? 0.2,
       annualDepreciationOverride: p.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
@@ -747,6 +752,7 @@ export class ScenarioSerializer {
       occupancyRate:              d.occupancyRate              ?? 0.95,
       rentalExpenseRatio:         d.rentalExpenseRatio         ?? 0.25,
       mortgageInterestRate:       d.mortgageInterestRate       ?? 0,
+      mortgagePrimeSpread:        d.mortgagePrimeSpread        ?? null,
       landValueRatio:             d.landValueRatio             ?? 0.2,
       annualDepreciationOverride: d.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
@@ -968,6 +974,8 @@ export class ScenarioSerializer {
     if (d.growthRate   !== undefined) opts.growthRate   = d.growthRate;
     if (d.dividendRate !== undefined) opts.dividendRate = d.dividendRate;
     if (d.__type !== 'LoanAccount' && d.interestRate !== undefined) opts.interestRate = d.interestRate;
+    // Prime-relative spread (design 56) — absent on legacy saves → null (not linked).
+    if (d.primeSpread !== undefined) opts.primeSpread = d.primeSpread;
     // Transaction-account flag (design 55 §7) — absent on legacy saves → false.
     if (d.isTransactionAccount !== undefined) opts.isTransactionAccount = d.isTransactionAccount;
     let account;
