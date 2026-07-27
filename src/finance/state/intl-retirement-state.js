@@ -157,8 +157,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.foreignPassiveIncomeYTD = 0;
     this.ftcCurrentGeneral = 0;
     this.ftcCurrentPassive = 0;
+    // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).
+    this.ftcCurrentResourced = 0;
     this.ftcPoolGeneral = {};
     this.ftcPoolPassive = {};
+    this.ftcPoolResourced = {};
     // US-source income booked while AU-resident (the FITO "without" removal set).
     this.usSourceOrdinaryUsdYTD = 0;   // USD, funds the §4.6 with/without US pass
     this.usSourceCapGainsUsdYTD = 0;

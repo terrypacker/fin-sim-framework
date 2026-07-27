@@ -176,10 +176,30 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
-    if (stateKey && state[stateKey] != null) {
-      stateUpdate[stateKey] = { ...state[stateKey], value: 0 };
+    const eq = stateKey ? state[stateKey] : null;
+    if (stateKey && eq != null) {
+      stateUpdate[stateKey] = { ...eq, value: 0 };
     }
-    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, residency }]);
+
+    // AU gain from the s855-45 stepped-up basis (design 72 §3): a vested foreign
+    // stake is deemed re-acquired at market value on commencing AU residency, so a
+    // post-move sale is AU-assessable only on post-arrival appreciation. The US gain
+    // above is unchanged — after the move the two countries hold different bases.
+    // Falls back to the raw gain when no AU basis was stamped, so pre-move sales and
+    // non-moving scenarios are byte-identical to pre-72 behavior.
+    const auBasis = eq?.costBaseByCountry?.AU ?? costBasis;
+    const auGain  = Math.max(0, salePrice - auBasis);
+    // AU CGT-reform indexation (design 57): index the stepped-up basis from the
+    // deemed-acquisition price level to the sale-year level. Without a stamped level
+    // there is nothing to index from, so the real gain is the nominal AU gain.
+    let auIndexedGain = auGain;
+    if (eq?.acquisitionPriceLevel != null) {
+      const nowLevel     = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
+      const indexedBasis = auBasis * (nowLevel / eq.acquisitionPriceLevel);
+      auIndexedGain = Math.max(0, salePrice - indexedBasis);
+    }
+
+    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency }]);
   }
 }
 

@@ -101,13 +101,45 @@ export class CompanyEquityService extends AssetService {
   }
 
   /**
-   * Snapshots the current value on first residency change (one-time capture).
-   * No-op if already set.
+   * Snapshots the current value on first residency change (one-time capture), and
+   * — when moving to a country that steps up the cost base on becoming resident
+   * (AU ITAA97 s855-45) — stamps the destination-country cost base, indexation
+   * level and deemed-acquisition date (design 72 §3).
+   *
+   * Shares in a foreign private company are **not** taxable Australian property, so
+   * a resident is taken to have acquired them at market value on the move date; only
+   * post-arrival appreciation is AU-assessable. The US basis is untouched, which is
+   * the whole point — after the move the two countries hold different bases for the
+   * same asset. Mirrors CollectibleService.recordResidencyChange.
+   *
+   * All one-time captures: no-op once set, so a re-entry never re-steps a base.
+   *
    * @param {import('../assets/company-equity.js').CompanyEquity} equity
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number, asOfMs?: number }} [opts]
+   *   The move date (asOfMs) is the CGT deemed-acquisition date — the ≥12-month
+   *   discount / indexation clock restarts here (design 62 §4).
    */
-  recordResidencyChange(equity) {
-    if (equity.balanceAtResidencyChange === null) {
+  recordResidencyChange(equity, { country, stepUp, priceLevel, asOfMs } = {}) {
+    if (equity.balanceAtResidencyChange == null) {
       equity.balanceAtResidencyChange = equity.value;
+    }
+    if (!stepUp || !country) return;
+
+    const existing = equity.costBaseByCountry ?? {};
+    if (existing[country] != null) return;
+
+    // New map objects rather than in-place writes, so a costBaseByCountry already
+    // recorded in the journal (and frozen in dev/test) is never mutated after the
+    // fact — the journal-immutability invariant.
+    equity.costBaseByCountry = { ...existing, [country]: equity.value ?? 0 };
+    if (priceLevel != null && equity.acquisitionPriceLevel == null) {
+      equity.acquisitionPriceLevel = priceLevel;
+    }
+    if (asOfMs != null) {
+      const existingDates = equity.acquisitionDateByCountry ?? {};
+      if (existingDates[country] == null) {
+        equity.acquisitionDateByCountry = { ...existingDates, [country]: asOfMs };
+      }
     }
   }
 

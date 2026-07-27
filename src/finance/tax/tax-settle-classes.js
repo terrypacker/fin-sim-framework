@@ -33,7 +33,7 @@ const YTD_FIELDS = {
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
-       'ftcCurrentGeneral', 'ftcCurrentPassive',
+       'ftcCurrentGeneral', 'ftcCurrentPassive', 'ftcCurrentResourced',
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
        'neInheritanceTaxYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
@@ -221,8 +221,9 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     const patches = {};
     const ftc = action.taxDetail?.ftc;
     if (ftc) {
-      patches.ftcPoolGeneral = ftc.nextPoolGeneral ?? {};
-      patches.ftcPoolPassive = ftc.nextPoolPassive ?? {};
+      patches.ftcPoolGeneral   = ftc.nextPoolGeneral   ?? {};
+      patches.ftcPoolPassive   = ftc.nextPoolPassive   ?? {};
+      patches.ftcPoolResourced = ftc.nextPoolResourced ?? {};
     }
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
@@ -273,7 +274,7 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    */
   _extraStatePatches(state, action) {
     const superTax      = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
-    const usSourceAuTax = _auTaxOnUsSourceIncome(action);
+    const usSourceAuTax = _auTaxOnUsSourceIncome(action, state);
     const auCreditable  = Math.max(0, (action.tax ?? 0) - superTax - usSourceAuTax);
     const gen   = state.foreignGeneralIncomeYTD ?? 0;
     const pass  = state.foreignPassiveIncomeYTD ?? 0;
@@ -282,6 +283,18 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     return {
       ftcCurrentGeneral: toUSD(auCreditable * generalShare,       'AUD', state),
       ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
+      // Design 72 §1 — treaty re-sourcing. The AU tax that FITO did NOT relieve
+      // (usSourceAuTax) is AU tax on US-SOURCE income. Excluded from the general/
+      // passive baskets above because §904 will not credit foreign tax against
+      // US-source income — correct as far as it goes, but previously it was simply
+      // DROPPED, so the US and AU taxes on the same gain became additive.
+      //
+      // The US–AU treaty (Art. 27) re-sources such income to foreign source "as
+      // necessary to permit relief from double taxation under Art. 22", for §904
+      // limitation purposes only — Form 1116's "certain income re-sourced by
+      // treaty" category. So it belongs in its own basket with its own limitation,
+      // not in the bin. Result: max(US, AU) rather than US + AU.
+      ftcCurrentResourced: toUSD(usSourceAuTax, 'AUD', state),
     };
   }
 }
@@ -298,14 +311,39 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
  * @param {object} action  the AU_TAX_SETTLE_APPLY action
  * @returns {number} AUD
  */
-function _auTaxOnUsSourceIncome(action) {
+function _auTaxOnUsSourceIncome(action, state) {
   const details = action.personTaxDetails?.length > 0
     ? action.personTaxDetails.map(p => p.taxDetail)
     : (action.taxDetail ? [action.taxDetail] : []);
-  return details.reduce(
+  if (details.length === 0) return 0;
+
+  const explicit = details.reduce(
     (sum, d) => sum + Math.max(0, (d?.fitoLimit ?? 0) - (d?.fito ?? 0)),
     0,
   );
+
+  // De-minimis fallback (design 72 §1). Under the A$1,000 shortcut the FITO limit
+  // is deliberately not computed, so `fitoLimit` is null and the loop above
+  // contributes 0 — which silently declares the *entire* AU liability to be tax on
+  // AU-source income. In a year with a large US-source realisation that is wildly
+  // wrong: six figures of AU tax on US-source income leaks into the general/passive
+  // baskets and funds a decade of over-relief.
+  //
+  // When no detail computed a limit, apportion the gross AU tax by the US-source
+  // share of assessable income instead. Approximate — the CGT discount means the
+  // gross buckets are not exactly the taxed amounts — but bounded and far closer
+  // than zero. Only applies when there is US-source income to apportion to.
+  const allNullLimit = details.every(d => d?.fitoLimit == null);
+  if (!allNullLimit) return explicit;
+
+  const usSourceAud = (state?.usSourceOrdinaryAudYTD ?? 0) + (state?.usSourceCapGainsAudYTD ?? 0);
+  const totalAud    = (state?.auOrdinaryIncomeYTD    ?? 0) + (state?.auCapitalGainsYTD    ?? 0);
+  if (!(usSourceAud > 0) || !(totalAud > 0)) return explicit;
+
+  const fitoTotal  = details.reduce((s, d) => s + (d?.fito ?? 0), 0);
+  const share      = Math.min(1, usSourceAud / totalAud);
+  const grossAuTax = (action.tax ?? 0) + fitoTotal;
+  return Math.max(0, grossAuTax * share - fitoTotal);
 }
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────

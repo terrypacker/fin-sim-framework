@@ -116,5 +116,11 @@ function _companyEquityToStatePlain(eq) {
     ownerId:              eq.ownerId           ?? null,
     country:              eq.country           ?? 'US',
     appreciationSchedule: eq.appreciationSchedule ?? null,
+    // Per-country cost base + indexation stamps (design 72 §3). Null until the
+    // residency step-up writes them; carried on state so the sale reducer can read
+    // the AU basis without reaching back into the service.
+    costBaseByCountry:        eq.costBaseByCountry        ?? null,
+    acquisitionPriceLevel:    eq.acquisitionPriceLevel    ?? null,
+    acquisitionDateByCountry: eq.acquisitionDateByCountry ?? null,
   };
 }

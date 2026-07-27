@@ -45,7 +45,7 @@ export const US_INCOME = {
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
       { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), residency: ValueType.text() } },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), residency: ValueType.text() } },
     ],
   },
 

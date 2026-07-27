@@ -90,8 +90,11 @@ export const US_TAX = {
       usSourceRealCapGainsAudYTD: 0,
       ftcCurrentGeneral:       0,
       ftcCurrentPassive:       0,
+      // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).
+      ftcCurrentResourced:     0,
       ftcPoolGeneral:          {},
       ftcPoolPassive:          {},
+      ftcPoolResourced:        {},
       usTaxPaidOnUsSourceAud:  0,
     };
   },
