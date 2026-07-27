@@ -1,7 +1,7 @@
 # 72 — Company equity sale: cross-border fidelity fixes
 
-**Status: Gaps 1 & 3 IMPLEMENTED** (+ the de-minimis sub-fix in §1). Gaps 2 & 4 outstanding.
-Suite green: 3776 unit + 897 viz. Surfaced by scenario testing of `CompanyEquity` sale timing
+**Status: Gaps 1, 2 & 3 IMPLEMENTED** (+ the de-minimis sub-fix in §1). Gap 4 outstanding.
+Suite green: 3779 unit + 897 viz. Surfaced by scenario testing of `CompanyEquity` sale timing
 across a US→AU residency change.
 
 **Result: the ~4.4× residency cliff was ~70% modelling artifact.** After both fixes the
@@ -104,7 +104,7 @@ remains. The two fixes are multiplicative, which is why they had to be measured 
 
 ---
 
-## 2. Gap 2 — marginal proceeds compound at ~2.9% instead of ~8%  ⚠️ LATENT
+## 2. Gap 2 — marginal proceeds compound at ~2.9% instead of ~8%  ✅ FIXED
 
 ### Symptom
 
@@ -124,6 +124,9 @@ reappearing at the very end of the run.
 - **Not ongoing tax drag.** The cumulative-tax delta is flat and slightly *declining* after the
   sale year.
 - **Not a different account.** The entire delta stays in the destination account in both cases.
+  *(This one was the misread that cost the most time: the delta was tracked in the account the
+  proceeds landed in, and that account was assumed to be the configured destination. It was
+  not — see the Cause below.)*
 
 ### Lead
 
@@ -135,23 +138,59 @@ substantial balance. A marginal dollar earns a cash-like return precisely when p
 account destined for exhaustion.
 
 Suspect drawdown sequencing, or an interaction between the cross-border sweep and
-`replenishSavings`. **Still unexplained.**
+`replenishSavings`. **Still unexplained.** *(It was neither: the account that drained is the
+transaction account, and the proceeds were in it because routing had failed.)*
 
-### Post-fix status: latent, not fixed
+### Cause — the sale destination was never honoured
 
-After Gaps 1 & 3 the symptom no longer fires on the reference comparison — the marginal tranche
-now compounds at **8.9%/yr** (was 2.9%). That is *consistent with* the diagnosis rather than a
-refutation of it: with ~2.7× more proceeds retained, the funding account no longer drains to
-zero, so the triggering condition is simply absent.
+**The proceeds were not in the account the modeller chose.** They were credited to the US
+cash pool, where they earned the savings rate (3% in the reference scenario — the observed
+"2.9%") until spending consumed them.
 
-**The root cause is untouched.** Any scenario in which the cross-border funding account still
-exhausts before simEnd should be expected to reproduce it. Do not treat this as closed.
+`saleDestinationAccount` is written by the asset editors as `a.stateKey ?? a.id`. Any account
+that had no `stateKey` when the destination was picked — **every account created in the UI**,
+whose stateKey is stamped later — persists as a bare account **id** (`ac45`). The sale
+handlers resolved it with a bare `state[saleDestinationAccount] != null` test, and runtime
+account state carries `stateKey` but *not* `id`, so the id form always missed and fell through
+to `defaultUsCashKey`. It never threw and never warned: the sale "worked", the money simply
+landed somewhere else.
+
+That also explains the drain-to-zero correlation the lead noted. The fallback *is* the
+transaction account — the account spending is drawn from first and the cross-border sweep
+empties. The exhaustion was a consequence of the mis-routing, not a separate mechanism.
+
+Not company-equity-specific: the same helper is duplicated in the US real-property, AU
+real-property and collectible sale paths, all with the same defect.
+
+### Fix
+
+`ScenarioLoader._normalizeSaleDestinations()` rewrites id → `stateKey` at load, against the
+just-deserialized `accountService`. Both carriers are normalized, because either can be the
+live one: the domain records (`companyEquities` / `realProperties` / `collectibles`, on the
+service objects the toolsets read *and* the cfg lists that get re-serialized) feed the
+toolset-compile path, and persisted `events[].data` feeds the serialized-graph path. The four
+copied `resolveDestinationKey` helpers now delegate to a shared
+`resolveSaleDestinationKey(state, dest, defaultKey)` in `cash-routing.js`, so the
+cash-pool fallback survives for a genuinely unresolvable destination — one place, one
+behaviour.
+
+### Measured impact
+
+On the reference scenario (US→AU move 2031, sale 2032, ±$300k stake), the marginal tranche's
+implied compound rate rises **3.6% → 4.2%/yr** and ending net worth rises ~3.5% in both arms.
+The residual 4.2% is now ordinary economics, not an artifact: the destination brokerage grows
+at 5% with a 2% dividend that is not reinvested, and ~$107k of the $476k proceeds goes to tax
+in the sale year. The annual delta now sits in the destination account and compounds smoothly
+at ~5%/yr instead of parking flat in cash for the first three years.
+
+Golden lock-ins did not move — the default scenario's destination is stored as a stateKey.
 
 ### Reproduction
 
-Pair two runs differing only by one company-equity tranche, and track the per-account delta
-annually. Both the flat-delta signature and the drain-to-zero correlation are visible without
-instrumenting the engine.
+Pair two runs differing only by one company-equity tranche and track the per-account delta
+annually (`npm run diff -- a.json b.json --track`). Pre-fix, the delta appears in the US
+*checking* account rather than the chosen brokerage; that is the whole tell, and it is visible
+by 12 months after the sale without instrumenting the engine.
 
 ---
 
@@ -361,16 +400,19 @@ than the one-tranche case, inverting the conclusion. The same trap applies to
 |---|---|---|
 | 1 | **Gap 3** — `costBaseByCountry` + `recordResidencyChange` for company equity | ✅ **DONE** |
 | 2 | **Gap 1** — treaty re-sourcing basket (+ FITO de-minimis apportionment) | ✅ **DONE** |
-| 3 | **Gap 2** — explain the 2.9% compounding anomaly | ⚠️ **LATENT** — symptom no longer fires on the reference comparison, root cause unaddressed |
+| 3 | **Gap 2** — explain the 2.9% compounding anomaly | ✅ **DONE** — `saleDestinationAccount` id form never resolved; proceeds fell back to the cash pool |
 | 4 | **Gap 4** — `vestingSchedule` / `redemptionRoute` / `taxTreatment` | Outstanding; likely its own design doc |
 
 Gaps 1 and 3 were measured **together**, deliberately: both reduce the post-move penalty and
 each alone understates the correction.
 
-### Files touched (Gaps 1 & 3)
+### Files touched (Gaps 1, 2 & 3)
 
 | Gap | File |
 |---|---|
+| 2 | `finance/account-rules/cash-routing.js` — shared `resolveSaleDestinationKey` |
+| 2 | `finance/account-rules/us/us-income-classes.js`, `us-collectible-classes.js`, `us-real-property-classes.js`, `au/au-real-property-classes.js` — four copied resolvers now delegate |
+| 2 | `scenarios/scenario-loader.js` — `_normalizeSaleDestinations` (id → stateKey, records + persisted events) |
 | 3 | `finance/assets/company-equity.js` — `costBaseByCountry` / `acquisitionPriceLevel` / `acquisitionDateByCountry` |
 | 3 | `finance/services/company-equity-service.js` — `recordResidencyChange` step-up |
 | 3 | `finance/reducers/change-residency-apply-reducer.js` — step 1d, copy-on-write |
@@ -406,8 +448,10 @@ shortcut; `FTC-US-9` is the guard.
    existing 10-year mechanism keyed by year?
 2. Should re-sourcing be opt-in per scenario (a treaty-election flag), given that claiming it
    is an election in practice?
-3. Does Gap 2 affect non-equity inflows — is any large lump credited to an
-   exhausting cross-border funding account under-compounded? If so it is a much broader bug.
+3. ~~Does Gap 2 affect non-equity inflows?~~ **Yes** — answered by the fix. The same
+   unresolved-destination defect was present in the US real-property, AU real-property and
+   collectible sale paths, and is fixed in all four. A UI-created destination account was the
+   trigger in every case.
 4. For Gap 4, is a two-country `taxTreatment` sufficient, or does the deferred taxing point
    need to be a **schedule** (vesting tranches taxed at different points)?
 
