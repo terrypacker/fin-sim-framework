@@ -90,6 +90,30 @@ const keys = Object.keys(arms).sort((a, b) =>
   || a.localeCompare(b));
 const meta = arms[keys[0]];
 
+// ── Sampler-cadence provenance (design 82 §8.3) ──────────────────────────────
+//
+// `pathShape` (CAGR, worst-5yr, max drawdown, the decade split) is derived from the
+// RECORDED yearly series, and design 82 moved that series off design 78's event
+// cadence onto the year boundary. That changed no run outcome — failure rate,
+// outOfFundsDate, cumulativeDeficit and finalNetWorthUsd are unaffected exactly —
+// which is precisely why the hazard is silent: an arm from either side looks equally
+// well-formed, and mixing them in one report compares path shapes read at different
+// instants. An arm with no stamp predates the switch.
+//
+// This is the same class of trap as the directory glob picking up a dropped arm: the
+// report is built from whatever JSON is lying around, so provenance has to be checked
+// here rather than remembered.
+const cadenceOf = (k) => arms[k].samplerCadence ?? 'interval (unstamped — pre-design-82)';
+const cadences  = new Set(keys.map(cadenceOf));
+if (cadences.size > 1) {
+  console.warn(`\n⚠  MIXED SAMPLER CADENCES — pathShape figures are NOT comparable across these arms:`);
+  for (const k of keys) console.warn(`     ${k.padEnd(24)} ${cadenceOf(k)}`);
+  console.warn(`   Re-run every arm in the batch with the same flags before quoting a pathShape.\n`);
+} else if (!arms[keys[0]].samplerCadence) {
+  console.warn(`\n⚠  These arms predate design 82's year-boundary cadence; their pathShape was`);
+  console.warn(`   read at the old event cadence. Regenerate before comparing against a fresh run.\n`);
+}
+
 // Mix distribution (design 82 §8) — present only on arms run with `--mix`. Thresholds
 // are DATA, replaceable without re-running an arm; that is the whole reason the arm
 // carries the raw per-path matrix rather than pre-reduced bands.

@@ -1,6 +1,6 @@
 # 82 — Allocation over time: reporting the realized asset mix
 
-**Status** (2026-07-30, `wip/allocation-reporting`): **COMPLETE.**
+**Status** (2026-08-05, `wip/allocation-reporting`): **COMPLETE — all questions closed.**
 
 | phase | what | status |
 |---|---|---|
@@ -9,6 +9,12 @@
 | **2** | workbench plugin | **IMPLEMENTED** (2026-07-29) — never needed design 81 |
 | **3** | target-vs-realized overlay | **IMPLEMENTED** (2026-07-29) — the payoff |
 | **4** | Monte Carlo mix distribution | **IMPLEMENTED** (2026-07-30) |
+| **5** | close-out: FX convergence, boundary decision, reference-plan MC (§5.3, §9.1) | **DONE** (2026-08-05) |
+
+The 2026-08-05 close-out pass produced three things worth reading before the body: a **live FX
+defect** found by converging the last duplicated copies (§5.3), a **correction to §5.2's
+diagnosis** that dissolved the largest open question (§10 #9), and a **reference-plan Monte
+Carlo** that retired §1's motivating finding and replaced it (§9.1).
 
 Scope: answer "what is my asset allocation, and how does it change over the plan" — per
 account, per country, and in total — and make the answer trustworthy enough to act on.
@@ -19,8 +25,9 @@ look at it? A doc written first would have been guessing at the layout. What fol
 the prototype settled, so Phase 2 can start cold.
 
 Every open question is now answered, and the answers have moved into the sections they change
-(§4 sampling, §5.1 the two cleanups, §6 Phase 2, §8 Phase 4). **§10 is the decision record** —
-what was decided, and why, so a closed fork stays closed.
+(§4 sampling, §5.1 the two cleanups, §5.3 the FX convergence, §6 Phase 2, §8 Phase 4, §9.1 the
+reference-plan re-verification). **§10 is the decision record** — what was decided, and why, so
+a closed fork stays closed.
 
 ---
 
@@ -281,27 +288,100 @@ loop dropped it (`if (at > end) break` skipped a 31 December it could not reach)
 had never shown the terminal state at all.
 
 It is worth more than a footnote, because of *how much* it differs: equity in one account reads
-**\$8.60m at 2069-12-31 and \$11.29m at 2070-01-01**. One day, +31%. The cause is that the
-annual investment family hangs off `PERIOD_ADVANCE_US`, which is dated **1 January**, together
-with the appreciation events for property, company equity and collectibles. So:
+**\$8.60m at 2069-12-31 and \$11.29m at 2070-01-01**. One day, +31%.
 
-> **Every 31 December sample is read *before* the year's investment growth and appreciation are
-> credited.** The mix labelled "2069" reflects growth credited through 1 January 2069.
+> ⚠ **Corrected 2026-08-05. The original diagnosis of that jump was wrong**, and it mattered,
+> because the open question in §10 was posed on top of it. This section claimed "the annual
+> investment family hangs off `PERIOD_ADVANCE_US`, which is dated 1 January" and concluded that
+> every 31 December sample is read before the year's growth. Measured against the event
+> calendar, the investment family is `interval: 'year-end'` — it is dated **31 December** and is
+> fully inside the sample. See the correction below for what the +31% actually was.
 
-This is **pre-existing** — Phase 1's `stepTo(31 Dec)` loop had exactly the same property, which
-is why the numbers are byte-identical — but it is precisely the class of error §4 rejects the
-event-count cadence over, so it cannot be left implicit:
+**What the calendar really does.** The year boundary splits the annual cycle in two:
 
-- Charts are self-consistent (every point sits at the same place in the annual cycle) and the
-  year *labels* lag the growth they are named for.
-- The terminal sample is **not** comparable with the others: it covers a partial year and sits
-  on the far side of the cascade. The lab page now says so in Provenance rather than drawing it
-  silently; any Phase 2 panel must do the same.
-- Whether the boundary should instead sit *after* the 1 January cascade — "the start of year
-  Y+1, once the period advance has run" — is a real question and deliberately **not** settled
-  here, because it would move every published figure. Recorded in §10.
+| dated **31 December** (`interval: 'year-end'`) | dated **1 January** |
+|---|---|
+| the whole investment family — account earnings, dividends, coupons, RMDs | real-asset **appreciation**: property, company equity, collectibles (`interval: 'annually'`) |
+| the year's expenses and the tax settles | the `PERIOD_ADVANCE` cascade — **which is where the rebalance fires** |
+
+So a 31 December sample carries a **complete** year of investment growth, spending and tax. The
++31% equity jump across that one day is **not growth at all** — it is the 1 January
+**rebalance** selling bonds into equity. The aggregate confirms it: across 2069-12-31 →
+2070-01-01 gross assets rise only 3.3% (the appreciation), while `BOND` goes 12.1% → 0.8% and
+`EQUITY` 36.0% → 46.6%. Money moved between classes; almost none was created.
+
+**The residual bias, correctly scoped.** One real lag survives the correction, and it is
+narrower than the original claim: real assets appreciate on 1 January, so at 31 December year Y
+financial assets carry a full year of growth and real assets carry **none of year Y's**
+appreciation. Measured directly — with a 4% house, consecutive year-end samples step by exactly
+one appreciation cycle, and the first sample shows the un-appreciated opening value. Two things
+follow:
+
+- Every mix therefore **understates the real-asset share** by about one appreciation cycle.
+  Note the direction: that runs *against* §9's `REAL_ESTATE` finding rather than manufacturing
+  it.
+- Charts stay self-consistent (every point sits at the same place in the annual cycle), and the
+  bias is a level effect, not a trend one.
+
+The terminal sample is still **not** comparable with the others: it covers a partial year and
+sits on the far side of the cascade. The lab page says so in Provenance rather than drawing it
+silently; the Phase 2 panel does the same.
+
+`tests/unit/sampler-year-boundary.test.mjs` now pins both halves of the table, because every
+mix figure in this design means what it means only under that calendar — and a re-dating would
+change all of them silently.
 
 ---
+
+### 5.3 The four remaining FX copies, converged — and one of them was already wrong (2026-08-05)
+
+Phase 1b extracted `toBaseCurrency`/`currencyOf` but wired only `computeNetWorth` and
+`buildAllocationCube`, leaving four copies of the same six lines standing on purpose: each
+belonged to a golden-locked metric, and re-verifying them was not a report's job. §10 D4
+tracked them so the duplication would not be forgotten.
+
+They are now all converged: `derived-metrics/net-liquidity.js`, `derived-metrics/after-tax.js`,
+`spending/guardrail-portfolio-value.js`, and the MC runner's `computeHouseValueUsd`. No
+valuation site outside `to-base-currency.js` reads `effectiveExchangeRates` any more.
+
+**This was not a tidy-up. One of the five copies had already drifted, and it was wrong in
+production.** `computeGuardrailPortfolioValue` read the account's currency as a bare string:
+
+```js
+const currency = val.currency ?? baseCurrency;   // ← a {code, symbol} DESCRIPTOR
+if (currency === baseCurrency) { … }             // never matches
+const pairId = `${baseCurrency}_${currency}`;    // "USD_[object Object]"
+const rate   = state.effectiveExchangeRates?.[pairId] ?? 1;   // → 1
+```
+
+A runtime account carries `currency` as the `{code, symbol}` descriptor from `Account`, not a
+code. So the base-currency short-circuit never fired, the pair id was garbage, the missing-rate
+fallback returned 1 — and **every foreign drawdown account was summed at face value with no
+conversion at all.** USD accounts came out right by accident, which is exactly why nothing ever
+looked wrong.
+
+Measured on the default plan at 2030: the guardrail portfolio read **\$2,305,025 against a true
+\$2,084,588 — overstated 10.57%**, the AUD balances counted at 1.00 instead of 1.55. A guardrail
+compares `spending / portfolio` against a threshold, so an overstated denominator **understates
+the withdrawal rate**: cuts fire late, raises fire early, and the error grows with the AUD
+share of the book. `RetirementDateHandler` reads the same function.
+
+Three things this settles beyond the fix itself:
+
+- **The unit tests could not have caught it.** Every fixture in `spending-guardrail-fx.test.mjs`
+  built `currency` as a bare string — a shape no real run produces. The tests were green and
+  the metric was wrong. Two tests now pin the descriptor shape specifically, and one asserts
+  the guardrail agrees with `computeNetWorth` on the same accounts; both fail against the old
+  implementation.
+- **No published figure moves.** No committed scenario selects `GUARDRAIL` as its spending
+  strategy (the reference plan runs `EXPLICIT_BANDS` + `FIXED`), and the reference plan's full
+  account-by-account result is byte-identical before and after. The defect was latent — but it
+  was latent in a lever the spend-ceiling work reaches for.
+- **The argument for the module was the right one, and it under-sold itself.** §5.1(a) argued a
+  comment is not a mechanism and a divergence would not throw. That was written as a
+  hypothetical. It had already happened.
+
+`to-base-currency.js`'s header now carries this as the reason not to add a sixth copy.
 
 ## 6. Phase 2 — workbench plugin (proposed)
 
@@ -604,7 +684,8 @@ random numbers that make the paired view valid no longer line up.
 ### 8.5 What the verification run already showed
 
 n=40, synthetic default, stochastic paths, two spend levels — enough to exercise the report,
-not enough to quote:
+not enough to quote. **Superseded for the reference plan by §9.1** (n=200), which reproduces
+the failure-shape mechanism but on a different asset and retires the house finding entirely:
 
 - At a **5% failure rate**, the failing paths sit at **94.8% `REAL_ESTATE`** at the horizon
   against **54.8%** for the survivors — a **+40 point gap**, with `EQUITY` at 0% versus 41.7%.
@@ -625,15 +706,24 @@ not enough to quote:
 Phase 1 paid for itself before Phase 2 started. All of these were invisible in a net-worth
 line:
 
-- **`REAL_ESTATE` 16.3% → 90.2%** of gross assets by 2069 while `EQUITY` drains to zero
-  (~2063). Terminal net worth still looks fine; the shape becomes a single illiquid asset.
-- **Gold drained by *drawdown*, not allocation** — grew to \$1.85m, then removed from the
-  taxable brokerage at the 28% collectibles rate during depletion.
-- **A ~94% one-year gold round trip in 2031** (Terry age 53): \$200k → \$12k → \$277k, caused by
-  a single glidepath anchor of `{EQUITY: 1, GOLD: 0}`. Almost certainly MPC harvest noise
-  (the step-faithful `age`/`age.99` pairs), and it lands on `moveYear` — so it realizes
-  collectibles CGT at the residency cost-base step-up (design 57 straddle territory).
-  **Still open** — see §10.
+> ⚠ **Re-verified 2026-08-05 against the current reference plan. The first bullet no longer
+> reproduces, and the reason is instructive** — the plan itself has moved on (designs 75/86
+> added the house-sale path, and the plan now sells a property), so the terminal shape is no
+> longer house-dominated. A findings list dated against a scenario file that keeps changing
+> goes stale silently; §9.1 records what was re-measured and what replaced it. The *machinery*
+> is unaffected — this is the report doing its job twice.
+
+- **~~`REAL_ESTATE` 16.3% → 90.2%~~ — STALE, and the direction reversed.** Re-measured, real
+  estate goes **~40% → ~12%** of gross assets over the plan: it *falls*. `EQUITY` does not
+  drain either — it ends the largest single class. See §9.1 for what the concentration finding
+  became.
+- **Gold drained by *drawdown*, not allocation** — grew substantially, then removed from the
+  taxable brokerage at the 28% collectibles rate during depletion. **Still reproduces**: gold
+  holds a double-digit share through the middle of the plan and is gone by the end.
+- **A one-year gold round trip on a single glidepath anchor.** **Still reproduces, and it is
+  wider than recorded here** — bonds go to zero with it, and it is one instance of a repeated
+  pattern, not a one-off. Now filed where it belongs, as **design 61 §12.1 D5**; §9.1 has the
+  measurement.
 - **Four defects in design 61**, recorded as §12.1 D1–D4 there: the immortal \$0.01
   liquidation remnant (fixed), the drift band's blindness to a zero-target class, uncleaned
   pre-existing dust, and a baked SCHEDULE freezing its asset classes (closed by §12.2 Q3).
@@ -643,6 +733,63 @@ line:
   alone.
 
 ---
+
+### 9.1 Re-verified on the reference plan (2026-08-05) — n=200, `--paths --mix`
+
+§8.5's numbers came from n=40 on the **synthetic default**, and §10 recorded "the reference
+plan is where it needs to be run" as open. It has now been run: two spend arms, n=200,
+stochastic paths, ~3 minutes per arm. Three results, in order of how much they change the
+design's story.
+
+**1. The house question is answered, and the answer is "no".** `P(REAL_ESTATE ≥ 60% of gross
+assets at simEnd)` is **0% in both arms** — against 45%→63% on the synthetic default. The
+motivating finding in §1 was real when written and is not a property of the current plan. This
+is exactly the failure mode §8 was built to prevent in the other direction: a single central
+path said "ends 90% house", and only a distribution could say how often. Here the distribution
+says never.
+
+**2. The concentration finding survives — it moved to the company stake.** The shape still
+*is* the failure mechanism, which is §8.2's third question and the one that decides which
+conversation to have:
+
+| readout | lower spend | higher spend |
+|---|---|---|
+| illiquid (house + company + collectibles) ≥ 75% at simEnd | 13% | 39% |
+| failing paths' median `PRIVATE_EQUITY` share at simEnd | 74.2% | 74.9% |
+| surviving paths' median `PRIVATE_EQUITY` share at simEnd | 28.1% | 30.3% |
+| gap | **+46.1 pts** | **+44.7 pts** |
+
+with `EQUITY` at 0% in failing paths against ~56–58% in surviving ones. So the +40-point
+failed-vs-survived gap §8.5 found on the synthetic default **reproduces on the reference plan
+at +45 points** — but the illiquid asset carrying it is the **company equity**, not the house.
+Same mechanism, different asset, and a different lever to reach for. Design 82's overlay
+(Phase 3) is still where it would act.
+
+**3. A threshold readout is being corrupted by design 61 D5.** `P(EQUITY share falls to zero
+at any year)` comes back **100% in both arms**. That is not a drawdown finding — it is the
+harvested-glidepath corner described in design 61 §12.1 D5: the plan spends three consecutive
+years at exactly 0% equity in the middle of retirement, and because the glidepath is keyed on
+**age**, it fires identically in every path. A probability that reads 100% for a structural
+reason is worse than no probability, so:
+
+> **Do not quote `P(EQUITY share = 0 …)` on a plan with a harvested glidepath** until D5 is
+> resolved. The neighbouring readouts (`illiquid ≥ 75%`, the failure split) are unaffected —
+> they are share-of-total questions that a corner moves only for the year it fires.
+
+This is the second time this design has surfaced the same defect and the first time its size
+has been visible: §9's original bullet saw one year of it on a central path, and it took the
+distribution to show it firing in 100% of worlds.
+
+**Reproduce:**
+
+```bash
+node scripts/montecarlo/mc-run.mjs --arms <spec.json> --scenario <plan.json> \
+     --out <dir> -n 200 --paths --mix
+node scripts/montecarlo/mc-report.mjs --dir <dir> --html <dir>/mix.html
+```
+
+A plan with more than one mortgaged property needs `spendTotalProperty` in the spec to use the
+`spendTotal` lever at all (design 86) — the runner fails loudly rather than picking one.
 
 ## 10. Decision record (all questions answered; #6–#8 closed 2026-07-30)
 
@@ -654,34 +801,36 @@ closed the way it did is what stops it being reopened by accident.
 | 1 | **Real-terms restatement.** Figures are nominal; is the unitless 100% view enough? | **Deferred.** Opt into design 79's value-basis toggle when it lands, rather than growing a private deflator here. The 100% view is immune to both inflation and FX, which is why it leads the page — so nominal money charts are a labelling issue, not a wrong-answer issue. | design 79 |
 | 2 | **Where does app-side sampling live?** | **The run's `sampler` hook — not a replay.** The premise that a plugin needed design 81 was wrong: design 78 already added a sampler to `buildSim`, so samples are collected as the run happens. Design 81 remains an upgrade (resample without re-running, exact dates), not a prerequisite. | §5.1(b), §6 |
 | 3 | **Account labels** — `_baseLabel` renders a user-named "AU House" as **"AU AU House"**, and loans have no display record at all, falling back to `auHousePropertyLoan`. | **Won't fix here.** Pre-existing design-70 behaviour; renaming the accounts is a fine workaround and fixing the prefix moves labels app-wide. It wants its own decision, not a report's. | design 70 |
-| 4 | **Share the FX conversion with `computeNetWorth`?** | **Yes** — extract one helper, wire net-worth + the cube only. The four other copies are tracked as a follow-up, deliberately out of this design's commit. | §5.1(a) |
+| 4 | **Share the FX conversion with `computeNetWorth`?** | **Yes** — extract one helper, wire net-worth + the cube only. The four other copies were tracked as a follow-up, deliberately out of this design's commit; **converged 2026-08-05 (#11), and one of them turned out to be already wrong.** | §5.1(a), §5.3 |
 | 5 | **Does the cube belong to Monte Carlo?** | **Yes**, as Phase 4: a compact per-year mix vector per iteration, reported as per-class bands, threshold probabilities, and mix conditioned on failure. | §8 |
 | 6 | **Raw per-path matrix in the arm file, or pre-reduced bands?** | **Raw**, positionally encoded and spliced in compactly (~1 MB/arm at n=400). §8.2 requires thresholds to move and the failure split to be re-cut without a re-run, and both need the individual paths. An arm is minutes; a report is milliseconds; the report is what gets rewritten. | §8.1 |
 | 7 | **Should `--mix` be on by default?** | **No — opt-in**, despite the compute being ~1.1%. The cost that bites is a megabyte per arm in files that get archived and re-reported, and an ordinary solvency run has no reader for it. The measurement, not the assumption, is in §8.3. | §8.3 |
 | 8 | **Terminal report or charts?** | **Both**, off one reduction. The terminal tables answer "how often", but "when does the shape turn" needs 45 columns, and a terminal cannot draw them. `mix-report-html.mjs` is to `mc-report.mjs` what `lib/grid-report.mjs` is to the terminal grid report. | §8.2 |
 
+### Closed 2026-08-05
+
+| # | question | resolution |
+|---|---|---|
+| 9 | **Should the sample boundary sit after the 1 January cascade?** (§5.2.) | **No — keep 31 December, and the premise was wrong.** The investment family is `interval: 'year-end'`, i.e. dated 31 December, so a year-boundary sample already carries the full year of growth, spending and tax; only real-asset appreciation and the rebalance land on 1 January. Moving the boundary would also **delete §7.3's finding**, since a post-rebalance sample reads 0.0% drift for every class by construction. The residual is a bounded level bias — real assets lag by one appreciation cycle — now stated in §5.2 and pinned by a test rather than left to a comment. |
+| 10 | **The 2031 gold round trip** (§9). | **Filed as design 61 §12.1 D5**, which is where §9 said it belonged but where it had never actually landed. Re-measurement made it bigger: bonds go with the gold, it recurs at several ages, and §9.1(3) shows it firing in 100% of Monte Carlo paths and corrupting a §8.2 threshold readout. Still owned by 61/39's harvest, not here. |
+| 11 | **Should the four remaining FX copies converge?** (§5.1(a).) | **Done — and one had already drifted.** All four now call the shared helper; `computeGuardrailPortfolioValue` was mis-valuing every foreign drawdown account by the FX rate. Full account in **§5.3**. No published figure moves (no committed scenario runs `GUARDRAIL`), and the reference plan is byte-identical. |
+| 12 | **Stale `pathShape` across the cadence boundary** (§8.4). | **Made detectable instead of remembered.** Arm files now stamp `samplerCadence`, and `mc-report.mjs` warns loudly when a batch mixes cadences or when an arm is unstamped (⇒ pre-design-82). The re-run of the archived decision MCs is still deferred per the standing rule — but a stale comparison can no longer happen silently, which was the actual hazard. |
+| 13 | **Mix distribution only exercised on the synthetic default** (§8.5). | **Run on the reference plan** at n=200 with `--paths --mix` — about 3 minutes per arm, well inside what is worth doing inline. Results and their consequences in **§9.1**; they revise §1's motivating finding, confirm the failure-shape mechanism at +45 points, and expose the D5 threshold corruption. |
+
 ### Still genuinely open
 
-- **Should the sample boundary sit after the 1 January cascade?** (§5.2.) Today a "2069" sample
-  is read before 2069's investment growth is credited, because the annual family hangs off the
-  1 January `PERIOD_ADVANCE`. Self-consistent, but the year labels lag the growth they name.
-  Moving the boundary would move every figure on the page, so it is a decision, not a fix.
-- **The 2031 gold round trip** (§9): \$200k → \$12k → \$277k in one year off a single
-  `{EQUITY: 1, GOLD: 0}` glidepath anchor, landing on `moveYear`. Almost certainly MPC harvest
-  noise, but it realizes collectibles CGT at a residency cost-base step-up, so it is not
-  cosmetic. **Belongs to design 61 / 39's harvest, not here** — this report is how it was
-  found, not where it gets fixed.
-- **Should the four remaining FX copies converge?** (§5.1(a).) Yes on the merits; needs an
-  owner willing to re-verify four golden-locked metrics: `net-liquidity.js`, `after-tax.js`,
-  `guardrail-portfolio-value.js`, `computeHouseValueUsd`.
-- **The real decision MCs have not been re-run** on the year-boundary cadence (§8.4). The
-  change is small and its direction is measured (§8.3), but every archived arm JSON carries a
-  `pathShape` from the old cadence, so those numbers are not comparable with a fresh run.
-  Regenerate before quoting a `pathShape` figure across that boundary.
-- **The mix distribution has only been exercised on the synthetic default** (§8.5). The +40
-  point failed-vs-survived `REAL_ESTATE` gap is a strong signal that the shape is the failure
-  mechanism, but it is n=40 on a scenario built from round numbers. The reference plan is where
-  it needs to be run, and that is the re-run above.
+- **The real decision MCs have not been re-run** on the year-boundary cadence (§8.4). Deferred,
+  not forgotten: the change is small, its direction is measured (§8.3), and the stale-cadence
+  trap is now caught by the stamp (#12) rather than by memory. Regenerate before quoting a
+  `pathShape` figure across that boundary.
+- **Design 61 D5 is unsized.** §9.1(3) establishes that harvested glidepath corners fire in
+  every path and corrupt a threshold readout; nobody has measured what the round-trip CGT
+  actually costs. The counterfactual is cheap — re-run with the corners smoothed and diff
+  terminal after-tax net worth — and it belongs to design 61, not here.
+- **§9's findings are dated against a scenario file that keeps moving.** The first bullet went
+  stale between 2026-07-30 and 2026-08-05 because the plan gained a house sale. Nothing in the
+  machinery prevents that recurring; the only real mitigation is to re-verify a quoted finding
+  before acting on it, which is what §9.1 is.
 
 ---
 
@@ -689,7 +838,7 @@ closed the way it did is what stops it being reopened by accident.
 
 | design | relationship |
 |---|---|
-| **61** (holding-allocation lever) | sets the target; this reports the realized mix. §12.1's defects were all found here. Phase 3 charts them together and made the reducer stamp `targetBand` (§7.4). |
+| **61** (holding-allocation lever) | sets the target; this reports the realized mix. §12.1's defects D1–D5 were all found here. Phase 3 charts them together and made the reducer stamp `targetBand` (§7.4). **D5** (harvested glidepath corners) is the one still open, and §9.1(3) is the measurement that made its size visible. |
 | **58 / 65** (drawdown, sleeve order) | the main *cause* of unintended drift — the report is how you see it, and §7.5 is what it looks like. `targetComposition` (design 65 §OQ1a) is what Phase 3 reads. |
 | **78** (telemetry cost) | why the cube is not a per-event derived metric — **and** the origin of the `sampler` hook every later phase samples through (§4). |
 | **74** (stochastic return paths) | the per-iteration seeding Phase 4's distribution is only meaningful under. Without `--paths` a single return is drawn per world and held, so the spread of *shapes* is narrower than reality — the mix page says so in its header. |

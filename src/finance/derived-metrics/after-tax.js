@@ -13,6 +13,7 @@ import { TaxSettleService }     from '../tax-settle-service.js';
 import { isCollectibleAllocation } from '../holdings/allocation.js';
 import { getResidency, primaryPersonKey } from '../residency-utils.js';
 import { toAUD }                from '../tax/tax-fx.js';
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 /**
  * After-tax re-pricing (design/40).
@@ -88,8 +89,7 @@ const DEFAULT_ASSUMED_GAIN_FRAC  = 0.5;
 
 /** True when an account is denominated/domiciled in AU (picks the AU rate). */
 function _isAu(account) {
-  const code = account?.currency?.code ?? account?.currency ?? null;
-  return code === 'AUD' || account?.country === 'AU';
+  return currencyOf(account, null) === 'AUD' || account?.country === 'AU';
 }
 
 /**
@@ -248,7 +248,7 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
     // returns the native amount when the run records no rate.
     rothLiquidationRate(account, assessable, state, date) {
       const fb  = () => fallback.rothLiquidationRate(account, assessable, state, date);
-      const ccy = account?.currency?.code ?? account?.currency ?? 'USD';
+      const ccy = currencyOf(account, 'USD');
       return engineDelta(computeAu, 'auOrdinaryIncomeYTD', toAUD(assessable, ccy, state), state, fb);
     },
     // Gold sleeve (design 56 §7.3): a US gold gain stacks on usCollectibleGainsYTD (the
@@ -476,14 +476,9 @@ function _sumAfterTax(state, date, opts, { includeAccount, includeIlliquid }) {
       continue;
     }
 
-    const currency = val.currency?.code ?? val.currency ?? baseCurrency;
-    if (currency === baseCurrency) {
-      total += contribution;
-    } else {
-      const pairId = `${baseCurrency}_${currency}`;
-      const rate   = state.effectiveExchangeRates?.[pairId] ?? 1;
-      total += contribution / rate;
-    }
+    // Shared valuation convention (design 82 §5.1a): after-tax net worth is quoted
+    // beside computeNetWorth, so the two must not disagree about what a dollar is.
+    total += toBaseCurrency(contribution, currencyOf(val, baseCurrency), baseCurrency, state);
   }
   return total;
 }

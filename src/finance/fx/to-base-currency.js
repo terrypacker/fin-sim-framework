@@ -31,11 +31,22 @@
  * divergence would not have thrown: both sides would still be internally consistent
  * and the shares would simply be wrong.
  *
- * Still duplicated elsewhere on purpose (design 82 §5.1a): `net-liquidity.js`,
- * `after-tax.js`, `guardrail-portfolio-value.js`, and the MC runner's
- * `computeHouseValueUsd`. Converting those is right on the merits but each is a
- * golden-locked metric, and the change belongs to whoever is willing to re-verify
- * them — not to a commit whose subject is a report.
+ * ─── every valuation site now routes through here ────────────────────────────
+ *
+ * Phase 1b wired only `computeNetWorth` + `buildAllocationCube` and left four
+ * copies standing, deliberately, because each was a golden-locked metric. They
+ * were converged afterwards (design 82 §5.3): `net-liquidity.js`, `after-tax.js`,
+ * `guardrail-portfolio-value.js` and the MC runner's `computeHouseValueUsd`.
+ *
+ * That was not cosmetic. **One of the five copies had already drifted** —
+ * `computeGuardrailPortfolioValue` compared `val.currency` against a bare code,
+ * but a runtime account carries a `{code, symbol}` descriptor, so the comparison
+ * never matched, the pair id came out `USD_[object Object]`, and the
+ * missing-rate fallback silently valued every FOREIGN drawdown account at face.
+ * The failure mode is exactly the one this module exists to prevent: nothing
+ * threw, each copy stayed internally consistent, and only the numbers were wrong.
+ * Adding a copy of these six lines is therefore a bug waiting for a currency —
+ * import this instead.
  */
 
 /**
