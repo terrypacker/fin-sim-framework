@@ -257,9 +257,9 @@ on `RealProperty`, applied in `computeRentalMonth`. This is the half that matter
 property-secured loan — drawing an offset down for private use no longer inflates the
 deduction — and it is inert at `null`.
 
-**Deferred (error 1): a standalone investment loan still deducts nothing.** The
-tempting shortcut is to emit the existing `AU_RENTAL_INCOME_TAX` action with a negative
-amount, which needs no new action type, reducer or toolset wiring. **That is now
+**Error 1 (a standalone investment loan deducts nothing) — BUILT as P9; see §10.2.**
+The tempting shortcut was to emit the existing `AU_RENTAL_INCOME_TAX` action with a
+negative amount, which needs no new action type, reducer or toolset wiring. **That is
 wrong**, and only became wrong when G5 landed: that action feeds
 `usPassiveActivityIncomeYTD`, so a borrow-to-invest interest deduction routed through
 it would be *suspended under §469*. Interest on money borrowed to buy securities is
@@ -267,13 +267,12 @@ it would be *suspended under §469*. Interest on money borrowed to buy securitie
 indefinite carryforward — not a passive activity loss. The two limitations have
 different bases, different carryforwards and different release conditions.
 
-So this needs its own channel, and the §163(d) limitation with it. That is a design
-decision rather than a typing exercise, and it is deferred deliberately rather than
-approximated. Consequence to state in any result: **an arm that borrows against
-something other than the rental and invests the proceeds is not yet modellable.** An
-arm that borrows against the rental is, and always was — under tracing rules the
-loan's character is fixed by what it originally funded, and drawing on an *offset*
-(the borrower's own money) does not disturb it.
+So it got its own channel, and the §163(d) limitation with it. The consequence line
+this section used to carry — *an arm that borrows against something other than the
+rental and invests the proceeds is not yet modellable* — no longer applies. An arm
+that borrows against the rental always was modellable: under tracing rules the loan's
+character is fixed by what it originally funded, and drawing on an *offset* (the
+borrower's own money) does not disturb it.
 
 ---
 
@@ -599,10 +598,11 @@ the other source.
 | **P2** | G4 offset capacity metric               | **done** | An hour's work; it is a study output and it makes P1's arms readable.                                                                                                   |
 | **P3** | G1 AU revenue-loss carryforward         | **done** | The load-bearing one. Touches the settle, the FITO counterfactual and the tax document.                                                                                 |
 | **P5** | G5 + G5b US §469 and the §904 partition | **done** | Promoted ahead of P4: until this landed, no unoffset arm could run at all without `FTC_LIMITATION_STRICT=off`. Reuses P3's pool pattern in the other jurisdiction.      |
-| **P4** | G3 `deductibleFraction`                 | **half** | The rental-path half is built. The standalone borrow-to-invest half is deferred — see §3 G3, it needs a §163(d) channel that must NOT reuse the §469 one P5 just built. |
+| **P4** | G3 `deductibleFraction`                 | **done** | The rental-path half. The standalone borrow-to-invest half shipped separately as P9 once P5 had shown why it could not share the §469 channel.                          |
 | **P6** | G6 term / IO expiry + the loan UI (§9)  | **done** | Depends on G2. Turns "hold leverage forever" into a testable assumption — and, with §9, one that is authorable rather than spec-file-only.                              |
 | **P7** | G8 expense events + G9 `fundFrom`       | **done** | One change: G9 is a field on G8's entry. Together they are the whole of what §8 needs from the engine, and neither is useful alone.                                     |
 | **P8** | G7 §988                                 | **done** | Promoted from unscheduled. §8 requires a live FX process; on a pinned rate a §988 gain is identically zero, so this was free to defer and no longer is.                 |
+| **P9** | G3 error 1 — §163(d) / s8-1 channel     | **done** | The last gap. Deliberately last: it needed P5 to exist before it was clear it must not reuse P5's pool. See §10.2.                                                      |
 
 P7 is behaviour-preserving for any scenario that authors no expense events — which,
 measured before the change, was **every** saved scenario, so there was no migration.
@@ -647,6 +647,10 @@ Per-gap tests are listed above. Across all of them:
   absence that also passes on a broken detector or a dead run pins nothing.
   Verified by mutation: adding the offset roles to the AU `CASH_SLEEVE_INTEREST` wiring
   (the exact "fix" this guards against) turns both of those red.
+- **A regression that a rental-linked loan does NOT also emit the P9 deduction** — the
+  one failure mode that would deduct the same interest twice, silently, with every
+  existing test still green. It is the first test in
+  `tests/unit/evt-investment-interest.test.mjs` for that reason.
 - **Golden re-baseline** at P3, with the direction and magnitude of the change stated
   in the commit rather than inferred later.
 - **A regression that a §988 loss leaves the §904 partition intact** (P8). This is the
@@ -967,12 +971,11 @@ asserts the balance actually falls.
 
 ### 9.4 What is still not authorable
 
-**A standalone loan's interest is still deducted nowhere** — §3 G3's error 1, deferred
-deliberately pending a §163(d) channel that must not reuse the §469 one P5 built. The
-account editor's *Deductible Frac.* field is honest about this in its tooltip, and it is
-not inert: it still drives the §988(e) business share (§3 G7), so on a foreign-currency
-loan it decides whether an exchange loss is deductible at all. Borrow-to-invest remains
-unmodellable; borrow-against-the-rental always was and still is.
+~~**A standalone loan's interest is still deducted nowhere**~~ — closed by P9 (§10.2).
+The account editor's *Deductible Frac.* field now does all three jobs it appears to do:
+the rental deduction, the §988(e) business share (§3 G7), and — on a standalone loan —
+the s8-1 / §163(d) deduction. Its tooltip, which used to state the deferral in so many
+words, now states the split treatment instead.
 
 ---
 
@@ -1051,19 +1054,61 @@ dated crash fixed, so its magnitudes do not stand. Re-running it is mechanical �
 `fromBalance` to every arm that sets an offset balance, clear the dated shock — and the
 instructions are written into that study's own run sheet rather than here.
 
-### 10.2 G3 error 1 — a standalone investment loan deducts nothing
+### 10.2 G3 error 1 — a standalone investment loan deducts nothing — **CLOSED**
 
-The last open gap in the document, and now the only one with an authoring surface that
-is *deliberately* honest about being partly inert: the account editor's *Deductible
-Frac.* field drives the §988(e) business share but reaches no s8-1 / §163 deduction.
+**Built as P9.** The *Deductible Frac.* field is no longer partly inert: on a standalone
+loan it now drives an s8-1 / §163(d) deduction as well as the §988(e) business share.
+The consequence line can be struck — **an arm that borrows against something other than
+the rental and invests the proceeds is now modellable.**
 
-It needs its own channel, **not** the `AU_RENTAL_INCOME_TAX` shortcut — that action
-feeds `usPassiveActivityIncomeYTD`, so a borrow-to-invest deduction routed through it
-would be suspended under §469, and §163(d) investment interest has a different base, a
-different carryforward and different release conditions. Reuse P3/P5's suspended-loss
-pool *shape*; do not reuse P5's pool. Until then, state in any result: **an arm that
-borrows against something other than the rental and invests the proceeds is not
-modellable.**
+It got its own channel, as §10.2 required. `US_INVESTMENT_INTEREST_DEDUCTION` /
+`AU_INVESTMENT_INTEREST_DEDUCTION`, emitted by `LoanPaymentHandler` and classified in
+each country's tax module, with `_computeInvestmentInterestLimitation` in
+`us-tax-rates-base.js` applying §163(d) and `usInvestmentInterestCarryforward` persisted
+at the settle beside the §469 pool. The pool *shape* is P3/P5's; the pool is not.
+
+Five decisions worth recording, because four of them are places the obvious
+implementation is wrong:
+
+1. **Only a standalone loan emits.** A rental-linked loan already deducts through
+   `computeRentalMonth`'s `deductibleInterest`, scaled by the same field. Emitting here
+   too would deduct the same interest twice, and nothing else in the suite would notice
+   — so that is the first test in the file.
+2. **`deductibleFraction: null` still deducts nothing.** Deductibility follows the USE
+   of the borrowed funds, nothing traces proceeds into what they bought, and every
+   pre-86 loan carries the null. A stated `0` agrees on the number and differs on the
+   claim, which is the distinction §9.3 already fought for on the term fields.
+3. **`min(interest, payment)`, not the accrual.** An individual is cash-basis. On a
+   negatively amortising loan the unpaid interest is capitalised into the balance and
+   is not yet deductible — deducting the accrual would relieve tax on money that never
+   left the borrower, in precisely the interest-only arms this document exists to study.
+4. **The two jurisdictions genuinely differ on the same loan, and that is the finding.**
+   Australia allows the whole amount against any assessable income — negative gearing —
+   and if that drives the year negative, G1's Div 36 pool already carries it, so the AU
+   half needed no new machinery at all. The US quarantines it to net investment income
+   and pools the rest indefinitely. The AU half is ten lines; the US half is a
+   limitation. A single "deduct the interest" path would have been wrong in one country.
+5. **It is accumulated POSITIVE and never nets into `usOrdinaryIncomeYTD`.** The G5b
+   lesson: a negative that lowers gross income while leaving every foreign basket
+   untouched stops the baskets partitioning income and collapses the §904 denominator.
+   It enters via `agi` AND `unrelatedDeductions`, exactly as the §988 loss does.
+
+**Two approximations, stated rather than buried.** The deduction is taken above the
+line, because this model has no itemized-deduction machinery and §163(d) interest is a
+Schedule A deduction — the same shortcut `usSection988LossYTD` takes, and the larger of
+the two errors. And the §163(d)(4)(B)(iii) election (treat net capital gain as
+investment income, at the price of the preferential rate on the elected amount) is not
+modelled; not electing is the statutory default and the conservative one, but it means a
+large-gain year does not unlock the deduction the way a real return might elect to.
+
+**Inert until stated**, and measured so: the full suite (4,531 + 996) is green with no
+re-baseline, and `npm run crossfoot` foots every linked line on both returns. Note what
+that last check can and cannot see — crossfoot only verifies lines carrying a
+`drillReport` link, and the two new §163(d) worksheet lines carry none, so it is
+evidence this channel broke nothing, not evidence the channel itself foots. The
+cross-year behaviour is pinned by the end-to-end tests instead.
+
+Tests: `tests/unit/evt-investment-interest.test.mjs` (22).
 
 ### 10.3 Open questions still unanswered
 

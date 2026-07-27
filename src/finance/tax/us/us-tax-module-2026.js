@@ -219,6 +219,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._realPropertyReducerFns(),
       ...this._rentalReducerFns(),
       ...this._section988ReducerFns(),
+      ...this._investmentInterestReducerFns(),
       ...this._incomeReducerFns(),
       ...this._collectibleReducerFns(),
       ...this._iraRolloverReducerFns(),
@@ -619,6 +620,54 @@ export class UsTaxModule2026 extends BaseTaxModule {
           ...next,
           usSection988LossYTD: (state.usSection988LossYTD ?? 0) - amount,   // stored positive
         };
+      }],
+    ];
+  }
+
+  _investmentInterestReducerFns() {
+    return [
+      // Design 86 G3 error 1 — interest on a STANDALONE loan whose proceeds were put
+      // to an income-producing use. The rental half of G3 has been built since P4;
+      // this is the borrow-to-invest half, which §10.2 recorded as unmodellable.
+      //
+      // ─── why it does not go where the rental deduction goes ──────────────────────
+      // The tempting shortcut was to reuse `US_RENTAL_INCOME_TAX` with a negative
+      // amount. That became wrong the moment G5 landed: the rental classifier feeds
+      // `usPassiveActivityIncomeYTD`, so a borrow-to-invest deduction routed through
+      // it would be SUSPENDED under §469. Interest on money borrowed to buy
+      // securities is §163(d) investment interest — a different limitation (net
+      // investment income, not passive income), a different carryforward, and a
+      // different release condition. So it gets its own accumulator, and computeTax
+      // applies the §163(d)(1) limit.
+      //
+      // ─── and why it does not reduce usOrdinaryIncomeYTD here ─────────────────────
+      // Same reason the §988 loss doesn't (G5b): a negative that lowers
+      // `grossIncomeAllSources` while leaving every foreign basket untouched breaks
+      // the §904 partition. The deduction is accumulated positive and enters
+      // computeTax through `agi` AND `unrelatedDeductions`, which is what keeps
+      // `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE` exact.
+      //
+      // ─── the AU side of a US-source deduction ───────────────────────────────────
+      // Australia assesses a resident on worldwide income and allows the same
+      // interest under s8-1, with NO quarantining — negative gearing is the whole
+      // point of the AU rule. So for an AU resident the deduction reduces AU
+      // assessable income directly (a negative booking), and if that drives the year
+      // negative, G1's Div 36 loss pool already carries it forward. A non-resident is
+      // not assessed on the foreign investment income the borrowing produced, so
+      // there is nothing for the deduction to reduce and no AU booking is made.
+      ['US_INVESTMENT_INTEREST_DEDUCTION', (state, action) => {
+        const amount = Math.max(0, action.amount ?? 0);
+        if (amount === 0) return state;
+        let next = {
+          ...state,
+          usInvestmentInterestYTD: (state.usInvestmentInterestYTD ?? 0) + amount,
+        };
+        if (action.residency === 'AU') {
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD: -toAUD(amount, 'USD', state),
+          });
+        }
+        return next;
       }],
     ];
   }

@@ -19,7 +19,7 @@ import { BaseAccountModule } from './finance/account-rules/base-account-module.j
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -302,7 +302,7 @@ import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
-import { UsTaxRatesBase, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
+import { UsTaxRatesBase, _computeInvestmentInterestLimitation, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -562,6 +562,7 @@ export const Finance = {
   section988BusinessFraction,
   computeSection988Gain,
   blendSection988BookingRate,
+  investmentInterestAction,
   LoanPaymentHandler,
   UsLoanPaymentHandler,
   AuLoanPaymentHandler,
@@ -1246,6 +1247,7 @@ export const Finance = {
   UsTaxRates2025,
   UsTaxRates2026,
   UsTaxRatesBase,
+  _computeInvestmentInterestLimitation,
   _computePassiveLossLimitation,
   _drawDownBasket,
   TaxService,

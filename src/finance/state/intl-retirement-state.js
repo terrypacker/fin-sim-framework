@@ -149,6 +149,15 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // deliberately outside the settle reset, because surviving the year boundary is
     // the point. Released against later passive income.
     this.usPassiveLossCarryforward         = 0;
+    // §163(d) investment interest (design 86 G3 error 1), USD, stored POSITIVE.
+    // The year's deductible interest on standalone (non-rental) borrowing, and the
+    // disallowed excess carried forward indefinitely under §163(d)(2). Two fields for
+    // the same reason §469 needs two: the expense resets at the US settle, the pool
+    // must survive it. This is deliberately NOT the §469 pool — investment interest
+    // is limited by net investment income, released by later investment income, and
+    // never suspended as a passive loss.
+    this.usInvestmentInterestYTD          = 0;
+    this.usInvestmentInterestCarryforward = 0;
     // §988 exchange gain/loss on foreign-currency DEBT (design 86 G7 / P8), USD.
     // Three fields rather than one signed scalar because the three have genuinely
     // different tax lives: the gain joins ordinary income, the loss is an ordinary

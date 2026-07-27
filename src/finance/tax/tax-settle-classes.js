@@ -33,6 +33,10 @@ const YTD_FIELDS = {
        // design 86 G5 — the SIGNED per-year passive results. The suspended-loss POOL
        // (usPassiveLossCarryforward) is deliberately NOT here: it must survive.
        'usPassiveActivityIncomeYTD', 'usForeignPassiveActivityIncomeYTD',
+       // design 86 G3 error 1 — the year's §163(d) investment interest. Its POOL
+       // (usInvestmentInterestCarryforward) is deliberately not here either: §163(d)(2)
+       // carries the disallowed excess forward indefinitely.
+       'usInvestmentInterestYTD',
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
@@ -412,6 +416,11 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     // down in place. This is the only place the pool is written.
     const pal = action.taxDetail?.passiveLoss;
     if (pal?.closing != null) patches.usPassiveLossCarryforward = +pal.closing.toFixed(2);
+    // §163(d) disallowed investment interest (design 86 G3 error 1). Same contract as
+    // the §469 pool above, and the same reason it is written here rather than drawn
+    // down inside computeTax.
+    const invInt = action.taxDetail?.investmentInterest;
+    if (invInt?.closing != null) patches.usInvestmentInterestCarryforward = +invInt.closing.toFixed(2);
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }

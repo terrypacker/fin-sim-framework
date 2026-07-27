@@ -45,6 +45,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ...this._auBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
       ...this._rentalReducerFns(),
+      ...this._investmentInterestReducerFns(),
       ...this._auIncomeReducerFns(),
       ...this._auWagesReducerFns(),
       ...this._inheritanceReducerFns(),
@@ -224,6 +225,46 @@ export class AuTaxModule2026 extends BaseTaxModule {
         return perPerson && asset
           ? { ...next, auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, asset, amount, state.people) }
           : { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
+      }],
+    ];
+  }
+
+  _investmentInterestReducerFns() {
+    return [
+      // Design 86 G3 error 1 — interest on a STANDALONE AU loan put to an
+      // income-producing use. The mirror of the US module's classifier; see there for
+      // why this cannot reuse the rental action (§469 would suspend it) and why the
+      // US side accumulates positive rather than netting into usOrdinaryIncomeYTD
+      // (G5b: it would break the §904 partition).
+      //
+      // AU: s8-1 allows the interest against assessable income generally, with no
+      // quarantining — that is what negative gearing IS, and it is the substantive
+      // difference from the US treatment of the very same loan. Booked as a NEGATIVE
+      // amount by ownership, so a jointly-held loan splits like a jointly-held asset.
+      // If it drives the year negative, G1's Div 36 pool carries the loss forward;
+      // nothing extra is needed here, which is the whole reason the AU half of this
+      // gap is ten lines and the US half is a limitation.
+      //
+      // A foreign resident is assessed only on AU-source income, and the borrowing
+      // funded a portfolio that is not it — no AU booking. The US booking is
+      // unconditional: a US citizen is taxed on worldwide income wherever resident.
+      ['AU_INVESTMENT_INTEREST_DEDUCTION', (state, action) => {
+        const { amount: raw, ownershipType, ownerId, owners, residency } = action;
+        const amount = Math.max(0, raw ?? 0);
+        if (amount === 0) return state;
+        const next = {
+          ...state,
+          usInvestmentInterestYTD: (state.usInvestmentInterestYTD ?? 0) + toUSD(amount, 'AUD', state),
+        };
+        if (residency !== 'AU') return next;
+
+        const perPerson = state.people != null && state.auPersonOrdinaryIncomeYTD != null;
+        const asset = ownershipType != null || ownerId != null || owners != null
+          ? { ownershipType, ownerId, owners }
+          : null;
+        return perPerson && asset
+          ? { ...next, auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, asset, -amount, state.people) }
+          : { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD - amount };
       }],
     ];
   }
