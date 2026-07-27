@@ -78,11 +78,32 @@ export class IntlTransferApplyReducer extends Reducer {
     const fee   = state.effectiveFxFees?.USD_AUD ?? 15;
     // Design 55 §7: sweep the account flagged as each country's transaction account
     // when present; otherwise the configured savings key (back-compat, unchanged).
-    const usKey = this.stateRegistry?.resolveTransactionAccountKey?.('US') ?? this.usSavingsKey;
-    const auKey = this.stateRegistry?.resolveTransactionAccountKey?.('AU') ?? this.auSavingsKey;
+    let usKey = this.stateRegistry?.resolveTransactionAccountKey?.('US') ?? this.usSavingsKey;
+    let auKey = this.stateRegistry?.resolveTransactionAccountKey?.('AU') ?? this.auSavingsKey;
+    // Optional explicit destination override (design 44): a caller that needs the
+    // proceeds credited to a *specific* account rather than the country's default
+    // transaction account (e.g. the tax-payment path topping up the exact savings
+    // account it debits) passes action.dstKey. It overrides only the receiving
+    // side for this direction; the source stays the other country's transaction
+    // account (whose investments replenishSavings liquidates below).
+    if (action.dstKey) {
+      if (direction === 'US_TO_AU') auKey = action.dstKey;
+      else                         usKey = action.dstKey;
+    }
     const usAcc = state[usKey];
     const auAcc = state[auKey];
     const pendingTaxActions = [];
+
+    // Absent counterpart: the funding side's account may not exist (e.g. a US-only
+    // scenario with no AU accounts). There is nothing to draw from, so the whole
+    // targetDeficit is uncoverable — report it rather than dereferencing undefined.
+    const srcAcc = direction === 'AU_TO_US' ? auAcc : usAcc;
+    if (!srcAcc) {
+      const ccy = direction === 'AU_TO_US' ? 'USD' : 'AUD';
+      return targetDeficit > 0.01
+        ? this.newState(state, {}, [{ type: 'OUT_OF_FUNDS', deficit: targetDeficit, currency: ccy }])
+        : this.newState(state);
+    }
 
     if (direction === 'AU_TO_US') {
       const audNeeded = grossUpForTarget(targetDeficit, 'AUD', 'USD', rate, fee);
