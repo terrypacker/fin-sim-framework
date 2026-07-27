@@ -51,6 +51,13 @@ function buildPrebuilt() {
 }
 
 const yearEnd = (y) => new Date(Date.UTC(y, 11, 31));
+/**
+ * Dec 31 of `y`, but never past the horizon — the final calendar year of a
+ * simEnd-on-Jan-1 scenario has no Dec 31 inside the run, and stepping there now
+ * throws (SimulationHorizonError) instead of silently freezing the world.
+ */
+const yearEndCapped = (y, simEnd) =>
+  new Date(Math.min(yearEnd(y).getTime(), new Date(simEnd).getTime()));
 const sumMv   = (h) => (h ?? []).reduce((s, x) => s + (x?.marketValue ?? 0), 0);
 
 /**
@@ -159,7 +166,7 @@ test('integrity: §4.4 invariant holds and no negative value/basis across the wh
 
   for (let year = new Date(cfg.simStart).getUTCFullYear(); year <= endYear; year++) {
     if (sim.currentDate.getTime() >= endMs) break;
-    sim.stepTo(yearEnd(year));
+    sim.stepTo(yearEndCapped(year, cfg.simEnd));
 
     for (const [key, acct] of Object.entries(sim.state)) {
       const holdings = acct?.holdings;
@@ -222,7 +229,7 @@ test('offset (integration): AU offset lands in state, speeds owner-occupied payo
   const violations = [];
   for (let year = compareYear + 1; year <= endYear; year++) {
     if (off.sim.currentDate.getTime() >= endMs) break;
-    off.sim.stepTo(yearEnd(year));
+    off.sim.stepTo(yearEndCapped(year, off.cfg.simEnd));
     for (const [key, acct] of Object.entries(off.sim.state)) {
       const holdings = acct?.holdings;
       if (!Array.isArray(holdings) || holdings.length === 0) continue;

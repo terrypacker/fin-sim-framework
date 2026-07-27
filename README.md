@@ -137,6 +137,27 @@ History note: the project previously used Rollup; see `design/14-vite-migration.
 
 Every execution unit (event / handler / action / reducer) publishes paired `EXECUTION_BEGIN` + `EXECUTION_END` messages with a hierarchical `executionId`. `GraphRecorder` consumes them to build the runtime execution graph in the same singleton `Graph` as the config layer. UI plugins (`exec-history`, `lineage`, `perf`) read from `graphQueryApi`.
 
+### The run horizon (`simEnd`)
+
+`BaseScenario.buildSim()` stamps the scenario's `simEnd` onto the Simulation, and
+`stepTo()` **refuses to step past it** — it throws `SimulationHorizonError` and
+advances nothing.
+
+The horizon is not just a slider bound. Toolsets schedule their event series out to
+`ctx.endDate` (= `simEnd`) and no further, while self-rescheduling monthly ticks keep
+going forever, so a step past `simEnd` leaves a *half-advanced world*: income,
+expenses and tax settles stopped, a few tick families still running, and
+`sim.currentDate` parked in the future. That reads like a plausible result — balances
+that quietly stopped growing, a final tax year that never settled — which is how a
+caller-side date error gets filed as a modelling bug. The UI can't reach it (the
+timeline clamps to `[simStart, simEnd]`); headless callers passing a date directly
+can, and that's who this guard is for.
+
+Escape hatches, in order of preference: step to `simEnd` or earlier, raise the
+scenario's `simEnd`, `buildSim({ pastEndPolicy: 'warn' })` to warn and clamp instead,
+or `sim.stepTo(date, { pastEnd: 'off' })` for the unguarded legacy behaviour. Bare
+`Simulation`s built without a scenario have no declared horizon and are unguarded.
+
 ### Breakpoints
 
 `sim.control.breakpointNodeIds` is a `Set<string>` of **config-graph node IDs**. Before each handler / action / reducer call, the simulation checks the set, snapshots a `pendingExecution` resume context, and throws an internal `BreakpointSignal` caught inside `stepTo()`. The paused node has **not** executed yet — `sim.state` reflects the state immediately before it.

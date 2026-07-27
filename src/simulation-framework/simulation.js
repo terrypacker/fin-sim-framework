@@ -64,6 +64,34 @@ export class BreakpointSignal extends Error {
 }
 
 /**
+ * Thrown by stepTo() when asked to step past the simulation's horizon (simEnd).
+ *
+ * A scenario's toolsets schedule their event series out to simEnd and no further,
+ * while self-rescheduling monthly ticks keep going forever. So past simEnd the run
+ * is HALF-advanced rather than simply stalled: income, expenses and tax settles have
+ * stopped, some tick families still compound, and `currentDate` walks on. On the
+ * reference scenario, nine years past a 2041 simEnd inflates terminal net worth by
+ * ~45% — growth with no spending and no tax.
+ *
+ * Nothing about that output announces itself as broken, which is how a caller-side
+ * date error gets filed as a modelling bug. The UI can't reach it (the timeline
+ * clamps to [simStart, simEnd]); headless callers passing a date directly can.
+ *
+ * @property {Date} target - the requested date
+ * @property {Date} simEnd - the simulation's horizon
+ */
+export class SimulationHorizonError extends Error {
+  constructor(message, { target, simEnd } = {}) {
+    super(message);
+    this.name   = 'SimulationHorizonError';
+    this.target = target;
+    this.simEnd = simEnd;
+  }
+}
+
+const _isoDay = d => new Date(d).toISOString().slice(0, 10);
+
+/**
  * Telemetry levels (design 78 §4.3).
  *
  * A run's *observation* cost is governed by three independent switches — silent,
@@ -112,6 +140,20 @@ export const TELEMETRY_LEVELS = {
 export class Simulation {
   constructor(startDate, { bus = new EventBus(), seed = 1, initialState = {}, opts = {}, graph = null } = {}) {
     this.currentDate = this.normalizeDate(startDate);
+
+    // ── Horizon (optional) ─────────────────────────────────────────────────
+    //
+    // The scenario's simEnd, stamped by BaseScenario.buildSim(). Nothing is
+    // scheduled past it, so stepTo() refuses to walk beyond it rather than
+    // leaving a half-advanced world — see SimulationHorizonError. Null for bare
+    // framework sims (unit-test fixtures, sims built without a scenario), which
+    // have no declared horizon and so keep the unguarded behaviour.
+    this.simEnd = opts.simEnd != null ? this.normalizeDate(new Date(opts.simEnd)) : null;
+    // What stepTo() does when the target is past simEnd:
+    //   'throw' (default) — SimulationHorizonError, nothing advances
+    //   'warn'            — console.warn, then clamp the step to simEnd
+    //   'off'             — legacy behaviour: advance the clock over an empty queue
+    this.pastEndPolicy = opts.pastEndPolicy ?? 'throw';
 
     // Total order: by date, then by event `order` (lower runs first). The order
     // band makes same-date sequencing explicit — income/earnings default to 0 and
@@ -1046,8 +1088,40 @@ export class Simulation {
   rewindToDate(date)        { return this.history.rewindToDate(date); }
   replayTo(date)            { return this.history.replayTo(date); }
 
-  stepTo(targetDate) {
-    const end = this.normalizeDate(targetDate);
+  /**
+   * Run every queued event up to and including `targetDate`, then park the clock
+   * there. Forward-only.
+   *
+   * @param {Date}   targetDate
+   * @param {object} [o]
+   * @param {'throw'|'warn'|'off'} [o.pastEnd] Override this sim's
+   *   `pastEndPolicy` for this call — see the constructor. Use `'off'` only when a
+   *   half-advanced world past simEnd is genuinely what you're after.
+   * @throws {SimulationHorizonError} when `targetDate` is past simEnd and the
+   *   policy is `'throw'` (the default for any sim built from a scenario).
+   */
+  stepTo(targetDate, { pastEnd = this.pastEndPolicy } = {}) {
+    let end = this.normalizeDate(targetDate);
+
+    // ── Horizon guard ─────────────────────────────────────────────────────
+    // Past simEnd the bounded event series are exhausted, so the loop below runs
+    // whatever self-rescheduling ticks remain and then parks the clock at `end` —
+    // a world that keeps compounding without earning, spending or paying tax.
+    // See SimulationHorizonError.
+    if (this.simEnd && end > this.simEnd && pastEnd !== 'off') {
+      const msg =
+        `stepTo(${_isoDay(end)}) is past this simulation's horizon simEnd=${_isoDay(this.simEnd)}. `
+        + 'The scenario schedules its event series only out to simEnd, so past it the world is '
+        + 'half-advanced: income, expenses and tax settles have stopped while self-rescheduling '
+        + 'ticks keep compounding. Step to simEnd or earlier, raise the scenario\'s simEnd, or '
+        + "pass { pastEnd: 'off' } if that is genuinely what you want.";
+      if (pastEnd === 'warn') {
+        console.warn(`[Simulation] ${msg} Clamping to simEnd.`);
+        end = this.simEnd;
+      } else {
+        throw new SimulationHorizonError(msg, { target: end, simEnd: this.simEnd });
+      }
+    }
 
     // ── Resume from a mid-event pause (handler / action / reducer) ─────────
     if (this.control.pendingExecution) {
@@ -1164,7 +1238,11 @@ export class Simulation {
   findSnapshotIndex(target) { return this.history.findSnapshotIndex(target); }
 
   branch() {
-    const clone = new Simulation(this.currentDate);
+    // The branch inherits the horizon: it replays the same queue, so stepping it
+    // past simEnd is the same mistake as stepping the parent past simEnd.
+    const clone = new Simulation(this.currentDate, {
+      opts: { simEnd: this.simEnd, pastEndPolicy: this.pastEndPolicy },
+    });
 
     const snap = this.history.snapshots[this.history.snapshotCursor];
 

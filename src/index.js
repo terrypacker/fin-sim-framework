@@ -358,7 +358,7 @@ import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
-import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
+import { BreakpointSignal, SimulationHorizonError, Simulation } from './simulation-framework/simulation.js';
 import { MutationTracker, diffStates } from './simulation-framework/state-utils.js';
 import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
@@ -1213,6 +1213,7 @@ export const Engine = {
   SimulationHistory,
   SimulationState,
   BreakpointSignal,
+  SimulationHorizonError,
   Simulation,
   MutationTracker,
   diffStates,
