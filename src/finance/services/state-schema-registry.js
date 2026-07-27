@@ -198,6 +198,9 @@ export class StateSchemaRegistry {
     // ── Well-known exact fields ───────────────────────────────────────────────
     this.registerPattern('people.*.residency',      ParameterValueType.text());
     this.registerPattern('people.*.residencyState', ParameterValueType.text());
+    // Move date (ms) stamped by ChangeResidencyApplyReducer — backs the FEIE
+    // full-qualifying-year gate (design 52 §4.2).
+    this.registerPattern('people.*.residencySinceMs', ParameterValueType.date());
     // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and
     // per-field via registerPerson() (design 10 §Phase 5), keyed on each person's
     // wageCurrency / ssCurrency. No code-less glob remains so an unstamped person
@@ -220,8 +223,35 @@ export class StateSchemaRegistry {
     this.register('usCapitalGainsYTD',           ParameterValueType.currency('USD'));
     this.register('usCollectibleGainsYTD',       ParameterValueType.currency('USD'));
     this.register('usPenaltyYTD',                ParameterValueType.currency('USD'));
+    // Deprecated pre-52 field: retained only as a back-compat read shim so old
+    // saves deserialize with the right currency typing. No live code writes it;
+    // design 52 replaced it with the sourced/basketed relief fields below.
     this.register('ftcYTD',                      ParameterValueType.currency('USD'));
     this.register('cumulativeDeficit',           ParameterValueType.currency('USD'));
+
+    // Cross-border relief — US side, canonical USD (design 52).
+    // §904 foreign-source numerators (post-FEIE), per basket.
+    this.register('foreignGeneralIncomeYTD',     ParameterValueType.currency('USD'));
+    this.register('foreignPassiveIncomeYTD',     ParameterValueType.currency('USD'));
+    // Current-year AU foreign tax available to credit this US settle, per basket
+    // (funded at the AU settle §4.4, consumed + banked at the US settle §4.3).
+    this.register('ftcCurrentGeneral',           ParameterValueType.currency('USD'));
+    this.register('ftcCurrentPassive',           ParameterValueType.currency('USD'));
+    // 10-year carryforward pools, per basket: { [vintageCY]: remainingUSD }.
+    this.registerPattern('ftcPoolGeneral.*',     ParameterValueType.currency('USD'));
+    this.registerPattern('ftcPoolPassive.*',     ParameterValueType.currency('USD'));
+    // US-source income booked while AU-resident — the FITO "without" removal set,
+    // captured in both currencies (USD funds §4.6, AUD funds §4.5).
+    this.register('usSourceOrdinaryUsdYTD',      ParameterValueType.currency('USD'));
+    this.register('usSourceCapGainsUsdYTD',      ParameterValueType.currency('USD'));
+
+    // Cross-border relief — AU side, canonical AUD (design 52).
+    this.register('usSourceOrdinaryAudYTD',      ParameterValueType.currency('AUD'));
+    this.register('usSourceCapGainsAudYTD',      ParameterValueType.currency('AUD'));
+    // US tax paid on US-source income (AUD), the FITO input; single-year handoff.
+    this.register('usTaxPaidOnUsSourceAud',      ParameterValueType.currency('AUD'));
+    // FEIE election (param): whether the Foreign Earned Income Exclusion is elected.
+    this.register('usFeieElected',               ParameterValueType.boolean());
 
     // US state income tax YTD (design 34) — USD
     this.register('stateOrdinaryIncomeYTD',      ParameterValueType.currency('USD'));
@@ -244,6 +274,10 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
+    // FEIE cap accumulator (design 52 §4.2): AU-source *earned* income only
+    // (wages/SE), per person — distinct from auPersonOrdinaryIncomeYTD which mixes
+    // wages with AU interest/rent and so cannot back the per-person FEIE cap.
+    this.registerPattern('auPersonEarnedIncomeYTD.*',           ParameterValueType.currency('AUD'));
 
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
 

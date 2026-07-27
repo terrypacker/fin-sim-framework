@@ -34,7 +34,6 @@ function usDetail(overrides = {}) {
     usCapitalGainsYTD:     20_000,
     usCollectibleGainsYTD: 0,
     usPenaltyYTD:          0,
-    ftcYTD:                0,
     ...overrides,
   });
 }
@@ -122,12 +121,42 @@ test('UsTaxDocument2026: Tax Computation section Gross Tax matches taxDetail', (
   assert.strictEqual(gross.amount, detail.grossTax);
 });
 
-test('UsTaxDocument2026: FTC credit line is negative (reduces liability)', () => {
-  const detail = usDetail({ ftcYTD: 3_000 });
-  const doc    = new UsTaxDocument2026().generate(detail, 2025);
+test('UsTaxDocument2026: per-§904-basket FTC credit lines are negative (reduce liability)', () => {
+  const detail = usDetail({
+    foreignPassiveIncomeYTD: 40_000,
+    ftcCurrentPassive:       3_000,
+    effectiveExchangeRates:  { USD_AUD: 1 },
+    currentPeriods:          { US: { startMs: Date.UTC(2025, 0, 1) } },
+  });
+  const doc     = new UsTaxDocument2026().generate(detail, 2025);
   const credits = doc.sections.find(s => s.heading === 'Credits');
-  const ftc     = credits.lineItems.find(li => li.label === 'Foreign Tax Credit');
-  assert.ok(ftc.amount <= 0, 'FTC should be <= 0 (reduces tax)');
+  const passive = credits.lineItems.find(li => li.label === 'Foreign Tax Credit — Passive (§904)');
+  assert.ok(passive != null && passive.amount < 0, 'Passive FTC should be < 0 (reduces tax)');
+});
+
+test('UsTaxDocument2026: FEIE exclusion appears in the Income section when elected', () => {
+  const detail = usDetail({
+    usFeieElected:           true,
+    people:                  { primary: { residency: 'AU' } },
+    auPersonEarnedIncomeYTD: { primary: 90_000 },
+    effectiveExchangeRates:  { USD_AUD: 1 },
+  });
+  const doc    = new UsTaxDocument2026().generate(detail, 2025);
+  const income = doc.sections.find(s => s.heading === 'Income');
+  const feie   = income.lineItems.find(li => li.label.includes('Foreign Earned Income Exclusion'));
+  assert.ok(feie != null && feie.amount < 0, 'FEIE line present and negative');
+});
+
+test('AuTaxDocument2026: FITO line appears when US tax was paid on US-source income', () => {
+  const detail = auResidentDetail({
+    auOrdinaryIncomeYTD:    120_000,
+    usSourceOrdinaryAudYTD: 60_000,
+    usTaxPaidOnUsSourceAud: 12_000,
+  });
+  const doc     = new AuTaxDocument2026().generate(detail, 2025);
+  const credits = doc.sections.find(s => s.heading === 'Credits');
+  const fito    = credits.lineItems.find(li => li.label.includes('Foreign Income Tax Offset'));
+  assert.ok(fito != null && fito.amount < 0, 'FITO line present and negative');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

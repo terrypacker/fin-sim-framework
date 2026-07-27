@@ -72,6 +72,20 @@ export const US_TAX = {
       usCapitalGainsYTD:   0,
       usPenaltyYTD:        0,
       usFilingSingle:      filingSingle,
+      // Cross-border relief accumulators (design 52) — initialised so the runtime
+      // state (and the journal state-diff) always carries them, matching
+      // IntlRetirementState. §904 numerators + FITO removal set + carryforward pools.
+      foreignGeneralIncomeYTD: 0,
+      foreignPassiveIncomeYTD: 0,
+      usSourceOrdinaryUsdYTD:  0,
+      usSourceCapGainsUsdYTD:  0,
+      usSourceOrdinaryAudYTD:  0,
+      usSourceCapGainsAudYTD:  0,
+      ftcCurrentGeneral:       0,
+      ftcCurrentPassive:       0,
+      ftcPoolGeneral:          {},
+      ftcPoolPassive:          {},
+      usTaxPaidOnUsSourceAud:  0,
     };
   },
 

@@ -89,5 +89,6 @@ export class UsTaxRates2025 extends UsTaxRatesBase {
 
     this._stdDeduction_single = 15_000;
     this._ficaWageBase        = 176_100; // IRS Social Security wage base 2025
+    this._feieCap             = 130_000; // Foreign Earned Income Exclusion cap 2025 (IRC §911)
   }
 }

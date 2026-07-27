@@ -21,7 +21,7 @@
  *   - consumeHoldingsFifo per-country realized basis (FIFO sale path)
  *   - recordResidencyChange gating (BROKERAGE only; retirement accounts skipped)
  *   - the account-level proportional drawdown path (replenishSavings → _drawPenaltyFree)
- *   - tax-module routing: usCGT += gain, auCGT += auGain, ftcYTD += auGain
+ *   - tax-module routing: usCGT += gain, auCGT += auGain, usSourceCapGainsAudYTD += auGain
  *
  * Run with: node --test tests/unit/evt-cgt-cost-base-reset.test.mjs
  */
@@ -193,36 +193,36 @@ test('replenishSavings: no step-up recorded → auGain equals gain', () => {
 test('US STOCK_WITHDRAWAL_TAX: AU resident routes gain→US, auGain→AU & FTC', () => {
   const fns  = new UsTaxModule2026().getReducerFns();
   const fn   = fns.get('STOCK_WITHDRAWAL_TAX');
-  const base = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, ftcYTD: 0 };
+  const base = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, usSourceCapGainsAudYTD: 0 };
   const next = fn(base, { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, auGain: 400, residency: 'AU' });
   assert.ok(near(next.usCapitalGainsYTD, 1000)); // US: original basis
   assert.ok(near(next.auCapitalGainsYTD, 400));  // AU: stepped-up basis
-  assert.ok(near(next.ftcYTD, 400));             // pre-move gain (600) earns no credit
+  assert.ok(near(next.usSourceCapGainsAudYTD, 400));             // pre-move gain (600) earns no credit
 });
 
 test('US STOCK_WITHDRAWAL_TAX: non-AU resident books US gain only', () => {
   const fn = new UsTaxModule2026().getReducerFns().get('STOCK_WITHDRAWAL_TAX');
-  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, ftcYTD: 0 },
+  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, usSourceCapGainsAudYTD: 0 },
     { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, auGain: 400, residency: 'US' });
   assert.ok(near(next.usCapitalGainsYTD, 1000));
   assert.ok(near(next.auCapitalGainsYTD, 0));
-  assert.ok(near(next.ftcYTD, 0));
+  assert.ok(near(next.usSourceCapGainsAudYTD, 0));
 });
 
 test('US STOCK_WITHDRAWAL_TAX: back-compat — missing auGain falls back to gain', () => {
   const fn = new UsTaxModule2026().getReducerFns().get('STOCK_WITHDRAWAL_TAX');
-  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, ftcYTD: 0 },
+  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, usSourceCapGainsAudYTD: 0 },
     { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, residency: 'AU' });
   assert.ok(near(next.auCapitalGainsYTD, 1000));
-  assert.ok(near(next.ftcYTD, 1000));
+  assert.ok(near(next.usSourceCapGainsAudYTD, 1000));
 });
 
 test('AU AU_STOCK_WITHDRAWAL_TAX: AU resident routes auGain to AU CGT & FTC', () => {
   const fn = new AuTaxModule2026().getReducerFns().get('AU_STOCK_WITHDRAWAL_TAX');
   // No state.people → scalar (non-perPerson) accumulators.
-  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, ftcYTD: 0 },
+  const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, foreignPassiveIncomeYTD: 0 },
     { type: 'AU_STOCK_WITHDRAWAL_TAX', gain: 1000, auGain: 400, residency: 'AU' });
   assert.ok(near(next.usCapitalGainsYTD, 1000));
   assert.ok(near(next.auCapitalGainsYTD, 400));
-  assert.ok(near(next.ftcYTD, 400));
+  assert.ok(near(next.foreignPassiveIncomeYTD, 400));
 });

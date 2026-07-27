@@ -62,5 +62,6 @@ export class UsTaxRates2024 extends UsTaxRatesBase {
 
     this._stdDeduction_single = 14_600;
     this._ficaWageBase        = 168_600; // IRS Social Security wage base 2024
+    this._feieCap             = 126_500; // Foreign Earned Income Exclusion cap 2024 (IRC §911)
   }
 }

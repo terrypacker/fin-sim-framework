@@ -189,7 +189,7 @@ test('EVT-51: company sale records gain as AU capital gain + FTC if AU resident'
   assert.ok(taxEntries.length > 0);
   const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
   assert.strictEqual(auGainsDiff.delta, 450_000);
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'ftcYTD');
+  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
 });
 

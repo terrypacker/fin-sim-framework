@@ -78,7 +78,11 @@ a real, always-on error in every US+AU scenario's tax bill, not an edge case.
   amount (`min(ftcYTD, grossTax)`) — an "AU tax fully relieves US tax up to gross"
   simplification. This design only guarantees `ftcYTD` is in **USD**; it does not
   replace the income-as-credit approximation with a true foreign-tax-paid credit.
-  **That replacement is specced as `design/52-true-foreign-tax-credit.md`.**
+  **That replacement is specced *and implemented* in
+  `design/52-true-foreign-tax-credit.md`** (FEIE + per-§904-basket FTC with 10-year
+  carryforward + AU FITO). `ftcYTD` is removed there (one-release read shim retained);
+  US relief now credits the *actual AU tax paid* on AU-source income, and US-source
+  income of AU residents is relieved on the AU return via FITO.
 - **Rate convention nuance.** Real returns use an annual average (or spot at each
   accrual) FX rate. We accrue at **monthly spot** (the rate live when the income
   event fires). Averaging is a possible refinement, not part of this.

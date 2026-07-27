@@ -182,7 +182,7 @@ test('EVT-52: Roth Conversion — NOT an AU taxable event for an AU resident (s9
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 20_000); // US still taxes the conversion
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 test('EVT-52: Roth Conversion — no AU income when not resident', () => {
@@ -191,7 +191,7 @@ test('EVT-52: Roth Conversion — no AU income when not resident', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 test('EVT-52: Roth Conversion — no penalty', () => {
@@ -234,7 +234,7 @@ test('EVT-52→EVT-43: converted IRA earnings stay AU-assessable, deferred to Ro
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 70_000);
   // Withdrawal: only the 10k IRA-earnings-sourced share is AU ordinary income.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10_000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
   assert.strictEqual(sim.state.usPenaltyYTD, 0); // primary is age 60
 });
 

@@ -133,7 +133,24 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auNonResidentWithholdingYTD = 0;
     this.auSuperTaxYTD = 0;
     this.auFrankingCreditYTD = 0;
-    this.ftcYTD = 0;
+
+    // Cross-border relief — design 52. Replaces the single ftcYTD line.
+    // US side (USD): §904 foreign-source numerators (post-FEIE) per basket, the
+    // current-year AU foreign tax available to credit, and the 10-year
+    // carryforward pools ({ [vintageCY]: remainingUSD }).
+    this.foreignGeneralIncomeYTD = 0;
+    this.foreignPassiveIncomeYTD = 0;
+    this.ftcCurrentGeneral = 0;
+    this.ftcCurrentPassive = 0;
+    this.ftcPoolGeneral = {};
+    this.ftcPoolPassive = {};
+    // US-source income booked while AU-resident (the FITO "without" removal set).
+    this.usSourceOrdinaryUsdYTD = 0;   // USD, funds the §4.6 with/without US pass
+    this.usSourceCapGainsUsdYTD = 0;
+    this.usSourceOrdinaryAudYTD = 0;   // AUD, funds the §4.5 FITO limit
+    this.usSourceCapGainsAudYTD = 0;
+    // US tax paid on US-source income (AUD) — the FITO input; single-year handoff.
+    this.usTaxPaidOnUsSourceAud = 0;
 
     // Per-person AU YTD accumulators.  Keys mirror state.people.
     // At AU tax settlement each person's share = perPersonMap[key] + sharedPool / numResidents.
@@ -148,6 +165,9 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auPersonFrankingCreditYTD          = _zeroes();
     this.auPersonNonResidentWithholdingYTD  = _zeroes();
     this.auPersonSuperTaxYTD                = _zeroes();
+    // AU-source *earned* income (wages/SE) per person — backs the per-person
+    // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.
+    this.auPersonEarnedIncomeYTD            = _zeroes();
 
     // Guardrail strategy substrate (design/26 Increment 2).
     // initialWithdrawalRate is null until RETIREMENT_DATE_REACHED fires (or pre-populated

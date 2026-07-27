@@ -277,7 +277,7 @@ test('EVT-3: Roth earnings withdrawal IS AU taxable if person is AU resident', (
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   // No FTC: the US does not tax a Roth earnings distribution (IRC §408A(d)(1)),
   // so there is no foreign tax for AU to credit — the s99B charge stands alone.
-  assert.strictEqual(sim.state.ftcYTD, 0, 'No FTC — US levies no tax on Roth earnings');
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0, 'No FTC — US levies no tax on Roth earnings');
 });
 
 test('EVT-3: Roth earnings withdrawal is NOT AU taxable if person is NOT AU resident', () => {
@@ -292,7 +292,7 @@ test('EVT-3: Roth earnings withdrawal is NOT AU taxable if person is NOT AU resi
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -537,7 +537,7 @@ test('EVT-43: converted IRA-earnings portion is AU ordinary income for a residen
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000 * sim.state.effectiveExchangeRates.USD_AUD); // 4000 × (5000/10000), design 51: USD→AUD
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);        // US taxed it at conversion, not now
   assert.strictEqual(sim.state.usPenaltyYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);                     // no US tax → no FTC
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);                     // no US tax → no FTC
   assert.strictEqual(sim.state.checkingAccount.balance, 10000);
   assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].amount, 5000);
   assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].taxableAmount, 2000); // remaining taxable share
@@ -652,7 +652,7 @@ test('EVT-44: Roth rollover earnings withdrawal IS AU ordinary income if AU resi
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 3000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   // No FTC (EVT-44 spec row): the US does not tax Roth rollover earnings, so
   // there is no foreign tax for AU to credit.
-  assert.strictEqual(sim.state.ftcYTD, 0, 'No FTC — US levies no tax on Roth rollover earnings');
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0, 'No FTC — US levies no tax on Roth rollover earnings');
 });
 
 test('EVT-44: Roth rollover earnings withdrawal is NOT AU taxable if not AU resident', () => {
@@ -666,5 +666,5 @@ test('EVT-44: Roth rollover earnings withdrawal is NOT AU taxable if not AU resi
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
