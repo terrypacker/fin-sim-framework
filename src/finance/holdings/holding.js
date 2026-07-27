@@ -69,11 +69,65 @@ export class Holding {
    *                                                  null = fall back to RATE_KEY_META[rateKey].defaultDuration ?? 0
    * @param {string|null} [opts.taxLossPartner=null] - Holding id of the substitute to rebuy after a tax-loss harvest
    *                                                   (design 29 §3.3). Null = fall back to same-rateKey search.
-   * @param {boolean}     [opts.treasury=false]      - BOND holdings only: true = a direct U.S. Treasury obligation
-   *                                                  whose coupon interest is federally taxable but EXEMPT from US
-   *                                                  state income tax (31 U.S.C. § 3124). false = corporate/other
-   *                                                  bond, fully taxable federal + state. Ignored for non-BOND
-   *                                                  allocations (design 59).
+   * @param {'none'|'state'|'federal'|'both'} [opts.taxExemption='none']
+   *                                                - BOND holdings only: how the coupon is exempted from income tax
+   *                                                  (design 66 §G2, generalizing the design-59 `treasury` flag):
+   *                                                    'none'    — fully taxable federal + state (corporate/other bond);
+   *                                                    'state'   — federally taxable but US-state-EXEMPT (a direct U.S.
+   *                                                                Treasury obligation, 31 U.S.C. § 3124);
+   *                                                    'federal' — federally EXEMPT (a municipal bond); ADDITIONALLY
+   *                                                                state-exempt when `issuingState` matches the
+   *                                                                resident's state (in-state muni), else state-taxable;
+   *                                                    'both'    — unconditionally federal- AND state-exempt (a muni
+   *                                                                treated as state-exempt regardless of residence).
+   *                                                  Ignored for non-BOND allocations. Back-compat: a legacy
+   *                                                  `treasury: true` holding loads as 'state'.
+   * @param {string|null} [opts.issuingState=null]  - BOND holdings only: 2-letter US state code of a municipal bond's
+   *                                                  issuer (taxExemption 'federal'). The muni coupon is state-exempt
+   *                                                  only when this matches the resident's state; null ⇒ treated as
+   *                                                  out-of-state (state-taxable). Ignored for other taxExemption
+   *                                                  values / non-BOND allocations (design 66 §G2).
+   * @param {Date|null}   [opts.maturityDate=null]  - BOND holdings only: the redemption date (design 66 §G4 / §3
+   *                                                  identity decision). null ⇒ the sleeve is a bond *fund* — perpetual,
+   *                                                  static `duration`, never matures (the back-compatible default).
+   *                                                  Non-null ⇒ an *individual bond*: its effective duration decays to
+   *                                                  0 as the date approaches (BondPriceAdjustReducer) and its price
+   *                                                  pulls to `faceValue` (recovering any rate-driven markdown); on the
+   *                                                  first period-advance at/after this date it is redeemed at par to
+   *                                                  cash by BondMaturityReducer. Ignored for non-BOND allocations.
+   * @param {number|null} [opts.faceValue=null]     - BOND holdings only: the par value redeemed at `maturityDate`. For
+   *                                                  a par bond (the Phase-3 scope) this equals the purchase
+   *                                                  marketValue/costBasis, so redemption is a return of principal with
+   *                                                  no realized gain (premium/discount amortization is design 66 §G9,
+   *                                                  out of scope). null on an individual bond ⇒ redeem at the
+   *                                                  then-current marketValue. Ignored when `maturityDate` is null.
+   * @param {boolean}     [opts.rollAtMaturity=false] - BOND holdings only: when true, an individual bond does NOT
+   *                                                  redeem to cash at maturity but ROLLS into a fresh par bond of the
+   *                                                  same term, re-issued at the then-current market yield
+   *                                                  (`effectiveInterestRates[rateKey]`, G1 lock-in) — a self-sustaining
+   *                                                  single-rung ladder (design 66 §G4; full ladders are §G8). Ignored
+   *                                                  when `maturityDate` is null.
+   * @param {boolean}     [opts.zeroCoupon=false]    - BOND holdings only (design 66 §G6): a zero-coupon / OID bond. Pays
+   *                                                  NO cash coupon (couponRate is 0/ignored); it is bought at a discount
+   *                                                  to `faceValue` and its price *accretes* to par over its life. The
+   *                                                  annual accretion (constant-yield Original Issue Discount) is imputed
+   *                                                  ordinary income EVEN THOUGH no cash is received (BondAccretionHandler
+   *                                                  → BOND_ACCRETION_APPLY), and it steps up `costBasis` so redemption at
+   *                                                  par realizes no further gain. A zero is always an *individual bond*
+   *                                                  (requires `maturityDate` + `faceValue`); it is EXCLUDED from the
+   *                                                  BondPriceAdjustReducer pull-to-par mark (the accretion owns the price
+   *                                                  trajectory) but still takes the rate-sensitivity mark. Ignored for
+   *                                                  non-BOND allocations / bond funds (no maturityDate).
+   * @param {boolean}     [opts.inflationLinked=false] - BOND holdings only (design 66 §G5): a TIPS / inflation-linked
+   *                                                  bond. Its principal indexes to CPI each year (via
+   *                                                  `state.cpiAccumulator`), so its cash coupon (marketValue × couponRate)
+   *                                                  is paid on the *inflation-adjusted* principal. The annual inflation
+   *                                                  accretion is imputed ordinary income (US "phantom" income;
+   *                                                  BondAccretionHandler) and steps up `costBasis`. Like a zero it is
+   *                                                  EXCLUDED from pull-to-par (its redemption value is the adjusted
+   *                                                  principal, not the original face) and redeems at
+   *                                                  max(adjustedPrincipal, faceValue) — the deflation floor. Ignored for
+   *                                                  non-BOND allocations.
    */
   constructor({
     id                   = null,
@@ -91,7 +145,13 @@ export class Holding {
     appreciationSchedule = null,
     duration             = null,
     taxLossPartner       = null,
-    treasury             = false,
+    taxExemption         = 'none',
+    issuingState         = null,
+    maturityDate         = null,
+    faceValue            = null,
+    rollAtMaturity       = false,
+    zeroCoupon           = false,
+    inflationLinked      = false,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -108,7 +168,13 @@ export class Holding {
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
     this.taxLossPartner       = taxLossPartner;
-    this.treasury             = treasury;
+    this.taxExemption         = taxExemption;
+    this.issuingState         = issuingState;
+    this.maturityDate         = maturityDate;
+    this.faceValue            = faceValue;
+    this.rollAtMaturity       = rollAtMaturity;
+    this.zeroCoupon           = zeroCoupon;
+    this.inflationLinked      = inflationLinked;
   }
 
   toJSON() {
@@ -134,7 +200,15 @@ export class Holding {
         : null,
       duration:            this.duration,
       taxLossPartner:      this.taxLossPartner,
-      treasury:            this.treasury,
+      taxExemption:        this.taxExemption,
+      issuingState:        this.issuingState,
+      maturityDate:        this.maturityDate
+        ? (this.maturityDate instanceof Date ? this.maturityDate.toISOString() : this.maturityDate)
+        : null,
+      faceValue:           this.faceValue,
+      rollAtMaturity:      this.rollAtMaturity,
+      zeroCoupon:          this.zeroCoupon,
+      inflationLinked:     this.inflationLinked,
     };
   }
 
@@ -157,7 +231,18 @@ export class Holding {
         : null,
       duration:      d.duration ?? null,
       taxLossPartner: d.taxLossPartner ?? null,
-      treasury:      d.treasury ?? false,
+      // design 66 §G2: taxExemption generalizes the design-59 `treasury` boolean.
+      // Back-compat — a state persisted before design 66 carries `treasury: true`
+      // for a direct Treasury obligation, which maps to the state-exempt bucket.
+      taxExemption:  d.taxExemption ?? (d.treasury ? 'state' : 'none'),
+      issuingState:  d.issuingState ?? null,
+      // design 66 §G4: maturity/pull-to-par. Absent ⇒ a perpetual bond fund.
+      maturityDate:  d.maturityDate ? new Date(d.maturityDate) : null,
+      faceValue:     d.faceValue ?? null,
+      rollAtMaturity: d.rollAtMaturity ?? false,
+      // design 66 §G5/§G6: TIPS + zero-coupon/OID. Absent ⇒ a plain (coupon) bond.
+      zeroCoupon:     d.zeroCoupon ?? false,
+      inflationLinked: d.inflationLinked ?? false,
     });
   }
 }

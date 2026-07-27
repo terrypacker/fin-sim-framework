@@ -143,7 +143,35 @@ test('RC-3: establishes a BOND sleeve with correct rateKey / basis / purchaseDat
   assert.strictEqual(bond.rateKey, RATE_KEYS.FIXED_INCOME_US, 'US bond rateKey');
   assert.ok(bond.purchaseDate instanceof Date, 'purchaseDate stamped');
   assert.ok(bond.duration > 0, 'BOND duration defaulted from RATE_KEY_META');
-  assert.strictEqual(bond.treasury, false);
+  assert.strictEqual(bond.taxExemption, 'none', 'an established sleeve is a generic taxable bond (design 66 §G2)');
+  assert.strictEqual(bond.issuingState, null);
+  // No effectiveInterestRates in this state ⇒ couponRate stays null (floats), the pre-G1 behavior.
+  assert.strictEqual(bond.couponRate, null, 'no market rate available ⇒ coupon floats (null)');
+});
+
+test('RC-3-G1: an established BOND sleeve locks its coupon to the market yield at purchase (design 66 G1)', () => {
+  // Per-account override wins over the shared key, mirroring the earnings-handler precedence.
+  const state = baseState({
+    effectiveInterestRates: { FIXED_INCOME_US: 0.045, 'FIXED_INCOME_US::iraAccount': 0.071 },
+    iraAccount: { balance: 10000, holdings: [
+      { allocation: ALLOCATION.EQUITY, marketValue: 10000, costBasis: 8000 },
+    ] },
+  });
+  const { applied } = rebalance(state, { stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
+    { EQUITY: 0.5, BOND: 0.5 });
+  const bond = applied.iraAccount.holdings.find(h => h.allocation === ALLOCATION.BOND);
+  assert.strictEqual(bond.couponRate, 0.071, 'coupon stamped from the per-account market yield at purchase');
+
+  // With only the shared key present, the sleeve locks that.
+  const shared = baseState({
+    effectiveInterestRates: { FIXED_INCOME_US: 0.045 },
+    iraAccount: { balance: 10000, holdings: [
+      { allocation: ALLOCATION.EQUITY, marketValue: 10000, costBasis: 8000 },
+    ] },
+  });
+  const bond2 = rebalance(shared, { stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
+    { EQUITY: 0.5, BOND: 0.5 }).applied.iraAccount.holdings.find(h => h.allocation === ALLOCATION.BOND);
+  assert.strictEqual(bond2.couponRate, 0.045, 'coupon stamped from the shared market yield');
 });
 
 // ── GOLD: jurisdiction-correct tax + the US-IRA guard ────────────────────────────

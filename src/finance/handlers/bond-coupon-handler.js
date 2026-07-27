@@ -26,10 +26,11 @@ import { computeHoldingsCoupons } from '../holdings/holdings-earnings.js';
  *   reinvest=false → BOND_COUPON_CASH_APPLY (credits the US savings account,
  *                                            chains BOND_COUPON_TAX)
  *
- * The action carries BOTH `amount` (full coupon → federal ordinary income) and
- * `stateTaxableAmount` (coupon excluding `treasury` holdings → US state ordinary
- * income), since direct U.S. Treasury interest is federally taxable but
- * state-exempt (31 U.S.C. § 3124).
+ * The action carries `amount` (full coupon, always credited to balance),
+ * `federalTaxableAmount` (coupon excluding federally-exempt municipal holdings →
+ * federal ordinary income) and `stateTaxableAmount` (coupon excluding state-exempt
+ * holdings — direct Treasuries per 31 U.S.C. § 3124, and in-state munis → US state
+ * ordinary income). See design 66 §G2 (generalizing the design-59 Treasury split).
  *
  * data.reinvest overrides the configured reinvest param for one-off events.
  *
@@ -81,7 +82,7 @@ export class BondCouponScheduledHandler extends HandlerEntry {
 
   call({ data, state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, stateTaxableAmount } = computeHoldingsCoupons({
+    const { amount, federalTaxableAmount, stateTaxableAmount } = computeHoldingsCoupons({
       state, stateKey, fallbackRate: this.couponRate,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
@@ -94,7 +95,7 @@ export class BondCouponScheduledHandler extends HandlerEntry {
     const actionType = reinvest ? 'BOND_COUPON_APPLY' : 'BOND_COUPON_CASH_APPLY';
 
     return [
-      { type: actionType, amount, stateTaxableAmount, residency, stateKey },
+      { type: actionType, amount, federalTaxableAmount, stateTaxableAmount, residency, stateKey },
       new RecordMetricAction('bond_coupons', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

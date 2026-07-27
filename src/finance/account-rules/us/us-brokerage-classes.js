@@ -174,7 +174,7 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, stateTaxableAmount, residency } = action;
+    const { amount, federalTaxableAmount, stateTaxableAmount, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
     const sa  = state[key];
     return this.newState(
@@ -186,7 +186,7 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
           holdings: distributeHoldingsCredit(sa.holdings, amount),
         },
       },
-      [{ type: 'BOND_COUPON_TAX', amount, stateTaxableAmount, residency }]
+      [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency }]
     );
   }
 }

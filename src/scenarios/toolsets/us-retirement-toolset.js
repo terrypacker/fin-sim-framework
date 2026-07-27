@@ -19,6 +19,7 @@ import { DividendScheduledHandler }     from '../../finance/handlers/dividend-sc
 import { BondCouponScheduledHandler }   from '../../finance/handlers/bond-coupon-handler.js';
 import { CashSleeveInterestHandler }     from '../../finance/handlers/cash-sleeve-interest-handler.js';
 import { BondSleeveCouponHandler }       from '../../finance/handlers/bond-sleeve-coupon-handler.js';
+import { BondAccretionHandler }          from '../../finance/handlers/bond-accretion-handler.js';
 import {
   FixedIncomeInterestHandler,
   IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler,
@@ -33,6 +34,7 @@ import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-d
 import { BondCouponCashApplyReducer }       from '../../finance/reducers/bond-coupon-cash-apply-reducer.js';
 import { CashSleeveInterestApplyReducer }    from '../../finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { BondSleeveCouponApplyReducer }      from '../../finance/reducers/bond-sleeve-coupon-apply-reducer.js';
+import { BondAccretionApplyReducer }         from '../../finance/reducers/bond-accretion-apply-reducer.js';
 import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer }   from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
@@ -135,7 +137,7 @@ export const US_RETIREMENT = {
   types: {
     handlers: [
       MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-      DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, FixedIncomeInterestHandler,
+      DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
       RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler,
@@ -147,7 +149,7 @@ export const US_RETIREMENT = {
       K401AnnualRmdHandler, K401ToIraConversionHandler,
     ],
     reducers: [
-      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer,
+      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
@@ -168,7 +170,8 @@ export const US_RETIREMENT = {
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
       { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'CASH_SLEEVE_INTEREST_APPLY',             fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
-      { type: 'BOND_SLEEVE_COUPON_APPLY',               fields: { amount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
+      { type: 'BOND_SLEEVE_COUPON_APPLY',               fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
+      { type: 'BOND_ACCRETION_APPLY',                   fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
@@ -579,6 +582,16 @@ export const US_RETIREMENT = {
           .name('Bond Sleeve Coupons').type('BOND_SLEEVE_COUPON')
           .interval('year-end').startOffset(0).enabled(true).color('#795548').build()
       );
+      // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
+      // (design 66 §G5/§G6). One shared annual stream across brokerage + all
+      // equity-served accounts (US handlers here, AU handlers in au-retirement); the
+      // handler no-ops when an account holds no zero/TIPS bond. Annual, matching the
+      // per-year OID / CPI accretion units.
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Bond Accretion').type('BOND_ACCRETION')
+          .interval('year-end').startOffset(0).enabled(true).color('#6D4C41').build()
+      );
     }
 
     if (fixedIncomeAccounts.length > 0) {
@@ -907,6 +920,30 @@ export const US_RETIREMENT = {
       }
     }
 
+    // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
+    // (design 66 §G5/§G6) — across ALL US bond-capable accounts. Brokerage accretion
+    // is US ordinary income ('us'); retirement wrappers (401k/IRA/Roth) defer it.
+    // The handler no-ops when an account holds no accreting bond, so this is safe to
+    // wire unconditionally alongside the coupon streams.
+    const bondAccretionEvent = context.schedulesById['BOND_ACCRETION'];
+    if (bondAccretionEvent) {
+      const usAccretionAccounts = [
+        ...usStockAccounts.map(a => ({ acct: a, role: ACCOUNT_ROLES.US_STOCK, taxMode: 'us' })),
+        ...k401Accounts.map(a  => ({ acct: a, role: ACCOUNT_ROLES.K401,     taxMode: 'deferred' })),
+        ...iraAccounts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.IRA,      taxMode: 'deferred' })),
+        ...rothAccounts.map(a  => ({ acct: a, role: ACCOUNT_ROLES.ROTH,     taxMode: 'deferred' })),
+      ];
+      for (const { acct, role, taxMode } of usAccretionAccounts) {
+        const h = new BondAccretionHandler({
+          stateRegistry: sr, role,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          country: 'US', taxMode,
+        });
+        h.handledEvents.push(bondAccretionEvent);
+        handlers.push(h);
+      }
+    }
+
     // Fixed income interest
     const fiEvent = context.schedulesById['INTL_FIXED_INCOME_INTEREST'];
     if (fiEvent) {
@@ -1050,6 +1087,9 @@ export const US_RETIREMENT = {
     if (accounts.some(a => EQUITY_SERVED_ROLES.includes(a.role))) {
       reducers.push(new CashSleeveInterestApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
       reducers.push(new BondSleeveCouponApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
+      // Non-cash bond accretion apply (design 66 §G5/§G6). One reducer for all
+      // bond-capable accounts (US + AU); branches on the action's taxMode.
+      reducers.push(new BondAccretionApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
     }
 
     reducers.push(new SetOutOfFundsDateReducer());

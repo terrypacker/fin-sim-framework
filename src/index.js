@@ -76,6 +76,7 @@ import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from '.
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
+import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -103,6 +104,7 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/hand
 import { BondCouponScheduledHandler } from './finance/handlers/bond-coupon-handler.js';
 import { CashSleeveInterestHandler } from './finance/handlers/cash-sleeve-interest-handler.js';
 import { BondSleeveCouponHandler } from './finance/handlers/bond-sleeve-coupon-handler.js';
+import { BondAccretionHandler } from './finance/handlers/bond-accretion-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
@@ -165,6 +167,7 @@ import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-
 import { BondCouponCashApplyReducer } from './finance/reducers/bond-coupon-cash-apply-reducer.js';
 import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { BondSleeveCouponApplyReducer } from './finance/reducers/bond-sleeve-coupon-apply-reducer.js';
+import { BondAccretionApplyReducer } from './finance/reducers/bond-accretion-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -680,6 +683,7 @@ export const Finance = {
   deriveNetWorth,
   AddRegimeReducer,
   BondPriceAdjustReducer,
+  BondMaturityReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
   PrimeRelinkReducer,
@@ -723,6 +727,7 @@ export const Finance = {
   BondCouponScheduledHandler,
   CashSleeveInterestHandler,
   BondSleeveCouponHandler,
+  BondAccretionHandler,
   ChangeResidencyHandler,
   ChangeStateResidencyHandler,
   DividendScheduledHandler,
@@ -866,6 +871,7 @@ export const Finance = {
   BondCouponCashApplyReducer,
   CashSleeveInterestApplyReducer,
   BondSleeveCouponApplyReducer,
+  BondAccretionApplyReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,

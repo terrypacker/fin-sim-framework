@@ -97,27 +97,40 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   const { sim, cfg } = buildPrebuilt();
   const p = cfg.parameters;
 
-  // Annually-compounded equity sleeves. The stock additionally compounds its
-  // reinvested dividend (when dividendReinvest is on); the prebuilt has it off,
-  // so the dividend leaves as cash and the stock grows at the bare growth rate.
-  const expected = {
-    rothAccount:       p.rothGrowthRate,
-    iraAccount:        p.iraGrowthRate,
-    k401Account:       p.k401GrowthRate,
-    superAccount:      p.superGrowthRate,
-    usStockAccount:    p.brokerageGrowthRate + (p.dividendReinvest ? p.brokerageDividendRate : 0),
+  // Pure-equity accounts compound at their configured growth rate (dividend leaves
+  // as cash in the prebuilt, reinvest off). usStockAccount + k401Account are now
+  // 60/40 equity/bond books (design 66 §G3), so their WHOLE balance no longer grows
+  // at one clean rate — the bond sleeves earn a coupon (reinvested only in the
+  // deferred 401k) and mark to market via duration. So they are checked at the
+  // EQUITY-SLEEVE level below instead of on the whole balance.
+  const expectedWhole = {
+    rothAccount:  p.rothGrowthRate,
+    iraAccount:   p.iraGrowthRate,
+    superAccount: p.superGrowthRate,
   };
+  // Equity sleeves of the mixed books still grow at exactly the equity rate.
+  const expectedEquitySleeve = {
+    usStockAccount: p.brokerageGrowthRate + (p.dividendReinvest ? p.brokerageDividendRate : 0),
+    k401Account:    p.k401GrowthRate,
+  };
+  const equityMv = (acct) => (acct?.holdings ?? [])
+    .filter(h => h.allocation === 'EQUITY')
+    .reduce((s, h) => s + (h.marketValue ?? 0), 0);
 
   const startYear = new Date(cfg.simStart).getUTCFullYear();
-  // Snapshot balances at three consecutive year-ends in early accumulation
-  // (well before any retirement drawdown), then assert each YoY ratio.
+  // Snapshot at three consecutive year-ends in early accumulation (well before any
+  // retirement drawdown): whole balance for pure-equity accounts, equity-sleeve
+  // marketValue for the mixed books.
   const snaps = [];
   for (let i = 1; i <= 3; i++) {
     sim.stepTo(yearEnd(startYear + i));
-    snaps.push(Object.fromEntries(Object.keys(expected).map(k => [k, sim.state[k]?.balance ?? 0])));
+    const snap = {};
+    for (const k of Object.keys(expectedWhole))        snap[k] = sim.state[k]?.balance ?? 0;
+    for (const k of Object.keys(expectedEquitySleeve)) snap[k] = equityMv(sim.state[k]);
+    snaps.push(snap);
   }
 
-  for (const [key, rate] of Object.entries(expected)) {
+  for (const [key, rate] of Object.entries({ ...expectedWhole, ...expectedEquitySleeve })) {
     for (let i = 1; i < snaps.length; i++) {
       const ratio = snaps[i][key] / snaps[i - 1][key];
       assert.ok(

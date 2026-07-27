@@ -61,6 +61,8 @@ export const COVERED = [
   'CashSleeveInterestApplyReducer',
   // Bond-sleeve coupon (equity-served non-US_STOCK accounts) covered by evt-bond-sleeve-coupon.test.mjs.
   'BondSleeveCouponApplyReducer',
+  // Non-cash bond accretion (zero-coupon/OID + TIPS) covered by evt-bond-accretion.test.mjs (design 66 §G5/§G6).
+  'BondAccretionApplyReducer',
   'StockContributionApplyReducer', 'StockEarningsApplyReducer', 'StockDividendApplyReducer',
   'StockWithdrawalApplyReducer', 'FixedIncomeContributionApplyReducer',
   'FixedIncomeEarningsApplyReducer', 'FixedIncomeWithdrawalApplyReducer',
@@ -110,6 +112,8 @@ export const COVERED = [
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',
+  // Design 66 §G4 — individual-bond maturity/redemption (bond-maturity.test.mjs)
+  'BondMaturityReducer',
   // Time-varying Prime → linked cash (design 56 §5 Phase 2b) — evt-prime-timevarying.test.mjs
   'PrimeRelinkReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs

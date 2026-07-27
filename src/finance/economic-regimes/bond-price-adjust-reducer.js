@@ -13,38 +13,77 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { RATE_KEY_META }      from './rate-keys.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 
+const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+
 /**
- * BondPriceAdjustReducer — marks BOND-allocation holdings to market whenever
- * `state.effectiveInterestRates` changes (design 28 §5).
+ * Years from `asOfMs` to a holding's maturity (design 66 §G4). Returns null when
+ * the holding is a bond *fund* (no `maturityDate`) or the as-of date is unknown,
+ * in which case the caller keeps the perpetual-fund behavior. Floored at 0 (a bond
+ * at/after maturity has 0 years left — BondMaturityReducer redeems it).
  *
- * Fires on every period-advance at PRE_PROCESS + 2 (12) — after RegimeApplyReducer
- * (PRE_PROCESS + 1 = 11) has written the new effective rates, before coupon-income
- * handlers compute earnings off the adjusted price.
+ * @param {object} h        - Holding
+ * @param {number|null} asOfMs
+ * @returns {number|null}
+ */
+function yearsToMaturity(h, asOfMs) {
+  if (h?.maturityDate == null || asOfMs == null) return null;
+  const matMs = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+  if (!Number.isFinite(matMs)) return null;
+  return Math.max(0, (matMs - asOfMs) / YEAR_MS);
+}
+
+/**
+ * BondPriceAdjustReducer — marks BOND-allocation holdings to market on each
+ * period-advance (design 28 §5, extended by design 66 §G4).
  *
- * Algorithm per BOND holding:
- *   effDuration = holding.duration ?? RATE_KEY_META[holding.rateKey]?.defaultDuration ?? 0
- *   Δrate       = effectiveInterestRates[rateKey] - priorMarkRates[rateKey]
- *   Δprice      = -effDuration × Δrate × holding.marketValue
- *   marketValue = max(0, marketValue + Δprice)
+ * Fires at PRE_PROCESS + 2 (12) — after RegimeApplyReducer (PRE_PROCESS + 1 = 11)
+ * has written the new effective rates, before coupon-income handlers compute
+ * earnings off the adjusted price, and before BondMaturityReducer (PRE_PROCESS + 3)
+ * redeems anything that has matured.
  *
- * On the first period, priorMarkRates is empty so Δrate = 0 for all keys → no-op.
- * costBasis is not adjusted (mark-to-market only; design 28 §13 Q4).
+ * Two effects per BOND holding, in order:
  *
- * Maintains `state.priorMarkRates` as a snapshot of the effective rates AFTER
- * each mark application, ready for next period's Δ computation.
+ *  1. Rate-sensitivity mark (design 28 §5). Using an *effective* duration
+ *       effDuration = min(staticDuration, yearsToMaturity)   [individual bond]
+ *                   = staticDuration                          [fund]
+ *     where staticDuration = holding.duration ?? RATE_KEY_META[rateKey].defaultDuration ?? 0,
+ *     it applies
+ *       Δprice      = -effDuration × (curRate − priorRate) × marketValue.
+ *     For an individual bond (`maturityDate != null`) the duration decays toward 0
+ *     as maturity approaches, so a late-life rate move barely moves the price —
+ *     the bond "pulls to par" (design 66 §G4). A fund keeps its static duration
+ *     (perpetual, today's exact behavior).
+ *
+ *  2. Pull-to-par convergence (individual bond only). Independent of any rate
+ *     move, the price amortizes toward `faceValue` over the remaining life:
+ *       frac        = Δt / (ttm + Δt)          (Δt = years since the prior mark)
+ *       marketValue += (faceValue − marketValue) × frac.
+ *     As ttm → 0 the fraction → 1, so a rate-driven markdown fully recovers to par
+ *     by maturity — the correctness gap a static-duration fund can never close.
+ *
+ * On the first period, priorMarkRates is empty (Δrate = 0) and priorMarkMs is
+ * unset (Δt skipped), so both effects are no-ops. costBasis is never adjusted
+ * (mark-to-market only; design 28 §13 Q4). Maintains `state.priorMarkRates` and
+ * `state.priorMarkMs` as the after-mark snapshot for next period's deltas.
  */
 export class BondPriceAdjustReducer extends Reducer {
   static type        = 'BondPriceAdjustReducer';
-  static description = 'Marks BOND holdings to market using modified duration and the period-over-period interest-rate delta.';
+  static description = 'Marks BOND holdings to market using modified duration and the period-over-period interest-rate delta; individual bonds (maturityDate) decay duration and pull to par.';
 
   constructor() {
     super('Bond Price Adjust', PRIORITY.PRE_PROCESS + 2);
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
   }
 
-  reduce(state, _action) {
+  reduce(state, action) {
     const effectiveRates = state.effectiveInterestRates ?? {};
     const priorRates     = state.priorMarkRates         ?? {};
+    const cc     = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
+    const asOfMs = state.currentPeriods?.[cc]?.startMs ?? null;
+    const priorMs = state.priorMarkMs ?? null;
+    // Years since the prior mark; drives pull-to-par amortization. null/≤0 (first
+    // period, or no as-of date) ⇒ no convergence this period.
+    const dt = (asOfMs != null && priorMs != null) ? (asOfMs - priorMs) / YEAR_MS : 0;
 
     const accountUpdates = {};
 
@@ -57,17 +96,41 @@ export class BondPriceAdjustReducer extends Reducer {
 
       let holdingsTouched = false;
       const nextHoldings = account.holdings.map(h => {
-        if (!h || h.allocation !== ALLOCATION.BOND || !h.rateKey) return h;
-        const effectiveDuration = h.duration ?? RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
-        if (effectiveDuration === 0) return h;
-        const curRate  = effectiveRates[h.rateKey] ?? 0;
-        const prevRate = priorRates[h.rateKey]     ?? curRate;
-        const deltaRate = curRate - prevRate;
-        if (deltaRate === 0) return h;
-        const delta = +(-(effectiveDuration * deltaRate * (h.marketValue ?? 0))).toFixed(2);
-        if (delta === 0) return h;
+        if (!h || h.allocation !== ALLOCATION.BOND) return h;
+
+        const ttm = yearsToMaturity(h, asOfMs);        // null ⇒ fund
+        let mv = h.marketValue ?? 0;
+        let touched = false;
+
+        // (1) Rate-sensitivity mark, with maturity-decayed effective duration.
+        if (h.rateKey) {
+          const staticDuration = h.duration ?? RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
+          const effDuration = ttm != null ? Math.min(staticDuration, ttm) : staticDuration;
+          if (effDuration > 0) {
+            const curRate   = effectiveRates[h.rateKey] ?? 0;
+            const prevRate  = priorRates[h.rateKey]     ?? curRate;
+            const deltaRate = curRate - prevRate;
+            const delta = +(-(effDuration * deltaRate * mv)).toFixed(2);
+            if (delta !== 0) { mv = Math.max(0, mv + delta); touched = true; }
+          }
+        }
+
+        // (2) Pull-to-par convergence (individual bond only, price → faceValue).
+        // Accreting bonds (zero-coupon/OID and TIPS, design 66 §G5/§G6) are EXCLUDED:
+        // their principal trajectory is owned by the accretion stream
+        // (BondAccretionHandler) — a zero accretes to par via constant-yield OID, and
+        // a TIPS indexes to CPI (redeeming at the adjusted principal, not the original
+        // face) — so a fixed-face pull-to-par here would double-count / fight it. The
+        // rate-sensitivity mark (1) above still applies to both.
+        if (ttm != null && h.faceValue != null && dt > 0 && !h.zeroCoupon && !h.inflationLinked) {
+          const frac  = ttm > 0 ? dt / (ttm + dt) : 1;   // ttm 0 ⇒ snap to par
+          const delta = +((h.faceValue - mv) * frac).toFixed(2);
+          if (delta !== 0) { mv = Math.max(0, mv + delta); touched = true; }
+        }
+
+        if (!touched) return h;
         holdingsTouched = true;
-        return { ...h, marketValue: Math.max(0, (h.marketValue ?? 0) + delta) };
+        return { ...h, marketValue: mv };
       });
 
       if (holdingsTouched) {
@@ -78,6 +141,9 @@ export class BondPriceAdjustReducer extends Reducer {
     return this.newState(state, {
       ...accountUpdates,
       priorMarkRates: { ...effectiveRates },
+      // Only advance the mark timestamp when we actually have an as-of date; unit
+      // tests that drive the reducer without currentPeriods keep priorMarkMs unset.
+      ...(asOfMs != null ? { priorMarkMs: asOfMs } : {}),
     });
   }
 }

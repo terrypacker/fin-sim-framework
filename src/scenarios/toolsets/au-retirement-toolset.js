@@ -15,6 +15,7 @@ import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js
 import { RATE_KEYS }                  from '../../finance/economic-regimes/rate-keys.js';
 import { CashSleeveInterestHandler }  from '../../finance/handlers/cash-sleeve-interest-handler.js';
 import { BondSleeveCouponHandler }    from '../../finance/handlers/bond-sleeve-coupon-handler.js';
+import { BondAccretionHandler }       from '../../finance/handlers/bond-accretion-handler.js';
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
 import { HealthcareEventHandler }     from '../../finance/spending/strategies/healthcare-event-handler.js';
@@ -538,6 +539,29 @@ export const AU_RETIREMENT = {
           taxMode,
         });
         h.handledEvents.push(bondCouponEvent);
+        handlers.push(h);
+      }
+    }
+
+    // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
+    // (design 66 §G5/§G6) — on AU equity-served accounts. au-stock accretion is AU
+    // ordinary income ('au'); super defers it. TIPS index to AU CPI (country 'AU').
+    // Shares the annual BOND_ACCRETION event scheduled by US_RETIREMENT; the apply
+    // reducer is registered there too (taxMode-branching). No-ops without an
+    // accreting bond.
+    const bondAccretionEvent = context.schedulesById['BOND_ACCRETION'];
+    if (bondAccretionEvent) {
+      const auAccretionAccounts = [
+        ...auStockAccts.map(a => ({ acct: a, role: ACCOUNT_ROLES.AU_STOCK, taxMode: 'au' })),
+        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'deferred' })),
+      ];
+      for (const { acct, role, taxMode } of auAccretionAccounts) {
+        const h = new BondAccretionHandler({
+          stateRegistry: sr, role,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          country: 'AU', taxMode,
+        });
+        h.handledEvents.push(bondAccretionEvent);
         handlers.push(h);
       }
     }
