@@ -228,6 +228,40 @@ test('StateTaxPaymentDebitReducer: debits US savings, keeps §4.4 (I3) — servi
   assert.equal(prev.usSavingsAccount.balance - next.usSavingsAccount.balance, 320, 'debited exactly the tax');
 });
 
+test('StateTaxPaymentDebitReducer: short balance escalates the residual cross-border', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const r = new StateTaxPaymentDebitReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 100, costBasis: 100 }] }),
+  };
+  const next = runReducer(r, state, makeAction('STATE_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
+    { checkNoMutation: false, balance: true, nonNegative: true });
+  assert.equal(next.usSavingsAccount.balance, 0, 'capped to available — never negative');
+  // Residual escalates rather than being silently absorbed (the historical gap):
+  // pull AU investments into this US tax account, then re-debit.
+  const xfer = next.next.find(a => a.type === 'INTL_TRANSFER_APPLY');
+  assert.ok(xfer, 'a residual state-tax bill escalates to a cross-border transfer');
+  assert.equal(xfer.direction, 'AU_TO_US');
+  assert.equal(xfer.dstKey, 'usSavingsAccount');
+  assert.equal(Math.round(xfer.targetDeficit), 220);
+  const redebit = next.next.find(a => a.type === 'STATE_TAX_PAYMENT_DEBIT' && a.escalated);
+  assert.ok(redebit, 'a follow-up escalated debit pays the topped-up balance');
+});
+
+test('StateTaxPaymentDebitReducer: no US cash account is fully OUT_OF_FUNDS (no crash)', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';   // key resolves, but state has no such account
+  const r = new StateTaxPaymentDebitReducer(services);
+  const next = runReducer(r, { people: makePeople({ residency: 'US' }) },
+    makeAction('STATE_TAX_PAYMENT_DEBIT', { amount: 500 }), DATE, { checkNoMutation: false });
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the whole liability is unpaid → OUT_OF_FUNDS');
+  assert.equal(oof.deficit, 500);
+  assert.equal(oof.currency, 'USD');
+});
+
 // ─── J — Mortgages (service-backed; cash debit == liability reduction) ─────────
 
 for (const [label, Reducer, type] of [
