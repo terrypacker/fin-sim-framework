@@ -33,6 +33,8 @@ import { INHERITED_RA_DISTRIBUTION_STRATEGY, INHERITED_RA_WINDOW } from '../../s
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
 import { buildOptVariables }      from '../../src/finance/optimization/intl-retirement-opt-config.js';
+import { InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionApplyReducer }
+  from '../../src/finance/account-rules/inheritance-classes.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -152,11 +154,13 @@ test('EVT-63: BequestService assigns stable stateKeys to assets that lack one', 
       { __type: 'Collectible', inheritedValue: 50_000, stateKey: 'keepMe' },
     ],
   }));
-  assert.strictEqual(bq.assets[0].stateKey, `${bq.id}_a0`);
+  // Design 63 §14.6: account-category auto-keys get an `…Account` suffix so their
+  // `.balance` journal rows match the per-account reports' convention.
+  assert.strictEqual(bq.assets[0].stateKey, `${bq.id}_a0Account`);
   assert.strictEqual(bq.assets[1].stateKey, 'keepMe');
 
   const { seeds, inheritanceDateMs } = services.bequestService.expand(bq);
-  assert.ok(seeds[`${bq.id}_a0`], 'auto-keyed asset should seed');
+  assert.ok(seeds[`${bq.id}_a0Account`], 'auto-keyed asset should seed');
   assert.ok(seeds['keepMe'], 'explicit-keyed asset should seed');
   assert.strictEqual(inheritanceDateMs, Date.UTC(2030, 0, 15));
 });
@@ -860,4 +864,71 @@ test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it
   sim.stepTo(new Date(Date.UTC(2035, 6, 1)));
   assert.ok((sim.state.inheritHome.value ?? 0) < 1, `param-driven sale should liquidate the home, got ${sim.state.inheritHome.value}`);
   assert.ok(sim.state.usSavingsAccount.balance > cashBefore, 'proceeds credited to cash');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63 §14: cross-border cash escalation — an inherited-asset cash movement in a
+// country the heir does not bank in (design 63 §7). Formerly `resolveCashKey`
+// returned an absent legacy key here; the RA-distribution site dereferenced it and
+// CRASHED (`transaction(undefined)`), the super/NE sites silently dropped the money.
+// resolvePresentCash now lands/sources cross-border (currency-converted) instead.
+// stateRegistry stub resolves no role account, so resolveCashKey falls to the legacy
+// literal — present only when the state carries usSavingsAccount / auSavingsAccount.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const noRoleRegistry = () => ({ getStateKey: () => null });
+
+test('EVT-63 §14: inherited-RA distribution for a heir with no US cash lands cross-border in AU cash (regression: no crash)', () => {
+  const accountService = ServiceRegistry.getInstance().accountService;
+  const reducer = new InheritedRaDistributionApplyReducer({ accountService, stateRegistry: noRoleRegistry() });
+  const state = {
+    inheritIra:       { balance: 300_000, holdings: [], type: 'ira' },
+    auSavingsAccount: { balance: 5_000, holdings: [], currency: { code: 'AUD' }, country: 'AU' },
+  };
+  const next = reducer.reduce(state, { type: 'INHERITED_RA_DISTRIBUTION_APPLY', amount: 30_000, stateKey: 'inheritIra', isRoth: false, residency: 'AU' });
+  assert.strictEqual(next.inheritIra.balance, 270_000, 'IRA drawn down');
+  // No FX rate in this bare state ⇒ native amount lands (documented fallback); the
+  // point is it lands SOMEWHERE rather than crashing on an absent US cash pool.
+  assert.strictEqual(state.auSavingsAccount.balance, 35_000, 'proceeds credited cross-border to AU cash');
+});
+
+test('EVT-63 §14: inherited-RA distribution is byte-identical when US cash exists (no cross-border)', () => {
+  const accountService = ServiceRegistry.getInstance().accountService;
+  const reducer = new InheritedRaDistributionApplyReducer({ accountService, stateRegistry: noRoleRegistry() });
+  const state = {
+    inheritIra:       { balance: 300_000, holdings: [], type: 'ira' },
+    usSavingsAccount: { balance: 5_000, holdings: [], currency: { code: 'USD' }, country: 'US' },
+    auSavingsAccount: { balance: 5_000, holdings: [], currency: { code: 'AUD' }, country: 'AU' },
+  };
+  reducer.reduce(state, { type: 'INHERITED_RA_DISTRIBUTION_APPLY', amount: 30_000, stateKey: 'inheritIra', isRoth: false, residency: 'US' });
+  assert.strictEqual(state.usSavingsAccount.balance, 35_000, 'credited to US cash as before');
+  assert.strictEqual(state.auSavingsAccount.balance, 5_000, 'AU cash untouched');
+});
+
+test('EVT-63 §14: no cash account anywhere ⇒ RA distribution no-ops instead of crashing', () => {
+  const accountService = ServiceRegistry.getInstance().accountService;
+  const reducer = new InheritedRaDistributionApplyReducer({ accountService, stateRegistry: noRoleRegistry() });
+  const state = { inheritIra: { balance: 300_000, holdings: [], type: 'ira' } };
+  const next = reducer.reduce(state, { type: 'INHERITED_RA_DISTRIBUTION_APPLY', amount: 30_000, stateKey: 'inheritIra', isRoth: false, residency: 'AU' });
+  assert.strictEqual(next.inheritIra.balance, 270_000, 'IRA drawn down; proceeds simply have nowhere to land');
+});
+
+test('EVT-63 §14: NE inheritance tax sources cross-border from AU cash when the heir has no US cash', () => {
+  const accountService = ServiceRegistry.getInstance().accountService;
+  const reducer = new InheritanceNeTaxApplyReducer({ accountService, stateRegistry: noRoleRegistry() });
+  const state = { auSavingsAccount: { balance: 5_000, holdings: [], currency: { code: 'AUD' }, country: 'AU' } };
+  reducer.reduce(state, { type: 'NE_INHERITANCE_TAX', amount: 1_000 });
+  assert.strictEqual(state.auSavingsAccount.balance, 4_000, 'NE tax debited cross-border from AU cash');
+});
+
+test('EVT-63 §14: AU super lump-sum lands cross-border in US cash for a US-only heir', () => {
+  const accountService = ServiceRegistry.getInstance().accountService;
+  const reducer = new InheritApplyReducer({ accountService, stateRegistry: noRoleRegistry() });
+  const state = {
+    inheritSuper:     { balance: 0, holdings: [], type: 'super', currency: { code: 'AUD' } },
+    usSavingsAccount: { balance: 10_000, holdings: [], currency: { code: 'USD' }, country: 'US' },
+  };
+  // taxable 500k, paid direct ⇒ tax = 500k × 0.17 = 85k; net = 415k credited to cash.
+  reducer.reduce(state, { type: 'INHERIT_APPLY', stateKey: 'inheritSuper', isSuper: true, category: 'account', inheritedValue: 500_000, taxableComponent: 500_000, paidViaEstate: false });
+  assert.strictEqual(state.usSavingsAccount.balance, 10_000 + 415_000, 'net super lump sum lands cross-border in US cash');
 });

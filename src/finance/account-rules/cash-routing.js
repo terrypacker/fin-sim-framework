@@ -79,3 +79,40 @@ export function resolveDestinationCashKey(stateRegistry, country, state, destina
   if (destinationKey != null && state[destinationKey] != null) return destinationKey;
   return resolveCashKey(stateRegistry, country, state, ownerId);
 }
+
+/**
+ * Resolve a cash account GUARANTEED PRESENT in `state`, preferring `country`'s
+ * pool and falling back to the OTHER country's when this country has none.
+ *
+ * `resolveCashKey` can return an absent legacy literal (`checkingAccount`) when a
+ * country has no wired cash account — normally harmless because the sim only routes
+ * a country's cash for people who bank there. Inheritance breaks that assumption: an
+ * inherited **US** IRA distribution (design 63 §6.2) or **AU** super lump-sum (§6.4)
+ * forces cash movement in a country the heir may not bank in at all (e.g. an
+ * AU-resident US-citizen heir with no US cash, §7). The bare key would then strand
+ * the proceeds or crash `transaction(undefined)`.
+ *
+ * This picks the heir's cash *wherever it exists*, so the caller can currency-convert
+ * and land/source the money cross-border instead of stranding it. Returns
+ * `{ key, account, country, crossed }` (`crossed` = fell back to the other country),
+ * or `null` when the household holds no cash account in EITHER country (degenerate —
+ * callers no-op rather than fabricate one).
+ *
+ * @param {object} stateRegistry
+ * @param {string} country - preferred ISO country ('US' | 'AU')
+ * @param {object} state
+ * @param {string|null} [ownerId=null]
+ * @returns {{ key: string, account: object, country: string, crossed: boolean } | null}
+ */
+export function resolvePresentCash(stateRegistry, country, state, ownerId = null) {
+  const localKey = resolveCashKey(stateRegistry, country, state, ownerId);
+  if (state[localKey] != null) {
+    return { key: localKey, account: state[localKey], country, crossed: false };
+  }
+  const other    = country === 'AU' ? 'US' : 'AU';
+  const otherKey = resolveCashKey(stateRegistry, other, state, ownerId);
+  if (state[otherKey] != null) {
+    return { key: otherKey, account: state[otherKey], country: other, crossed: true };
+  }
+  return null;
+}

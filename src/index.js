@@ -16,7 +16,7 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-r
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
-import { resolveCashKey, resolveDestinationCashKey } from './finance/account-rules/cash-routing.js';
+import { resolveCashKey, resolveDestinationCashKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
@@ -49,6 +49,7 @@ import { DEFAULT_LOCATION_POLICY, planLocatedTargets } from './finance/behaviora
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
+import { BondLadderReducer, materializeLadder } from './finance/behavioral/bond-ladder-reducer.js';
 import { CashBucketDrawdownReducer } from './finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from './finance/behavioral/contribution-suspension-toggle-reducer.js';
 import { DownturnRothConversionReducer } from './finance/behavioral/downturn-roth-conversion-reducer.js';
@@ -57,7 +58,6 @@ import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunisti
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
 import { RebalanceToTargetApplyReducer } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
 import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, targetForRole, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
-import { BondLadderReducer, materializeLadder } from './finance/behavioral/bond-ladder-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
@@ -126,7 +126,7 @@ import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingAct
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
-import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
+import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
@@ -490,6 +490,7 @@ export const Finance = {
   BaseAccountModule,
   resolveCashKey,
   resolveDestinationCashKey,
+  resolvePresentCash,
   InheritHandler,
   InheritApplyReducer,
   InheritanceNeTaxApplyReducer,
@@ -629,6 +630,8 @@ export const Finance = {
   AssetLocationRebalanceApplyReducer,
   BehavioralPanicSellApplyReducer,
   BEHAVIORAL_STRATEGY_REGISTRY,
+  BondLadderReducer,
+  materializeLadder,
   CashBucketDrawdownReducer,
   ContributionSuspensionToggleReducer,
   DownturnRothConversionReducer,
@@ -649,8 +652,6 @@ export const Finance = {
   resolveRegimeTarget,
   targetForRole,
   RebalanceToTargetReducer,
-  BondLadderReducer,
-  materializeLadder,
   StockHarvestApplyReducer,
   StrategicAssetLocationReducer,
   resolveSubstitute,
@@ -793,6 +794,10 @@ export const Finance = {
   computeHoldingsGrowth,
   computeHoldingsDividends,
   computeHoldingsCoupons,
+  couponFiringFraction,
+  couponFiringIndex,
+  resolvePrevailingCouponRate,
+  mergeCouponReinvestLots,
   computeHoldingsAccretion,
   computeHoldingsCashInterest,
   consumeHoldings,

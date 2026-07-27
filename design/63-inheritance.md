@@ -617,5 +617,174 @@ was rejected: it duplicates four toolsets' worth of wiring and drifts from them.
 ### 13.7 Regression guard
 Seed-at-0 keeps every metric byte-identical before the inheritance date; a bequest-free scenario
 registers no records. The reference golden stays unmoved.
+
+---
+
+## 14. Full first-class integration — the *effective-records* seam
+
+**Status: PROPOSED.** §13 (P6a/b/c) made inherited brokerage / property / collectible *participate*
+in the run (net worth, liquidity, drawdown, growth, sale) by injecting them into the **compiler
+context**. But a promoted asset is still **invisible to every tool that discovers accounts from the
+serialized config records** rather than from the runtime context/state — the *tuning* and *reporting*
+layer. This section closes that gap so an inherited account drops into the OPT/MPC levers, the
+behavior / spending strategies, the holdings UI, the state metrics, and the journal reports — while
+staying a **projection of the `Bequest`** (never a serialized account of its own).
+
+### 14.1 Symptoms (what a user sees today)
+1. Inherited accounts are **absent from the holdings-panel dropdown**.
+2. **Cash Flow by Account** (and the sibling per-account journal reports) don't show the inherited
+   account's flows.
+3. Inherited accounts are **absent from the state-view Metrics**.
+
+All three trace to the **same** structural fact — plus one incidental naming fragility (§14.6).
+
+### 14.2 Root cause — three discovery topologies, one gap
+The framework reaches "the accounts" through **three different lists**, and inherited assets are in
+two of them but not the third:
+
+| Layer | Built by | Contains inherited assets? | Consumers |
+|---|---|---|---|
+| **Config records** | `accountService.getAll()` (+ realProperty/collectible services) | ❌ **no** | serialize (`scenario-serializer.js:456,:486`), **`ScenarioParamGenerator.generate(cfg)`** (`:119`), holdings dropdown (`holdings-plugin.js:182`), journal facet options (`journal-report-plugin.js:523`), `buildOptVariables(scenario.accounts)` (`optimization-presenter.js:51`) |
+| **Compiled context** | `_buildContext` = services `+ expandContextRecords` (`scenario-compiler.js:181`) | ✅ yes (active bequests) | runtime handlers (growth / dividend / appreciation / sale / drawdown) |
+| **Runtime state** | toolset `state()` seeds | ✅ yes | net worth, drawdown eligibility, Lever-B online re-stamp |
+
+The **config-records** layer is the one that both (a) feeds serialization — which is *why* we must not
+register inherited assets there (double-serialize → duplicate-on-reload) — and (b) feeds
+**per-record param generation** and the **UI/report account lists**. So the very list we must keep
+inherited assets *out of for persistence* is the list the tuning + reporting tools *read from*.
+
+**Per-record params are the crux of "drop into OPT/MPC/behavior/spending."** `ScenarioParamGenerator`
+generates `acct.<sk>.<field>` / `prop.<sk>.<field>` / `coll.<sk>.<field>` params **from
+`cfg.accounts` / `cfg.realProperties` / `cfg.collectibles`** (`scenario-param-generator.js:119-127`).
+These generated params *are* the design-58 per-account `drawdownPriority`, the per-account growth /
+dividend rate overrides, and the design-61/65 sleeve/allocation levers — the knobs the optimizer,
+MC, MPC, and the strategy families tune. Because a promoted inherited account is **not in
+`cfg.accounts`**, it generates **no** per-account params, so it rides the bare role default and can't
+be independently reordered, rate-overridden, or sleeve-tuned. Fixing visibility (UI) and fixing
+tunability (params) are the **same** reroute.
+
+### 14.3 Chosen model — one *effective records* expansion, config stays the source of truth
+Keep the **`Bequest` as the sole serialized source of truth** (Direction B). Introduce a single
+**effective-records** expansion — `configRecords + expandContextRecords(activeBequests)` — and route
+the config-record **consumers that should see inherited assets** through it, while **serialize keeps
+reading the raw `getAll()`** (so nothing new is ever persisted). One expansion, reused everywhere;
+the promotion logic already exists (`BequestService.expandContextRecords`, `scenario-compiler.js:181`)
+— §14 just feeds that *same* output to the four other consumers.
+
+Reroute (read *effective*):
+1. **`ScenarioParamGenerator.generate`** — pass an effective `cfg` (config records + active
+   promotions) so inherited accounts generate `acct./prop./coll.` per-record params ⇒ they gain
+   `drawdownPriority`, rate overrides, sleeve/allocation levers ⇒ **drop into OPT/MC/MPC + behavior /
+   spending strategies automatically** (all of those read the generated params / role-keyed state, no
+   per-tool special-casing).
+2. **Holdings dropdown** (`holdings-plugin.js:182`).
+3. **Journal facet options** (`journal-report-plugin.js:523`) + the per-account report **default**
+   (§14.6).
+4. **`buildOptVariables(scenario.accounts)`** (`optimization-presenter.js:51`) — the Lever-B role
+   filter already admits inherited roles (they *reuse* the heir's `US_STOCK`/`AU_STOCK`, §13.4), but
+   the effective list makes discovery explicit and future-proofs dedicated inherited roles.
+
+Do **not** reroute:
+5. **Serialize / snapshotDomainRecords** (`scenario-serializer.js:456,:486`) — stays on raw
+   `getAll()`. This is the invariant that prevents the double-serialize the whole design avoids.
+
+**Where the expansion lives.** Two viable seams; recommend **(a)**:
+- **(a) `accountService.getEffective()` (+ realProperty/collectible equivalents)** — a read-through
+  overlay = `getAll()` + active promotions, tagged `{ inherited: true, bequestId }`. UI/opt/param-gen
+  call `getEffective()`; serialize calls `getAll()`. The service already holds the `bequestService`
+  ref path via the registry. Localized, explicit, and the tag lets consumers style/lock inherited
+  rows.
+- **(b)** Build the effective `cfg` once in `scenario-loader.js` before `ScenarioParamGenerator.
+  generate(cfg)` and thread an "effective accounts" array to the UI. Fewer new methods but a longer
+  thread through the UI layer.
+
+### 14.4 Persistence semantics (why this is *not* the double-serialize bug)
+Rerouting **param generation** means generated param *values* for inherited accounts —
+`acct.inheritedBrokerageAccount.drawdownPriority`, rate overrides, `saleAsset.*.plannedSaleYear`,
+etc. — get **harvested into `cfg.parameters`**, keyed by `stateKey`. That is **correct and desired**:
+it is how a user's post-inheritance edits survive a round-trip, and it is exactly the pattern design 63
+already ships for `bequest.*` / `raAsset.*` / `saleAsset.*` params (§12.3). It is **not**
+double-serialization: no duplicate *account record* is written — only a scalar param keyed by the
+inherited stateKey, whose owning record is **re-expanded from the `Bequest` on every load**.
+
+**Load-order invariant (load-bearing):** the effective expansion **must run before**
+`ScenarioParamGenerator.generate` on every load, so the inherited record exists when its params
+regenerate. Otherwise the design-55 §14 **de-generation guard** (`scenario-loader.js:793`) sees an
+"orphaned" generated param (no owning record) and strips it — silently dropping the user's tuning.
+The guard is the safety net *and* the trap: keep the expansion upstream of both generation and
+de-generation.
+
+### 14.5 Param-template collisions to reconcile
+Promoting property / collectible into the **generation** cfg means the standard `prop.` / `coll.`
+templates now fire for them **alongside** the existing bequest-specific `saleAsset.` template — and
+`ScenarioParamGenerator` **throws on duplicate keys** (`scenario-param-generator.js:107`). Concretely:
+- `prop.<sk>.plannedSaleYear` (`REAL_PROPERTY_PARAM_TEMPLATE`) **collides** with
+  `saleAsset.<sk>.plannedSaleYear` (`INHERITED_SALE_PARAM_TEMPLATE`). **Resolution:** retire
+  `INHERITED_SALE_PARAM_TEMPLATE` / the `saleAsset.` prefix once property/collectible flow through the
+  standard `prop.`/`coll.` generation. Collectibles currently generate **nothing**
+  (`COLLECTIBLE_PARAM_TEMPLATE = []`), so to preserve the P6c sale-year knob, **add `plannedSaleYear`
+  to `COLLECTIBLE_PARAM_TEMPLATE`**. Net: one source of the sale-year param, via the same template
+  every other property/collectible uses.
+- **Retirement (v2):** if inherited IRA/401(k)/Roth are ever promoted (§14.7), `acct.<sk>.*` would
+  overlap the `raAsset.<sk>.*` distribution knobs — keep them **disjoint** (distribution strategy on
+  `raAsset.`, earnings/priority on `acct.`) or the same dup-key guard throws.
+
+### 14.6 Journal naming fragility (task-2, standalone)
+The per-account journal reports (`CashFlowByAccountDef` et al.) select account-balance rows with
+`{ op: 'contains', field: 'stateKey', value: 'account.balance' }`
+(`report-definition-registry.js:328,369,404,439,637,726`). This works **only because every scenario
+account's `stateKey` ends in `…Account`** (`usSavingsAccount.balance` contains `account.balance`,
+case-folded). It is disambiguation-by-luck: it scopes "balance rows" to accounts and excludes
+real-property `.value` and loan `.balance` **purely via the `account` substring**. The report `api`
+(`JournalQueryApi`) does **not** expose the account set, so it can't currently build the filter from
+real identities.
+
+Inherited assets break this only when their `stateKey` **lacks `account`** — i.e. **auto-keyed**
+assets (`${bequest.id}_a<i>`, `bequest-service.js:282`) or a user key without the word. The shipped
+example uses `inheritedBrokerageAccount` and is unaffected.
+
+Two fixes, escalating:
+- **Tactical (ship now):** make `_assignAssetStateKeys` **category-aware** so an auto-keyed
+  *account* asset gets a `…Account` suffix (`${base}_a<i>Account`), conforming to the convention.
+  Property/collectible keys stay un-suffixed (correctly excluded from account-balance reports —
+  they're `.value`). One function + one pinning-test update; zero regression to existing reports.
+- **Robust (folds into §14.3):** once `getEffective()` exists, replace the fragile substring: default
+  the report's `accountStateKeys` to the **effective account set** and OR their `${sk}.balance`
+  prefixes (generalizing `_appendAccountStateKeyFilter`, which already does this per *selected*
+  account). This removes the substring dependency for good and is inheritance-agnostic (also fixes any
+  future non-`…Account` account key).
+
+### 14.7 Name propagation (task-2, standalone)
+`_seedPlain` omits `name`, so the inherited account's **state entry has no label**
+(`bequest-service.js` seed shape) — any surface that labels from state shows a fallback. Carry
+`asset.name` into **both** the state seed (`_seedPlain`) and the promoted context record
+(`expandContextRecords` already sets `name`, keep in sync), and have `getEffective()` surface it as
+the account label. This is the "we aren't leveraging the name" gap — independently correct, no
+dependency on §14.3.
+
+### 14.8 Retirement promotion (still v2)
+Inherited IRA/401(k)/Roth remain drained by the SECURE 10-year forced stream (§6.2) and are **not**
+promoted to first-class growing/tunable accounts. Doing so collides the reused role
+(`IRA`/`K401`/`ROTH`) with the heir's own RMD/contribution machinery (§13.5 decision 1). The
+effective-records seam (§14.3) is the substrate for it, but the role-collision resolution
+(shared-role vs. dedicated `inherited-*` roles) is deferred with §13.5.
+
+### 14.9 Phasing
+- **P7a (task-2, now):** name propagation (§14.7) + category-aware auto-key (§14.6 tactical). Ships
+  independently; no serialize/param changes.
+- **P7b:** `getEffective()` overlay (§14.3a) + reroute holdings dropdown, journal facet options, and
+  state metrics ⇒ symptoms 1 & 3 fixed; journal facet lists inherited accounts.
+- **P7c:** reroute `ScenarioParamGenerator.generate` through the effective cfg + reconcile template
+  collisions (§14.5) ⇒ inherited accounts gain per-record params ⇒ drop into OPT/MC/MPC + behavior /
+  spending. Load-order invariant test (§14.4).
+- **P7d:** robust journal per-account default from the effective set (§14.6 robust); retire the
+  `account.balance` substring.
+- **P8 (v2):** retirement promotion (§14.8).
+
+### 14.10 Regression guard
+Every reroute reads `getEffective()`, which for an **inert / bequest-free** scenario is identical to
+`getAll()` (no active promotions) — so param generation, the UI lists, and the opt variables are
+byte-identical and the reference golden stays unmoved. Serialize never changes. The name +
+auto-key changes only affect inherited records, which don't exist in the golden.
 </content>
 </invoke>
