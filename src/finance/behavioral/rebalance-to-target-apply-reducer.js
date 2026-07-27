@@ -171,8 +171,15 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),
     };
   }
+  // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months from
+  // the AU deemed-acquisition date, capped at auGain. Must ride on BOTH branches. Both
+  // brokerage disposal reducers stamp it (au-brokerage-classes, us-brokerage-classes),
+  // and every consumer reads `action.auDiscountableGain ?? auGain` — so OMITTING it does
+  // not mean "unknown", it means "all of it qualifies". Dropping it on the US-country
+  // branch therefore handed a rebalance the full 50% discount with no holding-period
+  // test, while a DRAWDOWN disposal from that same account was gated correctly.
+  const auDiscountableGain = Math.min(auGain, fifo.realizedDiscountableGainByCountry?.AU ?? auGain);
   if (country === 'AU') {
-    const auDiscountableGain = Math.min(auGain, fifo.realizedDiscountableGainByCountry?.AU ?? auGain);
     return {
       type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
       // Design 76 Gap C — attribute the gain to the account that was rebalanced.
@@ -180,7 +187,7 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
     };
   }
   return {
-    type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain,
+    type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
     residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
   };
 }
