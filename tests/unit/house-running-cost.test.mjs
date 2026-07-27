@@ -27,6 +27,24 @@ import assert             from 'node:assert/strict';
 import { HouseRunningCostHandler } from '../../src/finance/handlers/house-running-cost-handler.js';
 import { loadScenarioSim }         from '../helpers/scenario-harness.js';
 
+
+/**
+ * These tests assert on FINAL STATE only — none of them reads `sim.journal`,
+ * `sim.history`, a snapshot, the bus, or `sim.samples`. Telemetry is therefore pure
+ * overhead here, and it is not a small one: the journal and snapshot machinery, not
+ * the simulation maths, is what a full run spends its time on (design 78 §4.4 — sim
+ * maths measured at ~285ms of a 9.5s run). Turning it off makes this file ~5x faster.
+ *
+ * This matters beyond the file: `node --test` runs 300+ files 8-way parallel, so once
+ * the fast files drain, the whole suite sits on a handful of slow ones printing
+ * nothing, which reads as a hang. Shortening that tail is what keeps `npm run test`
+ * looking alive.
+ *
+ * If you add an assertion here that reads the journal or history, drop the wrapper and
+ * call `loadScenarioSim` directly — the default is full telemetry for a reason.
+ */
+const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
+
 // Minimal stateRegistry that always resolves the US pool key (residency US) or AU pool key.
 const mkRegistry = (usKey = 'usCash', auKey = 'auCash') => ({
   resolveTransactionAccountKey: (country) => (country === 'AU' ? auKey : usKey),
@@ -125,15 +143,15 @@ describe('house running cost — e2e', () => {
   const addCost = (amount) => (cfg) => { for (const p of cfg.realProperties) p.annualRunningCost = amount; };
 
   test('no running cost ⇒ two default runs are byte-identical, no event scheduled', () => {
-    const a = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const b = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const a = loadSim({ simEnd: END, stepTo: END }).sim;
+    const b = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(a), nw(b));
     assert.equal(a.queue.data.some(e => e.type === 'HOUSE_RUNNING_COST'), false);
   });
 
   test('a positive running cost schedules the event and lowers ending net worth', () => {
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const on  = loadScenarioSim({ mutateCfg: addCost(24000), simEnd: END, stepTo: END });
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
+    const on  = loadSim({ mutateCfg: addCost(24000), simEnd: END, stepTo: END });
     assert.equal(on.sim.queue.data.some(e => e.type === 'HOUSE_RUNNING_COST'), true);
     assert.ok(nw(on.sim) < nw(off), 'running costs should reduce ending net worth');
   });

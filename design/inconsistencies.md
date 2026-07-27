@@ -239,11 +239,12 @@ not "hold different opinions about what a dollar is". The allocation cube
 (`allocation-cube.js:221`) does have a company branch, and its Σ-rows ≡
 `computeNetWorth` invariant holds to the cent, so after-tax is the outlier.
 
-**Direction**: entangled with a modelling question rather than a pure bug — very
-high-risk equity arguably should not sit in a headline "worth" figure at all. The
-likely resolution is an explicit per-asset flag (model it, exclude it from worth)
-rather than either metric silently choosing. Until then the two numbers should not
-be quoted side by side without a footnote.
+**Direction**: superseded by `design/88-speculative-assets.md` (D5), which resolves
+this as part of a per-asset `speculative` flag rather than independently. Patching
+`_sumAfterTax` on its own would force full recognition of exactly the high-risk
+stakes that prompted the question — making the headline number worse while making
+the code more consistent. Until 88 phase 1 lands, the two numbers should not be
+quoted side by side without a footnote.
 
 ---
 
