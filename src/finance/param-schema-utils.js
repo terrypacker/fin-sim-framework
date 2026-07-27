@@ -125,6 +125,50 @@ export function controllableVariables(entries = []) {
   return entries.filter(e => e?.controllable === true);
 }
 
+/**
+ * The loaded scenario's own parameter values, as one flat `name → value` bag.
+ *
+ * A scenario cfg carries params in TWO stores and a sweep runner that reads only
+ * one of them silently centers on the wrong world:
+ *   - `cfg.parameters` — the plain bag the compiler reads. Always populated.
+ *   - `cfg.params`     — the typed UI list (`{ name, value, type, … }`). Populated
+ *                        once ScenarioLoader has materialized the schema; this is
+ *                        what the scenario editor writes to, so it WINS on conflict.
+ *
+ * Use this — never one store alone — wherever "what does this plan actually
+ * assume?" is the question (MC/Opt variable centers, provenance checks).
+ *
+ * @param {object} cfg  a serialized scenario config
+ * @returns {object} flat param bag (empty object when cfg has neither store)
+ */
+export function scenarioParamValues(cfg) {
+  const out = { ...(cfg?.parameters ?? {}) };
+  for (const p of (Array.isArray(cfg?.params) ? cfg.params : [])) {
+    if (p?.name != null && p.value !== undefined) out[p.name] = p.value;
+  }
+  return out;
+}
+
+/**
+ * The `key → defaultValue` bag from a flat param schema.
+ *
+ * This is the value ScenarioLoader materializes into `cfg.params` for any key the
+ * cfg doesn't carry (`_mergeParamSchema`), so it is what the SIM will actually run
+ * at. A sweep centering on anything else for those keys is centering off the run.
+ *
+ * Hidden entries are excluded to mirror the loader's `persistableSchema`: a hidden
+ * generated param (e.g. an account's `balanceTarget`) is a compile-only MC/Opt lever
+ * whose default must never be injected — writing it would rescale that account's
+ * holdings (design 55 §13).
+ */
+export function paramSchemaDefaults(schema = []) {
+  const out = {};
+  for (const e of schema) {
+    if (e?.key != null && !e.hidden && e.defaultValue !== undefined) out[e.key] = e.defaultValue;
+  }
+  return out;
+}
+
 /** Index a flat param schema array by its `key` for O(1) identity lookups. */
 export function indexParamSchema(schema = []) {
   return new Map(schema.map(e => [e.key, e]));

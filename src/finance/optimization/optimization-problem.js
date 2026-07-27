@@ -17,6 +17,7 @@ import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
 import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, defaultRateProvider, liquidationRateProvider }
   from '../derived-metrics/after-tax.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
+import { scenarioParamValues } from '../param-schema-utils.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
 import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
@@ -123,6 +124,31 @@ export class OptimizationProblem {
     this.horizonYears = horizonYears;
     this.feasibilityFirst = feasibilityFirst;
     this._serializedTemplate = null;
+    this._rawTemplateCache   = null;
+    this._resolvedBase       = null;
+  }
+
+  /**
+   * The base params every candidate is applied on top of: the cfg template's OWN
+   * params, under the caller's `baseParams`.
+   *
+   * Without the template layer a rollout describes the framework's library defaults
+   * rather than the loaded plan, because `serializeScenario` carries the typed
+   * `cfg.params` list but DROPS the `cfg.parameters` bag — so a template built by
+   * `buildDefaultConfig()` (the fallback, and what every headless lab uses) arrives
+   * at `_compile` with no params at all and the loader fills in schema defaults.
+   * `moveYear` and the `people` map aren't even in the schema, so they simply went
+   * missing: the plan's move to AU never happened. Same defect the MC runner had.
+   *
+   * Resolved once and memoized. A WORKER must not redo the merge — it is handed a
+   * pre-serialized template, so re-merging would fold a *different* (synthetic)
+   * template's params in underneath and make parallel rollouts disagree with serial
+   * ones. `initProblem` therefore pre-seeds `_resolvedBase` with the main thread's
+   * already-merged base, the same way it pre-seeds `_serializedTemplate`.
+   */
+  _resolveBase() {
+    this._resolvedBase ??= { ...scenarioParamValues(this._rawTemplate()), ...this.baseParams };
+    return this._resolvedBase;
   }
 
   /**
@@ -229,7 +255,7 @@ export class OptimizationProblem {
    * of the objective — so it is the unit a Web Worker runs off the main thread.
    */
   _rolloutResult(candidate) {
-    const params = this._applyCandidate({ ...this.baseParams, endDate: this._scoreEnd() }, candidate ?? {});
+    const params = this._applyCandidate({ ...this._resolveBase(), endDate: this._scoreEnd() }, candidate ?? {});
     return this._rollout(params);
   }
 
@@ -294,12 +320,16 @@ export class OptimizationProblem {
     return params;
   }
 
+  /** The cfg template as handed in (or the synthetic default), built at most once. */
+  _rawTemplate() {
+    this._rawTemplateCache ??= this.initialState?.cfgTemplate
+      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
+    return this._rawTemplateCache;
+  }
+
   /** Serialize the cfg template once (JSON-safe; registry entries carry factories). */
   _cfgTemplate() {
-    if (this._serializedTemplate) return this._serializedTemplate;
-    const raw = this.initialState?.cfgTemplate
-      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
-    this._serializedTemplate = ScenarioSerializer.serializeScenario(raw);
+    this._serializedTemplate ??= ScenarioSerializer.serializeScenario(this._rawTemplate());
     return this._serializedTemplate;
   }
 
@@ -465,7 +495,7 @@ export class OptimizationProblem {
    * @returns {{ date: Date, state: object, queue: Array, rngState: number }}
    */
   rollToSnapshot(candidate, toDate) {
-    const params = this._applyCandidate({ ...this.baseParams, endDate: this.simEnd }, candidate ?? {});
+    const params = this._applyCandidate({ ...this._resolveBase(), endDate: this.simEnd }, candidate ?? {});
     const sim = this._seededSim(params);
     sim.stepTo(toDate);
     return {
@@ -490,7 +520,7 @@ export class OptimizationProblem {
     // The fan spans the scored window [now, scoreEnd] (design 41) so the user sees
     // the horizon being optimized over, not always out to simEnd.
     const scoreEnd = this._scoreEnd();
-    const params = this._applyCandidate({ ...this.baseParams, endDate: scoreEnd }, candidate ?? {});
+    const params = this._applyCandidate({ ...this._resolveBase(), endDate: scoreEnd }, candidate ?? {});
     const sim    = this._seededSim(params);
     const startMs = sim.currentDate.getTime();
     const endMs   = scoreEnd.getTime();

@@ -15,23 +15,29 @@
  * and each of the following was a real bug found by inspecting output that looked
  * plausible. They live here so no future arm has to rediscover them.
  *
- * ── TRAP 1: variable means come from the FRAMEWORK DEFAULTS, not your scenario.
+ * ── TRAP 1 (FIXED IN THE RUNNER): means came from FRAMEWORK DEFAULTS, not your scenario.
  *
- * `DEFAULT_MC_VARIABLE_CONFIGS` takes its means from `INTL_RETIREMENT_DEFAULTS`.
- * `_perturb()` samples an enabled variable from `cfg.mean` and IGNORES baseParams.
- * So an arm whose scenario assumes 10% equity returns gets sampled around the
- * framework's 5–7% default, silently testing a world several points more
- * pessimistic than the plan — and every failure rate comes out overstated.
- * `recentreOnScenario()` fixes this generically. Always call it.
- * (There is an aliasing wrinkle behind it: the paramKey is `brokerageGrowthRate`
- * but its default mean is read from `usStockGrowthRate`.)
+ * `DEFAULT_MC_VARIABLE_CONFIGS` takes its means from `INTL_RETIREMENT_DEFAULTS`, and
+ * the runner used to center on those unless the caller passed the scenario's params
+ * as `baseParams` — which no arm did. An arm whose scenario assumed 10% equity
+ * returns got sampled around the framework's 5% default, silently testing a world
+ * several points more pessimistic than the plan, and a *disabled* lever wrote its
+ * framework default straight into `cfg.parameters`, overwriting the plan's own value.
  *
- * ── TRAP 2: shock variables are not built unless `shocks` is passed to run().
+ * `IntlRetirementMcRunner.run()` now seeds its base from the cfgTemplate's own params
+ * (both stores) before anything else, so every arm is centered on its scenario with
+ * no caller cooperation. `summary.provenance` reports where each center came from.
+ * `recentreOnScenario()` is kept as a VERIFICATION that this held — it no longer
+ * overrides anything, and anything it reports is a bug worth chasing.
  *
- * `buildShockMcConfigs` reads `params.shocks`. Enabling `shocks[0].severity` and
- * then calling `runner.run({})` builds NO shock variables at all — silently, with
- * no warning — and the arm measures a world with no crash in it. Pass the shocks
- * array through: `runner.run({ shocks })`. `extractShocks()` pulls it off the cfg.
+ * ── TRAP 2 (FIXED IN THE RUNNER): shock variables need `shocks` in the base params.
+ *
+ * `buildShockMcConfigs` reads `params.shocks`. Enabling `shocks[0].severity` and then
+ * calling `runner.run({})` used to build NO shock variables at all — silently — so
+ * the arm measured a world with no crash in it. The runner now reads `shocks` off the
+ * cfgTemplate along with every other param. Passing `runner.run({ shocks })` is still
+ * correct (an explicit caller override wins) and `extractShocks()` still pulls it off
+ * the cfg, but omitting it is no longer a silent hole.
  *
  * ── TRAP 3: a constant sampled return is not sequence risk.
  *
@@ -53,6 +59,8 @@
 
 import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
+import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
+import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
 import { quietAsync } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
@@ -64,22 +72,28 @@ export function extractShocks(cfg) {
 }
 
 /**
- * Re-centre every numeric MC variable on this cfg's own param value (TRAP 1).
- * Keeps each variable's configured stdDev; only the mean moves.
+ * VERIFY that every numeric MC variable is centered on this cfg's own param value
+ * (TRAP 1). The runner does the re-centring itself now, so this asserts rather than
+ * repairs: it builds the variable list the way the runner will and reports anything
+ * that would still be sampled away from the scenario.
  *
- * @returns {string[]} human-readable list of what moved, for the report header
+ * A non-empty result means either a deliberate override (from `opts.overrides`) or a
+ * regression in the runner's base-param layering — not something to paper over here.
+ *
+ * @returns {string[]} human-readable list of centers that differ, for the report header
  */
 export function recentreOnScenario(mcConfig, cfg, shocks) {
-  const own = numericParams(cfg);
-  const moved = [];
-  for (const v of mcConfig.buildVariables({ shocks })) {
-    const mine = own.get(v.paramKey);
-    if (mine != null && v.mean != null && Math.abs(mine - v.mean) > 1e-9) {
-      mcConfig.applyOverride(v.paramKey, { mean: mine });
-      moved.push(`${v.paramKey} ${(v.mean * 100).toFixed(1)}%→${(mine * 100).toFixed(1)}%`);
+  const own  = numericParams(cfg);
+  const base = { ...scenarioParamValues(cfg), shocks };
+  const off  = [];
+  for (const v of mcConfig.buildVariables(base)) {
+    const mine   = own.get(v.paramKey);
+    const center = v.type === DISTRIBUTION_TYPES.CONSTANT ? v.value : v.mean;
+    if (mine != null && center != null && Math.abs(mine - center) > 1e-9) {
+      off.push(`${v.paramKey} centered ${center} vs scenario ${mine}`);
     }
   }
-  return moved;
+  return off;
 }
 
 /**
@@ -89,7 +103,9 @@ export function recentreOnScenario(mcConfig, cfg, shocks) {
  * @param {object}  [opts]
  * @param {boolean} [opts.shock]     enable the manufactured single crash (severity + date)
  * @param {object}  [opts.overrides] extra `applyOverride` calls, `{paramKey: override}`
- * @param {boolean} [opts.recentre]  default true — see TRAP 1
+ * @param {boolean} [opts.recentre]  default true — verify centers match the scenario
+ *                                   (TRAP 1). The returned `recentred` list is now a
+ *                                   list of centers that DON'T match; normally empty.
  */
 export function buildMcConfig(cfg, { shock = false, overrides = {}, recentre = true } = {}) {
   const shocks = extractShocks(cfg);
@@ -140,5 +156,13 @@ export async function runArm({ cfg, n, mcConfig, shocks }) {
     firstDecadeBelow: r.firstDecadeBelowMedian ?? null,
   }));
 
-  return { rows, pathShape: summary?.pathShape ?? null, summary, ms: Date.now() - started };
+  return {
+    rows,
+    pathShape:  summary?.pathShape ?? null,
+    // What world these rows describe (see summarizeProvenance). Persisted with the
+    // arm so a report written days later can still say whether it is about the plan.
+    provenance: summary?.provenance ?? null,
+    summary,
+    ms: Date.now() - started,
+  };
 }

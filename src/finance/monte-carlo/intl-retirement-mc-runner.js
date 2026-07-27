@@ -14,7 +14,8 @@ import { ServiceRegistry }            from '../../services/service-registry.js';
 import { IntlRetirementScenario, applyRealPropertySaleYearParams, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
-import { IntlRetirementMcConfig }     from './intl-retirement-mc-config.js';
+import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
+import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { get, set }                   from './mc-param-paths.js';
 import { computeNetWorth }            from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
@@ -190,6 +191,59 @@ function makeSeededRng(seed) {
 }
 
 /**
+ * Reduce a resolved variable list to a provenance record for the run summary.
+ *
+ * Answers "what world did these numbers come from?" — the question a failure rate
+ * cannot be read without. Groups every variable by where its center came from (see
+ * CENTER_SOURCES), plus the two sets that need calling out:
+ *
+ *   syntheticCenters — ENABLED variables centered on the MC template's hardcoded
+ *                      mean because neither the scenario nor the param schema has a
+ *                      value at that paramKey. Those paths are partly synthetic;
+ *                      results must be labelled as such. Also warned to the console,
+ *                      since nothing else would surface it.
+ *   divergentCenters — centers deliberately set away from the scenario's own value.
+ *                      Legitimate (that is what an override is for) but it means the
+ *                      run is not centered on the plan as written.
+ *
+ * @param {Array}  variables                resolved variables from buildVariables()
+ * @param {object} [layers]
+ * @param {object} [layers.ownParams]       the loaded scenario's own param bag
+ * @param {object} [layers.schemaDefaults]  key → schema defaultValue
+ */
+export function summarizeProvenance(variables, { ownParams = null, schemaDefaults = null } = {}) {
+  const bySource = { scenario: [], schema: [], override: [], default: [] };
+  const divergentCenters = [];
+  const syntheticCenters = [];
+
+  for (const v of variables) {
+    // buildVariables can only report "resolvable in the merged bag or not"; the
+    // runner knows WHICH layer answered, so it splits scenario-owned values from
+    // schema defaults here — via the same function the MC panel's row tags use.
+    const source = refineCenterSource(v, { ownParams, schemaDefaults });
+
+    bySource[source]?.push(v.paramKey);
+    if (v.centerDiverges) {
+      divergentCenters.push({ paramKey: v.paramKey, center: v.center, scenarioValue: v.scenarioValue });
+    }
+    if (v.enabled && source === CENTER_SOURCES.DEFAULT) syntheticCenters.push(v.paramKey);
+  }
+
+  if (syntheticCenters.length > 0) {
+    console.warn('[IntlRetirementMcRunner] sampling around FRAMEWORK DEFAULTS — the scenario '
+      + `carries no value for: ${syntheticCenters.join(', ')}. Results are partly synthetic.`);
+  }
+
+  return {
+    centersBySource: bySource,
+    syntheticCenters,
+    divergentCenters,
+    /** True when every sampled center traces to the loaded scenario. */
+    fromScenario: syntheticCenters.length === 0 && divergentCenters.length === 0,
+  };
+}
+
+/**
  * Monte Carlo runner for the IntlRetirementScenario.
  *
  * Orchestrates n simulation runs, each with parameters perturbed by
@@ -250,6 +304,11 @@ export class IntlRetirementMcRunner {
     const rawTemplate = this.cfgTemplate
       ?? IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd);
     const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
+    // Read the template's params from the RAW record: serializeScenario carries the
+    // typed `params` list but not the `parameters` bag, and a cfg straight out of
+    // buildDefaultConfig() has only the bag — so reading the serialized copy would
+    // see no params at all for that (very common) source.
+    const templateParams = scenarioParamValues(rawTemplate);
 
     const runner = new ScenarioRunner({
       createSimulation: (params, seed) => {
@@ -303,14 +362,30 @@ export class IntlRetirementMcRunner {
       }),
     });
 
-    // Center each balance MC lever on the template's live account balance (design 55 §13).
-    // Without this a *disabled* balance lever's self-contained fallback (cfg.value ?? mean,
-    // a hardcoded default) would be written to params and rescale the account's holdings —
-    // silently resetting a customized balance. Merged under baseParams so an explicit caller
-    // override still wins.
+    // ── The base world every variable is centered on ─────────────────────────
+    //
+    // Layered weakest-first. The TEMPLATE'S OWN PARAMS are what make an MC run
+    // describe the LOADED SCENARIO rather than the framework's library defaults:
+    // without them buildVariables() resolves no scenario value for any paramKey and
+    // every center falls back to the hardcoded mean in DEFAULT_MC_VARIABLE_CONFIGS —
+    // a plan assuming 10% equity returns gets sampled around 5%, and, worse because
+    // it is completely silent, a *disabled* lever writes that default into params,
+    // overwriting the scenario's real value in cfg.parameters. They also carry
+    // `shocks` and every visibleWhen controller, so per-shock rows get built and
+    // strategy-gated variables aren't wrongly hidden.
+    //
+    //   1. schema defaults  — what ScenarioLoader materializes for keys the cfg
+    //                         doesn't carry, i.e. what the sim will actually run at.
+    //   2. template params  — the loaded scenario's own values.
+    //   3. balance centers  — a holdings-bearing account's balance is derived from
+    //                         its holdings, not a plain param, so the account record
+    //                         beats the params bag (design 55 §13).
+    //   4. baseParams       — an explicit caller override wins over all of them.
+    const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
     const balanceCenters = resolveBalanceCenters(cfgTemplate);
-    const base      = { ...balanceCenters, ...baseParams, endDate: simEnd };
-    const variables = this.mcConfig.buildVariables(base);
+    const base = { ...schemaDefaults, ...templateParams, ...balanceCenters, ...baseParams, endDate: simEnd };
+    const variables  = this.mcConfig.buildVariables(base);
+    const provenance = summarizeProvenance(variables, { ownParams: templateParams, schemaDefaults });
 
     const mcRuns  = [];
     for (let i = 0; i < this.n; i++) {
@@ -380,6 +455,11 @@ export class IntlRetirementMcRunner {
       p90RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.90),
       p10RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.10),
     };
+
+    // Provenance of the sampled world (see summarizeProvenance). Carried on the
+    // summary so a report can state what these numbers describe instead of the
+    // reader having to assume it was their plan.
+    summary.provenance = provenance;
 
     return { runs, summary };
   }

@@ -27,7 +27,12 @@ function defaultSize() {
 export function rolloutContext(problem) {
   return {
     serializedTemplate:  problem._cfgTemplate(),
-    baseParams:          problem.baseParams,
+    // The RESOLVED base (template params merged in), not the raw constructor arg:
+    // the worker is handed a pre-serialized template and so cannot redo that merge
+    // itself. Sending the raw arg would make worker rollouts run a different world
+    // than serial ones — the kind of divergence that shows up as a solver that
+    // "only reproduces single-threaded".
+    baseParams:          problem._resolveBase(),
     variables:           problem.variables,
     simStart:            problem.simStart,
     simEnd:              problem.simEnd,

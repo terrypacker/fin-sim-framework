@@ -117,6 +117,54 @@ export class McResultsPanel extends BaseComponent {
       '<div class="mc-idle-msg"><span>Configure and run Monte Carlo to see results.</span></div>';
   }
 
+  /**
+   * A badge stating, positively, which world these results describe.
+   *
+   * The banner below only appears when something is wrong, and silence is ambiguous:
+   * it reads the same whether the run was verified against the plan or nobody ever
+   * checked. This says which — so "on scenario" is a claim the panel makes, not an
+   * assumption the reader brings. Absent only when the runner reported no provenance
+   * at all (an older result, or a caller that doesn't produce one).
+   */
+  _buildProvenanceBadge(provenance) {
+    if (!provenance) return null;
+    const off = (provenance.syntheticCenters?.length ?? 0) + (provenance.divergentCenters?.length ?? 0);
+    const el = document.createElement('span');
+    el.className   = `mc-provenance-badge${provenance.fromScenario ? '' : ' mc-provenance-badge--off'}`;
+    el.textContent = provenance.fromScenario ? 'on scenario' : `⚠ off-plan (${off})`;
+    el.title       = provenance.fromScenario
+      ? 'Every sampled variable was centered on this scenario\'s own values.'
+      : 'Some variables were centered away from this scenario — see the note below.';
+    return el;
+  }
+
+  /**
+   * A banner naming the world these results describe, when it is NOT simply the
+   * plan as written (see summarizeProvenance). A failure rate sampled around
+   * framework defaults or user-set centers is an answer about a different plan, and
+   * charts alone can't show that — so it is labelled on the results themselves
+   * rather than left to the reader's assumption. Returns null when nothing to say.
+   */
+  _buildProvenanceBanner(provenance) {
+    if (!provenance || provenance.fromScenario) return null;
+    const notes = [];
+    if (provenance.syntheticCenters?.length) {
+      notes.push(`${provenance.syntheticCenters.length} variable(s) sampled around FRAMEWORK DEFAULTS `
+        + `(not in this scenario): ${provenance.syntheticCenters.join(', ')}`);
+    }
+    if (provenance.divergentCenters?.length) {
+      notes.push('centers set away from the scenario value: '
+        + provenance.divergentCenters.map(d => `${d.paramKey} (${d.center} vs ${d.scenarioValue})`).join(', '));
+    }
+    if (notes.length === 0) return null;
+
+    const el = document.createElement('div');
+    el.className = 'mc-provenance-banner';
+    el.textContent = `⚠ Not centered on the plan as written — ${notes.join('; ')}.`;
+    el.title = notes.join('\n');
+    return el;
+  }
+
   _renderResults(summary, runs) {
     this._runs    = runs;
     this._summary = summary;
@@ -143,8 +191,12 @@ export class McResultsPanel extends BaseComponent {
     header.textContent = `Results — ${runs.length} runs`;
 
     const toggle = this._buildToggle();
-    headerRow.append(header, toggle);
+    const badge  = this._buildProvenanceBadge(summary?.provenance);
+    headerRow.append(header, ...(badge ? [badge] : []), toggle);
     wrapper.appendChild(headerRow);
+
+    const provenance = this._buildProvenanceBanner(summary?.provenance);
+    if (provenance) wrapper.appendChild(provenance);
 
     // ── Badge grid ─────────────────────────────────────────────────────────────
     const badgeGrid = document.createElement('div');

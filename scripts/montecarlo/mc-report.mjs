@@ -83,6 +83,7 @@ if (argv.includes('--json')) {
   console.log(JSON.stringify({
     arms: Object.fromEntries(keys.map(k => [k, {
       n: arms[k].n, failureRate: failureRate(arms[k].rows), pathShape: arms[k].pathShape,
+      provenance: arms[k].provenance ?? null,
     }])),
   }, null, 1));
   process.exit(0);
@@ -100,7 +101,21 @@ console.log(`sampled: ${rm.paths
   + `${rm.propertyPaths ? ' + property path' : ''}${rm.shock ? ' + manufactured crash' : ''}`
   + ', plus lifespan, inflation and FX');
 if (rm.recentre === false) {
-  console.log('** MC means were NOT re-centred on the scenario — these rates are not about your plan.');
+  console.log('** MC centers were NOT verified against the scenario.');
+}
+// Provenance of the sampled world (design: MC centers follow the loaded scenario).
+// Silent when every center traced back to the plan — the normal case — so anything
+// printed here is a reason to distrust the rates below.
+for (const k of keys) {
+  const p = arms[k].provenance;
+  if (!p || p.fromScenario) continue;
+  if (p.syntheticCenters?.length) {
+    console.log(`** ${k}: sampled around FRAMEWORK DEFAULTS (absent from the scenario): `
+      + p.syntheticCenters.join(', '));
+  }
+  for (const d of (p.divergentCenters ?? [])) {
+    console.log(`** ${k}: ${d.paramKey} centered ${d.center}, scenario says ${d.scenarioValue}`);
+  }
 }
 
 // ─── 1. distribution ─────────────────────────────────────────────────────────

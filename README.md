@@ -372,6 +372,11 @@ Same registry pattern as `TaxEngine`. Per-year `UsAccountModule2024/2025/2026` a
 
 - `IntlRetirementMcConfig` — declarative MC config (per-param distribution).
 - `IntlRetirementMcRunner` — runs N simulations, evaluates objectives, returns per-run results + summary.
+- **Centers follow the loaded scenario.** `run()` seeds its base params from the cfgTemplate's own
+  two param stores (schema defaults → scenario params → account balances → caller overrides), so a
+  variable is sampled around the plan's value rather than the library default — for the UI and the
+  headless runners alike. `summary.provenance` reports where each center came from and names any
+  that isn't the plan's, so results centered on defaults or user-set values are labelled as such.
 
 ### Optimization (`src/finance/optimization/`)
 

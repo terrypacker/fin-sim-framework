@@ -114,3 +114,133 @@ describe('McConfigPanel — Copy from Scenario', () => {
     panel.destroy();
   });
 });
+
+/**
+ * Automatic re-centring. The panel is built once per scenario load, so a param
+ * edited afterwards would leave its MC center behind and the run would silently
+ * describe the previous plan. syncScenarioCenters() closes that gap on every run,
+ * while never overwriting a center the user typed — those are flagged instead.
+ */
+describe('McConfigPanel — automatic re-centring', () => {
+  const VARS = [
+    { paramKey: 'a', label: 'A', group: 'G', type: DISTRIBUTION_TYPES.NORMAL, mean: 1, stdDev: 0.5 },
+    { paramKey: 'b', label: 'B', group: 'G', type: DISTRIBUTION_TYPES.NORMAL, mean: 2, stdDev: 0.5 },
+  ];
+
+  /** Type `value` into a row's mean input the way a user would. */
+  function typeMean(container, index, value) {
+    const inp = container.querySelectorAll('.mc-var-row')[index].querySelector('input[placeholder="mean"]');
+    inp.value = String(value);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  test('re-centres untouched rows on the live scenario', () => {
+    const { panel } = makePanel();
+    panel.setVariables(VARS);
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.11], ['b', 0.22]]);
+
+    const { updated, diverged } = panel.syncScenarioCenters();
+    expect(updated).toBe(2);
+    expect(diverged).toEqual([]);
+
+    const out = panel.getConfig().variableConfigs;
+    expect(out.find(c => c.paramKey === 'a').mean).toBeCloseTo(0.11);
+    expect(out.find(c => c.paramKey === 'b').mean).toBeCloseTo(0.22);
+
+    panel.destroy();
+  });
+
+  test('keeps a user-typed center and reports it as diverged', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables(VARS);
+    typeMean(container, 0, 0.5);
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.11], ['b', 0.22]]);
+
+    const { updated, diverged } = panel.syncScenarioCenters();
+    expect(updated).toBe(1);                       // only the untouched row moved
+    expect(diverged).toEqual([{ paramKey: 'a', center: 0.5, scenarioValue: 0.11 }]);
+    expect(container.querySelectorAll('.mc-var-diverged').length).toBe(1);
+
+    const out = panel.getConfig().variableConfigs;
+    expect(out.find(c => c.paramKey === 'a').mean).toBeCloseTo(0.5);
+    expect(out.find(c => c.paramKey === 'b').mean).toBeCloseTo(0.22);
+
+    panel.destroy();
+  });
+
+  test('Copy from Scenario clears the user-set flag, so the row re-centres again', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables(VARS);
+    typeMean(container, 0, 0.5);
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.11]]);
+
+    panel.applyScenarioValues(new Map([['a', 0.11]]));
+    expect(container.querySelectorAll('.mc-var-diverged').length).toBe(0);
+
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.33]]);
+    expect(panel.syncScenarioCenters().updated).toBe(1);
+    expect(panel.getConfig().variableConfigs.find(c => c.paramKey === 'a').mean).toBeCloseTo(0.33);
+
+    panel.destroy();
+  });
+
+  test('the Run button re-centres before emitting the config', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables(VARS);
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.44], ['b', 0.55]]);
+
+    let emitted = null;
+    panel.onRun = (config) => { emitted = config; };
+    container.querySelector('.btn-primary').click();
+
+    expect(emitted.variableConfigs.find(c => c.paramKey === 'a').mean).toBeCloseTo(0.44);
+    expect(emitted.variableConfigs.find(c => c.paramKey === 'b').mean).toBeCloseTo(0.55);
+
+    panel.destroy();
+  });
+
+  test('tags each row with where its center came from, before any run', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables([
+      { ...VARS[0], paramKey: 'plan',  centerSource: 'scenario' },
+      { ...VARS[0], paramKey: 'sch',   centerSource: 'schema'   },
+      { ...VARS[0], paramKey: 'synth', centerSource: 'default'  },
+    ]);
+
+    const tags = [...container.querySelectorAll('.mc-var-source')];
+    // `scenario` is the normal case and renders nothing — 40-odd rows all saying
+    // "scenario" would bury the one that doesn't.
+    expect(tags.map(t => t.textContent)).toEqual(['', 'schema', 'default']);
+    expect(tags[2].classList.contains('mc-var-source--default')).toBe(true);
+    expect(tags[2].title).toContain('framework default');
+
+    panel.destroy();
+  });
+
+  test('typing a center flips its tag to "user", and re-syncing flips it back', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables([{ ...VARS[0], paramKey: 'a', centerSource: 'scenario' }]);
+    const tag = container.querySelector('.mc-var-source');
+
+    typeMean(container, 0, 0.5);
+    expect(tag.textContent).toBe('user');
+
+    panel.applyScenarioValues(new Map([['a', 0.11]]));
+    expect(tag.textContent).toBe('');
+
+    panel.destroy();
+  });
+
+  test('user-set centers survive a setVariables rebuild', () => {
+    const { panel, container } = makePanel();
+    panel.setVariables(VARS);
+    typeMean(container, 0, 0.5);
+    panel.setVariables(VARS);                      // e.g. a shock added to the scenario
+    panel.onResolveScenarioCenters = () => new Map([['a', 0.11], ['b', 0.22]]);
+
+    const { diverged } = panel.syncScenarioCenters();
+    expect(diverged).toEqual([{ paramKey: 'a', center: 0.5, scenarioValue: 0.11 }]);
+
+    panel.destroy();
+  });
+});
