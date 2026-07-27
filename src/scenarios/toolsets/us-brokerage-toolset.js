@@ -48,8 +48,14 @@ export const US_BROKERAGE = {
       { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text() } },
+      // The au* trio rides on a US disposal because an AU resident is taxed on
+      // worldwide gains: auGain measures from the s855-45 stepped-up basis,
+      // auIndexedGain from the CPI-indexed one, and auDiscountableGain is the slice
+      // held ≥12 months. Emitted by three paths (StockWithdrawalApplyReducer,
+      // AccountService.replenishSavings, the rebalancer), which between them cover
+      // all three fields.
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , stateKey: ValueType.text()} },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'FIXED_INCOME_EARNINGS_TAX',
         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
     ],

@@ -64,8 +64,12 @@ export const US_REAL_PROPERTY = {
         fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number() } },
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
+      // depreciationGain is the unrecaptured §1250 slice, taxed at its own ceiling
+      // and deliberately kept OUT of `gain`; auGain/auDiscountableGain are the AU
+      // resident's assessment of the same sale, measured from the s855-45 basis after
+      // the AU main-residence exemption.
       { type: 'US_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+        fields: { gain: ValueType.number(), depreciationGain: ValueType.number(), auGain: ValueType.number(), auDiscountableGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       // Country-agnostic loan payment (design 54 P2): one shared action/reducer for
       // US_LOAN_PAYMENT + AU_LOAN_PAYMENT, declared by both real-property toolsets
       // (registerActionType is idempotent). cc: null so it stays in REAL_PROPERTY_CASH

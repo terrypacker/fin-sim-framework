@@ -68,8 +68,19 @@ export const AU_REAL_PROPERTY = {
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text() } },
+      // Everything after `description` is the design 83 G7 main-residence working:
+      // auTaxableFraction is the s118-185 apportionment, auExemptionReason names the
+      // rule that produced it, and the acquisition/sale/occupation dates are the
+      // inputs that justify the fraction. Undeclared, a G7 report could show the
+      // apportioned gain with no way to explain it. The ownership trio (design 76
+      // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { gain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+        fields: { gain: ValueType.number(), depreciationGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(),
+                  ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+                  auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
+                  acquisitionMs: ValueType.number(), saleMs: ValueType.number(),
+                  mainResidenceFrom: ValueType.text(), mainResidenceUntil: ValueType.text(),
+                  isPrimaryResidence: ValueType.boolean() } },
       // Country-agnostic loan payment (design 54 P2): one shared action/reducer for
       // US_LOAN_PAYMENT + AU_LOAN_PAYMENT, declared by both real-property toolsets
       // (registerActionType is idempotent). cc: null so it stays in REAL_PROPERTY_CASH
