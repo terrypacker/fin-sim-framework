@@ -226,6 +226,11 @@ export class BequestService extends BaseService {
       ownerId:   record.ownerId  ?? null,
       inherited: true,
       bequestId: record.bequestId,
+      // Design 88 OQ4: an inherited stake that may never materialise is the same
+      // problem with an extra layer, and this seed is a hand-written projection —
+      // exactly the shape that made the flag inert elsewhere (§7 trap 2). Carried
+      // only when TRUE so an ordinary bequest's seed is unchanged.
+      ...(record.speculative === true ? { speculative: true } : {}),
     };
     if (category === 'real-property') {
       return { kind: 'real-property', value: 0, mortgageBalance: 0, costBasis: 0, ...marker };
@@ -379,7 +384,10 @@ export class BequestService extends BaseService {
     const ownerId  = asset.ownerId ?? bequest.heirId ?? null;
     // Common markers so funding (P2) + death-tax (P4) code can find inherited
     // records and route them back to their originating bequest.
-    const marker = { inherited: true, bequestId: bequest.id };
+    const marker = {
+      inherited: true, bequestId: bequest.id,
+      ...(asset.speculative === true ? { speculative: true } : {}),  // design 88 OQ4
+    };
 
     if (meta.category === 'real-property') {
       return {

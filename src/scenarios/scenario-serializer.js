@@ -810,6 +810,9 @@ export class ScenarioSerializer {
       costBaseByCountry:          p.costBaseByCountry          ?? null,
       acquisitionPriceLevel:      p.acquisitionPriceLevel      ?? null,
       acquisitionDateByCountry:   p.acquisitionDateByCountry   ?? null,
+      // Design 88 — emitted only when set, so pre-flag properties round-trip
+      // byte-for-byte (D2). Note the allowlist warning above: BOTH directions.
+      ...(p.speculative === true ? { speculative: true } : {}),
     };
     // Inheritance metadata (design 63 §14) — emitted only on promoted inherited
     // property so owned properties round-trip byte-for-byte.
@@ -881,6 +884,7 @@ export class ScenarioSerializer {
       costBaseByCountry:          d.costBaseByCountry          ?? null,
       acquisitionPriceLevel:      d.acquisitionPriceLevel      ?? null,
       acquisitionDateByCountry:   d.acquisitionDateByCountry   ?? null,
+      speculative:                d.speculative                === true,
     });
     if (d.stateKey) prop.stateKey = d.stateKey;
     // Inheritance metadata (design 63 §14) — restored from the serialized record
@@ -917,6 +921,9 @@ export class ScenarioSerializer {
             rate: e.rate,
           }))
         : null,
+      // Design 88 — emitted only when set, so pre-flag collectibles round-trip
+      // byte-for-byte (D2).
+      ...(c.speculative === true ? { speculative: true } : {}),
     };
     // Inheritance metadata (design 63 §14) — emitted only on promoted inherited
     // collectibles so owned collectibles round-trip byte-for-byte.
@@ -946,6 +953,7 @@ export class ScenarioSerializer {
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
+      speculative:         d.speculative         === true,
     });
     if (d.stateKey) col.stateKey = d.stateKey;
     // Inheritance metadata (design 63 §14) — restored from the serialized record.
@@ -982,6 +990,10 @@ export class ScenarioSerializer {
             rate: e.rate,
           }))
         : null,
+      // Design 88: emitted only when SET, following the inheritance-meta precedent
+      // above, so a scenario authored before the flag existed round-trips
+      // byte-for-byte (D2). Absent on reload ⇒ false ⇒ recognised, as before.
+      ...(c.speculative === true ? { speculative: true } : {}),
     };
   }
 
@@ -1005,6 +1017,7 @@ export class ScenarioSerializer {
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
+      speculative:         d.speculative         === true,
     });
     if (d.stateKey) eq.stateKey = d.stateKey;
     return eq;

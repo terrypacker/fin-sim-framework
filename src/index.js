@@ -51,7 +51,7 @@ import { ASSET_CLASS, ASSET_CLASS_VALUES, LIABILITY_CLASSES, assetClassForAlloca
 import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
 import { buildTargetCube, targetedStateKeys, driftAgainstTarget } from './finance/allocation-reporting/target-cube.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
-import { Asset } from './finance/assets/asset.js';
+import { Asset, assertSpeculativeConsistency, isSpeculative } from './finance/assets/asset.js';
 import { Bequest } from './finance/assets/bequest.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
@@ -87,7 +87,7 @@ import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-run
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
 import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
-import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
+import { computeNetWorth, computeNetWorthInclSpeculative, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { computeOffsetCapacity, deriveOffsetCapacity } from './finance/derived-metrics/offset-capacity.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
@@ -743,6 +743,8 @@ export const Finance = {
   LoanAccount,
   OffsetAccount,
   Asset,
+  assertSpeculativeConsistency,
+  isSpeculative,
   Bequest,
   Collectible,
   CompanyEquity,
@@ -828,6 +830,7 @@ export const Finance = {
   computeNetLiquidity,
   deriveNetLiquidity,
   computeNetWorth,
+  computeNetWorthInclSpeculative,
   deriveNetWorth,
   computeOffsetCapacity,
   deriveOffsetCapacity,

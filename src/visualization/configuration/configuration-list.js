@@ -23,12 +23,21 @@ const KIND_LABELS = {
   reducer:         'Reducers',
 };
 
+/**
+ * Design 88: the disclosure badge. A speculative asset is worth zero in every
+ * headline while still appearing in the list at its authored value, so without a
+ * marker here the list and the totals silently disagree and the list looks wrong.
+ * Same job as the `Primary` badge: a fact about the record that changes how every
+ * number downstream reads.
+ */
+const _spec = (n) => (n?.speculative === true ? 'Speculative' : '');
+
 const KIND_SUBTITLES = {
   person:          (n) => n.citizen?.join('/') ?? '',
   account:         (n) => n.type ?? '',
-  'real-property': (n) => [n.country, n.isPrimaryResidence ? 'Primary' : ''].filter(Boolean).join(' · '),
-  collectible:     (n) => n.country ?? '',
-  company:         (n) => n.country ?? '',
+  'real-property': (n) => [n.country, n.isPrimaryResidence ? 'Primary' : '', _spec(n)].filter(Boolean).join(' · '),
+  collectible:     (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
+  company:         (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
   bequest:         (n) => [n.decedentName, n.inheritanceYear ? `→ ${n.inheritanceYear}` : 'inert'].filter(Boolean).join(' '),
   event:           (n) => n.eventType ?? '',
   handler:         (n) => n.handlerClass ?? '',

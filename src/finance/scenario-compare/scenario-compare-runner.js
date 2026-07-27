@@ -13,6 +13,7 @@ import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario
 import { ScenarioLoader }         from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }     from '../../scenarios/scenario-serializer.js';
 import { computeNetWorthUsd }     from '../monte-carlo/intl-retirement-mc-runner.js';
+import { computeNetWorthInclSpeculative } from '../derived-metrics/net-worth.js';
 
 /**
  * ScenarioCompareRunner — runs a scenario registry entry deterministically
@@ -54,6 +55,7 @@ export class ScenarioCompareRunner {
       finalState:        state,
       journalEntries:    scenario.sim.journal.journal.slice(),
       finalNetWorthUsd:  computeNetWorthUsd(state),
+      finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(state, 'USD'),  // design 88 D7
       outOfFundsDate:    state.outOfFundsDate    ?? null,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       scenarioFailed:    state.scenarioFailed    ?? false,

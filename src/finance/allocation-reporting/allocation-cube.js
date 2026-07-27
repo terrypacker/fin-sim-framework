@@ -14,6 +14,7 @@ import { resolveDefaultAllocation } from '../holdings/default-allocations.js';
 // total has to equal net worth (THE INVARIANT below), so the two cannot be allowed to
 // hold different conventions. It used to be a private copy guarded by a comment.
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
+import { isSpeculative } from '../assets/asset.js';
 
 /**
  * allocation-cube.js — reduce one simulation state to a flat table of allocation facts.
@@ -49,13 +50,22 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
  * residual is emitted as its own row, so the cube's total ALWAYS equals the account
  * balance and the drift shows up as a labelled band instead of a silent error.
  *
- * ─── THE INVARIANT ───────────────────────────────────────────────────────────
+ * ─── THE INVARIANT (now two of them) ─────────────────────────────────────────
  *
- *     Σ rows.marketValue === computeNetWorth(state, baseCurrency)
+ *     Σ rows.marketValue                     === computeNetWorthInclSpeculative   (disclosure)
+ *     Σ rows.marketValue where !speculative  === computeNetWorth                  (recognition)
  *
  * with every `include*` option left on. This is not a nice-to-have; it is what
  * makes every share on the chart trustworthy, because a denominator that silently
  * omits an asset misstates EVERY slice, not just the missing one.
+ *
+ * The single invariant became two when design 88 split RECOGNITION from DISCLOSURE:
+ * the cube keeps the row for a speculative asset (dropping it would make the position
+ * invisible in the one view whose whole job is showing where the money is — D6) while
+ * net worth stops counting it (D5). Together the pair pins strictly more than the
+ * original did: not just that the cube and the metrics agree on the total, but that
+ * they agree on WHICH ROWS ARE RECOGNISED. A change that drops the flag in one of the
+ * two projections fails exactly one of them, which localises the bug immediately.
  *
  * It is therefore load-bearing that inclusion here uses net worth's OWN rule — a
  * numeric `balance`, or a recognised asset `kind` — and never a narrower one. An
@@ -162,6 +172,10 @@ export function buildAllocationCube(state, opts = {}) {
       allocation,
       rateKey,
       holdingCount,
+      // Design 88 D6: the disclosure column. Always a real boolean (never undefined)
+      // so a consumer can filter on it without re-deriving the rule, and so a row
+      // that lost the field upstream reads as `false` here rather than as absent.
+      speculative:      isSpeculative(entry),
       marketValueLocal: _round(marketValueLocal),
       marketValue:      _round(toBaseCurrency(marketValueLocal, currency, baseCurrency, state)),
       costBasisLocal:   costBasisLocal == null ? null : _round(costBasisLocal),

@@ -9,6 +9,7 @@
  */
 
 import { BaseService } from '../../services/base-service.js';
+import { assertSpeculativeConsistency } from '../assets/asset.js';
 
 /**
  * AssetService — operations on Asset state objects (and any object
@@ -24,6 +25,22 @@ export class AssetService extends BaseService {
 
   constructor(graph, query, bus, kind = 'asset', prefixLength = 2, hasEdges = false) {
     super(graph, query, bus, kind, prefixLength, hasEdges);
+  }
+
+  /**
+   * Merge changes, then re-check the design 88 D4 rule. The constructor guard alone
+   * is not enough: `updateCompanyEquity(id, { drawdownPriority: 1 })` on an already
+   * speculative stake would otherwise create the contradictory pair after the fact,
+   * and the editor's update path is the likeliest way to reach it.
+   *
+   * @param {object} item
+   * @param {object} changes
+   * @returns {object} item
+   */
+  mergeChanges(item, changes) {
+    const merged = super.mergeChanges(item, changes);
+    assertSpeculativeConsistency(merged);
+    return merged;
   }
 
   /**

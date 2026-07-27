@@ -76,6 +76,11 @@ export class CompanyEquityEditor extends BaseComponent {
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
+    // Design 88: the recognition switch. Rendered as `=== true` rather than a
+    // truthy read so a record that predates the flag shows unticked rather than
+    // inheriting whatever `undefined` coerces to.
+    el.querySelector('[data-id="speculative"]').checked = this._node?.speculative === true;
+
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
     this._populateAccountSelect(el, this._accounts, this._node?.saleDestinationAccount ?? null);
 
@@ -129,6 +134,7 @@ export class CompanyEquityEditor extends BaseComponent {
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,
+      speculative:          el.querySelector('[data-id="speculative"]').checked,
     };
     // Param-backed fields are owned by their scenario param (design/32).
     for (const f of this._linkedFields) delete data[f];

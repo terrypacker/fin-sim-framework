@@ -589,10 +589,22 @@ export class AllocationPlugin extends WorkbenchComponent {
       notes.push(`${dates} is a partial year, not a year-end`);
     }
 
+    // Design 88 §6: the disclosed-but-unrecognised amount, stated as a NOTE rather
+    // than drawn as a slice. Every share on this panel is a share of recognised
+    // wealth; a reader who can see the total is short by this much has been told
+    // where it went, and a reader who cannot would conclude the panel is broken.
+    if (s.speculative > 0.5) {
+      notes.push(`${this._money(s.speculative)} speculative — excluded from every share`);
+    }
+
     if (!s.ties) {
+      const gap = Math.abs(s.worst.deltaRecognised ?? 0) > Math.abs(s.worst.delta ?? 0)
+        ? { amount: s.worst.deltaRecognised, which: 'recognised rows vs net worth' }
+        : { amount: s.worst.delta,           which: 'all rows vs net worth incl. speculative' };
       el.className = 'alloc-provenance alloc-provenance--bad';
-      el.innerHTML = `<strong>Does not tie out.</strong> Worst gap ${this._money(s.worst.delta)}
-        in ${s.worst.year} — a class is being dropped or double-counted. Do not quote any share here.`;
+      el.innerHTML = `<strong>Does not tie out.</strong> Worst gap ${this._money(gap.amount)}
+        in ${s.worst.year} (${gap.which}) — a class is being dropped or double-counted.
+        Do not quote any share here.`;
       return;
     }
     el.className = 'alloc-provenance';

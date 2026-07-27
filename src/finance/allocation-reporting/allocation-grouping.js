@@ -68,6 +68,18 @@ const _dayKey = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0
  *        - drop LIABILITY rows. Default true because this is a MIX: an allocation is
  *          conventionally of gross assets, and a negative band in a stacked area is
  *          not a picture of anything. Set false for a net-worth decomposition.
+ * @param {boolean}  [opts.excludeSpeculative=true]
+ *        - drop rows flagged `speculative` (design 88 §6). Default true for the same
+ *          reason liabilities are dropped by default and for a sharper one: a
+ *          percentage-of-portfolio figure that includes a position you have DECLARED
+ *          may be worthless is not an allocation statement. "42% private equity" reads
+ *          as concentration risk you could rebalance away; if that 42% is a stake with
+ *          no buyer, every other slice is understated by a denominator you would never
+ *          have chosen. So the mix follows RECOGNITION — it ties to `computeNetWorth`,
+ *          the same figure every headline uses — and the excluded amount is disclosed
+ *          separately rather than becoming a slice. Set false for the total/net-worth
+ *          decomposition view, which is disclosure and ties to
+ *          `computeNetWorthInclSpeculative`.
  * @param {boolean}  [opts.normalize=false]
  *        - emit each date's column as shares of that column's total (the 100%
  *          stacked view — drift), rather than absolute values (growth).
@@ -82,6 +94,7 @@ export function buildAllocationSeries(rows, opts = {}) {
     value              = 'marketValue',
     filter             = null,
     excludeLiabilities = true,
+    excludeSpeculative = true,
     normalize          = false,
     dropEmpty          = true,
   } = opts;
@@ -98,6 +111,9 @@ export function buildAllocationSeries(rows, opts = {}) {
   for (const row of rows) {
     if (row?.date == null) continue;
     if (excludeLiabilities && LIABILITY_CLASSES.has(row.assetClass)) continue;
+    // Design 88 §6 — `=== true` so a row whose flag never made it this far is
+    // included, which is the pre-88 behaviour, rather than silently dropped.
+    if (excludeSpeculative && row.speculative === true) continue;
     if (filter && !filter(row)) continue;
 
     const amount = Number(row[value]);

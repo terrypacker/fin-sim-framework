@@ -223,7 +223,7 @@ handler/reducer pair and its tests; if the reducer is meant to be reachable, wir
 golden through it. Do not leave both — the isolated tests currently certify a code
 path the application never executes.
 
-### 4.12 `computeAfterTaxNetWorth` silently omits company equity
+### 4.12 `computeAfterTaxNetWorth` silently omits company equity — **RESOLVED (design 88 phase 1)**
 
 `computeNetWorth` (`net-worth.js`) counts five kinds: accounts, loans (negative),
 `real-property`, `collectible`, **and `company`**. `_sumAfterTax` (`after-tax.js`),
@@ -239,12 +239,14 @@ not "hold different opinions about what a dollar is". The allocation cube
 (`allocation-cube.js:221`) does have a company branch, and its Σ-rows ≡
 `computeNetWorth` invariant holds to the cent, so after-tax is the outlier.
 
-**Direction**: superseded by `design/88-speculative-assets.md` (D5), which resolves
-this as part of a per-asset `speculative` flag rather than independently. Patching
-`_sumAfterTax` on its own would force full recognition of exactly the high-risk
-stakes that prompted the question — making the headline number worse while making
-the code more consistent. Until 88 phase 1 lands, the two numbers should not be
-quoted side by side without a footnote.
+**Resolved** by `design/88-speculative-assets.md` phase 1 (D5), and deliberately not
+before it: patching `_sumAfterTax` on its own would have forced full recognition of
+exactly the high-risk stakes that prompted the question — making the headline number
+worse while making the code more consistent. `_sumAfterTax` now has a `company`
+branch, at par like real property and collectibles (illiquid-asset CGT remains
+design/40 Q5), gated on the same `speculative` rule `computeNetWorth` applies, so the
+two can no longer disagree about which assets exist. Pinned by *"88 D5: after-tax and
+pre-tax worth agree about WHICH assets exist"* in `tests/unit/speculative-assets.test.mjs`.
 
 ---
 

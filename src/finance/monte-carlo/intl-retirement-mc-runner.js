@@ -17,7 +17,8 @@ import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { get, set }                   from './mc-param-paths.js';
-import { computeNetWorth }            from '../derived-metrics/net-worth.js';
+import { computeNetWorth, computeNetWorthInclSpeculative }
+  from '../derived-metrics/net-worth.js';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../derived-metrics/after-tax.js';
 import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
@@ -433,6 +434,7 @@ export class IntlRetirementMcRunner {
         afterTaxNetWorthUsd: computeAfterTaxNetWorth(sim.state, simEnd, afterTaxOpts),
         cumulativeTaxesPaid: sim.state.cumulativeTaxesPaid ?? 0,
         finalNetWorthUsd:  computeNetWorthUsd(sim.state),
+        finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(sim.state, 'USD'),  // design 88 D7
         finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
         scenarioFailed:    sim.state.scenarioFailed    ?? false,
         outOfFundsDate:    sim.state.outOfFundsDate    ?? null,

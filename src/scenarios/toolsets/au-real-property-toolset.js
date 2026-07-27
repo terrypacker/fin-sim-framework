@@ -341,5 +341,7 @@ function _propertyToStatePlain(prop, startYear) {
     landValueRatio:             prop.landValueRatio             ?? 0.2,
     annualDepreciationOverride: prop.annualDepreciationOverride ?? null,
     accumulatedDepreciation:    prop.accumulatedDepreciation    ?? 0,
+    // Design 88 — see the US sibling. Projected only when TRUE (D2 byte-identity).
+    ...(prop.speculative === true ? { speculative: true } : {}),
   };
 }

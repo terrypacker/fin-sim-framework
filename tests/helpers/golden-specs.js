@@ -60,6 +60,32 @@ export const GOLDEN_SPECS = [
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2050, 0, 1)),
   },
+  {
+    name:        'speculative-stake',
+    description:
+      'Design 88 phase 1 (recognition): the default plan with its private company '
+      + 'stake flagged `speculative` and NO planned sale. Pins that the stake still '
+      + 'appreciates in state while contributing nothing to netWorth, that '
+      + 'netWorthInclSpeculative discloses it, and — the part a scalar assertion '
+      + 'cannot see — that flagging one asset moves NOTHING else in the end state. '
+      + 'Paired with control arms in speculative-assets.test.mjs.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2032, 0, 1)),
+    mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },
+  },
+  {
+    name:        'speculative-conversion',
+    description:
+      'Design 88 D2/§2: the same speculative stake WITH a plannedSaleYear inside the '
+      + 'run. The flag suppresses the carrying value, never the mechanics — so this '
+      + 'golden holds the whole COMPANY_SALE → COMPANY_SALE_TAX path firing normally '
+      + 'for a stake that was recognised at zero the day before, with the proceeds '
+      + 'recognised in full from the instant they land in the destination account.',
+    params:   { companySaleYear: 2029 },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2032, 0, 1)),
+    mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },
+  },
 ];
 
 /** Look up a spec by name (throws rather than silently running nothing). */

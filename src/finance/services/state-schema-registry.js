@@ -169,6 +169,10 @@ export class StateSchemaRegistry {
     // them (design 10 §Phase 4); exact paths override the generic metrics.* glob.
     this.register('metrics.netWorth',     ParameterValueType.currency('USD'));
     this.register('metrics.netLiquidity', ParameterValueType.currency('USD'));
+    // Design 88 D7: the disclosure twin of netWorth — published only on plans that
+    // hold a speculative asset, but registered unconditionally so it formats as money
+    // the moment it appears rather than rendering as a bare number.
+    this.register('metrics.netWorthInclSpeculative', ParameterValueType.currency('USD'));
     // After-tax re-priced aggregates (design/40) — USD-normalized like the above.
     this.register('metrics.afterTaxNetWorth',     ParameterValueType.currency('USD'));
     this.register('metrics.afterTaxNetLiquidity', ParameterValueType.currency('USD'));

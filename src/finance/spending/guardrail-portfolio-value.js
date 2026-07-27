@@ -28,6 +28,13 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
  * which no real run produces. `currencyOf` is the fix and the reason it lives
  * next to the conversion it feeds.
  *
+ * Scope note (design 88 §5.4 / D4): requiring BOTH a numeric `balance` and a
+ * non-null `drawdownPriority` is most of the lever-reachability test in another
+ * spelling — it omits net-liquidity's age gate, but it already excludes every
+ * `Asset` kind, speculative or not. So the guardrail needs no change for design 88,
+ * and that exclusion is intent rather than coincidence: a guardrail that flexed
+ * spending against a house it cannot sell would be steering on a phantom.
+ *
  * @param {object} state        — current simulation state
  * @param {string} [baseCurrency='USD']
  * @returns {number}  Total portfolio value in baseCurrency

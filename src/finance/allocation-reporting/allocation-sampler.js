@@ -10,7 +10,8 @@
 
 import { buildAllocationCube } from './allocation-cube.js';
 import { buildTargetCube }     from './target-cube.js';
-import { computeNetWorth }     from '../derived-metrics/net-worth.js';
+import { computeNetWorth, computeNetWorthInclSpeculative }
+  from '../derived-metrics/net-worth.js';
 
 /**
  * allocation-sampler.js — the one record an allocation consumer collects per sample.
@@ -32,6 +33,17 @@ import { computeNetWorth }     from '../derived-metrics/net-worth.js';
  * because a tie-out computed later against a net worth read at a different instant is
  * not a check of anything. Design 82 §3's invariant is the whole reason any share on
  * any chart can be quoted, so it is measured at every sample rather than asserted once.
+ *
+ * Since design 88 there are TWO invariants, and both travel with the sample:
+ *
+ *     cubeTotal                  === netWorthInclSpeculative   (disclosure)
+ *     cubeTotal − speculative    === netWorth                  (recognition)
+ *
+ * A single tie-out would have reported "does not tie out" on any plan holding a
+ * speculative asset — a false alarm on the loudest warning this panel has, which is
+ * the fastest way to teach a reader to ignore it. Checking both instead says something
+ * strictly stronger: the cube and the metrics agree on the total AND on which rows are
+ * recognised (design 88 §6).
  */
 
 /**
@@ -63,8 +75,11 @@ export function createAllocationSampler({
     // "no target" rather than as zero drift.
     const targetRows = buildTargetCube(state, { date: at, baseCurrency, displayNameFor });
 
-    const cubeTotal = rows.reduce((sum, r) => sum + r.marketValue, 0);
-    const netWorth  = computeNetWorth(state, baseCurrency);
+    const cubeTotal   = rows.reduce((sum, r) => sum + r.marketValue, 0);
+    const speculative = rows.reduce(
+      (sum, r) => sum + (r.speculative === true ? r.marketValue : 0), 0);
+    const netWorth    = computeNetWorth(state, baseCurrency);
+    const netWorthInclSpeculative = computeNetWorthInclSpeculative(state, baseCurrency);
 
     return {
       at,
@@ -73,7 +88,14 @@ export function createAllocationSampler({
       targetRows,
       cubeTotal,
       netWorth,
-      delta:      +(cubeTotal - netWorth).toFixed(2),
+      netWorthInclSpeculative,
+      // The disclosed amount, so a view can state what it left out of every share
+      // rather than leaving the reader to infer it from a total that does not add up.
+      speculative: +speculative.toFixed(2),
+      // Disclosure invariant: every row, against the figure that recognises every row.
+      delta:      +(cubeTotal - netWorthInclSpeculative).toFixed(2),
+      // Recognition invariant: the rows that count, against the figure that counts them.
+      deltaRecognised: +((cubeTotal - speculative) - netWorth).toFixed(2),
       inferred:   rows.filter(r => r.inferred).length,
       reconciled: rows.filter(r => r.source === 'reconciliation')
                       .reduce((sum, r) => sum + Math.abs(r.marketValue), 0),
@@ -101,15 +123,21 @@ export function summarizeSamples(samples) {
   if (list.length === 0) {
     return {
       count: 0, ties: true, worst: null, inferredAny: false, reconciledAny: false,
-      offBoundary: [], first: null, last: null,
+      speculative: 0, offBoundary: [], first: null, last: null,
     };
   }
 
-  const worst = list.reduce((w, s) => (Math.abs(s.delta) > Math.abs(w.delta) ? s : w), list[0]);
+  // Worst across BOTH invariants (design 88 §6): a sample that ties on the total but
+  // disagrees about which rows are recognised is still a broken denominator, and
+  // reporting only the larger of the two would hide whichever one is failing.
+  const _gap  = s => Math.max(Math.abs(s.delta ?? 0), Math.abs(s.deltaRecognised ?? 0));
+  const worst = list.reduce((w, s) => (_gap(s) > _gap(w) ? s : w), list[0]);
   return {
     count:         list.length,
-    ties:          Math.abs(worst.delta) < 1,
+    ties:          _gap(worst) < 1,
     worst,
+    /** Disclosed-but-unrecognised value at the latest sample (design 88 §6). */
+    speculative:   list[list.length - 1]?.speculative ?? 0,
     inferredAny:   list.some(s => s.inferred > 0),
     reconciledAny: list.some(s => s.reconciled > 0.5),
     offBoundary:   list.filter(s => s.at.getUTCMonth() !== 11 || s.at.getUTCDate() !== 31),

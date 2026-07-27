@@ -14,6 +14,7 @@ import { isCollectibleAllocation } from '../holdings/allocation.js';
 import { getResidency, primaryPersonKey } from '../residency-utils.js';
 import { toAUD }                from '../tax/tax-fx.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
+import { isSpeculative }        from '../assets/asset.js';
 
 /**
  * After-tax re-pricing (design/40).
@@ -446,10 +447,14 @@ function clampRate(r) {
 
 /**
  * Sum after-tax account values in `baseCurrency`, over the entries selected by
- * `includeAccount`. Real property / collectibles are added at par equity (Phase
- * 1, ≡ computeNetWorth — illiquid-asset cap-gains is design/40 Q5), and only
- * when `includeIlliquid` (the worth scope; net liquidity has no balance for them
- * and excludes them anyway).
+ * `includeAccount`. Real property / collectibles / company equity are added at par
+ * equity (Phase 1, ≡ computeNetWorth — illiquid-asset cap-gains is design/40 Q5),
+ * and only when `includeIlliquid` (the worth scope; net liquidity has no balance for
+ * them and excludes them anyway — design 88 §5: that exclusion is the CONTROL rule,
+ * not an accident, and must survive any future change that gives assets a balance).
+ * Speculative assets (design 88) are excluded from the worth scope by the same rule
+ * computeNetWorth applies, so the two cannot report "recognised at full value in net
+ * worth, valued at zero after tax" for the same stake.
  */
 function _sumAfterTax(state, date, opts, { includeAccount, includeIlliquid }) {
   const baseCurrency = opts?.baseCurrency ?? 'USD';
@@ -469,8 +474,21 @@ function _sumAfterTax(state, date, opts, { includeAccount, includeIlliquid }) {
       if (!includeAccount(val)) continue;
       contribution = computeAfterTaxValue(val, state, date, opts);
     } else if (includeIlliquid && val.kind === 'real-property' && typeof val.value === 'number') {
+      if (isSpeculative(val)) continue;
       contribution = val.value - (val.mortgageBalance ?? 0);
     } else if (includeIlliquid && val.kind === 'collectible' && typeof val.value === 'number') {
+      if (isSpeculative(val)) continue;
+      contribution = val.value;
+    } else if (includeIlliquid && val.kind === 'company' && typeof val.value === 'number') {
+      // Design 88 D5 / design/inconsistencies.md §4.12: company equity was absent
+      // here by OMISSION while computeNetWorth counted it in full, so the two
+      // disagreed by the entire carrying value of every unsold stake. Added at par
+      // for the same reason real property and collectibles are — pricing the embedded
+      // illiquid-asset CGT is design/40 Q5 and is deliberately not invented here.
+      // Fixed WITH the flag rather than before it: patching this in isolation would
+      // have forced full recognition of exactly the assets design 88 §1 argues should
+      // not be recognised.
+      if (isSpeculative(val)) continue;
       contribution = val.value;
     } else {
       continue;

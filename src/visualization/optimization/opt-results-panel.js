@@ -144,6 +144,16 @@ export class OptResultsPanel extends BaseComponent {
       { label: 'Best Roth Bal',  value: best  ? fmtDollar(best.result.rothFinalBalance)  : '—', cls: 'opt-badge-value--roth' },
     ];
 
+    // Design 88 D7: disclose the "and if the speculative stakes pay off?" figure —
+    // but only on a plan that holds one, and never as a score. The optimizer ranked
+    // these candidates on the RECOGNISED figure (D10), so an unlabelled second wealth
+    // badge on every run would read as an alternative objective.
+    const incl = best?.result?.finalNetWorthInclSpeculative;
+    if (incl != null && incl !== best?.result?.finalNetWorthUsd) {
+      badges.push({ label: 'Best NW (incl. spec.)', value: fmtDollar(incl),
+                    cls: 'opt-badge-value--nw' });
+    }
+
     const header = document.createElement('div');
     header.className = 'opt-section-label';
     header.textContent = `Results — ${objectiveLabel}`;

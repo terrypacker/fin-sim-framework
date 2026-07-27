@@ -569,7 +569,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     return val;
   }
 
-  _currentObjective() { return OPTIMIZATION_OBJECTIVES[this._currentObjectiveKey()] ?? OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET; }
+  /** Design 88 D10: the fallback is the LIQUID variant — see resolveTerminalKey. */
+  _currentObjective() { return OPTIMIZATION_OBJECTIVES[this._currentObjectiveKey()] ?? OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET_LIQUID; }
   _currentSolver()    { return this._q('solver')?.value ?? 'CEM'; }
 
   /**
@@ -914,9 +915,18 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       ? ` &nbsp;·&nbsp; after-tax worth <b>${_usd(r.finalAfterTaxNetWorth)}</b>` +
         ` &nbsp;·&nbsp; after-tax liquid <b>${_usd(r.finalAfterTaxNetLiquidity)}</b>`
       : '';
+    // Design 88 D7/§5: disclose the speculative total beside the recognised one, on a
+    // plan that has one. Deliberately placed AFTER `liquid`, not beside net worth: the
+    // controller steers the liquid figure (D10) and recognises the net-worth figure;
+    // this third number is the only one on the line nothing is steering.
+    const inclSpec = r.finalNetWorthInclSpeculative;
+    const specBits = (inclSpec != null && inclSpec !== r.finalNetWorthUsd)
+      ? ` &nbsp;·&nbsp; incl. speculative <b>${_usd(inclSpec)}</b>` : '';
+
     this._q('outcome').innerHTML =
       `Projected terminal net worth <b>${_usd(r.finalNetWorthUsd)}</b>` +
       ` &nbsp;·&nbsp; liquid <b>${_usd(r.finalNetLiquidity)}</b>` +
+      specBits +
       afterTaxBits +
       (target ? ` &nbsp;·&nbsp; ${targetLabel} ${_usd(target)}` : '') +
       ` &nbsp;·&nbsp; as of ${_fmtDate(advice.now.date)}`;

@@ -281,8 +281,21 @@ export class ScenarioComparePresenter extends BaseComponent {
     const deltaB = resB.finalNetWorthUsd;
     const nwDelta = deltaA != null && deltaB != null ? deltaB - deltaA : null;
 
+    // Design 88 D7: the disclosure row appears only when one of the two scenarios
+    // actually holds a speculative asset. Publishing an identical second row on every
+    // ordinary comparison would be noise, and — worse — would train the reader to
+    // ignore the one case where the two numbers say different things.
+    const inclA = resA.finalNetWorthInclSpeculative;
+    const inclB = resB.finalNetWorthInclSpeculative;
+    const hasSpeculative = (inclA != null && inclA !== resA.finalNetWorthUsd)
+                        || (inclB != null && inclB !== resB.finalNetWorthUsd);
+
     const rows = [
       ['Net Worth (USD)', fmtUsd(resA.finalNetWorthUsd), fmtUsd(resB.finalNetWorthUsd), nwDelta],
+      ...(hasSpeculative
+        ? [['… incl. Speculative', fmtUsd(inclA), fmtUsd(inclB),
+            (inclA != null && inclB != null) ? inclB - inclA : null]]
+        : []),
       ['Out-of-Funds',    fmtDate(resA.outOfFundsDate),  fmtDate(resB.outOfFundsDate),  null],
       ['Cum. Deficit',    fmtUsd(resA.cumulativeDeficit), fmtUsd(resB.cumulativeDeficit),
         resB.cumulativeDeficit - resA.cumulativeDeficit],
