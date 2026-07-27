@@ -693,6 +693,30 @@
           <div class="holdings-header">
             <span>Holdings</span>
             <button class="btn btn-xs" data-id="addHoldingBtn" type="button">+ Add</button>
+            <button class="btn btn-xs" data-id="ladderBtn" type="button" title="Build a bond ladder — expands into N staggered individual bonds (design 66 §G8)">+ Bond ladder</button>
+          </div>
+          <!-- Bond-ladder builder (design 66 §G8). Expands (total, rungs, spacing,
+               term, tax, coupon, roll, zero/TIPS) into N staggered BOND rungs that
+               self-perpetuate via roll-to-tail. Hidden until "+ Bond ladder". -->
+          <div data-id="ladderBuilder" class="ladder-builder" style="display:none">
+            <label>Total <input class="ladder-input" data-lf="total" type="number" min="0" placeholder="Total $"/></label>
+            <label>Rungs <input class="ladder-input" data-lf="rungs" type="number" min="2" max="30" value="5" style="width:4em"/></label>
+            <label>Spacing (yr) <input class="ladder-input" data-lf="spacing" type="number" min="1" step="0.5" value="1" style="width:4em"/></label>
+            <label>First rung (yr) <input class="ladder-input" data-lf="firstTerm" type="number" min="0" step="0.5" value="1" style="width:4em"/></label>
+            <label>Tax
+              <select class="ladder-input" data-lf="taxExemption">
+                <option value="none">Taxable</option>
+                <option value="state">Treasury</option>
+                <option value="federal">Municipal</option>
+                <option value="both">Muni (all-state)</option>
+              </select>
+            </label>
+            <label>Coupon <input class="ladder-input" data-lf="couponRate" type="number" step="0.001" placeholder="market" style="width:5em"/></label>
+            <label title="Roll each maturing rung into a fresh bond at the ladder's full term — a self-perpetuating ladder (design 66 §G8). Off ⇒ rungs fall to cash as they mature (spend-down)."><input class="ladder-input" data-lf="roll" type="checkbox" checked/> Roll</label>
+            <label title="Zero-coupon / OID ladder"><input class="ladder-input" data-lf="zeroCoupon" type="checkbox"/> Zero</label>
+            <label title="TIPS / inflation-linked ladder"><input class="ladder-input" data-lf="inflationLinked" type="checkbox"/> TIPS</label>
+            <button class="btn btn-xs btn-primary" data-id="ladderBuildBtn" type="button">Build</button>
+            <button class="btn btn-xs" data-id="ladderCancelBtn" type="button">Cancel</button>
           </div>
           <table class="holdings-table">
             <thead>

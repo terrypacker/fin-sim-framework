@@ -14,7 +14,7 @@ import assert   from 'node:assert/strict';
 import { Holding }    from '../../src/finance/holdings/holding.js';
 import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
 import { consumeHoldings, consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
-import { SLEEVE_ORDER, LOT_STRATEGY, buildHoldingsComparator,
+import { SLEEVE_ORDER, LOT_STRATEGY, LOT_STRATEGIES, buildHoldingsComparator,
          resolveDrawdownSelection, withRebalanceCoupling } from '../../src/finance/holdings/holdings-selection.js';
 
 const RATE = 'EQUITY_US';
@@ -263,4 +263,83 @@ test('withRebalanceCoupling: selling the over-weight sleeve moves the mix toward
   const bond = r.newHoldings.find(h => h.id === 'bond').marketValue;
   const eqFrac = eq / (eq + bond);
   assert.ok(eqFrac < 0.70, `equity fraction ${eqFrac} should fall toward the 0.60 target`);
+});
+
+// ─── Lever B — LADDER (ladder-aware drawdown, design 66 §G8) ──────────────────
+
+/** A bond rung: an individual BOND with a maturity date (design 66 §G4). */
+function rung({ id, mv, basis = mv, date = D(2020), maturity }) {
+  return new Holding({
+    id, allocation: ALLOCATION.BOND, marketValue: mv, costBasis: basis,
+    purchaseDate: date, rateKey: 'FIXED_INCOME_US',
+    maturityDate: maturity, faceValue: mv,
+  });
+}
+
+/**
+ * A ladder-holding brokerage: liquid cash, three staggered rungs (2028/2030/2032),
+ * a perpetual bond FUND (no maturity), and an appreciated equity growth sleeve.
+ */
+function ladderAccount() {
+  return [
+    holding({ id: 'eq',   mv: 1000, basis: 200,  date: D(2015), alloc: ALLOCATION.EQUITY }),
+    holding({ id: 'cash', mv: 500,  basis: 500,  date: D(2020), alloc: ALLOCATION.CASH }),
+    rung({    id: 'r2032', mv: 1000, date: D(2020), maturity: D(2032) }),
+    rung({    id: 'r2028', mv: 1000, date: D(2020), maturity: D(2028) }),
+    rung({    id: 'r2030', mv: 1000, date: D(2020), maturity: D(2030) }),
+    holding({ id: 'fund', mv: 1000, basis: 1000, date: D(2019), alloc: ALLOCATION.BOND }), // perpetual fund
+  ];
+}
+
+/** The id order the comparator sorts a holdings array into (sold first → last). */
+function sellOrder(holdings, selection) {
+  return [...holdings].sort(buildHoldingsComparator(selection)).map(h => h.id);
+}
+
+test('LADDER standalone: cash → nearest rung → far rungs → equity/fund last', () => {
+  const order = sellOrder(ladderAccount(), { lotStrategy: LOT_STRATEGY.LADDER });
+  // cash (−∞), rungs by ascending maturity, then +∞ tier (equity + fund) by
+  // purchaseDate tie-break (eq 2015 before fund 2019).
+  assert.deepEqual(order, ['cash', 'r2028', 'r2030', 'r2032', 'eq', 'fund']);
+});
+
+test('LADDER: a partial drawdown spares the far rungs and the growth sleeve', () => {
+  // Need 700: liquid cash (500) + 200 off the NEAREST rung (r2028). Everything
+  // beyond the nearest rung is untouched — the ladder front absorbs the debit.
+  const r = consumeHoldings(ladderAccount(), 700, { selection: { lotStrategy: LOT_STRATEGY.LADDER } });
+  assert.equal(r.consumed, 700);
+  const mv = (id) => r.newHoldings.find(h => h.id === id)?.marketValue ?? 0;
+  assert.equal(mv('cash'),  0,    'liquid cash spent first');
+  assert.equal(mv('r2028'), 800,  'nearest rung shaved by 200');
+  assert.equal(mv('r2030'), 1000, 'next rung untouched');
+  assert.equal(mv('r2032'), 1000, 'far rung untouched');
+  assert.equal(mv('eq'),    1000, 'growth sleeve preserved');
+  assert.equal(mv('fund'),  1000, 'perpetual fund preserved');
+});
+
+test('LADDER within a sleeve order: bonds sold nearest-maturity first, fund last, before equity', () => {
+  // TAX_COST groups the sleeves (cash<bond<equity<gold); LADDER orders WITHIN bond by
+  // maturity (funds +∞ ⇒ last of the bond sleeve, still before equity).
+  const order = sellOrder(ladderAccount(), {
+    sleeveOrder: SLEEVE_ORDER.TAX_COST, lotStrategy: LOT_STRATEGY.LADDER,
+  });
+  assert.deepEqual(order, ['cash', 'r2028', 'r2030', 'r2032', 'fund', 'eq']);
+});
+
+test('LADDER is a valid total order: equal-tier lots keep a stable FIFO tie-break (no NaN)', () => {
+  // Two cash lots (both −∞) and two funds (both +∞) must not produce NaN compares;
+  // they fall through to purchaseDate ascending.
+  const lots = [
+    holding({ id: 'cashB', mv: 100, basis: 100, date: D(2022), alloc: ALLOCATION.CASH }),
+    holding({ id: 'cashA', mv: 100, basis: 100, date: D(2019), alloc: ALLOCATION.CASH }),
+    holding({ id: 'fundB', mv: 100, basis: 100, date: D(2021), alloc: ALLOCATION.BOND }),
+    holding({ id: 'fundA', mv: 100, basis: 100, date: D(2018), alloc: ALLOCATION.BOND }),
+  ];
+  const order = sellOrder(lots, { lotStrategy: LOT_STRATEGY.LADDER });
+  // Cash tier first (older cashA before cashB), then fund tier (older fundA before fundB).
+  assert.deepEqual(order, ['cashA', 'cashB', 'fundA', 'fundB']);
+});
+
+test('LADDER is exposed as a selectable lot strategy', () => {
+  assert.ok(LOT_STRATEGIES.includes('LADDER'));
 });

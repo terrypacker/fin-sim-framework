@@ -605,7 +605,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // *lots* within the chosen account to sell for a spending debit. FIFO/FIFO is the
   // historic blind purchase-date order, so existing scenarios are byte-identical.
   drawdownSleeveOrder:   'FIFO',  // FIFO | TAX_COST | PRESERVE_GROWTH | WEIGHTED (Lever A)
-  drawdownLotStrategy:   'FIFO',  // FIFO | HIFO | LOSS_FIRST | SPECIFIC (Lever B)
+  drawdownLotStrategy:   'FIFO',  // FIFO | HIFO | LOSS_FIRST | SPECIFIC | LADDER (Lever B; LADDER = design 66 §G8)
   // Lever C (design 65 §4-C) rebalance-coupling weight (w_mix). 0 = off (default);
   // >0 biases the sleeve sell order toward the design-61 over-weight class so a debit
   // doubles as a rebalance. Inert unless a TARGET_ALLOCATION strategy stamps targets.
@@ -861,7 +861,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'FIFO sells oldest first (maximizes AU 12-month CGT-discount eligibility). ' +
       'HIFO sells highest-cost-basis first (least realized gain per dollar). ' +
       'LOSS_FIRST realizes losing lots first (banks losses). ' +
-      'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands).',
+      'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands). ' +
+      'LADDER draws a bond ladder the natural way — liquid cash first, then the ' +
+      'nearest-maturity rung (≈ par, least mark-to-market deviation), sparing funds/equity (design 66 §G8).',
   },
   {
     // Lever C (design 65 §4-C) — rebalance coupling. Feeds state.drawdownRebalanceWeight;

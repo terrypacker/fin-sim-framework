@@ -109,6 +109,8 @@ export const COVERED = [
   'StockHarvestApplyReducer',
   // Design 61 Lever C — taxable-aware target-allocation rebalance (reducer-postconditions-behavioral.test.mjs)
   'RebalanceToTargetReducer', 'RebalanceToTargetApplyReducer',
+  // Design 66 §G8 Phase C — bond-ladder length lever (bond-ladder-reducer.test.mjs)
+  'BondLadderReducer',
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',

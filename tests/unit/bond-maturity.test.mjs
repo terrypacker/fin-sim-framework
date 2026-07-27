@@ -156,3 +156,67 @@ describe('BondMaturityReducer — redemption at par (§G4)', () => {
     assert.equal(rolled.marketValue, 100_000);
   });
 });
+
+// ─── Ladder roll-to-tail (§G8) ──────────────────────────────────────────────────
+
+describe('BondMaturityReducer — ladder roll-to-tail (§G8)', () => {
+  let reducer;
+  beforeEach(() => { reducer = new BondMaturityReducer(); });
+
+  test('a rung with rollTermYears rolls to the ladder TAIL, not its own term', () => {
+    // Own term is 5y (2025→2030), but the ladder length is 8y. On maturity the near
+    // rung must roll to +8y (→2038) to become the new far rung — NOT +5y.
+    const rung = bond({
+      marketValue: 20_000, faceValue: 20_000, costBasis: 20_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      couponRate: 0.03, rollAtMaturity: true, rollTermYears: 8,
+    });
+    const next = reducer.reduce(stateWith(rung, { asOfY: 2030, effectiveRate: 0.05 }), { type: 'US_PERIOD_ADVANCE' });
+    const rolled = next.acct.holdings[0];
+    assert.equal(rolled.allocation, ALLOCATION.BOND);
+    assert.equal(rolled.maturityDate.getTime(), ms(2038), 'rolls to the fixed ladder term (+8y), not its own +5y');
+    assert.equal(rolled.couponRate, 0.05, 'coupon re-locks to the current market yield (G1)');
+    assert.equal(rolled.marketValue, 20_000, 'par proceeds redeployed');
+    assert.equal(rolled.rollAtMaturity, true, 'keeps rolling every term');
+    assert.equal(rolled.rollTermYears, 8, 'ladder length is preserved for the next roll');
+  });
+
+  test('a non-rolling ladder rung falls to CASH at maturity (spend-down)', () => {
+    const rung = bond({
+      marketValue: 20_000, faceValue: 20_000, costBasis: 20_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      rollAtMaturity: false, rollTermYears: 8,   // rollTermYears inert without rollAtMaturity
+    });
+    const next = reducer.reduce(stateWith(rung, { asOfY: 2030 }), { type: 'US_PERIOD_ADVANCE' });
+    const red = next.acct.holdings[0];
+    assert.equal(red.allocation, ALLOCATION.CASH, 'redeems to cash');
+    assert.equal(red.rollTermYears, null, 'ladder term cleared on redemption');
+    assert.equal(red.marketValue, 20_000);
+  });
+
+  test('a 5-year ladder self-perpetuates: after advancing a year the near rung re-lands at the tail', () => {
+    // Rungs maturing 2031..2035, ladder length 5y (rollTermYears:5), all rolling.
+    // Advance the clock to 2031: the 2031 rung matures and rolls to 2036 (2031+5) —
+    // exactly the tail, so the set becomes {2032,2033,2034,2035,2036} = {1..5} from now.
+    const rungs = [1, 2, 3, 4, 5].map((yr, i) => {
+      const h = bond({
+        id: `rung-${i}`, marketValue: 20_000, faceValue: 20_000, costBasis: 20_000,
+        purchaseDate: new Date(ms(2030)), maturityDate: new Date(ms(2030 + yr)),
+        couponRate: 0.04, rollAtMaturity: true, rollTermYears: 5,
+      });
+      return h;
+    });
+    const state = {
+      effectiveInterestRates: { [RATE_KEYS.FIXED_INCOME_US]: 0.045 },
+      currentPeriods:         { US: { startMs: ms(2031) } },
+      acct: { balance: 100_000, holdings: rungs },
+    };
+    const next = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE' });
+    const maturities = next.acct.holdings.map(h => new Date(h.maturityDate).getUTCFullYear()).sort();
+    assert.deepEqual(maturities, [2032, 2033, 2034, 2035, 2036], 'spacing preserved: the matured near rung re-lands at the tail');
+    const rolled = next.acct.holdings.find(h => h.id === 'rung-0');
+    assert.equal(rolled.allocation, ALLOCATION.BOND, 'the rolled rung is still a bond');
+    assert.equal(rolled.couponRate, 0.045, 'rolled rung re-locks the current yield');
+    assert.equal(next.acct.balance, 100_000, 'gross value conserved across the roll');
+  });
+});

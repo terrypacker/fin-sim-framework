@@ -423,3 +423,20 @@ footer {
   overflow-x: auto;
   max-height: 120px;
 }
+
+/* Bond-ladder builder (design 66 §G8) — inline expand-into-N-rungs form in the
+   account editor holdings section. */
+.ladder-builder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  font-size: 0.85em;
+}
+.ladder-builder label { display: inline-flex; align-items: center; gap: 4px; }
+.ladder-builder .ladder-input[type="number"] { width: 6em; }

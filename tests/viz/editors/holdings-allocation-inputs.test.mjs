@@ -197,3 +197,72 @@ describe('holdings editor — allocation-aware inputs', () => {
     expect(h.couponRate).toBeNull();
   });
 });
+
+/**
+ * Bond-ladder builder (design 66 §G8). "+ Bond ladder" reveals an inline form that
+ * expands (total, rungs, spacing, first term, tax, coupon, roll, zero/TIPS) into N
+ * staggered individual BOND rungs appended to the holdings table.
+ */
+describe('holdings editor — bond-ladder builder (§G8)', () => {
+  beforeEach(() => loadHtml('../../index.html'));
+
+  const lf = (root, name) => root.querySelector(`[data-lf="${name}"]`);
+
+  test('"+ Bond ladder" toggles the builder form visible', () => {
+    const root    = editorForHolding({ allocation: 'EQUITY' })._rootEl;
+    const builder = root.querySelector('[data-id="ladderBuilder"]');
+    expect(builder.style.display).toBe('none');
+    root.querySelector('[data-id="ladderBtn"]').dispatchEvent(new window.Event('click'));
+    expect(builder.style.display).toBe('');
+  });
+
+  test('Build expands into N staggered rolling BOND rungs (roll-to-tail term = ladder length)', () => {
+    const editor = editorForHolding({ allocation: 'EQUITY' });
+    const root   = editor._rootEl;
+    const before = editor._holdings.length;
+
+    lf(root, 'total').value     = '100000';
+    lf(root, 'rungs').value     = '5';
+    lf(root, 'spacing').value   = '1';
+    lf(root, 'firstTerm').value = '1';
+    lf(root, 'taxExemption').value = 'state';
+    root.querySelector('[data-id="ladderBuildBtn"]').dispatchEvent(new window.Event('click'));
+
+    const rungs = editor._holdings.filter(h => h.allocation === 'BOND');
+    expect(editor._holdings.length).toBe(before + 5);
+    expect(rungs.length).toBe(5);
+    // Even face split.
+    expect(rungs.every(h => h.faceValue === 20000 && h.marketValue === 20000 && h.costBasis === 20000)).toBe(true);
+    // Every rung rolls to the SAME ladder-length term: first + (rungs-1)*spacing = 5y.
+    expect(rungs.every(h => h.rollAtMaturity === true && h.rollTermYears === 5)).toBe(true);
+    // Tax treatment + individual-bond identity carried onto each rung.
+    expect(rungs.every(h => h.taxExemption === 'state' && h.maturityDate instanceof Date)).toBe(true);
+    // Staggered maturities (5 distinct years).
+    const years = new Set(rungs.map(h => h.maturityDate.getUTCFullYear()));
+    expect(years.size).toBe(5);
+    // Builder hides after Build.
+    expect(root.querySelector('[data-id="ladderBuilder"]').style.display).toBe('none');
+  });
+
+  test('roll OFF ⇒ spend-down rungs (no rollAtMaturity, rollTermYears null)', () => {
+    const editor = editorForHolding({ allocation: 'EQUITY' });
+    const root   = editor._rootEl;
+    lf(root, 'total').value = '30000';
+    lf(root, 'rungs').value = '3';
+    lf(root, 'roll').checked = false;
+    root.querySelector('[data-id="ladderBuildBtn"]').dispatchEvent(new window.Event('click'));
+
+    const rungs = editor._holdings.filter(h => h.allocation === 'BOND');
+    expect(rungs.length).toBe(3);
+    expect(rungs.every(h => h.rollAtMaturity === false && h.rollTermYears === null)).toBe(true);
+  });
+
+  test('a zero-amount ladder builds nothing', () => {
+    const editor = editorForHolding({ allocation: 'EQUITY' });
+    const root   = editor._rootEl;
+    const before = editor._holdings.length;
+    lf(root, 'total').value = '0';
+    root.querySelector('[data-id="ladderBuildBtn"]').dispatchEvent(new window.Event('click'));
+    expect(editor._holdings.length).toBe(before);
+  });
+});
