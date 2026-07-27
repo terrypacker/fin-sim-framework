@@ -42,12 +42,12 @@
  *   node scripts/verify-mpc-lever.mjs drawdownWeights      # Lever B only
  */
 
-import { OptimizationProblem }     from '../src/finance/optimization/optimization-problem.js';
-import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../src/finance/optimization/optimization-objectives.js';
-import { makeInitialSnapshot }     from '../src/finance/mpc/mpc-controller.js';
+import { OptimizationProblem }     from '../../src/finance/optimization/optimization-problem.js';
+import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../../src/finance/optimization/optimization-objectives.js';
+import { makeInitialSnapshot }     from '../../src/finance/mpc/mpc-controller.js';
 import { drawdownWeightKey, allocWeightKey, ALLOCATION_OPTIMIZED_MODE }
-  from '../src/scenarios/intl-retirement-scenario.js';
-import { sleeveWeightKey } from '../src/finance/holdings/holdings-selection.js';
+  from '../../src/scenarios/intl-retirement-scenario.js';
+import { sleeveWeightKey } from '../../src/finance/holdings/holdings-selection.js';
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));

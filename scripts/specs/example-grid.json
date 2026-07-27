@@ -1,0 +1,32 @@
+{
+  "title": "EXAMPLE — retirement year × equity return, with a spend-ceiling frontier",
+  "notes": "Synthetic illustration of the spec format. Every figure is a round made-up number, calibrated only so the built-in default scenario's frontier lands INSIDE the sweep and the table shows variation — a demo where every cell reads the same teaches nothing. Run with no --scenario to check the tool works, then copy this file and edit it for a real study.",
+
+  "base": {
+    "spendingStrategy": "EXPLICIT_BANDS"
+  },
+
+  "axes": {
+    "retire": {
+      "lever": "retire.primary",
+      "values": [2030, 2032, 2034],
+      "labels": ["retire 2030", "retire 2032", "retire 2034"]
+    },
+    "return": {
+      "lever": "equityShift",
+      "values": [0, -0.02, -0.04],
+      "labels": ["base", "-2pp", "-4pp"]
+    },
+    "spend": {
+      "lever": "spendTotal",
+      "values": [12000, 14000, 16000, 18000, 20000],
+      "labels": ["$12k", "$14k", "$16k", "$18k", "$20k"]
+    }
+  },
+
+  "report": {
+    "rows": "retire",
+    "cols": "return",
+    "reduce": { "axis": "spend", "pick": "last-passing" }
+  }
+}

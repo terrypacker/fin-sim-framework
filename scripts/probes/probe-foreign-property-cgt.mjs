@@ -30,9 +30,9 @@
  *         npm run probe:foreign-property-cgt
  */
 
-import { ServiceRegistry }        from '../src/services/service-registry.js';
-import { ScenarioLoader }         from '../src/scenarios/scenario-loader.js';
-import { IntlRetirementScenario } from '../src/scenarios/intl-retirement-scenario.js';
+import { ServiceRegistry }        from '../../src/services/service-registry.js';
+import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 const usd = n => '$' + Math.round(n).toLocaleString();
 let failures = 0;

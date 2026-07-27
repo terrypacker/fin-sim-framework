@@ -15,6 +15,7 @@ Reference: https://projectionlab.com
 """
 
 import json
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
@@ -428,20 +429,26 @@ def convert_finsim_to_projectionlab(finsim_data: Dict) -> Dict[str, Any]:
 
 
 def main():
-    """Main conversion function."""
-    # Read FinSim file
-    finsim_file = "scenarios/fin-sim-scenarios.json"
+    """Main conversion function.
+
+    Usage: convert_to_projectionlab.py [input.json] [output.json]
+
+    Paths are arguments rather than constants so the tool can convert any scenario
+    export without editing the source. The defaults point at the conventional
+    (gitignored) working location.
+    """
+    finsim_file = sys.argv[1] if len(sys.argv) > 1 else "scenarios/fin-sim-scenarios.json"
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "scenarios/projectionlab-config.json"
+
     with open(finsim_file, "r") as f:
         finsim_data = json.load(f)
-    
+
     # Convert to ProjectionLab format
     projectionlab_config = convert_finsim_to_projectionlab(finsim_data)
-    
-    # Write output
-    output_file = "scenarios/projectionlab-config.json"
+
     with open(output_file, "w") as f:
         json.dump(projectionlab_config, f, indent=2)
-    
+
     print(f"Conversion complete! Output written to {output_file}")
     
     # Count accounts

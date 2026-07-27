@@ -13,7 +13,7 @@ test('TE-3: Ordinary income uses bracket calculation', () => { ... });
 Run the coverage check at any time:
 
 ```sh
-node scripts/check-requirements.js
+node scripts/dev/check-requirements.js
 ```
 
 ---

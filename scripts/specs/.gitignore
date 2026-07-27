@@ -1,0 +1,8 @@
+# Grid and arm specs describe a REAL plan: retirement dates, spending levels, asset
+# values. That is private, and there is no reason for it to be in version control.
+#
+# So: everything here is ignored except the committed `example-*.json` files, which
+# use round synthetic figures and exist to document the format. Keep your own specs
+# here under any other name and they stay local.
+*.json
+!example-*.json

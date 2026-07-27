@@ -84,19 +84,19 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join }                   from 'node:path';
 
-import { ServiceRegistry }        from '../src/services/service-registry.js';
-import { BaseScenario }           from '../src/scenarios/base-scenario.js';
-import { ScenarioLoader }         from '../src/scenarios/scenario-loader.js';
-import { IntlRetirementScenario } from '../src/scenarios/intl-retirement-scenario.js';
-import { StateTaxSettleService }  from '../src/finance/tax/state/state-tax-settle-service.js';
-import { ReportDefinitionRegistry } from '../src/finance/journal-reporting/report-definition-registry.js';
-import { exportDrillReports }       from '../src/finance/journal-reporting/drill-report-export.js';
+import { ServiceRegistry }        from '../../src/services/service-registry.js';
+import { BaseScenario }           from '../../src/scenarios/base-scenario.js';
+import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { StateTaxSettleService }  from '../../src/finance/tax/state/state-tax-settle-service.js';
+import { ReportDefinitionRegistry } from '../../src/finance/journal-reporting/report-definition-registry.js';
+import { exportDrillReports }       from '../../src/finance/journal-reporting/drill-report-export.js';
 import {
   buildTaxWorksheetRows,
   toCsv,
   verifyWorksheetRows,
-} from '../src/finance/tax/tax-worksheet-export.js';
-import { withBom }                 from '../src/utils/csv.js';
+} from '../../src/finance/tax/tax-worksheet-export.js';
+import { withBom }                 from '../../src/utils/csv.js';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
