@@ -223,7 +223,7 @@ export class QueryApi {
    * @returns {Promise<{ groups: Array<{key:object, items:object[], ...aggregates}>, grandTotal: number|null }>}
    *   grandTotal is the 'total' aggregate's sum across all groups, or null when not defined.
    */
-  async aggregate({ query = '', groupBy = [], aggregates = {}, sort = [] }) {
+  async aggregate({ query = '', groupBy = [], aggregates = {}, sort = [], dedupeBy = null }) {
     if (this.rebuildIndexes) this._buildIndexes();
 
     const where = typeof query === 'string'
@@ -244,12 +244,18 @@ export class QueryApi {
       buckets.get(keyStr).items.push(item);
     }
 
-    // Fold each bucket
+    // Fold each bucket. When `dedupeBy` is set, collapse rows sharing that field
+    // value to a single representative before folding — this undoes the journal
+    // action×reducer fan-out (one action → N journal rows, all carrying the same
+    // payload) so payload-summing aggregates (e.g. sum of `gain`) count each
+    // distinct action once instead of N times. Rows with a null dedupe value are
+    // each kept (nothing to collapse them onto).
     const groups = [];
     for (const { key, items } of buckets.values()) {
-      const group = { key, items };
+      const folded = dedupeBy ? _dedupeItems(items, dedupeBy) : items;
+      const group = { key, items: folded };
       for (const [name, { fn, field }] of Object.entries(aggregates)) {
-        group[name] = _fold(fn, field, items);
+        group[name] = _fold(fn, field, folded);
       }
       groups.push(group);
     }
@@ -664,6 +670,23 @@ export class QueryApi {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
+
+// Collapse rows that share the same `field` value to their first occurrence,
+// preserving order. Rows whose `field` value is null/undefined are all kept
+// (they have no shared identity to dedupe on). Used to undo the journal
+// action×reducer fan-out via `instanceId` before payload aggregation.
+function _dedupeItems(items, field) {
+  const seen = new Set();
+  const out  = [];
+  for (const item of items) {
+    const v = item[field];
+    if (v == null) { out.push(item); continue; }
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(item);
+  }
+  return out;
+}
 
 function _fold(fn, field, items) {
   if (fn === 'count') return items.length;
