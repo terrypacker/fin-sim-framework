@@ -398,6 +398,36 @@ const sections = [];
     ], rows)}</section>`);
 }
 
+// Companion pages — the study's other HTML outputs, linked rather than inlined.
+//
+// A study directory grows self-contained pages this report cannot absorb: the
+// allocation-over-time page and the Monte Carlo mix distribution (design 82) are
+// chart-first and megabytes each. Inlining them would double the size of a page whose
+// job is the overview. Linking them means the overview stays the entry point and the
+// reader can still find them — a generated page nobody knows exists is a page nobody
+// opens. Freshness is checked against the scenario only, since nothing here knows
+// which spec (if any) defined them.
+let hasCompanions = false;
+{
+  const pages = readdirSync(dir)
+    .filter(f => /\.html?$/i.test(f) && resolve(dir, f) !== resolve(outFile))
+    .sort()
+    .map(f => ({ file: f, mtimeMs: mtime(join(dir, f)) }));
+  if (pages.length) {
+    hasCompanions = true;
+    sections.push(`<section id="companions"><h2>Companion pages</h2>
+      <p class="lede">Self-contained pages written into this directory by the same run. They are linked, not summarised —
+        each answers a different question from the grids and arms below.</p>
+      ${dataTable([
+        { head: 'page', get: r => `<a href="${esc(r.file)}"><span class="mono">${esc(r.file)}</span></a>` },
+        { head: 'written (UTC)', get: r => `<span class="mono">${esc(when(r.mtimeMs))}</span>` },
+        { head: 'state', get: r => (scenarioMtime != null && r.mtimeMs != null && scenarioMtime > r.mtimeMs
+          ? '<span class="badge crit">stale</span> <span class="muted">older than the scenario</span>'
+          : '<span class="badge ok">current</span>') },
+      ], pages)}</section>`);
+  }
+}
+
 // Headline cards — one per grid, plus one per MC set.
 {
   const cards = [];
@@ -603,6 +633,7 @@ for (const s of mcSets) {
 
 const nav = [
   { id: 'provenance', label: 'Provenance' },
+  ...(hasCompanions ? [{ id: 'companions', label: 'Companion pages' }] : []),
   { id: 'headlines', label: 'Headlines' },
   ...(levers.length ? [{ id: 'levers', label: 'What moves it' }] : []),
   ...grids.map(g => ({ id: `grid-${g.key}`, label: g.key })),
