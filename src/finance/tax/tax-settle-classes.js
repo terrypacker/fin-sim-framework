@@ -140,19 +140,27 @@ export class AuTaxSettleHandler extends TaxSettleHandlerBase {
     // Same rate on both AU paths as on the US settle — one household, one pair.
     const fxRate = taxFxRate(state);
 
+    // Design 77 §5.4 — the Div 295 fund tax accrued this FY, in AUD. It is NOT part
+    // of `tax` (that is the member's own liability, and the only thing
+    // AU_TAX_PAYMENT_DEBIT may draw from their cash) but it IS real tax that left
+    // the household's wealth, so it rides alongside for `cumulativeTaxesPaid`.
+    // Without this the MIN_LIFETIME_TAXES objective would reward shovelling money
+    // into super to make a tax it is still paying disappear from the metric.
+    const fundTax = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
+
     if (state.auPersonOrdinaryIncomeYTD && Object.keys(state.auPersonOrdinaryIncomeYTD).length > 0) {
       const personTaxDetails = this._settleService.computeAuTaxPerPerson(state);
       if (personTaxDetails.length > 0) {
         const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
         return [
-          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails, fxRate },
+          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails, fxRate, fundTax },
           { type: 'RECORD_BALANCE' },
         ];
       }
     }
     const taxDetail = this._settleService.computeAuTax(state);
     return [
-      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate },
+      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate, fundTax },
       { type: 'RECORD_BALANCE' },
     ];
   }
@@ -265,18 +273,27 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    * to the two baskets by AU-source income share, convert to USD, and stage it as
    * the current-year foreign tax the next US settle consumes.
    *
-   * Two amounts are removed before apportioning:
+   * One amount is removed before apportioning:
    *
-   *   1. **Super tax** — not a creditable foreign *income* tax.
-   *   2. **AU tax on US-SOURCE income** (design 71 §14). Foreign tax on US-source
+   *   **AU tax on US-SOURCE income** (design 71 §14). Foreign tax on US-source
    *      income is not creditable: §904 exists precisely to stop it, and the US is
    *      the source country here — AU relieves the double tax from its side, via
    *      FITO. `fitoLimit` is exactly this quantity, since the ATO "step 1 − step 2"
    *      calculation is the marginal AU tax on the US-source slice; FITO already
-   *      relieved `fito` of it, so `fitoLimit − fito` is what survives inside the AU
-   *      net liability.
+   *   relieved `fito` of it, so `fitoLimit − fito` is what survives inside the AU
+   *   net liability.
    *
-   * Removing (2) is the fix for a real over-relief leak. The previous code removed
+   * **Super fund tax used to be removed here too, and no longer needs to be.**
+   * Design 77 took the Div 295 fund tax out of the AU *member's* net liability
+   * entirely (it is withheld inside the fund at accrual), so `action.tax` no longer
+   * contains it and subtracting it again would understate the creditable base by
+   * the whole amount. The conclusion it encoded is unchanged and still correct: AU
+   * super fund tax is **not** a creditable foreign income tax of the member, because
+   * §901 credits the person on whom foreign law imposes legal liability
+   * (Treas. Reg. §1.901-2(f)) and that person is the fund's trustee, not the member.
+   * Design 77 §3.1 carries the reasoning.
+   *
+   * Removing the US-source amount is the fix for a real over-relief leak. The previous code removed
    * only super tax, on the stated assumption that "FITO has already reduced the AU
    * liability by the US tax on US-source income, so the residual is predominantly
    * AU-source tax". That holds only while FITO fully relieves — i.e. while the US
@@ -288,9 +305,8 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    * foreign income, so the over-relief was deferred rather than prevented.
    */
   _extraStatePatches(state, action) {
-    const superTax      = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
     const usSourceAuTax = _auTaxOnUsSourceIncome(action, state);
-    const auCreditable  = Math.max(0, (action.tax ?? 0) - superTax - usSourceAuTax);
+    const auCreditable  = Math.max(0, (action.tax ?? 0) - usSourceAuTax);
     const gen   = state.foreignGeneralIncomeYTD ?? 0;
     const pass  = state.foreignPassiveIncomeYTD ?? 0;
     const denom = gen + pass;

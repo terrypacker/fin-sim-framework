@@ -36,7 +36,13 @@ export class AccumulateTaxesPaidReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const tax = action.tax ?? 0;
+    // `fundTax` (design 77 §5.4) is the AU Div 295 superannuation FUND tax for the
+    // year. It is not the member's liability and is never debited from their cash —
+    // the fund withholds it at accrual — but it is tax the household genuinely bore,
+    // out of the super balance. Counting it keeps "lifetime taxes" a measure of tax
+    // paid rather than of tax *invoiced to the member*, which is what an optimizer
+    // minimizing this metric would otherwise learn to game.
+    const tax = (action.tax ?? 0) + (action.fundTax ?? 0);
     if (!tax) return this.newState(state);
 
     // AU settlements are denominated in AUD; convert to USD. US + state are USD.

@@ -32,6 +32,7 @@ import { OptimizationProblem } from '../../src/finance/optimization/optimization
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../../src/finance/optimization/optimization-objectives.js';
 import { DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
+import { AccountService } from '../../src/finance/services/account-service.js';
 
 const XB = COCKPIT_CONTROLS.DRAWDOWN_XBORDER;
 
@@ -154,20 +155,51 @@ test('DRAWDOWN_WITHINTIER: actuate rejects a bogus policy', () => {
   assert.strictEqual(sim.state.withinTierDraw, 'SEQUENTIAL');
 });
 
-test('DRAWDOWN_WITHINTIER: a committed policy bites under a snapshot-seeded rollout (§11.1 shim)', () => {
-  quiet(() => {
-    const snapshot = makeInitialSnapshot({ simStart: SIM_START, simEnd: SIM_END, asOfDate: NOW, baseParams: BASE });
-    const mk = (mode) => {
-      const problem = new OptimizationProblem({
+test('DRAWDOWN_WITHINTIER: a committed policy reaches the drawdown engine under a snapshot-seeded rollout (§11.1 shim)', () => {
+  // Guards the withinTierDraw entry in FORWARD_DRAWDOWN_STATE_FIELDS: without the
+  // re-stamp the injected snapshot's SEQUENTIAL clobbers the committed policy.
+  //
+  // This used to assert a NET WORTH delta between the two policies. That was a proxy,
+  // and a weak one — it only held while the scenario happened to draw from a tier with
+  // more than one member, and it measured $1,156 on $8.87M (0.013%) even then. Design 77
+  // left ~A$87k more in AU cash across the run (super fund tax stopped being debited
+  // from the member's own account), which reshaped the draw enough that every tier
+  // touched now has a single member. SEQUENTIAL and PROPORTIONAL are then the same walk
+  // by definition, and the proxy read zero — reporting a broken shim when the shim was
+  // fine.
+  //
+  // So observe the thing the shim is actually responsible for: the policy the drawdown
+  // engine SEES. This fails if the re-stamp is dropped (both runs would report the
+  // snapshot's SEQUENTIAL) and is immune to whether the scenario happens to exercise
+  // the split.
+  const seenModes = (mode, snapshot) => {
+    const orig = AccountService.prototype.replenishSavings;
+    const seen = new Set();
+    AccountService.prototype.replenishSavings = function (state, ...rest) {
+      seen.add(String(state?.withinTierDraw));
+      return orig.call(this, state, ...rest);
+    };
+    try {
+      new OptimizationProblem({
         variables: [], baseParams: BASE, objective: OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH,
         simStart: SIM_START, simEnd: SIM_END, initialState: { kind: 'snapshot', snapshot },
-      });
-      return problem.evaluate({ withinTierDraw: mode }).result.finalNetWorthUsd;
-    };
-    // Guards the withinTierDraw entry in FORWARD_DRAWDOWN_STATE_FIELDS: without the
-    // re-stamp the injected snapshot's SEQUENTIAL clobbers the committed policy.
-    assert.ok(Math.abs(mk('SEQUENTIAL') - mk('PROPORTIONAL')) > 1,
-      'withinTierDraw is inert under MPC (shim missing)');
+      }).evaluate({ withinTierDraw: mode });
+    } finally {
+      AccountService.prototype.replenishSavings = orig;
+    }
+    return seen;
+  };
+
+  quiet(() => {
+    const snapshot = makeInitialSnapshot({ simStart: SIM_START, simEnd: SIM_END, asOfDate: NOW, baseParams: BASE });
+    const seq  = seenModes('SEQUENTIAL',   snapshot);
+    const prop = seenModes('PROPORTIONAL', snapshot);
+
+    assert.ok(seq.size > 0 && prop.size > 0, 'the rollout must actually reach the drawdown path');
+    assert.deepStrictEqual([...seq],  ['SEQUENTIAL'],
+      'the committed SEQUENTIAL policy must reach replenishSavings');
+    assert.deepStrictEqual([...prop], ['PROPORTIONAL'],
+      'withinTierDraw is inert under MPC (shim missing): the injected snapshot clobbered the committed policy');
   });
 });
 

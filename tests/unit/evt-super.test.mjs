@@ -97,13 +97,16 @@ function makeSuperConfig({
 // EVT-20: Superannuation Contribution
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-20: Super contribution increases superAccount balance and contributionBasis', () => {
+test('EVT-20: Super contribution credits the balance NET of the 15% contributions tax', () => {
   const { sim } = loadToolsetScenario(makeSuperConfig({ initialAuSavings: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SUPER_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.superAccount.balance, 5000);
-  assert.strictEqual(sim.state.superAccount.contributionBasis, 5000);
+  // Design 77 §5.2 — the fund deducts the Div 295 contributions tax on receipt, so
+  // 5,000 gross contributed lands as 4,250. Pre-77 the full 5,000 was credited and
+  // the 750 was later taken out of the member's own AU cash at the annual settle.
+  assert.strictEqual(sim.state.superAccount.balance, 4250);
+  assert.strictEqual(sim.state.superAccount.contributionBasis, 4250);
   assert.strictEqual(sim.state.superAccount.earningsBasis, 0);
 });
 
@@ -246,14 +249,36 @@ test('EVT-22: Super earnings withdrawal has no AU tax', () => {
 // EVT-23: Super Earnings
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-23: Super earnings increase superAccount balance and earningsBasis', () => {
+// The default member in makeSuperConfig turns 60 on 2026-01-01, i.e. is already in
+// pension phase. Design 77 extended the pension-phase gate to the DIRECT
+// SUPER_EARNINGS path too (it previously applied only to the scheduled
+// INTL_SUPER_EARNINGS path), so these accumulation-phase cases must say so.
+const ACCUMULATION = { birthDate: '1990-01-01' };
+
+test('EVT-23: Super earnings increase superAccount balance and earningsBasis, net of fund tax', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    superBalance: 100000, superContribBasis: 100000, ...ACCUMULATION,
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'SUPER_EARNINGS', data: { amount: 7000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  // Design 77 §5.1 — 7,000 of gross fund earnings, less the 15% Div 295 earnings
+  // tax the fund pays out of its own assets, credits 5,950 to the member.
+  assert.strictEqual(sim.state.superAccount.balance, 105950);
+  assert.strictEqual(sim.state.superAccount.earningsBasis, 5950);
+  assert.strictEqual(sim.state.superAccount.contributionBasis, 100000); // unchanged
+});
+
+test('EVT-23: the DIRECT earnings path is pension-phase exempt too (member ≥ 60)', () => {
+  // Default birthDate — member is 60. Design 77 §5.1: the direct path used to tax
+  // this at 15% while the scheduled path exempted it, so the same member got a
+  // different answer depending on which event fired.
   const { sim } = loadToolsetScenario(makeSuperConfig({ superBalance: 100000, superContribBasis: 100000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SUPER_EARNINGS', data: { amount: 7000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.superAccount.balance, 107000);
-  assert.strictEqual(sim.state.superAccount.earningsBasis, 7000);
-  assert.strictEqual(sim.state.superAccount.contributionBasis, 100000); // unchanged
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 0);
+  assert.strictEqual(sim.state.superAccount.balance, 107000); // full gross, untaxed
 });
 
 test('EVT-23: Super earnings stay in account — no cash pool transaction', () => {
@@ -269,12 +294,15 @@ test('EVT-23: Super earnings stay in account — no cash pool transaction', () =
   assert.strictEqual(sim.state.checkingAccount.balance, 20000); // unchanged
 });
 
-test('EVT-23: Super earnings are always AU super taxable (15%)', () => {
-  const { sim } = loadToolsetScenario(makeSuperConfig({ superBalance: 100000, superContribBasis: 100000 }));
+test('EVT-23: Super earnings are AU super taxable (15%) in accumulation phase', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    superBalance: 100000, superContribBasis: 100000, ...ACCUMULATION,
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SUPER_EARNINGS', data: { amount: 7000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  // In the toolset path, state.people and state.superAccount are non-null → per-person maps used
+  // In the toolset path, state.people and state.superAccount are non-null → per-person maps used.
+  // The accrual is on the GROSS earnings even though only the net was credited.
   assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 1050); // 15% of 7000
 });
 
@@ -307,10 +335,31 @@ test('EVT-23: super earnings taxed at 15% in accumulation phase (member < 60)', 
   // capture a single year of 7% growth (the prior startOffset(1) fired at 2027).
   sim.stepTo(new Date(2027, 0, 15));
 
-  // 7000 of earnings accrued and grew the balance...
-  assert.strictEqual(sim.state.superAccount.balance, 107000);
-  // ...and were taxed at the flat 15% super rate.
+  // 7000 of GROSS earnings accrued, the fund paid 1050 of Div 295 tax out of them,
+  // and 5950 reached the member (design 77 §5.1).
+  assert.strictEqual(sim.state.superAccount.balance, 105950);
   assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 1050); // 15% of 7000
+});
+
+test('EVT-23: the fund earnings tax never touches the member’s own cash (design 77)', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    initialAuSavings: 50000,
+    superBalance: 100000, superContribBasis: 100000,
+    superGrowthRate: 0.07,
+    birthDate: '1990-01-01', // accumulation phase — tax is actually levied
+  }));
+  const before = sim.state.auSavingsAccount.balance;
+  // Step past the AU FY settle (30 June) that follows the first year-end accrual,
+  // which is where the pre-77 code turned auSuperTaxYTD into an AU_TAX_PAYMENT_DEBIT.
+  sim.stepTo(new Date(2027, 7, 1));
+
+  // The whole point of design 77: super fund tax is withheld inside the fund, so it
+  // is invisible to AU savings. The balance can only have moved by ordinary interest.
+  assert.ok(
+    sim.state.auSavingsAccount.balance >= before,
+    `AU savings fell from ${before} to ${sim.state.auSavingsAccount.balance} — the super `
+    + `fund tax is being debited from the member's cash again`,
+  );
 });
 
 test('EVT-23: super earnings tax-free in pension phase (member ≥ 60)', () => {

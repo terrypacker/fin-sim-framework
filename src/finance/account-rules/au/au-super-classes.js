@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { SUPER_TAX_RATE, superEarningsTaxRate } from '../../tax/au/super-tax-rate.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -32,10 +33,18 @@ function getAge(birthDate, asOfDate) {
 /**
  * EVT-20: Super contribution — debit AU cash pool, credit contributionBasis.
  * Chains SUPER_CONTRIBUTION_TAX (AU super tax at 15%).
+ *
+ * Design 77 §5.2 — the 15% contributions tax is levied on the FUND (ITAA 1997
+ * Div 295), which deducts it from the contribution as it is received. So the
+ * member contributes the gross amount out of AU cash but only the NET lands in
+ * their super balance and contributionBasis. Before design 77 the gross was
+ * credited and the tax was later debited from AU cash at the annual settle, which
+ * both overstated the super balance and charged the member's own cash for a tax
+ * they never legally owed.
  */
 export class SuperContributionApplyReducer extends AccountServiceReducer {
   static type        = 'SuperContributionApplyReducer';
-  static description = 'Debits the AU cash pool and credits superAccount contributionBasis; chains SUPER_CONTRIBUTION_TAX.';
+  static description = 'Debits the AU cash pool for the gross contribution, credits superAccount with the amount net of the 15% Div 295 contributions tax; chains SUPER_CONTRIBUTION_TAX.';
   static actionType  = 'SUPER_CONTRIBUTION_APPLY';
 
   constructor({ accountService, stateRegistry }) {
@@ -54,12 +63,21 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
     // Mirrors SuperEarningsApplyReducer, which already resolves this way.
     const key = action.stateKey ?? 'superAccount';
     const sa = state[key];
-    this.accountService.transaction(sa, action.amount, null);
+    // Net of the fund's Div 295 contributions tax. `contributionBasis` takes the
+    // same net figure so the basis invariant (balance === contributionBasis +
+    // earningsBasis) survives the withholding — the tax leaves the fund, it does
+    // not become earnings.
+    const tax = +(action.amount * SUPER_TAX_RATE).toFixed(2);
+    const net = +(action.amount - tax).toFixed(2);
+    this.accountService.transaction(sa, net, null);
     return this.newState(
       state,
       {
-        [key]: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
+        [key]: { ...sa, contributionBasis: sa.contributionBasis + net },
       },
+      // The classifier is handed the GROSS contribution: it is the base the 15% is
+      // levied on, and keeping the rate in the year-versioned tax module is what
+      // lets a future FY change it in one place.
       [{ type: 'SUPER_CONTRIBUTION_TAX', amount: action.amount, stateKey: key }]
     );
   }
@@ -135,10 +153,18 @@ export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
 /**
  * EVT-23: Super earnings accrual — stay in account.
  * Chains SUPER_EARNINGS_TAX (AU super tax at 15%).
+ *
+ * Design 77 §5.1 — `action.amount` arrives already NET of the fund's 15% earnings
+ * tax (SuperEarningsHandler withholds it by growing the holdings at
+ * `rate × (1 − taxRate)`), so this reducer credits the net and the balance never
+ * carries a tax the fund has in fact already paid. `action.grossAmount` is the
+ * pre-tax base, forwarded to the classifier so `auSuperTaxYTD` records the levy.
+ * Absent on pre-77 serialized actions ⇒ falls back to `amount`, reproducing the
+ * old (gross-credit, gross-base) arithmetic exactly.
  */
 export class SuperEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'SuperEarningsApplyReducer';
-  static description = 'Adds earnings to superAccount balance and earningsBasis; chains SUPER_EARNINGS_TAX.';
+  static description = 'Adds earnings NET of the 15% Div 295 fund earnings tax to superAccount balance and earningsBasis; chains SUPER_EARNINGS_TAX on the gross.';
   static actionType  = 'SUPER_EARNINGS_APPLY';
 
   constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
@@ -159,7 +185,12 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: sa.earningsBasis + action.amount,
         },
       },
-      [{ type: 'SUPER_EARNINGS_TAX', amount: action.amount, stateKey: key, taxRate: action.taxRate }]
+      [{
+        type: 'SUPER_EARNINGS_TAX',
+        amount: action.grossAmount ?? action.amount,
+        stateKey: key,
+        taxRate: action.taxRate,
+      }]
     );
   }
 }
@@ -247,9 +278,22 @@ export class SuperEarningsDirectHandler extends HandlerEntry {
     this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  /**
+   * `data.amount` is GROSS fund earnings, matching the scheduled
+   * INTL_SUPER_EARNINGS path. Design 77 §5.1 applies the same pension-phase gate
+   * and the same net crediting here, so an injected earnings event and a computed
+   * one cannot disagree about what the member ends up with. Without the gate this
+   * path taxed a 70-year-old's fund earnings at 15%.
+   */
+  call({ data, state, date }) {
+    const gross     = data.amount;
+    const personKey = Object.keys(state?.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age       = birthDate && date ? getAge(birthDate, date) : 0;
+    const taxRate   = superEarningsTaxRate(age);
+    const net       = +(gross * (1 - taxRate)).toFixed(2);
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount: data.amount },
+      { type: 'SUPER_EARNINGS_APPLY', amount: net, grossAmount: gross, taxRate },
       new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ];
   }

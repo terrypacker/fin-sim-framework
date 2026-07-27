@@ -245,8 +245,25 @@ function runDefaultIntlRetirement() {
 // it could not see them. Both are now listed there.
 //
 // A move back DOWN toward ~698k would mean ownership attribution has gone inert again.
-const EXPECTED_LIFETIME_TAX = 719_844;
-const EXPECTED_NET_WORTH     = 12_260_459;
+//
+// Design 77 (AU super fund tax) moved both, in opposite directions:
+//   lifetime tax 719,844 → 723,849  (+0.56%)
+//   net worth 12,260,459 → 12,183,627 (−0.63%)
+//
+// Net worth FELL because the Div 295 fund tax is now withheld from the super balance
+// when it accrues, instead of being debited from the member's AU cash at the annual
+// settle. Pre-77 the super account compounded on money that had already gone to the
+// ATO — ~A$87k of lifetime fund tax earning 7% for up to two decades. The household is
+// not newly poorer; the old figure was overstated.
+//
+// Lifetime tax ROSE even though the fund tax itself fell (A$87,435 → A$81,021, the
+// smaller balance earning less to tax). The rise is `fundTax` on AU_TAX_SETTLE_APPLY
+// (§5.4) keeping fund tax inside cumulativeTaxesPaid now that it has left the member's
+// netLiability, plus the second-order drawdown differences a smaller super book causes.
+// A sharp DROP of ~A$81k-equivalent here would mean that hand-off was lost and the
+// metric has stopped counting tax the household is still paying.
+const EXPECTED_LIFETIME_TAX = 723_849;
+const EXPECTED_NET_WORTH     = 12_183_627;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

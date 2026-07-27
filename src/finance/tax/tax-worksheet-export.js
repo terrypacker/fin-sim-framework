@@ -192,11 +192,18 @@ function flattenDocument(doc) {
         // double-counts. `SUBLINE` keeps them in the worksheet while excluding them
         // from any `rowType = 'LINE'` footing check (§5.2).
         //
+        // `memo: true` marks a DISCLOSURE row: an amount the return states but does
+        // not assess. The only one today is the AU Div 295 superannuation fund tax
+        // (design 77 §5.3) — real tax, paid by the fund out of fund assets, never a
+        // liability of the member filing this return. It sits below Net Tax
+        // Liability and must stay out of every footing sum, so it gets its own
+        // rowType rather than `LINE`.
+        //
         // A line may also declare its own `rowType` outright — the foreign-relief
         // worksheet (§13) emits `WORKSHEET` and `RATE` rows, which are supporting
         // intermediates rather than lines of the return and must never be summed
         // into it.
-        rowType:     li.rowType ?? (li.sub ? 'SUBLINE' : 'LINE'),
+        rowType:     li.rowType ?? (li.memo ? 'MEMO' : li.sub ? 'SUBLINE' : 'LINE'),
         amount:      li.amount ?? null,
         // A flat-rate tax states its rate and base on the line itself rather than
         // breaking out a one-band schedule (§5.2).

@@ -91,17 +91,37 @@ test('TE-1: super earnings classifier sets auSuperTaxYTD at 15% flat rate', () =
   assert.strictEqual(s1.auSuperTaxYTD, 3000); // 20000 * 0.15
 });
 
-test('TE-1: rates module adds auSuperTaxYTD directly to AU tax result', () => {
-  // auSuperTaxYTD is the pre-computed flat tax dollar amount
-  const { netLiability } = auRates.computeTax(auState({ auSuperTaxYTD: 1500 }));
-  assert.strictEqual(netLiability, 1500);
+// Design 77 §5.3 inverted these two. Div 295 super fund tax is levied on the FUND,
+// not the member — it never reaches their notice of assessment — and it is already
+// withheld from fund assets when the contribution or earning accrues. Adding it to
+// netLiability made AU_TAX_PAYMENT_DEBIT collect it a second time, from the member's
+// own AU cash. It is now reported as a memo line and nothing else.
+test('TE-1: rates module does NOT add auSuperTaxYTD to the member’s AU liability', () => {
+  const { netLiability, grossTax, superFundTax } = auRates.computeTax(auState({ auSuperTaxYTD: 1500 }));
+  assert.strictEqual(netLiability, 0);
+  assert.strictEqual(grossTax,     0);
+  // …but it is still reported, so the burden stays visible on the return.
+  assert.strictEqual(superFundTax, 1500);
 });
 
-test('TE-1: super tax stacks on top of ordinary income tax', () => {
-  // $50k ordinary income + $1500 pre-computed super tax
+test('TE-1: super tax does not stack on top of ordinary income tax', () => {
+  // $50k ordinary income, with and without $1500 of fund tax — identical liability.
   const withSuper    = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 1500 })).netLiability;
   const withoutSuper = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 0 })).netLiability;
-  assert.strictEqual(withSuper - withoutSuper, 1500);
+  assert.strictEqual(withSuper - withoutSuper, 0);
+});
+
+test('TE-1: the super fund tax memo line sits OUTSIDE every subtotal on the return', () => {
+  const d = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 1500 }));
+  const memo = d.lineItems.find(l => l.label.startsWith('Memo: Super Fund Tax'));
+  assert.ok(memo, 'the return should still disclose the fund tax');
+  assert.strictEqual(memo.amount, 1500);
+
+  // It must come after the Net Tax Liability line, so no reader (or CSV consumer)
+  // foots it into a total.
+  const memoIdx = d.lineItems.indexOf(memo);
+  const netIdx  = d.lineItems.findIndex(l => l.label === 'Net Tax Liability');
+  assert.ok(memoIdx > netIdx, 'memo must sit below Net Tax Liability');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
