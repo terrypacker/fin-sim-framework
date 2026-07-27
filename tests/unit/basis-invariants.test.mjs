@@ -124,7 +124,7 @@ function rebuild(a, newBalance) {
   // scale the ledger by the same factor.
   const ratios = a.holdings.map(h => (h.marketValue > 0 ? h.costBasis / h.marketValue : null));
   const factor = a.balance > 0 ? newBalance / a.balance : 1;
-  rescaleHoldingsToBalance(a.holdings, newBalance);
+  a.holdings = rescaleHoldingsToBalance(a.holdings, newBalance);
   a.balance = newBalance;
   a.contributionBasis *= factor;
   a.earningsBasis *= factor;

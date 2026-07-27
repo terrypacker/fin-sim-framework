@@ -103,7 +103,7 @@ export class AccountService extends AssetService {
     // new balance, otherwise Σ marketValue drifts away from account.balance.
     if ('balance' in changes && !('holdings' in changes) &&
         Array.isArray(account.holdings) && account.holdings.length > 0) {
-      rescaleHoldingsToBalance(account.holdings, account.balance);
+      account.holdings = rescaleHoldingsToBalance(account.holdings, account.balance);
     }
     // design 53 §8: on a retirement account, `earningsBasis` is DERIVED from
     // `balance − contributionBasis`, never hand-set. Re-derive the seed whenever an
@@ -273,6 +273,13 @@ export class AccountService extends AssetService {
     const last    = holdings.length - 1;
     const totalMv = holdings.reduce((s, h) => s + Math.max(0, h?.marketValue ?? 0), 0);
 
+    // Copy-on-write: build a NEW array of NEW holding objects and reassign
+    // account.holdings, never mutating the existing objects in place. A holding
+    // already captured by a prior journal diff (stateDiff.after) stays frozen, so
+    // the ledger's Holdings-Activity deltas can't be silently rewritten to a later
+    // value (the journal-aliasing invariant; formerly papered over by state-utils'
+    // _snapshot clone). `.map` runs its callback in index order, so the removed/
+    // added running totals accumulate exactly as the prior in-place loop did.
     if (amount < 0) {
       // Debit (drawdown / transfer-out): pro-rate the withdrawal across sleeves
       // by market value, consuming each sleeve's cost basis in proportion to the
@@ -280,15 +287,18 @@ export class AccountService extends AssetService {
       if (totalMv <= 0) return;
       const toRemove = Math.min(-amount, totalMv);
       let removed = 0;
-      holdings.forEach((h, i) => {
+      account.holdings = holdings.map((h, i) => {
         const mv   = Math.max(0, h.marketValue ?? 0);
         const sold = i === last
           ? Math.min(mv, toRemove - removed)
           : Math.min(mv, toRemove * (mv / totalMv));
         removed += sold;
         const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
-        h.marketValue = Math.max(0, mv - sold);
-        h.costBasis   = Math.max(0, (h.costBasis ?? 0) - basisShare);
+        return {
+          ...h,
+          marketValue: Math.max(0, mv - sold),
+          costBasis:   Math.max(0, (h.costBasis ?? 0) - basisShare),
+        };
       });
     } else {
       // Credit (contribution / sale proceeds / transfer-in): distribute across
@@ -296,18 +306,21 @@ export class AccountService extends AssetService {
       // market value. With no market value to weight against, land the whole
       // credit in the first sleeve.
       if (totalMv <= 0) {
-        const h = holdings[0];
-        h.marketValue = (h.marketValue ?? 0) + amount;
-        h.costBasis   = (h.costBasis   ?? 0) + amount;
+        account.holdings = holdings.map((h, i) => i === 0
+          ? { ...h, marketValue: (h.marketValue ?? 0) + amount, costBasis: (h.costBasis ?? 0) + amount }
+          : h);
         return;
       }
       let added = 0;
-      holdings.forEach((h, i) => {
+      account.holdings = holdings.map((h, i) => {
         const mv    = Math.max(0, h.marketValue ?? 0);
         const share = i === last ? amount - added : amount * (mv / totalMv);
         added += share;
-        h.marketValue = (h.marketValue ?? 0) + share;
-        h.costBasis   = (h.costBasis   ?? 0) + share;
+        return {
+          ...h,
+          marketValue: (h.marketValue ?? 0) + share,
+          costBasis:   (h.costBasis   ?? 0) + share,
+        };
       });
     }
   }
@@ -401,25 +414,27 @@ export class AccountService extends AssetService {
     if ('balanceAtResidencyChange' in account && account.balanceAtResidencyChange === null) {
       account.balanceAtResidencyChange = account.balance;
     }
-    if (stepUp && country && account.type === ACCOUNT_TYPE.BROKERAGE) {
-      if (Array.isArray(account.holdings)) {
-        for (const h of account.holdings) {
-          if (!h) continue;
-          h.costBaseByCountry = h.costBaseByCountry ?? {};
-          if (h.costBaseByCountry[country] == null) {
-            h.costBaseByCountry[country] = h.marketValue ?? 0;
-            // AU CGT reform (design 57 §6.3): the s855-45 step-up is the AU-deemed
-            // acquisition, so the indexation base level is the AU price level at the
-            // move. Stamp it alongside the stepped-up cost base (both gated on the
-            // one-time step-up) so a later post-2027 sale indexes each cross-border
-            // (US-brokerage equity + gold) sleeve from the residency date. Only
-            // stamp when a level is supplied and none is already recorded.
-            if (priceLevel != null && h.acquisitionPriceLevel == null) {
-              h.acquisitionPriceLevel = priceLevel;
-            }
-          }
+    if (stepUp && country && account.type === ACCOUNT_TYPE.BROKERAGE && Array.isArray(account.holdings)) {
+      // Copy-on-write: build new holding objects rather than mutating each lot in
+      // place, so a holdings array already recorded in the journal is never
+      // rewritten after the fact (journal-immutability, enforced by state-utils'
+      // freeze in dev/test). Unchanged lots pass through by reference.
+      account.holdings = account.holdings.map(h => {
+        if (!h) return h;
+        const existing = h.costBaseByCountry ?? {};
+        if (existing[country] != null) return h; // already stepped up for this country
+        const next = { ...h, costBaseByCountry: { ...existing, [country]: h.marketValue ?? 0 } };
+        // AU CGT reform (design 57 §6.3): the s855-45 step-up is the AU-deemed
+        // acquisition, so the indexation base level is the AU price level at the
+        // move. Stamp it alongside the stepped-up cost base (both gated on the
+        // one-time step-up) so a later post-2027 sale indexes each cross-border
+        // (US-brokerage equity + gold) sleeve from the residency date. Only stamp
+        // when a level is supplied and none is already recorded.
+        if (priceLevel != null && h.acquisitionPriceLevel == null) {
+          next.acquisitionPriceLevel = priceLevel;
         }
-      }
+        return next;
+      });
     }
   }
 

@@ -1016,7 +1016,7 @@ export class ScenarioSerializer {
       // holdings sum that disagrees with account.balance. Treat the stored
       // balance as authoritative and rescale the holdings to match.
       if (holdingsOutOfSync(account)) {
-        rescaleHoldingsToBalance(account.holdings, account.balance);
+        account.holdings = rescaleHoldingsToBalance(account.holdings, account.balance);
       }
     }
     // Auto-heal the basis ledger (design 43 §5 Phase 3): saved states drifted by

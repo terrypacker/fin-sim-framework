@@ -461,7 +461,7 @@ export class ScenarioLoader {
           // the toolset bootstraps holdings) set the scalar balance the compiler seeds
           // holdings from. Either way re-derive `balance` so the §4.4 invariant holds.
           if (holdings && holdings.length > 0) {
-            rescaleHoldingsToBalance(rec.holdings, val);
+            rec.holdings = rescaleHoldingsToBalance(rec.holdings, val);
             rec.balance = +rec.holdings.reduce((s, h) => s + (Number(h?.marketValue) || 0), 0).toFixed(2);
           } else {
             rec.balance = val;

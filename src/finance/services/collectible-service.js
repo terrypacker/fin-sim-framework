@@ -115,9 +115,12 @@ export class CollectibleService extends AssetService {
       collectible.balanceAtResidencyChange = collectible.value;
     }
     if (stepUp && country && collectible.isGold === true) {
-      collectible.costBaseByCountry = collectible.costBaseByCountry ?? {};
-      if (collectible.costBaseByCountry[country] == null) {
-        collectible.costBaseByCountry[country] = collectible.value ?? 0;
+      const existing = collectible.costBaseByCountry ?? {};
+      if (existing[country] == null) {
+        // New map object rather than an in-place [country] write, so a
+        // costBaseByCountry already recorded in the journal (and frozen in
+        // dev/test) is never mutated after the fact (journal-immutability).
+        collectible.costBaseByCountry = { ...existing, [country]: collectible.value ?? 0 };
         if (priceLevel != null && collectible.acquisitionPriceLevel == null) {
           collectible.acquisitionPriceLevel = priceLevel;
         }
