@@ -27,6 +27,8 @@
     "sweep": "node scripts/scenario/sweep-scenario.mjs",
     "export:tax": "node scripts/tax/export-tax-csv.mjs",
     "crossfoot": "node scripts/tax/crossfoot-drill-reports.mjs",
+    "section988:ingest": "node scripts/tax/section988-ingest.mjs",
+    "fetch:rates": "node scripts/tax/fetch-fx-rates.mjs",
     "probe:residency-cgt": "node scripts/probes/probe-residency-cgt.mjs",
     "probe:foreign-property-cgt": "node scripts/probes/probe-foreign-property-cgt.mjs",
     "probe:tax-payment-leak": "node scripts/probes/probe-tax-payment-tax-leak.mjs",

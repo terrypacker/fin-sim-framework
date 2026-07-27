@@ -157,9 +157,38 @@ design/72 was found.
 |---|---|
 | `export-tax-csv.mjs` (`npm run export:tax`) | per-year tax worksheets as CSV |
 | `crossfoot-drill-reports.mjs` (`npm run crossfoot`) | do the tax reports add up across years? |
+| `section988-ingest.mjs` (`npm run section988:ingest`) | is this real account history fit to compute §988 from? |
+| `fetch-fx-rates.mjs` (`npm run fetch:rates`) | refresh the pinned published rate series in `rates/` |
 
 `crossfoot` catches report bugs that are invisible one year at a time. Run it after
 touching anything on the tax reporting path.
+
+### §988 ingest — the odd one out
+
+`section988-ingest.mjs` is the only tool here that does **not** run the engine. It reads
+real bank-account history and answers whether that history is fit to compute foreign
+currency gain from — it deliberately computes no tax. Design 87 §12.
+
+Every error that matters in a §988 calculation is an ingest error: a missing row, a rate
+from the wrong date, a debit misread as a disposition. A lot ledger is path-dependent, so
+it absorbs each one silently and carries it forward forever. Hence five hard gates and a
+non-zero exit while any is open.
+
+Two things to know before using it:
+
+- **Pass every account in the currency, not just one.** `§1.988-2(a)(1)(iii)(E)` makes a
+  same-currency transfer a non-recognition event with carryover basis, so an account
+  ingested alone shows currency arriving with a basis set somewhere invisible. That is
+  GATE 4, and it is usually the largest finding.
+- **Rates come from `rates/`, never from the engine.** `effectiveExchangeRates.USD_AUD`
+  is a simulated path. Real history needs a published source — see `rates/README.md`.
+
+Classification is **two orthogonal axes** — `kind` (what this row does to the ledger,
+`§1.988-2(a)(1)(iii)`) and `businessFraction` (what the currency was used for,
+`§1.988-1(a)(9)`). A single Personal/Business/Ignored column cannot express either one
+without losing the other. Rules go in a JSON file (`--rules-schema` prints the format,
+`specs/section988-rules.example.json` is a worked example); keep real ones in gitignored
+`scenarios/`, since descriptions carry payee names.
 
 ## probes/
 
@@ -183,6 +212,8 @@ produced a wrong answer at least once.
 | module | what it owns |
 |---|---|
 | `scenario-source.mjs` | loading the base cfg; the file-vs-synthetic distinction |
+| `fx-rates.mjs` | the **published** rate table; holiday carry-forward vs. not-yet-published |
+| `section988-source.mjs` | real-history ingest: footing, the two classification axes, G6 measurements |
 | `variant.mjs` | **the single definition of every lever** |
 | `run.mjs` | running one cfg → a comparable row; real-spending traces |
 | `parallel.mjs` + `grid-worker.mjs` | fanning jobs across worker processes |
