@@ -9,7 +9,6 @@
  */
 
 import { ScenarioSerializer }     from './scenario-serializer.js';
-import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
@@ -366,12 +365,20 @@ export class ScenarioLoader {
     } else if (node.type === 'account') {
       const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) {
-        rec[node.field] = val;
-        // §4.4 invariant: a balance cascade must rescale holdings to match,
-        // otherwise the holdings sum drifts away from the edited balance
-        // (design 25 §4.4 / holdings-balance desync).
-        if (node.field === 'balance' && Array.isArray(rec.holdings) && rec.holdings.length > 0) {
-          rescaleHoldingsToBalance(rec.holdings, val);
+        // A holdings-bearing account's balance is DERIVED from Σ holdings.marketValue.
+        // The holdings are authoritative (the editor disables the balance field and
+        // refuses to param-link it when holdings exist), and holdings/basis are
+        // explicitly out of the param surface (design 55 §13). So a `balance` param
+        // must NOT drive them: re-derive the balance from the holdings and ignore the
+        // (possibly stale) param value. Without this, editing any holding — including
+        // an account's single default holding — is silently reverted on Rebuild when
+        // the persisted balance param cascades/rescales over it. Accounts with no
+        // holdings keep a plain scalar balance driven by the param.
+        const holdings = Array.isArray(rec.holdings) ? rec.holdings : null;
+        if (node.field === 'balance' && holdings && holdings.length > 0) {
+          rec.balance = +holdings.reduce((s, h) => s + (Number(h?.marketValue) || 0), 0).toFixed(2);
+        } else {
+          rec[node.field] = val;
         }
       }
     } else if (node.type === 'realProperty') {

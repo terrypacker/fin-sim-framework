@@ -16,6 +16,7 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-r
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
+import { resolveCashKey } from './finance/account-rules/cash-routing.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
@@ -461,6 +462,7 @@ export const Finance = {
   SuperWithdrawalEarningsHandler,
   SuperEarningsDirectHandler,
   BaseAccountModule,
+  resolveCashKey,
   loanKeyForProperty,
   findLoanForProperty,
   synthesizeLoanForProperty,

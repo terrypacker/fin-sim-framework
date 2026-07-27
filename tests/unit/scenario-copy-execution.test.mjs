@@ -425,39 +425,43 @@ test('changing spouseMonthlyWage param cascades to person via schema node', () =
   );
 });
 
-test('changing initialUsSavings param cascades to account initialValue via schema node', () => {
+test('a holdings-bearing account exposes no balance param; its balance round-trips through a copy', () => {
+  // design 55 §13: a holdings-bearing account's balance is DERIVED from Σ holdings, so
+  // no balance param is generated (the value is controlled by editing holdings, not a
+  // param). The starting balance still round-trips faithfully through a copy.
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'acct.usSavingsAccount.balance');
-  assert.ok(param, 'acct.usSavingsAccount.balance param must exist in the copy');
-  param.value = 77_777;
+  assert.strictEqual(
+    created.params?.find(p => p.name === 'acct.usSavingsAccount.balance'), undefined,
+    'holdings-bearing account has no balance param (balance derives from holdings)');
 
   const sim = loadCopyIntoFreshServices(created);
 
   assert.strictEqual(
-    sim.state.usSavingsAccount?.balance,
-    77_777,
-    `state.usSavingsAccount.balance should be 77777 after initialUsSavings param change, got ${sim.state.usSavingsAccount?.balance}`,
+    sim.state.usSavingsAccount?.balance, 30_000,
+    `account starting balance round-trips through the copy, got ${sim.state.usSavingsAccount?.balance}`,
   );
 });
 
-test('changing rothBalance param cascades to account initialValue via schema node', () => {
+test('changing rothAccount contributionBasis param cascades to state via schema node', () => {
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'acct.rothAccount.balance');
-  assert.ok(param, 'acct.rothAccount.balance param must exist in the copy');
+  // contributionBasis is the generated retirement scalar param (balance is now
+  // holdings-derived and no longer a param); it cascades onto the record + state.
+  const param = created.params?.find(p => p.name === 'acct.rothAccount.contributionBasis');
+  assert.ok(param, 'acct.rothAccount.contributionBasis param must exist in the copy');
   param.value = 55_555;
 
   const sim = loadCopyIntoFreshServices(created);
 
   assert.strictEqual(
-    sim.state.rothAccount?.balance,
+    sim.state.rothAccount?.contributionBasis,
     55_555,
-    `state.rothAccount.balance should be 55555 after rothBalance param change, got ${sim.state.rothAccount?.balance}`,
+    `state.rothAccount.contributionBasis should be 55555 after param change, got ${sim.state.rothAccount?.contributionBasis}`,
   );
 });
 
@@ -479,20 +483,20 @@ test('changing usSavingsMinBalance param cascades to account minimumBalance via 
   );
 });
 
-test('changing spouseRothBalance param cascades to account initialValue via schema node', () => {
+test('changing spouseRothAccount contributionBasis param cascades to state via schema node', () => {
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'acct.spouseRothAccount.balance');
-  assert.ok(param, 'acct.spouseRothAccount.balance param must exist in the copy');
+  const param = created.params?.find(p => p.name === 'acct.spouseRothAccount.contributionBasis');
+  assert.ok(param, 'acct.spouseRothAccount.contributionBasis param must exist in the copy');
   param.value = 33_333;
 
   const sim = loadCopyIntoFreshServices(created);
 
   assert.strictEqual(
-    sim.state.spouseRothAccount?.balance,
+    sim.state.spouseRothAccount?.contributionBasis,
     33_333,
-    `state.spouseRothAccount.balance should be 33333 after spouseRothBalance param change, got ${sim.state.spouseRothAccount?.balance}`,
+    `state.spouseRothAccount.contributionBasis should be 33333 after param change, got ${sim.state.spouseRothAccount?.contributionBasis}`,
   );
 });
