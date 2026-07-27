@@ -112,6 +112,23 @@
 .tax-doc-line--neg  .tax-doc-line-amount { color: var(--red); }
 .tax-doc-line--zero .tax-doc-line-amount { color: var(--text-muted); }
 
+/* Breakdown sub-rows (e.g. Tax on Income → ordinary vs capital gains). */
+.tax-doc-line--sub { padding: 1px 0; }
+.tax-doc-line--sub .tax-doc-line-label {
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.tax-doc-line--sub .tax-doc-line-label::before {
+  content: "↳";
+  margin-right: 5px;
+  opacity: 0.6;
+}
+.tax-doc-line--sub .tax-doc-line-amount {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .tax-doc-line-btn {
   font-size: 11px;
   font-family: var(--font-mono);

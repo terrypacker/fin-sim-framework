@@ -27,6 +27,143 @@ fidelity, and the §11 questions are resolved (see **Decisions locked** below).
   net worth moves $10,978,107 → $10,914,370** — the reform now bites on post-2027 AU-resident
   gains (exemption of pre-2027 gains, offset by discount removal + 30% floor).
 
+### ⚠️ Post-implementation correction — TWO COUPLED BUGS zero out AU CGT (2026-07-11, OPEN)
+
+Investigating a real run (US→AU retiree, sim to 2070) surfaced two bugs that together mean
+**the AU CGT reform is not taxing AU-resident capital gains at all** in the reference scenario.
+
+**Bug 1 — inflation wrapper drops the reform.** `InflationAdjustedAuTaxRates`
+(`inflation-adjusted-tax-rates.js`) `extends AuTaxRatesBase`, not the resolved year module,
+and copies only bracket/Medicare thresholds. `TaxSettleService._getModule` wraps the rates
+module with it whenever `state.inflationAccumulator.AU > 1` — **essentially every year after
+sim start** — so `this._cgtRelief` resolves to the **base 50% discount**, discarding
+`AuTaxRates2027._cgtRelief` (indexation + 30% floor). In isolation this reverts the reform to
+"50% discount on the nominal gain."
+
+**Bug 2 — the real-gain bucket is never populated for the drawdown path.** AU-resident
+capital gains in the reference scenario are realized via the **generic `STOCK_WITHDRAWAL_TAX`**
+action (replenish-savings drawdowns), which carries `auGain` but **no `auIndexedGain`**.
+`AuTaxModule2027.getReducerFns()` only overrides `AU_STOCK_WITHDRAWAL_TAX` /
+`AU_HOUSE_SALE_TAX` to fill `auRealCapitalGainsYTD` — **not** the generic type. So the
+real-gain bucket stays **0** while the gross bucket fills. `AuTaxRates2027._cgtRelief` then
+does `realGain = auRealCapitalGainsYTD ?? gross`; because the bucket is **present-and-zero**
+(not undefined), `??` never falls back → assesses **0** → **100% relief, AU CGT ≈ $0**.
+
+**Interaction:** Bug 1 *masked* Bug 2. With the wrapper reverting to the 50% discount on the
+(populated) gross bucket, drawdown-path gains were at least taxed at 50%. "Fixing" Bug 1 alone
+(delegating the CGT hooks) switches assessment to the empty real bucket → CGT drops to 0. Both
+must be fixed together. Observed on the design-52 golden: wrapper-fix-alone swung lifetime tax
+**−18%** (that was CGT being *zeroed*, initially mis-read as "legitimate indexation").
+
+**Status: reverted to a clean baseline pending a proper fix.** The wrapper delegation and the
+design-52 regold were both backed out; only the safe report changes remain (`AuTaxDocument2027`
+registered; "Tax on Income" ordinary-vs-CGT breakdown sub-rows). The Phase-4 reference figures
+(§ −$63.7k, "reform bites") were measured **under Bug 1+2** and are **not trustworthy**.
+
+**Full inventory of AU-resident capital-gain paths (verified 2026-07-11):**
+
+| Path | Action type | Classified in | Real-bucket routed? |
+|---|---|---|---|
+| AU brokerage sale | `AU_STOCK_WITHDRAWAL_TAX` | AU module | ✅ indexed (`auIndexedGain`) |
+| AU property sale | `AU_HOUSE_SALE_TAX` | AU module | ✅ raw gain (indexation deferred §6.4) |
+| US brokerage drawdown / TLH | `STOCK_WITHDRAWAL_TAX` | **US module** | ❌ leaks |
+| US company/equity sale | `COMPANY_SALE_TAX` | **US module** | ❌ leaks |
+| US collectible / **Gold** sale | `COLLECTIBLE_SALE_TAX` | **US module** | ❌ leaks (gold too — design 56 §7.2) |
+| US real property | `US_HOUSE_SALE_TAX` | US module | n/a — US-only, no AU assessment |
+| wages/bonus/SS/SE/rental/dividends/retirement | various | both | n/a — ordinary income, not CGT-relieved |
+
+The three leaking paths are cross-border US-source gains classified in the **US module** (it
+stamps `auCapitalGainsYTD` for AU residents); `AuTaxModule2027` never sees them. Note **Gold**
+(design 56) disposes via `COLLECTIBLE_SALE_TAX` for the US 28% rate, but **AU taxes gold
+bullion as an ordinary CGT asset** (ATO — investment bullion is not a collectible), so on the
+AU side it must be *indexed*, unlike true collectibles.
+
+**Finalized treatment (decisions locked 2026-07-11):**
+
+| Path | AU assessed (real) gain |
+|---|---|
+| AU brokerage | indexed (`auIndexedGain`) — unchanged |
+| AU property | raw gain, indexation deferred — unchanged |
+| US brokerage / TLH | **indexed**; deemed acquisition = **AU residency date** (Q1) |
+| US company | **0 basis ⇒ full proceeds taxed, un-indexed** (Q2) |
+| US true collectibles | **un-indexed** raw gain (Q3) |
+| Gold sleeve | **indexed** (ordinary AU CGT / bullion); deemed acquisition = residency date |
+
+**Implementation plan (one accurate landing — no throwaway interim number):**
+1. **Routing (structural).** `AuTaxModule2027.getReducerFns()` adds `STOCK_WITHDRAWAL_TAX`,
+   `COMPANY_SALE_TAX`, `COLLECTIBLE_SALE_TAX` (residency=AU) → `_recordRealGain` into
+   `auRealCapitalGainsYTD`. `TaxEngine.registerDynamic` registers pipeline reducers per
+   (country, action-type) independently, so the AU reducer runs **alongside** the US one (US
+   stamps gross, AU stamps real) — the same additive pattern as the existing AU-action
+   overrides. Older AU modules don't handle these types (`if (!fn) return state`), so pre-2027
+   is untouched.
+2. **Assessed gain per path** per the table above. US brokerage + gold need `auIndexedGain`
+   on the action, computed from a per-lot `acquisitionPriceLevel` set at the **residency
+   date** — extend the residency cost-base step-up (`residency-cost-base-policy.js`) to also
+   stamp `acquisitionPriceLevel = inflationAccumulator.AU` at the residency change (mirrors how
+   it already stamps `costBaseByCountry.AU`). Company = full gain (basis 0); true collectibles
+   = un-indexed `auGain`.
+3. **Gold vs. true collectibles share `COLLECTIBLE_SALE_TAX`** — the action must carry a gold
+   marker (gold holdings are tagged `taxClass:'COLLECTIBLE'`; add e.g. `isGold`/`allocation`)
+   so the AU reducer indexes gold but not true collectibles.
+4. **Fix the present-zero trap.** With every path now populating the bucket, `_cgtRelief`
+   should read the real bucket directly (or gate on a "populated" flag) rather than
+   `auRealCapitalGainsYTD ?? gross`, so a legitimately-zero real gain ≠ "never populated".
+5. **Re-apply the Bug-1 wrapper delegation**, then regold design 52 once, to the accurate figure.
+
+---
+
+### 📋 SESSION HANDOFF — resume here (2026-07-11)
+
+**All decisions are locked. Gold = INDEXED (confirmed).** Nothing below needs re-litigating;
+this is ready to implement in a fresh session.
+
+**Working-tree state (uncommitted on `main`; 3272-ish → now 3309 unit + 864 viz GREEN):**
+
+- ✅ **DONE & kept (the report deliverables):**
+  - `src/finance/tax/au/au-tax-document-2027.js` (NEW) — reform-correct ITR formatter, registered.
+  - `au-tax-document-2026.js` — extracted `_residentIncomeSection` / `_residentTaxComputationSection`
+    + `_taxOnIncomeSubRows` (ordinary-vs-CGT breakdown, shown when `discountedCapitalGains > 0`).
+  - `au-tax-rates-base.js` — exposes `ordinaryIncomeTax` / `capitalGainsTax` on the resident result
+    (`baseTax` split = `brackets(ord+gain) − brackets(ord)`; the two sum to `baseTax`).
+  - `tax-document-registry.js` + `src/index.js` — register/export the 2027 doc.
+  - `tax-document-modal.js` + `assets/css/plugins/modals.css` — render `sub:true` rows (`.tax-doc-line--sub`).
+  - `tests/unit/tax-documents.test.mjs` — 2027 doc + sub-row coverage.
+- ↩️ **REVERTED to baseline (do NOT assume these are done):**
+  - `inflation-adjusted-tax-rates.js` — Bug-1 wrapper delegation was backed out (no diff vs HEAD).
+  - `tests/unit/cross-border-relief-scenario.test.mjs` — golden restored to **895,088 / 11,852,976**
+    (with a note that these reflect the *buggy* 50%-discount behaviour).
+- ⚠️ **Therefore AU CGT is still wrong today:** post-2027 AU-resident gains are taxed at the base
+  50% discount (Bug 1 masking Bug 2). The fix below is the remaining work.
+
+**Next-session checklist (implement — everything is decided):**
+
+1. `AuTaxModule2027.getReducerFns()` — ADD `STOCK_WITHDRAWAL_TAX`, `COMPANY_SALE_TAX`,
+   `COLLECTIBLE_SALE_TAX` (residency=AU) → `_recordRealGain` into `auRealCapitalGainsYTD`.
+   (Additive to the US module's gross-bucket stamping — verified via `TaxEngine.registerDynamic`,
+   which registers per (country, action-type), so both run. Older AU modules `return state`.)
+2. Assessed (real) gain per path: **US brokerage/TLH → indexed** (`auIndexedGain`, deemed
+   acquisition = residency date); **company → full gain** (basis 0); **true collectibles →
+   un-indexed** `auGain`; **gold → indexed** (ordinary AU CGT / bullion, deemed acquisition =
+   residency date).
+3. Indexation basis: extend the residency cost-base step-up (`residency-cost-base-policy.js`) to
+   also stamp `acquisitionPriceLevel = inflationAccumulator.AU` at the residency change, for
+   US-brokerage equity + gold sleeves. Compute `auIndexedGain` in their sale reducers.
+4. Gold vs. true collectibles share `COLLECTIBLE_SALE_TAX` → add a gold marker on the action
+   (gold holdings are `taxClass:'COLLECTIBLE'`; add e.g. `isGold`/`allocation`) so the AU reducer
+   indexes gold but not true collectibles.
+5. Fix the present-zero trap in `AuTaxRates2027._cgtRelief`: read the real bucket directly / gate
+   on a "populated" flag instead of `auRealCapitalGainsYTD ?? gross`.
+6. Re-apply the Bug-1 wrapper delegation in `inflation-adjusted-tax-rates.js` (store `this._base`,
+   delegate `_cgtRelief`/`_cgtReliefLabel`).
+7. Verify: `npm run test:unit` + `test:viz`; re-run the reference scenario in-browser (Chrome
+   session; `window.__app.scenario.sim.journal.journal` → inspect a post-2027 `AU_TAX_SETTLE_APPLY`
+   `personTaxDetails[].taxDetail`); then **regold `cross-border-relief-scenario.test.mjs`** to the
+   accurate figure and update the note there.
+
+ATO source for gold treatment (bullion = ordinary CGT asset, not a collectible):
+[H&R Block — CGT on gold & silver](https://www.hrblock.com.au/tax-academy/capital-gains-tax-gold-silver-investments).
+
 ### Decisions locked (review, 2026-07-10)
 
 1. **Operative year = `2027`** (FY2027-28). `year=2026` keeps the 50% discount. (§2)
@@ -336,7 +473,14 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
    rules change (they don't here) — the account module.
 4. `AU_CGT_BASIS_RESET` one-off event + handler/reducer (reuse residency-step-up reducer),
    wired into `AU_TAX` `schedules()`/`handlers()`/`reducers()` and `types`.
-5. `npm run build:index` (new exported classes).
+5. **`src/finance/tax/au/au-tax-document-2027.js`** — the ITR *formatter*. Without it,
+   `TaxDocumentRegistry` falls back to `AuTaxDocument2026`, which hardcodes the
+   `CGT 50% Discount` label and omits the 30% min-tax top-up, so the Tax Report *displays*
+   the removed discount (mislabeling the indexation relief) and its Tax Computation section
+   fails to reconcile to Gross Tax — even though the tax actually charged by `AuTaxRates2027`
+   is correct. Register it in `tax-document-registry.js`. (⚠️ Originally missed — the rates
+   and classification modules were registered but the document module was not; added later.)
+6. `npm run build:index` (new exported classes).
 
 ## 9. Testing plan
 

@@ -63,25 +63,8 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
         taxYear,
         filingStatus: 'Individual Resident',
         sections: [
-          {
-            heading: 'Income',
-            lineItems: [
-              { label: 'Ordinary Income',                 amount:  inputs.ordinaryIncome, drillReport: drill('ordinary-income-by-source')  },
-              { label: 'Capital Gains (before discount)', amount:  inputs.capitalGains,   drillReport: drill('capital-gains-by-disposal')  },
-              { label: 'CGT 50% Discount',                amount: -taxDetail.cgtDiscount },
-              { label: 'Net Capital Gains',               amount:  taxDetail.discountedCapitalGains },
-              { label: 'Total Assessable Income',         amount:  taxDetail.assessableIncome },
-            ],
-          },
-          {
-            heading: 'Tax Computation',
-            lineItems: [
-              { label: 'Tax on Income',   amount: taxDetail.baseTax },
-              { label: 'Medicare Levy',   amount: taxDetail.medicareLevy },
-              { label: 'Super Tax',       amount: inputs.superTax },
-              { label: 'Gross Tax',       amount: taxDetail.grossTax },
-            ],
-          },
+          this._residentIncomeSection(taxDetail, drill),
+          this._residentTaxComputationSection(taxDetail),
           {
             heading: 'Credits',
             lineItems: [
@@ -142,6 +125,62 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
         marginalRate:  taxDetail.marginalRate,
       },
     };
+  }
+
+  /**
+   * Resident "Income" section. FY2027+ (AuTaxDocument2027) overrides this to
+   * relabel the CGT relief line from the 50% discount to cost-base indexation
+   * (design 57 §6.3). The amounts flow straight from the TaxComputationResult;
+   * only labels differ by year.
+   */
+  _residentIncomeSection(taxDetail, drill) {
+    const { inputs } = taxDetail;
+    return {
+      heading: 'Income',
+      lineItems: [
+        { label: 'Ordinary Income',                 amount:  inputs.ordinaryIncome, drillReport: drill('ordinary-income-by-source')  },
+        { label: 'Capital Gains (before discount)', amount:  inputs.capitalGains,   drillReport: drill('capital-gains-by-disposal')  },
+        { label: 'CGT 50% Discount',                amount: -taxDetail.cgtDiscount },
+        { label: 'Net Capital Gains',               amount:  taxDetail.discountedCapitalGains },
+        { label: 'Total Assessable Income',         amount:  taxDetail.assessableIncome },
+      ],
+    };
+  }
+
+  /**
+   * Resident "Tax Computation" section. FY2027+ overrides this to surface the
+   * 30% minimum-tax top-up (design 57 §6.3) — without it the listed lines do not
+   * reconcile to Gross Tax, which includes the top-up.
+   */
+  _residentTaxComputationSection(taxDetail) {
+    const { inputs } = taxDetail;
+    return {
+      heading: 'Tax Computation',
+      lineItems: [
+        { label: 'Tax on Income',   amount: taxDetail.baseTax },
+        ...this._taxOnIncomeSubRows(taxDetail),
+        { label: 'Medicare Levy',   amount: taxDetail.medicareLevy },
+        { label: 'Super Tax',       amount: inputs.superTax },
+        { label: 'Gross Tax',       amount: taxDetail.grossTax },
+      ],
+    };
+  }
+
+  /**
+   * Breakdown sub-rows for "Tax on Income", shown only when there is an
+   * assessable net capital gain. AU has no separate CGT rate schedule: the
+   * relieved gain is stacked on top of ordinary income and taxed at the
+   * resulting marginal brackets. So "Tax on Capital Gains" is the *incremental*
+   * bracket tax the gain adds — baseTax(ordinary+gain) − baseTax(ordinary) — and
+   * the two sub-rows sum exactly to the "Tax on Income" total above them. Any
+   * FY2027 30% minimum-tax top-up is reported separately, not folded in here.
+   */
+  _taxOnIncomeSubRows(taxDetail) {
+    if (!(taxDetail.discountedCapitalGains > 0)) return [];
+    return [
+      { label: 'Tax on Ordinary Income', amount: taxDetail.ordinaryIncomeTax, sub: true },
+      { label: 'Tax on Capital Gains',   amount: taxDetail.capitalGainsTax,   sub: true },
+    ];
   }
 
   _generateCgtSchedule(saleRecords, taxYear) {
