@@ -12,6 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
 import { resolveCashKey } from './cash-routing.js';
+import { fxRate }         from '../fx/fx-conversion.js';
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -55,20 +56,48 @@ export function synthesizeLoanForProperty(prop) {
   };
 }
 
-/**
- * Resolve the cash pool a loan's payment is drawn from: an explicit
- * `paymentSourceKey` wins; otherwise route through the shared cash resolver so a
- * flagged transaction account is honored (design 55 Phase 6b), falling back to the
- * loan country's savings pool then checking.
- */
-function resolveLoanCashKey(stateRegistry, state, loan) {
-  if (loan.paymentSourceKey && state[loan.paymentSourceKey]) return loan.paymentSourceKey;
-  return resolveCashKey(stateRegistry, loan.country === 'AU' ? 'AU' : 'US', state);
-}
-
 /** Currency code of an account/loan state entry ('USD'/'AUD'), tolerant of shape. */
 function currencyCode(entry) {
   return entry?.currency?.code ?? entry?.currency ?? null;
+}
+
+/**
+ * The state key of a same-currency offset account linked to this loan's property
+ * (design 54 P4), or null. An offset links to a *property* (`offsetsPropertyKey`)
+ * and the loan links to the same property (`linkedPropertyKey`), so the join is
+ * property-keyed — mirroring {@link offsetBalanceForLoan}. The same-currency guard
+ * keeps a misconfigured cross-currency offset from being drained 1:1 (ignoring FX);
+ * such an offset falls through to the normal cash pool. Returns the first match.
+ */
+function resolveLinkedOffsetKey(state, loan) {
+  const propKey = loan?.linkedPropertyKey;
+  if (!propKey || !state) return null;
+  const loanCcy = currencyCode(loan);
+  for (const [k, v] of Object.entries(state)) {
+    if (v && typeof v === 'object' && v.type === 'offset'
+        && v.offsetsPropertyKey === propKey
+        && (loanCcy == null || currencyCode(v) === loanCcy)) {
+      return k;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the cash pool a loan's payment is drawn from (design 54 P4). Precedence:
+ *   1. an explicit `paymentSourceKey` (a user override) — wins over everything;
+ *   2. a same-currency **offset** linked to the loan's property — an AU offset is the
+ *      everyday account the mortgage direct-debits, so paying from it is the default
+ *      when one exists (paying the P&I from the offset depletes it, which raises the
+ *      effective principal next period — realistic, and the whole point of the link);
+ *   3. otherwise the shared cash resolver so a flagged transaction account is honored
+ *      (design 55 Phase 6b), falling back to the loan country's savings pool then checking.
+ */
+function resolveLoanCashKey(stateRegistry, state, loan) {
+  if (loan.paymentSourceKey && state[loan.paymentSourceKey]) return loan.paymentSourceKey;
+  const offsetKey = resolveLinkedOffsetKey(state, loan);
+  if (offsetKey) return offsetKey;
+  return resolveCashKey(stateRegistry, loan.country === 'AU' ? 'AU' : 'US', state);
 }
 
 /**
@@ -154,25 +183,45 @@ export class LoanPaymentHandler extends HandlerEntry {
       if (balance <= 0) continue;
 
       const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
+      const cash      = state[cashKey];
       const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * (loan.interestRate ?? 0) / 12);
-      // Never pay past payoff: cap at the balance plus this month's interest.
+      // Never pay past payoff: cap at the balance plus this month's interest. All
+      // loan-side figures (interest, payment, balance) are in the LOAN's currency.
       const payment   = Math.min(loan.monthlyPayment ?? 0, balance + interest);
       if (payment <= 0) continue;
 
-      const cash      = state[cashKey];
-      const deficit   = (cash?.minimumBalance ?? 0) - ((cash?.balance ?? 0) - payment);
+      // FX (design 54 P4): the payment is denominated in the loan's currency, but the
+      // debit lands in the cash account's currency. When they differ, convert — an
+      // A$2,000 mortgage paid from a USD account draws payment ÷ (AUD-per-USD), not 1:1.
+      // Both currencies must be known to convert; a missing code means legacy 1:1.
+      const loanCcy = currencyCode(loan);
+      const cashCcy = currencyCode(cash);
+      const fx      = (loanCcy && cashCcy)
+        ? fxRate(loanCcy, cashCcy, state.effectiveExchangeRates?.USD_AUD ?? 1.55)
+        : 1;
+      const cashDue = payment * fx; // what leaves the cash pool, in cash currency
+
+      const deficit   = (cash?.minimumBalance ?? 0) - ((cash?.balance ?? 0) - cashDue);
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
 
       // Negative amortization: a payment below the accrued interest grows the balance.
       // Not clamped (a real interest-only / underwater loan); flagged so the UI can
-      // surface it rather than reading as a silent bug (design 54 §4).
+      // surface it rather than reading as a silent bug (design 54 §4). Loan currency.
       const principalPart = payment - interest;
       if (principalPart < 0) {
         actions.push(new FieldValueAction('loan_negative_amortization', 'Loan Negative Amortization', -principalPart));
       }
 
-      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest });
+      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx });
       actions.push(new RecordBalanceAction(`${loanKey}.balance`, loanKey));
+      // Snapshot the debited cash pool too (design 54 P4): the payment mutates its
+      // balance, and its charted `metrics.<cashKey>` series only updates when a
+      // RECORD_BALANCE is emitted. A savings pool gets snapshotted by its own monthly
+      // events (interest/wages/expenses), but a linked OFFSET has no other event
+      // touching it once it's the payment source — without this its metric freezes
+      // while state.<cashKey>.balance correctly drops. (BalanceSnapshotReducer runs at
+      // PRIORITY.METRICS, reading the post-debit/post-replenish balance.)
+      actions.push(new RecordBalanceAction(`${cashKey}.balance`, cashKey));
     }
     return actions;
   }
@@ -241,12 +290,22 @@ export class LoanPaymentApplyReducer extends Reducer {
     const loan = state[loanKey];
     const cash = state[cashKey];
 
-    const actualPay = Math.min(payment, Math.max(0, cash?.balance ?? 0));
-    if (actualPay > 0 && cash) this.accountService.transaction(cash, -actualPay, null);
+    // `cashDue`/`fx` are the cash-currency debit and the loan→cash rate (design 54 P4);
+    // absent on legacy actions ⇒ same-currency 1:1 (byte-for-byte with the old path).
+    const cashDue = action.cashDue ?? payment;
+    const fx      = action.fx || 1;
 
-    // Principal reduction = paid − accrued interest. Negative ⇒ balance grows
+    // The debit happens in the CASH account's currency, capped to its balance.
+    const actualCash = Math.min(cashDue, Math.max(0, cash?.balance ?? 0));
+    if (actualCash > 0 && cash) this.accountService.transaction(cash, -actualCash, null);
+
+    // Value delivered to the loan, converted back into the LOAN's currency. When the
+    // cash pool can't cover the full payment, only the funded portion pays down debt.
+    const deliveredLoanCcy = actualCash / fx;
+
+    // Principal reduction = delivered − accrued interest. Negative ⇒ balance grows
     // (negative amortization). Clamp only at payoff (0), never at growth.
-    const principalPart = actualPay - interest;
+    const principalPart = deliveredLoanCcy - interest;
     const newBalance    = Math.max(0, (loan?.balance ?? 0) - principalPart);
 
     return this.newState(state, {

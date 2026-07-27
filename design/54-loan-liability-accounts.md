@@ -1,8 +1,9 @@
 # 54 — Loan (liability) accounts + offset re-targeting
 
-**Status**: **IMPLEMENTED** — all 3 phases complete and green on branch
+**Status**: **IMPLEMENTED** — phases 1–3 complete and green on branch
 `wip/accounts-and-loans` (P1 `d1e9464`/`888adca`, P2 `6886590`, P3 `f9e4b75`). Phase 3
 (offset re-target) was **co-implemented with design 53 Q3/Phase 3** — see §9 per-phase status.
+**Phase 4** (offset-as-payment-source + loan-payment FX) added later — see §9 P4 and §12.
 
 Phase 1 landed: `LoanAccount` (liability, `ACCOUNT_TYPE.LOAN`, `US_LOAN`/`AU_LOAN` roles),
 the `LOAN_PAYMENT` handler+reducer (interest/principal split + negative-amort flag),
@@ -326,6 +327,82 @@ intermediate property-scalar wiring). Deviations from the plan above:
 - **⚠️ Outstanding:** editor-created offsets get no `stateKey` and don't reach `sim.state`
   (config-declared ones work). Deferred to **design 55 §3.1**. Full detail in design 53 §6
   Phase 3 "Outstanding".
+
+### Phase 4 — Offset as payment source + cross-currency loan payments
+
+Two defects surfaced running a real AU (Dickson) scenario with an offset:
+
+1. **The monthly payment drew from AU savings, not the offset.** P3 wired the offset to
+   *reduce interest* (`effectivePrincipal`) but never as the *payment source*.
+   `synthesizeLoanForProperty` (`loan-classes.js:39`) never sets `paymentSourceKey`, so
+   `resolveLoanCashKey` fell straight through to `resolveCashKey(country)` = the flagged
+   transaction account / savings pool. In AU practice the offset **is** the everyday
+   account the mortgage direct-debits — the offset should be the default source.
+2. **The payment ignored currency.** `monthlyPayment` is denominated in the **loan's**
+   currency (an AU property implies AUD), but `LoanPaymentApplyReducer` debited the cash
+   pool with the raw number via `transaction()` — no FX. An A$2,000 payment debited a USD
+   account **US$2,000** (should be ≈ US$1,290). The interest accrual and the
+   deficit/replenish math were currency-blind the same way.
+
+**Fix 1 — auto-prefer the linked offset (`resolveLoanCashKey`).** Precedence becomes:
+(1) an explicit `paymentSourceKey` override, (2) a **same-currency offset linked to the
+loan's property** (`offsetsPropertyKey === loan.linkedPropertyKey`, via the new
+`resolveLinkedOffsetKey`, mirroring `offsetBalanceForLoan`'s property-keyed, same-currency
+join), (3) the shared `resolveCashKey` chain (transaction account → savings → checking).
+No serializer/UI change — the loan is a synthesized state entry, not an editable account;
+the explicit `paymentSourceKey` remains the escape hatch.
+
+> **Behavior change vs P3.** P3's "offset cash is untouched by the payment" no longer holds
+> by default: the P&I now debits the offset. This is deliberate and realistic — but note
+> the **dynamic it creates**: paying the P&I from the offset depletes it, which *raises*
+> `effectivePrincipal` next period (less offset), nudging interest back up. The offset is
+> no longer a static interest shield once it is also the payment source; over time it drains
+> (and `REPLENISH_SAVINGS` tops it up from other pools once it breaches its minimum). Wages
+> and expenses still route through the transaction account, not the offset, so in a strict
+> "salary-into-offset" model the offset would be refilled — that fuller model is out of scope.
+
+**Fix 2 — FX-convert the debit.** All loan-side figures (interest, payment, principal,
+balance) stay in the **loan's** currency. Only the **cash debit** converts, mirroring the
+cross-currency pattern in `account-service.js`:
+```
+fx      = (loanCcy && cashCcy) ? fxRate(loanCcy, cashCcy, state.effectiveExchangeRates.USD_AUD) : 1
+cashDue = payment × fx                          // leaves the cash pool, in cash currency
+```
+The handler uses `cashDue` for the deficit/replenish check and passes `{ cashDue, fx }` on
+the `LOAN_PAYMENT_APPLY` action. The reducer debits `actualCash = min(cashDue, cashBalance)`
+in cash currency, then converts the funded amount **back** to loan currency
+(`deliveredLoanCcy = actualCash / fx`) for the principal reduction — so an under-funded pool
+only pays down the funded portion, and the negative-amortization flag stays in loan
+currency. A missing currency code on either side (legacy) ⇒ `fx = 1`, byte-for-byte with the
+old path; same-currency (the common case) ⇒ `fxRate` returns 1 and pays no fee. The flat
+per-transfer FX fee is intentionally **not** applied here (it is a sweep-transfer cost, not a
+direct-debit cost, and would muddy the principal accounting).
+
+**Telemetry (RECORD_BALANCE for the cash pool).** The charted `metrics.<key>` series only
+updates when a `RECORD_BALANCE` snapshot is emitted. `LoanPaymentHandler` snapshotted the
+**loan** but not the debited cash pool — fine when paying from savings (its own monthly
+interest/wages/expenses events snapshot it), but a linked **offset** has *no* other event
+touching it once it's the payment source, so its metric froze while `state.<offset>.balance`
+correctly dropped. Fix: the handler now also emits `RecordBalanceAction(`${cashKey}.balance`)`
+after the payment (read post-debit/post-replenish at `PRIORITY.METRICS`). Regression: the
+`evt-offset` auto-debit test asserts the RECORD_BALANCE for the offset key is emitted. (Same
+class of bug as the P2 house-sale-payoff loan-metric freeze.)
+
+**Out of scope (Design 56).** The loan rate is still fixed (`loan.interestRate`). Making it
+track a policy rate — `Prime(country, t) + primeSpread` — is **design 56 Phase 3**. The
+"loan paid down ⇒ interest falls" behavior already works (interest recomputes monthly on the
+current `effectivePrincipal`); only the *variable rate* is 56's job.
+
+**Tests.** `evt-loan.test.mjs`: an AUD loan paid from a USD account FX-converts the debit
+(cash falls ≈ 1290, loan falls 2000); the same payment from an AUD account debits 1:1.
+`evt-offset.test.mjs`: the monthly payment auto-debits the linked offset (savings untouched);
+an explicit `paymentSourceKey` still isolates the interest-only effect (offset untouched).
+`accounting-integrity.test.mjs`: the full-sim AU offset drains as the payment source without
+going negative and still speeds payoff.
+
+**✅ DONE (green: 3199 unit + 849 viz).** `resolveLinkedOffsetKey` + `resolveLoanCashKey`
+precedence, `fxRate`-based conversion in `LoanPaymentHandler.call` /
+`LoanPaymentApplyReducer.reduce`, and the tests above.
 
 ---
 

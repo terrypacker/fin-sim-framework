@@ -28,7 +28,7 @@ import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 import { Graph }          from '../../src/graph/graph.js';
 import { GraphQueryApi }  from '../../src/graph/graph-query-api.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
-import { USD, CheckingAccount, SavingsAccount, LoanAccount } from '../../src/finance/assets/account.js';
+import { USD, AUD, CheckingAccount, SavingsAccount, LoanAccount } from '../../src/finance/assets/account.js';
 import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from '../../src/finance/account-rules/loan-classes.js';
 import { computeNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
@@ -182,6 +182,45 @@ test('LOAN: the base handler (country=null) still pays every loan', () => {
   }
   assert.ok(near(state.usLoan.balance, 99_500), `us ${state.usLoan.balance}`);
   assert.ok(near(state.auLoan.balance, 99_500), `au ${state.auLoan.balance}`);
+});
+
+// ── Cross-currency payment (design 54 P4) ─────────────────────────────────────
+
+test('LOAN: an AUD loan paid from a USD account FX-converts the debit (not 1:1)', () => {
+  const svc = makeSvc();
+  const handler = new LoanPaymentHandler();
+  const reducer = new LoanPaymentApplyReducer({ accountService: svc });
+  // 1 USD = 1.55 AUD. A$2,000 payment ⇒ 2000 ÷ 1.55 ≈ US$1,290.32 leaves the USD pool.
+  let state = {
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+    usSavingsAccount: new SavingsAccount(50_000, { country: 'US', currency: USD }),
+    // AUD loan, 0% so interest doesn't muddy the FX math; paid from the USD account.
+    auHouseLoan: new LoanAccount(100_000, { country: 'AU', currency: AUD, interestRate: 0, monthlyPayment: 2_000, paymentSourceKey: 'usSavingsAccount' }),
+  };
+  for (const a of handler.call({ state })) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  // Cash cost is FX-converted (the bug was debiting a flat 2000 USD).
+  assert.ok(near(state.usSavingsAccount.balance, 50_000 - 1_290.32), `cash ${state.usSavingsAccount.balance}`);
+  // The loan still receives A$2,000 of value → balance falls by 2000 in loan currency.
+  assert.ok(near(state.auHouseLoan.balance, 98_000), `loan ${state.auHouseLoan.balance}`);
+});
+
+test('LOAN: the same AUD payment from an AUD account debits 1:1 (currency parity)', () => {
+  const svc = makeSvc();
+  const handler = new LoanPaymentHandler();
+  const reducer = new LoanPaymentApplyReducer({ accountService: svc });
+  let state = {
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+    auSavingsAccount: new SavingsAccount(50_000, { country: 'AU', currency: AUD }),
+    auHouseLoan: new LoanAccount(100_000, { country: 'AU', currency: AUD, interestRate: 0, monthlyPayment: 2_000, paymentSourceKey: 'auSavingsAccount' }),
+  };
+  for (const a of handler.call({ state })) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  // Same-currency: A$2,000 debits A$2,000 — no conversion, loan also falls by 2000.
+  assert.ok(near(state.auSavingsAccount.balance, 48_000), `cash ${state.auSavingsAccount.balance}`);
+  assert.ok(near(state.auHouseLoan.balance, 98_000), `loan ${state.auHouseLoan.balance}`);
 });
 
 // ── Serializer round-trip ─────────────────────────────────────────────────────
