@@ -157,6 +157,40 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
   }
 }
 
+/**
+ * Bond coupon (reinvest path) — coupon interest stays in the account, reinvested
+ * into the holdings. Chains BOND_COUPON_TAX carrying `amount` (full, federal) and
+ * `stateTaxableAmount` (non-Treasury, US state) — design 59.
+ */
+export class BondCouponApplyReducer extends AccountServiceReducer {
+  static type        = 'BondCouponApplyReducer';
+  static description = 'Adds bond coupon interest to the account balance and reinvests into holdings; chains BOND_COUPON_TAX (federal + state, with the Treasury-exempt split).';
+  static actionType  = 'BOND_COUPON_APPLY';
+
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
+    super('Bond Coupon Apply', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes   = ['BOND_COUPON_APPLY'];
+    this.generatedActionTypes = ['BOND_COUPON_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, stateTaxableAmount, residency } = action;
+    const key = action.stateKey ?? 'usStockAccount';
+    const sa  = state[key];
+    return this.newState(
+      state,
+      {
+        [key]: {
+          ...sa,
+          balance:  sa.balance + amount,
+          holdings: distributeHoldingsCredit(sa.holdings, amount),
+        },
+      },
+      [{ type: 'BOND_COUPON_TAX', amount, stateTaxableAmount, residency }]
+    );
+  }
+}
+
 /** EVT-14: Stock earnings (unrealized) — stay in account, no tax. */
 export class StockEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'StockEarningsApplyReducer';

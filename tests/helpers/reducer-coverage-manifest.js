@@ -55,6 +55,8 @@ export const COVERED = [
   'RothRolloverWithdrawalContribApplyReducer', 'RothRolloverWithdrawalEarningsApplyReducer',
 
   // C — US brokerage + collectible (reducer-postconditions-us-brokerage.test.mjs)
+  // Bond coupon reducers covered by evt-bond-coupon.test.mjs (design 59).
+  'BondCouponApplyReducer', 'BondCouponCashApplyReducer',
   'StockContributionApplyReducer', 'StockEarningsApplyReducer', 'StockDividendApplyReducer',
   'StockWithdrawalApplyReducer', 'FixedIncomeContributionApplyReducer',
   'FixedIncomeEarningsApplyReducer', 'FixedIncomeWithdrawalApplyReducer',

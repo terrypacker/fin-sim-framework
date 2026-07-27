@@ -16,6 +16,7 @@ import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-exp
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
+import { BondCouponScheduledHandler }   from '../../finance/handlers/bond-coupon-handler.js';
 import {
   FixedIncomeInterestHandler,
   IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler,
@@ -27,6 +28,7 @@ import { HealthcareEventHandler }       from '../../finance/spending/strategies/
 import { ExpenseDebitReducer }          from '../../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer }      from '../../finance/reducers/replenish-savings-reducer.js';
 import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-dividend-cash-apply-reducer.js';
+import { BondCouponCashApplyReducer }       from '../../finance/reducers/bond-coupon-cash-apply-reducer.js';
 import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer }   from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
@@ -129,7 +131,7 @@ export const US_RETIREMENT = {
   types: {
     handlers: [
       MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-      DividendScheduledHandler, FixedIncomeInterestHandler,
+      DividendScheduledHandler, BondCouponScheduledHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
       RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler,
@@ -141,7 +143,7 @@ export const US_RETIREMENT = {
       K401AnnualRmdHandler, K401ToIraConversionHandler,
     ],
     reducers: [
-      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer,
+      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
@@ -540,6 +542,11 @@ export const US_RETIREMENT = {
           .name('US Stock Dividends').type('DIVIDEND_SCHEDULED')
           .interval('year-end').startOffset(1).enabled(true).color('#4CAF50').build()
       );
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Bond Coupons').type('INTL_BOND_COUPON')
+          .interval('year-end').startOffset(1).enabled(true).color('#8D6E63').build()
+      );
     }
 
     if (fixedIncomeAccounts.length > 0) {
@@ -770,9 +777,10 @@ export const US_RETIREMENT = {
       }
     }
 
-    // US Stock earnings + dividends
-    const stockEvent = context.schedulesById['INTL_STOCK_EARNINGS'];
-    const divEvent   = context.schedulesById['DIVIDEND_SCHEDULED'];
+    // US Stock earnings + dividends + bond coupons
+    const stockEvent  = context.schedulesById['INTL_STOCK_EARNINGS'];
+    const divEvent    = context.schedulesById['DIVIDEND_SCHEDULED'];
+    const couponEvent = context.schedulesById['INTL_BOND_COUPON'];
     if (stockEvent) {
       for (const acct of usStockAccounts) {
         const earningsH = new IntlUsStockEarningsHandler({
@@ -791,6 +799,18 @@ export const US_RETIREMENT = {
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
+
+        // Bond coupon interest on any BOND holdings in this account (design 59).
+        // Coupons come from each holding's couponRate; reinvest mirrors dividends.
+        if (couponEvent) {
+          const couponH = new BondCouponScheduledHandler({
+            stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
+            ownerId: acct.ownerId, stateKey: acct.stateKey,
+            reinvest: p.dividendReinvest,
+          });
+          couponH.handledEvents.push(couponEvent);
+          handlers.push(couponH);
+        }
       }
     }
 
@@ -917,6 +937,10 @@ export const US_RETIREMENT = {
 
     if (usStockAccounts.length > 0) {
       reducers.push(new StockDividendCashApplyReducer({
+        accountService: accountSvc, stateRegistry: sr,
+        role: ACCOUNT_ROLES.US_SAVINGS, ownerId: primaryId,
+      }));
+      reducers.push(new BondCouponCashApplyReducer({
         accountService: accountSvc, stateRegistry: sr,
         role: ACCOUNT_ROLES.US_SAVINGS, ownerId: primaryId,
       }));

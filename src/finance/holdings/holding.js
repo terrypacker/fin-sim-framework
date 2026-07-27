@@ -59,6 +59,11 @@ export class Holding {
    *                                                  null = fall back to RATE_KEY_META[rateKey].defaultDuration ?? 0
    * @param {string|null} [opts.taxLossPartner=null] - Holding id of the substitute to rebuy after a tax-loss harvest
    *                                                   (design 29 §3.3). Null = fall back to same-rateKey search.
+   * @param {boolean}     [opts.treasury=false]      - BOND holdings only: true = a direct U.S. Treasury obligation
+   *                                                  whose coupon interest is federally taxable but EXEMPT from US
+   *                                                  state income tax (31 U.S.C. § 3124). false = corporate/other
+   *                                                  bond, fully taxable federal + state. Ignored for non-BOND
+   *                                                  allocations (design 59).
    */
   constructor({
     id                   = null,
@@ -75,6 +80,7 @@ export class Holding {
     appreciationSchedule = null,
     duration             = null,
     taxLossPartner       = null,
+    treasury             = false,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -90,6 +96,7 @@ export class Holding {
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
     this.taxLossPartner       = taxLossPartner;
+    this.treasury             = treasury;
   }
 
   toJSON() {
@@ -114,6 +121,7 @@ export class Holding {
         : null,
       duration:            this.duration,
       taxLossPartner:      this.taxLossPartner,
+      treasury:            this.treasury,
     };
   }
 
@@ -135,6 +143,7 @@ export class Holding {
         : null,
       duration:      d.duration ?? null,
       taxLossPartner: d.taxLossPartner ?? null,
+      treasury:      d.treasury ?? false,
     });
   }
 }

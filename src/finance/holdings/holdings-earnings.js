@@ -174,6 +174,10 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
+    // BOND holdings pay coupon interest, not equity dividends — their income is
+    // handled by computeHoldingsCoupons on the INTL_BOND_COUPON path (design 59).
+    // Skipping them here stops a bond earning a spurious account-rate "dividend".
+    if (h.allocation === 'BOND') continue;
     const mv  = h.marketValue ?? 0;
     const yld = h.dividendYield ?? fallbackYield;
     const rk  = h.rateKey ?? fallbackRateKey;
@@ -189,4 +193,61 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     }
   }
   return { amount: +total.toFixed(2), holdingActions };
+}
+
+/**
+ * Walk an account's BOND holdings and compute per-holding coupon interest
+ * (design 59):
+ *
+ *   perHolding = marketValue × (holding.couponRate ?? fallbackRate)
+ *
+ * A non-null `couponRate` is a FIXED contractual coupon and is NOT re-adjusted by
+ * economic-regime rate moves (design 53 §4) — so, unlike dividends, coupons take
+ * no `effectiveDividendAdjustments`/regime scaling here. Only BOND holdings pay a
+ * coupon; EQUITY/CASH/GOLD/OTHER sleeves are skipped.
+ *
+ * Returns the dividend-shaped `{ amount, holdingActions }` plus a
+ * `stateTaxableAmount` — the coupon total EXCLUDING `treasury` holdings, since
+ * direct U.S. Treasury interest is federally taxable but state-exempt
+ * (31 U.S.C. § 3124). `amount` is the full (federal) coupon; the caller stamps
+ * both onto the BOND_COUPON_* action so federal tax uses `amount` and state tax
+ * uses `stateTaxableAmount`.
+ *
+ * `holdingActions` reinvest the coupon into each sleeve (costBasisDelta 0),
+ * matching computeHoldingsDividends; a cash-payout caller can ignore them and
+ * use only the summed amount.
+ *
+ * @param {object} opts
+ * @param {object} opts.state         - Current simulation state
+ * @param {string} opts.stateKey      - state[stateKey] is the account
+ * @param {number} opts.fallbackRate  - Coupon rate used when a BOND holding has no couponRate
+ * @returns {{ amount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
+  const account  = state?.[stateKey];
+  const holdings = account?.holdings ?? [];
+
+  let total       = 0;
+  let stateTaxable = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h || h.allocation !== 'BOND') continue;
+    const mv     = h.marketValue ?? 0;
+    const rate   = h.couponRate ?? fallbackRate;
+    const coupon = +(mv * rate).toFixed(2);
+    if (coupon === 0) continue;
+    total += coupon;
+    if (!h.treasury) stateTaxable += coupon;   // Treasury coupon is state-exempt
+    holdingActions.push(new HoldingTransactAction({
+      stateKey,
+      holdingId:        h.id,
+      marketValueDelta: coupon,
+      costBasisDelta:   0,
+    }));
+  }
+  return {
+    amount:            +total.toFixed(2),
+    stateTaxableAmount: +stateTaxable.toFixed(2),
+    holdingActions,
+  };
 }

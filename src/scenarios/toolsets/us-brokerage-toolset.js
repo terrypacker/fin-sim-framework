@@ -12,7 +12,7 @@ import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import {
   FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
   FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
-  StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
+  StockDividendApplyReducer, BondCouponApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
   FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
   StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
 } from '../../finance/account-rules/us/us-brokerage-classes.js';
@@ -34,7 +34,7 @@ export const US_BROKERAGE = {
 
   types: {
     handlers: [FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler],
-    reducers: [FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer],
+    reducers: [FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, BondCouponApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer],
     actions: [
       { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('USD') } },
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', fields: { amount: ValueType.currency('USD') } },
@@ -42,6 +42,9 @@ export const US_BROKERAGE = {
       { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_TAX',             fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
+      { type: 'BOND_COUPON_APPLY',              fields: { amount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
+      { type: 'BOND_COUPON_CASH_APPLY',         fields: { amount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
+      { type: 'BOND_COUPON_TAX',                fields: { amount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text() } },
@@ -90,6 +93,7 @@ export const US_BROKERAGE = {
     if (hasST) reducers.push(
       new StockContributionApplyReducer({ accountService, stateRegistry }),
       new StockDividendApplyReducer({ accountService, stateRegistry }),
+      new BondCouponApplyReducer({ accountService, stateRegistry }),
       new StockEarningsApplyReducer({ accountService, stateRegistry }),
       new StockWithdrawalApplyReducer({ accountService, stateRegistry }),
     );
