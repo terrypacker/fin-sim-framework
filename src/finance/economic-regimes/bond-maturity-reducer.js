@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
+import { resolveYield }       from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -67,6 +68,7 @@ export class BondMaturityReducer extends Reducer {
     if (asOfMs == null) return this.newState(state);
 
     const effectiveRates = state.effectiveInterestRates ?? {};
+    const yieldCurve     = state.yieldCurve ?? {};
     const accountUpdates = {};
 
     for (const key of Object.keys(state)) {
@@ -76,7 +78,7 @@ export class BondMaturityReducer extends Reducer {
       const hasMatured = account.holdings.some(h => isMatured(h, asOfMs));
       if (!hasMatured) continue;
 
-      const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates) : h);
+      const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates, yieldCurve) : h);
       accountUpdates[key] = _syncBalance({ ...account, holdings: nextHoldings });
     }
 
@@ -96,7 +98,7 @@ function isMatured(h, asOfMs) {
  * at par to a CASH holding (default). `faceValue ?? marketValue` is the par
  * proceeds.
  */
-function redeem(h, asOfMs, effectiveRates) {
+function redeem(h, asOfMs, effectiveRates, yieldCurve = {}) {
   // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
@@ -120,7 +122,14 @@ function redeem(h, asOfMs, effectiveRates) {
       : (purchaseMs != null && matMs > purchaseMs)
         ? (matMs - purchaseMs)
         : ((h.duration ?? 5) * YEAR_MS);
-    const newCoupon = (h.rateKey != null ? effectiveRates[h.rateKey] : undefined) ?? h.couponRate ?? null;
+    // design 67 — re-lock at the yield for the ROLL TERM's tenor (not a flat 5y proxy),
+    // so a rung rolling into an N-year ladder bond earns the curve's N-year term premium.
+    // resolveYield returns null when the anchor is absent ⇒ keep the prior couponRate.
+    const rollTenorYears = termMs / YEAR_MS;
+    const newCoupon = resolveYield(
+      { effectiveInterestRates: effectiveRates, yieldCurve },
+      { rateKey: h.rateKey, tenorYears: rollTenorYears },
+    ) ?? h.couponRate ?? null;
     return {
       ...h,
       marketValue:  par,
