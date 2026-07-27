@@ -540,6 +540,9 @@ Key `<select>` added in a prior pass); bond `costBasis`↔`marketValue` sync. In
 ### Outstanding (post-rollout)
 
 All 5 phases are functionally complete and green. Known follow-ups, none blocking:
+- **`earningsBasis` should be derived, not hand-entered** (proposed — see §8). Make it a
+  computed, read-only field (`balance − contributionBasis`) the way `balance` is derived
+  from holdings, so the invariant can't be authored inconsistent.
 - **Editor-created offset accounts don't reach `sim.state`** (Phase 3 blocker above): a
   record created in the editor gets no `stateKey`, so the runtime-state projection can't see
   it. Config-declared offsets work. Fix owned by **design 55 §3.1** (stateKey assignment for
@@ -581,3 +584,75 @@ All 5 phases are functionally complete and green. Known follow-ups, none blockin
   account-level field, but reads as generic on a `Holding` and collides conceptually with
   the account rate). `couponRate` is the bond twin of `dividendYield` and is unambiguous;
   revisit only if a non-coupon interest-bearing holding type appears.
+
+---
+
+## 8. Addendum (proposed) — `earningsBasis` becomes derived, not hand-entered
+
+**Status**: proposed follow-up (the 5 phases above shipped; this is a later cleanup).
+
+### 8.1 Problem
+On a `RetirementAccount` the ledger obeys the invariant
+`contributionBasis + earningsBasis == balance` (§2; `reconcileLedgerToBalance`,
+`investment-account.js:29`). Yet the account editor exposes **all three** as independently
+editable fields (`contributionBasis`, `earningsBasis`, and `balance`), so a user can author
+an inconsistent trio. `reconcileLedgerToBalance` then silently rebases the split on load —
+the entered `earningsBasis` isn't honored, it's overwritten. Hand-editing a value the model
+immediately recomputes is a footgun.
+
+This mirrors a problem design 55 already solved for `balance`: a holdings-bearing account's
+`balance` is **derived** (Σ holdings), the editor **disables** the field and computes it live,
+and it is **dropped from the save payload** so nothing writes a competing value
+(`account-editor.js` `_syncBalance`; design 55 §13). `earningsBasis` should get the same
+treatment.
+
+### 8.2 Change — derive `earningsBasis` from the other two
+Make `earningsBasis` a **computed, read-only** field at the editor/bootstrap layer:
+
+```
+earningsBasis = max(0, balance − contributionBasis)
+```
+
+The user supplies what they can actually know — the `balance` (or holdings) and the
+`contributionBasis` (what they put in) — and *earnings* is the remainder, exactly as
+`balance` is the remainder of Σ holdings. This makes the invariant true **by construction**
+at entry, so `reconcileLedgerToBalance` never has to correct a fresh edit.
+
+**Why derive `earningsBasis` (not `contributionBasis`)?** A user knows their contributions;
+they rarely know the embedded-earnings figure. Deriving the earnings half matches how people
+actually hold the numbers. (Deriving `contributionBasis = balance − earningsBasis` is the
+symmetric alternative — rejected as less natural.)
+
+### 8.3 Scope boundary — runtime is unchanged
+The derivation applies **only to the initial / edited value.** During the simulation the
+retirement reducers still maintain `contributionBasis` and `earningsBasis`
+**independently** — earnings accrue via `*_EARNINGS_APPLY`, contributions via contribution
+reducers — so the two legitimately diverge from `balance − contributionBasis` over the run
+(that divergence *is* the deferred-tax signal the withdrawal/after-tax paths read). Only the
+**seed** is derived; the ledger evolves freely thereafter. `reconcileLedgerToBalance` stays
+as the load-time healer for older saved states.
+
+### 8.4 Touch points (all mirror the derived-`balance` pattern)
+- **Account editor** (`account-editor.js`): disable the `earningsBasis` input; recompute it
+  live whenever `balance`/holdings or `contributionBasis` change (a sibling to `_syncBalance`);
+  show it read-only with a "computed = balance − contributions" hint; exclude it from
+  `_readForm`'s payload.
+- **Controller** (`accounts-controller.js`): on create/update, compute
+  `earningsBasis = max(0, balance − contributionBasis)` instead of reading the field.
+- **Generator (design 55)**: `earningsBasis` is already *not* a generated param (retirement
+  template is `[BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE]`); keep it that way — the editable
+  scalar is `contributionBasis`, and `earningsBasis` never becomes a param.
+- **Serializer**: keep round-tripping `earningsBasis` (the runtime value must persist); only
+  the *editor* stops treating it as an input.
+
+### 8.5 Edge / open questions
+- **`contributionBasis > balance`** → negative earnings; clamp `earningsBasis` at 0 (and
+  optionally clamp `contributionBasis` to `balance`), matching `reconcileLedgerToBalance`'s
+  `balance ≤ 0` branch.
+- **Roth**: contributions are the always-accessible tax-free layer and earnings the taxable
+  layer; the same derivation holds (`earningsBasis = balance − contributionBasis`), so Roth
+  needs no special case — confirm against `RothEarningsApplyReducer`.
+- **Where to compute** — editor + controller (belt-and-suspenders) vs a single
+  compile-time normalization pass over `cfg.accounts` (also heals older saves, like the
+  design 55 §3.1 stateKey pass). The normalization pass is the more robust home; the editor
+  disable is still needed for the live UX.
