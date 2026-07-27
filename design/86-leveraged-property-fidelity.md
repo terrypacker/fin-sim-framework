@@ -635,6 +635,18 @@ Per-gap tests are listed above. Across all of them:
 - **A regression asserting an offset earns no yield** — that it holds a `CASH` holding
   with a live `rateKey` while no handler credits it is a correct behaviour standing on
   the absence of a wiring. Absences are not self-documenting; pin it.
+  **WRITTEN** — `tests/unit/evt-offset-no-yield.test.mjs`. Four assertions, in the order
+  a reader needs them: the sleeve really is stamped `SAVINGS_AU`/`SAVINGS_US` by the
+  same `resolveRateKey` call every other cash sleeve uses (so the key looks like an
+  oversight); that rate is non-zero in a live run and design 60's own compute helper,
+  pointed at the offset, *would* pay it (so the behaviour rests on wiring, not on a 0%
+  rate); no handler in a loaded sim is registered against an offset stateKey or either
+  offset role; and over a year the offset does not move by a cent. The last two each
+  carry a control — the same scan finds `AuSavingsInterestHandler` on the savings
+  account, and that account compounds over the same year — because an assertion of
+  absence that also passes on a broken detector or a dead run pins nothing.
+  Verified by mutation: adding the offset roles to the AU `CASH_SLEEVE_INTEREST` wiring
+  (the exact "fix" this guards against) turns both of those red.
 - **Golden re-baseline** at P3, with the direction and magnitude of the change stated
   in the commit rather than inferred later.
 - **A regression that a §988 loss leaves the §904 partition intact** (P8). This is the
@@ -1115,9 +1127,11 @@ may be worth more than any sizing decision and is a single field.
 
 ### 10.5 Smaller, genuinely optional
 
-- **§6's "an offset earns no yield" regression** is still unwritten. The behaviour is
-  correct and stands entirely on the *absence* of a wiring, which is exactly the kind of
-  thing that gets "fixed" by someone reading `rateKey` on an offset's CASH holding.
+- ~~**§6's "an offset earns no yield" regression**~~ — **DONE**, see §6. The reason it
+  was worth writing rather than trusting: the offset's whole return in §8 is the loan
+  interest it suppresses, so crediting it a savings rate as well pays the same dollar
+  twice and quietly inverts the AUD-liquidity argument. Nothing else in the suite would
+  have gone red.
 - **A UI for the offset's idle capacity** (G4/P2). The metric is recorded per period;
   nothing surfaces it, so an over-funded offset still looks identical to a right-sized
   one in the app, which is the reading §8.2's sizing rule depends on.
