@@ -320,12 +320,34 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
 
 ## 8. Open questions
 
-1. **Is an offset deposit business-use under §988(e)(3)?** The provision asks about
-   "expenses properly allocable to such transaction", and a deposit has no expenses. Its
-   *function* is suppressing interest on an income-producing loan, which is a decent
-   §212 argument, but it is not the clean answer the mortgage leg has. Note the irony:
-   an offset earns no interest by design ([[offset-earns-no-yield]]), which weakens the
-   profit-motive characterization exactly where you would want it strong.
+1. **Is an offset deposit business-use — and under WHICH test?** This is really two
+   questions, and conflating them is a live imprecision in the model.
+
+   | provision | test | decides |
+   |---|---|---|
+   | §988(e)(3) | expenses allocable meet **§162 or §212** | whether §988 applies (ordinary character) |
+   | §165(c)(2) | transaction **"entered into for profit"** | whether the loss is deductible |
+
+   "Entered into for profit" is the **broader** standard, so the two can diverge: a
+   transaction that fails §212 may still clear §165(c)(2) and yield a deductible loss —
+   just not an ordinary §988 one. The model drives both from a single
+   `deductibleFraction`. That simplification errs in one direction only — it
+   **over-disallows, never over-deducts** — and it is exact at both ends (a
+   rental-linked pool clears both tests; a purely personal one clears neither).
+
+   The offset deposit is precisely where the gap opens. §988(e)(3) is weak for it: the
+   provision asks about "expenses properly allocable to such transaction" and a deposit
+   has no expenses — and an offset earns no interest by design
+   ([[offset-earns-no-yield]]), which undercuts the §212 story exactly where you would
+   want it strong. But §165(c)(2) is a different and easier question, since the deposit
+   exists to reduce the carrying cost of an income-producing asset. So the honest
+   position is that the *loss* may well be deductible even where §988 does not reach the
+   transaction. **Unresolved, and worth advice before anyone relies on §8's numbers.**
+
+   *Quijano does not settle it:* those taxpayers **conceded** the borrowing was
+   "neither carried out by a trade or business nor entered into for profit" — §165(c)(1)
+   and (2) — so the court never had to decide whether a residence-linked facility could
+   clear the profit test.
 2. **Should the two legs be integrated when they genuinely match?** §988(d) allows it
    but §988(d)(2)(B) demands identification, and Quijano says it must be contemporaneous.
    Probably "no, and that is the finding" — but it should be a recorded decision rather

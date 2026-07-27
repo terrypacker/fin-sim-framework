@@ -115,6 +115,17 @@ export function blendCurrencyBasisRate(oldBalance, acqRate, added, spotRate) {
  * an income-producing property should be authored explicitly — design 87 open question 1
  * records why that answer is not as clean as the mortgage's.
  *
+ * **This ONE fraction drives TWO different statutory tests, and they are not the same
+ * standard.** §988(e)(3) asks whether expenses allocable to the transaction meet
+ * **§162 or §212**, and decides whether §988 applies at all (i.e. ordinary character).
+ * §165(c)(2) asks whether the loss was "incurred in any transaction **entered into for
+ * profit**", and decides whether the loss is deductible. "For profit" is the broader
+ * test, so the two can diverge: a transaction outside §212 may still clear §165(c)(2).
+ * Collapsing them into one knob is a modelling simplification whose error runs in one
+ * direction only — it **over-disallows**, never over-deducts. It is exact for the two
+ * cases that matter here (a rental-linked pool clears both; a purely personal one
+ * clears neither) and approximate in between. Design 87 open question 1.
+ *
  * @returns {number} 0..1
  */
 export function currencyPoolBusinessFraction(account) {
