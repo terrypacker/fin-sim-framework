@@ -11,7 +11,7 @@
 import { ScenarioRunner }             from '../../simulation-framework/scenario.js';
 import { createDistribution }         from '../../simulation-framework/distributions.js';
 import { ServiceRegistry }            from '../../services/service-registry.js';
-import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario, applyRealPropertySaleYearParams, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { IntlRetirementMcConfig }     from './intl-retirement-mc-config.js';
@@ -160,7 +160,13 @@ export class IntlRetirementMcRunner {
       }),
     });
 
-    const base      = { ...baseParams, endDate: simEnd };
+    // Center each balance MC lever on the template's live account balance (design 55 §13).
+    // Without this a *disabled* balance lever's self-contained fallback (cfg.value ?? mean,
+    // a hardcoded default) would be written to params and rescale the account's holdings —
+    // silently resetting a customized balance. Merged under baseParams so an explicit caller
+    // override still wins.
+    const balanceCenters = resolveBalanceCenters(cfgTemplate);
+    const base      = { ...balanceCenters, ...baseParams, endDate: simEnd };
     const variables = this.mcConfig.buildVariables(base);
 
     const mcRuns  = [];

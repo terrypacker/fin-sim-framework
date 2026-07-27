@@ -466,22 +466,28 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   spouseRetirementDate:  'person.spouse.retirementDate',
   primaryMonthlyWage:    'person.primary.monthlyWage',
   spouseMonthlyWage:     'person.spouse.monthlyWage',
-  // US account balances
-  initialUsSavings:      'acct.usSavingsAccount.balance',
-  rothBalance:           'acct.rothAccount.balance',
-  iraBalance:            'acct.iraAccount.balance',
-  k401Balance:           'acct.k401Account.balance',
-  stockBalance:          'acct.usStockAccount.balance',
-  fixedIncomeBalance:    'acct.fixedIncomeAccount.balance',
+  // Account balances (design 55 §13). Every account bootstraps a holding at compile time,
+  // so its `balance` is derived from Σ holdings and is never a plain generated param. These
+  // legacy flat keys — kept as the MC/Opt lever keys because a dotted key is misread as a
+  // nested path by mc-param-paths `set()` — resolve to the generated, hidden compile-only
+  // `acct.<stateKey>.balanceTarget`, whose loader cascade rescales holdings to the value
+  // non-destructively. A pre-design-55 save carrying one of these keys therefore rescales
+  // its (consistent) holdings to the stored balance — a no-op — rather than being ignored.
+  initialUsSavings:      'acct.usSavingsAccount.balanceTarget',
+  rothBalance:           'acct.rothAccount.balanceTarget',
+  iraBalance:            'acct.iraAccount.balanceTarget',
+  k401Balance:           'acct.k401Account.balanceTarget',
+  stockBalance:          'acct.usStockAccount.balanceTarget',
+  fixedIncomeBalance:    'acct.fixedIncomeAccount.balanceTarget',
   // AU account balances
-  auSavingsBalance:      'acct.auSavingsAccount.balance',
-  superBalance:          'acct.superAccount.balance',
-  auStockBalance:        'acct.auStockAccount.balance',
+  auSavingsBalance:      'acct.auSavingsAccount.balanceTarget',
+  superBalance:          'acct.superAccount.balanceTarget',
+  auStockBalance:        'acct.auStockAccount.balanceTarget',
   // Spouse account balances
-  spouseRothBalance:     'acct.spouseRothAccount.balance',
-  spouseIraBalance:      'acct.spouseIraAccount.balance',
-  spouseK401Balance:     'acct.spouseK401Account.balance',
-  spouseSuperBalance:    'acct.spouseSuperAccount.balance',
+  spouseRothBalance:     'acct.spouseRothAccount.balanceTarget',
+  spouseIraBalance:      'acct.spouseIraAccount.balanceTarget',
+  spouseK401Balance:     'acct.spouseK401Account.balanceTarget',
+  spouseSuperBalance:    'acct.spouseSuperAccount.balanceTarget',
   // Real property
   usHouseSaleYear:       'prop.usHouseProperty.plannedSaleYear',
   auHouseSaleYear:       'prop.auHouseProperty.plannedSaleYear',
@@ -489,6 +495,33 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   usSavingsMinBalance:   'acct.usSavingsAccount.minimumBalance',
   auSavingsMinBalance:   'acct.auSavingsAccount.minimumBalance',
 });
+
+/**
+ * Design 55 §13: resolve the live scenario value that each balance MC/Opt lever should
+ * center on, keyed by the lever's legacy flat key (`stockBalance`, `rothBalance`, …).
+ *
+ * A holdings-bearing account's balance is derived from Σ holdings and is not a plain
+ * param, so it can't be read from the flat `cfg.parameters` map the way a rate can. This
+ * inverts the balance aliases (legacy key → `acct.<stateKey>.balanceTarget`) and reads the
+ * matching account record's balance from the config. The result is merged into the MC
+ * params snapshot so that (a) the panel presets and Copy-from-Scenario show the real
+ * balance, and (b) a *disabled* balance lever no longer falls back to a hardcoded default
+ * that would rescale the account's holdings when the runner writes it.
+ *
+ * @param {object} cfg - a serialized scenario config (needs cfg.accounts with balances)
+ * @returns {Object<string, number>} legacy balance key → live account balance
+ */
+export function resolveBalanceCenters(cfg) {
+  const centers = {};
+  const accounts = Array.isArray(cfg?.accounts) ? cfg.accounts : [];
+  for (const [legacy, target] of Object.entries(INTL_RETIREMENT_PARAM_ALIASES)) {
+    const m = /^acct\.(.+)\.balanceTarget$/.exec(target);
+    if (!m) continue;
+    const acct = accounts.find(a => a?.stateKey === m[1]);
+    if (acct && acct.balance != null) centers[legacy] = acct.balance;
+  }
+  return centers;
+}
 
 /**
  * IntlRetirementScenario — International two-person retirement simulation.

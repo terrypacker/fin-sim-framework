@@ -171,6 +171,13 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
   },
 
   // ── Account balances (disabled by default — starting values are known) ────
+  // Every account bootstraps at least one holding at compile time, so its `balance` is
+  // DERIVED from Σ holdings and is not a plain param (design 55 §13). These levers keep
+  // their flat legacy keys — a dotted key would be misread as a nested path by mc-param-
+  // paths `set()` — and INTL_RETIREMENT_PARAM_ALIASES resolves each to the generated,
+  // hidden `acct.<stateKey>.balanceTarget`, whose loader cascade rescales that account's
+  // holdings to the sampled dollar total non-destructively. The sampled value is still an
+  // absolute balance in the account's native currency.
   {
     paramKey: 'initialUsSavings',      label: 'US Savings Initial Balance (USD)',
     type: DISTRIBUTION_TYPES.CONSTANT, value: D.initialUsSavings,
@@ -422,7 +429,12 @@ export class IntlRetirementMcConfig {
         return {
           ...cfg,
           defaultValue,
-          mean: cfg.mean ?? defaultValue,
+          // Preset the sweep center to the live scenario value so the panel inputs
+          // reflect the current config (balances and rates), falling back to the
+          // template's hardcoded default only when the param isn't resolvable in
+          // `params`. A user override (from the panel) still wins via the spread below.
+          mean:  defaultValue ?? cfg.mean,
+          value: defaultValue ?? cfg.value,
           ...override,
         };
       });

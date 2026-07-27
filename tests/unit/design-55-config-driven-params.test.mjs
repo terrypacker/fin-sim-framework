@@ -84,10 +84,14 @@ test('D55-2: legacy flat key in cfg.parameters aliases to the generated key and 
   cfg.parameters = { ...(cfg.parameters ?? {}), rothBalance: 55_555 };
   loadCfg(cfg);
 
+  // A holdings-bearing account's balance MC lever aliases to the hidden, compile-only
+  // `acct.<stateKey>.balanceTarget` (design 55 §13); the cascade rescales the holdings so
+  // the account's balance lands on the swept value.
   assert.strictEqual(acct(cfg, 'rothAccount').balance, 55_555,
-    'aliased legacy key cascades onto the record');
+    'aliased legacy key cascades onto the record via balanceTarget');
   assert.strictEqual(cfg.parameters.rothBalance, undefined, 'legacy flat key is removed');
-  assert.strictEqual(cfg.parameters['acct.rothAccount.balance'], 55_555, 'value carried to generated key');
+  assert.strictEqual(cfg.parameters['acct.rothAccount.balanceTarget'], 55_555,
+    'value carried to generated balanceTarget key');
 });
 
 // ── Alias back-compat: persisted typed params (saved scenario) ──────────────────

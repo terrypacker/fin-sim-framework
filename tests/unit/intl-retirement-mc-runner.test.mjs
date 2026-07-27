@@ -178,6 +178,23 @@ test('IntlRetirementMcRunner: all-disabled mcConfig produces n identical runs', 
   for (const r of runs) assert.strictEqual(r.finalNetWorthUsd, first);
 });
 
+test('IntlRetirementMcRunner: a disabled balance lever does not reset a customized balance (design 55 §13)', async () => {
+  // A holdings-bearing account's balance MC lever aliases to the compile-only
+  // `balanceTarget`. A disabled lever must center on the template's live balance — not the
+  // hardcoded template default — so it doesn't rescale the account's holdings on every run.
+  const cfgTemplate = IntlRetirementScenario.buildDefaultConfig(
+    { stockBalance: 600_000 }, SIM_START, SIM_END);
+  const allDisabled = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({ ...c, enabled: false }));
+  const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(allDisabled);
+  const runner = makeRunner({ mcConfig, cfgTemplate });
+  const { runs } = await runner.run();
+
+  for (const r of runs) {
+    assert.strictEqual(r.params.stockBalance, 600_000,
+      `disabled balance lever must keep the customized balance, got ${r.params.stockBalance}`);
+  }
+});
+
 // ─── Registry isolation ──────────────────────────────────────────────────────
 //
 // 4.1 (design/inconsistencies.md): MC must not mutate the singleton
