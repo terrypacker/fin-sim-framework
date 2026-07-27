@@ -83,7 +83,7 @@ export class JournalDataSource {
       const base = _project(entry);
       if (!entry.stateDiff?.length) {
         // Emit the entry as-is with null diff fields so it isn't silently dropped.
-        rows.push({ ...base, stateKey: null, stateBefore: null, stateAfter: null, stateDelta: null, diffSeq: 0 });
+        rows.push({ ...base, stateKey: null, stateBefore: null, stateAfter: null, stateDelta: null, absStateDelta: null, diffSeq: 0 });
       } else {
         for (let i = 0; i < entry.stateDiff.length; i++) {
           const d = entry.stateDiff[i];
@@ -95,6 +95,9 @@ export class JournalDataSource {
             stateBefore:   d.before  ?? null,
             stateAfter:    d.after   ?? null,
             stateDelta:    d.delta   ?? null,
+            // Magnitude of movement — summed for "gross moved" reports where
+            // signed deltas would cancel (e.g. HOLDING_TRANSACT posts +N and −N).
+            absStateDelta: d.delta != null ? Math.abs(d.delta) : null,
             diffSeq:       i,
           });
         }
@@ -122,6 +125,10 @@ function _project(entry) {
     // ── Identity / ordering ──────────────────────────────────────────────────
     seq:          entry.seq,
     id:           entry.id,
+    // action.instanceId is shared by every journal entry emitted for the SAME
+    // action (one per reducer execution). Distinct-count it to collapse the
+    // action×reducer fan-out back to distinct actions.
+    instanceId:   entry.action?.instanceId ?? null,
 
     // ── Time ────────────────────────────────────────────────────────────────
     date:         entry.date,
