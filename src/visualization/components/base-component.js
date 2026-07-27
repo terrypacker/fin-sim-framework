@@ -60,6 +60,26 @@ export class BaseComponent {
   }
 
   /**
+   * Tag an editor's `.node-header` with an "Inherited" badge when the record was
+   * promoted from a Bequest (design 63 §14 — `node.inherited === true`), so a
+   * user editing an inherited account / property / collectible can see at a glance
+   * that it's decedent-sourced (and its FMV is funded at the inheritance date, not
+   * authored here). No-op for ordinary records and when the header is absent.
+   * @param {HTMLElement} el   - the cloned editor template root
+   * @param {object|null} node - the record being edited
+   */
+  _applyInheritedBadge(el, node) {
+    if (!node?.inherited) return;
+    const header = el.querySelector('.node-header');
+    if (!header || header.querySelector('.node-inherited-badge')) return;
+    const badge = document.createElement('span');
+    badge.className = 'node-inherited-badge';
+    badge.textContent = 'Inherited';
+    badge.title = 'Promoted from a bequest (design 63) — funded at the inheritance date.';
+    header.appendChild(badge);
+  }
+
+  /**
    * Usage:
    *   this._debouncedSearch = this.debounce(() => this._searchChanged(), 200);
    *   this._input.addEventListener('input', this._debouncedSearch);

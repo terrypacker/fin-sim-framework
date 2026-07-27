@@ -106,6 +106,7 @@ export class AccountEditor extends BaseComponent {
   render() {
     const el     = this._getTemplate('tpl-account-editor');
     const isEdit = !!(this._node?.id);
+    this._applyInheritedBadge(el, this._node);
 
     // Initialise working holdings copy before anything touches the DOM. Normalize the
     // legacy design-59 `treasury` boolean to the design-66 taxExemption enum so an
