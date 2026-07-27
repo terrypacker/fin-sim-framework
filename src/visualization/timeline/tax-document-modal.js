@@ -10,6 +10,7 @@
 
 import { WB_EVENTS } from '../workbench/workbench-runtime.js';
 import { worksheetRowsFromDocuments, toCsv } from '../../finance/tax/tax-worksheet-export.js';
+import { withBom } from '../../utils/csv.js';
 
 /**
  * TaxDocumentModal — renders a TaxDocument in a native <dialog> modal.
@@ -119,6 +120,7 @@ export class TaxDocumentModal {
         <div class="tax-doc-title-group">
           <div class="tax-doc-title">${doc.title}</div>
           <div class="tax-doc-subtitle">${doc.filingStatus}</div>
+          ${_renderFxNote(doc)}
         </div>
       </div>
       <div class="tax-doc-body">
@@ -147,7 +149,7 @@ export class TaxDocumentModal {
     const rows = worksheetRowsFromDocuments(doc);
     if (!rows.length) return;
 
-    const csv  = toCsv(rows);
+    const csv  = withBom(toCsv(rows));
     const blob = new Blob([csv], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -273,6 +275,23 @@ export class TaxDocumentModal {
 // ─── Module-level helpers ─────────────────────────────────────────────────────
 
 const COUNTRY_TO_CURRENCY = { US: 'USD', AU: 'AUD' };
+
+/**
+ * The FX rate line under the filing status.
+ *
+ * A cross-border return converts the other country's income into its own
+ * currency, and the reader cannot check a single one of those figures without
+ * the rate. Stated as `1 USD = 1.543210 AUD` rather than the raw `USD_AUD` pair
+ * id, since the direction is the whole point. Rendered only when the settlement
+ * recorded a rate — a single-country run, or a settlement from before the field
+ * existed, shows nothing rather than an invented 1.0.
+ */
+function _renderFxNote(doc) {
+  if (doc?.fxRate == null) return '';
+  const [from, to] = String(doc.fxPair ?? 'USD_AUD').split('_');
+  return `<div class="tax-doc-fx-note" title="Rate in force at settlement; the cross-border figures on this return were converted through it">`
+    + `FX at settlement: 1 ${from} = ${doc.fxRate.toFixed(6)} ${to}</div>`;
+}
 
 /**
  * `"Form 1040 — 2032"` → `"form-1040-2032.csv"`; a per-person AU return gets the

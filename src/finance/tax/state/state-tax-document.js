@@ -8,6 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { TAX_FX_PAIR }  from '../tax-fx.js';
+import { taxYearLabel } from '../tax-year-label.js';
+
 /**
  * StateTaxDocumentReporter (design 34 Phase 2).
  *
@@ -33,12 +36,16 @@ export class StateTaxDocumentReporter {
     const taxYear = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
     const grossTax = (taxDetail.ordinaryTax ?? 0) + (taxDetail.capitalGainsTax ?? 0);
     const inputs   = taxDetail.inputs ?? {};
+    const fxRate   = journalEntry?.action?.data?.fxRate;
 
     return {
-      title:        `${taxDetail.stateCode} State Income Tax — ${taxYear}`,
+      title:        `${taxDetail.stateCode} State Income Tax — ${taxYearLabel('US', taxYear)}`,
       country:      'US',
       state:        taxDetail.stateCode,
       taxYear,
+      // The state return is USD-only, but its base comes from FX-normalized
+      // federal accumulators, so it reports the same rate (see taxFxRate).
+      ...(fxRate != null ? { fxRate, fxPair: TAX_FX_PAIR } : {}),
       filingStatus: taxDetail.filingStatus ?? 'Married Filing Jointly',
       sections:     this._sections(taxDetail, grossTax),
       summary: {

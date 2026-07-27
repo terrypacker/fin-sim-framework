@@ -290,10 +290,13 @@ being forced into one abstraction.
 | 15 | `drillReport` | `LINE` | journal report id explaining this line, when one exists |
 | 16 | `personKey` | all | empty for household-level filings; set for AU per-person (§8.2) |
 | 17 | `currency` | all | `USD` / `AUD` — the document's **native** currency (§5.3) |
+| 18 | `taxYearLabel` | all | `taxYear` in the return's own convention: `CY 2032` / `FY 2025–26` (§5.5) |
+| 19 | `fxPair` | all | `USD_AUD` — the pair `fxRate` quotes; empty when no rate was recorded (§5.5) |
+| 20 | `fxRate` | all | AUD per USD at the settlement, 6 dp (§5.5) |
 
-Columns 1–15 are the format confirmed against `scenarios/example-tax-report.csv`. Columns 16–17 are
+Columns 1–15 are the format confirmed against `scenarios/example-tax-report.csv`. Columns 16–20 are
 **appended**, never inserted: a spreadsheet built against the 15-column US export keeps working, and
-adding them now (rather than when AU lands) avoids invalidating saved pivots later.
+adding them this way avoids invalidating saved pivots later.
 
 ### 5.2 Row conventions
 
@@ -340,6 +343,44 @@ file, which would break every formula written against the format. So table-shape
 A disposal register is a genuinely different report with its own natural columns, and it is the
 obvious next export after this one (it would be the drill-down behind the "Long-Term Capital Gains"
 line). It is deferred rather than mangled.
+
+### 5.5 Reader-facing context: the year label, the FX rate, and the BOM
+
+Three additions driven by reading the exports rather than by generating them.
+
+**`taxYearLabel`.** `taxYear` is an integer in the convention the return files under — calendar for
+US, fiscal-year START for AU (§8.1). That makes it the join key against the drill-report CSVs, what
+`--year` filters on, and the only form a spreadsheet can sort or pivot numerically, so it stays a
+number. But a bare `2025` on an Australian row reads as calendar 2025 and is off by half a year.
+`taxYearLabel` states the same year the way the return spells it (`CY 2032` / `FY 2025–26`), and the
+drill-report CSVs carry the same pair so the two artifacts agree column for column.
+
+One definition, in `src/finance/tax/tax-year-label.js`, shared by the AU return titles, the workbench
+period dropdown and both exports — three artifacts that previously each built the string inline and
+could have drifted.
+
+**`fxPair` / `fxRate`.** A cross-border return converts the other country's income into its own
+currency: every AUD figure on a Form 1040 and every USD figure on an ITR went through
+`tax-fx.toCcy`. A reader holding only the converted totals cannot reproduce a single one of them. So
+each settle handler stamps the USD/AUD rate in force onto its `*_TAX_SETTLE_APPLY` action (declared
+in the owning toolset's `fields`, or `pickPayload` would drop it), `TaxDocumentRegistry` puts it on
+the document alongside `personKey`, and the flattener repeats it on every row — a pivot table filters
+away anything stated only once.
+
+Precisely what it is: the rate recorded **at the settle**, which is the rate used for the settle-time
+conversions (the FITO handoff, the §904 basket funding). It is *not* a weighted average of the rates
+the individual income lines accrued at during the year — those were each converted at their own
+period's rate. With a static FX rate the two coincide; once rates move within a year (FX vol, regime
+shocks, design 47) the settle-date rate is the year-end benchmark, not the effective rate of every
+line above it. Empty, never `1.0`, when the run recorded no rate at all.
+
+**UTF-8 BOM.** Excel does not sniff UTF-8 in a `.csv`: without a BOM it decodes with the system
+legacy codepage, so `§904` renders as `Â§904`, the FY en dash as `â€"`, and the FITO `≤` as `â‰¤`.
+Every artifact-producing boundary — `writeFileSync`, stdout, `Blob` — wraps with `withBom`
+(`src/utils/csv.js`); the CSV *builders* (`toCsv`, `rowsToCsv`) stay BOM-free, because their output
+is concatenated, embedded and string-compared, and a BOM mid-file is garbage. The param CSV, the one
+we both write and read, strips it on the way back in — which also fixes importing any CSV the user
+saved out of Excel, since Excel always writes one.
 
 ---
 

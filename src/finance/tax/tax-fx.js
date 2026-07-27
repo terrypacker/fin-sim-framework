@@ -47,3 +47,36 @@ export const toUSD = (amount, fromCcy, state) => toCcy(amount, fromCcy, 'USD', s
 
 /** Convert a native `fromCcy` amount into AUD (AU buckets' canonical currency). */
 export const toAUD = (amount, fromCcy, state) => toCcy(amount, fromCcy, 'AUD', state);
+
+/**
+ * The currency pair every cross-border tax conversion goes through, quoted as
+ * `1 USD = <rate> AUD` (the `UsdAudPair` id in `state.effectiveExchangeRates`).
+ */
+export const TAX_FX_PAIR = 'USD_AUD';
+
+/**
+ * The USD/AUD rate in force at a settlement, for REPORTING on the return.
+ *
+ * A cross-border return is the one artifact whose numbers cannot be checked
+ * without knowing the rate behind them: every AUD figure on a Form 1040 and
+ * every USD figure on an ITR was normalized by `toCcy` above, and a reader with
+ * only the converted totals has no way to reproduce them. Stamping the rate on
+ * the settlement puts it on the return itself.
+ *
+ * **What this rate is, precisely.** It is the rate recorded in state at the
+ * moment of the settle — the one used for the settle-time conversions (the FITO
+ * handoff in `UsTaxSettleHandler`, the §904 basket funding in
+ * `AuTaxSettleApplyReducer`). It is NOT a weighted average of the rates applied
+ * to individual income items as they accrued: those were converted at each
+ * period's own rate as the year ran. With a static FX rate — the default — the
+ * two are identical. Once rates move within a year (FX vol / regime shocks, or
+ * design 47 time-varying rates) the settle-date rate is the year-end
+ * benchmark, not the effective rate of every line above it.
+ *
+ * @param {object} state  state snapshot carrying `effectiveExchangeRates`
+ * @returns {number|null} AUD per USD, or null when the run records no rate
+ *                        (single-country scenarios) — never a silent 1.0
+ */
+export function taxFxRate(state) {
+  return state?.effectiveExchangeRates?.[TAX_FX_PAIR] ?? null;
+}

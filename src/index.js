@@ -269,10 +269,11 @@ import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebit
 import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
-import { toCcy, toUSD, toAUD } from './finance/tax/tax-fx.js';
+import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv } from './finance/tax/tax-worksheet-export.js';
+import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
 import { UsTaxDocument2026 } from './finance/tax/us/us-tax-document-2026.js';
@@ -1083,6 +1084,8 @@ export const Finance = {
   toCcy,
   toUSD,
   toAUD,
+  TAX_FX_PAIR,
+  taxFxRate,
   UsTaxSettleHandler,
   AuTaxSettleHandler,
   UsTaxSettleApplyReducer,
@@ -1098,6 +1101,8 @@ export const Finance = {
   worksheetRowsFromDocuments,
   verifyWorksheetRows,
   toCsv,
+  taxYearLabel,
+  auFyLabel,
   UsTaxDocument2024,
   UsTaxDocument2025,
   UsTaxDocument2026,

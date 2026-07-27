@@ -9,6 +9,7 @@
  */
 
 import { BaseTaxDocumentModule } from '../base-tax-document-module.js';
+import { taxYearLabel }          from '../tax-year-label.js';
 
 /**
  * AuTaxDocument2026 — Australian individual income tax document formatter for FY2026+.
@@ -50,7 +51,7 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
   }
 
   _generateItr(taxDetail, taxYear, period = null) {
-    const fyLabel = `FY ${taxYear}–${(taxYear + 1).toString().slice(-2)}`;
+    const fyLabel = taxYearLabel('AU', taxYear);
     const { inputs } = taxDetail;
     const drill = (reportId) => period
       ? { reportId, params: { cc: 'AU', period } }
@@ -259,7 +260,7 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
   }
 
   _generateCgtSchedule(saleRecords, taxYear) {
-    const fyLabel        = `FY ${taxYear}–${(taxYear + 1).toString().slice(-2)}`;
+    const fyLabel        = taxYearLabel('AU', taxYear);
     const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
     const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
     const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);

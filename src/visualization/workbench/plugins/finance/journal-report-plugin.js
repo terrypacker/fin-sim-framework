@@ -20,6 +20,7 @@ import { ReportDefinitionRegistry }    from '../../../../finance/journal-reporti
 import { createReportApis, runReport } from '../../../../finance/journal-reporting/run-report.js';
 import { generateReportCsv }           from '../../../../finance/journal-reporting/report-csv.js';
 import { ServiceRegistry }             from '../../../../services/service-registry.js';
+import { withBom }                     from '../../../../utils/csv.js';
 
 const _fmt       = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 const _fmtN      = (n) => n == null ? '—' : _fmt.format(n);
@@ -674,7 +675,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
     const reportTitle = def?.title ?? 'journal-report';
     const filename    = `${reportTitle.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.csv`;
-    const blob        = new Blob([csv], { type: 'text/csv' });
+    const blob        = new Blob([withBom(csv)], { type: 'text/csv' });
     const url         = URL.createObjectURL(blob);
     const a           = document.createElement('a');
     a.href            = url;

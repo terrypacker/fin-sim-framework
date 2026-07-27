@@ -12,6 +12,7 @@ import { BaseComponent }          from '../components/base-component.js';
 import { DecisionGraphRunner }    from '../../finance/decision-graph/decision-graph-runner.js';
 import { buildDecisionGraphCsv }  from '../../finance/decision-graph/decision-graph-csv.js';
 import { ServiceRegistry }        from '../../services/service-registry.js';
+import { withBom }               from '../../utils/csv.js';
 
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const PCT = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
@@ -288,7 +289,7 @@ export class DgResultsPanel extends BaseComponent {
   _exportCsv(result, ranked) {
     const csv = buildDecisionGraphCsv(result, ranked);
     if (!csv) return;
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([withBom(csv)], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;

@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { QueryApi } from '../query/query-api.js';
+import { QueryApi }      from '../query/query-api.js';
+import { taxYearLabel }  from './tax/tax-year-label.js';
 
 /**
  * JournalQueryApi — extends QueryApi with domain-aware helpers for journal queries.
@@ -499,8 +500,8 @@ function _formatPeriodLabel(cc, date) {
     // belongs to FY ending year. Prefix with `AU` so the implied country is
     // explicit when the report mixes both ccs in the period dropdown.
     const fyEnd = month >= 6 ? year + 1 : year;
-    return `AU FY ${fyEnd - 1}–${String(fyEnd).slice(-2)}`;
+    return `AU ${taxYearLabel('AU', fyEnd - 1)}`;
   }
-  if (cc === 'US') return `US CY ${year}`;
+  if (cc === 'US') return `US ${taxYearLabel('US', year)}`;
   return d.toISOString().slice(0, 10);
 }

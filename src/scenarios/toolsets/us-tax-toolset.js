@@ -42,7 +42,10 @@ export const US_TAX = {
     actions: [
       { type: 'US_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
       { type: 'US_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
-        fields: { tax: ValueType.number(), taxDetail: ValueType.any() } },
+        // fxRate — USD/AUD in force at the settle, reported on the return
+        // (design 71 §5.5). Must be declared: pickPayload keeps ONLY declared
+        // fields, so an undeclared field never reaches the document modules.
+        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },

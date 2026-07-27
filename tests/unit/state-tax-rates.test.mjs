@@ -188,7 +188,11 @@ test('document reporter renders a state return from the settlement taxDetail', (
 
   const doc = new StateTaxDocumentReporter().generate(entry);
   assert.equal(doc.state, 'NE');
-  assert.equal(doc.title, 'NE State Income Tax — 2024');
+  // The year is spelled in the shared tax-year label form (`CY`/`FY`), so a
+  // state return reads the same way as the federal and AU ones it sits beside.
+  // The `form` column of the worksheet CSV splits on the em dash, so it is
+  // unaffected: still `NE State Income Tax`.
+  assert.equal(doc.title, 'NE State Income Tax — CY 2024');
   assert.ok(doc.sections[0].lineItems.length > 0);
   near(doc.summary.netLiability, 3629.467);
 });

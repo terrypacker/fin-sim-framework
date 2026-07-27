@@ -69,7 +69,8 @@ test('TWE-1: rows carry exactly the §5.1 columns, in order', () => {
     'taxYear', 'country', 'form', 'section', 'line', 'label', 'rowType', 'amount',
     'bracketRate', 'bracketLower', 'bracketUpper', 'bracketIncome', 'bracketTax',
     'parentLine', 'drillReport', 'personKey', 'currency',
-  ], 'the column contract is frozen — personKey/currency APPEND, never insert');
+    'taxYearLabel', 'fxPair', 'fxRate',
+  ], 'the column contract is frozen — new columns APPEND, never insert');
 
   for (const row of rows) {
     assert.deepEqual(
@@ -676,4 +677,69 @@ test('TWE-35: the de-minimis shortcut is stated, not left to be inferred', async
     'the shortcut is named, rather than showing an unexplained absent limit');
   assert.equal(ws.find(r => r.label === 'FITO — offset allowed').amount, 800);
   assert.equal(ws.find(r => /forfeited/.test(r.label)).amount, 0);
+});
+
+// ─── Tax-year label + settlement FX rate (§5.5) ──────────────────────────────
+
+test('TWE-36: AU rows carry the FY label beside the numeric year, which stays a number', () => {
+  const rows = buildTaxWorksheetRows(runAu(), { cc: 'AU' });
+  assert.ok(rows.length > 0);
+
+  for (const r of rows) {
+    // The integer is the join key against the drill-report CSVs and what --year
+    // filters on; turning it into a string would break both. The label is what
+    // stops a reader taking an AU `2025` for the calendar year.
+    assert.equal(typeof r.taxYear, 'number');
+    assert.equal(r.taxYearLabel, `FY ${r.taxYear}–${String(r.taxYear + 1).slice(-2)}`);
+  }
+  assert.ok(rows.some(r => r.taxYearLabel === 'FY 2031–32'),
+    'the post-move fiscal years are labelled, not just the first');
+});
+
+test('TWE-37: US and state rows label the calendar year', () => {
+  const rows = buildTaxWorksheetRows(runScenario(), { cc: 'US' });
+  for (const r of rows) assert.equal(r.taxYearLabel, `CY ${r.taxYear}`);
+});
+
+test('TWE-38: every row states the settlement FX rate, quoted as AUD per USD', () => {
+  // A cross-border return converts the other country's income into its own
+  // currency; without the rate none of those figures can be re-derived from the
+  // export. It repeats on every row because a worksheet is read through a pivot,
+  // where a header-only value would be filtered away.
+  const rows = buildTaxWorksheetRows(runAu(), { cc: 'AU' });
+  for (const r of rows) {
+    assert.equal(r.fxPair, 'USD_AUD');
+    assert.equal(typeof r.fxRate, 'number');
+    assert.ok(r.fxRate > 0, 'a recorded rate, never a placeholder');
+  }
+
+  const usRows = buildTaxWorksheetRows(runScenario(), { cc: 'US' });
+  assert.ok(usRows.every(r => r.fxPair === 'USD_AUD' && r.fxRate > 0),
+    'the US return converts AU-source income too, so it states the rate as well');
+});
+
+test('TWE-39: a document with no recorded rate exports blank FX cells, never 1.0', async () => {
+  // Single-country runs record no pair at all. Fabricating 1.0 would silently
+  // assert USD and AUD are at parity.
+  const { UsTaxRates2025 }    = await import('../../src/finance/tax/us/us-tax-rates-2025.js');
+  const { UsTaxDocument2026 } = await import('../../src/finance/tax/us/us-tax-document-2026.js');
+  const detail = new UsTaxRates2025().computeTax({ usOrdinaryIncomeYTD: 200_000 });
+  const rows   = worksheetRowsFromDocuments(new UsTaxDocument2026().generate(detail, 2025));
+
+  assert.ok(rows.length > 0);
+  for (const r of rows) {
+    assert.equal(r.fxRate, null);
+    assert.equal(r.fxPair, null, 'no pair is named when no rate was recorded');
+  }
+  const cells = splitCsvLine(toCsv([rows[0]], { header: false }));
+  assert.equal(cells[WORKSHEET_COLUMNS.indexOf('fxRate')], '');
+  assert.equal(cells[WORKSHEET_COLUMNS.indexOf('fxPair')], '');
+});
+
+test('TWE-40: fxRate renders at 6dp — it is a multiplier, not a percentage', () => {
+  const csv = toCsv([{ ...blankRow(), rowType: 'LINE', fxPair: 'USD_AUD', fxRate: 1.5432109876 }],
+    { header: false });
+  const cells = splitCsvLine(csv);
+  assert.equal(cells[WORKSHEET_COLUMNS.indexOf('fxRate')], '1.543211');
+  assert.equal(cells[WORKSHEET_COLUMNS.indexOf('fxPair')], 'USD_AUD');
 });

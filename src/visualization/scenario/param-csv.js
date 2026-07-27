@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { stripBom } from '../../utils/csv.js';
+
 /**
  * CSV round-trip for the flat scenario parameter list (scenario.params).
  *
@@ -122,7 +124,12 @@ function parseCsv(text) {
  * @throws {Error} if the header lacks a `key` or `value` column
  */
 export function csvToParamUpdates(text) {
-  const rows = parseCsv(text).filter(r => !(r.length === 1 && r[0].trim() === ''));
+  // Strip any leading BOM before parsing. Our own export writes one (so Excel
+  // decodes the file as UTF-8), and a CSV the user saved out of Excel always
+  // carries one — either way it would otherwise fuse onto the first header cell
+  // and turn `key` into `﻿key`, so the required-column check would fail on
+  // a file that is in fact perfectly well formed.
+  const rows = parseCsv(stripBom(text)).filter(r => !(r.length === 1 && r[0].trim() === ''));
   if (rows.length === 0) return [];
 
   const header = rows[0].map(h => h.trim().toLowerCase());

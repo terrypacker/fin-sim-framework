@@ -12,6 +12,7 @@ import { ServiceRegistry }    from '../../services/service-registry.js';
 import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
 import { ScenarioLoader }     from '../../scenarios/scenario-loader.js';
 import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
+import { withBom } from '../../utils/csv.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -216,7 +217,7 @@ export class ScenarioTabPresenter {
 
     this._view.onDownloadCsv = () => {
       if (!this._activeScenario) return;
-      const csv  = paramsToCsv(this._activeScenario.params);
+      const csv  = withBom(paramsToCsv(this._activeScenario.params));
       const base = (this._activeScenario.name || 'scenario').replace(/[^\w.-]+/g, '-');
       this._view.downloadFile(`${base}-params.csv`, csv, 'text/csv');
     };

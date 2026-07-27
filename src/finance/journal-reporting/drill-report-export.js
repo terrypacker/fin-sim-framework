@@ -32,7 +32,9 @@
  * `taxYear` follows the convention each return is filed under: the calendar year
  * for US, the fiscal-year START year for AU (`2025` = FY2025-26). That matches
  * the tax-worksheet CSV, so a drill file and the worksheet can be joined on
- * (taxYear, cc) without an off-by-one.
+ * (taxYear, cc) without an off-by-one. `taxYearLabel` states the same year the
+ * way the return spells it (`CY 2026` / `FY 2025–26`), because the bare AU
+ * integer reads as a calendar year and is off by half a year.
  *
  * Period buckets come from a country's settle entries, so they never overlap.
  * A report with a `cc` facet is run once per requested country against that
@@ -43,6 +45,7 @@
 
 import { createReportApis, runReport } from './run-report.js';
 import { buildReportRows, rowsToCsv }  from './report-csv.js';
+import { taxYearLabel }                from '../tax/tax-year-label.js';
 
 /**
  * Export a set of reports as multi-year CSV documents.
@@ -108,11 +111,14 @@ async function _runWholeSimulation(def, apis, requestedCcs, detail) {
     // The period rollup keys an AU fiscal year by its END year; the AU return —
     // and so the worksheet CSV these files are cross-referenced against — is
     // filed under the START year. Restate it so the two artifacts agree.
-    const auYears = (cc ?? def.yearCc) === 'AU';
+    const yearCc  = cc ?? def.yearCc;
+    const auYears = yearCc === 'AU';
     for (const row of buildReportRows(groups, def, { detail })) {
       const { year, ...rest } = row;
       const taxYear = year == null ? null : (auYears ? year - 1 : year);
-      rows.push({ taxYear, ...(cc ? { cc } : {}), ...rest });
+      // Same pairing as the worksheet CSV: numeric key for joining, label so an
+      // AU `2025` is not misread as the calendar year.
+      rows.push({ taxYear, taxYearLabel: taxYearLabel(yearCc, taxYear), ...(cc ? { cc } : {}), ...rest });
     }
   }
   return { mode: 'year-grouped', ccs: ccs.map(c => c ?? '—'), rows };
@@ -140,7 +146,13 @@ async function _runPerPeriod(def, apis, ccs, detail) {
         ...(hasCcFacet ? { cc } : {}),
       };
       const { groups } = await runReport(def, params, apis);
-      const lead = { taxYear: _taxYearOf(cc, p.toEntryDate), periodLabel: p.label, cc };
+      const taxYear = _taxYearOf(cc, p.toEntryDate);
+      const lead = {
+        taxYear,
+        taxYearLabel: taxYearLabel(cc, taxYear),
+        periodLabel:  p.label,
+        cc,
+      };
       rows.push(...buildReportRows(groups, def, { detail, lead }));
     }
   }
