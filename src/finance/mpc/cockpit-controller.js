@@ -956,6 +956,11 @@ export const COCKPIT_CONTROLS = {
         }
       }
 
+      // (5) Zeroed-class diagnostics (design 61 §12.1 D5). Both warn; neither edits
+      //     the bake, because a corner is a well-formed mix and the controller did
+      //     commit it — the reader, not the harvest, decides whether it was meant.
+      warnings.push(..._zeroedClassWarnings(collapsed));
+
       // Keep the last mix in the weight params (the reducer's static fallback).
       const lastEpoch = epochs[epochs.length - 1];
       const weightParams = {};
@@ -1472,6 +1477,68 @@ function _mixL1(a, b) {
   let d = 0;
   for (const c of classes) d += Math.abs((a?.[c] ?? 0) - (b?.[c] ?? 0));
   return d;
+}
+
+/** A share this size or larger is a real position, not a rounding remnant. */
+const _MATERIAL_SHARE = 0.05;
+
+/**
+ * Warn about anchors that drive a MATERIAL class to exactly zero (design 61 §12.1
+ * D5). Two shapes, and the measurement says only one of them is expensive:
+ *
+ *  • TERMINAL — the final anchor zeroes a class the plan was still holding.
+ *    `interpolateGlidepath` CLAMPS above the last anchor, so a mix the controller
+ *    committed for ONE epoch silently becomes policy for every remaining year.
+ *    This is the exact mirror of rule (4)'s leading anchor, and it is the one that
+ *    costs: on the reference plan the terminal `BOND 100%` liquidates the whole
+ *    equity book into a single tax year immediately before the terminal settle
+ *    would have priced those gains anyway — measured −\$2.2M after-tax net worth,
+ *    losing on 11 of 12 seeds.
+ *
+ *  • ROUND TRIP — a class goes material → exactly 0 → material again. D5 filed
+ *    these as the defect ("realizes CGT and buys straight back"), but they do NOT
+ *    measure as friction: smoothing them LOSES money, and by no more than matched
+ *    edits to ordinary non-corner rungs do. Reported as information, deliberately
+ *    not as a defect, so a reader can see the shape without being told it is a bug.
+ *
+ * Neither rewrites the bake. A corner is a well-formed total mix and the MPC really
+ * did choose it; only the reader knows whether it was intent or a flat objective.
+ */
+function _zeroedClassWarnings(collapsed) {
+  if (!Array.isArray(collapsed) || collapsed.length < 2) return [];
+  const out = [];
+  const at = (i, c) => collapsed[i]?.value?.[c] ?? 0;
+  const classes = [...new Set(collapsed.flatMap(p => Object.keys(p.value ?? {})))];
+  const pct = v => `${Math.round(v * 100)}%`;
+
+  // ── TERMINAL: the last anchor zeroes something the previous one held. ──
+  const last = collapsed.length - 1;
+  const dropped = classes.filter(c => at(last, c) === 0 && at(last - 1, c) >= _MATERIAL_SHARE);
+  if (dropped.length) {
+    out.push(`Allocation Mix: the FINAL anchor (age ${collapsed[last].key}, ${_mixLabel(collapsed[last].value)}) `
+      + `zeroes ${dropped.map(c => `${ALLOC_WEIGHT_CLASS_LABELS[c] ?? c} (${pct(at(last - 1, c))} → 0)`).join(', ')}. `
+      + `The glidepath CLAMPS above its last anchor, so this mix applies to EVERY year after `
+      + `age ${collapsed[last].key} — but the controller committed it for one epoch, against a horizon `
+      + `that ended there. A re-run will liquidate those classes in full at that age. Check it is intended `
+      + `(design 61 §12.1 D5).`);
+  }
+
+  // ── ROUND TRIP: material → exactly 0 (one or more anchors) → material. ──
+  for (const c of classes) {
+    let i = 1;
+    while (i < collapsed.length) {
+      if (at(i, c) !== 0) { i++; continue; }
+      let end = i;
+      while (end + 1 < collapsed.length && at(end + 1, c) === 0) end++;
+      if (at(i - 1, c) >= _MATERIAL_SHARE && end + 1 < collapsed.length && at(end + 1, c) >= _MATERIAL_SHARE) {
+        out.push(`Allocation Mix: ${ALLOC_WEIGHT_CLASS_LABELS[c] ?? c} leaves the plan entirely for `
+          + `ages ${collapsed[i].key}–${collapsed[end].key} (${pct(at(i - 1, c))} → 0 → ${pct(at(end + 1, c))}) `
+          + `and is bought back. Informational: this shape has NOT measured as pure friction (design 61 §12.1 D5).`);
+      }
+      i = end + 1;
+    }
+  }
+  return out;
 }
 
 /** "E70 / B25 / C5" — a compact mix for the harvest diff. */
