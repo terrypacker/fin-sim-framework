@@ -265,6 +265,7 @@ export class StateSchemaRegistry {
     // AU YTD
     this.register('auOrdinaryIncomeYTD',         ParameterValueType.currency('AUD'));
     this.register('auCapitalGainsYTD',           ParameterValueType.currency('AUD'));
+    this.register('auDiscountableGainsYTD',      ParameterValueType.currency('AUD'));
     this.register('auRealCapitalGainsYTD',       ParameterValueType.currency('AUD'));
     this.register('auNonResidentWithholdingYTD', ParameterValueType.currency('AUD'));
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));

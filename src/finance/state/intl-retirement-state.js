@@ -136,6 +136,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usPenaltyYTD = 0;
     this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;
+    this.auDiscountableGainsYTD = 0;  // CGT 50%-discount-eligible slice (design 62 §4)
     this.auRealCapitalGainsYTD = 0;  // FY2027 CGT reform: post-indexation gain (design 57)
     this.auNonResidentWithholdingYTD = 0;
     this.auSuperTaxYTD = 0;
@@ -171,6 +172,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     const _zeroes = () => Object.fromEntries(_personKeys.map(k => [k, 0]));
     this.auPersonOrdinaryIncomeYTD          = _zeroes();
     this.auPersonCapitalGainsYTD            = _zeroes();
+    this.auPersonDiscountableGainsYTD       = _zeroes();
     this.auPersonRealCapitalGainsYTD        = _zeroes();
     this.auPersonFrankingCreditYTD          = _zeroes();
     this.auPersonNonResidentWithholdingYTD  = _zeroes();

@@ -69,7 +69,15 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
    *                    (0 = no floor; 0.30 for FY2027+, design 57 §6.3).
    */
   _cgtRelief(state, auCapitalGainsYTD) {
-    const reliefAmount   = auCapitalGainsYTD * this._cgtDiscountRate;
+    // The 50% discount applies only to gains from assets held ≥12 months (Div 115).
+    // After a residency deemed acquisition the clock restarts at the move, so the
+    // eligible slice is tracked separately in auDiscountableGainsYTD (design 62 §4)
+    // and capped at the total gain. Absent (old saves / synthetic states) ⇒ discount
+    // the full gain, preserving the prior behavior byte-for-byte.
+    const discountBase = (state != null && 'auDiscountableGainsYTD' in state)
+      ? Math.min(auCapitalGainsYTD, Math.max(0, state.auDiscountableGainsYTD ?? 0))
+      : auCapitalGainsYTD;
+    const reliefAmount   = discountBase * this._cgtDiscountRate;
     const netTaxableGain = auCapitalGainsYTD - reliefAmount;
     return { netTaxableGain, reliefAmount, minTaxRate: 0 };
   }

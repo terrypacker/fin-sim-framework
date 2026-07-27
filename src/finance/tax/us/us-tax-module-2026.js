@@ -222,13 +222,18 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ['STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
         const auGain = action.auGain ?? gain;
+        // CGT 50%-discount-eligible slice (design 62 §4): lots held ≥12 months from
+        // the AU deemed-acquisition date. Defaults to the full auGain when absent.
+        const auDiscountableGain = action.auDiscountableGain ?? auGain;
         const isAuResident = residency === 'AU';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
           const audGain = toAUD(auGain, 'USD', state);
+          const audDiscountableGain = toAUD(auDiscountableGain, 'USD', state);
           next = {
             ...next,
             auCapitalGainsYTD:      state.auCapitalGainsYTD + audGain,
+            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audDiscountableGain,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
             usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
@@ -365,6 +370,11 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            // Company shares carry no per-lot 12-month tracking here, so the whole
+            // gain stays discount-eligible (design 62 §4 — the residency holding-
+            // period gate targets brokerage lots; company/collectible/property
+            // holding-period gating is out of Gap 1's scope).
+            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audGain,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
             usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
@@ -395,6 +405,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
+            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audGain,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
             usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };

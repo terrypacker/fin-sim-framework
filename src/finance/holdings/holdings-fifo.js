@@ -54,15 +54,25 @@ import { isCollectibleAllocation } from './allocation.js';
  * while true (non-gold) collectibles stay un-indexed. Both are `{}` when no
  * indexation context is passed.
  *
- * @param {{ level: number, asOfMs: number, country: string }|null} [indexation=null]
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
+ * CGT 50%-discount split (design 62 §4): when an `indexation` (AU CGT) context is
+ * supplied, `realizedDiscountableGainByCountry[country]` tallies the realized gain
+ * from EQUITY/BOND lots held ≥12 months measured from the country's deemed-acquisition
+ * date (`acquisitionDateByCountry[country]`, stamped at the resident's move) — falling
+ * back to `purchaseDate` for lots never stepped up. The pre-2027 rates module discounts
+ * only this portion; lots sold within 12 months of the move are excluded (the ATO clock
+ * restarts at residency). `{}` when no indexation context is passed. `level` is optional
+ * here: a caller that only needs the discount split (not indexation) may pass
+ * `{ asOfMs, country }` with no `level` — the index factor then stays 1.
+ *
+ * @param {{ level?: number, asOfMs: number, country: string }|null} [indexation=null]
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
 export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -83,6 +93,9 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   // no lot carries a per-country override.
   const idxCountry = indexation?.country ?? null;
   const realizedIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
+  // CGT 50%-discount eligibility (design 62 §4): the portion of the realized gain
+  // from lots held ≥12 months measured from the country's deemed-acquisition date.
+  const realizedDiscountableGainByCountry = idxCountry ? { [idxCountry]: 0 } : {};
   // Collectible (gold) slice tallies for the reform country — un-indexed and indexed.
   const collectibleBasisByCountry        = idxCountry ? { [idxCountry]: 0 } : {};
   const collectibleIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
@@ -110,13 +123,26 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
     if (idxCountry) {
       const cb        = h.costBaseByCountry?.[idxCountry] ?? (h.costBasis ?? 0);
       const lotLevel  = h.acquisitionPriceLevel;
-      const held12mo  = (indexation.asOfMs - _purchaseTs(h)) >= TWELVE_MONTHS_MS;
+      // The ≥12-month CGT clock runs from the country's DEEMED-acquisition date when
+      // the lot was stepped up on the resident's move (design 62 §4) — the ATO restarts
+      // the clock at the residency date, not the original purchase. Falls back to the
+      // purchase date for lots never stepped up.
+      const acqTs     = h.acquisitionDateByCountry?.[idxCountry] ?? _purchaseTs(h);
+      const held12mo  = (indexation.asOfMs - acqTs) >= TWELVE_MONTHS_MS;
       // CPI index factor ≥ 1 (indexation only ratchets the basis up; never a loss).
       const factor    = (held12mo && lotLevel != null && lotLevel > 0 && indexation.level > 0)
         ? Math.max(1, indexation.level / lotLevel)
         : 1;
       const idxBasisShare = cb * fraction;
       realizedIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
+      // Discountable gain (design 62 §4): EQUITY/BOND (non-collectible) lots held
+      // ≥12mo from the deemed-acquisition date are eligible for the pre-2027 Division
+      // 115 50% discount. Sum each such lot's per-lot floored AU gain (proceeds share
+      // − AU basis share). The rates module discounts only this portion. Collectibles/
+      // gold are excluded (gold is indexed, not discounted, under the reform).
+      if (held12mo && !isCollectibleAllocation(h.allocation)) {
+        realizedDiscountableGainByCountry[idxCountry] += Math.max(0, take - idxBasisShare);
+      }
       // Split the gold (collectible) slice out so the caller can index gold while
       // leaving equity's own indexed basis intact (both already counted above).
       if (isCollectibleAllocation(h.allocation)) {
@@ -147,6 +173,7 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   for (const c of countries) realizedBasisByCountry[c] = +realizedBasisByCountry[c].toFixed(2);
   if (idxCountry) {
     realizedIndexedBasisByCountry[idxCountry]    = +realizedIndexedBasisByCountry[idxCountry].toFixed(2);
+    realizedDiscountableGainByCountry[idxCountry] = +realizedDiscountableGainByCountry[idxCountry].toFixed(2);
     collectibleBasisByCountry[idxCountry]        = +collectibleBasisByCountry[idxCountry].toFixed(2);
     collectibleIndexedBasisByCountry[idxCountry] = +collectibleIndexedBasisByCountry[idxCountry].toFixed(2);
   }
@@ -154,6 +181,7 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
     realizedIndexedBasisByCountry,
+    realizedDiscountableGainByCountry,
     collectibleProceeds: +collectibleProceeds.toFixed(2),
     collectibleBasis:    +collectibleBasis.toFixed(2),
     collectibleBasisByCountry,

@@ -784,6 +784,7 @@ export class ScenarioSerializer {
       isGold:               c.isGold               ?? false,
       costBaseByCountry:    c.costBaseByCountry    ?? null,
       acquisitionPriceLevel: c.acquisitionPriceLevel ?? null,
+      acquisitionDateByCountry: c.acquisitionDateByCountry ?? null,
       appreciationSchedule: c.appreciationSchedule
         ? c.appreciationSchedule.map(e => ({
             date: e.date instanceof Date ? e.date.toISOString() : e.date,
@@ -811,6 +812,7 @@ export class ScenarioSerializer {
       isGold:              d.isGold              ?? false,
       costBaseByCountry:   d.costBaseByCountry   ?? null,
       acquisitionPriceLevel: d.acquisitionPriceLevel ?? null,
+      acquisitionDateByCountry: d.acquisitionDateByCountry ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,

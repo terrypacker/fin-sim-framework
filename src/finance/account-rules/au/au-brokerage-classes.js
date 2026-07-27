@@ -195,6 +195,10 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     const gain        = Math.max(0, salePrice - realizedBasis);
     const auGain      = Math.max(0, salePrice - realizedAuBasis);
     const auIndexedGain = Math.max(0, salePrice - realizedIndexedAuBasis);
+    // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months
+    // from the AU deemed-acquisition date, capped at auGain. Read by the pre-2027
+    // rates module so the discount applies only to the eligible portion.
+    const auDiscountableGain = Math.min(auGain, r.realizedDiscountableGainByCountry?.AU ?? auGain);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], salePrice, null);
 
@@ -210,7 +214,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
     );
   }
 }

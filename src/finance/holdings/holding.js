@@ -43,6 +43,16 @@ export class Holding {
    *                                                  reform (design 57 §6.3). null = not stamped ⇒ no indexation
    *                                                  (index factor 1). The 1 Jul 2027 deemed cost base reset (design
    *                                                  57 §6.4) restamps this alongside costBaseByCountry.AU.
+   * @param {Object<string,number>|null} [opts.acquisitionDateByCountry=null]
+   *                                                - Per-country CGT deemed-acquisition date (epoch ms), keyed by ISO
+   *                                                  country code, set when a jurisdiction steps up the basis on
+   *                                                  becoming resident (e.g. AU ITAA97 s855-45: the residency date).
+   *                                                  This is the date the ≥12-month CGT-discount / indexation clock
+   *                                                  runs from for that country — it RESTARTS at the move, per ATO
+   *                                                  "How changing residency affects CGT". null/absent for a country
+   *                                                  ⇒ that country uses `purchaseDate`. `purchaseDate` itself is left
+   *                                                  unchanged (it drives FIFO order + design 57's straddle test).
+   *                                                  Country-agnostic; see design 62 §4.
    * @param {string|null} [opts.rateKey=null]       - Lookup into state.effectiveGrowthRates; resolved on register if null
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
    * @param {number|null} [opts.dividendYield=null] - Per-holding annual dividend yield; null = fall back to the
@@ -73,6 +83,7 @@ export class Holding {
     costBaseByCountry    = null,
     purchaseDate         = null,
     acquisitionPriceLevel = null,
+    acquisitionDateByCountry = null,
     rateKey              = null,
     label                = '',
     dividendYield        = null,
@@ -89,6 +100,7 @@ export class Holding {
     this.costBaseByCountry    = costBaseByCountry;
     this.purchaseDate         = purchaseDate;
     this.acquisitionPriceLevel = acquisitionPriceLevel;
+    this.acquisitionDateByCountry = acquisitionDateByCountry;
     this.rateKey              = rateKey;
     this.label                = label;
     this.dividendYield        = dividendYield;
@@ -109,6 +121,7 @@ export class Holding {
       costBaseByCountry:   this.costBaseByCountry ? { ...this.costBaseByCountry } : null,
       purchaseDate:        this.purchaseDate ? this.purchaseDate.toISOString() : null,
       acquisitionPriceLevel: this.acquisitionPriceLevel,
+      acquisitionDateByCountry: this.acquisitionDateByCountry ? { ...this.acquisitionDateByCountry } : null,
       rateKey:             this.rateKey,
       label:               this.label,
       dividendYield:       this.dividendYield,
@@ -134,6 +147,7 @@ export class Holding {
       costBaseByCountry: /** @type {Object<string,number>|null} */ (d.costBaseByCountry ? { ...d.costBaseByCountry } : null),
       purchaseDate:  d.purchaseDate ? new Date(d.purchaseDate) : null,
       acquisitionPriceLevel: d.acquisitionPriceLevel ?? null,
+      acquisitionDateByCountry: /** @type {Object<string,number>|null} */ (d.acquisitionDateByCountry ? { ...d.acquisitionDateByCountry } : null),
       rateKey:       d.rateKey ?? null,
       label:         d.label   ?? '',
       dividendYield: d.dividendYield ?? null,
