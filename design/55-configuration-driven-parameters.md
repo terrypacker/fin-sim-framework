@@ -660,6 +660,96 @@ intl-transfers; every other cash flow bypassed it (§7.4).*
 
 ---
 
+## 14. Param lifecycle — pruning orphaned generated params (added 2026-07-13)
+
+**Status**: **Implemented** (2026-07-13). Fix A (orphan-param prune in
+`_mergeParamSchema`) + Fix B (real-property `value`/`appreciationRate` binding and
+`nodeLookup` asset resolution) both shipped and green (3378 unit + 866 viz). The
+sale-date "reset" open item resolved as the same `value`/`appreciationRate` clobber
+(Fix B); `plannedSaleYear` was already bound.
+
+### 14.1 The gap — generation without de-generation
+
+Design 55 made the param surface a *function of the live records*: `generate(cfg)`
+emits one entry per (live record × template field), and `_driftMergeDomainRecords` +
+`recordDeletedDefaults` keep a deliberately-deleted default **record** out of the
+config via the `cfg.deletedDefaults` tombstone (§11). But there is **no symmetric
+de-generation of the params** a since-deleted record produced. `_mergeParamSchema`
+only ever *backfills* metadata and *appends* new keys — it never **removes** a
+persisted generated param whose record no longer exists. So a generated param
+outlives its record indefinitely, in **both** `cfg.params` (the typed UI array) *and*
+`cfg.parameters` (the flat map the cascade/MC read).
+
+**Observed** (a long-lived real scenario): 16 orphaned generated params whose
+`node.stateKey` matched no live account — and those 5 stateKeys were an *exact* match
+for `cfg.deletedDefaults.accounts` (`usSavingsAccount`, `fixedIncomeAccount`,
+`auFixedIncomeAccount`, `auStockAccount`, `spouseIraAccount`). The user had deleted
+those default accounts (some replaced by new accounts of the same *display name*), and
+their params never left.
+
+Symptoms, all one root cause:
+- **"Deleted default accounts still show params."** Fixed Income (US/AU), AU Stock,
+  Traditional IRA (Spouse), US Savings groups persist though the accounts are gone.
+- **"Live account shows linked *and* unlinked params."** When a replacement account
+  reuses the deleted one's display name (`usSavings2Account` "Shared Checking" replacing
+  `usSavingsAccount`; `iraSpouseAccount` "IRA (Jeanne)" replacing `spouseIraAccount`),
+  the display-name-derived `group` collides, so the same group renders the live
+  account's linked params **beside** the dead account's orphans. `nodeLookup` returns
+  `found:false` for the dead stateKey → the `(unlinked)` badge
+  (`scenario-tab-view.js:461`).
+- **Stale group/label strings.** A generated param snapshots `group`/`label` from the
+  record at generation time; a since-renamed-then-deleted account can leave params
+  under an *old* group name (`usSavingsAccount` params split across "US · US Savings"
+  and "US · Shared Checking").
+
+The orphans are **inert to the sim** (`_applyParamNode` finds no matching record and
+no-ops), so this is pure UI clutter + a persistence smell — not a wrong-numbers bug.
+
+### 14.2 The rule — reconcile generated params against the live schema on Rebuild
+
+`generate(cfg)` only emits for live records, so the freshly-built `schemaByKey` in
+`_mergeParamSchema` is the authoritative set of *currently valid* generated keys. After
+the backfill/append passes, **prune every persisted param that is a generated key
+(`isGeneratedParamKey`) yet absent from `schemaByKey`** — from both `cfg.params` and
+`cfg.parameters` (and the sibling `<key>Currency` flat entry for Money params).
+
+Scoping guarantees (why this is safe):
+- **Generated keys only.** Static/global/toolset/scenario-class params (`iraGrowthRate`,
+  `moveYear`, optimization keys) are never touched — they lack the `acct.`/`person.`/
+  `prop.`/`coll.`/`equity.` namespace.
+- **Compile-only hidden levers survive.** `balanceTarget` (§13) *is* in `schemaByKey`
+  (generate still emits it), so it is never pruned; it is already excluded from
+  `cfg.params` by `isCompileOnly`, so pruning `cfg.params` can't touch it either.
+- **Account-type changes self-heal.** Converting an account (e.g. savings→brokerage)
+  drops the fields the old template had but the new one doesn't (`minimumBalance`,
+  `isTransactionAccount`); those now-invalid generated params are correctly pruned too.
+- **Runs on the compile/Rebuild branch only** (`_mergeParamSchema` is reached solely
+  from `_compileFromToolsets`), exactly like `_driftMergeDomainRecords` and
+  `recordDeletedDefaults`. A toolset-less serialized-graph load leaves params untouched,
+  which is correct — that path never regenerates the schema. Pruning is therefore a
+  Rebuild-time reconciliation, matching the tombstone lifecycle it complements.
+
+This makes param existence fully derived from the live record set in *both* directions:
+add a record + Rebuild → its params appear (existing behavior); delete a record +
+Rebuild → its params disappear (this fix).
+
+### 14.3 Real-property link completion (Fix B)
+
+Two smaller design-32/55 wiring gaps surfaced alongside the orphan clutter:
+- `real-property-editor.js` routes **only `plannedSaleYear`** through
+  `bindParamLinkedField`; `value` and `appreciationRate` write straight to the record,
+  so a direct edit of either is unprotected by the harvest and the stale param clobbers
+  it on Rebuild (a design-32 violation). Bind all three fields.
+- `nodeLookup` (`scenario-tab-presenter.js`) resolves only `account`/`person`, returning
+  `null` for `realProperty` (and `collectible`/`companyEquity`), so those params never
+  show the live record name or the click-through in the Scenario panel. Extend it.
+- **Open verify item:** a report that editing the sale date on the *record* and
+  rebuilding resets it to the param value. `plannedSaleYear` is already bound, so this
+  needs a live repro before assuming a cause (candidate: an edit surface that bypasses
+  the bound field, leaving record≠param for `_normalizeParams` to clobber).
+
+---
+
 ## Decisions
 
 | # | Question | Decision |

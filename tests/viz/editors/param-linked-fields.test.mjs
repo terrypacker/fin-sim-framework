@@ -174,6 +174,46 @@ describe('Param-linked editor fields', () => {
     expect('plannedSaleYear' in editor._readForm(editor._rootEl)).toBe(false);
   });
 
+  test('RealProperty value and appreciationRate route through their params (design 55 §14.3)', () => {
+    const valueParam = { name: 'prop.usHouseProperty.value', value: 1600000, label: 'US House — Value',
+                         node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'value' } };
+    const rateParam  = { name: 'prop.usHouseProperty.appreciationRate', value: 0.04, label: 'US House — Appreciation Rate',
+                         node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'appreciationRate' } };
+    let changed = 0;
+    const editor = new RealPropertyEditor({
+      container: makeMockContainer(),
+      node: { id: 'r1', name: 'US House', country: 'US', stateKey: 'usHouseProperty' },
+      people: [], accounts: [],
+      links: new ParamFieldLinks([valueParam, rateParam]),
+      onParamChange: () => { changed++; },
+    });
+    editor.render();
+    const root = editor._rootEl;
+
+    // Value: reads the param, shows the badge, writes the param on edit.
+    const valueInput = root.querySelector('[data-id="value"]');
+    expect(valueInput.value).toBe('1600000');
+    expect(valueInput.closest('.node-field').querySelector('.param-link-badge')).toBeTruthy();
+    valueInput.value = '1750000';
+    fire(valueInput, 'input');
+    expect(valueParam.value).toBe(1750000);
+
+    // Appreciation rate: fractional value preserved through the param.
+    const rateInput = root.querySelector('[data-id="appreciationRate"]');
+    expect(rateInput.value).toBe('0.04');
+    expect(rateInput.closest('.node-field').querySelector('.param-link-badge')).toBeTruthy();
+    rateInput.value = '0.075';
+    fire(rateInput, 'input');
+    expect(rateParam.value).toBe(0.075);
+    expect(changed).toBeGreaterThan(0);
+
+    // Both are param-owned → excluded from the service payload so the cascade (not the
+    // record write) is the single source of truth on Rebuild (fixes the clobber-on-Rebuild).
+    const data = editor._readForm(root);
+    expect('value' in data).toBe(false);
+    expect('appreciationRate' in data).toBe(false);
+  });
+
   test('No links → fields behave normally (read from node, present in save)', () => {
     const editor = new PersonEditor({
       container: makeMockContainer(),

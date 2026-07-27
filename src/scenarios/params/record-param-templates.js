@@ -36,10 +36,14 @@ import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 const CONTRIBUTION_BASIS = {
   field: 'contributionBasis', label: 'Contribution Basis',
   type: 'Number', mc: false, opt: true,
+  description: 'After-tax contribution basis for this retirement account — the portion ' +
+    'already taxed. Withdrawals of basis come out tax-free; the balance above it is the ' +
+    'taxable earnings.',
 };
 
 // Cash / investment balance — the field every account type exposes.
-const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, opt: false };
+const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, opt: false,
+  description: 'Current total balance of this account.' };
 
 // Holdings-bearing balance MC/Opt lever (design 55 §13). A holdings-bearing account's
 // `balance` is DERIVED from Σ holdings.marketValue and is therefore NOT emitted as a
@@ -62,19 +66,27 @@ export const BALANCE_TARGET = {
 // old global usSavingsMinBalance / auSavingsMinBalance params. Plain Number: the
 // floor is always in the account's native currency (no cross-currency display
 // conversion), so the currency is inferred from the account, not the param.
-const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', type: 'Number', mc: false, opt: true };
+const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', type: 'Number', mc: false, opt: true,
+  description: 'Cash floor for this account. When the balance drops below it, the model ' +
+    'replenishes from other liquid accounts.' };
 
 // Per-account earnings rates (design 55 §8 / Phase 2). An unset rate on the record
 // (null) means "use the toolset's global rate"; the generated param therefore starts
 // empty and only overrides the global once the user (or MC) gives it a value. The
 // earnings handler reads it via the per-account rate key so regimes still apply.
-const GROWTH_RATE   = { field: 'growthRate',   label: 'Growth Rate',   type: 'Number', mc: true, opt: false };
-const DIVIDEND_RATE = { field: 'dividendRate', label: 'Dividend Rate', type: 'Number', mc: true, opt: false };
+const GROWTH_RATE   = { field: 'growthRate',   label: 'Growth Rate',   type: 'Number', mc: true, opt: false,
+  description: 'Annual growth (appreciation) rate for this account\'s holdings, as a ' +
+    'fraction (0.05 = 5%). Leave blank to use the scenario\'s global rate for this account type.' };
+const DIVIDEND_RATE = { field: 'dividendRate', label: 'Dividend Rate', type: 'Number', mc: true, opt: false,
+  description: 'Annual dividend yield for this account\'s holdings, as a fraction ' +
+    '(0.02 = 2%). Leave blank to use the scenario\'s global dividend rate.' };
 // Per-account cash interest rate (CHECKING/SAVINGS). Retired as an MC lever (design 56
 // Decision 6 / §3.1): a cash account's rate is now Prime + primeSpread, so the systemic
 // rate sweep is Prime, not this per-account knob — retiring it removes the MC double-move
 // at the source. Still a live editable/seed field (mc:false, opt:false).
-const INTEREST_RATE = { field: 'interestRate', label: 'Interest Rate', type: 'Number', mc: false, opt: false };
+const INTEREST_RATE = { field: 'interestRate', label: 'Interest Rate', type: 'Number', mc: false, opt: false,
+  description: 'Annual cash interest rate for this account, as a fraction (0.03 = 3%). ' +
+    'Leave blank to track the country\'s Prime rate plus this account\'s spread.' };
 
 // Transaction-account flag (design 55 §7 / Phase 3). Marks the cash account that
 // expenses debit and cross-border sweeps replenish for its country of residence.
@@ -83,6 +95,8 @@ const INTEREST_RATE = { field: 'interestRate', label: 'Interest Rate', type: 'Nu
 const IS_TRANSACTION_ACCOUNT = {
   field: 'isTransactionAccount', label: 'Transaction Account',
   type: 'Boolean', mc: false, opt: false,
+  description: 'When on, this is the cash account that expenses debit and cross-border ' +
+    'transfers replenish for its country of residence. Flag exactly one account per country.',
 };
 
 export const ACCOUNT_PARAM_TEMPLATES = {
@@ -101,14 +115,19 @@ export const ACCOUNT_PARAM_TEMPLATES = {
 };
 
 export const PERSON_PARAM_TEMPLATE = [
-  { field: 'monthlyWage',   label: 'Monthly Wage',    type: 'Number', mc: true,  opt: true },
-  { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: true },
+  { field: 'monthlyWage',   label: 'Monthly Wage',    type: 'Number', mc: true,  opt: true,
+    description: 'Gross monthly employment wage for this person, before tax, in their native currency.' },
+  { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: true,
+    description: 'Date this person stops earning wages (their last working month).' },
 ];
 
 export const REAL_PROPERTY_PARAM_TEMPLATE = [
-  { field: 'value',            label: 'Value',            type: 'Number', mc: true,  opt: false },
-  { field: 'appreciationRate', label: 'Appreciation Rate', type: 'Number', mc: true, opt: false },
-  { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true },
+  { field: 'value',            label: 'Value',            type: 'Number', mc: true,  opt: false,
+    description: 'Current market value of this property.' },
+  { field: 'appreciationRate', label: 'Appreciation Rate', type: 'Number', mc: true, opt: false,
+    description: 'Annual appreciation rate for this property, as a fraction (0.04 = 4%).' },
+  { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+    description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
 ];
 
 // Template-ready but empty until these assets grow parameters (design 55 §4 / Phase 4).

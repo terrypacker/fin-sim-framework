@@ -160,6 +160,10 @@ export class ScenarioParamGenerator {
       };
       if (t.hidden)  entry.hidden  = t.hidden;
       if (t.options) entry.options = t.options;
+      // Field-level description (design 55 §4) → the param's hover tooltip in the
+      // Scenario panel. Without it the tooltip falls back to the generated key
+      // (`acct.<stateKey>.<field>`), which surfaced the raw stateKey on hover.
+      if (t.description) entry.description = t.description;
       // design-10 Money seeding (§4). Deferred in Phase 1 (all templates Number),
       // but supported so a later phase flips `money: true` on a template field.
       if (t.money) {
