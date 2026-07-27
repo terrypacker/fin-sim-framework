@@ -28,6 +28,7 @@ import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 import { Graph }          from '../../src/graph/graph.js';
 import { GraphQueryApi }  from '../../src/graph/graph-query-api.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
+import { BRACKET_BASE_YEAR } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { USD }            from '../../src/finance/assets/account.js';
 import {
   RothAccount, TraditionalIRAAccount, FourOhOneKAccount, BrokerageAccount,
@@ -233,8 +234,8 @@ test('toolset: real base-year amounts compound to nominal by inflation', () => {
   const [e] = US_EARLY_WITHDRAWAL.schedules(makeContext({
     ...BASE, inflationRate: 0.03, earlyWithdrawalSchedule: [{ year: 2030, taxDeferredAmount: 10_000 }],
   }));
-  // BRACKET_BASE_YEAR is 2025 → 5 years of 3% compounding.
-  assert.ok(Math.abs(e.data.taxDeferredAmount - 10_000 * Math.pow(1.03, 5)) < 1e-6);
+  const years = 2030 - BRACKET_BASE_YEAR;
+  assert.ok(Math.abs(e.data.taxDeferredAmount - 10_000 * Math.pow(1.03, years)) < 1e-6);
 });
 
 test('toolset: handler short-circuits when there is no destination', () => {

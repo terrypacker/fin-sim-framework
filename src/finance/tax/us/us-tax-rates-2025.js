@@ -10,32 +10,10 @@
 
 import { UsTaxRatesBase } from './us-tax-rates-base.js';
 
-/**
- * Return the gross ordinary income (usOrdinaryIncomeYTD) at the TOP of the
- * MFJ ordinary-income bracket with the given marginal rate, for the given year.
- *
- * "Top of bracket" = lower threshold of the next higher bracket (in taxable-income
- * space) + standard deduction.  The result is the usOrdinaryIncomeYTD level at
- * which a household crosses into the next bracket.
- *
- * Brackets are inflation-indexed from the 2025 base using the provided annual rate.
- * Returns Infinity for the 37% (top) bracket.
- *
- * @param {number} rate            - Target marginal rate, e.g. 0.22
- * @param {number} year            - Tax year to compute for
- * @param {number} annualInflation - Annual inflation rate for bracket indexing (default 0.03)
- * @returns {number}
- */
-export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
-  const base    = new UsTaxRates2025();
-  const factor  = Math.pow(1 + annualInflation, year - 2025);
-  const brackets = base._brackets_mfj.map(([t, r]) => [t * factor, r]);
-  const stdDed   = base._stdDeduction_mfj * factor;
-
-  const idx = brackets.findIndex(([, r]) => r === rate);
-  if (idx < 0 || idx + 1 >= brackets.length) return Infinity;
-  return brackets[idx + 1][0] + stdDed;
-}
+// `usBracketGrossIncomeCeiling` used to live here, hard-pinned to the 2025 tables.
+// It now resolves the year's registered statutory module and is exported from
+// `tax-settle-service.js` (which owns the year→module registry), so the
+// Roth-conversion ceilings track the same brackets the settle path applies.
 
 /**
  * UsTaxRates2025 — US federal tax rates for tax year 2025.

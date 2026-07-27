@@ -153,7 +153,11 @@ function runDefaultIntlRetirement() {
 // which used to make _auTaxOnUsSourceIncome return 0 and declare the whole AU liability
 // AU-source — leaking six figures into the general/passive baskets in a big realisation
 // year. Now apportioned by US-source income share. FTC-US-9 guards the bound.
-const EXPECTED_LIFETIME_TAX = 706_637;
+// Moved 706_637 → 698_420 (−1.2%) when the statutory 2026 US rates module
+// (Rev. Proc. 2025-32) replaced the "inflate the 2025 brackets" fallback: the
+// OBBBA schedule's wider bands + $32,200 MFJ standard deduction cut the US
+// liability slightly. Downward, but ~1%, not the six-figure ftcYTD swing.
+const EXPECTED_LIFETIME_TAX = 698_420;
 const EXPECTED_NET_WORTH     = 12_273_473;
 const TOL = 0.01;
 

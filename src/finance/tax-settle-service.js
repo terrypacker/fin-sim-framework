@@ -10,6 +10,7 @@
 
 import { UsTaxRates2024 } from './tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './tax/us/us-tax-rates-2025.js';
+import { UsTaxRates2026 } from './tax/us/us-tax-rates-2026.js';
 import { AuTaxRates2024 } from './tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './tax/au/au-tax-rates-2026.js';
@@ -43,6 +44,7 @@ const AU_PER_PERSON_INCOME_FIELDS = [
  * Registered modules (ordered by country and financial year):
  *   US 2024  — IRS Rev. Proc. 2023-34 MFJ brackets
  *   US 2025  — IRS Rev. Proc. 2024-40 MFJ brackets
+ *   US 2026  — IRS Rev. Proc. 2025-32 MFJ brackets (permanent OBBBA schedule)
  *   AU 2024  — ATO FY2024-25 (Stage 3 tax cuts)
  *   AU 2025  — ATO FY2025-26 (30% bracket extended to $135k)
  *   AU 2026  — ATO FY2026-27 ($18,201–$45,000 band cut 16% → 15%; CGT unchanged)
@@ -59,6 +61,7 @@ export class TaxSettleService {
     for (const m of [
       new UsTaxRates2024(),
       new UsTaxRates2025(),
+      new UsTaxRates2026(),
       new AuTaxRates2024(),
       new AuTaxRates2025(),
       new AuTaxRates2026(),
@@ -231,24 +234,114 @@ export class TaxSettleService {
    * @returns {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule}
    */
   _getModule(cc, state) {
-    const available = Object.keys(this._modules)
+    const period = state.currentPeriods?.[cc];
+    const baseModule = period
+      ? this.ratesForYear(cc, new Date(period.startMs).getUTCFullYear())
+      // No period in state — use highest available year as fallback
+      : this.ratesForYear(cc, Infinity);
+    return this._inflationWrap(cc, baseModule, state);
+  }
+
+  /** Registered years for a country, ascending. */
+  _yearsFor(cc) {
+    const years = Object.keys(this._modules)
       .filter(k => k.startsWith(cc + '_'))
       .map(k => parseInt(k.split('_')[1], 10))
       .sort((a, b) => a - b);
-
-    if (available.length === 0) {
+    if (years.length === 0) {
       throw new Error(`[TaxSettleService] No rates module registered for country: ${cc}`);
     }
-
-    const period = state.currentPeriods?.[cc];
-    if (period) {
-      const taxYear = new Date(period.startMs).getUTCFullYear();
-      const best    = available.filter(y => y <= taxYear).pop() ?? available[0];
-      return this._inflationWrap(cc, this._modules[`${cc}_${best}`], state);
-    }
-
-    // No period in state — use highest available year as fallback
-    const baseModule = this._modules[`${cc}_${available[available.length - 1]}`];
-    return this._inflationWrap(cc, baseModule, state);
+    return years;
   }
+
+  /**
+   * The STATUTORY (un-inflated) rates module for a calendar year — the highest
+   * registered year <= `year`, the same selection `_getModule` makes before the
+   * inflation wrap. Public so bracket-shaped levers (Roth-conversion ceilings,
+   * the MPC cockpit's bracket labels) read the same tables the settle path does
+   * instead of pinning a base year of their own.
+   *
+   * @param {string} cc    Country code ('US' or 'AU')
+   * @param {number} year  Calendar year; Infinity selects the highest registered.
+   * @returns {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule}
+   */
+  ratesForYear(cc, year) {
+    const years = this._yearsFor(cc);
+    const best  = years.filter(y => y <= year).pop() ?? years[0];
+    return this._modules[`${cc}_${best}`];
+  }
+
+  /**
+   * Base year for REAL (inflation-free) US amounts: the newest registered US
+   * statutory table. `state.inflationAccumulator.US` starts at 1.0 in the sim's
+   * first year, so this is the year in which quoted-real and nominal coincide.
+   *
+   * @returns {number}
+   */
+  get usBracketBaseYear() {
+    const years = this._yearsFor('US');
+    return years[years.length - 1];
+  }
+
+  /**
+   * Gross ordinary income (usOrdinaryIncomeYTD) at the TOP of the MFJ bracket
+   * with the given marginal rate, for the given year.
+   *
+   * "Top of bracket" = lower threshold of the next higher bracket (in taxable-income
+   * space) + the standard deduction — the usOrdinaryIncomeYTD level at which a
+   * household crosses into the next bracket. Returns Infinity for the top (37%) bracket.
+   *
+   * Mirrors the settle path: `year`'s statutory table, then indexed by inflation the
+   * way `_inflationWrap` indexes it. Indexing runs from `usBracketBaseYear` — where
+   * the settle-time accumulator is 1.0 — so a year with its own statutory module
+   * (2026 = Rev. Proc. 2025-32) is quoted at its published thresholds rather than
+   * an inflated older table's.
+   *
+   * @param {number} rate            Target marginal rate, e.g. 0.22
+   * @param {number} year            Tax year to compute for
+   * @param {number} annualInflation Annual rate used for bracket indexing
+   * @returns {number}
+   */
+  usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
+    const base   = this.ratesForYear('US', year);
+    const factor = Math.pow(1 + annualInflation, year - this.usBracketBaseYear);
+
+    const idx = base._brackets_mfj.findIndex(([, r]) => r === rate);
+    if (idx < 0 || idx + 1 >= base._brackets_mfj.length) return Infinity;
+    return (base._brackets_mfj[idx + 1][0] + base._stdDeduction_mfj) * factor;
+  }
+}
+
+/** Shared read-only instance for the module-level bracket helpers below. */
+let _sharedService = null;
+function _shared() {
+  if (!_sharedService) _sharedService = new TaxSettleService();
+  return _sharedService;
+}
+
+/**
+ * Base year for REAL base-year USD amounts — see `TaxSettleService.usBracketBaseYear`.
+ * Read through the service so it tracks the newest registered US table instead of
+ * being restated as a literal at each call site.
+ */
+export const US_BRACKET_BASE_YEAR = _shared().usBracketBaseYear;
+
+/** The statutory US rates module for `year` — see `TaxSettleService.ratesForYear`. */
+export function usRatesForYear(year) {
+  return _shared().ratesForYear('US', year);
+}
+
+/**
+ * Free-function form of `TaxSettleService.usBracketGrossIncomeCeiling`, for callers
+ * (scenario toolsets, the MPC cockpit) that have a year and an inflation rate but no
+ * simulation state. Previously lived in `us-tax-rates-2025.js` and was hard-pinned to
+ * the 2025 tables; it now resolves the year's registered module.
+ *
+ * @param {number} rate            Target marginal rate, e.g. 0.22
+ * @param {number} year            Tax year to compute for
+ * @param {number} annualInflation Annual rate for bracket indexing
+ * @returns {number}
+ */
+export function usBracketGrossIncomeCeiling(rate, year, annualInflation = 0.03) {
+  return _shared().usBracketGrossIncomeCeiling(rate, year, annualInflation);
 }
