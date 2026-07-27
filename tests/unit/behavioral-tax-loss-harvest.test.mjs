@@ -52,7 +52,7 @@ describe('StockHarvestApplyReducer', () => {
 
   test('TLH-1: signed negative gain reaches next action chain', () => {
     const sold   = holding({ id: 'h1', mv: 1000, basis: 1500 });  // loss of 500
-    const sub    = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_INTL' });
+    const sub    = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_AU' });
     const acct   = account({ holdings: [sold, sub] });
     const state  = makeState('usStockAccount', acct);
 
@@ -76,7 +76,7 @@ describe('StockHarvestApplyReducer', () => {
 
   test('TLH-2: sold holding removed; substitute grows by proceeds', () => {
     const sold   = holding({ id: 'h1', mv: 1000, basis: 1500 });
-    const sub    = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_INTL' });
+    const sub    = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_AU' });
     const state  = makeState('usStockAccount', account({ holdings: [sold, sub] }));
     const reducer = new StockHarvestApplyReducer();
 
@@ -189,7 +189,7 @@ describe('TaxLossHarvestHandler', () => {
 
   test('TLH-H-1: emits STOCK_HARVEST_APPLY for each below-basis holding', () => {
     const h1 = holding({ id: 'h1', mv: 1000, basis: 1500, rateKey: 'EQUITY_US' });
-    const h2 = holding({ id: 'h2', mv: 2000, basis: 1800, rateKey: 'EQUITY_INTL' });  // above basis (no harvest)
+    const h2 = holding({ id: 'h2', mv: 2000, basis: 1800, rateKey: 'EQUITY_AU' });  // above basis (no harvest)
     const h3 = holding({ id: 'h3', mv: 500,  basis: 800,  rateKey: 'EQUITY_US' });    // below basis, partner = h1
     const state = { usStockAccount: account({ holdings: [h1, h2, h3] }), people: { primary: { residency: 'US' } } };
 
@@ -210,7 +210,7 @@ describe('TaxLossHarvestHandler', () => {
   test('TLH-H-2: cap limits total realized loss', () => {
     // holding with mv=1000, basis=2000 → full loss = 1000; cap = 600
     const h1 = holding({ id: 'h1', mv: 1000, basis: 2000, rateKey: 'EQUITY_US' });
-    const h2 = holding({ id: 'h2', mv: 5000, basis: 5000, rateKey: 'EQUITY_INTL' });
+    const h2 = holding({ id: 'h2', mv: 5000, basis: 5000, rateKey: 'EQUITY_AU' });
     h1.taxLossPartner = 'h2';
     const state = { usStockAccount: account({ holdings: [h1, h2] }), people: { primary: { residency: 'US' } } };
 

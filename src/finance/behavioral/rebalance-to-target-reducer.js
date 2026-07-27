@@ -309,8 +309,8 @@ export class RebalanceToTargetReducer extends Reducer {
       // Actual allocation fractions.
       const actual = {};
       for (const h of account.holdings) {
-        const alloc = h.allocation ?? ALLOCATION.OTHER;
-        actual[alloc] = (actual[alloc] ?? 0) + (h?.marketValue ?? 0);
+        // Every holding carries a valid allocation (enforced in Holding's constructor).
+        actual[h.allocation] = (actual[h.allocation] ?? 0) + (h?.marketValue ?? 0);
       }
 
       const needsRebalance = Object.entries(target).some(([alloc, tgt]) => {

@@ -37,7 +37,7 @@ test('EVT-CASH-INT-1: computeHoldingsCashInterest pays only CASH sleeves, monthl
   const state = {
     effectiveInterestRates: { SAVINGS_US: 0.03 },
     acct: { holdings: [
-      { id: 'c1', allocation: 'CASH',   marketValue: 10000, rateKey: 'CASH_US' },  // 10000 × 0.03/12 = 25
+      { id: 'c1', allocation: 'CASH',   marketValue: 10000, rateKey: 'SAVINGS_US' },  // 10000 × 0.03/12 = 25
       { id: 'e1', allocation: 'EQUITY', marketValue: 50000, rateKey: 'EQUITY_US' }, // ignored
       { id: 'b1', allocation: 'BOND',   marketValue: 20000, couponRate: 0.04 },     // ignored
       { id: 'g1', allocation: 'GOLD',   marketValue: 10000, rateKey: 'GOLD' },       // ignored
@@ -55,7 +55,7 @@ test('EVT-CASH-INT-1: computeHoldingsCashInterest pays only CASH sleeves, monthl
 
 test('EVT-CASH-INT-2: rate resolution — per-account key wins, then shared key, then fallback', () => {
   const mk = (rates) => ({ effectiveInterestRates: rates, acct: { holdings: [
-    { id: 'c1', allocation: 'CASH', marketValue: 12000, rateKey: 'CASH_US' },
+    { id: 'c1', allocation: 'CASH', marketValue: 12000, rateKey: 'SAVINGS_US' },
   ] } });
 
   // per-account override `SAVINGS_US::acct` = 6% wins over the shared 3%
@@ -139,7 +139,7 @@ function seedCashSleeve(cfg) {
   const acct = (cfg.accounts ?? []).find(a => a.role === 'us-stock');
   assert.ok(acct, 'expected a us-stock account in the default scenario');
   acct.holdings = [
-    { id: 'cash-sleeve', allocation: 'CASH', marketValue: 100000, costBasis: 100000, rateKey: 'CASH_US' },
+    { id: 'cash-sleeve', allocation: 'CASH', marketValue: 100000, costBasis: 100000, rateKey: 'SAVINGS_US' },
   ];
   acct.initialValue = 100000;
   acct.balance = 100000;

@@ -45,6 +45,7 @@ import { StateIncomeClassificationReducer } from '../../src/finance/tax/state/st
 import { StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../../src/finance/tax/state/state-tax-settle-classes.js';
 import { UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer } from '../../src/finance/account-rules/mortgage-payment-classes.js';
 import { UsRentalIncomeApplyReducer, AuRentalIncomeApplyReducer } from '../../src/finance/account-rules/rental-income-classes.js';
+import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 
 const DATE = new Date('2030-06-15');
 
@@ -65,20 +66,69 @@ test('AddRegimeReducer: missing regime is a no-op (I7)', () => {
   assertStateUnchanged(prev, next);
 });
 
-test('RevalueAssetReducer: shocks holdings and re-syncs balance (I3/I4)', () => {
+test('RevalueAssetReducer: shocks the matching sleeve and re-syncs balance (I3/I4)', () => {
   const r = new RevalueAssetReducer();
-  const state = makeAccountState({ stateKey: 'usStockAccount', holdings: [{ id: 'h1', marketValue: 1000, costBasis: 800 }] });
+  const state = makeAccountState({ stateKey: 'usStockAccount', country: 'US',
+    holdings: [{ id: 'h1', allocation: 'EQUITY', marketValue: 1000, costBasis: 800 }] });
   const next = runReducer(r, state,
-    makeAction('REVALUE_ASSET_APPLY', { targetStateKeys: ['usStockAccount'], multiplier: -0.4 }),
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_US', holdingsStateKeys: ['usStockAccount'], multiplier: -0.4 }),
     DATE, { balance: true, nonNegative: true });
   assert.equal(next.usStockAccount.balance, 600);
   assert.equal(sumHoldings(next.usStockAccount), 600); // I3 explicit
 });
 
+test('RevalueAssetReducer: an EQUITY shock spares the CASH/BOND/GOLD sleeves of the same account', () => {
+  // The defect this pins down: targeting used to be per-ACCOUNT (by role), so a
+  // us-stock brokerage that a glidepath had moved 90% into cash still took the full
+  // equity markdown on that cash. Only the equity sleeve may move.
+  const r = new RevalueAssetReducer();
+  const state = makeAccountState({ stateKey: 'usStockAccount', country: 'US', holdings: [
+    { id: 'eq',   allocation: 'EQUITY', marketValue: 1000, costBasis: 1000 },
+    { id: 'bond', allocation: 'BOND',   marketValue: 1000, costBasis: 1000 },
+    { id: 'cash', allocation: 'CASH',   marketValue: 1000, costBasis: 1000 },
+    { id: 'gold', allocation: 'GOLD',   marketValue: 1000, costBasis: 1000 },
+  ] });
+  const next = runReducer(r, state,
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_US', holdingsStateKeys: ['usStockAccount'], multiplier: -0.4 }),
+    DATE, { balance: true, nonNegative: true });
+  const mv = Object.fromEntries(next.usStockAccount.holdings.map(h => [h.id, h.marketValue]));
+  assert.deepEqual(mv, { eq: 600, bond: 1000, cash: 1000, gold: 1000 });
+  assert.equal(next.usStockAccount.balance, 3600);
+});
+
+test('RevalueAssetReducer: an AU shock does not touch US sleeves (jurisdiction is the account country)', () => {
+  const r = new RevalueAssetReducer();
+  const state = {
+    ...makeAccountState({ stateKey: 'usStockAccount', country: 'US',
+      holdings: [{ id: 'us', allocation: 'EQUITY', marketValue: 1000, costBasis: 1000 }] }),
+    ...makeAccountState({ stateKey: 'superAccount', country: 'AU',
+      holdings: [{ id: 'au', allocation: 'EQUITY', marketValue: 1000, costBasis: 1000 }] }),
+  };
+  const next = runReducer(r, state,
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_AU',
+      holdingsStateKeys: ['usStockAccount', 'superAccount'], multiplier: -0.4 }),
+    DATE, { balance: true, nonNegative: true });
+  assert.equal(next.usStockAccount.holdings[0].marketValue, 1000);
+  assert.equal(next.superAccount.holdings[0].marketValue,   600);
+});
+
+test('RevalueAssetReducer: the account ROLE is irrelevant — only the sleeve decides', () => {
+  // A BOND sleeve inside an equity-role wrapper is a bond. Role used to select the
+  // whole account for an EQUITY_US shock; now it carries no weight at all.
+  const r = new RevalueAssetReducer();
+  const state = makeAccountState({ stateKey: 'treasuryDirectAccount', country: 'US',
+    role: ACCOUNT_ROLES.US_STOCK,
+    holdings: [{ id: 'b', allocation: 'BOND', marketValue: 1000, costBasis: 1000 }] });
+  const next = runReducer(r, state,
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_US', holdingsStateKeys: ['treasuryDirectAccount'], multiplier: -0.4 }),
+    DATE, { balance: true, nonNegative: true });
+  assert.equal(next.treasuryDirectAccount.holdings[0].marketValue, 1000, 'a bond is not equity');
+});
+
 test('RevalueAssetReducer: shocks scalar-value assets (RealProperty)', () => {
   const r = new RevalueAssetReducer();
   const next = runReducer(r, { house: { value: 500000 } },
-    makeAction('REVALUE_ASSET_APPLY', { targetStateKeys: ['house'], multiplier: -0.2 }), DATE);
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'REAL_ESTATE_US', targetStateKeys: ['house'], multiplier: -0.2 }), DATE);
   assert.equal(next.house.value, 400000);
 });
 
@@ -86,15 +136,16 @@ test('RevalueAssetReducer: null multiplier is a no-op (I7)', () => {
   const r = new RevalueAssetReducer();
   const prev = makeAccountState({ stateKey: 'usStockAccount', balance: 1000 });
   const next = runReducer(r, structuredClone(prev),
-    makeAction('REVALUE_ASSET_APPLY', { targetStateKeys: ['usStockAccount'] }), DATE);
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_US', holdingsStateKeys: ['usStockAccount'] }), DATE);
   assertStateUnchanged(prev, next);
 });
 
 test('RevalueAssetReducer: a +shock never drives marketValue negative is moot; a -shock clamps at 0 (I4)', () => {
   const r = new RevalueAssetReducer();
-  const state = makeAccountState({ stateKey: 'usStockAccount', holdings: [{ id: 'h1', marketValue: 100, costBasis: 100 }] });
+  const state = makeAccountState({ stateKey: 'usStockAccount', country: 'US',
+    holdings: [{ id: 'h1', allocation: 'EQUITY', marketValue: 100, costBasis: 100 }] });
   const next = runReducer(r, state,
-    makeAction('REVALUE_ASSET_APPLY', { targetStateKeys: ['usStockAccount'], multiplier: -2 }),
+    makeAction('REVALUE_ASSET_APPLY', { rateKey: 'EQUITY_US', holdingsStateKeys: ['usStockAccount'], multiplier: -2 }),
     DATE, { balance: true, nonNegative: true });
   assert.equal(next.usStockAccount.balance, 0);
 });

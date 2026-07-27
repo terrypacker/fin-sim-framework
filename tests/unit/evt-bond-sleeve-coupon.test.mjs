@@ -41,7 +41,7 @@ test('EVT-BOND-SLV-1: computeHoldingsCoupons pays only BOND sleeves; null coupon
       { id: 'b1', allocation: 'BOND',   marketValue: 20000, couponRate: 0.05 },     // explicit → 1000
       { id: 'b2', allocation: 'BOND',   marketValue: 10000, couponRate: null },     // null → fallback 0.04 → 400
       { id: 'e1', allocation: 'EQUITY', marketValue: 50000, rateKey: 'EQUITY_US' }, // ignored
-      { id: 'c1', allocation: 'CASH',   marketValue: 10000, rateKey: 'CASH_US' },   // ignored
+      { id: 'c1', allocation: 'CASH',   marketValue: 10000, rateKey: 'SAVINGS_US' },   // ignored
       { id: 'g1', allocation: 'GOLD',   marketValue: 10000, rateKey: 'GOLD' },       // ignored
     ] },
   };

@@ -9,21 +9,32 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { resolveRateKey }    from '../holdings/default-allocations.js';
 
 /**
- * RevalueAssetReducer — applies a multiplier to the marketValue of every
- * holding under each targeted state key (Account), or to the scalar `value`
- * of asset-level state entries (RealProperty / Collectible — design 25 §5.3
- * keeps these scalar until design 28).
+ * RevalueAssetReducer — applies a shock's instantaneous level effect.
  *
- * For Accounts: post-design-25, balance is denormalized from Σ holdings, so
- * shocking balance directly would be wiped out the next time a holdings
- * reducer re-syncs. Instead we apply the multiplier to every holding's
- * marketValue and re-sync balance from Σ holdings — the §4.4 invariant.
+ * Two kinds of target, and the distinction is the whole point of this reducer:
+ *
+ *  · **Accounts** (`holdingsStateKeys`) — revalued PER HOLDING. A holding is hit
+ *    only when its own allocation resolves to the shocked `rateKey`, so a −40 %
+ *    EQUITY_US crash marks down the equity sleeve of a brokerage/IRA/401k/Roth and
+ *    leaves that same account's CASH, BOND and GOLD sleeves alone. The account's
+ *    ROLE is deliberately not consulted: it used to select whole accounts, which
+ *    meant a glidepath sitting 90 % in cash still took the full equity markdown
+ *    because the cash happened to live inside an equity-role wrapper.
+ *    Balance is then re-synced from Σ holdings — the §4.4 invariant (shocking
+ *    `balance` directly would be erased by the next holdings re-sync).
+ *
+ *  · **Scalar assets** (`targetStateKeys`) — RealProperty / Collectible, which have
+ *    no holdings and carry a single `value` (design 25 §5.3). These are still
+ *    selected by rate key upstream, because there is no finer signal available.
  *
  * Action fields:
- *   - targetStateKeys: string[]  — state keys to revalue
- *   - multiplier: number         — e.g. -0.40 to drop 40%
+ *   - rateKey: string              — the shocked series, e.g. 'EQUITY_US'
+ *   - holdingsStateKeys: string[]  — accounts to scan sleeve-by-sleeve
+ *   - targetStateKeys: string[]    — scalar assets to revalue wholesale
+ *   - multiplier: number           — e.g. -0.40 to drop 40%
  *
  * Runs at POSITION_UPDATE (30) so it executes after the regime is pushed and
  * after any cash-flow actions from the same handler batch.
@@ -38,33 +49,40 @@ export class RevalueAssetReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { targetStateKeys, multiplier } = action;
-    if (!targetStateKeys?.length || multiplier == null) return this.newState(state);
+    const { rateKey, targetStateKeys, holdingsStateKeys, multiplier } = action;
+    if (multiplier == null) return this.newState(state);
+    if (!targetStateKeys?.length && !holdingsStateKeys?.length) return this.newState(state);
 
+    const shock = (v) => Math.max(0, (v ?? 0) + +(((v ?? 0) * multiplier).toFixed(2)));
     const updates = {};
-    for (const key of targetStateKeys) {
-      const entry = state[key];
-      if (!entry) continue;
 
-      if (Array.isArray(entry.holdings) && entry.holdings.length > 0) {
-        // Account with holdings — shock every holding's marketValue and
-        // re-sync balance from Σ. Each holding clamps at zero.
-        const nextHoldings = entry.holdings.map(h => {
-          if (!h) return h;
-          const drop = +((h.marketValue ?? 0) * multiplier).toFixed(2);
-          return { ...h, marketValue: Math.max(0, (h.marketValue ?? 0) + drop) };
-        });
-        const nextBalance = +nextHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-        updates[key] = { ...entry, holdings: nextHoldings, balance: nextBalance };
-      } else if (entry.balance != null) {
-        // Account without holdings (degenerate): preserve legacy behavior.
-        const drop = +(entry.balance * multiplier).toFixed(2);
-        updates[key] = { ...entry, balance: Math.max(0, entry.balance + drop) };
-      } else if (entry.value != null) {
-        // Asset-level (RealProperty / Collectible) — scalar value.
-        const drop = +(entry.value * multiplier).toFixed(2);
-        updates[key] = { ...entry, value: Math.max(0, entry.value + drop) };
-      }
+    // ── Accounts: per-sleeve, by allocation ──────────────────────────────────
+    for (const key of holdingsStateKeys ?? []) {
+      const entry = state[key];
+      if (!entry || !Array.isArray(entry.holdings) || entry.holdings.length === 0) continue;
+
+      let hit = false;
+      const nextHoldings = entry.holdings.map(h => {
+        if (!h) return h;
+        // Resolve the holding's CLASS key from its own allocation, with no role —
+        // the sleeve's asset class, independent of the wrapper it happens to sit in.
+        // null (account has no country) never matches, so a jurisdiction-less
+        // account is untouched by a jurisdiction shock.
+        if (resolveRateKey(entry.country, h.allocation, null) !== rateKey) return h;
+        hit = true;
+        return { ...h, marketValue: shock(h.marketValue) };
+      });
+      if (!hit) continue;
+
+      const nextBalance = +nextHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+      updates[key] = { ...entry, holdings: nextHoldings, balance: nextBalance };
+    }
+
+    // ── Scalar assets (RealProperty / Collectible): whole `value` ────────────
+    for (const key of targetStateKeys ?? []) {
+      const entry = state[key];
+      if (!entry || updates[key]) continue;
+      if (entry.value != null) updates[key] = { ...entry, value: shock(entry.value) };
     }
 
     return this.newState(state, updates);

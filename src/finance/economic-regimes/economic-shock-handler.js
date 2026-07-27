@@ -23,8 +23,12 @@ import { DateUtils }           from '../../simulation-framework/date-utils.js';
  *
  * @param {object} opts
  * @param {Object<string, string[]>} opts.rateKeyToStateKeys
- *   Maps each RATE_KEY to the state keys of accounts it governs.
- *   Built by the ECONOMIC_REGIMES toolset from context.accounts.
+ *   Maps each RATE_KEY to the SCALAR assets (RealProperty / Collectible) it governs.
+ *   Built by the ECONOMIC_REGIMES toolset; accounts are not in this map.
+ * @param {string[]} opts.allAccountStateKeys
+ *   Every account, regardless of role. RevalueAssetReducer scans these holding-by-
+ *   holding and revalues only the sleeves whose own allocation matches the shocked
+ *   rate key, so an account's role never decides what a shock touches.
  */
 export class EconomicShockHandler extends HandlerEntry {
   static type      = 'EconomicShockHandler';
@@ -33,8 +37,9 @@ export class EconomicShockHandler extends HandlerEntry {
 
   constructor(opts = {}) {
     super(null, 'Economic Shock');
-    const { rateKeyToStateKeys = {} } = opts ?? {};
-    this.rateKeyToStateKeys = rateKeyToStateKeys;
+    const { rateKeyToStateKeys = {}, allAccountStateKeys = [] } = opts ?? {};
+    this.rateKeyToStateKeys  = rateKeyToStateKeys;
+    this.allAccountStateKeys = allAccountStateKeys;
     this.generatedActionTypes = ['ADD_REGIME_APPLY', 'REVALUE_ASSET_APPLY', 'RECOMPUTE_REGIMES'];
   }
 
@@ -72,25 +77,24 @@ export class EconomicShockHandler extends HandlerEntry {
 
     const levelEffects = shock.levelEffects ?? {};
 
-    if (levelEffects.equityRevaluation) {
-      const { rateKeys, multiplier } = levelEffects.equityRevaluation;
+    // Both level effects emit the same action shape. Accounts always go in scope
+    // (the reducer filters them per holding); scalar assets are still rate-key
+    // matched, since a RealProperty has no sleeves to inspect.
+    const pushRevaluation = (effect) => {
+      if (!effect) return;
+      const { rateKeys, multiplier } = effect;
       for (const rk of (rateKeys ?? [])) {
-        const targetStateKeys = this.rateKeyToStateKeys[rk] ?? [];
-        if (targetStateKeys.length > 0) {
-          actions.push({ type: 'REVALUE_ASSET_APPLY', rateKey: rk, multiplier, targetStateKeys });
-        }
+        const targetStateKeys   = this.rateKeyToStateKeys[rk] ?? [];
+        const holdingsStateKeys = this.allAccountStateKeys;
+        if (targetStateKeys.length === 0 && holdingsStateKeys.length === 0) continue;
+        actions.push({
+          type: 'REVALUE_ASSET_APPLY', rateKey: rk, multiplier, targetStateKeys, holdingsStateKeys,
+        });
       }
-    }
+    };
 
-    if (levelEffects.realEstateRevaluation) {
-      const { rateKeys, multiplier } = levelEffects.realEstateRevaluation;
-      for (const rk of (rateKeys ?? [])) {
-        const targetStateKeys = this.rateKeyToStateKeys[rk] ?? [];
-        if (targetStateKeys.length > 0) {
-          actions.push({ type: 'REVALUE_ASSET_APPLY', rateKey: rk, multiplier, targetStateKeys });
-        }
-      }
-    }
+    pushRevaluation(levelEffects.equityRevaluation);
+    pushRevaluation(levelEffects.realEstateRevaluation);
 
     actions.push({ type: 'RECOMPUTE_REGIMES' });
     return actions;

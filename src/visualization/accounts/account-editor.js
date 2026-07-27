@@ -12,6 +12,7 @@ import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
+import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Cash account types eligible to be flagged the country's transaction account
@@ -25,7 +26,7 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // Types carrying the contribution/earnings ledger — the only ones that show (and
 // persist) the basis fields (design 53 §2). Brokerage is holdings-only.
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
-const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'GOLD', 'OTHER'];
+const ALLOCATIONS      = [...ALLOCATION_VALUES];
 
 // Rate Key choices for the holdings editor, grouped by asset category. A holding's
 // rateKey selects which market-return series drives its growth (state.effective*
@@ -478,7 +479,7 @@ export class AccountEditor extends BaseComponent {
 
   /** Does this allocation carry any per-holding detail fields? (CASH does not.) */
   _holdingHasDetail(alloc) {
-    return alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD' || alloc === 'BOND';
+    return alloc === 'EQUITY' || alloc === 'GOLD' || alloc === 'BOND';
   }
 
   /**
@@ -491,10 +492,10 @@ export class AccountEditor extends BaseComponent {
     // GOLD (design 56 §7): a commodity sleeve — like equity it carries a cost basis
     // (for the 28% collectibles CGT on disposal) but pays no dividend/coupon and has
     // no duration; it grows via its GOLD rate key.
-    const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD'; // BOND: hidden (=MV); CASH: no CGT
-    const showPartner   = alloc === 'EQUITY' || alloc === 'OTHER';   // TLH is equity-oriented
+    const showCostBasis = alloc === 'EQUITY' || alloc === 'GOLD'; // BOND: hidden (=MV); CASH: no CGT
+    const showPartner   = alloc === 'EQUITY';   // TLH is equity-oriented
     const isBond        = alloc === 'BOND';
-    // Periodic income binds dividendYield (EQUITY) or couponRate (BOND); GOLD/OTHER
+    // Periodic income binds dividendYield (EQUITY) or couponRate (BOND); GOLD
     // earn none.
     const incomeField   = alloc === 'EQUITY' ? 'dividendYield'
                         : isBond             ? 'couponRate'

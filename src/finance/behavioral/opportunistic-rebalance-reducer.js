@@ -10,7 +10,6 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { REGIME_TAG }        from '../economic-regimes/regime-tag.js';
-import { ALLOCATION }        from '../holdings/allocation.js';
 
 const ACTION_KEY = 'opportunistic_rebalance';
 
@@ -71,8 +70,8 @@ export class OpportunisticRebalanceReducer extends Reducer {
       // Compute actual allocation fractions
       const actual = {};
       for (const h of account.holdings) {
-        const alloc = h.allocation ?? ALLOCATION.OTHER;
-        actual[alloc] = (actual[alloc] ?? 0) + (h?.marketValue ?? 0);
+        // Every holding carries a valid allocation (enforced in Holding's constructor).
+        actual[h.allocation] = (actual[h.allocation] ?? 0) + (h?.marketValue ?? 0);
       }
 
       // Check if any allocation drifts past the band

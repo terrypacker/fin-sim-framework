@@ -43,7 +43,7 @@ function brokerageFixture(stateFields = {}) {
   const broker  = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
   broker.holdings = [
     new Holding({ id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 5000, costBasis: 1000, purchaseDate: D(2010), rateKey: 'EQUITY_US' }), // oldest, big gain
-    new Holding({ id: 'cash', allocation: ALLOCATION.CASH,   marketValue: 5000, costBasis: 5000, purchaseDate: D(2020), rateKey: 'CASH_US' }),   // no gain
+    new Holding({ id: 'cash', allocation: ALLOCATION.CASH,   marketValue: 5000, costBasis: 5000, purchaseDate: D(2020), rateKey: 'SAVINGS_US' }),   // no gain
   ];
   const state = {
     savingsAccount: savings, brokerAccount: broker,
@@ -187,7 +187,7 @@ test('EVT-65 Lever C off (weight 0) leaves the draw as blind FIFO — oldest EQU
   const savings = new CheckingAccount(0, { country: 'US', currency: USD });
   const broker  = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
   broker.holdings = [
-    new Holding({ id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 3000, costBasis: 2900, purchaseDate: new Date('2010-01-01'), rateKey: 'BOND_US' }),
+    new Holding({ id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 3000, costBasis: 2900, purchaseDate: new Date('2010-01-01'), rateKey: 'FIXED_INCOME_US' }),
     new Holding({ id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 7000, costBasis: 3000, purchaseDate: new Date('2015-01-01'), rateKey: 'EQUITY_US' }),
   ];
   broker.targetComposition = { EQUITY: 0.6, BOND: 0.4 };

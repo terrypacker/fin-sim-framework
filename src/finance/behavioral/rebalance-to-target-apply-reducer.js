@@ -179,12 +179,11 @@ function _addProRata(holdings, allocation, amount) {
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */
 function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null }) {
-  // Resolve by (country, allocation) with NO role: the role's default rate key
-  // (e.g. IRA → EQUITY_US) would otherwise override a non-default sleeve — a BOND
-  // sleeve in an equity-role account must grow at the bond rate, not the wrapper's
-  // equity rate. Allocation must win (as it already does for CASH/GOLD in resolveRateKey).
-  // For an EQUITY sleeve this is identical to the role-keyed result.
-  const rateKey  = resolveRateKey(country, allocation, null);
+  // The role is safe to pass now: resolveRateKey only lets it refine WITHIN the
+  // allocation's own class, so a BOND sleeve in an equity-role account still
+  // resolves to the bond rate. (This used to force role=null to work around the
+  // resolver returning the wrapper's equity key for any non-CASH/GOLD sleeve.)
+  const rateKey  = resolveRateKey(country, allocation, role);
   const duration = allocation === ALLOCATION.BOND
     ? (RATE_KEY_META[rateKey]?.defaultDuration ?? null)
     : null;

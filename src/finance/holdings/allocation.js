@@ -11,17 +11,22 @@
 /**
  * ALLOCATION — the asset category a Holding represents.
  *
- * Drives rateKey resolution (see default-allocations.js#resolveRateKey) so a
- * Holding inherits its regime-adjusted return from state.effectiveGrowthRates,
- * and gates behavioral / rebalance handlers that act on a specific class
- * (EQUITY panic-sell, BOND duration-revalue, etc. — see design 28 / 29).
+ * The allocation is the AUTHORITATIVE asset-class signal for a holding. It drives
+ * rateKey resolution (see default-allocations.js#resolveRateKey), the earnings
+ * paths (growth / dividend / coupon / cash interest), shock revaluation, the
+ * rebalance target classes and the drawdown sleeve order. The account's ROLE never
+ * overrides it — a BOND sleeve inside an equity-role wrapper is a bond.
+ *
+ * This list is CLOSED. Every value here must be handled by every consumer above;
+ * there is no catch-all bucket, because a holding that no consumer recognises is
+ * silently excluded from rebalancing and drawdown rather than modelled. An
+ * unrecognised allocation is a load-time error (see Holding's constructor).
  */
 export const ALLOCATION = Object.freeze({
   EQUITY: 'EQUITY',
   BOND:   'BOND',
   CASH:   'CASH',
   GOLD:   'GOLD',
-  OTHER:  'OTHER',
 });
 
 /** Tuple of every legal ALLOCATION value — useful for schema validation. */
