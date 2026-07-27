@@ -19,6 +19,8 @@ import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.
 import { get, set }                   from './mc-param-paths.js';
 import { computeNetWorth }            from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
+import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
+import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
 
 /** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
 export function computeNetWorthUsd(state) {
@@ -47,27 +49,54 @@ export function computeHouseValueUsd(state, baseCurrency = 'USD') {
 /**
  * Sampler for the per-iteration time series (design 78 §4.5).
  *
- * The three metrics an MC path needs are computed here, at sample time, from
- * live state — instead of deep-cloning the entire state so they can be computed
- * later. That is 1,803 full-state clones per iteration replaced by ~44 records
- * of four numbers, and it is the whole of MC's remaining telemetry cost.
+ * The metrics an MC path needs are computed here, at sample time, from live state —
+ * instead of deep-cloning the entire state so they can be computed later. That is
+ * 1,803 full-state clones per iteration replaced by ~45 records of a few numbers, and
+ * it is the whole of MC's remaining telemetry cost.
  *
- * Runs at the history-snapshot cadence and at the same point in the event loop,
- * so the series is identical to the one the snapshots produced. Must not retain
- * references into `state` — it returns numbers only.
+ * Runs at the YEAR-BOUNDARY cadence (design 82 §4): the state after the last event
+ * dated in year Y, which is the same instant the lab page and the workbench panel
+ * sample, so a share means the same thing in all three. Must not retain references
+ * into `state` — it returns numbers only.
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.mix=false] also record the asset MIX (design 82 §8.1). Costs
+ *        one cube build per sample; see §8.3 on why it is measured, not assumed cheap.
  */
-function sampleTimeSeriesPoint(state, date) {
-  return {
-    date:          new Date(date),
-    netWorthUsd:   computeNetWorthUsd(state),
-    netLiquidity:  computeNetLiquidity(state, date),
-    houseValueUsd: computeHouseValueUsd(state),
+export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
+  return function sampleTimeSeriesPoint(state, date) {
+    const point = {
+      date:          new Date(date),
+      netWorthUsd:   computeNetWorth(state, baseCurrency),
+      netLiquidity:  computeNetLiquidity(state, date),
+      houseValueUsd: computeHouseValueUsd(state, baseCurrency),
+    };
+    if (!mix) return point;
+
+    // Built through the SHARED cube + pivot, never a private sum: design 82 §8.1's
+    // whole point is that an MC share and a lab-page share are the same quantity.
+    // `displayNameFor` is deliberately absent — a mix needs no account labels, and MC
+    // runs on an isolated per-iteration registry with nothing named.
+    const rows = buildAllocationCube(state, { date, baseCurrency });
+    const { grossAssets, mix: shares } = mixPoint(rows, { classes: MIX_CLASSES });
+    point.grossAssetsUsd = grossAssets;
+    point.mix            = shares;
+    return point;
   };
 }
 
 /**
- * Reduce the sampler's records to one data point per year — the last sample
- * within each calendar year, matching the previous snapshot-based behaviour.
+ * Reduce the sampler's records to one data point per year.
+ *
+ * Under the year-boundary cadence there is already exactly one record per calendar
+ * year, so this is now a re-stamp rather than a reduction: the date is normalized to
+ * 1 January of the sampled year so every path's series lands on IDENTICAL timestamps.
+ * The MC fan chart groups by exact timestamp (`mc-results-panel._buildFanData`), so a
+ * per-path stamp — 31 December for a boundary sample, the horizon for a terminal
+ * flush — would split one year into two columns of one path each.
+ *
+ * The label therefore names the year the state belongs to, not the instant it was read
+ * at; that was already true under the event cadence and is unchanged here.
  */
 function extractYearlyTimeSeries(sim) {
   const byYear = new Map();
@@ -81,6 +110,7 @@ function extractYearlyTimeSeries(sim) {
       netWorthUsd:   sample.netWorthUsd,
       netLiquidity:  sample.netLiquidity,
       houseValueUsd: sample.houseValueUsd,
+      ...(sample.mix ? { grossAssetsUsd: sample.grossAssetsUsd, mix: sample.mix } : {}),
     }));
 }
 
@@ -267,6 +297,10 @@ export class IntlRetirementMcRunner {
    *                                                            variable list via buildVariables().
    * @param {Date}                      [opts.simStart]       - Simulation start date.
    * @param {Date}                      [opts.simEnd]         - Simulation end date.
+   * @param {boolean}                   [opts.mix=false]      - Also record the per-year
+   *        asset MIX on every path (design 82 §8). Off by default: it is a real cost
+   *        (one allocation cube per sampled year) and only the allocation-distribution
+   *        report reads it, so an ordinary solvency run should not pay for it.
    */
   constructor({
     n           = 100,
@@ -274,12 +308,14 @@ export class IntlRetirementMcRunner {
     simStart    = new Date(Date.UTC(2026, 0, 1)),
     simEnd      = new Date(Date.UTC(2041, 0, 1)),
     cfgTemplate = null,
+    mix         = false,
   } = {}) {
     this.n           = n;
     this.mcConfig    = mcConfig;
     this.simStart    = simStart;
     this.simEnd      = simEnd;
     this.cfgTemplate = cfgTemplate;
+    this.mix         = mix;
   }
 
   /**
@@ -293,6 +329,7 @@ export class IntlRetirementMcRunner {
   async run(baseParams = {}, onProgress) {
     const simStart = this.simStart;
     const simEnd   = this.simEnd;
+    const sampler  = createMcSampler({ mix: this.mix });
 
     // Design 15 §2.3: the active scenario cfg is the per-iteration template.
     // Fallback to a fresh defaults cfg for tests / library consumers that don't
@@ -331,7 +368,26 @@ export class IntlRetirementMcRunner {
         // telemetry 'off' + a sampler: MC needs no bus, journal or full-state
         // history snapshots — only the yearly series, which the sampler collects
         // directly (design 78 §4.5).
-        scenario.buildSim({ seed, telemetry: 'off', sampler: sampleTimeSeriesPoint });
+        //
+        // The cadence is 'year-boundary' (design 82 §4/§8.3), NOT the event cadence
+        // design 78 shipped with. Design 78 picked the event cadence for cheapness, and
+        // it lands the "yearly" point at whatever event happened to be last in the year
+        // — mid-something, and drifting with event volume. A MIX is precisely sensitive
+        // to whether the year-end rebalance has fired, so an arbitrary instant is not an
+        // option here; and having MC sample somewhere the lab page and the workbench
+        // panel do not would defeat the shared-modules argument entirely.
+        //
+        // This RE-BASELINES the RECORDED series, and nothing else. The sampler cannot
+        // affect the run, so `scenarioFailed`, `outOfFundsDate`, `cumulativeDeficit` and
+        // `finalNetWorthUsd` are unchanged EXACTLY. What moves is `timeSeries`, and
+        // therefore `pathShape` (CAGR, worst-5yr, max drawdown, the decade split).
+        //
+        // Direction, measured rather than assumed — and the opposite of the intuition:
+        // on the reference plan the year-boundary series is LOWER in 25 of 45 years and
+        // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
+        // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
+        // See design 82 §8.3; an arm JSON from before this change is not comparable.
+        scenario.buildSim({ seed, telemetry: 'off', sampler, samplerCadence: 'year-boundary' });
 
         const cfg = structuredClone(cfgTemplate);
         // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
