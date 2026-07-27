@@ -76,6 +76,44 @@ export function synthesizeLoanForProperty(prop) {
 }
 
 /**
+ * Does this property's mortgage need a monthly `LOAN_PAYMENT` event scheduled?
+ *
+ * Lives here rather than in either real-property toolset because both of them gate on
+ * it, and a term field honoured on one side only would change behaviour depending on
+ * which country owned the property.
+ *
+ * The `monthlyMortgage > 0` half is the original design-54 gate. It is not sufficient
+ * once design 86 exists: an interest-only loan DERIVES its payment, and a loan with a
+ * maturity year is discharged from the term, so both leave `monthlyMortgage` inert —
+ * and a UI that offers "interest only" while the event stays unscheduled would silently
+ * model a loan that is never paid at all. (`scripts/lib/variant.mjs` worked around this
+ * by seeding a placeholder `monthlyMortgage = 1`; that hack is no longer needed.)
+ */
+export function propertyNeedsLoanPayment(prop) {
+  if (!((prop?.mortgageBalance ?? 0) > 0)) return false;
+  return (prop.monthlyMortgage ?? 0) > 0
+      || !!prop.mortgageInterestOnly
+      || prop.mortgageMaturityYear != null;
+}
+
+/**
+ * Does this authored account need a monthly `LOAN_PAYMENT` event in `country`?
+ *
+ * A standalone `LoanAccount` (design 54, no `linkedPropertyKey`) is paid by exactly the
+ * same country-filtered handler as a mortgage — but nothing schedules the event for it,
+ * because the real-property toolsets only ever looked at properties. Same gate as
+ * {@link propertyNeedsLoanPayment}: a balance, plus SOMETHING that determines a payment.
+ */
+export function accountNeedsLoanPayment(account, country) {
+  if (account?.type !== 'loan') return false;
+  if ((account.country ?? 'US') !== country) return false;
+  if (!((account.balance ?? 0) > 0)) return false;
+  return (account.monthlyPayment ?? 0) > 0
+      || !!account.interestOnly
+      || account.maturityYear != null;
+}
+
+/**
  * The calendar year of the loan country's current tax period, or null when the state
  * carries no period (synthetic states in unit tests). `PERIOD_ADVANCE` actions have no
  * usable date at runtime, so the period's `startMs` is the reliable clock here.

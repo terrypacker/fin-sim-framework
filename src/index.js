@@ -19,7 +19,7 @@ import { BaseAccountModule } from './finance/account-rules/base-account-module.j
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -553,6 +553,8 @@ export const Finance = {
   loanKeyForProperty,
   findLoanForProperty,
   synthesizeLoanForProperty,
+  propertyNeedsLoanPayment,
+  accountNeedsLoanPayment,
   offsetBalanceForLoan,
   effectivePrincipal,
   resolveLoanRate,

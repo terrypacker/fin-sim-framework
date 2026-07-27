@@ -640,6 +640,7 @@
             <option value="ira">Traditional IRA</option>
             <option value="super">Superannuation</option>
             <option value="offset">Offset</option>
+            <option value="loan">Loan (liability)</option>
           </select>
         </div>
         <div class="node-field">
@@ -673,7 +674,7 @@
             <option value="">— none —</option>
           </select>
         </div>
-        <div class="node-field">
+        <div class="node-field" data-id="minimumBalanceRow">
           <label>Min Bal.</label>
           <input type="number" data-id="minimumBalance" value="0"/>
         </div>
@@ -688,7 +689,7 @@
           <input type="checkbox" data-id="isTransactionAccount"
                  title="Route this country's household cash (expenses, wages, contributions, taxes) through this account. Flag exactly one cash account per country."/>
         </div>
-        <div class="node-field">
+        <div class="node-field" data-id="drawdownRow">
           <label>Drawdown</label>
           <input type="number" data-id="drawdownPriority" placeholder="blank = exclude"/>
         </div>
@@ -708,6 +709,64 @@
             <select data-id="offsetsPropertyKey">
               <option value="">— none —</option>
             </select>
+          </div>
+        </div>
+        <!-- ── LOAN (liability) — design 54 §2 + design 86 terms/deductibility ──
+             `balance` is the outstanding principal as a POSITIVE number; net worth
+             subtracts it. A loan is never a drawdown source, so the Drawdown row is
+             hidden for this type. -->
+        <div data-id="loanFields" style="display:none">
+          <div class="node-section-head">Loan Terms (design 54 / 86)</div>
+          <div class="node-field">
+            <label>Interest Rate</label>
+            <input type="number" step="0.001" data-id="loanRate" value="0"
+                   title="Annual rate the lender quotes (absolute, e.g. 0.06 = 6%). When Prime is configured it is stored as a spread over the central-bank Prime rate, so a Prime move re-rates this loan (design 56)."/>
+            <div class="field-hint" data-id="loanRateHint" style="font-size:0.8em;opacity:0.7"></div>
+          </div>
+          <div class="node-field">
+            <label>Monthly Payment</label>
+            <input type="number" data-id="monthlyPayment" value="0"
+                   title="Fixed monthly P&amp;I payment. Inert while Interest Only is on (the payment is derived from the accrued interest) and after IO expiry with a maturity year set (the loan re-amortises over the remaining term). A fixed payment below the accrued interest does not error — the balance grows."/>
+          </div>
+          <div class="node-field">
+            <label>Interest Only</label>
+            <input type="checkbox" data-id="interestOnly"
+                   title="Pay exactly the accrued interest on the effective (offset-reduced) principal each month, so the balance is flat by construction and a variable rate is tracked automatically (design 86 G2)."/>
+          </div>
+          <div class="node-field">
+            <label>IO Until Year</label>
+            <input type="number" data-id="interestOnlyUntilYear" placeholder="blank = IO for life"
+                   title="Calendar year the interest-only period ends; from then the loan reverts to P&amp;I amortised over the remaining term (needs a Maturity Year). Blank = interest-only forever (design 86 G6)."/>
+          </div>
+          <div class="node-field">
+            <label>Maturity Year</label>
+            <input type="number" data-id="maturityYear" placeholder="blank = no term"
+                   title="Calendar year the loan must be discharged — the whole remaining balance plus interest is paid that year. Blank = no term (design 86 G6)."/>
+            <div class="field-hint" data-id="loanTermHint" style="font-size:0.8em;opacity:0.7"></div>
+          </div>
+          <div class="node-field">
+            <label>Deductible Frac.</label>
+            <input type="number" step="0.05" min="0" max="1" data-id="deductibleFraction" placeholder="blank = auto (rental)"
+                   title="Income-producing share of the borrowed money's USE, 0..1 (s8-1; Munro; TR 95/33) — design 86 G3. Blank keeps the default rule: fully deductible while a linked property rents, nil otherwise. It also sets the §988(e) business share. NOTE: a standalone loan (no linked property) still emits NO interest deduction — design 86 G3 error 1 is deferred pending a §163(d) channel."/>
+          </div>
+          <div class="node-field">
+            <label>Linked Property</label>
+            <select data-id="linkedPropertyKey"
+                    title="The property this loan finances. Only properties with no mortgage balance of their own are offered: a property with one already synthesizes its own &lt;property&gt;Loan, and a second loan against it would double-count the debt. The link is also what joins an offset account to this loan.">
+              <option value="">— none (standalone) —</option>
+            </select>
+          </div>
+          <div class="node-field">
+            <label>Payment Source</label>
+            <select data-id="paymentSourceKey"
+                    title="Account the monthly payment is debited from. Blank resolves in order: a same-currency offset linked to this loan's property, then the country's flagged transaction account, then its savings pool.">
+              <option value="">— default —</option>
+            </select>
+          </div>
+          <div class="node-field">
+            <label>§988 Booking FX</label>
+            <input type="number" step="0.0001" data-id="bookingFxRate" placeholder="blank = rate at first payment"
+                   title="Foreign units per USD on the date the debt was incurred (design 86 G7). A non-USD loan held by a US person realizes ordinary exchange gain or loss on each principal repayment, measured against this rate. Blank stamps the rate at the first payment, which UNDERSTATES §988 for a loan already outstanding at t0."/>
           </div>
         </div>
         <div data-id="holdingsSection" class="holdings-section" style="display:none">
@@ -811,14 +870,6 @@
           <input type="checkbox" data-id="isPrimaryResidence"/>
         </div>
         <div class="node-field">
-          <label>Mortgage Bal.</label>
-          <input type="number" data-id="mortgageBalance" value="0"/>
-        </div>
-        <div class="node-field">
-          <label>Monthly Mtg.</label>
-          <input type="number" data-id="monthlyMortgage" value="0"/>
-        </div>
-        <div class="node-field">
           <label>Sale Year</label>
           <input type="number" data-id="plannedSaleYear" placeholder="blank = none"/>
         </div>
@@ -841,6 +892,44 @@
             <option value="">— none —</option>
           </select>
         </div>
+        <!-- ── MORTGAGE — synthesized into a linked Loan liability at build time
+             (design 54 P2); its terms and deductibility come from design 86. ── -->
+        <div class="node-section-head">Mortgage (design 54 / 86)</div>
+        <div class="node-field">
+          <label>Mortgage Bal.</label>
+          <input type="number" data-id="mortgageBalance" value="0" title="Outstanding principal, in the property's currency. Above 0 this synthesizes a linked Loan liability keyed &lt;property&gt;Loan; the property itself then contributes equity only."/>
+        </div>
+        <div class="node-field">
+          <label>Monthly Mtg.</label>
+          <input type="number" data-id="monthlyMortgage" value="0" title="Fixed monthly P&amp;I payment. Inert while Interest Only is on (the payment is derived from the accrued interest) and while past the IO expiry with a maturity year set (the loan re-amortises over the remaining term)."/>
+        </div>
+        <div class="node-field">
+          <label>Mtg. Int. Rate</label>
+          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate the bank quotes (deductible). When Prime is configured it is stored as a spread over Prime (design 56), so a Prime move re-rates the loan."/>
+          <div class="field-hint" data-id="mortgageRateHint" style="font-size:0.8em;opacity:0.7"></div>
+        </div>
+        <div class="node-field">
+          <label>Interest Only</label>
+          <input type="checkbox" data-id="mortgageInterestOnly" title="Pay exactly the accrued interest on the effective (offset-reduced) principal each month, so the balance is flat by construction and a variable rate is tracked automatically (design 86 G2). A fixed Monthly Mtg. below the accrued interest silently negatively amortizes instead — this is the safe way to express interest-only."/>
+        </div>
+        <div class="node-field">
+          <label>IO Until Year</label>
+          <input type="number" data-id="mortgageInterestOnlyUntilYear" placeholder="blank = IO for life" title="Calendar year the interest-only period ends. From that year the loan reverts to P&amp;I amortised over the REMAINING term (needs a Maturity Year), which is the payment step-up a 'hold the leverage' plan is exposed to. Blank = interest-only forever (design 86 G6)."/>
+        </div>
+        <div class="node-field">
+          <label>Maturity Year</label>
+          <input type="number" data-id="mortgageMaturityYear" placeholder="blank = no term" title="Calendar year the loan must be discharged. In that year the whole remaining balance plus interest is paid; a shortfall runs through the normal replenish / insufficient-funds path. Blank = no term, the loan amortises (or stays interest-only) forever (design 86 G6)."/>
+          <div class="field-hint" data-id="mortgageTermHint" style="font-size:0.8em;opacity:0.7"></div>
+        </div>
+        <div class="node-field">
+          <label>Deductible Frac.</label>
+          <input type="number" data-id="mortgageDeductibleFraction" step="0.05" min="0" max="1" placeholder="blank = auto (rental)" title="Income-producing share of the borrowed money's USE, 0..1 (s8-1; Munro; TR 95/33) — design 86 G3. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988(e) business share, so it moves the exchange gain/loss treatment too."/>
+        </div>
+        <div class="node-field">
+          <label>§988 Booking FX</label>
+          <input type="number" data-id="mortgageBookingFxRate" step="0.0001" placeholder="blank = rate at first payment" title="Foreign units per USD on the date the debt was incurred (design 86 G7). A non-USD mortgage held by a US person realizes ordinary exchange gain or loss on each principal repayment, measured against this rate. Blank stamps the rate at the first payment, which treats the loan as incurred then and so UNDERSTATES §988 for a loan already outstanding at t0."/>
+        </div>
+
         <div class="node-section-head">Rental Income (design 48)</div>
         <div class="node-field">
           <label>Rental Income</label>
@@ -857,11 +946,6 @@
         <div class="node-field">
           <label>Expense Ratio</label>
           <input type="number" data-id="rentalExpenseRatio" value="0.25" step="0.01" title="Deductible cash opex as a fraction of gross rent"/>
-        </div>
-        <div class="node-field">
-          <label>Mtg. Int. Rate</label>
-          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate the bank quotes (deductible). When Prime is configured it is stored as a spread over Prime (design 56), so a Prime move re-rates the loan."/>
-          <div class="field-hint" data-id="mortgageRateHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field">
           <label>Land Value %</label>

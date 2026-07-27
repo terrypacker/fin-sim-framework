@@ -80,12 +80,18 @@ describe('loan lever', () => {
     assert.equal(cfg.initialState.hPropertyLoan.interestOnly, true, 'loan field name');
   });
 
-  test('an interest-only mortgage keeps a positive monthlyMortgage so the payment event is scheduled', () => {
-    // The real-property toolsets only schedule LOAN_PAYMENT for a property with BOTH
-    // a positive balance and a positive monthlyMortgage. Zero it and the loan runs free.
+  test('an interest-only mortgage writes the authored payment through, placeholder-free', () => {
+    // The lever used to seed `monthlyMortgage = 1` here, because the real-property
+    // toolsets scheduled LOAN_PAYMENT only for a property with a positive
+    // monthlyMortgage — an IO mortgage derives its payment, so a truthful 0 meant the
+    // loan was never paid at all. The toolsets now gate on `propertyNeedsLoanPayment`,
+    // which counts an IO or term-bearing mortgage, so the placeholder is gone and what
+    // the spec asked for is what the cfg carries.
     const cfg = exportedCfg();
     applyLoan(cfg, makeSetParam(cfg), 'hPropertyLoan', { interestOnly: true, monthlyPayment: 0 });
-    assert.ok(cfg.realProperties[0].monthlyMortgage > 0);
+    assert.equal(cfg.realProperties[0].monthlyMortgage, 0);
+    assert.equal(cfg.initialState.hPropertyLoan.monthlyPayment, 0);
+    assert.equal(cfg.realProperties[0].mortgageInterestOnly, true);
   });
 
   test('primeSpread: null is meaningful (fix the rate), not "absent"', () => {

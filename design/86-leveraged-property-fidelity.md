@@ -1,7 +1,13 @@
 # 86 — Leveraged property fidelity: loss carryforward, interest-only debt, and interest deductibility
 
-**Status** (2026-08-05): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3),
-G6's UI surface, and G7. Phase table in §5. Full suite green (4,435 + 977).
+**Status** (2026-08-05): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3).
+Phase table in §5. Full suite green (4,503 + 996).
+
+**P6's UI surface landed last** (2026-08-05) and is written up in §9. It closed the
+last gap between "the engine can do it" and "a person can author it", and closing it
+surfaced three defects that only an authoring surface makes reachable — including a
+schedule gate that would have made the new *Interest Only* checkbox model a loan that
+is never paid at all.
 
 **Extended** (2026-08-05) with §8: the offset reframed as a *domestic-currency
 liquidity option* rather than a return bet. That reframing is what finally gives the
@@ -10,9 +16,10 @@ liquidity option* rather than a return bet. That reframing is what finally gives
 a nominated account) — plus it promotes **G7** from unscheduled to load-bearing.
 
 **P7 and P8 are now BUILT** (2026-08-05), so every gap in this document is closed
-except G3's standalone-loan half. Full suite green (4,487 + 977). What that leaves
-before §8's question can actually be answered is no longer engine work — it is
-running the study. See §8.8.
+except G3's standalone-loan half. Full suite green at that point (4,487 + 977).
+
+**What is left is in §10** — and it is not engine work. §8's question is unanswered
+because the study has not been run, not because anything is missing to run it with.
 
 Found while designing a study of AU mortgage **offset accounts** — whether cash is
 better parked in an offset (earning the loan rate, certain and untaxed) or invested
@@ -344,6 +351,10 @@ roughly half a million dollars of terminal wealth against the same loan left
 interest-only for life. That gap was previously unmodellable, and it is the main risk
 of a "hold the leverage into later life" plan.
 
+**The UI surface is now built too — see §9.** Until it was, the term was reachable only
+from a spec file, which meant the single largest risk in the plan could not be authored
+in the app that the plan is actually maintained in.
+
 ---
 
 ### G7 · No §988 gain or loss on foreign-currency debt
@@ -528,8 +539,15 @@ balance, payment, or rate spread, nor for an offset balance. Every axis of a lev
 study was unreachable from a spec file, so none of this would have been measurable even
 once built. **All of the following are now built** (P1, then P7).
 
-- **`loan` lever** — `{ balance, monthlyPayment, primeSpread, interestOnly,
-  deductibleFraction, termMonths }` against a loan state key.
+- **`loan` lever** — `{ balance, monthlyPayment, primeSpread, interestRate,
+  interestOnly, deductibleFraction, interestOnlyUntilYear, maturityYear }` against a
+  loan state key. (The term is two **absolute calendar years**, not the `termMonths`
+  this section first proposed — see §3 G6 for why: a borrower knows the dates, not the
+  duration, and it matches `plannedSaleYear` / `moveYear` elsewhere.) The lever writes
+  the property field or the account field per key, whichever that loan is.
+  It briefly seeded a placeholder `monthlyMortgage = 1` to force a payment event onto
+  an interest-only mortgage; **that hack is gone** now the toolsets gate on
+  `propertyNeedsLoanPayment` (§9.2).
 - **`offset` lever** — `{ balance, deployTo: <stateKey> }`, where `deployTo`
   **moves** value to a named account rather than creating it. Arms that don't hold
   total wealth constant are not comparable, and that is the easiest thing in this
@@ -559,7 +577,7 @@ the other source.
 | **P3** | G1 AU revenue-loss carryforward         | **done** | The load-bearing one. Touches the settle, the FITO counterfactual and the tax document.                                                                                 |
 | **P5** | G5 + G5b US §469 and the §904 partition | **done** | Promoted ahead of P4: until this landed, no unoffset arm could run at all without `FTC_LIMITATION_STRICT=off`. Reuses P3's pool pattern in the other jurisdiction.      |
 | **P4** | G3 `deductibleFraction`                 | **half** | The rental-path half is built. The standalone borrow-to-invest half is deferred — see §3 G3, it needs a §163(d) channel that must NOT reuse the §469 one P5 just built. |
-| **P6** | G6 term / IO expiry                     | open     | Depends on G2. Turns "hold leverage forever" into a testable assumption.                                                                                                |
+| **P6** | G6 term / IO expiry + the loan UI (§9)  | **done** | Depends on G2. Turns "hold leverage forever" into a testable assumption — and, with §9, one that is authorable rather than spec-file-only.                              |
 | **P7** | G8 expense events + G9 `fundFrom`       | **done** | One change: G9 is a field on G8's entry. Together they are the whole of what §8 needs from the engine, and neither is useful alone.                                     |
 | **P8** | G7 §988                                 | **done** | Promoted from unscheduled. §8 requires a live FX process; on a pinned rate a §988 gain is identically zero, so this was free to defer and no longer is.                 |
 
@@ -603,6 +621,19 @@ Per-gap tests are listed above. Across all of them:
 - **A regression that omitting `randomSeed` is byte-identical to seed 1** (§8.8), and
   that an explicit `buildSim({ seed })` still wins. The second is what stops a scenario
   parameter from silently collapsing every Monte Carlo path onto one ordering.
+- **Authoring-surface regressions** (§9). Three, all pinning silent failures rather
+  than rendering:
+  · a blank term field round-trips as `null`, not 0, through both editors and the
+    controller — `maturityYear: 0` and `deductibleFraction: 0` are real, and mean
+    something quite different from "unset";
+  · the LOAN_PAYMENT schedule gate fires for an interest-only mortgage with a zero
+    payment, and for a standalone loan with no property in the scenario at all;
+  · an **end-to-end** run with an authored standalone `LoanAccount` whose balance
+    actually falls. That one is the only test that would have caught all three of
+    §9.2's defects at once, because each of them leaves a loan sitting untouched.
+
+  Files: `tests/unit/loan-account-authoring.test.mjs`,
+  `tests/viz/editors/{loan-account-fields,mortgage-term-fields}.test.mjs`.
 
 ## 7. Open questions
 
@@ -790,3 +821,154 @@ byte-identical to before, and there is a regression pinning that.
 **Consequence for §8.6's study:** paired arms on shared seeds are now actually possible.
 They were not before, and a paired Monte Carlo run on the old code would have compared
 arms across a single FX world while reporting per-path deltas.
+
+---
+
+## 9. The authoring surface — P6's UI, and the three defects it found
+
+Every gap above shipped as engine plus a `scripts/lib/variant.mjs` lever, on the §4
+argument that unreachable from a spec means unmeasurable. That argument is right and it
+is also only half the story: **unreachable from the app means unmaintainable**. The
+plan this model exists to serve is edited in the workbench, and until this phase a loan
+could not be seen there at all, let alone given a term. Interest-only, the IO expiry,
+the maturity year, the stated deductible fraction and the §988 booking rate were all
+spec-file-only — which is to say the single largest risk in a leverage plan (§3 G6's
+half-million-dollar reversion) was invisible to the person holding the plan.
+
+### 9.1 Two surfaces, because there are two kinds of loan
+
+- **A mortgage** is not an authored account. It is synthesized at build time from the
+  property record (`synthesizeLoanForProperty`, design 54 P2), so its terms belong on
+  the **real-property editor**. The mortgage fields, previously scattered between the
+  header block and the rental block, are now one *Mortgage* section carrying balance,
+  payment, rate, and the five design-86 fields.
+- **A standalone `LoanAccount`** has existed since design 54 and had no UI whatsoever —
+  the type select offered no "loan". The **account editor** now does, with the same
+  terms plus the two links (`linkedPropertyKey`, `paymentSourceKey`).
+
+### 9.2 What building it exposed
+
+Three defects, none of which any test would have caught, because each is only reachable
+once a person can author the field:
+
+1. **The LOAN_PAYMENT schedule gate was `monthlyMortgage > 0`.** An interest-only loan
+   *derives* its payment, so that field is inert — and a mortgage with the new
+   *Interest Only* box ticked and the payment left at 0 would have been scheduled no
+   payment event at all. The loan would have sat there accruing nothing, being paid
+   nothing, looking like a modelling choice. The gate is now
+   `propertyNeedsLoanPayment` / `accountNeedsLoanPayment` (loan-classes.js, beside the
+   handler for the P7 reason: a field honoured on one side only changes behaviour with
+   whichever country owns the record). `variant.mjs` had papered over exactly this by
+   seeding a placeholder `monthlyMortgage = 1`; that hack is deleted.
+2. **`bookingFxRate` was never serialized.** A LoanAccount's §988 booking rate — the
+   basis every exchange gain is measured against — survived neither save nor reload, so
+   an authored rate silently reverted to "stamped at the first payment". That
+   understates §988 rather than erroring, which is the failure mode this document keeps
+   running into.
+3. **An authored loan's terms never reached runtime state.** `_accountToStatePlain`
+   projected balance and type but no rate, payment, links or terms, and
+   `LoanPaymentHandler` reads *state*, not the record. So a standalone loan was a debt
+   in net worth that nothing ever serviced. This is the offset link's bug (design 53
+   §3) re-appearing one field-set over, and the fix is the same shape.
+
+Together those three are the difference between a loan type that exists and one that
+works. An e2e regression now runs a full scenario with an authored standalone loan and
+asserts the balance actually falls.
+
+### 9.3 Decisions worth recording
+
+- **A blank term field is `null`, not 0.** `maturityYear: 0` is a loan due in year zero
+  and `deductibleFraction: 0` states that nothing is deductible — both are real,
+  authorable values that mean something quite different from "unset", which is what
+  every pre-86 loan is and must remain. Both editors and the controller coerce blanks
+  to null on every path.
+- **The deductible fraction is clamped to `[0, 1]`.** Typing `50` meaning 50% would
+  otherwise multiply both the s8-1 deduction and the §988(e) business split by fifty.
+- **The loan property picker hides properties that already carry a mortgage.** Such a
+  property synthesizes its own `<propertyKey>Loan`, and `findLoanForProperty` prefers
+  that slot — so a second authored loan against the same house would double the debt
+  while the authored half stayed invisible. A loan already linked to one keeps its
+  option, so re-saving never silently unlinks it.
+- **A liability hides its drawdown and minimum-balance rows,** and labels `balance` as
+  *Principal Owed*. The ctor already forces `drawdownPriority` null (design 54 §8);
+  showing an editable field for it invites the offset mistake §3 G9 measured.
+- **The loan rate is its own input, not the cash-rate field.** `LoanAccount` reuses
+  `interestRate` for the *loan* rate, which is a different quantity from the cash
+  earnings rate the savings/brokerage field edits. Storage is Prime-relative either way
+  (design 56), so the two look alike and must not be wired alike.
+- **A term hint states the loan's life in words** under the fields, because the failure
+  case is silent: an IO expiry with no maturity year has no term to amortise over, so
+  `scheduledLoanPayment` falls back to the authored fixed payment. That is a real
+  branch, and almost never what was meant.
+
+### 9.4 What is still not authorable
+
+**A standalone loan's interest is still deducted nowhere** — §3 G3's error 1, deferred
+deliberately pending a §163(d) channel that must not reuse the §469 one P5 built. The
+account editor's *Deductible Frac.* field is honest about this in its tooltip, and it is
+not inert: it still drives the §988(e) business share (§3 G7), so on a foreign-currency
+loan it decides whether an exchange loss is deductible at all. Borrow-to-invest remains
+unmodellable; borrow-against-the-rental always was and still is.
+
+---
+
+## 10. What is left
+
+Ordered by what unblocks what, not by size. Nothing below is in flight.
+
+### 10.1 Run §8.6's study — the only thing the document exists for
+
+Every engine gap this document opened is now closed and authorable. **The offset
+question is unanswered purely because the study has not been run.** §8.6 specifies it:
+a break-even on exercise, three paired arms on shared seeds (draw the offset / sell
+foreign assets and convert / a no-expense control), `MEAN_REVERTING` FX primary with
+`RANDOM_WALK` as a sensitivity and `fxVolatility` an axis in both (§8.5).
+
+Three things to carry in, all of which the document has already paid for once:
+
+- **Turn the FX process on.** Every result predating §8 was run with `fxProcessModel:
+  NONE`, under which the option is worth *identically zero* and §988 recognizes nothing.
+  Those results are silent on this question, not negative on it.
+- **Run G6 live in any arm that exercises** (§8.7). With the offset full the term is
+  inert, so it is tempting to hold it fixed; exercising re-exposes the plan to the
+  IO-expiry step-up at precisely the moment cash is tightest, and §988 arrives
+  concentrated in the same act.
+- **Vary `randomSeed`** (§8.8). A seed sweep on the old code returned eight identical
+  results, which reads as robustness and was one path measured eight times.
+
+Expect this to be a long run; the repo's standing habit is to ship the runner and the
+spec, write the re-run instructions into the decision doc, and not block a session on
+it.
+
+### 10.2 G3 error 1 — a standalone investment loan deducts nothing
+
+The last open gap in the document, and now the only one with an authoring surface that
+is *deliberately* honest about being partly inert: the account editor's *Deductible
+Frac.* field drives the §988(e) business share but reaches no s8-1 / §163 deduction.
+
+It needs its own channel, **not** the `AU_RENTAL_INCOME_TAX` shortcut — that action
+feeds `usPassiveActivityIncomeYTD`, so a borrow-to-invest deduction routed through it
+would be suspended under §469, and §163(d) investment interest has a different base, a
+different carryforward and different release conditions. Reuse P3/P5's suspended-loss
+pool *shape*; do not reuse P5's pool. Until then, state in any result: **an arm that
+borrows against something other than the rental and invests the proceeds is not
+modellable.**
+
+### 10.3 Open questions still unanswered
+
+§7's five, unchanged by the UI phase — except that **Q4 got sharper**. Q4 asks whether
+drawing an offset for a private purpose changes the deduction; `deductibleFraction` is
+now a field a person can type a number into, on two screens, and it moves two provisions
+at once (s8-1 and §988(e)(3)). §8's tax argument leans on the answer.
+
+Q2 (does an AU loss pool survive a residency change?) is the one most likely to bite a
+cross-border run silently.
+
+### 10.4 Smaller, genuinely optional
+
+- **§6's "an offset earns no yield" regression** is still unwritten. The behaviour is
+  correct and stands entirely on the *absence* of a wiring, which is exactly the kind of
+  thing that gets "fixed" by someone reading `rateKey` on an offset's CASH holding.
+- **A UI for the offset's idle capacity** (G4/P2). The metric is recorded per period;
+  nothing surfaces it, so an over-funded offset still looks identical to a right-sized
+  one in the app, which is the reading §8.2's sizing rule depends on.

@@ -83,6 +83,37 @@ export class RealPropertyEditor extends BaseComponent {
     hint.textContent = `= Prime (${this._fmtPct(prime)}) ${sign} ${this._fmtPct(Math.abs(spread))}`;
   }
 
+  /**
+   * Describe the loan's life from the three term fields (design 86 G2/G6), because
+   * their interaction is the part that is easy to author wrong:
+   *
+   *   · IO with no expiry  → interest-only forever, and `monthlyMortgage` is inert.
+   *   · IO with an expiry but NO maturity year → `scheduledLoanPayment` has no term to
+   *     amortise over, so at expiry it falls back to the authored fixed payment. That
+   *     is a real behaviour, not an error, but it is almost never what was meant.
+   *   · IO with both → the reversion this whole gap exists to model.
+   *   · maturity alone  → the balance is discharged in that year, in one payment.
+   */
+  _updateMortgageTermHint(el) {
+    const hint = el.querySelector('[data-id="mortgageTermHint"]');
+    if (!hint) return;
+    const io       = el.querySelector('[data-id="mortgageInterestOnly"]').checked;
+    const ioUntil  = el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value;
+    const maturity = el.querySelector('[data-id="mortgageMaturityYear"]').value;
+
+    if (!io && !ioUntil && !maturity) { hint.textContent = ''; return; }
+    if (!io) {
+      hint.textContent = maturity
+        ? `P&I, discharged in full in ${maturity}.`
+        : 'IO Until Year applies to an interest-only loan only — tick Interest Only.';
+      return;
+    }
+    if (!ioUntil) { hint.textContent = 'Interest-only for life — Monthly Mtg. is inert.'; return; }
+    hint.textContent = maturity
+      ? `Interest-only to ${ioUntil}, then P&I re-amortised over the remaining term to ${maturity}.`
+      : `Interest-only to ${ioUntil}, then the fixed Monthly Mtg. — set a Maturity Year to re-amortise instead.`;
+  }
+
   render() {
     const el     = this._getTemplate('tpl-real-property-editor');
     const isEdit = !!(this._node?.id);
@@ -121,6 +152,26 @@ export class RealPropertyEditor extends BaseComponent {
     this._updateMortgageRateHint(el);
     this.listen(el.querySelector('[data-id="mortgageInterestRate"]'), 'input', () => this._updateMortgageRateHint(el));
     this.listen(el.querySelector('[data-id="country"]'), 'change', () => this._updateMortgageRateHint(el));
+    // Mortgage terms + deductibility (design 86 G2/G3/G6/G7). Every one is blank/off
+    // by default, which reproduces the pre-86 loan exactly: no term, no IO, the
+    // "deductible iff the property rents" rule, and a §988 booking rate stamped at the
+    // first payment. A blank year/fraction must round-trip as null, NOT 0 — 0 is a real
+    // maturity year and a real "nothing is deductible" fraction.
+    el.querySelector('[data-id="mortgageInterestOnly"]').checked = this._node?.mortgageInterestOnly ?? false;
+    el.querySelector('[data-id="mortgageInterestOnlyUntilYear"]').value = this._node?.mortgageInterestOnlyUntilYear ?? '';
+    el.querySelector('[data-id="mortgageMaturityYear"]').value          = this._node?.mortgageMaturityYear          ?? '';
+    el.querySelector('[data-id="mortgageDeductibleFraction"]').value    = this._node?.mortgageDeductibleFraction    ?? '';
+    el.querySelector('[data-id="mortgageBookingFxRate"]').value         = this._node?.mortgageBookingFxRate         ?? '';
+    // The IO-expiry / re-amortisation branch needs a term to amortise over, and an IO
+    // mortgage derives its own payment, so the payment field goes inert. Both are
+    // easy to get silently wrong, so say so under the fields rather than in a tooltip.
+    const refreshTerm = () => this._updateMortgageTermHint(el);
+    for (const id of ['mortgageInterestOnly', 'mortgageInterestOnlyUntilYear', 'mortgageMaturityYear']) {
+      this.listen(el.querySelector(`[data-id="${id}"]`), 'change', refreshTerm);
+      this.listen(el.querySelector(`[data-id="${id}"]`), 'input',  refreshTerm);
+    }
+    refreshTerm();
+
     el.querySelector('[data-id="landValueRatio"]').value       = this._node?.landValueRatio         ?? 0.2;
     el.querySelector('[data-id="annualDepreciationOverride"]').value =
       this._node?.annualDepreciationOverride ?? '';
@@ -194,6 +245,14 @@ export class RealPropertyEditor extends BaseComponent {
 
   _readForm(el) {
     const saleYearRaw = el.querySelector('[data-id="plannedSaleYear"]').value;
+    /** A blank numeric input means "unset" (null), never 0 — see the render comment. */
+    const nullableNum = (dataId, round = false) => {
+      const raw = el.querySelector(`[data-id="${dataId}"]`).value;
+      if (raw === '' || raw == null) return null;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return null;
+      return round ? Math.round(n) : n;
+    };
     const data = {
       id:                   this._node?.id ?? null,
       name:                 el.querySelector('[data-id="name"]').value.trim(),
@@ -215,6 +274,17 @@ export class RealPropertyEditor extends BaseComponent {
       occupancyRate:        +el.querySelector('[data-id="occupancyRate"]').value,
       rentalExpenseRatio:   +el.querySelector('[data-id="rentalExpenseRatio"]').value,
       mortgageInterestRate: +el.querySelector('[data-id="mortgageInterestRate"]').value,
+      // Mortgage terms + deductibility (design 86). Years are whole numbers; the
+      // deductible fraction is clamped to [0,1] because it is a share, and a stray
+      // 50 (percent, not fraction) would otherwise multiply the deduction by fifty.
+      mortgageInterestOnly:          el.querySelector('[data-id="mortgageInterestOnly"]').checked,
+      mortgageInterestOnlyUntilYear: nullableNum('mortgageInterestOnlyUntilYear', true),
+      mortgageMaturityYear:          nullableNum('mortgageMaturityYear', true),
+      mortgageDeductibleFraction:    (() => {
+        const f = nullableNum('mortgageDeductibleFraction');
+        return f == null ? null : Math.min(1, Math.max(0, f));
+      })(),
+      mortgageBookingFxRate:         nullableNum('mortgageBookingFxRate'),
       landValueRatio:       +el.querySelector('[data-id="landValueRatio"]').value,
       annualDepreciationOverride:
         el.querySelector('[data-id="annualDepreciationOverride"]').value === ''

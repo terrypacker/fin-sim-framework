@@ -372,6 +372,8 @@ export class WorkbenchApp extends BaseComponent {
           node,
           people,
           realProperties,
+          // Sibling accounts back the loan "Payment Source" picker (design 54 P4).
+          accounts: registry.graphQueryApi.getByKind('account'),
           primeRates,
           ...paramLinkProps(),
           onSave: (data) => {

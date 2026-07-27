@@ -710,6 +710,22 @@ function _accountToStatePlain(account) {
   if (account.offsetsPropertyKey !== undefined) {
     plain.offsetsPropertyKey = account.offsetsPropertyKey ?? null;
   }
+  // LoanAccount terms (design 54 §2 + design 86). Same reason as the offset link
+  // above: LoanPaymentHandler reads the runtime STATE entry, not the record, so a
+  // field left out here makes an authored loan a balance with no rate and no
+  // payment — it sits in net worth and is never serviced.
+  if (account.type === 'loan') {
+    plain.interestRate          = account.interestRate          ?? 0;
+    plain.primeSpread           = account.primeSpread           ?? null;
+    plain.monthlyPayment        = account.monthlyPayment        ?? 0;
+    plain.linkedPropertyKey     = account.linkedPropertyKey     ?? null;
+    plain.paymentSourceKey      = account.paymentSourceKey      ?? null;
+    plain.interestOnly          = account.interestOnly          ?? false;
+    plain.deductibleFraction    = account.deductibleFraction    ?? null;
+    plain.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
+    plain.maturityYear          = account.maturityYear          ?? null;
+    plain.bookingFxRate         = account.bookingFxRate         ?? null;
+  }
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;
     plain.earningsBasis            = account.earningsBasis ?? 0;

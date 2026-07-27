@@ -11,7 +11,8 @@
 import { OneOffEvent }             from '../../simulation-framework/events/one-off-event.js';
 import { EventSeries }             from '../../simulation-framework/events/event-series.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../finance/account-rules/au/au-real-property-classes.js';
-import { AuLoanPaymentHandler, LoanPaymentApplyReducer, synthesizeLoanForProperty } from '../../finance/account-rules/loan-classes.js';
+import { AuLoanPaymentHandler, LoanPaymentApplyReducer, synthesizeLoanForProperty,
+         propertyNeedsLoanPayment, accountNeedsLoanPayment } from '../../finance/account-rules/loan-classes.js';
 import { AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from '../../finance/account-rules/rental-income-classes.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
@@ -115,8 +116,12 @@ export const AU_REAL_PROPERTY = {
         enabled: true,
         color:   '#5D4037',
       }));
-    const mortgagedProps = auProps.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
-    if (mortgagedProps.length > 0) {
+    // A monthly payment event is needed for a mortgage OR for a standalone AU
+    // LoanAccount (design 54); the handler pays every `type: 'loan'` state entry in
+    // the country, so one event covers both (design 86 G6 UI).
+    const needsLoanPayment = auProps.some(propertyNeedsLoanPayment)
+      || (context.accounts ?? []).some(a => accountNeedsLoanPayment(a, 'AU'));
+    if (needsLoanPayment) {
       schedules.push(new EventSeries({
         name:     'AU Loan Payment',
         type:     'AU_LOAN_PAYMENT',
@@ -150,12 +155,17 @@ export const AU_REAL_PROPERTY = {
 
   handlers(context) {
     const props = (context.realProperties ?? []).filter(p => p.country === 'AU');
-    if (props.length === 0) return [];
-    const handlers = [new AuHouseSaleHandler()];
-    const mortgagedProps = props.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
-    if (mortgagedProps.length > 0) {
+    // A standalone LoanAccount needs the payment handler even with no AU property at
+    // all, so the loan gate is evaluated before the no-property early return.
+    const needsLoanPayment = props.some(propertyNeedsLoanPayment)
+      || (context.accounts ?? []).some(a => accountNeedsLoanPayment(a, 'AU'));
+    if (props.length === 0) {
       // Country-filtered so it pays only AU loans; the shared LoanPaymentApplyReducer
       // is registered once by the compiler substrate (design 54 P2).
+      return needsLoanPayment ? [new AuLoanPaymentHandler({ stateRegistry: context.stateRegistry })] : [];
+    }
+    const handlers = [new AuHouseSaleHandler()];
+    if (needsLoanPayment) {
       handlers.push(new AuLoanPaymentHandler({ stateRegistry: context.stateRegistry }));
     }
     const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
