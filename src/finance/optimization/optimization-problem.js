@@ -31,11 +31,21 @@ import { rolloutProfiler }     from './rollout-profiler.js';
  * whole state with the now-snapshot, whose values reflect the OLD control from when
  * the snapshot was taken; without re-stamping, a committed Lever-A/C candidate is
  * inert under MPC (verified by scripts/verify-mpc-lever.mjs). These are scalar
- * toolset-resolved state fields (crossBorderDrawdown = Lever A; withinTierDraw =
- * Lever C). The Lever-B role-weight order bakes into per-account drawdownPriority
- * and needs a cascade re-run instead (§11.3 Phase 3-MPC), handled separately.
+ * toolset-resolved state fields (crossBorderDrawdown = design-58 Lever A;
+ * withinTierDraw = design-58 Lever C). The design-58 Lever-B role-weight order bakes
+ * into per-account drawdownPriority and needs a cascade re-run instead (§11.3 Phase
+ * 3-MPC), handled separately.
+ *
+ * Design 65 (allocation-aware drawdown) adds its own toolset-resolved policy fields:
+ * the sleeve order / lot strategy (Levers A/B) and the rebalance-coupling weight
+ * (Lever C). `drawdownSleeveWeights` is an object, but the spread-apply below handles
+ * it like any other field; all four are read fresh from state by the disposal
+ * primitive each draw, so forwarding them is enough (no per-account re-stamp).
  */
-const FORWARD_DRAWDOWN_STATE_FIELDS = ['crossBorderDrawdown', 'withinTierDraw'];
+const FORWARD_DRAWDOWN_STATE_FIELDS = [
+  'crossBorderDrawdown', 'withinTierDraw',
+  'drawdownSleeveOrder', 'drawdownLotStrategy', 'drawdownSleeveWeights', 'drawdownRebalanceWeight',
+];
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {

@@ -1,6 +1,7 @@
 # 65 — Allocation-aware drawdown: choose *which holding type* to sell for a debit
 
-**Status**: **PROPOSED** (2026-07-16). No code yet. Scope: make the **within-account
+**Status**: **IMPLEMENTED — all 4 phases** (2026-07-16, branch `wip/allocation-aware-drawdown`).
+Scope: make the **within-account
 liquidation** of a spending debit **allocation-aware** — choose *which asset class
 (sleeve) and which lots* to sell, instead of the current blind FIFO-by-purchase-date.
 This is the third leg of the "control the holdings over time" family: **design 58**
@@ -263,6 +264,73 @@ drawdown, event withdrawals, design-61 rebalance, inheritance) inherits the capa
 Phases 1–2 have **no dependency on design 61** (they help any mixed-sleeve or multi-lot
 account, including the pre-61 fixed-income/brokerage split). Phase 3 is where 65 and 61
 unify.
+
+### Implementation notes (Phases 1–2, 2026-07-16)
+
+- **Phase 1 (seam):** `consumeHoldings(holdings, amount, { indexation, selection })` in
+  `holdings-fifo.js`; `consumeHoldingsFifo` is now a thin FIFO wrapper. The pluggable
+  comparator lives in the new `holdings/holdings-selection.js`
+  (`buildHoldingsComparator`, `SLEEVE_ORDER`, `LOT_STRATEGY`, `resolveDrawdownSelection`).
+  `selection == null` ⇒ purchaseDate-ascending, byte-identical to the old path, so every
+  existing caller and the golden are unaffected.
+- **Phase 2 (Levers A/B):** params `drawdownSleeveOrder` (FIFO/TAX_COST/PRESERVE_GROWTH/
+  WEIGHTED), `drawdownLotStrategy` (FIFO/HIFO/LOSS_FIRST/SPECIFIC), and `sleeveWeight::<CLASS>`
+  in `intl-retirement-scenario.js`, projected onto `state` by `us-retirement-toolset.js`
+  (alongside `withinTierDraw`/`crossBorderDrawdown`). Both disposal paths resolve the same
+  `state` fields via `resolveDrawdownSelection`: the engine path (`_drawPenaltyFree`, threaded
+  through `replenishSavings`) and the event path (`Us/AuStockWithdrawalApplyReducer`). Opt
+  axes added to `intl-retirement-opt-config.js`.
+- **OQ3 decision:** the primitive stays **tax-agnostic** (it tallies; the caller taxes). Lever B
+  ranks lots by basis-ratio/gain (`HIFO`/`MIN_GAIN`/`LOSS_FIRST`), which is jurisdiction-free.
+  `SPECIFIC` is an alias of `MIN_GAIN` today; a genuinely bracket-/after-tax-aware `SPECIFIC`
+  (and AU-discount-aware Lever B) is deferred to a later phase since it needs caller-side rate
+  context — the tests below hold regardless.
+- **Golden unmoved — correctly.** The default IntlRetirement scenario is accumulation-heavy:
+  it never liquidates a mixed-sleeve brokerage for a deficit before simEnd, so the lever is
+  **legitimately inert there** and `cross-border-relief-scenario.test.mjs` does not move. To
+  guard against a silently-inert lever (the design-61 `id:null` lesson), engagement is proven
+  by `evt-allocation-aware-drawdown.test.mjs`: forced-drawdown fixtures exercise **both** the
+  engine (`replenishSavings`/`_drawPenaltyFree`) and event (`STOCK_WITHDRAWAL_APPLY`) paths and
+  assert the sleeve/lot choice (and realized gain) actually changes under TAX_COST/HIFO.
+  Primitive-level policies are covered by `holdings-selection.test.mjs`.
+
+**Phase 3 (Lever C — rebalance coupling), OQ1 resolved via option (a):**
+- `RebalanceToTargetReducer` now **stamps `account.targetComposition`** (the per-account target
+  fraction map it already computes) into state **every period** — even when nothing drifts —
+  via copy-on-write, so the drawdown sees a fresh target between rebalances. Confirmed firing in
+  a full run (the taxable brokerage stamps `{EQUITY:1.0}` under LOCATED). The stamp is inert
+  unless coupling is on, and the reducer is absent by default (`behavioralStrategies=[]`), so the
+  golden is untouched.
+- New param `drawdownRebalanceWeight` (w_mix, default 0 = off), projected to `state`, opt axis
+  added, gated on `behavioralStrategies includes TARGET_ALLOCATION`. `resolveDrawdownSelection`
+  carries it; `withRebalanceCoupling(selection, account)` (in `holdings-selection.js`) builds a
+  per-account `sleeveScore = taxRankNorm(class) − w_mix·(actualFrac − targetFrac)` — **note the
+  sign is `−`, not the doc §4-C `+`**: ascending sort sells first, so the over-weight sleeve must
+  score *lower*. Applied at all three consume sites; returns the selection unchanged when coupling
+  is off / no target / empty account ⇒ **design-61-off accounts fall back to Lever A** transparently.
+- **Lever-C benefit is scenario-shaped.** Under LOCATED, a taxable account concentrates to one
+  sleeve, so there's no mix to correct there (w=0≡w=1); the payoff needs genuinely mixed-sleeve
+  taxable accounts that get drawn — staged directly in the integration tests (stamp fires, a
+  coupled draw sells the over-weight EQUITY toward target, w=0 falls back to blind FIFO).
+
+**Phase 4 (MPC online):**
+- `DRAWDOWN_SLEEVE` cockpit control in `cockpit-controller.js` (mirrors `ALLOCATION_MIX`):
+  `buildVariables` → one CONTINUOUS `sleeveWeight::<CLASS>` axis per sleeve; `describe` →
+  the resulting sell order; `appliesTo` gates on `drawdownSleeveOrder === WEIGHTED`; `actuate`
+  rewrites the live `state.drawdownSleeveOrder`/`drawdownSleeveWeights` + persists the params.
+- The four design-65 fields joined `FORWARD_DRAWDOWN_STATE_FIELDS` (`optimization-problem.js`)
+  so a committed policy survives snapshot injection. **No `_seededSim` per-account shim** (the
+  design-58 Lever-B `drawdownPriority` re-stamp) is needed — the sleeve policy is a state-resident
+  config the primitive reads fresh each draw, so forwarding the fields is sufficient. Proven by
+  `mpc-drawdown-sleeve.test.mjs` (control spec + a direct forwarding assertion: a committed
+  WEIGHTED policy + weights are present on the snapshot-seeded sim, not the snapshot's FIFO default).
+- `scripts/verify-mpc-lever.mjs drawdownSleeve` exists but reports **INCONCLUSIVE** on the standard
+  post-move drawdown scenario: within one brokerage the sell order changes CGT *timing*, but that
+  scenario drains the taxable book (or cross-border relief offsets the gain) so terminal wealth is
+  order-invariant — the same scenario-shaped limitation as Levers A–C. The forwarding correctness
+  is covered by the unit test above regardless.
+
+**3578 unit + 870 viz green.** Design 65 is complete (Levers A/B/C static + opt + MPC).
 
 ---
 

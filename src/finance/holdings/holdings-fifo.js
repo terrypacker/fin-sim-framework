@@ -9,14 +9,24 @@
  */
 
 import { isCollectibleAllocation } from './allocation.js';
+import { buildHoldingsComparator } from './holdings-selection.js';
 
 /**
- * FIFO consumption of an account's holdings to satisfy a sale of `amount`
- * dollars at marketValue. Returns the realized cost basis and the new
- * holdings array (with consumed positions removed or reduced).
+ * Consume an account's holdings to satisfy a sale of `amount` dollars at
+ * marketValue. Returns the realized cost basis and the new holdings array (with
+ * consumed positions removed or reduced).
  *
- * Sort order: ascending purchaseDate (FIFO). Holdings with null purchaseDate
- * sort first (treated as oldest — "carried in from scenario boot").
+ * Sort order (design 65): a pluggable **selection policy** decides which lots to
+ * consume. When `selection` is null the lots are walked in ascending purchaseDate
+ * order (FIFO) — byte-identical to the historic behavior — so every caller that
+ * omits `selection` (and the golden) is unaffected. When a `selection` is supplied
+ * the primitive walks the sleeve order (Lever A/C) then the lot strategy (Lever B),
+ * with a purchaseDate tie-break; see holdings-selection.js. Every tally below is
+ * computed from *whichever* lots are consumed, so the tax chain downstream is
+ * untouched — only *which* lots get sold changes.
+ *
+ * Holdings with null purchaseDate sort first under FIFO (treated as oldest —
+ * "carried in from scenario boot").
  *
  * Each holding's basis share is computed pro-rata against its own
  * (consumed / marketValue) × costBasis. This matches the realized-gain
@@ -64,13 +74,16 @@ import { isCollectibleAllocation } from './allocation.js';
  * here: a caller that only needs the discount split (not indexation) may pass
  * `{ asOfMs, country }` with no `level` — the index factor then stays 1.
  *
- * @param {{ level?: number, asOfMs: number, country: string }|null} [indexation=null]
+ * @param {Object}  [opts={}]
+ * @param {{ level?: number, asOfMs: number, country: string }|null} [opts.indexation=null]
+ * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, sleeveScore?: Function, lotStrategy?: string }|null} [opts.selection=null]
+ *   The design-65 selection policy; null ⇒ FIFO (identical to the historic behavior).
  * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
-export function consumeHoldingsFifo(holdings, amount, indexation = null) {
+export function consumeHoldings(holdings, amount, { indexation = null, selection = null } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
     return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
   }
@@ -80,7 +93,7 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   for (const h of holdings) {
     if (h?.costBaseByCountry) for (const c of Object.keys(h.costBaseByCountry)) countries.add(c);
   }
-  const sorted = [...holdings].sort((a, b) => _purchaseTs(a) - _purchaseTs(b));
+  const sorted = [...holdings].sort(buildHoldingsComparator(selection));
   let remaining     = amount;
   let realizedBasis = 0;
   let consumed      = 0;
@@ -189,6 +202,20 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
     newHoldings,
     consumed:      +consumed.toFixed(2),
   };
+}
+
+/**
+ * FIFO consumption — the historic entry point, now a thin wrapper over
+ * `consumeHoldings` with no selection policy (⇒ purchaseDate ascending). Kept so
+ * every existing caller (engine drawdown, event withdrawals, design-61 rebalance,
+ * inheritance, residency cost-base) is byte-identical until it opts into a policy.
+ *
+ * @param {Array}  holdings
+ * @param {number} amount
+ * @param {{ level?: number, asOfMs: number, country: string }|null} [indexation=null]
+ */
+export function consumeHoldingsFifo(holdings, amount, indexation = null) {
+  return consumeHoldings(holdings, amount, { indexation });
 }
 
 function _purchaseTs(h) {

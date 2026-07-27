@@ -288,6 +288,12 @@ export class RebalanceToTargetReducer extends Reducer {
 
     const rebalanceActions = [];
     const newFiredShocks   = [];
+    // Design 65 §OQ1(a): stamp each account's current target composition into state
+    // every period — even when no rebalance fires — so the allocation-aware drawdown
+    // (Lever C) can read `actual − target` per sleeve at liquidation time and sell the
+    // over-weight sleeve first. Copy-on-write (a fresh account object) keeps the
+    // JOURNAL_STRICT purity invariant; the field is inert unless drawdownRebalanceWeight>0.
+    const stampPatch = {};
 
     for (const { stateKey, role, total } of present) {
       const account = state[stateKey];
@@ -298,6 +304,7 @@ export class RebalanceToTargetReducer extends Reducer {
       const target = locatedPlan
         ? _fractionsOf(locatedPlan.get(stateKey), total)
         : targetForRole(scheduledTarget, role);
+      stampPatch[stateKey] = { ...account, targetComposition: target };
 
       // Actual allocation fractions.
       const actual = {};
@@ -331,21 +338,18 @@ export class RebalanceToTargetReducer extends Reducer {
 
     for (const r of qualifyingRegimes) newFiredShocks.push(r.shockId);
 
-    if (rebalanceActions.length === 0 && newFiredShocks.length === 0) {
-      return this.newState(state);
+    // Always return the target stamp (design 65 §OQ1a) even when nothing drifted, so
+    // the drawdown sees a fresh target between rebalances. Merge in the fired-shock
+    // ledger only when a regime rebalance fired.
+    const patch = { ...stampPatch };
+    if (newFiredShocks.length > 0) {
+      patch.regimeActions = {
+        ...state.regimeActions,
+        [ACTION_KEY]: { ...entry, firedForShocks: [...entry.firedForShocks, ...newFiredShocks] },
+      };
     }
 
-    const updatedEntry = newFiredShocks.length > 0
-      ? { ...entry, firedForShocks: [...entry.firedForShocks, ...newFiredShocks] }
-      : entry;
-
-    return this.newState(
-      state,
-      newFiredShocks.length > 0
-        ? { regimeActions: { ...state.regimeActions, [ACTION_KEY]: updatedEntry } }
-        : {},
-      rebalanceActions,
-    );
+    return this.newState(state, patch, rebalanceActions);
   }
 }
 
