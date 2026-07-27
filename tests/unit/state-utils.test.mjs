@@ -43,6 +43,27 @@ test('diffStates: delta is null for non-numeric change', () => {
   assert.strictEqual(changes[0].delta, null);
 });
 
+// A YTD accumulator absent from a loaded scenario's initial state materializes on
+// its first accrual. Reporting that as an unknown (null) delta silently dropped the
+// first accrual of the run from every stateDelta-summing report, so the Form 1040
+// income drills under-footed their own tax line by that amount.
+test('diffStates: a field materializing from absent carries its full value as the delta', () => {
+  const changes = diffStates({}, { usNetInvestmentIncomeYTD: 213.43 });
+  assert.strictEqual(changes.length, 1);
+  assert.strictEqual(changes[0].field, 'usNetInvestmentIncomeYTD');
+  assert.strictEqual(changes[0].delta, 213.43);
+});
+
+test('diffStates: a field materializing from explicit null also carries its full value', () => {
+  const changes = diffStates({ cash: null }, { cash: 500 });
+  assert.strictEqual(changes[0].delta, 500);
+});
+
+test('diffStates: delta stays null when a non-number becomes a number', () => {
+  const changes = diffStates({ rate: 'prime' }, { rate: 0.07 });
+  assert.strictEqual(changes[0].delta, null);
+});
+
 test('diffStates: skips "credits" key', () => {
   const prev = { credits: [1, 2, 3], cash: 100 };
   const next  = { credits: [1, 2, 3, 4], cash: 100 };
@@ -172,4 +193,12 @@ test('MutationTracker: primitive values pass through unchanged with delta', () =
   assert.strictEqual(sd[0].before, 100);
   assert.strictEqual(sd[0].after, 250);
   assert.strictEqual(sd[0].delta, 150);
+});
+
+test('MutationTracker: recording onto an absent field yields the full value as delta', () => {
+  MutationTracker.begin();
+  MutationTracker.record('usNetInvestmentIncomeYTD', undefined, 213.43);
+  const sd = MutationTracker.flush();
+  assert.strictEqual(sd[0].before, null, 'absent is recorded as null');
+  assert.strictEqual(sd[0].delta, 213.43);
 });

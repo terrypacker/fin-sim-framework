@@ -84,10 +84,30 @@ function _snapshot(v) {
   return _JOURNAL_STRICT ? _deepFreeze(v) : v;
 }
 
+/**
+ * Numeric delta for a field transition, or null when the change is not numeric.
+ *
+ * A field that *materializes* — absent (or explicitly null) before, a number
+ * after — counts as a delta of its full value, not "unknown". YTD accumulators
+ * are the case that matters: a scenario whose initial state omits, say,
+ * `usNetInvestmentIncomeYTD` gets `undefined → 213.43` on the first accrual of
+ * the run, and a null delta there silently drops that accrual from every report
+ * that sums `stateDelta` (ordinary-income-by-source, niit-base-by-component),
+ * so the drill under-foots the tax line by exactly the first month's accrual.
+ * Only the first period of a run is affected — the annual settle writes a real
+ * 0 afterwards.
+ */
+function _numericDelta(before, after) {
+  if (typeof after !== 'number') return null;
+  if (typeof before === 'number')      return after - before;
+  if (before === undefined || before === null) return after;   // field materialized
+  return null;                                                  // e.g. string → number
+}
+
 export const MutationTracker = {
   begin()                    { _mutations = []; },
   record(field, before, after) {
-    const delta = typeof after === 'number' && typeof before === 'number' ? after - before : null;
+    const delta = _numericDelta(before, after);
     _mutations.push({ field, before: _snapshot(before ?? null), after: _snapshot(after ?? null), delta });
   },
   flush() {
@@ -162,7 +182,7 @@ export function diffStates(prev, next) {
         walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
       }
     } else if (!_leafEqual(b, a)) {
-      const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
+      const delta = _numericDelta(b, a);
       // `a` is a live reference into this.state; `b` may be too depending on the
       // caller. Snapshot object/array leaves so the recorded diff can't be
       // rewritten by later in-place mutation of the same object.

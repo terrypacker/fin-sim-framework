@@ -103,7 +103,7 @@ async function runDef(def, params, entries) {
 
 // ─── Registry composition ────────────────────────────────────────────────────
 
-test('ReportDefinitionRegistry registers the 15 built-in definitions', () => {
+test('ReportDefinitionRegistry registers the 16 built-in definitions', () => {
   const reg = new ReportDefinitionRegistry();
   const ids = reg.getAll().map(d => d.id).sort();
   assert.deepStrictEqual(ids, [
@@ -114,6 +114,7 @@ test('ReportDefinitionRegistry registers the 15 built-in definitions', () => {
     'debits-from-account',
     'journal-composition',
     'money-moved-by-action',
+    'niit-base-by-component',
     'nr-withholding-income-by-source',
     'ordinary-income-by-source',
     'pretax-adjustments-by-source',
@@ -614,6 +615,89 @@ test('account multiselect on cash-flow-by-account filters per-diff rows by state
   assert.strictEqual(filtered.groups.length, 1);
   assert.strictEqual(filtered.groups[0].key.stateKey, 'usSavingsAccount.balance');
   assert.strictEqual(filtered.groups[0].total, -1000);
+});
+
+// ─── NiitBaseByComponentDef ──────────────────────────────────────────────────
+
+test('niit-base-by-component: sums all three NII accumulators and excludes the settle reset', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('niit-base-by-component');
+  assert.strictEqual(def.perDiff, true, 'NII accrues as stateDeltas, not action amounts');
+
+  const entries = [
+    // The non-gain slice — the part that made the Form 8960 line unexplainable.
+    entry({
+      actionType: 'STOCK_DIVIDEND_TAX',
+      data:       { amount: 22630.69 },
+      stateDiff:  [
+        { field: 'usOrdinaryIncomeYTD',       before: 0, after: 22630.69, delta: 22630.69 },
+        { field: 'usNetInvestmentIncomeYTD',  before: 0, after: 22630.69, delta: 22630.69 },
+      ],
+    }),
+    entry({
+      actionType: 'BOND_COUPON_TAX',
+      data:       { amount: 16722.63 },
+      stateDiff:  [{ field: 'usNetInvestmentIncomeYTD', before: 22630.69, after: 39353.32, delta: 16722.63 }],
+    }),
+    // Gains live in their own accumulators but are part of the same §1411 base.
+    entry({
+      actionType: 'COMPANY_SALE_TAX',
+      data:       { gain: 650000 },
+      stateDiff:  [{ field: 'usCapitalGainsYTD', before: 0, after: 650000, delta: 650000 }],
+    }),
+    entry({
+      actionType: 'COLLECTIBLE_SALE_TAX',
+      data:       { gain: 5000 },
+      stateDiff:  [{ field: 'usCollectibleGainsYTD', before: 0, after: 5000, delta: 5000 }],
+    }),
+    // The annual settle zeroes every accumulator; counting its diff would cancel
+    // the whole report out to ~0.
+    entry({
+      actionType: 'US_TAX_SETTLE_APPLY',
+      data:       { tax: 100000 },
+      stateDiff:  [
+        { field: 'usNetInvestmentIncomeYTD', before: 39353.32, after: 0, delta: -39353.32 },
+        { field: 'usCapitalGainsYTD',        before: 650000,   after: 0, delta: -650000   },
+        { field: 'usCollectibleGainsYTD',    before: 5000,     after: 0, delta: -5000     },
+      ],
+    }),
+    // Ordinary income that is NOT investment income must stay out of the base.
+    entry({
+      actionType: 'WAGES_INCOME_TAX',
+      data:       { amount: 200000 },
+      stateDiff:  [{ field: 'usOrdinaryIncomeYTD', before: 22630.69, after: 222630.69, delta: 200000 }],
+    }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  const types = groups.map(g => g.key.actionType).sort();
+  assert.deepStrictEqual(types,
+    ['BOND_COUPON_TAX', 'COLLECTIBLE_SALE_TAX', 'COMPANY_SALE_TAX', 'STOCK_DIVIDEND_TAX']);
+  // Ties out to taxDetail.netInvestmentIncome = NII pool + capital + collectible gains.
+  assert.strictEqual(Math.round(grandTotal * 100) / 100, 694353.32);
+});
+
+test('niit-base-by-component: personKeys facet filters the base', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('niit-base-by-component');
+
+  const entries = [
+    entry({
+      actionType: 'US_RENTAL_INCOME_TAX',
+      data:       { amount: 9000, personKey: 'p-1' },
+      stateDiff:  [{ field: 'usNetInvestmentIncomeYTD', before: 0,    after: 9000,  delta: 9000 }],
+    }),
+    entry({
+      actionType: 'US_RENTAL_INCOME_TAX',
+      data:       { amount: 4000, personKey: 'p-2' },
+      stateDiff:  [{ field: 'usNetInvestmentIncomeYTD', before: 9000, after: 13000, delta: 4000 }],
+    }),
+  ];
+
+  const both   = await runDef(def, { cc: 'US', period: null }, entries);
+  const onlyP1 = await runDef(def, { cc: 'US', period: null, personKeys: ['p-1'] }, entries);
+  assert.strictEqual(both.grandTotal,   13000);
+  assert.strictEqual(onlyP1.grandTotal,  9000);
 });
 
 test('person multiselect on ordinary-income-by-source filters by personKey', async () => {

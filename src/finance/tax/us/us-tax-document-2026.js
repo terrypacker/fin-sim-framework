@@ -88,7 +88,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax, flat: br.collectibles },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
             ...(taxDetail.niitTax > 0
-              ? [{ label: 'Net Investment Income Tax (Form 8960, 3.8%)', amount: taxDetail.niitTax, flat: br.niit }]
+              ? [{
+                  label: 'Net Investment Income Tax (Form 8960, 3.8%)',
+                  amount: taxDetail.niitTax,
+                  flat: br.niit,
+                  drillReport: drill('niit-base-by-component'),
+                }]
               : []),
             // SECA and the Additional Medicare surtax are inside grossTax but were
             // never listed, so for a self-employed filer the visible lines did not
