@@ -40,6 +40,7 @@ import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
+import { roundRecordField } from './params/record-field-rounding.js';
 
 // Retirement roles carry the contribution/earnings basis ledger (design 53 §2)
 // whose `earningsBasis` is DERIVED from `balance − contributionBasis` (design 53
@@ -65,19 +66,6 @@ const BUILT_IN_TOOLSETS = [
   INHERITANCE,
   ECONOMIC_REGIMES,
 ];
-
-/**
- * Real-property / company-equity fields the param cascade should round to a whole
- * number (dollar value, calendar year). Fractional fields (rates, ratios) are
- * passed through unrounded — Math.round on a 0.04 rate would zero it.
- */
-const WHOLE_NUMBER_RECORD_FIELDS = new Set([
-  'value', 'plannedSaleYear', 'costBasis', 'mortgageBalance',
-]);
-function _roundRecordField(field, val) {
-  if (val == null) return val;
-  return WHOLE_NUMBER_RECORD_FIELDS.has(field) ? Math.round(val) : val;
-}
 
 /**
  * Lever B (design 58 §4-B): synthesize a strategy priority map (role → rank) from
@@ -671,22 +659,30 @@ export class ScenarioLoader {
       // Round whole-number fields (dollar value, sale year) but NOT fractional
       // rates like appreciationRate (design 55 property template) — Math.round on a
       // 0.04 rate would zero it, corrupting appreciation on Rebuild.
-      if (rec) rec[node.field] = _roundRecordField(node.field, val);
+      if (rec) rec[node.field] = roundRecordField(node.field, val);
+    } else if (node.type === 'collectible') {
+      // Same shape as realProperty: whole-number value / sale year, fractional rates
+      // passed through. Without this branch the generated `coll.<sk>.plannedSaleYear`
+      // param never reached its record, so the §6 harvest (which re-seeds a generated
+      // param from its record) blanked the value on every Rebuild/reload — and the
+      // collectible editor, whose sale-year field is param-owned, showed it empty.
+      const rec = (cfg.collectibles ?? []).find(r => r.stateKey === node.stateKey);
+      if (rec) rec[node.field] = roundRecordField(node.field, val);
     } else if (node.type === 'companyEquity') {
       const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
-      if (rec) rec[node.field] = _roundRecordField(node.field, val);
+      if (rec) rec[node.field] = roundRecordField(node.field, val);
     } else if (node.type === 'bequest') {
       // Design 63: the inheritanceYear param activates an inert bequest. Null keeps
       // it inert (no INHERIT event); a year rounds to a whole number.
       const rec = (cfg.bequests ?? []).find(r => r.stateKey === node.stateKey);
-      if (rec) rec[node.field] = (val == null ? null : _roundRecordField(node.field, val));
+      if (rec) rec[node.field] = (val == null ? null : roundRecordField(node.field, val));
     } else if (node.type === 'bequestAsset') {
       // Design 63 §12.3: per-inherited-RA-asset drawdown knobs cascade onto the
       // matching asset nested in a bequest. distributionMode is a string enum (no
       // rounding); fillCeiling / lumpYear are numeric.
       const cast = (v) => (v == null || v === '')
         ? null
-        : (typeof v === 'string' ? v : _roundRecordField(node.field, v));
+        : (typeof v === 'string' ? v : roundRecordField(node.field, v));
       let target = null;
       for (const b of (cfg.bequests ?? [])) {
         const asset = (b.assets ?? []).find(x => x.stateKey === node.stateKey);

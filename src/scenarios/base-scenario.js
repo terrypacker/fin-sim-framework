@@ -14,6 +14,7 @@ import {EventBus} from "../simulation-framework/event-bus.js";
 import {DerivedMetricsRegistry} from "../simulation-framework/derived-metrics-registry.js";
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
+import {roundRecordField} from "./params/record-field-rounding.js";
 
 /**
  * Base class for simulation scenarios.
@@ -149,9 +150,20 @@ export class BaseScenario extends SimGraphNode {
    * Algorithm:
    *   1. Write each key present in `params` back onto the matching `this.params[i].value`.
    *   2. For each typed-param entry that carries a `node` declaration, update the
-   *      live config-layer person or account node in-place via the service APIs.
+   *      live config-layer record (person / account / real property / collectible /
+   *      company equity) in-place via the service APIs.
    *   3. For account `balance` changes, also patch `this.initialState` so
    *      that the next `buildSim()` starts with the correct opening balance.
+   *
+   * This is the in-place sibling of `ScenarioLoader._applyParamNode`, which runs the
+   * same cascade on the cfg records during a full load/Rebuild. The two must cover
+   * the same `node.type`s: a type handled by only one of them means the param is
+   * silently dropped on that path — and for a GENERATED per-record param that is
+   * worse than inert, because the design-55 §6 harvest re-seeds the param from its
+   * record, blanking the user's value. Node types with no simple record target
+   * (`bequest`, `bequestAsset`, `accountPriority`) are load-path only by design.
+   * Whole-number coercion is shared via `roundRecordField` so neither path rounds a
+   * fractional rate to zero.
    *
    * Subclasses may override for finer control (e.g. to also update event data).
    *
@@ -195,10 +207,26 @@ export class BaseScenario extends SimGraphNode {
         }
       } else if (node.type === 'realProperty') {
         const realPropertyService = this.context?.realPropertyService;
-        const prop = realPropertyService?.getAll().find(p => p.stateKey === node.stateKey);
+        const prop = realPropertyService?.getAll().find(r => r.stateKey === node.stateKey);
         if (prop) {
           realPropertyService.updateProperty(prop, {
-            [node.field]: val != null ? Math.round(val) : val,
+            [node.field]: roundRecordField(node.field, val),
+          });
+        }
+      } else if (node.type === 'collectible') {
+        const collectibleService = this.context?.collectibleService;
+        const col = collectibleService?.getAll().find(c => c.stateKey === node.stateKey);
+        if (col) {
+          collectibleService.updateCollectible(col, {
+            [node.field]: roundRecordField(node.field, val),
+          });
+        }
+      } else if (node.type === 'companyEquity') {
+        const companyEquityService = this.context?.companyEquityService;
+        const eq = companyEquityService?.getAll().find(e => e.stateKey === node.stateKey);
+        if (eq) {
+          companyEquityService.updateCompanyEquity(eq, {
+            [node.field]: roundRecordField(node.field, val),
           });
         }
       }

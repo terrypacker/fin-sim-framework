@@ -302,6 +302,7 @@ import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField } from './scenarios/params/record-field-rounding.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
@@ -1311,6 +1312,8 @@ export const Scenarios = {
   resolveBalanceCenters,
   IntlRetirementScenario,
   applyRealPropertySaleYearParams,
+  WHOLE_NUMBER_RECORD_FIELDS,
+  roundRecordField,
   BALANCE_TARGET,
   ACCOUNT_PARAM_TEMPLATES,
   PERSON_PARAM_TEMPLATE,
