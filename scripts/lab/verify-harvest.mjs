@@ -36,7 +36,7 @@
  *   node scripts/lab/verify-harvest.mjs --seeds 1,2        # out-of-sample check
  */
 
-import { harvestLab, report, OBJECTIVES } from '../lib/harvest-lab.mjs';
+import { harvestLab, report, fmtFeasibility, fmtUsd, OBJECTIVES } from '../lib/harvest-lab.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, dflt) => {
@@ -76,16 +76,38 @@ for (const seed of seeds) {
   });
   report({ title: `harvest verification · levers ${levers.join('+')} · seed ${seed}`, out });
 
+  // FEASIBILITY is its own verdict line, above the drift, and it is unconditional
+  // (design 80 §4.1). Two bugs this fixes at once:
+  //   • the drift verdict was guarded on `a !== 0`, so under a die-with-zero goal —
+  //     the exact goal that produced the motivating failure — the script printed NO
+  //     verdict at all, silently;
+  //   • even when it did print, a Δ% on `finalNetLiquidity` cannot separate a
+  //     bankrupt plan from a perfect spend-down (§2.6): both terminate at $0.
+  const feas = out.feasibility?.b;
+  if (feas) {
+    console.log(`  FEASIBILITY: ${feas.feasible ? 'PASS — the baked plan stays solvent to the end of the scenario.' : `FAIL — ${fmtFeasibility(feas)}. The copy would be BLOCKED in the cockpit.`}`);
+  }
+
   const { a, b } = out.terminals;
-  if (Number.isFinite(a) && Number.isFinite(b) && a !== 0) {
+  const pointLevers = out.plan.entries.filter(e => e.form === 'POINT');
+  let verdict;
+  if (feas && !feas.feasible) {
+    // Fidelity is undefined against an infeasible bake — don't dress it up as a Δ%.
+    verdict = 'N/A — fidelity is not meaningful for an infeasible plan; fix feasibility first.';
+  } else if (!Number.isFinite(a) || !Number.isFinite(b)) {
+    verdict = 'N/A — one of the terminals is missing.';
+  } else if (a === 0) {
+    // A target-0 goal lands A on the metric's floor, where a RELATIVE drift is a
+    // division by zero and an ABSOLUTE one is the only honest statement.
+    verdict = `A = $0 (the goal's target) — relative drift is undefined; absolute Δ = ${fmtUsd(b - a)}.`;
+  } else {
     const drift = Math.abs((b - a) / a);
-    const pointLevers = out.plan.entries.filter(e => e.form === 'POINT');
-    const verdict = pointLevers.length
+    verdict = pointLevers.length
       ? `POINT levers present (${pointLevers.map(e => e.paramKey).join(', ')}) — drift is unbounded by construction; `
         + 'run with --votv to price the alternative.'
       : drift <= 0.01
         ? 'PASS — the baked schedule reproduces the run within 1%.'
         : `DRIFT ${(drift * 100).toFixed(2)}% — check the plan warnings above for where the approximation bit.`;
-    console.log(`  VERDICT: ${verdict}\n`);
   }
+  console.log(`  VERDICT: ${verdict}\n`);
 }

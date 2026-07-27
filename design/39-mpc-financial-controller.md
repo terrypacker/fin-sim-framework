@@ -738,6 +738,17 @@ reused there: same upsert, same enabling params, same diff, same
 
 ### 13.12 Remaining open question
 
+> **Superseded in part by `design/80-feasibility-preserving-harvest.md` (2026-07-26).**
+> Field result: a `DIE_WITH_TARGET` harvest produces a scenario that goes **insolvent**
+> while the closed-loop run it was baked from does not. That is a *feasibility* loss,
+> not the bounded drift §13.7 promises, and it revises four things here: §13.6.3's
+> variance-based collapse warning (a single decisive move at a statutory access age
+> reads as near-constant), §13.6.6's RESOLVE inheriting the MPC's objective verbatim
+> (a closed-loop objective is indifferent to solvency margin because feedback supplies
+> it — see the `DEFAULT_DEFICIT_PENALTY` docblock, "zero for any solvent plan"),
+> §13.7's `Δ%` fidelity targets, and §13.13.3's VoTV/VoFB, which is undefined when `B`
+> is infeasible. Design 80 also supplies the gate §13.6.5 / D7 were waiting on.
+
 - **H6 — Where the knots live.** §13.13 (below) argues that the POINT/SCHEDULE
   split is an artifact of the param system, not of the levers. Whether to factor a
   first-class schedule-valued param type — and for which levers time-variation is

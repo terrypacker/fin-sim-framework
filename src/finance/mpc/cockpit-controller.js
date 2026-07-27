@@ -9,7 +9,8 @@
  */
 
 import { OptimizationProblem }     from '../optimization/optimization-problem.js';
-import { OPTIMIZATION_OBJECTIVES, objectivePrimaryMetric } from '../optimization/optimization-objectives.js';
+import { OPTIMIZATION_OBJECTIVES, objectivePrimaryMetric, infeasibilityOf }
+  from '../optimization/optimization-objectives.js';
 import { createSolver }            from '../optimization/solvers/solver-registry.js';
 import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives.js';
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
@@ -1079,6 +1080,7 @@ export class CockpitController {
     horizonYears = null,       // sliding prediction window H (design 41); null = full horizon
     runId        = null,       // cockpit run this controller's epochs belong to (§13.2)
     decisionStore = null,      // optional DecisionRecordRegistry — durable log (§13 H4)
+    feasibilityFirst = true,   // solvency outranks reward, always (design 80 U2)
   } = {}) {
     this.simStart     = simStart;
     this.simEnd       = simEnd;
@@ -1094,6 +1096,7 @@ export class CockpitController {
     this.committed    = _deepCopyParams(baseParams);
     this.cfgTemplate  = cfgTemplate;
     this.objective    = objective;
+    this.feasibilityFirst = feasibilityFirst;
     // Multi-lever (design 45 §8): the controller searches a SET of controls whose
     // decision variables union into one vector and commit together each epoch.
     // `controls` (array) wins; otherwise the single `control` (back-compat). The
@@ -1226,6 +1229,11 @@ export class CockpitController {
       simEnd:       this.simEnd,
       horizonYears: this.horizonYears,   // sliding window for scoring + fan (design 41)
       initialState: { kind: 'snapshot', snapshot: this.snapshot, cfgTemplate: this.cfgTemplate },
+      // Design 80 U2 — solvency outranks reward structurally, so the search cannot
+      // drift into the infeasible region the way it did at §2.7's five consecutive
+      // failing epochs. Cockpit-only: the OPT panel keeps the plain score unless it
+      // opts in, so design-38 results stay byte-identical.
+      feasibilityFirst: this.feasibilityFirst,
     });
   }
 
@@ -1275,12 +1283,33 @@ export class CockpitController {
       fan = top.map(c => mkFan(c, problem.rolloutSeries(c.candidate, { points: seriesPoints })));
     }
 
+    // Design 80 U2 — feasibilityFirst guarantees a solvent candidate wins WHEN ONE
+    // EXISTS. When none does, the solver still has to return something, and the
+    // least-bad option is not a recommendation — it is a plan that runs out of
+    // money. That state was previously indistinguishable from a good one, because
+    // the goal metric itself cannot tell them apart: `finalNetLiquidity` reaches 0
+    // at the same moment OutOfFunds fires, so a ruined plan displays "$0" and reads
+    // as ON TARGET for a die-with-zero goal (design 80 §2.6). Say it explicitly.
+    const shortfall = best.result ? infeasibilityOf(best.result, this.snapshot) : 0;
+    const feasibility = {
+      feasible: shortfall === 0,
+      shortfall,
+      // How much of the searched set was even solvent — 0 of N is the signal that
+      // the lever's RANGE is the binding constraint, not the controller's choice
+      // (a spending floor above the affordable level, design 80 §2.5).
+      feasibleCandidates: (solution.candidates ?? [])
+        .filter(c => c.result && infeasibilityOf(c.result, this.snapshot) === 0).length,
+      totalCandidates: (solution.candidates ?? []).length,
+      outOfFundsDate: best.result?.outOfFundsDate ?? null,
+    };
+
     this.lastAdvice = {
       now: { date: this.snapshot.date, netWorth: fan[0]?.netWorth?.[0] ?? null },
       recommended,
       candidates: solution.candidates ?? [],
       fan,
       variables,
+      feasibility,
     };
     return this.lastAdvice;
   }
@@ -1327,7 +1356,24 @@ export class CockpitController {
         runId:       this.runId,
         controlKeys: this.controls.map(c => c.key),
         controlVars: variables,
-        extra: { goalMetric: { key: metric.key, label: metric.label } },
+        extra: {
+          goalMetric: { key: metric.key, label: metric.label },
+          // Design 80 F5 — solvency of the epoch's OWN projection, recorded at
+          // decision time. `result` already carries cumulativeDeficit, but nothing
+          // read it, so a run could commit five consecutive failing plans in
+          // silence (§2.7). The goal metric cannot substitute: for the liquid scope
+          // a ruined plan and a perfect spend-down both terminate at 0 (§2.6).
+          // Stamped here so the harvest and the save-points log can both refuse to
+          // present a ruined epoch as a recommendation.
+          feasibility: {
+            feasible:       infeasibilityOf(result, this.snapshot) === 0,
+            shortfall:      infeasibilityOf(result, this.snapshot),
+            deficit:        result?.cumulativeDeficit ?? 0,
+            deficitMonths:  result?.deficitMonths ?? 0,
+            scenarioFailed: result?.scenarioFailed ?? false,
+            outOfFundsDate: result?.outOfFundsDate ?? null,
+          },
+        },
       });
       // Mirror the layer to durable storage so an un-harvested run survives a
       // reload (§13 H4). The graph stays the source of truth.

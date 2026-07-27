@@ -63,7 +63,7 @@ export function applyHarvestPlan(scenario, plan, { applyRequires = true } = {}) 
       const current = readParamValue(scenario, req.paramKey);
       if (requirementSatisfied(current, req.to)) continue;
       const next = isIncludesRequirement(req.to)
-        ? _withIncluded(current, req.to.includes)
+        ? withIncluded(current, req.to.includes)
         : req.to;
       const res = upsertParam(scenario, req.paramKey, next);
       if (res.status === 'skipped') skipped.push({ paramKey: req.paramKey, reason: res.reason });
@@ -163,8 +163,15 @@ export function inferParamType(paramKey, value) {
   return 'Text';
 }
 
-/** Add `value` to an EnumMulti list without dropping the user's other selections. */
-function _withIncluded(current, value) {
+/**
+ * Add `value` to an EnumMulti list without dropping the user's other selections.
+ *
+ * Exported because the pre-apply feasibility check (harvest-feasibility.js) must
+ * fold the SAME enabling params this writer will, or it would verify a plan
+ * different from the one that gets applied — precisely the silent divergence F1
+ * exists to close.
+ */
+export function withIncluded(current, value) {
   if (Array.isArray(current)) return current.includes(value) ? current.slice() : [...current, value];
   if (current == null || current === '') return [value];
   return current === value ? current : [current, value];

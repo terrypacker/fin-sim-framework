@@ -59,6 +59,13 @@
 /* Horizon field dims its label when the goal can't use a window (design 41). */
 .mpc-field--disabled { opacity: 0.45; }
 [data-mpc="horizon"] { width: 72px; }
+/* Solver budget + seed and their evals/dimension readout (design 80 U5). The
+   readout turns warm when the search is sparse — the same budget is thorough over
+   one variable and thin over thirteen, and that is only visible as a ratio. */
+[data-mpc="budget"] { width: 68px; }
+[data-mpc="seed"]   { width: 56px; }
+.mpc-evals { white-space: nowrap; font-variant-numeric: tabular-nums; align-self: center; }
+.mpc-evals--sparse { color: var(--warn, #c88); opacity: 0.95; }
 
 /* The Die-With-Target axis sub-selects (Basis / Terminal / Tax basis) live inside
    a wrapper span so they can be shown/hidden as a group. `display:contents` lets
@@ -361,3 +368,24 @@
 }
 .mpc-hv-busy  { font-size: 12px; color: var(--text-dim); padding: 4px 0; }
 .mpc-hv-empty { font-size: 12px; color: var(--text-dim); padding: 4px 0; }
+
+/* ── Feasibility gate (design 80 F1) ───────────────────────────────────────────
+   Solvency is a PRIOR axis to fidelity, so it reads above the diff rather than as
+   one more line in the warnings list — an infeasible plan is a different kind of
+   object from a slightly-drifted one, and it blocks the copy. */
+.mpc-hv-feas {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.mpc-hv-feas--ok      { color: var(--text-dim); border-color: var(--border); }
+.mpc-hv-feas--unknown { color: var(--warn, #c88); border-color: var(--warn, #c88); }
+.mpc-hv-feas--bad {
+  color: var(--danger, #e66);
+  border-color: var(--danger, #e66);
+  background: color-mix(in srgb, var(--danger, #e66) 10%, transparent);
+}
+.mpc-harvest-override { color: var(--danger, #e66); }

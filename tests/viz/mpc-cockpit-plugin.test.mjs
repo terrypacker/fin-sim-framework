@@ -660,3 +660,133 @@ test('MpcCockpitPlugin: harvest targets the newest run, not a blend of runs', as
   assert.equal(plugin._harvestPlan.runId, 'run:new');
   assert.equal(plugin._harvestPlan.epochs, 1);
 });
+
+// ─── design 80 F1: feasibility is a GATE on the harvest, not a warning ───────
+
+/** Mount a harvest-capable cockpit with the F1 check stubbed to a fixed verdict. */
+function mountGatedPlugin(feasibility, opts = {}) {
+  const mounted = mountHarvestPlugin(opts);
+  mounted.checks = [];
+  mounted.plugin._checkFeasibility = (args) => { mounted.checks.push(args); return feasibility; };
+  return mounted;
+}
+
+const RUINED = {
+  feasible: false, shortfall: 5_705_589, cumulativeDeficit: 5_705_589, deficitMonths: 194,
+  scenarioFailed: true, outOfFundsDate: new Date(Date.UTC(2051, 3, 30)), result: {}, params: {}, error: null,
+};
+const SOLVENT = {
+  feasible: true, shortfall: 0, cumulativeDeficit: 0, deficitMonths: 0,
+  scenarioFailed: false, outOfFundsDate: null, result: {}, params: {}, error: null,
+};
+
+test('MpcCockpitPlugin: an infeasible harvest BLOCKS the copy and names the ruin date', async () => {
+  const { plugin, graph } = mountGatedPlugin(RUINED, {
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 9941 });
+  await plugin._openHarvest();
+
+  assert.equal(plugin._q('harvest-apply').disabled, true, 'copy is blocked, not merely warned about');
+  const body = plugin._q('harvest-body').textContent;
+  assert.match(body, /Infeasible/);
+  assert.match(body, /runs out of money in Apr 2051/, 'the ruin DATE is named, not just a deficit');
+  assert.match(body, /\$5,705,589 short over 194 month/);
+  // Never expressed as a % of the goal metric (§2.6 — that number is ≈0 here).
+  assert.ok(!/%/.test(body.split('open-loop')[0]), 'feasibility is not reported as a percentage');
+});
+
+test('MpcCockpitPlugin: the block is overridable, and the override is labelled with the ruin date', async () => {
+  const { plugin, graph, scenario } = mountGatedPlugin(RUINED, {
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 9941 });
+  await plugin._openHarvest();
+
+  const field = plugin._q('harvest-override-field');
+  assert.equal(field.style.display, '', 'override offered only when blocked');
+  assert.match(plugin._q('harvest-override-label').textContent, /Copy anyway — this plan runs out in Apr 2051/);
+
+  // Applying while still blocked writes nothing.
+  plugin._applyHarvest();
+  assert.equal(scenario.harvestedFrom, undefined, 'nothing written while blocked');
+
+  // Ticking the override enables the copy (a truncated exploratory harvest is a
+  // legitimate reason to want one — design 39 §13 H2).
+  const box = plugin._q('harvest-override');
+  box.checked = true;
+  box.dispatchEvent(new Event('change'));
+  assert.equal(plugin._q('harvest-apply').disabled, false);
+  plugin._applyHarvest();
+  assert.equal(scenario.harvestedFrom.runId, 'run:test', 'the override applies the plan');
+});
+
+test('MpcCockpitPlugin: a feasible harvest says so and hides the override', async () => {
+  const { plugin, graph, checks, scenario } = mountGatedPlugin(SOLVENT, {
+    params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList', value: [] }],
+  });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  await plugin._openHarvest();
+
+  assert.equal(plugin._q('harvest-apply').disabled, false);
+  assert.equal(plugin._q('harvest-override-field').style.display, 'none');
+  assert.match(plugin._q('harvest-body').textContent, /Solvent/);
+
+  // The check is handed the PLAN under review plus the scenario's own horizon —
+  // it must verify the same object the writer will write.
+  assert.equal(checks.length, 1, 'checked once on open, not per toggle');
+  assert.equal(checks[0].plan, plugin._harvestPlan);
+  assert.equal(checks[0].cfgTemplate, scenario);
+  assert.equal(checks[0].simEnd.getUTCFullYear(), 2046);
+});
+
+test('MpcCockpitPlugin: an unverifiable check does not veto the copy', async () => {
+  // Unverifiable ≠ infeasible — a check that could not run must not silently
+  // block the user's own plan.
+  const { plugin, graph } = mountGatedPlugin({ ...SOLVENT, feasible: null, error: 'compile failed' });
+  addSpendingEpoch(graph, { year: 2030, amount: 6000 });
+  await plugin._openHarvest();
+  assert.equal(plugin._q('harvest-apply').disabled, false);
+  assert.match(plugin._q('harvest-body').textContent, /could not be checked/);
+});
+
+// ─── design 80 U5: budget + seed as cockpit controls ────────────────────────
+
+test('MpcCockpitPlugin: budget and seed are exposed and feed every solve path', () => {
+  const plugin = mountPlugin();
+  assert.equal(Number(plugin._q('budget').value), 64, 'the app’s long-standing default');
+  assert.equal(Number(plugin._q('seed').value), 1);
+  assert.deepStrictEqual(plugin._solverOptions(), { budget: 64, seed: 1 });
+
+  plugin._q('budget').value = '128';
+  plugin._q('seed').value   = '7';
+  assert.deepStrictEqual(plugin._solverOptions(), { budget: 128, seed: 7 });
+
+  // Junk falls back to the defaults rather than handing the solver a NaN budget.
+  plugin._q('budget').value = '';
+  plugin._q('seed').value   = '-3';
+  assert.deepStrictEqual(plugin._solverOptions(), { budget: 64, seed: 1 });
+});
+
+test('MpcCockpitPlugin: the evals readout reports budget per search dimension', () => {
+  const plugin = mountPlugin();
+  // No scenario ⇒ dimension unknown ⇒ the budget alone, no fabricated ratio.
+  plugin._syncEvalsReadout();
+  assert.equal(plugin._q('evals').textContent, '64 evals');
+
+  // With a scenario the ratio is live BEFORE the first Advise, which is the point:
+  // sparsity is knowable in advance, not only inferable from a bad answer after.
+  plugin.setServices({ scenarioService: { getActive: () => ({
+    params: [{ name: 'spendingStrategy', value: ['EXPLICIT_BANDS'] },
+             { name: 'spendingExpenseBands', value: [{ startAge: 45, monthlyAmount: 5500 }] }],
+  }) } });
+  plugin._syncEvalsReadout();
+  assert.match(plugin._q('evals').textContent, /^64 evals · 64\.0\/dim \(1 var\)$/);
+  assert.equal(plugin._q('evals').classList.contains('mpc-evals--sparse'), false);
+
+  // A low budget over the same space flags as sparse.
+  plugin._q('budget').value = '4';
+  plugin._q('budget').dispatchEvent(new Event('change'));
+  assert.match(plugin._q('evals').textContent, /4 evals · 4\.0\/dim/);
+  assert.equal(plugin._q('evals').classList.contains('mpc-evals--sparse'), true);
+});
