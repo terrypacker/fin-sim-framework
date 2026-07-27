@@ -101,6 +101,8 @@ export const COVERED = [
   'IntlTransferRecordReducer',
   'AccountRetitleApplyReducer', 'PersonDiedApplyReducer', 'SocialSecuritySurvivorApplyReducer',
   'StockDividendCashApplyReducer', 'UsSavingsInterestCreditReducer', 'ScenarioCompleteReducer',
+  // design/68 Gap 4 — YOD-6 in mortality-year-of-death-tax.test.mjs
+  'SuperDeathBenefitApplyReducer',
 
   // E — behavioral (reducer-postconditions-behavioral.test.mjs)
   'PanicSellReducer', 'BehavioralPanicSellApplyReducer', 'OpportunisticRebalanceReducer',

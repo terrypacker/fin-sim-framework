@@ -1018,11 +1018,53 @@ export class Simulation {
       }
 
       // Soft-end: a reducer set scenarioComplete (e.g. all persons deceased).
-      // simEnd remains the hard cap; this is Path A from design/27 §2.1.
-      if (this.state?.scenarioComplete) break;
+      // simEnd remains the hard cap; this is Path A from design/27 §2.1. Before
+      // breaking, settle the final partial tax year so its accrued liability is
+      // not stranded out of the terminal snapshot (design/68 Gap 2).
+      if (this.state?.scenarioComplete) {
+        this._flushTerminalTaxSettles();
+        break;
+      }
     }
 
     this.currentDate = end;
+  }
+
+  /**
+   * design/68 Gap 2 — on last-survivor termination, fire the current partial
+   * fiscal year's pending tax settle for each country before the run loop
+   * breaks. The settle series reschedules one occurrence at a time, so at most
+   * one TAX_SETTLE_US and one TAX_SETTLE_AU sit in the queue at any moment:
+   * exactly the settles whose fiscal year contains the death, covering the
+   * income accrued up to death. They are executed in date order against the live
+   * state — currentPeriods is still the active period, since no PERIOD_ADVANCE
+   * for that country falls between a mid-year death and its own year-end settle.
+   * Without this, the final year's income tax (both countries) vanishes from the
+   * ending net worth / bequest. Composes with Gap 1 (the AU settle files the
+   * now-deceased's per-person return) and Gap 4 (super death benefit).
+   */
+  _flushTerminalTaxSettles() {
+    const SETTLE_TYPES = new Set(['TAX_SETTLE_US', 'TAX_SETTLE_AU']);
+    // Earliest still-pending node per settle type (the current partial year).
+    const earliest = new Map();
+    for (const node of this.queue.data) {
+      if (!SETTLE_TYPES.has(node.type)) continue;
+      const cur = earliest.get(node.type);
+      if (!cur || node.date < cur.date) earliest.set(node.type, node);
+    }
+
+    const pending = [...earliest.values()].sort((a, b) => a.date - b.date);
+    for (const node of pending) {
+      this.queue.removeByKey(node.instanceId);
+      this.currentDate = node.date;
+      try {
+        this.execute(node);
+      } catch (e) {
+        // Ignore breakpoints during the terminal flush — the run is ending.
+        if (e instanceof BreakpointSignal) continue;
+        throw e;
+      }
+    }
   }
 
   findSnapshotIndex(target) { return this.history.findSnapshotIndex(target); }
