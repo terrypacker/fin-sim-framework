@@ -1086,8 +1086,18 @@ export class AccountService extends AssetService {
         // action the type-specific reducers would (design 44 Gap B) — otherwise
         // an eligible IRA/401k/super drawn by the engine escapes income tax.
         // Amounts are in the source account's currency, matching Phase 2 below
-        // and the STOCK_WITHDRAWAL_TAX path above. A qualified Roth withdrawal is
-        // tax-free, so it (correctly) emits nothing.
+        // and the STOCK_WITHDRAWAL_TAX path above.
+        //
+        // Every case here emits and passes `residency`, leaving the cross-border
+        // consequence to the tax module. That division of labour is the point: a
+        // service deciding for itself that a distribution is untaxed is how design 84
+        // G7 happened — the Roth case was omitted on the strength of "a qualified Roth
+        // withdrawal is tax-free", which is true in the US and false in Australia,
+        // where the wrapper is a foreign trust and the earnings are s99B ordinary
+        // income. Because the age gate makes a Roth penalty-free-ELIGIBLE at 59½, this
+        // branch is precisely where an AU resident's Roth gets drained by ordinary
+        // spending and tax-bill funding, so the omission zeroed the entire s99B charge
+        // on the involuntary path.
         const { fromContrib, fromEarnings } = this.reduceLedgerForWithdrawal(account, withdraw);
         switch (account.type) {
           case ACCOUNT_TYPE.TRADITIONAL_IRA:
@@ -1100,7 +1110,17 @@ export class AccountService extends AssetService {
           case ACCOUNT_TYPE.SUPER:
             if (fromEarnings > 0) pendingTaxActions.push({ type: 'SUPER_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings });
             break;
-          // ROTH (qualified, age-eligible) is tax-free → no action.
+          case ACCOUNT_TYPE.ROTH:
+            // Corpus is silent under s99B(2)(a) and never US-taxable, so only the
+            // earnings slice is emitted. `penaltyAmount: 0` because this branch is by
+            // definition the age-eligible one — §72(t) does not reach it. For a US
+            // resident the reducer books nothing at all, so this stays a no-op there.
+            if (fromEarnings > 0) pendingTaxActions.push({
+              type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: 0, residency,
+              // Design 76 Gap B: attribute to the wrapper's owner, not the household.
+              stateKey: account.stateKey ?? key,
+            });
+            break;
         }
       }
 

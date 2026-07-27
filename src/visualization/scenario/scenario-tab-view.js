@@ -1224,14 +1224,23 @@ function _buildPrimeScheduleListEditor(param) {
  *
  * `destinationKey` (an optional brokerage-account override; default the owner's US
  * brokerage) is not surfaced as a column — it is preserved through the up-front
- * clone for any entry that already carries one, and left unset on new entries.
+ * clone for any entry that already carries one, and left unset on new entries. It may
+ * be a state key or a per-owner `{ ownerId: stateKey }` map (design 84 G6), so the
+ * clone below has to reach INTO it: a shallow `{ ...e }` would hand every clone the
+ * same map object and an edit here would reach back into the active scenario, which is
+ * the shallow-copy trap design 39 §13 already paid for once.
  *
  * The incoming value is cloned up front so in-place edits never mutate a shared
  * schema default; a non-array value (e.g. a stale string from the old free-text
  * input) is coerced to an empty list.
  */
 function _buildEarlyWithdrawalScheduleListEditor(param) {
-  param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({ ...e }));
+  param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({
+    ...e,
+    ...(e?.destinationKey != null && typeof e.destinationKey === 'object'
+      ? { destinationKey: { ...e.destinationKey } }
+      : {}),
+  }));
 
   const container = document.createElement('div');
   container.className = 'age-band-list-editor';   // reuse the shared band-editor styles

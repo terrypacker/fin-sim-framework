@@ -47,6 +47,14 @@ export const makeLabelOf = (spec) => (name, j) => {
  * @param {Array}  o.results  `[{id, failed, oofDate, netWorth, netLiq, error}]` from the run
  * @returns {object} see below
  */
+/**
+ * Money-valued row fields a spec may name as `report.metric`. `afterTaxNW` is the
+ * right one for any question about WHERE wealth sits — a wrapper swap, a conversion,
+ * a decant — because nominal `netWorth` prices a pre-tax dollar at par with a Roth
+ * dollar (design/40) and ranks those decisions on a scoreboard that cannot see them.
+ */
+const MONEY_METRICS = new Set(['netWorth', 'netLiq', 'afterTaxNW', 'taxPaid', 'deficit']);
+
 export function buildGridModel({ spec, results }) {
   const axisNames = Object.keys(spec.axes ?? {});
   if (!axisNames.length) throw new Error('grid spec has no axes');
@@ -101,8 +109,15 @@ export function buildGridModel({ spec, results }) {
   function directCell(fixed) {
     const r = byId.get(idOf(fixed));
     if (!r || r.error) return { text: '?', value: null, missing: true };
-    if (rep.metric === 'netWorth') return { text: fmtMoney(r.netWorth), value: r.netWorth };
-    if (rep.metric === 'netLiq')   return { text: fmtMoney(r.netLiq),   value: r.netLiq };
+    if (rep.metric != null) {
+      // Allowlisted rather than free field access: a typo would otherwise fall through
+      // to pass/fail and render a perfectly plausible table of the wrong measurement.
+      if (!MONEY_METRICS.has(rep.metric)) {
+        throw new Error(`grid report: unknown metric "${rep.metric}" `
+          + `(have: ${[...MONEY_METRICS].join(', ')}, or omit for pass/fail)`);
+      }
+      return { text: fmtMoney(r[rep.metric]), value: r[rep.metric] ?? null };
+    }
     return {
       text: r.failed ? `FAIL ${r.oofDate?.slice(0, 4) ?? ''}`.trim() : 'ok',
       value: r.failed ? 0 : 1, failed: r.failed,
