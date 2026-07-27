@@ -47,6 +47,10 @@ export class Collectible extends Asset {
    * @param {object|null}   [opts.currency=null]                - Currency descriptor (e.g. USD / AUD from account.js)
    * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
    *                                                            - Step-wise appreciation schedule (design 28 §3)
+   * @param {boolean}       [opts.isGold=false]                 - Investment bullion: an ordinary AU CGT asset (indexed
+   *                                                              under the FY2027 reform), not a true collectible (design 57 Part 2, Item C)
+   * @param {object|null}   [opts.costBaseByCountry=null]       - Per-country cost-base override (AU s855-45 residency step-up)
+   * @param {number|null}   [opts.acquisitionPriceLevel=null]   - AU CPI level at the deemed AU acquisition (residency date) for indexation
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'collectible' });
@@ -60,5 +64,12 @@ export class Collectible extends Asset {
     this.country                  = opts.country                  ?? 'US';
     this.currency                 = opts.currency                 ?? null;
     this.appreciationSchedule     = opts.appreciationSchedule     ?? null;
+    // AU CGT reform (design 57 Part 2, Item C). Bullion is an ordinary AU CGT
+    // asset → its AU gain is cost-base indexed like equity; true collectibles are
+    // not. costBaseByCountry.AU + acquisitionPriceLevel are stamped at the AU
+    // residency step-up (CollectibleService.recordResidencyChange).
+    this.isGold                   = opts.isGold                   ?? false;
+    this.costBaseByCountry        = opts.costBaseByCountry        ?? null;
+    this.acquisitionPriceLevel    = opts.acquisitionPriceLevel    ?? null;
   }
 }

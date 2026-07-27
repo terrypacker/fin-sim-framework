@@ -53,13 +53,31 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
     const key = stateKey ?? 'collectibleAccount';
-    if (state[key] != null) {
-      stateUpdate[key] = { ...state[key], value: 0 };
+    const col = state[key];
+    if (col != null) {
+      stateUpdate[key] = { ...col, value: 0 };
     }
+
+    // AU CGT reform (design 57 Part 2, Item C): investment bullion (isGold) is an
+    // ordinary AU CGT asset, so its AU gain is cost-base indexed like equity; a
+    // true collectible is not. The AU-deemed cost base (costBaseByCountry.AU) and
+    // the indexation level (acquisitionPriceLevel) were stamped at the residency
+    // step-up. auGain falls back to the raw gain when no AU basis was stamped, so
+    // non-gold and pre-move sales are unchanged.
+    const isGold   = col?.isGold === true;
+    const auBasis  = col?.costBaseByCountry?.AU ?? costBasis;
+    const auGain   = Math.max(0, salePrice - auBasis);
+    let auIndexedGain = auGain;
+    if (isGold && col?.acquisitionPriceLevel != null) {
+      const nowLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
+      const indexedBasis = auBasis * (nowLevel / col.acquisitionPriceLevel);
+      auIndexedGain = Math.max(0, salePrice - indexedBasis);
+    }
+
     return this.newState(
       state,
       stateUpdate,
-      [{ type: 'COLLECTIBLE_SALE_TAX', gain, residency }]
+      [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency }]
     );
   }
 }

@@ -99,7 +99,6 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/han
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
-import { AuCgtBasisResetHandler, AuCgtBasisResetReducer } from '../finance/account-rules/au/au-cgt-reset-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
 import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
 import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
@@ -228,7 +227,6 @@ const _ALL_CLASSES = [
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
   UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler,
-  AuCgtBasisResetHandler, AuCgtBasisResetReducer,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,
@@ -780,6 +778,10 @@ export class ScenarioSerializer {
       country:              c.country              ?? 'US',
       currency:             c.currency             ?? null,
       stateKey:             c.stateKey             ?? null,
+      // AU CGT reform (design 57 Part 2, Item C) — bullion marker + AU basis/level.
+      isGold:               c.isGold               ?? false,
+      costBaseByCountry:    c.costBaseByCountry    ?? null,
+      acquisitionPriceLevel: c.acquisitionPriceLevel ?? null,
       appreciationSchedule: c.appreciationSchedule
         ? c.appreciationSchedule.map(e => ({
             date: e.date instanceof Date ? e.date.toISOString() : e.date,
@@ -803,6 +805,10 @@ export class ScenarioSerializer {
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
       currency:            d.currency            ?? null,
+      // AU CGT reform (design 57 Part 2, Item C).
+      isGold:              d.isGold              ?? false,
+      costBaseByCountry:   d.costBaseByCountry   ?? null,
+      acquisitionPriceLevel: d.acquisitionPriceLevel ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,

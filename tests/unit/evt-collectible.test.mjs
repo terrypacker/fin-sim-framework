@@ -221,10 +221,15 @@ test('EVT-36: collectible sale records gain as AU capital gain if AU resident', 
 
   const taxEntries = sim.journal.getActions('COLLECTIBLE_SALE_TAX');
   assert.ok(taxEntries.length > 0);
-  const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
+  // Search across all reducer entries for the action: a cross-border AU resident's
+  // COLLECTIBLE_SALE_TAX is processed by both the US federal reducer (which stamps
+  // auCapitalGainsYTD) and the additive AU dynamic reducer (design 57 §6.5), so the
+  // federal diff is no longer guaranteed to be entry [0].
+  const allDiffs = taxEntries.flatMap(e => e.stateDiff);
+  const auGainsDiff = allDiffs.find(d => d.field === 'auCapitalGainsYTD');
   const expectedGain = AU_COLLECTIBLE_JSON.collectibles[0].value - AU_COLLECTIBLE_JSON.collectibles[0].costBasis;
   assert.strictEqual(auGainsDiff.delta, expectedGain);
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
+  const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -338,9 +343,12 @@ test('EVT-46: gold collectible sale records AU capital gain if AU resident', () 
 
   const taxEntries = sim.journal.getActions('COLLECTIBLE_SALE_TAX');
   assert.ok(taxEntries.length > 0);
-  const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
+  // Both the US federal and the additive AU dynamic reducer process this action
+  // (design 57 §6.5) — search all entries rather than assuming the federal is [0].
+  const allDiffs = taxEntries.flatMap(e => e.stateDiff);
+  const auGainsDiff = allDiffs.find(d => d.field === 'auCapitalGainsYTD');
   assert.strictEqual(auGainsDiff.delta, 20000);
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
+  const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
 });
 

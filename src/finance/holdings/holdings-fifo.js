@@ -46,15 +46,23 @@ import { isCollectibleAllocation } from './allocation.js';
  *
  * @param {Array}  holdings - account.holdings (not mutated)
  * @param {number} amount   - market-value dollars to consume; must be > 0
+ * Collectible per-country / indexed basis (design 57 §6.3, gold): when an
+ * `indexation` context is supplied, the collectible (GOLD) slice's realized basis
+ * is ALSO tallied for the reform country — both un-indexed (`collectibleBasisByCountry`)
+ * and indexed (`collectibleIndexedBasisByCountry`) — so a cross-border caller can
+ * measure the gold portion's AU gain from its stepped-up, CPI-indexed cost base
+ * while true (non-gold) collectibles stay un-indexed. Both are `{}` when no
+ * indexation context is passed.
+ *
  * @param {{ level: number, asOfMs: number, country: string }|null} [indexation=null]
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, newHoldings: Array, consumed: number }}
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
 export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -75,6 +83,9 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   // no lot carries a per-country override.
   const idxCountry = indexation?.country ?? null;
   const realizedIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
+  // Collectible (gold) slice tallies for the reform country — un-indexed and indexed.
+  const collectibleBasisByCountry        = idxCountry ? { [idxCountry]: 0 } : {};
+  const collectibleIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
   const newHoldings = [];
 
   for (const h of sorted) {
@@ -104,7 +115,14 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
       const factor    = (held12mo && lotLevel != null && lotLevel > 0 && indexation.level > 0)
         ? Math.max(1, indexation.level / lotLevel)
         : 1;
-      realizedIndexedBasisByCountry[idxCountry] += cb * fraction * factor;
+      const idxBasisShare = cb * fraction;
+      realizedIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
+      // Split the gold (collectible) slice out so the caller can index gold while
+      // leaving equity's own indexed basis intact (both already counted above).
+      if (isCollectibleAllocation(h.allocation)) {
+        collectibleBasisByCountry[idxCountry]        += idxBasisShare;
+        collectibleIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
+      }
     }
     consumed      += take;
     remaining     -= take;
@@ -127,13 +145,19 @@ export function consumeHoldingsFifo(holdings, amount, indexation = null) {
     // If fully consumed (remainingMv ≈ 0), the holding is dropped.
   }
   for (const c of countries) realizedBasisByCountry[c] = +realizedBasisByCountry[c].toFixed(2);
-  if (idxCountry) realizedIndexedBasisByCountry[idxCountry] = +realizedIndexedBasisByCountry[idxCountry].toFixed(2);
+  if (idxCountry) {
+    realizedIndexedBasisByCountry[idxCountry]    = +realizedIndexedBasisByCountry[idxCountry].toFixed(2);
+    collectibleBasisByCountry[idxCountry]        = +collectibleBasisByCountry[idxCountry].toFixed(2);
+    collectibleIndexedBasisByCountry[idxCountry] = +collectibleIndexedBasisByCountry[idxCountry].toFixed(2);
+  }
   return {
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
     realizedIndexedBasisByCountry,
     collectibleProceeds: +collectibleProceeds.toFixed(2),
     collectibleBasis:    +collectibleBasis.toFixed(2),
+    collectibleBasisByCountry,
+    collectibleIndexedBasisByCountry,
     newHoldings,
     consumed:      +consumed.toFixed(2),
   };

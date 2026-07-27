@@ -28,6 +28,7 @@ import assert     from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
 import { _drawDownBasket } from '../../src/finance/tax/us/us-tax-rates-base.js';
 import {
   UsTaxSettleHandler,
@@ -177,6 +178,41 @@ test('FITO-2: A$1,000 de-minimis offsets in full and skips the limit calc', () =
   assert.equal(r.fito, 800);
   assert.equal(r.fitoDeMinimis, true);
   assert.equal(r.fitoLimit, null, 'limit calc skipped');
+});
+
+// ─── FY2027 FITO "without" pass reduces the REAL bucket (design 57 Part 2, D) ──
+
+// FY2027 assesses auRealCapitalGainsYTD (indexed), not the gross auCapitalGainsYTD.
+// A resident whose capital gain is entirely US-source: the FITO "without US-source"
+// pass must strip the gain from the REAL bucket too, or the CG slice of the FITO
+// limit collapses to ~0 and the US tax paid on that gain goes uncredited.
+const auFito2027RealState = (usTaxPaidAud) => ({
+  people: { primary: { residency: 'AU' } },
+  auOrdinaryIncomeYTD: 0,
+  auCapitalGainsYTD:      100_000,   // gross
+  auRealCapitalGainsYTD:  100_000,   // real (indexed) — what FY2027 assesses
+  usSourceCapGainsAudYTD:     100_000,  // all US-source (gross slice)
+  usSourceRealCapGainsAudYTD: 100_000,  // all US-source (real slice, design 57 Part 2 D)
+  usTaxPaidOnUsSourceAud: usTaxPaidAud,
+});
+
+test('FITO-D: FY2027 with/without limit tracks the REAL (indexed) US-source gain', () => {
+  const r = new AuTaxRates2027().computeTax(auFito2027RealState(50_000));
+  // "with" pre-FITO: baseTax(100k)=20,252 + medicare 2,000 + 30% min-tax top-up
+  //   (30,000 − 20,252)=9,748 ⇒ 32,000. "without": real bucket → 0 ⇒ pre-FITO 0.
+  // So the whole 32,000 is the CG slice of the limit; the 50k US tax is capped there.
+  assert.ok(Math.abs(r.fitoLimit - 32_000) < 1, `limit ${r.fitoLimit}`);
+  assert.ok(Math.abs(r.fito - 32_000) < 1, `fito ${r.fito}`);
+});
+
+test('FITO-D: without the real-bucket reduction the CG slice would collapse to ~0', () => {
+  // Same state but WITHOUT the usSourceRealCapGainsAudYTD signal: the "without" pass
+  // can only strip the gross bucket (unread by FY2027), so the real bucket is
+  // unchanged and the limit's CG slice is ~0 — the design-57 Part-2-D bug.
+  const buggy = { ...auFito2027RealState(50_000), usSourceRealCapGainsAudYTD: 0 };
+  const r = new AuTaxRates2027().computeTax(buggy);
+  assert.ok(r.fitoLimit < 1, `limit should collapse without the real signal, got ${r.fitoLimit}`);
+  assert.ok(r.fito < 1, `fito ${r.fito}`);
 });
 
 // ─── Reset asymmetry (§4.3 / §5) ─────────────────────────────────────────────

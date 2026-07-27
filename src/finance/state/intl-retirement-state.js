@@ -103,6 +103,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
 
     this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };
+    // Dedicated ATO CPI indexation series (design 57 Part 2, Item A). cpiRates
+    // decouples the CGT cost-base index from wage/expense inflation; when a
+    // country's rate is unset the InflationAdjustReducer falls back to the
+    // effective inflation rate, so cpiAccumulator tracks inflationAccumulator
+    // byte-for-byte until a distinct CPI is chosen.
+    this.cpiRates             = {};
+    this.cpiAccumulator       = { US: 1.0, AU: 1.0 };
     this.monthlyExpenses      = monthlyExpenses ?? 6_000;
 
     // Spending strategy substrate (design/26).
@@ -149,6 +156,9 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usSourceCapGainsUsdYTD = 0;
     this.usSourceOrdinaryAudYTD = 0;   // AUD, funds the §4.5 FITO limit
     this.usSourceCapGainsAudYTD = 0;
+    // US-source *real* (indexed) AU cap gain (AUD) — funds the FY2027 FITO
+    // "without" pass's CG slice (design 57 Part 2, Item D).
+    this.usSourceRealCapGainsAudYTD = 0;
     // US tax paid on US-source income (AUD) — the FITO input; single-year handoff.
     this.usTaxPaidOnUsSourceAud = 0;
 
