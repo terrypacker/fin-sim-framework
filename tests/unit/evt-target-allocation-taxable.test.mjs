@@ -18,8 +18,8 @@
  *   - AU_STOCK sell realizes AU_STOCK_WITHDRAWAL_TAX;
  *   - a tax-advantaged account rebalances for free (no tax);
  *   - establish a BOND sleeve from zero (rateKey / purchaseDate / basis / duration);
- *   - a GOLD sell routes through COLLECTIBLE_SALE_TAX (isGold); a gold buy never lands
- *     in a US IRA (the §OQ4a guard) but does in AU super / taxable;
+ *   - a GOLD sell routes through COLLECTIBLE_SALE_TAX (isGold); a gold buy lands in ANY
+ *     account, including a US IRA (the §OQ4a guard was reversed 2026-07-29);
  *   - split drift bands: the same drift triggers under the tight sheltered band but
  *     not under the wide taxable band (§OQ3).
  */
@@ -27,7 +27,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { RebalanceToTargetReducer, targetForRole, countryForRole, roleCanHoldGold }
+import { RebalanceToTargetReducer, countryForRole, roleCanHoldGold }
   from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer }
   from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
@@ -75,18 +75,13 @@ test('RC-helper: countryForRole / roleCanHoldGold', () => {
   assert.strictEqual(countryForRole(ACCOUNT_ROLES.IRA), 'US');
   assert.strictEqual(countryForRole(ACCOUNT_ROLES.AU_STOCK), 'AU');
   assert.strictEqual(countryForRole(ACCOUNT_ROLES.SUPER), 'AU');
-  assert.strictEqual(roleCanHoldGold(ACCOUNT_ROLES.IRA), false);
-  assert.strictEqual(roleCanHoldGold(ACCOUNT_ROLES.SUPER), true);   // AU super may hold bullion
-  assert.strictEqual(roleCanHoldGold(ACCOUNT_ROLES.US_STOCK), true); // taxable is fine
-});
-
-test('RC-helper: targetForRole drops GOLD from a US tax-advantaged account and renormalizes', () => {
-  const target = { EQUITY: 0.5, BOND: 0.2, CASH: 0.1, GOLD: 0.2 };
-  const ira    = targetForRole(target, ACCOUNT_ROLES.IRA);
-  assert.ok(!('GOLD' in ira), 'IRA target must have no GOLD');
-  assert.ok(Math.abs(Object.values(ira).reduce((s, v) => s + v, 0) - 1) < 1e-6, 'renormalized to 1');
-  // Super keeps gold (AU bullion allowed).
-  assert.deepStrictEqual(targetForRole(target, ACCOUNT_ROLES.SUPER), target);
+  // Reversed 2026-07-29 (design 61 §12 OQ4a): EVERY role may hold the GOLD sleeve. The
+  // §408(m) restriction is on physical bullion held directly, not on a gold ETF, which
+  // is available in every IRA/401k/Roth and carries the same collectibles rate.
+  for (const role of [ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.ROTH,
+                      ACCOUNT_ROLES.SUPER, ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.AU_STOCK]) {
+    assert.strictEqual(roleCanHoldGold(role), true, `${role} may hold gold`);
+  }
 });
 
 // ── Taxable sell realizes CGT; value conserved gross ─────────────────────────────
@@ -192,7 +187,10 @@ test('RC-4: selling a GOLD sleeve routes through COLLECTIBLE_SALE_TAX (isGold)',
   assert.ok(coll.gain > 0, 'gold gain realized');
 });
 
-test('RC-5: gold guard — a GOLD target never establishes a sleeve in a US IRA', () => {
+test('RC-5: a GOLD target DOES establish a sleeve in a US IRA (guard reversed)', () => {
+  // The inverse of the original RC-5. Sheltering gold is not merely permitted, it is the
+  // tax-efficient placement for a US resident — the 28% collectibles rate is what the
+  // shelter avoids — so the guard was removing the best option (design 61 §12 OQ4a).
   const state = baseState({
     iraAccount: { balance: 10000, holdings: [
       { allocation: ALLOCATION.EQUITY, marketValue: 10000, costBasis: 8000 },
@@ -200,12 +198,15 @@ test('RC-5: gold guard — a GOLD target never establishes a sleeve in a US IRA'
   });
   const { actions, applied } = rebalance(state, { stateKey: 'iraAccount', role: ACCOUNT_ROLES.IRA },
     { EQUITY: 0.5, GOLD: 0.5 });
-  // The leg reducer renormalized the IRA target to gold-free, so no gold leg exists…
+
   const goldLeg = (actions[0]?.legs ?? []).find(l => l.allocation === ALLOCATION.GOLD);
-  assert.ok(!goldLeg, 'no GOLD leg generated for the guarded IRA');
-  // …and no gold sleeve is ever established.
-  assert.ok(!applied.iraAccount.holdings.some(h => h.allocation === ALLOCATION.GOLD),
-    'no GOLD sleeve in the IRA');
+  assert.ok(goldLeg, 'a GOLD leg is generated for the IRA');
+  assert.ok(goldLeg.delta > 0, 'it is a BUY leg');
+  const gold = applied.iraAccount.holdings.find(h => h.allocation === ALLOCATION.GOLD);
+  assert.ok(gold, 'a GOLD sleeve is established in the IRA');
+  assert.ok(Math.abs(gold.marketValue - 5000) < 1, 'sized to the 50% target');
+  // A sheltered rebalance stays free — no CGT on the equity sold to fund it.
+  assert.strictEqual(totOf(applied.iraAccount.holdings), 10000, 'value conserved');
 });
 
 test('RC-3b: every established sleeve gets a UNIQUE id (no HoldingTransact collision)', () => {

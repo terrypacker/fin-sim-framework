@@ -45,10 +45,11 @@ export const TAXABLE_ROLES = new Set([
 ]);
 
 /**
- * The US tax-advantaged roles that may NOT hold a GOLD sleeve (IRA/401k/Roth
- * bullion ban, design 61 §OQ4a). AU SUPER is deliberately excluded — bullion is a
- * permitted SMSF asset. Used both to renormalize a guarded account's target (so a
- * gold leg is never generated) and by the apply reducer's establish-new-sleeve buy.
+ * The US tax-advantaged roles (IRA/401k/Roth); AU SUPER is deliberately excluded.
+ *
+ * This no longer gates gold — the bullion guard was reversed (design 61 §12 OQ4a,
+ * 2026-07-29) because a gold ETF is holdable in all three. Retained because it is
+ * exported and names a genuinely useful jurisdiction/shelter set.
  */
 export const US_TAX_ADVANTAGED_ROLES = new Set([
   ACCOUNT_ROLES.K401, ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH,
@@ -66,9 +67,27 @@ export function countryForRole(role) {
   return US_ROLES.has(role) ? 'US' : 'AU';
 }
 
-/** True when a role's account may hold a GOLD sleeve (design 61 §OQ4a). */
-export function roleCanHoldGold(role) {
-  return !US_TAX_ADVANTAGED_ROLES.has(role);
+/**
+ * True when a role's account may hold a GOLD sleeve.
+ *
+ * **Every role may (design 61 §12 OQ4a, reversed 2026-07-29).** This used to exclude
+ * US tax-advantaged roles on the strength of the §408(m) bullion restriction. That was
+ * modelling the wrong instrument: §408(m) restricts holding *physical* bullion directly
+ * in an IRA, and says nothing about a **gold ETF** (GLD/IAU), which is how a retirement
+ * portfolio actually takes a gold position and is available in every IRA/401k/Roth. The
+ * `GOLD` sleeve here is an abstract *exposure*, not a claim about custody, and the ETF
+ * carries the same US collectibles rate, so one sleeve models both.
+ *
+ * Kept as a named predicate rather than deleted because the location code reads better
+ * for it and a future eligibility rule (an AU-super in-house-asset test, say) would land
+ * here. It is currently total.
+ *
+ * Consequence worth knowing: the 28% collectibles rate now makes *sheltering* gold in a
+ * US tax-advantaged account the tax-efficient placement for a US resident — the
+ * placement the old guard forbade — so located plans will migrate gold there.
+ */
+export function roleCanHoldGold(_role) {
+  return true;
 }
 
 // ─── Lever B — time variation (design 61 §4-B / Phase 3) ──────────────────────
@@ -155,30 +174,6 @@ export function resolveRegimeTarget(regimeTargets, activeRegimes, fallback) {
   }
   if (regimeTargets.NORMAL) return _normalize(regimeTargets.NORMAL);
   return fallback;
-}
-
-/**
- * Restrict a portfolio target mix to the allocation classes a given account role may
- * hold, renormalizing so the eligible shares still sum to 1. Today the only
- * restriction is the US-tax-advantaged gold guard (design 61 §OQ4a): an IRA/401k/Roth
- * drops GOLD and the freed weight spreads pro-rata across EQUITY/BOND/CASH — so a gold
- * leg is never generated for a guarded account and value still conserves. A degenerate
- * target (all-eligible weight 0) falls back to the un-normalized eligible slice.
- */
-export function targetForRole(target, role) {
-  if (roleCanHoldGold(role)) return target;
-  const eligible = {};
-  let total = 0;
-  for (const [alloc, w] of Object.entries(target)) {
-    if (alloc === ALLOCATION.GOLD) continue;
-    eligible[alloc] = w;
-    total += w;
-  }
-  if (total <= 0) return eligible;
-  for (const alloc of Object.keys(eligible)) {
-    eligible[alloc] = +(eligible[alloc] / total).toFixed(6);
-  }
-  return eligible;
 }
 
 /**
@@ -301,9 +296,13 @@ export class RebalanceToTargetReducer extends Reducer {
       const band    = taxable ? this.driftBandTaxable : this.driftBandSheltered;
       // LOCATED ⇒ this account's assigned composition (as fractions of its total);
       // PER_ACCOUNT ⇒ the uniform portfolio mix with the per-role gold guard.
+      // PER_ACCOUNT drives every account to the uniform portfolio mix. There is no
+      // longer any role-based restriction to apply here — `targetForRole` existed only
+      // to strip GOLD from US tax-advantaged accounts and was removed with that guard
+      // (design 61 §12 OQ4a, reversed 2026-07-29).
       const target = locatedPlan
         ? _fractionsOf(locatedPlan.get(stateKey), total)
-        : targetForRole(scheduledTarget, role);
+        : scheduledTarget;
       stampPatch[stateKey] = { ...account, targetComposition: target };
 
       // Actual allocation fractions.

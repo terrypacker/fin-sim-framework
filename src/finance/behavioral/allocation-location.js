@@ -58,10 +58,17 @@ export const DEFAULT_LOCATION_POLICY = Object.freeze({
   // Cash: a low-tax filler — taxable/Roth first, then wherever capacity remains.
   [ALLOCATION.CASH]:   [ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.ROTH,
                         ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.SUPER],
-  // Gold: shelter in AU super (the only gold-eligible tax-advantaged account) first,
-  // then a taxable brokerage. US IRA/401k/Roth are excluded by the eligibility guard,
-  // not merely deprioritized. Optimal for both residencies (super shelters; the
-  // US-28% vs AU-indexed tax difference is realized in the CGT path, design 57).
+  // Gold: shelter in AU super first, then a taxable brokerage.
+  //
+  // ⚠ US IRA/401k/Roth are absent from this list. They used to be *excluded* by the
+  // eligibility guard; that guard was reversed (design 61 §12 OQ4a, 2026-07-29), so they
+  // are now merely UNPREFERRED — gold reaches them only via the spillover/reconcile pass
+  // once every preferred home is full. That is almost certainly not what we want for a
+  // US resident: the 28% collectibles rate makes a US tax-advantaged account the
+  // tax-efficient home for gold, ahead of the taxable brokerage. Making it *preferred*
+  // is a separate, deliberate change (it moves gold placement and therefore results) and
+  // is tracked as design 61 §12.2 Q4. `planLocatedTargets` already threads `residency`
+  // for exactly this.
   [ALLOCATION.GOLD]:   [ACCOUNT_ROLES.SUPER, ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.US_STOCK],
 });
 
