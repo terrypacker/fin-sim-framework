@@ -709,7 +709,7 @@
   margin-top: 2px;
 }
 
-/* ── HealthcareEventList param editor ── */
+/* ── ExpenseEventList param editor (design 86 G8; was HealthcareEventList) ── */
 .healthcare-event-list-editor {
   display: flex;
   flex-direction: column;
@@ -718,9 +718,12 @@
   width: 100%;
 }
 
+/* Date, Amount, Currency, Category, Fund From, Person, remove. Currency is a short
+   fixed track — it holds a 3-letter code and stealing space from Fund From (a state
+   key, the longest value here) makes the row unreadable. */
 .healthcare-event-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 1fr 26px;
+  grid-template-columns: 1.2fr 1fr 0.6fr 1fr 1.3fr 1fr 26px;
   gap: 6px;
   align-items: center;
 }

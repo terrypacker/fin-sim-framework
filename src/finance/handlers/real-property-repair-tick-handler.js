@@ -43,7 +43,7 @@ function poissonSample(rng, lambda) {
  * Severity median is `repairValuePct · value` when set, else the fixed `repairMedian`; σ is
  * `repairSigma` (lognormal shape). All amounts are in the property's currency.
  *
- * Debit shape mirrors HouseRunningCostHandler / HealthcareEventHandler exactly: the summed,
+ * Debit shape mirrors HouseRunningCostHandler / ExpenseEventHandler exactly: the summed,
  * FX-converted repair is an essential outflow from the residence cash pool, prepending
  * REPLENISH_SAVINGS so it joins the same drawdown + cross-border escalation path (design 75
  * §5.3). A per-property HOUSE_REPAIR_APPLY carries the native amount for tracking and the

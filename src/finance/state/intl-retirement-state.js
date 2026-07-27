@@ -247,10 +247,17 @@ export class InternationalRetirementFinancialState extends SimulationState {
       currentAdjustmentMultiplier:  1.0,
     };
 
-    // Healthcare tracking substrate (design/26 Increment 2).
-    this.healthcareEventsScheduled = [];
-    this.healthcareSpendingYTD     = 0;
-    this.healthcareSpendingTotal   = 0;
+    // One-off expense-event tracking (design/26 Increment 2, generalized by design
+    // 86 G8). Per-category because `category` now discriminates KINDS of event —
+    // 'healthcare' is one value among many — so a single scalar could no longer tell
+    // a medical bill from a capital improvement.
+    //
+    // Replaces healthcareSpendingYTD / healthcareSpendingTotal. The "YTD" field was
+    // never reset by any settle path, so it was a duplicate of the total under a name
+    // that said otherwise; it is deliberately not reproduced here. A third field,
+    // healthcareEventsScheduled, was write-only and is likewise dropped.
+    this.expenseEventSpendingByCategory = {};
+    this.expenseEventSpendingTotal      = 0;
 
     // Age-banded spending substrate (design/33). appliedFactor is the real
     // age multiplier currently folded into the expense slice; the reducer

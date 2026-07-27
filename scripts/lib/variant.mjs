@@ -37,6 +37,10 @@
  *                                       interestOnly) — works on a synthesized
  *                                       mortgage or a standalone LoanAccount
  *   offset            {offsetKey: {...}} offset balance, and where the freed cash goes
+ *   expenseEvents     [{...}]          dated one-off expenses in a chosen currency,
+ *                                      optionally funded from a nominated account
+ *                                      (design 86 G8/G9); APPENDS and auto-enables
+ *                                      the EXPENSE_EVENTS spending strategy
  *   spendingStrategy  string           FIXED | GUARDRAIL | EXPLICIT_BANDS | …
  *   monthlyExpenses   number           the raw expense line (EXCLUDES loan payments)
  *   spendTotal        number           all-in monthly outflow INCLUDING mortgage
@@ -89,6 +93,7 @@ export function buildVariant(cfg, levers = {}) {
   if (levers.loan) {
     for (const [loanKey, o] of Object.entries(levers.loan)) applyLoan(out, set, loanKey, o);
   }
+  if (levers.expenseEvents) applyExpenseEvents(out, set, levers.expenseEvents);
   if (levers.offset) {
     for (const [stateKey, o] of Object.entries(levers.offset)) applyOffset(out, stateKey, o);
   }
@@ -496,6 +501,42 @@ export function applyOffset(cfg, stateKey, o = {}) {
     const rate = fxFactor(cfg, target.currency(), dest.currency());
     dest.setBalance(dest.balance() + delta * rate);
   }
+}
+
+/**
+ * `expenseEvent` lever (design 86 G8/G9) — append dated one-off expenses and make
+ * sure the strategy that consumes them is switched on.
+ *
+ * Two things it does beyond writing the list, both of which are silently-inert traps
+ * if skipped:
+ *
+ *  1. **Enables `EXPENSE_EVENTS` in `spendingStrategy`.** That param is a MULTI-select
+ *     array, so this appends rather than replaces — clobbering it would disable the
+ *     scenario's real spending strategy and change every arm's spending, not just the
+ *     one being tested.
+ *  2. **Writes through `makeSetParam`**, hitting both param stores. `expenseEvents`
+ *     authored into only one is read by some tools and not others.
+ *
+ * Events APPEND to any the scenario already authors, so an arm adds its shock without
+ * deleting the plan's own events. Pass `replace: true` to author the list outright.
+ *
+ * @param {object} cfg
+ * @param {function} set  makeSetParam(cfg)
+ * @param {object|Array} spec  one event, an array of them, or
+ *                             `{ replace?: boolean, events: [...] }`
+ */
+export function applyExpenseEvents(cfg, set, spec) {
+  const replace = !Array.isArray(spec) && spec?.replace === true;
+  const events  = Array.isArray(spec) ? spec : (spec?.events ?? [spec]);
+  const clean   = events.filter(e => e && e.date && e.amount);
+  if (clean.length === 0 && !replace) return;
+
+  const existing = replace ? [] : (allParams(cfg).expenseEvents ?? []);
+  set('expenseEvents', [...existing, ...clean.map(e => ({ ...e }))]);
+
+  const strategies = allParams(cfg).spendingStrategy;
+  const list = Array.isArray(strategies) ? [...strategies] : [strategies].filter(Boolean);
+  if (!list.includes('EXPENSE_EVENTS')) set('spendingStrategy', [...list, 'EXPENSE_EVENTS']);
 }
 
 /**

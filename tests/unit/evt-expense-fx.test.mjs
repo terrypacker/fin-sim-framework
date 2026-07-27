@@ -14,7 +14,7 @@
  * EVT-EXPENSE-FX — a USD-denominated expense debited from an AUD savings account
  * after a change of residency must leave the *converted* AUD magnitude
  * (e.g. $6k @ 1.5 → A$9k), not the raw native number. Pre-move (USD→USD) and
- * post-move (USD→AUD) are both covered, for monthly and healthcare expenses.
+ * post-move (USD→AUD) are both covered, for monthly and one-off expense events.
  * The RECORD_METRIC value stays native in both cases.
  */
 
@@ -22,7 +22,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { MonthlyExpensesHandler } from '../../src/finance/handlers/monthly-expenses-handler.js';
-import { HealthcareEventHandler } from '../../src/finance/spending/strategies/healthcare-event-handler.js';
+import { ExpenseEventHandler } from '../../src/finance/spending/strategies/expense-event-handler.js';
 
 const US_ROLE = 'US_SAVINGS';
 const AU_ROLE = 'AU_SAVINGS';
@@ -89,10 +89,10 @@ test('EVT-EXPENSE-FX-3: post-move deficit/replenish uses the converted amount', 
   assert.ok(Math.abs(replenish.deficit - 1_000) < 1e-6, `expected 1000 deficit, got ${replenish.deficit}`);
 });
 
-// ── HealthcareEventHandler ───────────────────────────────────────────────────
+// ── ExpenseEventHandler ───────────────────────────────────────────────────
 
-test('EVT-EXPENSE-FX-4: post-move healthcare expense debits AU savings at converted magnitude', () => {
-  const h = new HealthcareEventHandler({
+test('EVT-EXPENSE-FX-4: post-move expense event debits AU savings at converted magnitude', () => {
+  const h = new ExpenseEventHandler({
     stateRegistry, expensesCurrency: 'USD', usRole: US_ROLE, auRole: AU_ROLE,
   });
   const actions = h.call({
@@ -103,13 +103,13 @@ test('EVT-EXPENSE-FX-4: post-move healthcare expense debits AU savings at conver
   assert.strictEqual(debit.targetKey, 'auSavingsAccount');
   assert.ok(Math.abs(debit.amount - 9_000) < 1e-6, `expected A$9000, got ${debit.amount}`);
   // Tracking + metric stay native.
-  const apply = actions.find(a => a.type === 'HEALTHCARE_EXPENSE_APPLY');
+  const apply = actions.find(a => a.type === 'EXPENSE_EVENT_APPLY');
   assert.strictEqual(apply.amount, 6_000);
   assert.strictEqual(metricOf(actions).value, 6_000);
 });
 
-test('EVT-EXPENSE-FX-5: pre-move healthcare expense debits US savings at native magnitude', () => {
-  const h = new HealthcareEventHandler({
+test('EVT-EXPENSE-FX-5: pre-move expense event debits US savings at native magnitude', () => {
+  const h = new ExpenseEventHandler({
     stateRegistry, expensesCurrency: 'USD', usRole: US_ROLE, auRole: AU_ROLE,
   });
   const actions = h.call({

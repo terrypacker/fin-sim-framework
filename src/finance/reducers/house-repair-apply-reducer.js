@@ -17,7 +17,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *
  *   1. Tracking — accumulates `houseRepairSpendingYTD` / `houseRepairSpendingTotal` (native
  *      property-currency amount) for journal/report visibility, mirroring
- *      HealthcareExpenseApplyReducer.
+ *      ExpenseEventApplyReducer.
  *   2. Capitalization (design 75 §8 Q6 = yes) — when the property's `capitalizeRepairs` fraction
  *      is > 0, lifts `state[stateKey].capitalizedImprovements` by `capitalize · amount` (in the
  *      property's currency). The house-sale reducers add this accumulator to the sale cost basis,

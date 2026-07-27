@@ -27,7 +27,7 @@ export class ScenarioTabView {
     this.onOpenLinkedNode = null;
     /**
      * Supplies the list of persons for person-picker param editors (e.g. the
-     * HealthcareEventList Person column). The presenter wires this from the
+     * ExpenseEventList Person column). The presenter wires this from the
      * personService so the view stays service-agnostic.
      * @type {function(): Array<{id:string,name:string}>|null}
      */
@@ -540,8 +540,8 @@ export class ScenarioTabView {
         valueInput = _buildPrimeScheduleListEditor(param);
       } else if (param.type === 'EarlyWithdrawalScheduleList') {
         valueInput = _buildEarlyWithdrawalScheduleListEditor(param);
-      } else if (param.type === 'HealthcareEventList') {
-        valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
+      } else if (param.type === 'ExpenseEventList') {
+        valueInput = _buildExpenseEventListEditor(param, this.personsProvider);
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),
@@ -1323,32 +1323,46 @@ function _buildEarlyWithdrawalScheduleListEditor(param) {
   return container;
 }
 
-// ─── HealthcareEventList editor ───────────────────────────────────────────────
+// ─── ExpenseEventList editor ──────────────────────────────────────────────────
 
 /**
- * Build a self-contained DOM editor for a HealthcareEventList parameter.
+ * Build a self-contained DOM editor for an ExpenseEventList parameter
+ * (`expenseEvents`), design 86 G8/G9 — generalized from the HealthcareEventList
+ * editor this replaces.
  *
- * Each entry in `param.value` is a one-off healthcare event
- * `{ date, amount, category, personId }` rendered as a row of inputs (date,
- * amount, category, person id) plus a remove button. An "Add Event" button
- * appends a blank event. Mutations are written in-place onto the cloned
- * `param.value` array so the scenario picks them up on the next rebuild.
+ * Each entry in `param.value` is a dated one-off expense
+ * `{ date, amount, currency, category, fundFrom, personId }` rendered as a row of
+ * inputs plus a remove button. An "Add Event" button appends a blank event.
+ * Mutations are written in-place onto the cloned `param.value` array so the
+ * scenario picks them up on the next rebuild.
  *
- * The incoming value is deep-cloned up front so in-place edits never mutate the
- * shared schema default (an empty array, but cloned for consistency with the
- * AgeBandList editor). A non-array value (e.g. a stale string from the old
- * free-text input) is coerced to an empty list.
+ * The incoming value is cloned up front so in-place edits never mutate the shared
+ * schema default. A non-array value (e.g. a stale string from the old free-text
+ * input) is coerced to an empty list.
  *
- * The Person column is a <select> populated from `personsProvider` (each event's
- * personId picks whose residency drives the debited savings account). It is
- * optional — a blank "— Any —" option leaves personId null so the handler falls
- * back to the first person.
+ * `propertyKey` and `capitalize` are NOT surfaced as columns — the row is already
+ * six fields wide and they are a rarer pairing. They are preserved through the
+ * up-front clone for any entry that already carries them, exactly as the
+ * EarlyWithdrawalScheduleList editor preserves `destinationKey`, so authoring them
+ * in a spec file and then editing the row here does not silently drop them.
+ *
+ * Two columns need explaining:
+ *   - **Currency** is the event's own denomination. Blank inherits the linked
+ *     property's currency, else the household expense currency — which is what
+ *     every event did unconditionally before G8.
+ *   - **Fund From** is a state key debited directly, the way to draw an
+ *     out-of-queue account such as an offset WITHOUT giving it a drawdownPriority.
+ *     Blank falls back to the Person's residency-appropriate savings account.
+ *
+ * The Person column is a <select> populated from `personsProvider`; it picks whose
+ * residency drives that fallback. A blank "— Any —" leaves personId null so the
+ * handler falls back to the first person.
  *
  * @param {object} param  The param descriptor ({ value, ... })
  * @param {function(): Array<{id:string,name:string}>} [personsProvider]
  * @returns {HTMLElement}
  */
-function _buildHealthcareEventListEditor(param, personsProvider) {
+function _buildExpenseEventListEditor(param, personsProvider) {
   param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({ ...e }));
 
   const container = document.createElement('div');
@@ -1357,10 +1371,12 @@ function _buildHealthcareEventListEditor(param, personsProvider) {
   const persons = (typeof personsProvider === 'function' ? personsProvider() : null) ?? [];
 
   const COLUMNS = [
-    { field: 'date',     label: 'Date',     type: 'date'   },
-    { field: 'amount',   label: 'Amount',   type: 'number', step: '100' },
-    { field: 'category', label: 'Category', type: 'text',   placeholder: 'e.g. surgery' },
-    { field: 'personId', label: 'Person',   type: 'person' },
+    { field: 'date',     label: 'Date',      type: 'date'   },
+    { field: 'amount',   label: 'Amount',    type: 'number', step: '100' },
+    { field: 'currency', label: 'Ccy',       type: 'text',   placeholder: 'auto' },
+    { field: 'category', label: 'Category',  type: 'text',   placeholder: 'e.g. repair' },
+    { field: 'fundFrom', label: 'Fund From', type: 'text',   placeholder: 'default' },
+    { field: 'personId', label: 'Person',    type: 'person' },
   ];
 
   const render = () => {
@@ -1418,6 +1434,14 @@ function _buildHealthcareEventListEditor(param, personsProvider) {
           const v = input.value;
           if (field === 'amount') {
             evt.amount = v.trim() === '' ? null : parseFloat(v);
+          } else if (field === 'currency') {
+            // NULL, not '', when blank: the handler resolves the denomination with
+            // `data.currency ?? property ?? household`, and '' is not nullish — an
+            // empty string would win that chain and reach the converter as a bogus
+            // currency code instead of falling through to the intended default.
+            evt.currency = v.trim() === '' ? null : v.trim().toUpperCase();
+          } else if (field === 'fundFrom') {
+            evt.fundFrom = v.trim() === '' ? null : v.trim();   // same nullish contract
           } else {
             evt[field] = v.trim() === '' ? '' : v;
           }
@@ -1444,7 +1468,10 @@ function _buildHealthcareEventListEditor(param, personsProvider) {
     addBtn.className = 'btn btn-sm healthcare-event-add-btn';
     addBtn.textContent = '+ Add Event';
     addBtn.addEventListener('click', () => {
-      param.value.push({ date: '', amount: null, category: '', personId: null });
+      param.value.push({
+        date: '', amount: null, currency: null, category: '',
+        fundFrom: null, personId: null,
+      });
       render();
     });
     container.appendChild(addBtn);

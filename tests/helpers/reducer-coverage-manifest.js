@@ -132,7 +132,7 @@ export const COVERED = [
 
   // H — spending (reducer-postconditions-spending.test.mjs)
   'SpendingStrategyApplyReducer', 'AgeBandedSpendingReducer', 'GuardrailBaselineApplyReducer',
-  'GuardrailAnnualCheckReducer', 'GuardrailAdjustApplyReducer', 'HealthcareExpenseApplyReducer',
+  'GuardrailAnnualCheckReducer', 'GuardrailAdjustApplyReducer', 'ExpenseEventApplyReducer',
   'LateLifeCareApplyReducer', 'RegimeAwareSpendingReducer',
   // EXPLICIT_BANDS strategy (design 38 §6.1) — spending-explicit-bands.test.mjs
   'ExplicitBandsSpendingReducer',

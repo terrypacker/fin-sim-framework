@@ -15,7 +15,7 @@ import { ageSpendingFactor, ageBandStartAge } from '../age-spending-factor.js';
  * Research-calibrated default band table (design/33 §5.1). Encodes the
  * three-phase ("go-go / slow-go / no-go") discretionary glide of the
  * retirement spending smile; the terminal health upturn is deliberately left
- * to the HEALTHCARE strategy / design 27 late-life care (§7), so the no-go
+ * to the EXPENSE_EVENTS strategy / design 27 late-life care (§7), so the no-go
  * band plateaus rather than spiking.
  */
 export const DEFAULT_AGE_BANDS = [

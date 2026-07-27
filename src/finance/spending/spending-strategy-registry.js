@@ -12,7 +12,7 @@ import { RegimeAwareSpendingReducer }       from './strategies/regime-aware-spen
 import { GuardrailBaselineApplyReducer }   from './strategies/guardrail-baseline-apply-reducer.js';
 import { GuardrailAdjustApplyReducer }     from './strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer }     from './strategies/guardrail-annual-check-reducer.js';
-import { HealthcareExpenseApplyReducer }   from './strategies/healthcare-expense-apply-reducer.js';
+import { ExpenseEventApplyReducer }        from './strategies/expense-event-apply-reducer.js';
 import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from './strategies/age-banded-spending-reducer.js';
 import { ExplicitBandsSpendingReducer, DEFAULT_EXPENSE_BANDS } from './strategies/explicit-bands-spending-reducer.js';
 
@@ -65,7 +65,7 @@ function _ageBands(context) {
  * registered directly by the toolset and handles the fixed-inflation-adjusted
  * behavior (design/26 §12 decision 3).
  *
- * Handlers (RetirementDateHandler, HealthcareEventHandler) are wired in the
+ * Handlers (RetirementDateHandler, ExpenseEventHandler) are wired in the
  * toolset's handlers() method since they need account + stateRegistry context.
  */
 export const SPENDING_STRATEGY_REGISTRY = {
@@ -143,17 +143,26 @@ export const SPENDING_STRATEGY_REGISTRY = {
     ],
   },
 
-  HEALTHCARE: {
+  // Generalized from HEALTHCARE by design 86 G8. Healthcare is now a `category`
+  // VALUE rather than a strategy, which is the correct relationship between the two:
+  // a medical bill and a roof replacement are the same kind of thing to the engine —
+  // a dated amount debited from savings — and differ only in what you call them and
+  // where the money comes from.
+  EXPENSE_EVENTS: {
     reducers: () => [
-      new HealthcareExpenseApplyReducer(),
+      new ExpenseEventApplyReducer(),
     ],
     paramSchema: () => [
       {
-        key: 'healthcareEvents', label: 'Healthcare Events',
-        type: 'HealthcareEventList', group: 'Spending', mc: false, opt: true,
+        key: 'expenseEvents', label: 'One-Off Expense Events',
+        type: 'ExpenseEventList', group: 'Spending', mc: false, opt: true,
         defaultValue: [],
-        description: 'List of one-off healthcare events: [{ date, amount, category, personId }]',
-        visibleWhen: { param: 'spendingStrategy', includes: 'HEALTHCARE' },
+        description: 'List of dated one-off expenses: [{ date, amount, currency, category, fundFrom, personId, propertyKey, capitalize }]. '
+          + '`currency` defaults to the linked property\'s, else the household expense currency — set it explicitly for a cost that is genuinely denominated in one currency (design 86 §8). '
+          + '`fundFrom` is a state key debited DIRECTLY, taking only what is above that account\'s minimumBalance, with any remainder falling through to the residence-appropriate savings account; omit it for the residency default. '
+          + 'It is the way to draw an out-of-queue account such as an offset WITHOUT giving that account a drawdownPriority, which would drain it against all spending. '
+          + '`propertyKey` + `capitalize` (0-1) add that fraction of the cost to the property\'s capitalizedImprovements, reducing the eventual capital gain the way capitalizeRepairs does.',
+        visibleWhen: { param: 'spendingStrategy', includes: 'EXPENSE_EVENTS' },
       },
     ],
   },

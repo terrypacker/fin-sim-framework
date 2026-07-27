@@ -254,3 +254,59 @@ describe('offset drawdownPriority', () => {
     assert.equal(cfg.accounts[0].balance, 100_000, 'balance untouched when not given');
   });
 });
+
+// ─── expenseEvents lever (design 86 G8/G9) ────────────────────────────────────
+
+describe('expenseEvents lever', () => {
+  test('writes BOTH param stores', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      expenseEvents: [{ date: '2035-06-01', amount: 250_000, currency: 'AUD', fundFrom: 'off' }],
+    });
+    assert.equal(cfg.parameters.expenseEvents.length, 1);
+    assert.equal(cfg.params.find(p => p.name === 'expenseEvents').value.length, 1,
+      'a lever that writes only one store is silently inert against the other source');
+  });
+
+  test('auto-enables EXPENSE_EVENTS without clobbering the existing strategies', () => {
+    const base = exportedCfg();
+    base.params.push({ name: 'spendingStrategy', value: ['EXPLICIT_BANDS', 'FIXED'] });
+    base.parameters.spendingStrategy = ['EXPLICIT_BANDS', 'FIXED'];
+    const cfg = buildVariant(base, {
+      expenseEvents: [{ date: '2035-06-01', amount: 250_000 }],
+    });
+    assert.deepEqual(cfg.parameters.spendingStrategy,
+      ['EXPLICIT_BANDS', 'FIXED', 'EXPENSE_EVENTS'],
+      'replacing rather than appending would disable the plan\'s real spending strategy '
+      + 'and change every arm, not just the one under test');
+  });
+
+  test('is idempotent — re-running does not double-enable the strategy', () => {
+    const once  = buildVariant(exportedCfg(), { expenseEvents: [{ date: '2035-06-01', amount: 1 }] });
+    const twice = buildVariant(once,          { expenseEvents: [{ date: '2036-06-01', amount: 2 }] });
+    assert.equal(twice.parameters.spendingStrategy.filter(s => s === 'EXPENSE_EVENTS').length, 1);
+    assert.equal(twice.parameters.expenseEvents.length, 2, 'events append');
+  });
+
+  test('replace: true authors the list outright', () => {
+    const once = buildVariant(exportedCfg(), { expenseEvents: [{ date: '2035-06-01', amount: 1 }] });
+    const cfg  = buildVariant(once, {
+      expenseEvents: { replace: true, events: [{ date: '2040-06-01', amount: 9 }] },
+    });
+    assert.equal(cfg.parameters.expenseEvents.length, 1);
+    assert.equal(cfg.parameters.expenseEvents[0].amount, 9);
+  });
+
+  test('entries are copied, so an arm cannot reach back into the caller\'s spec', () => {
+    const spec = [{ date: '2035-06-01', amount: 250_000 }];
+    const cfg  = buildVariant(exportedCfg(), { expenseEvents: spec });
+    cfg.parameters.expenseEvents[0].amount = 1;
+    assert.equal(spec[0].amount, 250_000, 'the shallow-copy trap this repo has paid for before');
+  });
+
+  test('drops entries missing a date or an amount', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      expenseEvents: [{ date: '2035-06-01', amount: 100 }, { amount: 200 }, { date: '2036-01-01' }],
+    });
+    assert.equal(cfg.parameters.expenseEvents.length, 1);
+  });
+});

@@ -159,7 +159,7 @@ import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-re
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computeNetWorthUsd, computeHouseValueUsd, createMcSampler, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
@@ -234,12 +234,12 @@ import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-por
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
 import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
+import { ExpenseEventApplyReducer } from './finance/spending/strategies/expense-event-apply-reducer.js';
+import { buildExpenseEventSchedule, ExpenseEventHandler } from './finance/spending/strategies/expense-event-handler.js';
 import { DEFAULT_EXPENSE_BANDS, pinExpensesForBand, repinExpensesIfChanged, ExplicitBandsSpendingReducer } from './finance/spending/strategies/explicit-bands-spending-reducer.js';
 import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
-import { HealthcareEventHandler } from './finance/spending/strategies/healthcare-event-handler.js';
-import { HealthcareExpenseApplyReducer } from './finance/spending/strategies/healthcare-expense-apply-reducer.js';
 import { LateLifeCareApplyReducer } from './finance/spending/strategies/late-life-care-apply-reducer.js';
 import { LateLifeCareHandler } from './finance/spending/strategies/late-life-care-handler.js';
 import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime-aware-spending-reducer.js';
@@ -965,6 +965,7 @@ export const Finance = {
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   computeHouseValueUsd,
+  MC_SAMPLER_CADENCE,
   createMcSampler,
   computePathShape,
   summarizeProvenance,
@@ -1129,6 +1130,9 @@ export const Finance = {
   SPENDING_STRATEGY_REGISTRY,
   DEFAULT_AGE_BANDS,
   AgeBandedSpendingReducer,
+  ExpenseEventApplyReducer,
+  buildExpenseEventSchedule,
+  ExpenseEventHandler,
   DEFAULT_EXPENSE_BANDS,
   pinExpensesForBand,
   repinExpensesIfChanged,
@@ -1136,8 +1140,6 @@ export const Finance = {
   GuardrailAdjustApplyReducer,
   GuardrailAnnualCheckReducer,
   GuardrailBaselineApplyReducer,
-  HealthcareEventHandler,
-  HealthcareExpenseApplyReducer,
   LateLifeCareApplyReducer,
   LateLifeCareHandler,
   RegimeAwareSpendingReducer,
