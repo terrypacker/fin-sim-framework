@@ -46,6 +46,45 @@ export function reconcileLedgerToBalance(account) {
 }
 
 /**
+ * Derive `earningsBasis` from the seed `balance` and `contributionBasis`
+ * (design 53 §8): `earningsBasis = max(0, balance − contributionBasis)`. Earnings
+ * is the *remainder* the user cannot know directly — the same way a
+ * holdings-bearing account's `balance` is the remainder of Σ holdings — so the
+ * invariant `contributionBasis + earningsBasis == balance` holds by construction
+ * at entry and `reconcileLedgerToBalance` never has to rebase a fresh edit.
+ *
+ * Applies to the INITIAL / edited seed only (§8.3). The runtime reducers evolve
+ * `contributionBasis`/`earningsBasis` independently thereafter — do NOT call this
+ * on a live/mid-run ledger, it would flatten the deferred-tax divergence.
+ *
+ * Contribution defaults to `balance` when absent (→ earnings 0, "all principal";
+ * mirrors the builder's `contributionBasis ?? balance`). An over-stated
+ * contribution (`> balance`) clamps earnings at 0, matching §8.5.
+ *
+ * Reads the balance as `balance ?? initialValue`: a serialized config seed spells
+ * it `initialValue` (the Account constructor arg), a built Account/state record
+ * spells it `balance` — mirroring the serializer's `d.balance ?? d.initialValue`.
+ *
+ * Roth rollover buckets (`rolloverContribBasis` / `rolloverEarningsBasis`, design
+ * 36) are a SEPARATE layer of the same balance, so they are subtracted too — the
+ * full invariant is `balance == contributionBasis + earningsBasis +
+ * rolloverContribBasis + rolloverEarningsBasis`. Deriving from `balance −
+ * contributionBasis` alone would mis-attribute rolled-over principal as regular
+ * earnings (the Roth case §8.5 flagged for confirmation). Absent buckets are 0.
+ *
+ * @param {object} account - seed record ({ balance|initialValue, contributionBasis?, earningsBasis, rollover*Basis? })
+ * @returns {number} the derived earningsBasis (also written onto the account)
+ */
+export function deriveEarningsBasis(account) {
+  const balance = account?.balance ?? account?.initialValue ?? 0;
+  const contrib = account?.contributionBasis ?? balance;
+  const rollover = (account?.rolloverContribBasis ?? 0) + (account?.rolloverEarningsBasis ?? 0);
+  const earnings = +Math.max(0, balance - contrib - rollover).toFixed(2);
+  if (account) account.earningsBasis = earnings;
+  return earnings;
+}
+
+/**
  * InvestmentAccount — extends Account with fields common to holdings-bearing
  * investment accounts (US/AU brokerage stocks + the retirement subclasses).
  *

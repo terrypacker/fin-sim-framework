@@ -540,8 +540,8 @@ Key `<select>` added in a prior pass); bond `costBasis`↔`marketValue` sync. In
 ### Outstanding (post-rollout)
 
 All 5 phases are functionally complete and green. Known follow-ups, none blocking:
-- **`earningsBasis` should be derived, not hand-entered** (proposed — see §8). Make it a
-  computed, read-only field (`balance − contributionBasis`) the way `balance` is derived
+- **`earningsBasis` is derived, not hand-entered** — **DONE** (see §8). Computed read-only
+  (`balance − contributionBasis`, less Roth rollover buckets) the way `balance` is derived
   from holdings, so the invariant can't be authored inconsistent.
 - **Editor-created offset accounts don't reach `sim.state`** (Phase 3 blocker above): a
   record created in the editor gets no `stateKey`, so the runtime-state projection can't see
@@ -587,9 +587,12 @@ All 5 phases are functionally complete and green. Known follow-ups, none blockin
 
 ---
 
-## 8. Addendum (proposed) — `earningsBasis` becomes derived, not hand-entered
+## 8. Addendum — `earningsBasis` becomes derived, not hand-entered
 
-**Status**: proposed follow-up (the 5 phases above shipped; this is a later cleanup).
+**Status**: **IMPLEMENTED.** Shared helper `deriveEarningsBasis` in
+`investment-account.js`, wired at four seed/edit sites (editor, controller create,
+service `updateAccount`, loader compile-branch normalization). 3209 unit / 853 viz
+green. Two refinements surfaced during implementation, folded into §8.4/§8.5 below.
 
 ### 8.1 Problem
 On a `RetirementAccount` the ledger obeys the invariant
@@ -645,13 +648,34 @@ as the load-time healer for older saved states.
 - **Serializer**: keep round-tripping `earningsBasis` (the runtime value must persist); only
   the *editor* stops treating it as an input.
 
+**Implementation note — the normalization pass gates on ROLE, not type.** At the
+compile-seed stage `cfg.accounts` records carry **no `type`** discriminator (they are
+identified by `role`), and brokerage roles (`us-stock`/`fixed-income`/…) still carry a
+*write-only-dead* `contributionBasis` (design 53 §2) that must **not** gain a derived
+`earningsBasis`. So `ScenarioLoader._normalizeRetirementBasis` gates on
+`RETIREMENT_ROLES = {ira, k401, roth-ira, super}`. It runs only on the compile-from-toolsets
+branch (§8.3 — never the toolset-less serialized-graph path, whose ledger legitimately
+diverges mid-run). The helper reads the balance as `balance ?? initialValue`, since a
+serialized seed spells the field `initialValue` while a built Account spells it `balance`
+(mirroring the serializer's `d.balance ?? d.initialValue`). This shifts the default
+IntlRetirement scenario: retirement accounts now seed with their proper embedded earnings
+(e.g. `iraAccount` 200k/150k → **50k** earnings) instead of the previously under-stated 0,
+which reconcile left alone — that shift is the whole point (it moves after-tax net worth
+and withdrawal tax), but it does change baseline numbers.
+
 ### 8.5 Edge / open questions
 - **`contributionBasis > balance`** → negative earnings; clamp `earningsBasis` at 0 (and
   optionally clamp `contributionBasis` to `balance`), matching `reconcileLedgerToBalance`'s
   `balance ≤ 0` branch.
 - **Roth**: contributions are the always-accessible tax-free layer and earnings the taxable
-  layer; the same derivation holds (`earningsBasis = balance − contributionBasis`), so Roth
-  needs no special case — confirm against `RothEarningsApplyReducer`.
+  layer. **RESOLVED (needs a special case after all):** a Roth's balance also includes the
+  *rollover* buckets (`rolloverContribBasis` / `rolloverEarningsBasis`, design 36), a
+  separate layer of the same balance. Deriving from `balance − contributionBasis` alone
+  mis-attributes rolled-over principal as regular earnings (caught by EVT-42). The full
+  invariant is `balance == contributionBasis + earningsBasis + rolloverContribBasis +
+  rolloverEarningsBasis`, so `deriveEarningsBasis` subtracts the rollover buckets too:
+  `earningsBasis = max(0, balance − contributionBasis − rolloverContribBasis −
+  rolloverEarningsBasis)` (absent buckets = 0).
 - **Where to compute** — editor + controller (belt-and-suspenders) vs a single
   compile-time normalization pass over `cfg.accounts` (also heals older saves, like the
   design 55 §3.1 stateKey pass). The normalization pass is the more robust home; the editor

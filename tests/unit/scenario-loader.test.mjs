@@ -966,3 +966,41 @@ test('load (compile branch): a tombstoned default account never reaches the serv
   assert.ok(!keys.includes('usSavingsAccount'),
     'the tombstoned default is absent from the compiled services');
 });
+
+// ── _normalizeRetirementBasis (design 53 §8) ──────────────────────────────────
+// earningsBasis is a DERIVED seed (balance − contributionBasis) on the compile
+// branch, the same way balance is derived from Σ holdings. The pass heals a
+// hand-authored/inconsistent trio before the account service reads it.
+
+// Gated on ROLE: at the compile-seed stage cfg.accounts carry no `type`, and
+// brokerage roles carry a write-only-dead contributionBasis that must stay ledger-free.
+test('_normalizeRetirementBasis: derives earningsBasis on retirement ROLES, ignoring the authored value', () => {
+  const cfg = {
+    accounts: [
+      { role: 'k401',     stateKey: 'k', balance: 50_000, contributionBasis: 40_000, earningsBasis: 999 },
+      { role: 'super',    stateKey: 's', balance: 100_000, contributionBasis: 60_000, earningsBasis: 0 },
+      { role: 'ira',      stateKey: 'i', balance: 30_000, contributionBasis: 40_000, earningsBasis: 5_000 },
+      { role: 'roth-ira', stateKey: 'r', balance: 80_000, contributionBasis: 60_000, earningsBasis: 0 },
+    ],
+  };
+  new ScenarioLoader()._normalizeRetirementBasis(cfg);
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.k.earningsBasis, 10_000);          // overwrites 999
+  assert.strictEqual(byKey.s.earningsBasis, 40_000);          // fixes the under-stated 0
+  assert.strictEqual(byKey.i.earningsBasis, 0);               // contrib > balance clamps at 0
+  assert.strictEqual(byKey.r.earningsBasis, 20_000);          // roth derives the same way
+});
+
+test('_normalizeRetirementBasis: leaves brokerage/cash roles ledger-free (does not add earningsBasis)', () => {
+  const cfg = {
+    accounts: [
+      { role: 'us-stock',     stateKey: 'b', balance: 50_000, contributionBasis: 30_000 }, // dead brokerage contrib
+      { role: 'fixed-income', stateKey: 'f', balance: 80_000, contributionBasis: 0 },
+      { role: 'us-savings',   stateKey: 'v', balance: 10_000 },
+    ],
+  };
+  new ScenarioLoader()._normalizeRetirementBasis(cfg);
+  for (const a of cfg.accounts) {
+    assert.ok(!('earningsBasis' in a), `${a.role} must not gain a derived earningsBasis`);
+  }
+});

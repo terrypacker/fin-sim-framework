@@ -16,6 +16,7 @@ import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
+import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldingsFifo } from '../holdings/holdings-fifo.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
@@ -103,6 +104,15 @@ export class AccountService extends AssetService {
     if ('balance' in changes && !('holdings' in changes) &&
         Array.isArray(account.holdings) && account.holdings.length > 0) {
       rescaleHoldingsToBalance(account.holdings, account.balance);
+    }
+    // design 53 §8: on a retirement account, `earningsBasis` is DERIVED from
+    // `balance − contributionBasis`, never hand-set. Re-derive the seed whenever an
+    // edit moves either input (a config-time edit, not a runtime ledger mutation —
+    // reducers evolve the ledger via sim.state, not updateAccount). Gated on the
+    // ledger signature, like reconcileLedgerToBalance.
+    if ('contributionBasis' in account &&
+        ('balance' in changes || 'contributionBasis' in changes)) {
+      deriveEarningsBasis(account);
     }
     this._publish('UPDATE', account, original);
     this._wireNodeEdges(account);

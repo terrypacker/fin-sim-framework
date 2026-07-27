@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { InvestmentAccount, RetirementAccount, reconcileLedgerToBalance } from '../../src/finance/assets/investment-account.js';
+import { InvestmentAccount, RetirementAccount, reconcileLedgerToBalance, deriveEarningsBasis } from '../../src/finance/assets/investment-account.js';
 
 // ── InvestmentAccount construction (base: holdings-bearing, no basis ledger) ────
 
@@ -162,4 +162,45 @@ test('reconcileLedgerToBalance: no-op on a tied ledger and on accounts without t
   const cash = { balance: 100_000 };
   assert.strictEqual(reconcileLedgerToBalance(cash), false);
   assert.ok(!('contributionBasis' in cash));
+});
+
+// ── deriveEarningsBasis (design 53 §8) ────────────────────────────────────────
+
+test('deriveEarningsBasis: earnings = balance − contributions', () => {
+  const a = { balance: 50_000, contributionBasis: 40_000, earningsBasis: 999 };
+  assert.strictEqual(deriveEarningsBasis(a), 10_000);
+  assert.strictEqual(a.earningsBasis, 10_000); // overwrites the stale value
+});
+
+test('deriveEarningsBasis: fixes the UNDER-stated ledger reconcile leaves alone', () => {
+  // contrib 60k / earnings 0 / balance 100k — reconcile is a no-op here (total < balance),
+  // so the hand-authored earnings 0 would survive. Derivation restores the invariant.
+  const a = { balance: 100_000, contributionBasis: 60_000, earningsBasis: 0 };
+  assert.strictEqual(deriveEarningsBasis(a), 40_000);
+});
+
+test('deriveEarningsBasis: contributions > balance clamps earnings at 0', () => {
+  const a = { balance: 39_000, contributionBasis: 180_000, earningsBasis: 0 };
+  assert.strictEqual(deriveEarningsBasis(a), 0);
+});
+
+test('deriveEarningsBasis: absent contributions defaults to balance → earnings 0 (all principal)', () => {
+  const a = { balance: 25_000, earningsBasis: 5_000 };
+  assert.strictEqual(deriveEarningsBasis(a), 0);
+  assert.strictEqual(a.earningsBasis, 0);
+});
+
+test('deriveEarningsBasis: reads initialValue when balance is absent (serialized seed spelling)', () => {
+  const a = { initialValue: 100_000, contributionBasis: 60_000, earningsBasis: 0 };
+  assert.strictEqual(deriveEarningsBasis(a), 40_000);
+});
+
+test('deriveEarningsBasis: Roth rollover buckets are subtracted, not counted as earnings', () => {
+  // balance 10k is ALL rolled-over principal (design 36); regular earnings stay 0.
+  const a = { balance: 10_000, contributionBasis: 0, rolloverContribBasis: 10_000, earningsBasis: 999 };
+  assert.strictEqual(deriveEarningsBasis(a), 0);
+  // Mixed: 100k = 40k contrib + 30k rollover-contrib + 10k rollover-earn → 20k regular earnings.
+  const b = { balance: 100_000, contributionBasis: 40_000,
+              rolloverContribBasis: 30_000, rolloverEarningsBasis: 10_000, earningsBasis: 0 };
+  assert.strictEqual(deriveEarningsBasis(b), 20_000);
 });

@@ -35,6 +35,17 @@ import { US_COMPANY_SALE }   from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
+import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
+import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
+
+// Retirement roles carry the contribution/earnings basis ledger (design 53 §2)
+// whose `earningsBasis` is DERIVED from `balance − contributionBasis` (design 53
+// §8). Gated on ROLE, not type: at the compile-seed stage cfg.accounts have no
+// `type` discriminator, and brokerage roles (us-stock/fixed-income/…) carry a
+// write-only-dead `contributionBasis` that must NOT gain a derived earningsBasis.
+const RETIREMENT_ROLES = new Set([
+  ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.ROTH, ACCOUNT_ROLES.SUPER,
+]);
 
 const SCENARIO_CLASS_BY_ID = new Map([
   [IntlRetirementScenario.scenarioId(), IntlRetirementScenario],
@@ -117,6 +128,7 @@ export class ScenarioLoader {
     if (cfg.toolsets?.length > 0) {
       this._driftMergeDomainRecords(cfg);
       this._normalizeParams(cfg);
+      this._normalizeRetirementBasis(cfg);
     }
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
@@ -190,6 +202,27 @@ export class ScenarioLoader {
       if (p?.name === 'startingResidency' && p.value != null) {
         p.value = normalizeCountryCode(p.value);
       }
+    }
+  }
+
+  /**
+   * Derive `earningsBasis` from the seed `balance − contributionBasis` on every
+   * retirement account in the config (design 53 §8), the same way a holdings-bearing
+   * account's `balance` is derived from Σ holdings. The user authors `balance` (or
+   * holdings) and `contributionBasis`; earnings is the remainder, so the invariant
+   * `contributionBasis + earningsBasis == balance` holds by construction and any
+   * hand-entered `earningsBasis` (or an older over-committed save) is normalized away.
+   *
+   * Seed-only (§8.3): runs on the COMPILE-from-toolsets branch, where cfg.accounts
+   * are initial values the sim re-evolves — never on a toolset-less serialized graph,
+   * whose ledger legitimately diverges mid-run (that divergence is the deferred-tax
+   * signal). Must run after `_normalizeParams` (which cascades the `contributionBasis`
+   * param onto the record) and before `deserializePersonsAccounts` reads it.
+   * @private
+   */
+  _normalizeRetirementBasis(cfg) {
+    for (const acct of (Array.isArray(cfg.accounts) ? cfg.accounts : [])) {
+      if (acct && RETIREMENT_ROLES.has(acct.role)) deriveEarningsBasis(acct);
     }
   }
 

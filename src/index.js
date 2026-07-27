@@ -40,7 +40,7 @@ import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccoun
 import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
-import { reconcileLedgerToBalance, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
+import { reconcileLedgerToBalance, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
@@ -577,6 +577,7 @@ export const Finance = {
   Collectible,
   CompanyEquity,
   reconcileLedgerToBalance,
+  deriveEarningsBasis,
   InvestmentAccount,
   BrokerageAccount,
   RetirementAccount,
