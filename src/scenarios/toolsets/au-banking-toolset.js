@@ -45,9 +45,9 @@ export const AU_BANKING = {
       { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
         fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_SAVINGS_EARNINGS_APPLY',   fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), residency: ValueType.text() } },
-      { type: 'AU_SAVINGS_EARNINGS_TAX',     fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
+      { type: 'AU_SAVINGS_EARNINGS_TAX',     fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
-      { type: 'AU_FIXED_INCOME_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
+      { type: 'AU_FIXED_INCOME_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), stateKey: ValueType.text() } },
     ],
   },
 

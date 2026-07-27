@@ -99,6 +99,9 @@ export const AU_TAX = {
       auPersonSuperTaxYTD:              {},
       auPersonFrankingCreditYTD:        {},
       auPersonEarnedIncomeYTD:          {},   // FEIE cap accumulator (design 52 §4.2)
+      auPersonUsSourceOrdinaryAudYTD:            {},
+      auPersonUsSourceCapGainsAudYTD:            {},
+      auPersonUsSourceRealCapGainsAudYTD:        {},
     };
 
     //Zero out some fields that we will need
@@ -110,6 +113,9 @@ export const AU_TAX = {
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
       state.auPersonNrWithholdingInterestYTD[p.id] = 0;
       state.auPersonNrWithholdingUnfrankedDividendYTD[p.id] = 0;
+      state.auPersonUsSourceOrdinaryAudYTD[p.id] = 0;
+      state.auPersonUsSourceCapGainsAudYTD[p.id] = 0;
+      state.auPersonUsSourceRealCapGainsAudYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;
       state.auPersonFrankingCreditYTD[p.id] = 0;
       state.auPersonEarnedIncomeYTD[p.id] = 0;

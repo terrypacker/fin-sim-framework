@@ -333,6 +333,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           superTax:               auSuperTaxYTD,
           frankingCredits:        auFrankingCreditYTD,
           foreignIncomeTaxOffset: foreignTaxAud,
+          // This person's US-source slices (design 76 Gap D). Surfaced so the
+          // creditable-base split can apportion per person under the A$1,000
+          // de-minimis, where no fitoLimit is computed to subtract from.
+          usSourceOrdinary:       state.usSourceOrdinaryAudYTD ?? 0,
+          usSourceCapGains:       state.usSourceCapGainsAudYTD ?? 0,
           isResident:             true,
         },
         isResident:               true,

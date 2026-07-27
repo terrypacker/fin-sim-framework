@@ -217,6 +217,11 @@ function _propertyToStatePlain(prop) {
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',
     ownerId:             prop.ownerId            ?? null,
+    // Design 76 Gap A: carry the explicit per-person breakdown too — it is the
+    // FIRST branch of ownershipFractions and outranks sole/joint. Dropping it left
+    // design 73's rental attribution (which reads owners off propState) unable to
+    // see anything but the coarse sole/joint split.
+    owners:              prop.owners             ?? [],
     country:             prop.country            ?? 'AU',
     // Tag the FX currency so net-worth / net-liquidity / spending guardrails
     // convert an AUD-denominated property instead of counting it 1:1 as USD.

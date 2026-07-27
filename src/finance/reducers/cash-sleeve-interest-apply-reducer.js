@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { accumulateByOwnership } from '../ownership-utils.js';
 
 /**
  * Handles CASH_SLEEVE_INTEREST_APPLY actions (design 60) — money-market interest
@@ -54,7 +55,7 @@ export class CashSleeveInterestApplyReducer extends Reducer {
 
     if (taxMode === 'au') {
       // AU-source cash interest → AU ordinary income via the shared AU tax path.
-      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]);
+      return this.newState(base, {}, [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency, stateKey: key }]);
     }
 
     // taxMode === 'us' — US ordinary income (federal + state). When AU-resident,
@@ -68,11 +69,23 @@ export class CashSleeveInterestApplyReducer extends Reducer {
       usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
     };
     if (residency === 'AU') {
+      // Design 76 Gap B/D: attribute the assessable income and its US-source removal
+      // slice to the owner(s) of the account whose cash sleeve earned it. Both must
+      // move together, or the FITO limit is sized off a mismatched base.
+      const owner = state.people != null ? acct : null;
+      const patch = owner
+        ? {
+            auPersonOrdinaryIncomeYTD:      accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {},      owner, amount, state.people),
+            auPersonUsSourceOrdinaryAudYTD: accumulateByOwnership(state.auPersonUsSourceOrdinaryAudYTD ?? {}, owner, amount, state.people),
+          }
+        : {
+            auOrdinaryIncomeYTD:    (state.auOrdinaryIncomeYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + amount,
+          };
       return this.newState({
         ...withUs,
-        auOrdinaryIncomeYTD:    (state.auOrdinaryIncomeYTD ?? 0) + amount,
+        ...patch,
         usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-        usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + amount,
       });
     }
     return this.newState(withUs);

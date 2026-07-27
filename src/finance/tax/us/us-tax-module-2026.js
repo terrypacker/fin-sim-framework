@@ -9,7 +9,69 @@
  */
 
 import { BaseTaxModule } from '../base-tax-module.js';
+import { resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
+
+/**
+ * Per-person AU accumulator for each household scalar this module books while the
+ * taxpayer is an AU resident (design 76 Gap B). Every entry pairs the AU-return
+ * field with the per-person map that supersedes it.
+ */
+const AU_PERSON_FIELD = {
+  auOrdinaryIncomeYTD:        'auPersonOrdinaryIncomeYTD',
+  auCapitalGainsYTD:          'auPersonCapitalGainsYTD',
+  auDiscountableGainsYTD:     'auPersonDiscountableGainsYTD',
+  usSourceOrdinaryAudYTD:     'auPersonUsSourceOrdinaryAudYTD',
+  usSourceCapGainsAudYTD:     'auPersonUsSourceCapGainsAudYTD',
+  usSourceRealCapGainsAudYTD: 'auPersonUsSourceRealCapGainsAudYTD',
+};
+
+/**
+ * Book AU-assessable amounts for an AU resident, attributed to the person who owns
+ * the income rather than split evenly across the household at settle time.
+ *
+ * Australia has no joint assessment (design 76 §1), so every dollar here belongs to
+ * exactly one taxpayer — or to each owner of a jointly held asset in proportion to
+ * their interest. `resolveAttributionFractions` reads whichever identifier the
+ * action carries (personKey / stateKey / inline ownership).
+ *
+ * When nothing resolves we fall back to the household scalar. That is deliberately
+ * NOT an even split: the scalar is still divided by headcount at settle, but it stays
+ * visible as unattributed income that P5's assertion can catch, whereas an even split
+ * applied here would silently look like a real answer.
+ *
+ * @param {object} state         - state before this action
+ * @param {object} next          - state accumulated so far by the caller
+ * @param {object} action        - the tax action (source of the attribution identifier)
+ * @param {string} canonicalKey  - fallback state key for the account-derived case
+ * @param {Record<string, number>} amounts - AU field → amount (AUD)
+ * @returns {object} next, with either per-person maps or household scalars advanced
+ */
+function bookAuResident(state, next, action, canonicalKey, amounts) {
+  const fractions = resolveAttributionFractions(state, action, canonicalKey);
+  const patch = {};
+
+  if (fractions == null) {
+    for (const [field, value] of Object.entries(amounts)) {
+      patch[field] = (next[field] ?? state[field] ?? 0) + value;
+    }
+    return { ...next, ...patch };
+  }
+
+  for (const [field, value] of Object.entries(amounts)) {
+    const personField = AU_PERSON_FIELD[field];
+    if (personField == null) {          // no per-person twin ⇒ genuinely household
+      patch[field] = (next[field] ?? state[field] ?? 0) + value;
+      continue;
+    }
+    const map = { ...(next[personField] ?? state[personField] ?? {}) };
+    for (const { personKey, fraction } of fractions) {
+      map[personKey] = (map[personKey] ?? 0) + value * fraction;
+    }
+    patch[personField] = map;
+  }
+  return { ...next, ...patch };
+}
 
 /**
  * UsTaxModule2026 — US tax classification rules for 2026.
@@ -73,10 +135,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const isAuResident = residency === 'AU';
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (isAuResident) {
-          next = {
-            ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-          };
+          // Design 76 Gap B — attributed to the Roth's owner. No US-source removal
+          // set is fed here on purpose: the US levies no income tax on these
+          // earnings, so there is no US tax for the FITO limit to relieve.
+          next = bookAuResident(state, next, action, 'rothAccount', {
+            auOrdinaryIncomeYTD: toAUD(amount, 'USD', state),
+          });
         }
         return next;
       }],
@@ -112,10 +176,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the IRA it was drawn from, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'iraAccount', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -147,10 +215,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the 401k the RMD came from, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'k401Account', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -174,10 +246,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the account that earned it, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'fixedIncomeAccount', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -197,10 +273,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the account that received it, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'usStockAccount', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -230,10 +310,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audFed  = toAUD(fedAmount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + audFull,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + fedAmount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + audFed,
           };
+          // Design 76 Gap B — attributed to the account holding the bond. Note the
+          // two amounts differ: AU assesses the FULL coupon (it grants no US-Treasury
+          // exemption), while the US-source removal set tracks only the federally
+          // taxable slice, so they must be booked as separate amounts.
+          next = bookAuResident(state, next, action, 'usStockAccount', {
+            auOrdinaryIncomeYTD:    audFull,
+            usSourceOrdinaryAudYTD: audFed,
+          });
         }
         return next;
       }],
@@ -256,11 +342,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audDiscountableGain = toAUD(auDiscountableGain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD:      state.auCapitalGainsYTD + audGain,
-            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audDiscountableGain,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
+          // Design 76 Gap B — the gain belongs to the owner(s) of the account that
+          // held the lots; the discountable slice must follow the same split so the
+          // CGT discount is applied against the right person's gain.
+          next = bookAuResident(state, next, action, 'usStockAccount', {
+            auCapitalGainsYTD:      audGain,
+            auDiscountableGainsYTD: audDiscountableGain,
+            usSourceCapGainsAudYTD: audGain,
+          });
         }
         return next;
       }],
@@ -282,11 +373,15 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audDiscountable = toAUD(action.auDiscountableGain ?? action.auGain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
-            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audDiscountable,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + action.auGain,
-            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
+          // Design 76 Gap B — attributed to the property's owner(s), stamped inline
+          // by the sale reducer (mirrors AU_HOUSE_SALE_TAX, which already did this).
+          next = bookAuResident(state, next, action, null, {
+            auCapitalGainsYTD:      audGain,
+            auDiscountableGainsYTD: audDiscountable,
+            usSourceCapGainsAudYTD: audGain,
+          });
         }
         return next;
       }],
@@ -314,10 +409,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the property's owners (stamped inline), rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -338,10 +437,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + taxable,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the recipient (personKey) — each person has their own entitlement, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -360,17 +463,18 @@ export class UsTaxModule2026 extends BaseTaxModule {
         };
         if (isAuResident) {
           const audAmount = toAUD(amount, 'USD', state);
-          const removal = {
+          next = {
+            ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + audAmount,
           };
-          if (personKey && state.auPersonOrdinaryIncomeYTD) {
-            const personMap = { ...state.auPersonOrdinaryIncomeYTD };
-            personMap[personKey] = (personMap[personKey] ?? 0) + audAmount;
-            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ...removal };
-          } else {
-            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + audAmount, ...removal };
-          }
+          // Design 76 Gap B/D — attributed to the earner via personKey; personal
+          // services income is never apportionable. Replaces a hand-rolled per-person
+          // block that booked the income per person but left its AUD removal set on
+          // the household scalar, so the FITO limit was sized off a mismatched base.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    audAmount,
+            usSourceOrdinaryAudYTD: audAmount,
+          });
         }
         return next;
       }],
@@ -390,17 +494,18 @@ export class UsTaxModule2026 extends BaseTaxModule {
         };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);
-          const removal = {
+          next = {
+            ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
-          if (personKey && state.auPersonOrdinaryIncomeYTD) {
-            const personMap = { ...state.auPersonOrdinaryIncomeYTD };
-            personMap[personKey] = (personMap[personKey] ?? 0) + aud;
-            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ...removal };
-          } else {
-            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + aud, ...removal };
-          }
+          // Design 76 Gap B/D — attributed to the earner via personKey; personal
+          // services income is never apportionable. Replaces a hand-rolled per-person
+          // block that booked the income per person but left its AUD removal set on
+          // the household scalar, so the FITO limit was sized off a mismatched base.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -420,10 +525,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the earner (personKey) — W-2 wages are never apportionable, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -442,15 +551,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audGain = toAUD(auGainUsd, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+          };
+          // Design 76 Gap B — attributed to the equity holder, stamped inline by the
+          // sale reducer (company equity has no account state key).
+          next = bookAuResident(state, next, action, null, {
+            auCapitalGainsYTD:      audGain,
             // Company shares carry no per-lot 12-month tracking here, so the whole
             // gain stays discount-eligible (design 62 §4 — the residency holding-
             // period gate targets brokerage lots; company/collectible/property
             // holding-period gating is out of Gap 1's scope).
-            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audGain,
-            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
-          };
+            auDiscountableGainsYTD: audGain,
+            usSourceCapGainsAudYTD: audGain,
+          });
         }
         return next;
       }],
@@ -477,12 +590,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audGain = toAUD(gain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
-            // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
-            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audGain,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
+          // Design 76 Gap B — attributed to the collectible's owner(s), stamped
+          // inline by the sale reducer (a collectible has no account state key).
+          next = bookAuResident(state, next, action, null, {
+            auCapitalGainsYTD:      audGain,
+            // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
+            auDiscountableGainsYTD: audGain,
+            usSourceCapGainsAudYTD: audGain,
+          });
         }
         return next;
       }],
@@ -501,10 +618,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the rollover IRA, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'iraAccount', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -519,10 +640,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the IRA the RMD came from, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, 'iraAccount', {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],
@@ -550,7 +675,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const { penaltyAmount = 0, auAssessableAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (residency === 'AU' && auAssessableAmount > 0) {
-          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(auAssessableAmount, 'USD', state) };
+          // Design 76 Gap B — attributed to the rollover Roth's owner. As with EVT-3,
+          // no US-source removal set: the US taxes none of this, so FITO has nothing
+          // to relieve.
+          next = bookAuResident(state, next, action, 'rothAccount', {
+            auOrdinaryIncomeYTD: toAUD(auAssessableAmount, 'USD', state),
+          });
         }
         return next;
       }],
@@ -570,7 +700,10 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const { amount, penaltyAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (residency === 'AU') {
-          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state) };
+          // Design 76 Gap B — attributed to the rollover Roth's owner (see EVT-3).
+          next = bookAuResident(state, next, action, 'rothAccount', {
+            auOrdinaryIncomeYTD: toAUD(amount, 'USD', state),
+          });
         }
         return next;
       }],
@@ -624,10 +757,14 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
+          // Design 76 Gap B — attributed to the inherited account's beneficiary, rather than
+          // halved across the household by computeAuTaxPerPerson at settle.
+          next = bookAuResident(state, next, action, null, {
+            auOrdinaryIncomeYTD:    aud,
+            usSourceOrdinaryAudYTD: aud,
+          });
         }
         return next;
       }],

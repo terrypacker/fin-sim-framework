@@ -9,7 +9,7 @@
  */
 
 import { BaseTaxModule } from '../base-tax-module.js';
-import { accumulateByOwnership } from '../../ownership-utils.js';
+import { accumulateByOwnership, resolveAttributionAsset } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
 
 const SUPER_TAX_RATE = 0.15;
@@ -225,7 +225,12 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_SAVINGS_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        const perPerson = state.people != null && state.auSavingsAccount != null;
+        // Design 76 Gap C: attribute to the account that earned the interest. This
+        // action is emitted from five sites (AU savings, and the cash-sleeve /
+        // bond-sleeve / bond-accretion reducers on their 'au' taxMode), each of
+        // which stamps the account it credited.
+        const account = resolveAttributionAsset(state, action, 'auSavingsAccount');
+        const perPerson = state.people != null && account != null;
         // AU-source interest is net investment income for a US person
         // (IRC §1411(c)(1)(A)(i)) → NIIT base, mirroring FIXED_INCOME_EARNINGS_TAX.
         // The FTC cannot offset NIIT, so AU-taxed interest still bears the 3.8% surtax.
@@ -240,14 +245,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auSavingsAccount, amount, state.people) }
+              ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, account, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
           };
         } else {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, state.auSavingsAccount, amount, state.people) }
+              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, account, amount, state.people) }
               : { auNrWithholdingInterestYTD: (state.auNrWithholdingInterestYTD ?? 0) + amount }),
           };
         }
@@ -265,7 +270,9 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        const perPerson = state.people != null && state.auFixedIncomeAccount != null;
+        // Design 76 Gap C — attribute to the account that earned the interest.
+        const account = resolveAttributionAsset(state, action, 'auFixedIncomeAccount');
+        const perPerson = state.people != null && account != null;
         // AU-source interest is net investment income for a US person
         // (IRC §1411(c)(1)(A)(i)) → NIIT base, as with AU_SAVINGS_EARNINGS_TAX.
         const usd = toUSD(amount, 'AUD', state);
@@ -279,14 +286,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
+              ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, account, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
           };
         } else {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
+              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, account, amount, state.people) }
               : { auNrWithholdingInterestYTD: (state.auNrWithholdingInterestYTD ?? 0) + amount }),
           };
         }
@@ -300,11 +307,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-20: super contribution — AU super tax at 15%, no US tax
       ['SUPER_CONTRIBUTION_TAX', (state, action) => {
         const superTax = action.amount * SUPER_TAX_RATE;
-        const perPerson = state.people != null && state.superAccount != null;
+        // Design 76 Gap C — contributions tax belongs to the MEMBER whose account
+        // received the contribution, never to the household. Matches the stateKey
+        // resolution SUPER_EARNINGS_TAX already does below.
+        const account = resolveAttributionAsset(state, action, 'superAccount');
+        const perPerson = state.people != null && account != null;
         return {
           ...state,
           ...(perPerson
-            ? { auPersonSuperTaxYTD: accumulateByOwnership(state.auPersonSuperTaxYTD ?? {}, state.superAccount, superTax, state.people) }
+            ? { auPersonSuperTaxYTD: accumulateByOwnership(state.auPersonSuperTaxYTD ?? {}, account, superTax, state.people) }
             : { auSuperTaxYTD: state.auSuperTaxYTD + superTax }),
         };
       }],
@@ -337,7 +348,9 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-26: franked dividend (resident) — US ordinary income, AU franking credit, FTC.
       // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_FRANKED_RESIDENT_TAX', (state, action) => {
-        const perPerson = state.people != null && state.auStockAccount != null;
+        // Design 76 Gap C — attribute to the AU brokerage account that paid it.
+        const account = resolveAttributionAsset(state, action, 'auStockAccount');
+        const perPerson = state.people != null && account != null;
         // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
         // → NIIT base, mirroring STOCK_DIVIDEND_TAX. The NII slice is the cash
         // dividend the US recognises (the AU franking gross-up is not US income), so
@@ -349,15 +362,55 @@ export class AuTaxModule2026 extends BaseTaxModule {
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
           foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
-            ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, state.auStockAccount, action.amount, state.people) }
+            ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, account, action.amount, state.people) }
             : { auFrankingCreditYTD: state.auFrankingCreditYTD + action.amount }),
+        };
+      }],
+
+      // EVT-27: franked dividend (NON-resident) — US ordinary income, no AU tax, no FTC.
+      //
+      // Australia taxes nothing here and that is correct: ITAA 1936 s128B(3)(ga)(i)
+      // excludes the franked part of a dividend from withholding tax for a foreign
+      // resident, s128D keeps it out of assessable income, and ss207-20 / 207-70 deny
+      // the franking offset to non-residents. So no auOrdinaryIncomeYTD, no
+      // withholding bucket, and no franking credit — unlike all three sibling
+      // dividend events.
+      //
+      // But the Australian exemption says nothing about the United States. A US
+      // citizen is taxed on worldwide income wherever resident (IRC §61, §1), so the
+      // dividend is US ordinary income exactly as it is on the other three branches.
+      // This leg was specified in docs/requirements.md (EVT-27: US "Ordinary Income")
+      // but never implemented — the reducer chained no tax action at all, so a
+      // US-resident citizen holding ASX shares paid tax on franked dividends in
+      // NEITHER country. The old "Ordinary Income??" note in the requirements CSV was
+      // uncertainty about the US side; the AU side was never in doubt.
+      //
+      // NIIT: dividends are net investment income (IRC §1411(c)(1)(A)(i)), and since
+      // no Australian tax is paid there is no FTC to reduce it — this is the one
+      // dividend branch where the 3.8% surtax lands wholly unrelieved.
+      //
+      // §904: the dividend is AU-source (sourced to the paying company's residence),
+      // so it belongs in the passive basket numerator. No foreign tax accompanies it,
+      // but the numerator sizes the LIMITATION, not the credit — genuinely
+      // foreign-source income raising the passive limit is §904 working as intended.
+      // Contrast design 73's warning, which was about US-source income being fed
+      // into a basket numerator; that is a different and improper thing.
+      ['AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', (state, action) => {
+        const usd = toUSD(action.amount, 'AUD', state);
+        return {
+          ...state,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
         };
       }],
 
       // EVT-28: unfranked dividend (resident) — US ordinary income, AU ordinary income, FTC.
       // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', (state, action) => {
-        const perPerson = state.people != null && state.auStockAccount != null;
+        // Design 76 Gap C — attribute to the AU brokerage account that paid it.
+        const account = resolveAttributionAsset(state, action, 'auStockAccount');
+        const perPerson = state.people != null && account != null;
         // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
         // → NIIT base, mirroring STOCK_DIVIDEND_TAX.
         const usd = toUSD(action.amount, 'AUD', state);
@@ -367,7 +420,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
           foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
-            ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auStockAccount, action.amount, state.people) }
+            ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, account, action.amount, state.people) }
             : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + action.amount }),
         };
       }],
@@ -379,7 +432,9 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // Protocol's 5%/0% tiers both require a *corporate* beneficial owner, so an
       // individual always falls to 15% and there is no tiering to model.
       ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', (state, action) => {
-        const perPerson = state.people != null && state.auStockAccount != null;
+        // Design 76 Gap C — attribute to the AU brokerage account that paid it.
+        const account = resolveAttributionAsset(state, action, 'auStockAccount');
+        const perPerson = state.people != null && account != null;
         // Dividends are net investment income for a US person (IRC §1411(c)(1)(A)(i))
         // → NIIT base, mirroring STOCK_DIVIDEND_TAX.
         const usd = toUSD(action.amount, 'AUD', state);
@@ -389,7 +444,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
           foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
-            ? { auPersonNrWithholdingUnfrankedDividendYTD: accumulateByOwnership(state.auPersonNrWithholdingUnfrankedDividendYTD ?? {}, state.auStockAccount, action.amount, state.people) }
+            ? { auPersonNrWithholdingUnfrankedDividendYTD: accumulateByOwnership(state.auPersonNrWithholdingUnfrankedDividendYTD ?? {}, account, action.amount, state.people) }
             : { auNrWithholdingUnfrankedDividendYTD: (state.auNrWithholdingUnfrankedDividendYTD ?? 0) + action.amount }),
         };
       }],
@@ -408,15 +463,17 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // full auGain when absent (old actions ⇒ current full-discount behavior).
         const auDiscountableGain = action.auDiscountableGain ?? auGain;
         const isAuResident = residency === 'AU';
-        const perPerson = state.people != null && state.auStockAccount != null;
+        // Design 76 Gap C — attribute to the AU brokerage account that paid it.
+        const account = resolveAttributionAsset(state, action, 'auStockAccount');
+        const perPerson = state.people != null && account != null;
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? {
-                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people),
-                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, state.auStockAccount, auDiscountableGain, state.people),
+                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, account, auGain, state.people),
+                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, account, auDiscountableGain, state.people),
                 }
               : {
                   auCapitalGainsYTD:      state.auCapitalGainsYTD + auGain,

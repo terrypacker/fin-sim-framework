@@ -47,7 +47,7 @@ export const US_COLLECTIBLES = {
       { type: 'COLLECTIBLE_SALE_APPLY',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number() } },
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), residency: ValueType.text() } },
+        fields: { gain: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', fields: { amount: ValueType.number() } },
     ],
   },
@@ -128,6 +128,8 @@ function _collectibleToStatePlain(col) {
     plannedSaleYear:     col.plannedSaleYear  ?? null,
     ownershipType:       col.ownershipType    ?? 'sole',
     ownerId:             col.ownerId          ?? null,
+    // Design 76 Gap A — owners[] outranks sole/joint; needed by P3's gain attribution.
+    owners:              col.owners           ?? [],
     country:             col.country          ?? 'US',
     appreciationSchedule: col.appreciationSchedule ?? null,
     // AU CGT reform (design 57 Part 2, Item C): bullion marker + AU basis/level,

@@ -57,6 +57,6 @@ export class StockDividendCashApplyReducer extends Reducer {
     const { amount, residency } = action;
     const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], amount, date);
-    return this.newState(state, {}, [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]);
+    return this.newState(state, {}, [{ type: 'STOCK_DIVIDEND_TAX', amount, residency, stateKey: key }]);
   }
 }

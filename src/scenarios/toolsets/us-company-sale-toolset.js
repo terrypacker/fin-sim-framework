@@ -114,6 +114,8 @@ function _companyEquityToStatePlain(eq) {
     plannedSaleYear:      eq.plannedSaleYear   ?? null,
     ownershipType:        eq.ownershipType     ?? 'sole',
     ownerId:              eq.ownerId           ?? null,
+    // Design 76 Gap A — owners[] outranks sole/joint; needed by P3's gain attribution.
+    owners:               eq.owners            ?? [],
     country:              eq.country           ?? 'US',
     appreciationSchedule: eq.appreciationSchedule ?? null,
     // Per-country cost base + indexation stamps (design 72 §3). Null until the

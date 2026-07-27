@@ -157,8 +157,96 @@ function runDefaultIntlRetirement() {
 // (Rev. Proc. 2025-32) replaced the "inflate the 2025 brackets" fallback: the
 // OBBBA schedule's wider bands + $32,200 MFJ standard deduction cut the US
 // liability slightly. Downward, but ~1%, not the six-figure ftcYTD swing.
-const EXPECTED_LIFETIME_TAX = 698_420;
-const EXPECTED_NET_WORTH     = 12_273_473;
+// Design 76 §0 + P2 (AU per-person attribution) — an UPWARD tax move in two parts,
+// measured separately against 698,429 at the pre-76 baseline (34dc682):
+//
+//   §0 EVT-27, +0.28% (698,429 → 700,352). A franked dividend received while a
+//   NON-resident of Australia chained no tax action at all, so it was taxed by
+//   neither country. Australia is right to exempt it (ITAA 1936 s128B(3)(ga)), but a
+//   US citizen is taxed on worldwide income, so it now reaches the US return.
+//
+//   P2 Gap A, +2.15% (700,352 → 715,426). `ownershipType` was dropped by
+//   `_accountToStatePlain` on the way into runtime state, so `ownershipFractions`
+//   could never take its `sole` branch and EVERY per-person attribution fell through
+//   to an even split. The default scenario's `auStockAccount` is solely owned by
+//   `primary`, so its franked dividends and franking credits were being halved onto
+//   the spouse: `auPersonFrankingCreditYTD` read 4,517/4,517 and now reads 9,035/0.
+//
+// The rise is the correct removal of a phantom income split. Australia has no joint
+// assessment and no income splitting — one spouse's investment income cannot be
+// parked on the other to use their tax-free threshold and lower brackets.
+//
+// Checked, because the direction could also be explained by a modelling artifact:
+// `frankingOffset = Math.min(credit, baseTax)` treats franking credits as
+// NON-refundable, so concentrating them on one person could in principle waste them.
+// Measured, it goes the other way — the cap costs 7,148 before P2 and only 4,137
+// after, because the credits now land on the high-income owner who can absorb them
+// instead of half-wasting against the low-income spouse. With a refundable offset the
+// P2 delta would be LARGER (+18,085 rather than +15,074), so the cap understates this
+// move rather than manufacturing it.
+//
+// P1 (design 76 Gap C, stateKey threading) was measured at exactly 698,429 — bit-for-
+// bit inert, as its phase contract required.
+//
+// FOLLOW-UP (not design 76): resident franking credits have been refundable since the
+// 2000 Ralph reforms (ITAA 1997 Div 67), so the Math.min cap is a real fidelity gap
+// worth ~4,137 lifetime here. Out of scope for an attribution change.
+//
+// Design 76 P3 (Gap B + D), +0.97% (715,426 → 722,339). The remaining ~18 US-source
+// income types stopped writing household scalars and now attribute to the account
+// owner / earner / asset holder. On this scenario the household scalars drain to zero
+// entirely, so nothing reaches computeAuTaxPerPerson's even-split divisor any more.
+//
+// The direction is the same income-splitting removal as P2, but P3 only lands here
+// because Gap D moved with it. The FITO "without US-source" pass subtracts each
+// person's US-source slice from their own income, so that slice must be attributed
+// identically to the income. Migrating the income while leaving the removal set on an
+// even split was measured at 949,884 (+32.8%) — each person's limit sized off a
+// mismatched base. The two halves of P3 are not separable.
+//
+// P3 also tripped FTC-US-9, which is an invariant test rather than a golden: the
+// de-minimis fallback in `_auTaxOnUsSourceIncome` read the household scalars to
+// apportion AU tax by US-source share, and once those drained it computed a 0 share,
+// declared the whole AU liability AU-source, and leaked ~88k of AU tax on US-source
+// income back into the creditable base. Fixed by summing the per-person maps too
+// (the same `_sumMap` treatment superTax already had). Worth noting that the golden
+// alone would NOT have caught this — the invariant test did.
+//
+// Design 76 P4 (Gap D remainder), −0.33% (722,339 → 719,938). `usTaxPaidOnUsSourceAud`
+// is the one FITO input that cannot be attributed — US tax is assessed MFJ and stamped
+// once per US settle — so it is now APPORTIONED by each person's share of the US-source
+// income AU is taxing, instead of split by headcount. DOWN is the expected direction:
+// FITO has no carryforward (§4.5), so relief handed to a spouse whose own limit cannot
+// absorb it is simply lost. Matching the offset to the income share wastes less of it.
+//
+// P4 also exposed a latent defect in `_auTaxOnUsSourceIncome`, again caught by
+// FTC-US-9 rather than by any golden: the A$1,000 de-minimis test is PER PERSON, but
+// the fallback handling it was all-or-nothing across the household. A mixed household
+// — one spouse over the threshold with a computed fitoLimit, one under with a null one
+// — contributed 0 for the under-threshold spouse, declaring their entire AU liability
+// AU-source and therefore creditable against US tax (~24k of leak). Latent for as long
+// as the even split kept both spouses on the same side of the threshold; P4's
+// income-share apportionment pushed them apart. Now apportioned per person, which
+// drops the peak current-year passive foreign tax from 13,515 to 154 — two orders of
+// magnitude under FTC-US-9's bound, and consistent with that test's own statement that
+// this household's genuine AU-source tax is very small.
+//
+// Design 76 P5 close-out, −0.01% (719,938 → 719,844). Two last attribution holes:
+// BONUS_TAX now resolves an earner (explicit data.personId, else the sole person
+// still working, else the highest wage) instead of sitting on the household scalar;
+// and the FY2027 CGT-reform *real* buckets (auRealCapitalGainsYTD /
+// usSourceRealCapGainsAudYTD) now attribute on the US-source paths in
+// au-tax-module-2027, which had kept writing household scalars by design note.
+// Barely visible here because this scenario realises little in FY2027+; on the real
+// user scenario it moved lifetime tax +$1,022.
+//
+// The real-bucket hole was found by the P5 runtime warning on a live scenario, NOT
+// by the suite — the residue test's field list had omitted the two real buckets, so
+// it could not see them. Both are now listed there.
+//
+// A move back DOWN toward ~698k would mean ownership attribution has gone inert again.
+const EXPECTED_LIFETIME_TAX = 719_844;
+const EXPECTED_NET_WORTH     = 12_260_459;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

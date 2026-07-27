@@ -92,7 +92,8 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
           balance: acct.balance + amount,
         },
       },
-      [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, residency, stateKey: key }]
     );
   }
 }
@@ -154,7 +155,8 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
           holdings: distributeHoldingsCredit(sa.holdings, amount),
         },
       },
-      [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'STOCK_DIVIDEND_TAX', amount, residency, stateKey: key }]
     );
   }
 }
@@ -198,7 +200,8 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
           holdings,
         },
       },
-      [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency }]
+      // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
+      [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency, stateKey: key }]
     );
   }
 }
@@ -307,12 +310,16 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // above is the authoritative CGT source. auIndexedGain carries the AU CGT-reform
     // real gain (design 57) alongside the stepped-up auGain and the US gain.
     const taxActions = [
-      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key },
+      // Design 76 Gap B: attribute the AU gain to the account's owner.
+      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
     ];
     if (collectibleGain > 0) {
       // isGold flags this collectible slice as bullion so the AU FY2027 classifier
       // indexes it (ordinary AU CGT), unlike true collectibles (design 57 §6.4/§7.2).
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency });
+      // Design 76 Gap B: the gold sleeve lives INSIDE this brokerage account, so the
+      // gain is attributed to the account's owner via stateKey — not to a standalone
+      // collectible's ownership, which this slice does not have.
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, stateKey: key });
     }
     return this.newState(
       state,

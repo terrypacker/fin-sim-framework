@@ -1063,9 +1063,12 @@ export class AccountService extends AssetService {
         pendingTaxActions.push({
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auDiscountableGain, residency,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
+          // Design 76 Gap B: attribute the AU gain to this account's owner.
+          stateKey: account.stateKey ?? key,
         });
         if (collGain > 0) {
-          pendingTaxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collGain, residency });
+          // Design 76 Gap B — gold sleeve inside the account ⇒ attribute by account.
+          pendingTaxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collGain, residency, stateKey: account.stateKey ?? key });
         }
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super

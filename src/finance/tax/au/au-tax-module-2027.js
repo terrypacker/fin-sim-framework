@@ -9,7 +9,7 @@
  */
 
 import { AuTaxModule2026 } from './au-tax-module-2026.js';
-import { accumulateByOwnership } from '../../ownership-utils.js';
+import { accumulateByOwnership, resolveAttributionAsset, resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
 
 /**
@@ -56,7 +56,9 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       const next = baseStock(state, action);
       if (action.residency !== 'AU') return next;   // real bucket for residents only
       const realGain = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
-      return this._recordRealGain(next, state, realGain, state.auStockAccount);
+      // Design 76 Gap C: resolve the same account the parent's gross-bucket path
+      // resolved, so the real bucket slices identically (see _recordRealGain).
+      return this._recordRealGain(next, state, realGain, resolveAttributionAsset(state, action, 'auStockAccount'));
     });
 
     const baseHouse = fns.get('AU_HOUSE_SALE_TAX');
@@ -81,7 +83,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       if (action.residency !== 'AU') return state;
       const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
       const realGainAud = toAUD(realGainUsd, 'USD', state);
-      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
+      return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud);
     });
 
     // Company equity: AU-assessable from the s855-45 stepped-up basis and indexed
@@ -93,7 +95,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       if (action.residency !== 'AU') return state;
       const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
       const realGainAud = toAUD(realGainUsd, 'USD', state);
-      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
+      return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
     // US house (foreign real property, design 62 §5): AU-assessable for a resident
@@ -103,7 +105,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     fns.set('US_HOUSE_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
       const realGainAud = toAUD(action.auGain ?? 0, 'USD', state);
-      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
+      return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
     // Collectibles: bullion (isGold) is an ordinary AU CGT asset → indexed like
@@ -114,26 +116,62 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
         ? (action.auIndexedGain ?? action.auGain ?? action.gain ?? 0)
         : (action.auGain ?? action.gain ?? 0);
       const realGainAud = toAUD(realGainUsd, 'USD', state);
-      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
+      return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
     return fns;
   }
 
   /**
-   * Track the US-source slice of the real (indexed) AU capital gain (AUD). Feeds
-   * the FY2027 FITO "without US-source" pass so the CG component of the FITO limit
-   * tracks the *real* gain the reform assesses (design 57 Part 2, Item D). Shared
-   * household scalar — split per-person at settle like usSourceCapGainsAudYTD.
+   * Book a US-source real (post-indexation) capital gain for an AU resident, into
+   * BOTH the real bucket and its US-source slice, attributed per person.
+   *
+   * Design 76: these two must be attributed identically, and identically to the
+   * gross bucket the parent US module already booked — the FY2027 FITO "without
+   * US-source" pass subtracts `usSourceRealCapGainsAudYTD` from `auRealCapitalGainsYTD`
+   * to size the CG slice of the limit (design 57 Part 2, Item D). A person holding
+   * 100% of the gain but half the US-source slice gets a limit computed off a base
+   * they do not have — the same defect measured at +32.8% on the ordinary buckets.
+   *
+   * These four action types are US-source, so they previously wrote the household
+   * scalars unconditionally ("no per-person split", the original comment said). That
+   * was left behind by the main Gap B migration and surfaced by design 76 P5's
+   * unattributed-residue warning on a real scenario, not by the test suite — the
+   * default scenarios have no FY2027+ US-source realisation.
+   *
+   * @param {object} state         state before this action
+   * @param {object} action        the tax action (carries stateKey / owner fields)
+   * @param {string|null} canonicalKey  fallback account key for the account-derived case
+   * @param {number} realGainAud   the real gain, AUD
    */
-  _recordUsSourceRealGain(next, realGainAud) {
-    return { ...next, usSourceRealCapGainsAudYTD: (next.usSourceRealCapGainsAudYTD ?? 0) + realGainAud };
+  _recordUsSourceReal(state, action, canonicalKey, realGainAud) {
+    const fractions = resolveAttributionFractions(state, action, canonicalKey);
+    if (fractions == null) {
+      return {
+        ...state,
+        auRealCapitalGainsYTD:      (state.auRealCapitalGainsYTD      ?? 0) + realGainAud,
+        usSourceRealCapGainsAudYTD: (state.usSourceRealCapGainsAudYTD ?? 0) + realGainAud,
+      };
+    }
+    const spread = (map) => {
+      const out = { ...(map ?? {}) };
+      for (const { personKey, fraction } of fractions) {
+        out[personKey] = (out[personKey] ?? 0) + realGainAud * fraction;
+      }
+      return out;
+    };
+    return {
+      ...state,
+      auPersonRealCapitalGainsYTD:        spread(state.auPersonRealCapitalGainsYTD),
+      auPersonUsSourceRealCapGainsAudYTD: spread(state.auPersonUsSourceRealCapGainsAudYTD),
+    };
   }
 
   /**
-   * Add a real (post-indexation) capital gain into auRealCapitalGainsYTD, keyed
-   * per-person by ownership when state.people is populated (mirrors the parent's
-   * auCapitalGainsYTD handling so the two buckets slice identically).
+   * Add a real (post-indexation) capital gain into the real bucket, keyed per-person
+   * by ownership when state.people is populated (mirrors the parent's
+   * auCapitalGainsYTD handling so the two buckets slice identically). Used by the
+   * AU-native paths, whose gains are AU-source and so feed no US-source slice.
    */
   _recordRealGain(next, refState, realGain, asset) {
     const perPerson = refState.people != null && asset != null;

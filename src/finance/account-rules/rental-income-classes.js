@@ -172,8 +172,12 @@ export class UsRentalIncomeApplyReducer extends AccountServiceReducer {
         accumulatedDepreciation: (propState.accumulatedDepreciation ?? 0) + (monthlyDepreciation ?? 0),
       };
     }
+    // Design 76 Gap B: carry the property's ownership, exactly as the AU rental
+    // path below already does (design 73 Gap 3 step 3). Without it a solely-owned
+    // US rental was taxed half to each spouse on the AU return.
+    const { ownershipType, ownerId, owners } = propState ?? {};
     return this.newState(state, updates, [
-      { type: 'US_RENTAL_INCOME_TAX', amount: taxableRental, residency },
+      { type: 'US_RENTAL_INCOME_TAX', amount: taxableRental, residency, ownershipType, ownerId, owners },
     ]);
   }
 }
