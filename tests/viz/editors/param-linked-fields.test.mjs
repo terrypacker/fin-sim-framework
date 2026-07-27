@@ -22,6 +22,7 @@ import { ParamFieldLinks }   from '../../../src/visualization/scenario/param-fie
 import { AccountEditor }     from '../../../src/visualization/accounts/account-editor.js';
 import { PersonEditor }      from '../../../src/visualization/people/person-editor.js';
 import { RealPropertyEditor} from '../../../src/visualization/assets/real-property-editor.js';
+import { BequestEditor }     from '../../../src/visualization/assets/bequest-editor.js';
 
 function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
 
@@ -212,6 +213,52 @@ describe('Param-linked editor fields', () => {
     const data = editor._readForm(root);
     expect('value' in data).toBe(false);
     expect('appreciationRate' in data).toBe(false);
+  });
+
+  test('Bequest inheritanceYear routes through its param (read, write, badge, excluded, click-through)', () => {
+    const param = { name: 'bequest.dadEstate.inheritanceYear', value: 2035, label: 'Dad Estate — Inheritance Year',
+                    node: { type: 'bequest', stateKey: 'dadEstate', field: 'inheritanceYear' } };
+    let changed = 0;
+    let opened = null;
+    const editor = new BequestEditor({
+      container: makeMockContainer(),
+      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceYear: null, assets: [] },
+      people: [{ id: 'primary', name: 'Alice' }],
+      links: new ParamFieldLinks([param]),
+      onParamChange: () => { changed++; },
+      onOpenParam:   (p) => { opened = p; },
+    });
+    editor.render();
+    const root = editor._rootEl;
+
+    // Reads the param value (2035), not the node's null inheritanceYear.
+    expect(editor._year.value).toBe('2035');
+    // Badge present on the year field, and it click-throughs to the param.
+    const badge = editor._year.closest('.node-field').querySelector('.param-link-badge');
+    expect(badge).toBeTruthy();
+    badge.click();
+    expect(opened).toBe(param);
+
+    // Editing writes the param (rounded int), not the record payload.
+    editor._year.value = '2040';
+    fire(editor._year, 'input');
+    expect(param.value).toBe(2040);
+    expect(changed).toBeGreaterThan(0);
+
+    const data = editor._readForm();
+    expect('inheritanceYear' in data).toBe(false); // owned by the param
+    expect(data.name).toBe('Dad Estate');          // free field still present
+  });
+
+  test('Bequest with no link carries inheritanceYear in its save payload', () => {
+    const editor = new BequestEditor({
+      container: makeMockContainer(),
+      node: { id: 'b1', name: 'Dad Estate', stateKey: 'dadEstate', inheritanceYear: 2030, assets: [] },
+      people: [], links: new ParamFieldLinks([]),
+    });
+    editor.render();
+    expect(editor._year.value).toBe('2030');
+    expect(editor._readForm().inheritanceYear).toBe(2030);
   });
 
   test('No links → fields behave normally (read from node, present in save)', () => {

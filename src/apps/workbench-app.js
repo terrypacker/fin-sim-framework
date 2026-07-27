@@ -500,6 +500,7 @@ export class WorkbenchApp extends BaseComponent {
           node,
           people,
           promotedAssets,
+          ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {
               const { id, ...changes } = data;
