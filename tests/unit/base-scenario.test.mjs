@@ -35,6 +35,8 @@ import { FieldReducer } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 import { CheckingAccount } from '../../src/finance/assets/account.js';
 import { Person }          from '../../src/finance/person.js';
+import { RealProperty }    from '../../src/finance/assets/real-property.js';
+import { Collectible }     from '../../src/finance/assets/collectible.js';
 import { deriveNetWorth }  from '../../src/finance/derived-metrics/net-worth.js';
 import {
   GraphBuilderView
@@ -312,6 +314,53 @@ test('applyParams: ignores node when person/account not found', () => {
   const { scenario } = makeParamScenario();
   // Should not throw even if the target node doesn't exist
   assert.doesNotThrow(() => scenario.applyParams({ retirementDate: '2039-01-01T00:00:00.000Z' }));
+});
+
+// applyParams must cover the same node.type set as ScenarioLoader._applyParamNode
+// (minus the load-path-only bequest/accountPriority types) — an asset type handled
+// by only one cascade is silently dropped on the other path.
+function makeAssetParamScenario() {
+  ServiceRegistry.resetAll();
+  const sr = ServiceRegistry.getInstance();
+
+  const prop = new RealProperty(800_000, { name: 'US House', appreciationRate: 0.04 });
+  prop.stateKey = 'usHouseProperty';
+  sr.realPropertyService.createProperty(prop);
+
+  const col = new Collectible(50_000, { name: 'Gold' });
+  col.stateKey = 'collectibleAccount';
+  sr.collectibleService.createCollectible(col);
+
+  const scenario = new BaseScenario({
+    context: sr.simulationContext,
+    params: [
+      { name: 'coll.collectibleAccount.plannedSaleYear', type: 'Number', value: null,
+        node: { type: 'collectible', stateKey: 'collectibleAccount', field: 'plannedSaleYear' } },
+      { name: 'prop.usHouseProperty.plannedSaleYear', type: 'Number', value: null,
+        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } },
+      { name: 'prop.usHouseProperty.appreciationRate', type: 'Number', value: 0.04,
+        node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'appreciationRate' } },
+    ],
+  });
+  return { scenario, sr };
+}
+
+test('applyParams: cascades a collectible field via its node declaration', () => {
+  const { scenario, sr } = makeAssetParamScenario();
+  scenario.applyParams({ 'coll.collectibleAccount.plannedSaleYear': 2035 });
+  const col = sr.collectibleService.getAll().find(c => c.stateKey === 'collectibleAccount');
+  assert.strictEqual(col.plannedSaleYear, 2035);
+});
+
+test('applyParams: rounds whole-number asset fields but not fractional rates', () => {
+  const { scenario, sr } = makeAssetParamScenario();
+  scenario.applyParams({
+    'prop.usHouseProperty.plannedSaleYear':  2035.4,
+    'prop.usHouseProperty.appreciationRate': 0.04,
+  });
+  const prop = sr.realPropertyService.getAll().find(r => r.stateKey === 'usHouseProperty');
+  assert.strictEqual(prop.plannedSaleYear, 2035, 'sale year rounds to a whole year');
+  assert.strictEqual(prop.appreciationRate, 0.04, 'fractional rate is not rounded to 0');
 });
 
 // ─── rebuild ──────────────────────────────────────────────────────────────────

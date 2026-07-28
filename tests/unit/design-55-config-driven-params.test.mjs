@@ -169,6 +169,29 @@ test('D55-6: generated property appreciationRate round-trips (not rounded to 0)'
     `property appreciationRate survives Rebuild, got ${prop.appreciationRate}`);
 });
 
+// ── Collectible sale year cascades like a property's (regression) ────────────────
+
+test('D55-6b: generated collectible plannedSaleYear cascades and survives Rebuild', () => {
+  const cfg = freshCfg();
+  loadCfg(cfg);
+
+  const key = 'coll.collectibleAccount.plannedSaleYear';
+  assert.ok(paramNamed(cfg, key), 'collectible sale-year param generated');
+
+  // Edit the linked param (what the collectible editor does — its sale-year field is
+  // param-owned, so the record is only ever written through this cascade).
+  paramNamed(cfg, key).value = 2_035;
+  loadCfg(cfg); // Rebuild
+
+  const col = (cfg.collectibles ?? []).find(c => c.stateKey === 'collectibleAccount');
+  assert.strictEqual(col.plannedSaleYear, 2_035, 'sale year cascaded onto the collectible record');
+  assert.strictEqual(paramNamed(cfg, key).value, 2_035,
+    'param value survives the §6 harvest (no blank-out on Rebuild)');
+  // The cascade is what makes the sale actually happen.
+  assert.ok((cfg.events ?? []).some(e => e.type === 'COLLECTIBLE_SALE'),
+    'a COLLECTIBLE_SALE event is scheduled for the planned year');
+});
+
 // ── Orphan generated params are de-generated on Rebuild (§14) ────────────────────
 
 test('D55-7: an orphaned generated param (no live record) is pruned on Rebuild', () => {
