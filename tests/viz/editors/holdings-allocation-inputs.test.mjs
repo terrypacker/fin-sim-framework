@@ -20,6 +20,7 @@
 
 import { loadHtml, makeMockContainer } from '../../helpers/viz-utils.js';
 import { AccountEditor } from '../../../src/visualization/accounts/account-editor.js';
+import { ALLOCATION_VALUES } from '../../../src/finance/holdings/allocation.js';
 
 function editorForHolding(holding) {
   const node = {
@@ -154,13 +155,14 @@ describe('holdings editor — allocation-aware inputs', () => {
     expect(cell(root, 'marketValue')).not.toBeNull();
   });
 
-  test('OTHER row: Cost Basis + Loss Partner shown; no Income Rate / Duration', () => {
-    const root = editorForHolding({ allocation: 'OTHER' })._rootEl;
-    expect(cell(root, 'costBasis')).not.toBeNull();
-    expect(cell(root, 'taxLossPartner')).not.toBeNull();
-    expect(cell(root, 'dividendYield')).toBeNull();
-    expect(cell(root, 'couponRate')).toBeNull();
-    expect(cell(root, 'duration')).toBeNull();
+  test('the allocation dropdown offers exactly the ALLOCATION enum — no OTHER', () => {
+    // OTHER used to be selectable here while being invisible to the rebalance target
+    // classes and the drawdown sleeve ranker, so picking it silently produced a
+    // holding the rebalancer would liquidate and the drawdown would never sell.
+    const root = editorForHolding({ allocation: 'EQUITY' })._rootEl;
+    const opts = [...root.querySelectorAll('select[data-f="allocation"] option')].map(o => o.value);
+    expect(opts).toEqual([...ALLOCATION_VALUES]);
+    expect(opts).not.toContain('OTHER');
   });
 
   test('switching EQUITY → BOND re-renders: coupon + duration appear, cost basis hides, rate key survives', () => {

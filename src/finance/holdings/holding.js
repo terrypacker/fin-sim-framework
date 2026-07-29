@@ -8,6 +8,42 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { ALLOCATION_VALUES } from './allocation.js';
+import { RATE_KEYS }         from '../economic-regimes/rate-keys.js';
+
+const RATE_KEY_VALUES = new Set(Object.values(RATE_KEYS));
+
+/**
+ * Every Holding must declare a known ALLOCATION. There is no catch-all bucket and
+ * no inferred default here: the allocation decides the holding's rate series, its
+ * earnings path, whether a shock revalues it, and whether the rebalancer and the
+ * drawdown sleeve order can see it at all. An unrecognised value would be silently
+ * skipped by the last two, so it fails at construction instead.
+ */
+function assertValidAllocation(allocation, id) {
+  if (ALLOCATION_VALUES.includes(allocation)) return;
+  throw new Error(
+    `Holding ${id ?? '(unnamed)'} has ${allocation == null ? 'no allocation' : `an unknown allocation "${allocation}"`}. ` +
+    `Expected one of: ${ALLOCATION_VALUES.join(', ')}.`,
+  );
+}
+
+/**
+ * A non-null rateKey must name a real rate series. A stale or mistyped key (an
+ * older scenario's `BOND_US`, say) resolves to nothing in effectiveGrowthRates /
+ * effectiveInterestRates and quietly falls back to the account-level rate, so the
+ * holding earns the wrong series with no signal that anything is wrong.
+ * `null` stays legal — it means "resolve from (country, allocation, role) at
+ * registration", which AccountService does.
+ */
+function assertValidRateKey(rateKey, id) {
+  if (rateKey == null || RATE_KEY_VALUES.has(rateKey)) return;
+  throw new Error(
+    `Holding ${id ?? '(unnamed)'} has an unknown rateKey "${rateKey}". ` +
+    `Expected null or one of: ${[...RATE_KEY_VALUES].join(', ')}.`,
+  );
+}
+
 /**
  * Holding — plain-data record of a single position inside an Account.
  *
@@ -170,6 +206,8 @@ export class Holding {
     zeroCoupon           = false,
     inflationLinked      = false,
   } = {}) {
+    assertValidAllocation(allocation, id);
+    assertValidRateKey(rateKey, id);
     this.id                   = id;
     this.allocation           = allocation;
     this.marketValue          = marketValue;

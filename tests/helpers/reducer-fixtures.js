@@ -18,6 +18,8 @@
  */
 
 import { Holding } from '../../src/finance/holdings/holding.js';
+import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
+import { DEFAULT_ALLOCATION_BY_ROLE } from '../../src/finance/holdings/default-allocations.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
 
 const CURRENCY = {
@@ -39,6 +41,8 @@ let _holdingSeq = 0;
  * @param {Array}   [opts.holdings]            - Holding instances or plain opts;
  *                                               defaults to one holding sized to `balance`.
  * @param {number}  [opts.balance=1000]        - used to size the default holding
+ * @param {string}  [opts.allocation]          - allocation for holdings that omit one;
+ *                                               defaults to the role's (else EQUITY)
  * @returns {object} an account node (NOT wrapped in a state tree)
  */
 export function makeAccount(opts = {}) {
@@ -51,8 +55,18 @@ export function makeAccount(opts = {}) {
     balance = 1000,
   } = opts;
 
+  // Allocation is mandatory on a Holding and has no catch-all default, so supply one
+  // for the terse `{ marketValue, costBasis }` specs these fixtures are built around.
+  // Role-derived when the account has a role, so a savings/fixed-income fixture gets
+  // a CASH/BOND sleeve rather than a nonsensical equity one.
+  const defaultAllocation = opts.allocation
+    ?? (role ? DEFAULT_ALLOCATION_BY_ROLE[role] : null)
+    ?? ALLOCATION.EQUITY;
+
   const holdings = (opts.holdings ?? [{ marketValue: balance, costBasis: balance }]).map(h =>
-    h instanceof Holding ? h : new Holding({ id: `h${++_holdingSeq}`, ...h }),
+    h instanceof Holding
+      ? h
+      : new Holding({ id: `h${++_holdingSeq}`, allocation: defaultAllocation, ...h }),
   );
 
   return {
@@ -102,7 +116,9 @@ export function makeAction(type, props = {}) {
 
 /** A Holding factory with a stable auto-id (handy for multi-holding specs). */
 export function makeHolding(opts = {}) {
-  return new Holding({ id: `h${++_holdingSeq}`, ...opts });
+  // Allocation is mandatory on a Holding with no catch-all default; EQUITY is the
+  // neutral choice for fixtures that only care about marketValue arithmetic.
+  return new Holding({ id: `h${++_holdingSeq}`, allocation: ALLOCATION.EQUITY, ...opts });
 }
 
 /**

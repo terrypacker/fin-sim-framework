@@ -51,14 +51,21 @@ export function resolvePropertyRateKey(asset) {
 }
 
 /**
- * Build a rateKey → [stateKey, ...] map from the scenario's registered accounts,
- * real properties, and collectibles.
+ * Build the rateKey → [stateKey, ...] map for SCALAR assets — real properties and
+ * collectibles. These carry a single `value` and no holdings, so a rate key is the
+ * only signal available for deciding whether a shock touches them.
  *
- * Accounts: role → ROLE_TO_RATE_KEY → rateKey.
  * Real properties: resolvePropertyRateKey() (market-aware; design 28 §4 Step 8).
  * Collectibles: RATE_KEYS.COLLECTIBLE.
+ *
+ * Accounts are deliberately ABSENT. They used to be mapped here by
+ * `ROLE_TO_RATE_KEY[acct.role]`, which made a shock's level effect select whole
+ * accounts: a −40 % EQUITY_US crash marked down every sleeve of every equity-role
+ * account, including its cash and bonds. Accounts are now scanned holding-by-holding
+ * (see `allAccountStateKeys` and RevalueAssetReducer), so the sleeve's own
+ * allocation decides, and the account's role is irrelevant.
  */
-function buildRateKeyToStateKeys(accounts, realProperties = [], collectibles = []) {
+function buildRateKeyToStateKeys(realProperties = [], collectibles = []) {
   const map = {};
   const addEntry = (rateKey, stateKey) => {
     if (!rateKey || !stateKey) return;
@@ -66,9 +73,6 @@ function buildRateKeyToStateKeys(accounts, realProperties = [], collectibles = [
     map[rateKey].push(stateKey);
   };
 
-  for (const acct of accounts) {
-    addEntry(ROLE_TO_RATE_KEY[acct.role], acct.stateKey);
-  }
   for (const prop of realProperties) {
     addEntry(resolvePropertyRateKey(prop), prop.stateKey);
   }
@@ -418,9 +422,10 @@ export const ECONOMIC_REGIMES = {
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
-          rateKey:         ValueType.text(),
-          multiplier:      ValueType.number(),
-          targetStateKeys: ValueType.any(),
+          rateKey:           ValueType.text(),
+          multiplier:        ValueType.number(),
+          targetStateKeys:   ValueType.any(),
+          holdingsStateKeys: ValueType.any(),
         },
       },
       { type: 'RECOMPUTE_REGIMES', fields: {} },
@@ -848,15 +853,19 @@ export const ECONOMIC_REGIMES = {
 
   handlers(context) {
     const rateKeyToStateKeys = buildRateKeyToStateKeys(
-      context.accounts,
       context.realProperties ?? [],
       context.collectibles   ?? [],
     );
+    // Every account is in scope for every level effect; the reducer filters by each
+    // holding's own allocation. Passing them all is what makes the account's role
+    // irrelevant — including for sleeves the rebalancer creates mid-run, which a
+    // role-derived map built at construction time could never have anticipated.
+    const allAccountStateKeys = (context.accounts ?? []).map(a => a.stateKey).filter(Boolean);
     const behavioralHandlers = (context.parameters.behavioralStrategies ?? [])
       .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.handlers(context) ?? []);
     const p = context.parameters;
     return [
-      new EconomicShockHandler({ rateKeyToStateKeys }),
+      new EconomicShockHandler({ rateKeyToStateKeys, allAccountStateKeys }),
       new EconomicRecoveryTickHandler(),
       // Stochastic curve evolution (design 67 §6) — only when on, so the sim.rng is
       // untouched otherwise and runs stay byte-identical.

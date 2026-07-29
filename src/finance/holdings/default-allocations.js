@@ -52,8 +52,8 @@ export const DEFAULT_ALLOCATION_BY_TYPE = Object.freeze({
 });
 
 /**
- * Country × allocation → rateKey fallback table (design 25 §4.3).
- * OTHER falls through to caller-supplied keys (REAL_ESTATE_*, COLLECTIBLE, …).
+ * Country × allocation → rateKey table (design 25 §4.3). GOLD is country-agnostic
+ * and resolved ahead of this table; every other allocation must appear here.
  */
 const RATE_KEY_BY_COUNTRY_ALLOCATION = Object.freeze({
   US: Object.freeze({
@@ -70,8 +70,11 @@ const RATE_KEY_BY_COUNTRY_ALLOCATION = Object.freeze({
 
 /**
  * Resolve a Holding's default ALLOCATION from an Account.
- * Role wins when present; falls through to type. Returns OTHER for accounts
- * with neither — the caller (toolset) is expected to override.
+ * Role wins when present; falls through to type.
+ *
+ * @throws when the account has neither a known role nor a known type — there is no
+ *   catch-all allocation to fall back on, and guessing produces a holding that the
+ *   rebalance and drawdown class lists silently ignore.
  */
 export function resolveDefaultAllocation(account) {
   if (account?.role && DEFAULT_ALLOCATION_BY_ROLE[account.role]) {
@@ -80,34 +83,63 @@ export function resolveDefaultAllocation(account) {
   if (account?.type && DEFAULT_ALLOCATION_BY_TYPE[account.type]) {
     return DEFAULT_ALLOCATION_BY_TYPE[account.type];
   }
-  return ALLOCATION.OTHER;
+  throw new Error(
+    `Cannot resolve a default allocation for account "${account?.stateKey ?? account?.id ?? '(unnamed)'}": ` +
+    `role=${account?.role ?? 'none'} type=${account?.type ?? 'none'}. ` +
+    'Give the account a known role or type, or author the holding\'s allocation explicitly.',
+  );
 }
 
 /**
- * Resolve a Holding's rateKey.
+ * The rate-key CLASS each allocation may resolve within. The account ROLE is only
+ * allowed to refine the key *inside* its allocation's class — picking US vs AU
+ * equity for an EQUITY sleeve, say. It can never move a holding to a different
+ * asset class, which is what made a BOND sleeve in a `us-stock` brokerage resolve
+ * to EQUITY_US and take equity shocks and equity duration handling.
+ */
+const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
+  [ALLOCATION.EQUITY]: Object.freeze(new Set([RATE_KEYS.EQUITY_US,       RATE_KEYS.EQUITY_AU])),
+  [ALLOCATION.BOND]:   Object.freeze(new Set([RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU])),
+  [ALLOCATION.CASH]:   Object.freeze(new Set([RATE_KEYS.SAVINGS_US,      RATE_KEYS.SAVINGS_AU])),
+});
+
+/**
+ * Resolve a Holding's rateKey. **Allocation is authoritative**; role only refines.
  *
  * Lookup order:
- *   1. Role-keyed (ROLE_TO_RATE_KEY) — preferred, encodes both jurisdiction and asset class.
- *   2. (country, allocation) table — fallback for accounts without a role.
- *   3. null — caller must supply a rateKey explicitly (e.g. OTHER / collectible / real-estate).
+ *   1. GOLD → the single country-agnostic commodity series (design 56 §7).
+ *   2. The account role's key, but ONLY when it belongs to the allocation's own
+ *      class — this is what lets a Roth's EQUITY sleeve pick EQUITY_US while a
+ *      Roth's BOND sleeve still resolves FIXED_INCOME_US.
+ *   3. The (country, allocation) table.
  *
- * @param {string|null} country   - ISO country code (e.g. 'US', 'AU')
+ * An unknown ALLOCATION throws: it is a closed enum this module owns, and a holding
+ * whose class cannot be named is invisible to rebalancing, drawdown and shocks.
+ * An absent or unknown COUNTRY returns null instead — `Account.country` is an
+ * optional field that legitimately defaults to null, and null here means
+ * "unresolved", which the earnings paths already handle by falling back to the
+ * account-level rate. Such a holding is also never matched by a jurisdiction shock,
+ * which is the right answer for an account that belongs to no jurisdiction.
+ *
+ * @param {string|null} country    - ISO country code (e.g. 'US', 'AU')
  * @param {string}      allocation - ALLOCATION value
- * @param {string|null} [role]    - ACCOUNT_ROLES value (preferred when available)
- * @returns {string|null}
+ * @param {string|null} [role]     - ACCOUNT_ROLES value; refines within the class only
+ * @returns {string|null} a RATE_KEYS value, or null when the country is unknown
+ * @throws when the allocation is not a known ALLOCATION
  */
 export function resolveRateKey(country, allocation, role = null) {
-  // CASH always earns a cash rate (design 56 §6): a cash sleeve in a non-cash account
-  // (e.g. a BROKERAGE holding some CASH) must resolve to SAVINGS_{country}, NOT the
-  // account role's equity/bond key. So the allocation wins over the role for CASH.
-  // (Behavioral panic-sell cash passes rateKey:null and bypasses this resolver.)
-  if (allocation === ALLOCATION.CASH) {
-    return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[ALLOCATION.CASH] ?? null;
-  }
-  // GOLD earns the country-agnostic commodity rate (design 56 §7): a gold sleeve in
-  // any account (e.g. a US_STOCK brokerage) resolves to the single GOLD series, NOT
-  // the account role's equity key. Allocation wins over the role, like CASH.
   if (allocation === ALLOCATION.GOLD) return RATE_KEYS.GOLD;
-  if (role && ROLE_TO_RATE_KEY[role]) return ROLE_TO_RATE_KEY[role];
+
+  const classKeys = CLASS_KEYS_BY_ALLOCATION[allocation];
+  if (!classKeys) {
+    throw new Error(
+      `Cannot resolve a rateKey for unknown allocation "${allocation}". ` +
+      `Expected one of: ${Object.keys(CLASS_KEYS_BY_ALLOCATION).join(', ')}, ${ALLOCATION.GOLD}.`,
+    );
+  }
+
+  const roleKey = role ? ROLE_TO_RATE_KEY[role] : null;
+  if (roleKey && classKeys.has(roleKey)) return roleKey;
+
   return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[allocation] ?? null;
 }

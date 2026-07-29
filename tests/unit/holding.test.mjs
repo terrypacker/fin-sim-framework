@@ -94,13 +94,17 @@ test('Holding: round-trip handles null purchaseDate', () => {
 
 // ─── ALLOCATION enum ──────────────────────────────────────────────────────────
 
-test('ALLOCATION: frozen enum with 5 values', () => {
-  assert.equal(Object.keys(ALLOCATION).length, 5);
+test('ALLOCATION: frozen, CLOSED enum of 4 asset classes', () => {
+  // Closed on purpose: every consumer (earnings, shocks, rebalance target classes,
+  // drawdown sleeve order) must handle each value. There is no catch-all bucket —
+  // the former OTHER was accepted by the editor but silently invisible to the
+  // rebalancer and the drawdown ranker, so it was removed rather than half-wired.
+  assert.equal(Object.keys(ALLOCATION).length, 4);
   assert.equal(ALLOCATION.EQUITY, 'EQUITY');
   assert.equal(ALLOCATION.BOND,   'BOND');
   assert.equal(ALLOCATION.CASH,   'CASH');
   assert.equal(ALLOCATION.GOLD,   'GOLD');   // design 56 §7 — commodity, 28% US collectibles CGT
-  assert.equal(ALLOCATION.OTHER,  'OTHER');
+  assert.equal(ALLOCATION.OTHER,  undefined);
   assert.throws(() => { ALLOCATION.NEW = 'NEW'; }, /Cannot|read only/);
 });
 
@@ -127,9 +131,9 @@ test('resolveDefaultAllocation: SAVINGS account → CASH', () => {
   assert.equal(resolveDefaultAllocation({ type: 'savings' }), 'CASH');
 });
 
-test('resolveDefaultAllocation: no role/type → OTHER', () => {
-  assert.equal(resolveDefaultAllocation({}), 'OTHER');
-  assert.equal(resolveDefaultAllocation(null), 'OTHER');
+test('resolveDefaultAllocation: no role/type → throws (no catch-all)', () => {
+  assert.throws(() => resolveDefaultAllocation({}),   /Cannot resolve a default allocation/);
+  assert.throws(() => resolveDefaultAllocation(null), /Cannot resolve a default allocation/);
 });
 
 test('resolveDefaultAllocation: role wins over type', () => {
@@ -157,12 +161,28 @@ test('resolveRateKey: country × allocation fallback', () => {
   assert.equal(resolveRateKey('AU', 'CASH'),   RATE_KEYS.SAVINGS_AU);
 });
 
-test('resolveRateKey: OTHER allocation → null (caller supplies)', () => {
-  assert.equal(resolveRateKey('US', 'OTHER'), null);
+test('resolveRateKey: unknown allocation throws', () => {
+  assert.throws(() => resolveRateKey('US', 'OTHER'),   /unknown allocation "OTHER"/);
+  assert.throws(() => resolveRateKey('US', undefined), /unknown allocation/);
 });
 
-test('resolveRateKey: unknown country → null', () => {
+test('resolveRateKey: unknown country → null (Account.country is optional)', () => {
   assert.equal(resolveRateKey('XX', 'EQUITY'), null);
+  assert.equal(resolveRateKey(null, 'CASH'),   null);
+});
+
+test('resolveRateKey: ALLOCATION wins over role — role only refines within the class', () => {
+  // The bug this encodes: a BOND sleeve inside an equity-role wrapper used to
+  // resolve to the wrapper's EQUITY_US key, which then took equity shocks and lost
+  // its RATE_KEY_META duration. The role may pick US-vs-AU inside a class, never
+  // move a holding to a different class.
+  assert.equal(resolveRateKey('US', 'BOND', ACCOUNT_ROLES.US_STOCK), RATE_KEYS.FIXED_INCOME_US);
+  assert.equal(resolveRateKey('US', 'BOND', ACCOUNT_ROLES.ROTH),     RATE_KEYS.FIXED_INCOME_US);
+  assert.equal(resolveRateKey('AU', 'BOND', ACCOUNT_ROLES.SUPER),    RATE_KEYS.FIXED_INCOME_AU);
+  assert.equal(resolveRateKey('US', 'CASH', ACCOUNT_ROLES.K401),     RATE_KEYS.SAVINGS_US);
+  assert.equal(resolveRateKey('US', 'GOLD', ACCOUNT_ROLES.US_STOCK), RATE_KEYS.GOLD);
+  // …but it still picks the jurisdiction for an EQUITY sleeve.
+  assert.equal(resolveRateKey('US', 'EQUITY', ACCOUNT_ROLES.SUPER),  RATE_KEYS.EQUITY_AU);
 });
 
 // ─── Map coverage ─────────────────────────────────────────────────────────────

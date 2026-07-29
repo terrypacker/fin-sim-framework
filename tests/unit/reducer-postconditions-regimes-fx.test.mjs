@@ -64,24 +64,24 @@ test('RemoveRegimeReducer: missing regimeId is a no-op (I7); removing an absent 
 test('RegimeApplyReducer: composes effective rates from base + scaled adjustment (I1)', () => {
   const r = new RegimeApplyReducer();
   const state = {
-    baseInterestRates: { BOND_US: 0.04 },
+    baseInterestRates: { FIXED_INCOME_US: 0.04 },
     // L curve at t=0 → factor 1.0 (full shock), deterministic.
-    activeRegimes: [{ id: 'r1', recoveryProfile: 'L', startDate: DATE, durationMonths: 12, interestRateAdjustment: { BOND_US: -0.02 } }],
+    activeRegimes: [{ id: 'r1', recoveryProfile: 'L', startDate: DATE, durationMonths: 12, interestRateAdjustment: { FIXED_INCOME_US: -0.02 } }],
   };
   const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
-  assert.equal(next.effectiveInterestRates.BOND_US, 0.02, 'base 0.04 + (−0.02)×factor(1)');
+  assert.equal(next.effectiveInterestRates.FIXED_INCOME_US, 0.02, 'base 0.04 + (−0.02)×factor(1)');
   assert.equal(next.activeRegimes[0].currentFactor, 1, 'recovery factor attached to the live regime');
 });
 
 test('RegimeApplyReducer: drops a fully-recovered, past-end regime; deterministic (I2)', () => {
   const r = new RegimeApplyReducer();
   const state = {
-    baseInterestRates: { BOND_US: 0.04 },
-    activeRegimes: [{ id: 'old', recoveryProfile: 'L', startDate: new Date('2020-01-01'), endDate: new Date('2021-01-01'), durationMonths: 12, interestRateAdjustment: { BOND_US: -0.02 } }],
+    baseInterestRates: { FIXED_INCOME_US: 0.04 },
+    activeRegimes: [{ id: 'old', recoveryProfile: 'L', startDate: new Date('2020-01-01'), endDate: new Date('2021-01-01'), durationMonths: 12, interestRateAdjustment: { FIXED_INCOME_US: -0.02 } }],
   };
   const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
   assert.equal(next.activeRegimes.length, 0, 'factor 0 + past endDate ⇒ dropped');
-  assert.equal(next.effectiveInterestRates.BOND_US, 0.04, 'no live regime ⇒ effective == base');
+  assert.equal(next.effectiveInterestRates.FIXED_INCOME_US, 0.04, 'no live regime ⇒ effective == base');
 
   const a = r.reduce(structuredClone(state), makeAction('US_PERIOD_ADVANCE'), DATE);
   const b = r.reduce(structuredClone(state), makeAction('US_PERIOD_ADVANCE'), DATE);
@@ -90,8 +90,8 @@ test('RegimeApplyReducer: drops a fully-recovered, past-end regime; deterministi
 
 test('RegimeApplyReducer: no active regimes ⇒ effective mirrors base (I7)', () => {
   const r = new RegimeApplyReducer();
-  const next = runReducer(r, { baseInterestRates: { BOND_US: 0.04 }, activeRegimes: [] }, makeAction('US_PERIOD_ADVANCE'), DATE);
-  assert.deepEqual(next.effectiveInterestRates, { BOND_US: 0.04 });
+  const next = runReducer(r, { baseInterestRates: { FIXED_INCOME_US: 0.04 }, activeRegimes: [] }, makeAction('US_PERIOD_ADVANCE'), DATE);
+  assert.deepEqual(next.effectiveInterestRates, { FIXED_INCOME_US: 0.04 });
   assert.deepEqual(next.activeRegimes, []);
 });
 
@@ -100,9 +100,9 @@ test('RegimeApplyReducer: no active regimes ⇒ effective mirrors base (I7)', ()
 test('BondPriceAdjustReducer: marks bonds down on a rate rise, re-syncs §4.4 (I3/I4)', () => {
   const r = new BondPriceAdjustReducer();
   const state = {
-    effectiveInterestRates: { BOND_US: 0.05 },
-    priorMarkRates:         { BOND_US: 0.03 },
-    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'BOND_US', duration: 5, marketValue: 1000, costBasis: 1000 }] }),
+    effectiveInterestRates: { FIXED_INCOME_US: 0.05 },
+    priorMarkRates:         { FIXED_INCOME_US: 0.03 },
+    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'FIXED_INCOME_US', duration: 5, marketValue: 1000, costBasis: 1000 }] }),
   };
   const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE, { balance: true, nonNegative: true });
   // Δprice = −duration(5) × Δrate(0.02) × 1000 = −100
@@ -110,27 +110,27 @@ test('BondPriceAdjustReducer: marks bonds down on a rate rise, re-syncs §4.4 (I
   assert.equal(next.bondAccount.balance, 900, '§4.4 re-synced (I3)');
   assert.equal(sumHoldings(next.bondAccount), 900);
   assert.equal(next.bondAccount.holdings[0].costBasis, 1000, 'mark-to-market only — basis untouched');
-  assert.deepEqual(next.priorMarkRates, { BOND_US: 0.05 }, 'prior marks snapshot the new effective rates');
+  assert.deepEqual(next.priorMarkRates, { FIXED_INCOME_US: 0.05 }, 'prior marks snapshot the new effective rates');
 });
 
 test('BondPriceAdjustReducer: first period (empty priorMarkRates) leaves holdings unchanged (I7)', () => {
   const r = new BondPriceAdjustReducer();
   const state = {
-    effectiveInterestRates: { BOND_US: 0.05 },
-    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'BOND_US', duration: 5, marketValue: 1000, costBasis: 1000 }] }),
+    effectiveInterestRates: { FIXED_INCOME_US: 0.05 },
+    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'FIXED_INCOME_US', duration: 5, marketValue: 1000, costBasis: 1000 }] }),
   };
   const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE, { balance: true, nonNegative: true });
   assert.equal(next.bondAccount.balance, 1000, 'Δrate=0 on first mark ⇒ no price change');
-  assert.deepEqual(next.priorMarkRates, { BOND_US: 0.05 }, 'still snapshots for next period');
+  assert.deepEqual(next.priorMarkRates, { FIXED_INCOME_US: 0.05 }, 'still snapshots for next period');
 });
 
 test('BondPriceAdjustReducer: rate drop never drives marketValue below 0 (I4)', () => {
   const r = new BondPriceAdjustReducer();
   const state = {
     // A huge rate rise on a long-duration bond would overshoot negative — clamps at 0.
-    effectiveInterestRates: { BOND_US: 0.50 },
-    priorMarkRates:         { BOND_US: 0.00 },
-    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'BOND_US', duration: 10, marketValue: 100, costBasis: 100 }] }),
+    effectiveInterestRates: { FIXED_INCOME_US: 0.50 },
+    priorMarkRates:         { FIXED_INCOME_US: 0.00 },
+    bondAccount: makeAccount({ stateKey: 'bondAccount', holdings: [{ id: 'b1', allocation: ALLOCATION.BOND, rateKey: 'FIXED_INCOME_US', duration: 10, marketValue: 100, costBasis: 100 }] }),
   };
   const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE, { balance: true, nonNegative: true });
   assert.equal(next.bondAccount.holdings[0].marketValue, 0);
