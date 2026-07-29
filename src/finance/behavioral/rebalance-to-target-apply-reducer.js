@@ -38,6 +38,28 @@ import { roleCanHoldGold }      from './rebalance-to-target-reducer.js';
  * Legs sum to zero (Σ delta = 0), so gross account value is conserved; the realized
  * CGT is the only (deferred) cost. Balance is re-synced to Σ marketValue. Holdings are
  * rebuilt copy-on-write (never mutated in place) so JOURNAL_STRICT purity holds (G2).
+ *
+ * ─── why the dust sweep exists ───────────────────────────────────────────────
+ *
+ * Liquidating a sleeve to a target weight of zero used to leave a residual of a cent
+ * or less, and that residual was IMMORTAL. Three thresholds disagreed:
+ *
+ *   _reduceProRata pruned a holding only below   0.001
+ *   the leg builder emitted a leg only above     0.01   (rebalance-to-target-reducer)
+ *   this reducer skipped `delta >= -0.01` and `take <= 0.01`
+ *
+ * So anything landing in [0.001, 0.01] was simultaneously too large to prune and too
+ * small to act on: a $0.01 GOLD sleeve survived 25 consecutive rebalances against a
+ * target of `{EQUITY: 1.0}`. Value stayed conserved, so nothing was lost — but the
+ * account kept a phantom sleeve of an asset class the policy said it must not hold,
+ * which then shows up forever as its own band in the allocation report and its own
+ * row in the holdings panel.
+ *
+ * `_sweepDust` closes the gap at the point the dust would be CREATED, folding the
+ * remnant's market value AND cost basis into the largest surviving holding so both
+ * gross value and basis stay exact. It deliberately does not touch a sleeve whose
+ * basis is material (see the guard there), and it cannot fire on a freshly bought
+ * sleeve because a buy leg only runs above the same 0.01 threshold.
  */
 export class RebalanceToTargetApplyReducer extends Reducer {
   static type        = 'RebalanceToTargetApplyReducer';
@@ -97,6 +119,8 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       }
     }
 
+    holdings = _sweepDust(holdings);
+
     const newBalance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     return this.newState(
       state,
@@ -145,6 +169,59 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
     type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain,
     residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
   };
+}
+
+/**
+ * The value below which a sleeve is a liquidation remnant rather than a position.
+ * Deliberately the SAME 0.01 the leg builder and the sell/buy guards use — the whole
+ * defect was these three numbers disagreeing (see the class doc). Keep them equal.
+ */
+const DUST = 0.01;
+
+/**
+ * Fold liquidation remnants into the largest surviving holding.
+ *
+ * A sleeve qualifies only when BOTH its market value and its cost basis are at or below
+ * DUST. The basis half of that test is what keeps this safe: a holding worth a cent but
+ * carrying real basis is a total unrealized LOSS, not dust, and silently folding its
+ * basis into another sleeve would move that loss onto the wrong lot and mis-state a
+ * later disposal. Such a holding is left exactly where it is.
+ *
+ * Market value and basis are both carried across, so the sweep is value- and
+ * basis-neutral: no phantom cent of gain is created for a later year to tax. (Note
+ * that basis-neutrality is a property of the SWEEP, not of a rebalance as a whole — a
+ * taxable leg realizes gain and re-bases the lots it touches, which is why this is
+ * tested directly rather than through an account-level basis total.)
+ *
+ * Exported for direct testing.
+ */
+export function _sweepDust(holdings) {
+  const isDust = h => {
+    const mv = h?.marketValue ?? 0;
+    return mv > 0 && mv <= DUST && (h?.costBasis ?? 0) <= DUST;
+  };
+  if (!holdings.some(isDust)) return holdings;
+
+  const keep = holdings.filter(h => !isDust(h));
+  // Nothing to fold into (the whole account is dust) — leave it untouched rather than
+  // vanish the value.
+  if (keep.length === 0) return holdings;
+
+  let mv = 0, basis = 0;
+  for (const h of holdings) {
+    if (!isDust(h)) continue;
+    mv    += h.marketValue ?? 0;
+    basis += h.costBasis   ?? 0;
+  }
+
+  let biggest = 0;
+  for (let i = 1; i < keep.length; i++) {
+    if ((keep[i].marketValue ?? 0) > (keep[biggest].marketValue ?? 0)) biggest = i;
+  }
+  return keep.map((h, i) => (i === biggest
+    ? { ...h, marketValue: +((h.marketValue ?? 0) + mv).toFixed(2),
+               costBasis:   +((h.costBasis   ?? 0) + basis).toFixed(2) }
+    : h));
 }
 
 /** Pro-rata reduce the given allocation's holdings by `amount` (free sell). */
