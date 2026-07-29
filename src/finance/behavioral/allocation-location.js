@@ -24,10 +24,12 @@ import { roleCanHoldGold } from './rebalance-to-target-reducer.js';
  * assignment fills every account to exactly its own total, so each account's legs
  * still sum to zero and value is conserved per account (Phase-2 invariant).
  *
- * Gold eligibility (§OQ4a): US IRA/401k/Roth cannot hold bullion; AU super can. Gold
- * is therefore capped at the gold-eligible capacity and any excess weight is
- * redistributed across the other classes, so a gold target larger than the eligible
- * shelter is honored as far as legally possible (and never lands in a US IRA).
+ * Gold eligibility: **every account may hold gold** (design 61 §12 OQ4a, reversed
+ * 2026-07-29 — a gold ETF is holdable in a US IRA/401k/Roth and carries the same
+ * collectibles rate). `roleCanHoldGold` is therefore total and the gold capacity cap
+ * below is unreachable; both are retained as the seam for a future eligibility rule.
+ * What decides gold's home now is purely the tax arithmetic, via
+ * GOLD_PREFERENCE_BY_RESIDENCY (§12.2 Q4).
  *
  * Lazy post-move relocation (§OQ4b): the planner is re-run every period from the
  * CURRENT residency + accounts, so a US→AU move simply re-targets the new optimum and
@@ -58,19 +60,86 @@ export const DEFAULT_LOCATION_POLICY = Object.freeze({
   // Cash: a low-tax filler — taxable/Roth first, then wherever capacity remains.
   [ALLOCATION.CASH]:   [ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.ROTH,
                         ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.SUPER],
-  // Gold: shelter in AU super first, then a taxable brokerage.
-  //
-  // ⚠ US IRA/401k/Roth are absent from this list. They used to be *excluded* by the
-  // eligibility guard; that guard was reversed (design 61 §12 OQ4a, 2026-07-29), so they
-  // are now merely UNPREFERRED — gold reaches them only via the spillover/reconcile pass
-  // once every preferred home is full. That is almost certainly not what we want for a
-  // US resident: the 28% collectibles rate makes a US tax-advantaged account the
-  // tax-efficient home for gold, ahead of the taxable brokerage. Making it *preferred*
-  // is a separate, deliberate change (it moves gold placement and therefore results) and
-  // is tracked as design 61 §12.2 Q4. `planLocatedTargets` already threads `residency`
-  // for exactly this.
+  // Gold: RESIDENCY-DEPENDENT, so the real list comes from GOLD_PREFERENCE_BY_RESIDENCY
+  // via resolveLocationPolicy() (design 61 §12.2 Q4). This entry is the residency-agnostic
+  // fallback, used only when a caller supplies its own policy object without a GOLD key.
   [ALLOCATION.GOLD]:   [ACCOUNT_ROLES.SUPER, ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.US_STOCK],
 });
+
+/**
+ * Gold's preferred homes, by the holder's CURRENT residency (design 61 §4-D / §12.2 Q4).
+ *
+ * ⚠ **These lists were set by MEASUREMENT, and the measurement inverted the original
+ * reasoning.** §12.2 Q4 originally specified "shelter gold ahead of taxable for a US
+ * resident, because a taxable gold sale pays the 28% collectibles rate". That is true
+ * about the *rate* and still wrong as a policy, because it optimises the wrong quantity.
+ *
+ * Asset location depends on **growth × tax treatment**, not the tax rate alone. A shelter
+ * is a finite resource, so it should hold the asset that benefits from it most. Gold grows
+ * far slower than equity (5% vs 10% in the reference plan), so parking gold in a shelter
+ * evicts a 10% asset from it and buys a rate saving on a 5% one. Over a 44-year horizon
+ * the displaced compounding dominates the rate.
+ *
+ * Measured on the reference plan (terminal net worth, identical in every other respect):
+ *
+ *   | gold preference order                        | terminal NW | vs best  |
+ *   |----------------------------------------------|-------------|----------|
+ *   | IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH   | $30.45m     |  best    |
+ *   | US_STOCK, AU_STOCK, SUPER, IRA, K401, ROTH   | $28.42m     | −$2.03m  |
+ *   | SUPER, AU_STOCK, US_STOCK  (the pre-Q4 list) | $28.21m     | −$2.24m  |
+ *   | IRA, K401, ROTH, SUPER, …   (Q4 as specified)| $25.20m     | −$5.25m  |
+ *
+ * So the ordering below, and the two rules that generate it:
+ *
+ * 1. **Tax-DEFERRED first (IRA/401k).** Deferred growth converts to ordinary income on
+ *    withdrawal, which is the worst possible treatment for a high-growth asset — so a
+ *    deferred account is exactly where a low-growth, badly-taxed sleeve belongs. This is
+ *    the same logic that already puts BOND at the head of the deferred list; gold is
+ *    bonds-like here (low growth, unfavourable rate), so its policy mirrors bonds'.
+ * 2. **Roth LAST, always.** The Roth is the most valuable shelter (tax-free forever) and
+ *    must hold the highest-growth asset. Q4-as-specified ranked it third, which is most
+ *    of that −$5.25m.
+ *
+ * Residency then decides where the AU wrappers sit: an AU resident's bullion is an
+ * ordinary, CPI-indexed AU CGT asset (`isGold:true`, design 57 §6.4/§7.2) and super taxes
+ * earnings at 15%, so super leads for AU; a US resident has no reason to route gold across
+ * the border. Both lists name EVERY rebalanceable role, so gold always has a defined
+ * preference and never falls through to the capacity-ordered spillover.
+ *
+ * The switch is **lazy**, not move-pinned (§OQ4b): the planner re-runs each period from
+ * the current residency, so a US→AU move re-targets and the drift band walks holdings over
+ * the following periods rather than forcing a taxable event on the move date. That matters
+ * most here — relocating gold out of a taxable account realizes 28% NOW to save later.
+ *
+ * ⚠ The AU arm is less thoroughly measured than the US arm (the reference plan starts US
+ * and moves in 2031, so the US years dominate the terminal figure). Revisit with an
+ * AU-resident-from-start plan before treating the AU ordering as settled.
+ */
+export const GOLD_PREFERENCE_BY_RESIDENCY = Object.freeze({
+  // Deferred first, taxable next, super/AU after, Roth last.
+  US: Object.freeze([ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401,
+                     ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.AU_STOCK,
+                     ACCOUNT_ROLES.SUPER, ACCOUNT_ROLES.ROTH]),
+  // Super leads (15% earnings tax, and bullion is ordinary indexed CGT outside it);
+  // then the US deferred wrappers, then taxable. Roth last, same reason as above.
+  AU: Object.freeze([ACCOUNT_ROLES.SUPER, ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401,
+                     ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.US_STOCK,
+                     ACCOUNT_ROLES.ROTH]),
+});
+
+/**
+ * The location policy in force for a residency.
+ *
+ * `override` (the `allocationLocationPolicy` param) wins per class, so a scenario can
+ * pin any single class's preference without losing the residency-aware gold default.
+ *
+ * @param {string}      [residency='US'] - 'US' | 'AU'
+ * @param {object|null} [override=null]  - partial policy, per class
+ */
+export function resolveLocationPolicy(residency = 'US', override = null) {
+  const gold = GOLD_PREFERENCE_BY_RESIDENCY[residency] ?? GOLD_PREFERENCE_BY_RESIDENCY.US;
+  return { ...DEFAULT_LOCATION_POLICY, [ALLOCATION.GOLD]: gold, ...(override ?? {}) };
+}
 
 const R2 = (x) => +(+x).toFixed(2);
 
@@ -96,11 +165,15 @@ function _orderedForClass(accounts, remaining, preferred) {
  * @param {object}   opts
  * @param {object[]} opts.accounts        - [{ stateKey, role, total }] (total = Σ marketValue)
  * @param {object}   opts.portfolioTarget - { EQUITY, BOND, CASH, GOLD } fractions (need not be exact)
- * @param {object}   [opts.policy]        - class → preferred-roles map (defaults to DEFAULT_LOCATION_POLICY)
- * @param {string}   [opts.residency]     - 'US' | 'AU' (reserved for finer gold policy; see header)
+ * @param {object}   [opts.policy]        - partial class → preferred-roles map, merged over the
+ *                                        residency-resolved default (see resolveLocationPolicy)
+ * @param {string}   [opts.residency]     - 'US' | 'AU'; selects gold's preference order (§12.2 Q4)
  * @returns {Map<string, object>} stateKey → { <ALLOCATION>: dollars } summing to that account's total
  */
-export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy = DEFAULT_LOCATION_POLICY, residency = 'US' } = {}) {
+export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy = null, residency = 'US' } = {}) {
+  // Gold's preferred home depends on residency (§12.2 Q4); everything else does not.
+  // A caller-supplied `policy` is merged over the residency default, per class.
+  policy = resolveLocationPolicy(residency, policy);
   const active = accounts.filter(a => (a?.total ?? 0) > 0);
   const totalPortfolio = active.reduce((s, a) => s + a.total, 0);
   const out = new Map(active.map(a => [a.stateKey, {}]));
