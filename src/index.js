@@ -58,7 +58,7 @@ import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportu
 import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
 import { RebalanceToTargetApplyReducer } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
-import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, targetForRole, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
+import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
@@ -694,7 +694,6 @@ export const Finance = {
   ageAsOf,
   interpolateGlidepath,
   resolveRegimeTarget,
-  targetForRole,
   RebalanceToTargetReducer,
   StockHarvestApplyReducer,
   StrategicAssetLocationReducer,

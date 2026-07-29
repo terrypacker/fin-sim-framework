@@ -1,7 +1,13 @@
 # 61 — Holding-allocation lever: optimize the Stock/Bond/Cash/Gold mix over time
 
 **Status**: **COMPLETE — ALL PHASES 1–5 IMPLEMENTED** (2026-07-16) on
-`wip/holding-allocation-lever`. Phase 1 = Lever A (searchable static mix); Phase 2 = Lever C
+`wip/holding-allocation-lever`. **Amended 2026-07-29**: OQ4(a)'s US-retirement gold
+guard is **REVERSED** (§12 OQ4a — a gold ETF is holdable in an IRA/401k/Roth and taxed
+closely enough to bullion to be the same sleeve); four defects found in use are recorded
+in §12.1 (one fixed, three open) with the questions they raise in §12.2 — **all four of
+which are now resolved** (Q1 accept-the-band, Q2 `targetForRole` removed, Q3 enforce
+total mixes incl. the MPC harvest, Q4 gold prefers a US shelter via preference-list
+ordering only). Q3 and Q4 are decided but **not yet implemented**. Phase 1 = Lever A (searchable static mix); Phase 2 = Lever C
 (taxable-aware rebalance + buy/establish-sleeve primitive + US-IRA gold guard + split drift
 bands); Phase 3 = Lever B (time variation — STATIC/GLIDEPATH/REGIME_CONDITIONED); Phase 4 =
 Lever D (jurisdiction-aware location — LOCATED default / PER_ACCOUNT); Phase 5 = MPC online
@@ -194,11 +200,21 @@ the indexed-ordinary path, *not* the US collectible rate — `us-brokerage-class
 ~L266, design 57 §6.4/§7.2), so in AU a taxable-account gold sleeve is no worse than
 equity and super shelters it entirely. So the location policy must be
 **jurisdiction-aware** and compose with residency/move-year:
-- **US retirement accounts cannot hold the GOLD sleeve** (IRA/401k/Roth bullion ban):
-  an eligibility guard excludes US tax-advantaged roles as gold targets — for both the
-  location policy and the establish-new-sleeve buy (§6), so a gold buy never lands in a
-  US IRA. AU **super** *is* gold-eligible (permitted SMSF asset), so the guard is
-  US-tax-advantaged-only.
+- ~~**US retirement accounts cannot hold the GOLD sleeve**~~ — **REVERSED 2026-07-29,
+  see §12 OQ4(a). The guard was wrong and is removed: a US IRA/401k/Roth may hold the
+  GOLD sleeve.** The original text is kept below for the record.
+  > *(superseded)* US retirement accounts cannot hold the GOLD sleeve (IRA/401k/Roth
+  > bullion ban): an eligibility guard excludes US tax-advantaged roles as gold targets
+  > — for both the location policy and the establish-new-sleeve buy (§6), so a gold buy
+  > never lands in a US IRA. AU **super** *is* gold-eligible (permitted SMSF asset), so
+  > the guard is US-tax-advantaged-only.
+
+  With the guard gone, gold location is decided **purely by the tax arithmetic** the
+  rest of this section already describes, which is the more interesting answer: a US
+  resident's 28% collectibles rate makes sheltering gold in a tax-advantaged account
+  *attractive*, and that option previously did not exist for the solver to find. AU
+  super remains gold-eligible as before, so the location policy no longer carries any
+  role-based gold exclusion at all.
 - **Post-move relocation is lazy, not move-pinned:** the optimal gold home flips at a
   US→AU move (US: shelter to dodge 28%; AU: taxable fine, super best), but the policy
   just re-*targets* the new optimum and lets the normal rebalance cadence (OQ3) walk
@@ -432,8 +448,13 @@ hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
   cadence-insensitive on wealth. (Design-informing evidence already produced by
   `scripts/prototype-rebalance-cadence.mjs`; the in-sim test asserts the *ordering*,
   not the toy magnitudes.)
-- **Gold guard (OQ4a):** a gold buy is never located into a US IRA/401k/Roth; AU
-  super remains gold-eligible.
+- ~~**Gold guard (OQ4a):**~~ **INVERTED 2026-07-29 (§12 OQ4a).** The old assertion —
+  *a gold buy is never located into a US IRA/401k/Roth* — is now the wrong behaviour.
+  Replace with: a gold buy **may** land in a US IRA/401k/Roth, and the located optimum
+  **prefers** it while US-resident (the 28% collectibles rate makes sheltering gold the
+  tax-efficient placement). AU super remains gold-eligible, unchanged.
+- **Dust (§12.1 D1):** liquidating a sleeve leaves no remnant; the sweep conserves gross
+  value and, in isolation, cost basis; a cent-valued lot carrying real basis is left alone.
 - **Serializer round-trip** for every new param.
 
 ---
@@ -691,12 +712,48 @@ dimension-growth entry in 46's cost model.
    re-optimize post-move (lazily).** Gold's tax home is residency-dependent (§4-D):
    **US** taxable gold = 28% collectibles (punitive); **AU** bullion = ordinary
    CPI-indexed CGT (no worse than equity; **super shelters it**). Decisions:
-   - **(a) Model the US retirement-account bullion restriction.** US IRA/401k/Roth
-     **cannot hold the GOLD sleeve** — the location policy and the establish-new-sleeve
-     buy primitive (§6) must **exclude US tax-advantaged roles as gold targets**
-     (mirror it as an eligibility guard, the allocation twin of the drawdown-eligible
-     role set). AU **super** *can* hold gold (bullion is a permitted SMSF asset), so the
-     guard is US-tax-advantaged-only, not all-tax-advantaged.
+   - ~~**(a) Model the US retirement-account bullion restriction.**~~ **↯ REVERSED
+     2026-07-29 — the guard was modelling the wrong instrument. Remove it.**
+     > *(superseded)* **(a) Model the US retirement-account bullion restriction.** US
+     > IRA/401k/Roth **cannot hold the GOLD sleeve** — the location policy and the
+     > establish-new-sleeve buy primitive (§6) must **exclude US tax-advantaged roles as
+     > gold targets** (mirror it as an eligibility guard, the allocation twin of the
+     > drawdown-eligible role set). AU **super** *can* hold gold (bullion is a permitted
+     > SMSF asset), so the guard is US-tax-advantaged-only, not all-tax-advantaged.
+
+     **Why it was wrong.** The restriction that exists in §408(m) is on holding
+     *physical bullion and collectibles directly* in an IRA. It does **not** stop a US
+     retirement account from holding a **gold ETF** (GLD, IAU and the like), which is
+     the ordinary way a retirement portfolio takes a gold position and is freely
+     available in every IRA/401k/Roth. This model's `GOLD` sleeve is an abstract
+     *exposure*, not a claim about physical custody — and a gold ETF is taxed closely
+     enough to bullion (the US collectibles rate applies to gains on these
+     grantor-trust ETFs) that one sleeve models both. Guarding the sleeve therefore
+     removed a position the owner can genuinely hold, on the strength of a rule about
+     a form of ownership the model never represented.
+
+     **Consequences of the reversal:**
+     - `roleCanHoldGold` becomes vacuously true; `targetForRole` no longer strips GOLD
+       for any role, so a portfolio target is applied unmodified everywhere.
+     - The establish-new-sleeve backstop in the apply reducer (§6) is no longer needed.
+     - **This is the interesting half — but removing the guard does NOT deliver it on
+       its own** (measured 2026-07-29, after the code change landed). The 28%
+       collectibles rate makes *sheltering* gold in a US tax-advantaged account the
+       tax-efficient location for a US resident — the placement the guard forbade. But
+       `DEFAULT_LOCATION_POLICY[GOLD]` is `[SUPER, AU_STOCK, US_STOCK]`: the US
+       retirement roles are **absent from the preference list entirely**, so removing the
+       guard only promoted them from *excluded* to *unpreferred*. Gold now reaches them
+       only via the spillover pass once every preferred home is full. Re-running the
+       reference plan after the reversal, gold placement was **unchanged** (2040: $402k
+       AU super, $455k US brokerage, $0 in any US retirement account). Making it
+       preferred is a separate deliberate change — see §12.2 Q4.
+     - Tests asserting *"a gold buy never lands in a US IRA"* (§10) inverted: the new
+       assertion is that it **may**, and that the located optimum prefers it while US-
+       resident. `targetForRole`'s renormalization path loses its only caller and
+       should be checked for whether it still earns its keep.
+     - Any saved scenario whose gold was previously excluded from a US retirement
+       account will re-locate on the next rebalance under the normal cadence (lazily,
+       per (b)) — no migration needed, but results **will** move for gold-holding plans.
    - **(b) Gold location re-optimizes *after* a move, not pinned to the move date.**
      The "right" gold home flips at a US→AU move (US: shelter to dodge 28%; AU: taxable
      is fine, super best), but the relocation is **lazy** — it rides the normal
@@ -745,6 +802,203 @@ dimension-growth entry in 46's cost model.
    allocation `CUSTOM`) stays a later power-user add if fine-grained control is
    requested.
 
+---
+
+## 12.1 Defects found in use (2026-07-29)
+
+Surfaced while building the allocation-over-time report (design 82), which charts the
+realized mix and so makes sleeve hygiene visible for the first time.
+
+**D1 — ✅ FIXED: liquidated sleeves left an immortal $0.01 remnant.** Selling a sleeve
+to a target weight that rounds sub-cent left a residual that no later rebalance could
+ever remove, because three thresholds disagreed:
+
+| where | threshold |
+|---|---|
+| `_reduceProRata` pruned a holding below | `0.001` |
+| the leg builder emits a leg above (`rebalance-to-target-reducer.js`) | `0.01` |
+| the apply reducer skips | `delta >= -0.01`, `take <= 0.01` |
+
+Anything in `[0.001, 0.01]` was too large to prune and too small to act on. Measured: a
+$0.01 GOLD sleeve survived **25 consecutive rebalances** against `{EQUITY: 1.0}`. Gross
+value stayed conserved throughout, so nothing was lost — but the account kept a phantom
+sleeve of a class the policy forbade, which then appears as a permanent band in the
+allocation report and a permanent row in the holdings panel.
+
+Fixed by `_sweepDust` in the apply reducer, folding a remnant's market value **and**
+cost basis into the largest survivor (carrying only the value would mint a phantom cent
+of unrealized gain for a later year to tax). It sweeps only when **both** are ≤ `0.01`:
+a lot worth a cent against real basis is a total unrealized *loss*, not dust, and
+folding that basis onto another lot would mis-state a later disposal.
+
+> ⚠ **Do not assert account-level basis conservation across a rebalance.** A taxable
+> FIFO sell re-bases the lots it consumes and a buy establishes fresh basis at cost, so
+> the account total legitimately moves. Basis-neutrality is a property of the *sweep*;
+> test it against `_sweepDust` directly.
+
+**D2 — OPEN: the drift band is structurally blind to a zero-target class.**
+`needsRebalance` iterates `Object.entries(target)` only, so a class that is **held but
+absent from the target** is never drift-checked. "I hold an asset class my policy says
+0%" therefore cannot trigger a rebalance *at any size* — it only ever gets corrected as
+a side-effect of some *other* class breaching its band. This is the root cause D1 was a
+symptom of, and it is why the sweep alone is not a complete answer.
+
+The fix is small in code and large in blast radius: making a zero-target holding
+trigger a rebalance changes **when** rebalances fire in every scenario, hence when CGT
+is realized, hence results. It also needs a threshold above the dust floor or a pure
+remnant would cause perpetual re-rebalancing. Deliberately **not** taken as a drive-by;
+see §12.2 Q1.
+
+**D3 — OPEN: pre-existing dust is never cleaned.** `_sweepDust` runs inside an apply,
+so it prevents dust being *created* but cannot clean a saved state that already carries
+some. Only reachable if D2 is fixed, or by sweeping somewhere that always runs (the
+holdings reducers / `_syncBalance`), which is a much more golden-sensitive location.
+
+**D4 — OPEN (authoring, not engine): a baked SCHEDULE freezes its asset classes.** The
+MPC glidepath harvest derives its class list per epoch from what the accounts held *at
+harvest time* (`cockpit-controller.js` ~L919, via `presentAllocations`). That is correct
+and faithful — but it means **any class added to the plan after a bake is silently
+targeted at 0% and liquidated on the next rebalance**, with no warning, because a
+missing key and a deliberate zero are indistinguishable downstream. Observed exactly
+this: gold added to a plan whose 39-anchor glidepath predated it was sold off in year
+one. Candidate mitigations: warn when a held class is absent from every anchor; or have
+`interpolateGlidepath` treat an absent class as "unconstrained" rather than zero (a
+semantic change needing its own decision).
+
+## 12.2 Open questions arising (2026-07-29)
+
+1. **Should a zero-target holding trigger a rebalance (D2)?** ⇢ **Reframed 2026-07-29 by
+   the owner's totality proposal (Q3), and mostly dissolved by it.** If a target mix is
+   required to be **total** — every class present with an explicit weight, summing to 1 —
+   then `Object.entries(target)` covers every class and the D2 *blindness* is gone. The
+   owner's further point is that a class cannot be zeroed in isolation (something else
+   must rise to keep Σ = 1), so the transition always breaches some band and triggers.
+   Both are right.
+
+   **What survives (measured, not argued).** Totality removes the blindness but the
+   **band still gates**. With a fully-specified target `{EQUITY .6, BOND .4, CASH 0,
+   GOLD 0}` and gold at **5%** of a taxable account, `|0.05 − 0| = 0.05` is inside the
+   0.10 band and **no rebalance ever fires** — verified over repeated periods. So:
+   - the *transition* self-corrects (owner is right);
+   - a position that **arrives** at a zero-target class without a target change does
+     not. Real sources: in-kind inheritance (design 63), a rollover, or simply the other
+     classes being drawn down around it. The reference plan shows exactly this shape —
+     gold grew to $1.85M and was removed by *drawdown*, never by rebalancing.
+
+   So the residual question is much smaller than D2 was: **should a zero target carry a
+   zero (or tighter) band?** Options: (a) exact — `tgt === 0 && actual > dust` triggers;
+   (b) a small absolute floor (say 0.5% of the account) well above the dust threshold;
+   (c) accept it — `0 ± band` means "approximately none" and the allocation report
+   surfaces the residue. Note (a) fights §OQ3's finding that wide bands beat tight ones
+   by ~$173k of avoided CGT, so forcing a sale of a 5% sleeve purely because its target
+   is 0 may be precisely the bad trade that prototype warned about. **Leaning (b) or (c).**
+
+   ✅ **RESOLVED 2026-07-29 — (c), accept it; the band is already the configurable knob
+   (owner).** Confirmed: the two params the owner named are exactly the mechanism.
+   `rebalanceDriftBandTaxable` (default **0.10**, wide) and `rebalanceDriftBandSheltered`
+   (default **0.02**, tight) are the `band` in `needsRebalance`, both `opt: true` so the
+   optimizer/MC can search them, and both already per-tier. Someone who wants a
+   zero-target sleeve cleaned up more aggressively tightens the band; the §OQ3 tax
+   trade-off is then theirs to make explicitly. **No code change.**
+
+   One property to be aware of rather than fix: the band is **symmetric and absolute**,
+   so it cannot be tightened for zero-target classes *alone* — tightening it to catch a 5%
+   gold residue also tightens EQUITY and BOND, increasing churn and realized CGT across
+   the board. If independent control is ever wanted, that is option (b) (a separate
+   zero-target floor), and it can be added without disturbing this decision.
+2. ✅ **RESOLVED 2026-07-29 — remove `targetForRole` (owner).** Done: the function is
+   deleted, `roleCanHoldGold` is now total (retained as a named seam), the apply
+   reducer's establish-sleeve backstop is gone, and the `PER_ACCOUNT` branch uses the
+   scheduled target directly. Tests inverted (RC-5, LOC-4, LOC-5); suite green at 4185.
+
+3. **Enforce that a target mix is TOTAL (owner's proposal) — recommended, with two
+   caveats.** Absent-means-zero is what silently liquidated gold (D4). Requiring every
+   class explicitly, summing to 1, and **failing loudly at load/compile** rather than
+   normalizing, matches this codebase's ethos (cf. `Holding`'s constructor rejecting an
+   unknown allocation) and would have caught D4 at authoring time. Caveats:
+   - **It relocates D4 rather than deleting it.** A pre-existing 3-key bake becomes
+     *invalid* the moment GOLD exists in the plan. That is better (explicit, early,
+     loud) but somebody must still author the missing weight; backfilling with 0 is the
+     silent liquidation wearing a hat.
+   - **`_normalize` currently hides authoring errors.** Verified on the owner's own
+     hand-authored anchors: `{EQUITY .75, BOND .25, CASH 0, GOLD .25}` sums to **1.25**
+     and is silently rescaled to `{EQUITY .6, BOND .2, CASH 0, GOLD .2}` — 75% equity
+     authored, 60% run. Totality enforcement should therefore also reject Σ ≠ 1 (within
+     epsilon) instead of rescaling, or the constraint buys much less than it looks.
+   - Enforcement must sit at **every** target producer: glidepath anchors, regime maps,
+     stick-breaking from `allocWeight::*`, and the LOCATED per-account composition.
+
+   ✅ **RESOLVED 2026-07-29 — enforce totality; breaking existing configs is acceptable
+   (owner: only one in use, will be fixed by hand). The MPC tooling must not be able to
+   emit an invalid glidepath — that is part of the deliverable, not a follow-up.**
+
+   **Spec.**
+   1. **Validate, do not normalize.** A target mix is valid iff it carries an explicit
+      weight for **every** `ALLOCATION` value and `|Σw − 1| ≤ ε`. Reject otherwise, at
+      load/compile, naming the offending anchor and the actual sum. `_normalize`'s
+      silent rescale is removed from the authoring path (it may stay as an internal
+      guard *after* validation, where it is a no-op).
+   2. **The MPC harvest must emit total mixes.** This is the load-bearing part.
+      `cockpit-controller.js` builds anchors from
+      `synthesizeTargetAllocation(candidate, present)`, where `present` is the classes
+      the accounts actually held at that epoch — so harvested anchors are **partial by
+      construction** and would every one of them be invalid under (1). The fix keeps the
+      search dimensionality but totalises the *output*: continue to search only over
+      present classes (searching a class the plan does not hold is a wasted dimension),
+      then **backfill every absent `ALLOCATION` with an explicit `0`** before writing the
+      anchor. A harvested plan is then always re-runnable and always valid.
+      ⚠ Note the semantic this locks in: a harvested `0` genuinely means "the epoch
+      decided none", which is correct *for that harvest* — it is the D4 hazard only when
+      a class is added to the plan **later**, which (1) now catches loudly at load.
+   3. **Same treatment for the other producers:** `allocationRegimeTargets` maps and the
+      `allocWeight::*` stick-breaking (which already covers all four classes when
+      `presentAllocations` is not narrowing it — narrow it and backfill zeros, as in (2)).
+   4. **Migration:** no shim. The one live scenario is fixed by hand; the validator's
+      error message is the migration guide.
+
+4. **Should the location policy PREFER a US tax-advantaged account for gold?** New,
+   arising from the OQ4(a) reversal. `DEFAULT_LOCATION_POLICY[GOLD]` omits IRA/401k/Roth,
+   so post-reversal gold placement is measurably unchanged (§12 OQ4a). For a US resident
+   the 28% collectibles rate argues for sheltering gold *ahead of* the taxable brokerage;
+   for an AU resident super stays best and taxable is fine. `planLocatedTargets` already
+   threads `residency` for this and does not use it. Doing it moves gold placement and
+   therefore results, so it wants a deliberate decision — but leaving it undone means the
+   reversal is inert in LOCATED mode, which is the default.
+
+   ✅ **RESOLVED 2026-07-29 — yes, and the owner's assumption is correct: no funds ever
+   move between accounts.** The word "migrate" in the earlier draft was badly chosen and
+   is withdrawn. Verified empirically (two-account LOCATED run, gold preferred into the
+   IRA):
+
+   ```text
+   BEFORE  iraAccount     balance=500,000  EQUITY=500,000
+           usStockAccount balance=500,000  EQUITY=400,000 GOLD=100,000
+   AFTER   iraAccount     balance=500,000  EQUITY=400,000 GOLD=100,000
+           usStockAccount balance=500,000  EQUITY=500,000
+   ```
+
+   **Both balances are unchanged.** Asset location is achieved by **simultaneous
+   independent internal swaps**, never a transfer: the IRA sells $100k of its own equity
+   and buys $100k of its own gold; the brokerage does the reverse. The book-level mix is
+   identical (90/10) but gold now sits in the shelter. This is structural, not incidental
+   — `RebalanceToTargetApplyReducer` is handed **one `stateKey` per action** and patches
+   only that account, and `planLocatedTargets` constrains each account's composition to
+   sum to **its own** total (asserted by LOC-1). Neither can move value across an account
+   boundary even in principle. Cross-account movement remains exclusively the business of
+   rollovers, contributions and `INTL_TRANSFER`.
+
+   So the change is a **preference-list edit only**: add the US tax-advantaged roles to
+   `DEFAULT_LOCATION_POLICY[GOLD]`, ordered by residency via the `residency` argument
+   `planLocatedTargets` already threads — US-resident: `[IRA, K401, ROTH, SUPER,
+   US_STOCK, AU_STOCK]` (shelter ahead of taxable to dodge the 28% collectibles rate);
+   AU-resident: `[SUPER, AU_STOCK, US_STOCK, IRA, K401, ROTH]` (super best, taxable
+   fine). The tax rationale is §4-D's, unchanged; only the guard that made it
+   unexpressible is gone.
+
+   Caveat to size before building: a *taxable* account selling gold to hand the exposure
+   to a shelter **realizes CGT at 28% now** to save 28% later. It is only a win when the
+   remaining holding period is long enough, so the drift band (Q1) is doing real work
+   here — this should not be forced on the move date (§4-D's lazy relocation, OQ4b).
 ---
 
 ## 13. Relationship to design 58
