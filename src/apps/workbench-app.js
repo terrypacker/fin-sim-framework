@@ -76,6 +76,7 @@ import {
   FINANCE_DEFAULT_LAYOUT,
 } from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
+import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
@@ -573,7 +574,17 @@ export class WorkbenchApp extends BaseComponent {
     // ── Build scenario ────────────────────────────────────────────────────────
     //This will create the active scenario
     this.scenario = registry.scenarioService.createActiveScenario();
-    this.scenario.buildSim();
+    // Allocation sampling rides the run itself (design 82 §6): the panel reads what
+    // was recorded as the sim advanced, so it never re-steps the primary sim and
+    // never disturbs playback. Unconditional on purpose — ~45 cube builds per run is
+    // not worth a mode the user can be in the wrong half of, and a panel whose empty
+    // state reads "re-run with sampling on" is a panel people stop opening.
+    this.scenario.buildSim({
+      sampler: createAllocationSampler({
+        displayNameFor: (stateKey) => registry.schemaRegistry.displayNameFor(stateKey),
+      }),
+      samplerCadence: 'year-boundary',
+    });
 
     // Design 15: the active scenario cfg is the single source of truth. Defaults
     // are materialized once at registry registration; Rebuild reads whatever the

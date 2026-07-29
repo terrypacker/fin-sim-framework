@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
+
 /**
  * Compute total net worth from simulation state.
  *
@@ -27,7 +29,7 @@ export function computeNetWorth(state, baseCurrency = 'USD') {
   for (const val of Object.values(state)) {
     if (val == null || typeof val !== 'object') continue;
 
-    const currency = val.currency?.code ?? val.currency ?? baseCurrency;
+    const currency = currencyOf(val, baseCurrency);
     let contribution = 0;
 
     if (val.type === 'loan' && typeof val.balance === 'number') {
@@ -47,13 +49,10 @@ export function computeNetWorth(state, baseCurrency = 'USD') {
       continue;
     }
 
-    if (currency === baseCurrency) {
-      total += contribution;
-    } else {
-      const pairId = `${baseCurrency}_${currency}`;
-      const rate   = state.effectiveExchangeRates?.[pairId] ?? 1;
-      total += contribution / rate;
-    }
+    // Shared with the allocation cube (design 82 §5.1a): the two are bound by the
+    // invariant Σ cube rows === computeNetWorth, so they must not be able to hold
+    // different opinions about what a dollar is.
+    total += toBaseCurrency(contribution, currency, baseCurrency, state);
   }
 
   return total;

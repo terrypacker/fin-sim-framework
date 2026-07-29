@@ -15,6 +15,7 @@
  *     centerInnerSizes: [number, number],  // flex fractions (h) or [1, px-height] (v)
  *     'center-a':       { tabs: string[], active: string | null },
  *     'center-b':       { tabs: string[], active: string | null },
+ *     closedTabs:       string[],  // tabs the user closed on purpose — see _adoptNewDefaultTabs
  *   }
  */
 export class WorkbenchLayoutModel {
@@ -53,6 +54,40 @@ export class WorkbenchLayoutModel {
     for (const [key, value] of Object.entries(this._default)) {
       if (this._layout[key] === undefined) {
         this._layout[key] = structuredClone(value);
+      }
+    }
+    this._adoptNewDefaultTabs();
+  }
+
+  /**
+   * Place default tabs that the saved layout has never heard of.
+   *
+   * Backfilling only top-level KEYS meant a newly registered panel was invisible to
+   * everyone with a saved layout — which is everyone who has used the app — and
+   * invisible in the worst way: the plugin loads, works, and simply has no tab, so it
+   * reads as "the feature doesn't work" rather than "your layout predates it".
+   *
+   * A tab the user CLOSED must stay closed, so intent is recorded explicitly at the
+   * moment of closing (`closedTabs`) rather than inferred from absence. One-time quirk
+   * worth knowing: tabs closed before `closedTabs` existed have no record, so they
+   * reappear once and stay gone after the next close.
+   */
+  _adoptNewDefaultTabs() {
+    const closed = new Set(Array.isArray(this._layout.closedTabs) ? this._layout.closedTabs : []);
+
+    const placed = new Set();
+    for (const cfg of Object.values(this._layout)) {
+      if (Array.isArray(cfg?.tabs)) cfg.tabs.forEach(t => placed.add(t));
+    }
+
+    for (const [pane, cfg] of Object.entries(this._default)) {
+      if (!Array.isArray(cfg?.tabs)) continue;
+      for (const tab of cfg.tabs) {
+        if (placed.has(tab) || closed.has(tab)) continue;
+        if (!Array.isArray(this._layout[pane]?.tabs)) continue;
+        this._layout[pane].tabs.push(tab);
+        this._layout[pane].active ??= tab;
+        placed.add(tab);
       }
     }
   }
@@ -102,10 +137,17 @@ export class WorkbenchLayoutModel {
     if (!cfg || cfg.tabs.includes(tab)) return;
     cfg.tabs.push(tab);
     cfg.active = tab;
+    // Re-opening revokes the "don't put this back" record from closeTab().
+    if (Array.isArray(this._layout.closedTabs)) {
+      this._layout.closedTabs = this._layout.closedTabs.filter(t => t !== tab);
+    }
   }
 
   /**
    * Remove a tab from a pane; advances active to next available.
+   *
+   * Records the id so `_adoptNewDefaultTabs()` does not helpfully put it back on the
+   * next load — closing a tab is an instruction, not an accident.
    */
   closeTab(pane, tab) {
     const cfg = this._layout[pane];
@@ -113,6 +155,9 @@ export class WorkbenchLayoutModel {
     if (cfg.active === tab) {
       cfg.active = cfg.tabs[0] ?? null;
     }
+    const closed = Array.isArray(this._layout.closedTabs) ? this._layout.closedTabs : [];
+    if (!closed.includes(tab)) closed.push(tab);
+    this._layout.closedTabs = closed;
   }
 
   /** Set the active tab in a pane. */

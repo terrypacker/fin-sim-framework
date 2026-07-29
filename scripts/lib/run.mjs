@@ -61,8 +61,12 @@ export async function quietAsync(fn) {
  *   TELEMETRY_LEVELS (design 78 §4.3). Defaults to `full` because a tool that
  *   opens a sim without stepping it usually wants to inspect the journal or
  *   snapshots; pass `'off'` if all you need is state.
+ * @param {function} [o.sampler] Optional (state, date) => record — collect a time
+ *   series off the run itself instead of re-stepping it. See Simulation#samples.
+ * @param {'interval'|'year-boundary'} [o.samplerCadence='interval'] When the
+ *   sampler fires (design 82 §4).
  */
-export function openSim(cfg, { telemetry = 'full' } = {}) {
+export function openSim(cfg, { telemetry = 'full', sampler = null, samplerCadence = 'interval' } = {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
@@ -71,7 +75,7 @@ export function openSim(cfg, { telemetry = 'full' } = {}) {
     simStart:     new Date(cfg.simStart),
     simEnd:       new Date(cfg.simEnd),
   });
-  scenario.buildSim({ telemetry });
+  scenario.buildSim({ telemetry, sampler, samplerCadence });
   new ScenarioLoader().load(cfg, services);
   return scenario.sim;
 }

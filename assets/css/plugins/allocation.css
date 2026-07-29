@@ -1,0 +1,199 @@
+/* ── Allocation Plugin (design 82 §6) ──────────────────────────────────────────
+ *
+ * Chart-first panel: the toolbar and the two text strips are deliberately thin so the
+ * chart gets the height. The provenance strip sits ABOVE the chart because the tie-out
+ * has to be read before the shares are (design 82 §3).
+ */
+
+.alloc-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.alloc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.alloc-spacer { flex: 1; }
+
+.alloc-account { max-width: 190px; }
+
+.alloc-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Segmented share/$ switch. */
+.alloc-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.alloc-seg button {
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.alloc-seg button:last-child { border-right: 0; }
+
+.alloc-seg button.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.alloc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.alloc-toggle input { margin: 0; }
+
+.alloc-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.alloc-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+/* ── Provenance strip ─────────────────────────────────────────────────────── */
+
+.alloc-provenance {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.alloc-provenance:empty { display: none; }
+
+.alloc-provenance code {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.alloc-ok { color: var(--green); }
+
+/* A broken denominator makes every share on the panel wrong — this is meant to stop
+ * the reader, not to decorate. */
+.alloc-provenance--bad {
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-border);
+  color: var(--red);
+  white-space: normal;
+}
+
+/* ── Chart ────────────────────────────────────────────────────────────────── */
+
+.alloc-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.alloc-chart {
+  position: absolute;
+  inset: 0;
+}
+
+.alloc-placeholder {
+  color: var(--text-muted);
+  padding: 16px 12px;
+  font-style: italic;
+}
+
+/* ── "Mix now" strip ──────────────────────────────────────────────────────── */
+
+.alloc-mixbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 9px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.alloc-mixbar:empty { display: none; }
+
+.alloc-mix-label {
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Doubles as the chart's legend, so the chips are clickable (click = hide the band). */
+.alloc-mix-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.alloc-mix-item:hover { color: var(--text); }
+
+.alloc-mix-item--off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+/* Target-vs-actual: the chips report drift, they are not series switches. */
+.alloc-mix-item--static { cursor: default; }
+
+/* Out of policy — the band the rebalancer itself checked against was exceeded. */
+.alloc-mix-item--breach strong {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.alloc-drift-scope {
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.alloc-mix-item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.alloc-mix-item strong { color: var(--text); }

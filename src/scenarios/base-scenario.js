@@ -247,7 +247,12 @@ export class BaseScenario extends SimGraphNode {
   rebuild(params) {
     this.context.services.reset();
     if (params) this.applyParams(params);
-    this.buildSim();
+    // Rebuild with the SAME sim options the caller originally asked for. Passing
+    // nothing here silently reverted every one of them to its default — so an app
+    // that built the primary sim with a sampler (design 82 §6) or at a reduced
+    // telemetry level lost that on the first param edit, and the panel it fed simply
+    // went empty with nothing to explain why.
+    this.buildSim(this._buildSimOpts ?? {});
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -278,13 +283,25 @@ export class BaseScenario extends SimGraphNode {
    *   cost of the run — see TELEMETRY_LEVELS (design 78 §4.3). Batch callers
    *   (Monte Carlo, optimizer, scripts/) should ask for the level they need
    *   here rather than poking sim.silent after the fact.
-   * @param {function} [o.sampler] Optional (state, date) => record, called at the
-   *   history-snapshot cadence. Lets a batch caller collect a time series without
-   *   paying for full-state snapshots; read it back off `sim.samples`.
+   * @param {function} [o.sampler] Optional (state, date) => record. Lets a caller
+   *   collect a time series without paying for full-state snapshots; read it back
+   *   off `sim.samples`.
+   * @param {'interval'|'year-boundary'} [o.samplerCadence='interval'] When the
+   *   sampler fires — every `snapshotInterval` events, or once per calendar year at
+   *   the year boundary (design 82 §4). Anything sensitive to the year-end sequence
+   *   (an asset mix, which the year-end rebalance moves) wants 'year-boundary'; the
+   *   default keeps design 78's MC series unchanged.
    * @param {'throw'|'warn'|'off'} [o.pastEndPolicy='throw'] What `sim.stepTo()`
    *   does when handed a date past this scenario's simEnd — see Simulation.
    */
-  buildSim({ seed = 1, telemetry = 'full', sampler = null, pastEndPolicy = 'throw' } = {}) {
+  buildSim({
+    seed = 1, telemetry = 'full', sampler = null, samplerCadence = 'interval',
+    pastEndPolicy = 'throw',
+  } = {}) {
+    // Remembered so rebuild() can reconstruct an equivalent sim rather than a
+    // default one — see rebuild().
+    this._buildSimOpts = { seed, telemetry, sampler, samplerCadence, pastEndPolicy };
+
     const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
     const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
 
@@ -312,7 +329,10 @@ export class BaseScenario extends SimGraphNode {
       // simEnd is the run's horizon, not just a slider bound: the toolsets
       // schedule events out to it and no further, so stepping past it produces a
       // half-advanced world. Handing it to the sim lets stepTo() say so.
-      opts: { derivedMetrics, telemetry, sampler, simEnd: this.simEnd, pastEndPolicy },
+      opts: {
+        derivedMetrics, telemetry, sampler, samplerCadence,
+        simEnd: this.simEnd, pastEndPolicy,
+      },
     });
 
     simulationRegistry.register('primary', sim);

@@ -1,4 +1,10 @@
-# 60 — Real vs. Nominal value display (constant-dollar toggle)
+# 79 — Real vs. Nominal value display (constant-dollar toggle)
+
+> **Renumbered 2026-07-29**: this document was `60-real-vs-nominal-display.md` and
+> collided with `60-cash-sleeve-money-market-yield.md` — two designs sharing a number,
+> one IMPLEMENTED and one not, which made every "design 60" citation ambiguous. Every
+> in-code `design 60` comment refers to the **cash sleeve** doc; this one is now **79**
+> (a number never used). Cite it as design 79 from here on.
 
 **Status**: **DESIGN** (2026-07-13). Scope: add an app-wide **value basis**
 toggle — `Nominal` (default, today's behaviour) vs. `Real (today's $)` — to
@@ -345,7 +351,7 @@ single-factor deflation.
   `formatAmount`, and `_toDisplayCurrency` (used by `formatValue`). State comes
   from the same `_rateStateProvider?.()` already used for FX — value and deflator
   share the stepped-to instant.
-- P1 uses the **US accumulator only** (§7 Phase 1). Add a `// TODO design 60 §7
+- P1 uses the **US accumulator only** (§7 Phase 1). Add a `// TODO design 79 §7
   Phase 2: per-native-country accumulator` marker at the deflator.
 
 **1.3 Top-bar select (`index.html` + `src/apps/workbench-app.js`)**

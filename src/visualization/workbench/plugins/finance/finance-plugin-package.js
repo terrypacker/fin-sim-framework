@@ -29,6 +29,7 @@ import { DgConfigPlugin }          from './dg-config-plugin.js';
 import { DgResultsPlugin }         from './dg-results-plugin.js';
 import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 import { HoldingsPlugin }          from './holdings-plugin.js';
+import { AllocationPlugin }        from './allocation-plugin.js';
 import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
@@ -38,7 +39,7 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         MpcCockpitPlugin };
+         AllocationPlugin, MpcCockpitPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -54,6 +55,7 @@ export const FINANCE_PLUGINS = [
   { id: 'opt-results',  title: 'OPT Results',   component: OptResultsPlugin  },
   { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
   { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin    },
+  { id: 'allocation',   title: 'Allocation',    component: AllocationPlugin  },
   { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin      },
   { id: 'opt-runs',     title: 'OPT Runs',      component: OptRunsPlugin     },
   { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
@@ -77,7 +79,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'timeline', 'chart', 'allocation', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

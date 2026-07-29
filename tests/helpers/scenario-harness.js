@@ -63,7 +63,8 @@ import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
  * @returns {{ sim, scenario, services, cfg }}
  */
 export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, stepTo,
-                                  telemetry = 'full', sampler = null } = {}) {
+                                  telemetry = 'full', sampler = null,
+                                  samplerCadence = 'interval' } = {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const cfg = IntlRetirementScenario.buildDefaultConfig(params, simStart, simEnd);
@@ -74,7 +75,7 @@ export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, step
     simStart:     new Date(cfg.simStart),
     simEnd:       new Date(cfg.simEnd),
   });
-  scenario.buildSim({ telemetry, sampler });
+  scenario.buildSim({ telemetry, sampler, samplerCadence });
   new ScenarioLoader().load(cfg, services);
   if (stepTo != null) scenario.sim.stepTo(stepTo instanceof Date ? stepTo : new Date(stepTo));
   return { sim: scenario.sim, scenario, services, cfg };
