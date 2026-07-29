@@ -87,7 +87,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
 import { runJobsParallel, parseWorkers } from '../lib/parallel.mjs';
-import { table, money, note } from '../lib/format.mjs';
+import { buildGridModel, makeIdOf } from '../lib/grid-report.mjs';
+import { table, note } from '../lib/format.mjs';
 
 const USAGE = `
 variant-grid.mjs — run an N-dimensional grid of scenario variants and table it.
@@ -122,12 +123,6 @@ const base = loadBaseConfig(source);
 const axisNames = Object.keys(spec.axes ?? {});
 if (!axisNames.length) { console.error('spec has no axes'); process.exit(2); }
 
-/** Display label for value j of an axis. */
-const labelOf = (name, j) => {
-  const ax = spec.axes[name];
-  return String(ax.labels?.[j] ?? ax.values[j]);
-};
-
 /** Write `value` at a dotted path inside a lever bag, creating parents. */
 function setLeverPath(levers, path, value) {
   const parts = path.split('.');
@@ -136,12 +131,8 @@ function setLeverPath(levers, path, value) {
   node[parts.at(-1)] = value;
 }
 
-/**
- * Cell id: axis indices joined. Indices rather than labels so a label containing
- * the separator, or two axis values that stringify alike (0.1 vs "0.1"), cannot
- * collide into one cell.
- */
-const idOf = (idx) => axisNames.map(n => `${n}=${idx[n]}`).join('|');
+// Shared with the reader in lib/grid-report.mjs — see makeIdOf's note.
+const idOf = makeIdOf(axisNames);
 
 function leversFor(idx) {
   const levers = structuredClone(spec.base ?? {});
@@ -173,9 +164,6 @@ const results = await runJobsParallel({
   source, worker: WORKER, workers: parseWorkers(argv), label: 'grid cells',
 });
 
-const byId = new Map(results.map(r => [r.id, r]));
-const errors = results.filter(r => r.error);
-
 if (flag('--out')) {
   writeFileSync(flag('--out'), JSON.stringify({ spec, source: base.source, results }, null, 1));
   console.error(`raw results → ${flag('--out')}`);
@@ -186,103 +174,45 @@ if (argv.includes('--json')) {
 }
 
 // ─── report ──────────────────────────────────────────────────────────────────
+//
+// The reduction itself lives in lib/grid-report.mjs so this terminal view and the
+// HTML study report cannot drift into disagreeing about what a cell means. Only the
+// rendering is local.
 
-const rep = spec.report ?? {};
-const rowAxis = rep.rows ?? axisNames[0];
-const colAxis = rep.cols ?? axisNames[1] ?? null;
-const reduceAxis = rep.reduce?.axis ?? null;
-const panelAxes = (rep.panels ?? []).length
-  ? rep.panels
-  : axisNames.filter(n => n !== rowAxis && n !== colAxis && n !== reduceAxis);
-
-for (const name of [rowAxis, colAxis, reduceAxis, ...panelAxes]) {
-  if (name && !axisNames.includes(name)) {
-    console.error(`report references unknown axis "${name}"`); process.exit(2);
-  }
+let model;
+try {
+  model = buildGridModel({ spec, results });
+} catch (err) {
+  console.error(err.message); process.exit(2);
 }
+
+const { rowAxis, colAxis, reduceAxis } = model;
 
 console.log('');
-if (spec.title) console.log(`════ ${spec.title} ════`);
+if (model.title) console.log(`════ ${model.title} ════`);
 note(describeSource(base));
-if (spec.notes) note(spec.notes);
-if (errors.length) note(`** ${errors.length} of ${results.length} cells errored — shown as "?" — e.g. ${errors[0].error}`);
+if (model.notes) note(model.notes);
+if (model.errors) note(`** ${model.errors} of ${model.total} cells errored — shown as "?" — e.g. ${model.firstError}`);
 
-/**
- * Scan the reduce axis at fixed other-axis indices and report the frontier.
- * Also counts pass→fail flips, which is the non-monotonicity tell.
- */
-function reduceCell(fixed) {
-  const ax = spec.axes[reduceAxis];
-  let lastPassing = -1, flips = 0, prev = null, missing = false;
-  for (let j = 0; j < ax.values.length; j++) {
-    const r = byId.get(idOf({ ...fixed, [reduceAxis]: j }));
-    if (!r || r.error) { missing = true; continue; }
-    if (!r.failed) lastPassing = j;
-    if (prev !== null && r.failed !== prev) flips++;
-    prev = r.failed;
-  }
-  if (missing && lastPassing < 0) return { text: '?', flips };
-  if (lastPassing < 0) return { text: `<${labelOf(reduceAxis, 0)}`, flips, offGridLow: true };
-  const atEnd = lastPassing === ax.values.length - 1;
-  return { text: labelOf(reduceAxis, lastPassing) + (atEnd ? '+' : ''), flips, offGridHigh: atEnd };
-}
-
-/** Direct cell metric when there is no reduce axis. */
-function directCell(fixed) {
-  const r = byId.get(idOf(fixed));
-  if (!r || r.error) return '?';
-  if (rep.metric === 'netWorth') return money(r.netWorth);
-  if (rep.metric === 'netLiq')   return money(r.netLiq);
-  return r.failed ? `FAIL ${r.oofDate?.slice(0, 4) ?? ''}`.trim() : 'ok';
-}
-
-const warnings = [];
-
-/** Enumerate panel index combinations. */
-function panelCombos() {
-  let combos = [{}];
-  for (const name of panelAxes) {
-    const next = [];
-    for (const c of combos) spec.axes[name].values.forEach((_, j) => next.push({ ...c, [name]: j }));
-    combos = next;
-  }
-  return combos;
-}
-
-for (const panel of panelCombos()) {
-  const panelLabel = panelAxes.map(n => `${n} ${labelOf(n, panel[n])}`).join(', ');
-  const rowLabels = spec.axes[rowAxis].values.map((_, j) => labelOf(rowAxis, j));
-  const colLabels = colAxis ? spec.axes[colAxis].values.map((_, j) => labelOf(colAxis, j)) : ['value'];
-
-  const cell = (rowLabel, colLabel) => {
-    const ri = rowLabels.indexOf(rowLabel);
-    const ci = colAxis ? colLabels.indexOf(colLabel) : null;
-    const fixed = { ...panel, [rowAxis]: ri };
-    if (colAxis) fixed[colAxis] = ci;
-
-    if (!reduceAxis) return directCell(fixed);
-    const { text, flips } = reduceCell(fixed);
-    if (flips > 1) warnings.push(`${panelLabel ? panelLabel + ' / ' : ''}${rowAxis} ${rowLabel}`
-      + `${colAxis ? ` / ${colAxis} ${colLabel}` : ''}: ${flips} pass↔fail flips along ${reduceAxis}`);
-    return text;
-  };
-
+for (const panel of model.panels) {
   table({
-    title: [reduceAxis ? `frontier along ${reduceAxis}` : rep.metric ?? 'pass/fail', panelLabel]
-      .filter(Boolean).join(' — '),
-    rows: rowLabels, cols: colLabels, cell, corner: `${rowAxis}\\${colAxis ?? ''}`,
+    title: [model.metric, panel.label].filter(Boolean).join(' — '),
+    rows: panel.rows, cols: panel.cols,
+    cell: (rowLabel, colLabel) =>
+      panel.cells[panel.rows.indexOf(rowLabel)][panel.cols.indexOf(colLabel)].text,
+    corner: `${rowAxis}\\${colAxis ?? ''}`,
   });
 }
 
 if (reduceAxis) {
-  console.log(`\n"${labelOf(reduceAxis, 0)}"-style entries are the last PASSING ${reduceAxis} value.`);
-  console.log(`  "<${labelOf(reduceAxis, 0)}" = failed even at the first value (frontier below the sweep)`);
+  console.log(`\n"${model.labelOf(reduceAxis, 0)}"-style entries are the last PASSING ${reduceAxis} value.`);
+  console.log(`  "<${model.labelOf(reduceAxis, 0)}" = failed even at the first value (frontier below the sweep)`);
   console.log(`  trailing "+"  = still passing at the last value (frontier beyond the sweep)`);
 }
 
-if (warnings.length) {
+if (model.warnings.length) {
   console.log('\n** NON-MONOTONE CELLS — the frontier is not a single boundary here.');
   console.log('   The reported value is the last passing one, but there is a passing');
   console.log('   region beyond a failing one. Inspect with --json before quoting these.');
-  for (const w of new Set(warnings)) console.log(`   · ${w}`);
+  for (const w of model.warnings) console.log(`   · ${w}`);
 }

@@ -141,7 +141,13 @@ export async function runArm({ cfg, n, mcConfig, shocks }) {
     seed:   r.seed,
     nw:     Math.round(r.finalNetWorthUsd ?? 0),
     failed: !!r.scenarioFailed,
-    oof:    r.outOfFundsDate ? String(r.outOfFundsDate).slice(0, 10) : null,
+    // ISO, not String(): `outOfFundsDate` arrives as a Date, and `String(date)` is
+    // "Tue Feb 27 2061 00:00:00 GMT…", whose first ten characters are "Tue Feb 27" —
+    // a date string with the YEAR sliced off. Every consumer reads the year by
+    // `oof.slice(0, 4)`, so they silently got NaN and dropped the row; the terminal
+    // report prints the out-of-funds line only when at least one row parses, so the
+    // readout simply never appeared and nothing ever errored. Matches run.mjs.
+    oof:    r.outOfFundsDate ? new Date(r.outOfFundsDate).toISOString().slice(0, 10) : null,
     // sampled long-run mean — the headline explanatory variable for failure
     growth: r.params?.brokerageGrowthRate ?? null,
     shockDate: r.params?.shocks?.[0]?.startDate ? String(r.params.shocks[0].startDate).slice(0, 10) : null,
