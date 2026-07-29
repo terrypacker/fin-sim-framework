@@ -14,7 +14,6 @@ import { consumeHoldingsFifo }  from '../holdings/holdings-fifo.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
-import { roleCanHoldGold }      from './rebalance-to-target-reducer.js';
 
 /**
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
@@ -31,9 +30,9 @@ import { roleCanHoldGold }      from './rebalance-to-target-reducer.js';
  *   - **Buy**: add to an existing sleeve of the target allocation, or ESTABLISH a new
  *     sleeve when none exists (the design-61 §6 buy primitive) — stamping allocation,
  *     marketValue, costBasis (= amount, fresh basis), purchaseDate, rateKey (via
- *     resolveRateKey) and BOND defaults. A GOLD establish is guarded out of a US
- *     tax-advantaged account (bullion ban, §OQ4a) as a defensive backstop; the leg
- *     reducer already renormalizes a guarded account's target so no gold leg is generated.
+ *     resolveRateKey) and BOND defaults. A GOLD sleeve may be established in ANY
+ *     account, including a US IRA/401k/Roth — the bullion guard was reversed (design 61
+ *     §12 OQ4a, 2026-07-29) because a gold ETF is holdable there and taxed the same.
  *
  * Legs sum to zero (Σ delta = 0), so gross account value is conserved; the realized
  * CGT is the only (deferred) cost. Balance is re-synced to Σ marketValue. Holdings are
@@ -112,9 +111,9 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       if (matching.length > 0) {
         holdings = _addProRata(holdings, allocation, buyAmt);
       } else {
-        // Establish a new sleeve. Backstop the gold guard (§OQ4a) — normally the leg
-        // reducer already dropped GOLD from a guarded account's target.
-        if (allocation === ALLOCATION.GOLD && !roleCanHoldGold(role)) continue;
+        // Establish a new sleeve. The gold backstop that used to sit here is gone with
+        // the bullion guard (design 61 §12 OQ4a, reversed 2026-07-29) — a GOLD sleeve
+        // may now be established in any account, including a US IRA/401k/Roth.
         holdings = [...holdings, _newSleeve({ allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey })];
       }
     }

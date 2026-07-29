@@ -71,23 +71,39 @@ test('LOC-3: bonds prefer tax-deferred; equity prefers Roth/taxable; gold shelte
   assert.ok(near(plan.get('rothAccount')[ALLOCATION.EQUITY] ?? 0, 100000), 'roth all equity');
 });
 
-test('LOC-4: gold NEVER lands in a US IRA/401k/Roth (bullion ban)', () => {
+test('LOC-4: gold MAY land in a US IRA/401k/Roth (bullion ban reversed)', () => {
+  // Inverse of the original LOC-4. Design 61 §12 OQ4a, reversed 2026-07-29: §408(m)
+  // restricts *physical* bullion, not a gold ETF, which every IRA/401k/Roth can hold.
+  // A gold target larger than the gold-preferred shelters must now spill into them
+  // rather than be capped away.
   const plan = planLocatedTargets({ accounts: ACCOUNTS,
     portfolioTarget: { EQUITY: 0.2, BOND: 0.2, CASH: 0.1, GOLD: 0.5 } });   // heavy gold
-  assert.strictEqual(plan.get('iraAccount')[ALLOCATION.GOLD] ?? 0, 0);
-  assert.strictEqual(plan.get('rothAccount')[ALLOCATION.GOLD] ?? 0, 0);
+
+  const book     = ACCOUNTS.reduce((s, a) => s + a.total, 0);
+  const placed   = ACCOUNTS.reduce((s, a) => s + (plan.get(a.stateKey)[ALLOCATION.GOLD] ?? 0), 0);
+  assert.ok(near(placed, 0.5 * book),
+    `the full 50% gold target is placed, not capped: ${placed} vs ${0.5 * book}`);
+
+  const inUsRetirement = ['iraAccount', 'rothAccount']
+    .reduce((s, k) => s + (plan.get(k)[ALLOCATION.GOLD] ?? 0), 0);
+  assert.ok(inUsRetirement > 0, 'gold is no longer excluded from US retirement accounts');
+  for (const a of ACCOUNTS) assert.ok(near(sumComp(plan.get(a.stateKey)), a.total), 'still conserved');
 });
 
-test('LOC-5: gold above the eligible shelter capacity is capped + redistributed (Σ conserved)', () => {
-  // Only super (100k) is gold-eligible among these two; a 60% gold target ($120k) exceeds it.
+test('LOC-5: the gold capacity cap is now INERT — every account is gold-eligible', () => {
+  // Was: "gold above the eligible shelter capacity is capped + redistributed". With the
+  // bullion guard reversed, `goldCap` equals the whole book, so a normalized target can
+  // never exceed it and the redistribution branch in allocation-location.js is
+  // unreachable. It is retained as the seam for a future eligibility rule (see
+  // roleCanHoldGold); this test pins that it currently does nothing.
   const accts = [
-    { stateKey: 'iraAccount',   role: ACCOUNT_ROLES.IRA,   total: 100000 },  // gold-ineligible
-    { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER, total: 100000 },  // gold-eligible
+    { stateKey: 'iraAccount',   role: ACCOUNT_ROLES.IRA,   total: 100000 },
+    { stateKey: 'superAccount', role: ACCOUNT_ROLES.SUPER, total: 100000 },
   ];
   const plan = planLocatedTargets({ accounts: accts, portfolioTarget: { EQUITY: 0.2, BOND: 0.2, GOLD: 0.6 } });
+
   const goldTotal = accts.reduce((s, a) => s + (plan.get(a.stateKey)[ALLOCATION.GOLD] ?? 0), 0);
-  assert.ok(goldTotal <= 100000 + 0.5, `gold capped at super capacity: ${goldTotal}`);
-  assert.strictEqual(plan.get('iraAccount')[ALLOCATION.GOLD] ?? 0, 0, 'no gold in the IRA');
+  assert.ok(near(goldTotal, 120000), `the full 60% ($120k) is placed, uncapped: ${goldTotal}`);
   for (const a of accts) assert.ok(near(sumComp(plan.get(a.stateKey)), a.total), 'still conserved');
 });
 
