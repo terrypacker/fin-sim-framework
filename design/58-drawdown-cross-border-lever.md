@@ -1,18 +1,22 @@
 # 58 — Drawdown control levers: cross-border mode, orderable priority, and pooled-tier draws
 
-**Status**: **PROPOSED** (2026-07-12). No code yet. Scope: turn the account
+**Status**: **COMPLETE — ALL PHASES IMPLEMENTED** (2026-07-12). Levers A, B and C plus
+all three MPC online controls (`DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`,
+`DRAWDOWN_WEIGHTS`) are done; see §10/§11 for the per-phase record. Originally
+**PROPOSED** (2026-07-12) — the header was not updated as the phases landed and still
+read "No code yet" until 2026-07-29. Scope: turn the account
 drawdown decision into a set of **explicit, composable, optimizable levers**. The
 same decision has three orthogonal dimensions the model conflates today:
 
 1. **Where** — which country's accounts are eligible first (`LOCAL_FIRST` vs
-   `GLOBAL`). *(Lever A — ready to build.)*
+   `GLOBAL`). *(Lever A — ✅ implemented.)*
 2. **What order** — the priority accounts drain in, and making that order a
    **search space** the optimizer can tune (not just a pick-from-a-fixed-menu).
-   *(Lever B.)*
+   *(Lever B — ✅ implemented.)*
 3. **How within a tier** — when several accounts share a tier (e.g. two Roths),
    draw them **one-at-a-time, equally, or proportionally by balance** rather than
    always draining one dry first. *(Lever C — the "draw both Roths together" ask;
-   planned, more real-world-accurate.)*
+   ✅ implemented.)*
 
 Levers A/B/C are independent and compose (§5). Phase 1 (Lever A) satisfies the
 immediate "let `CUSTOM` honor my account order across the border" request.
