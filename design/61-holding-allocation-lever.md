@@ -5,9 +5,10 @@
 guard is **REVERSED** (§12 OQ4a — a gold ETF is holdable in an IRA/401k/Roth and taxed
 closely enough to bullion to be the same sleeve); four defects found in use are recorded
 in §12.1 (one fixed, three open) with the questions they raise in §12.2 — **all four of
-which are now resolved** (Q1 accept-the-band, Q2 `targetForRole` removed, Q3 enforce
-total mixes incl. the MPC harvest, Q4 gold prefers a US shelter via preference-list
-ordering only). Q3 and Q4 are decided but **not yet implemented**. Phase 1 = Lever A (searchable static mix); Phase 2 = Lever C
+which are now resolved AND implemented** (Q1 accept-the-band — no code needed; Q2
+`targetForRole` removed; Q3 total-mix validation incl. the MPC harvest path; Q4
+residency-aware gold location). Q4's *specified* ordering was refuted by measurement and
+the shipped lists differ from it — see §12.2 Q4 for the numbers and the corrected rule. Phase 1 = Lever A (searchable static mix); Phase 2 = Lever C
 (taxable-aware rebalance + buy/establish-sleeve primitive + US-IRA gold guard + split drift
 bands); Phase 3 = Lever B (time variation — STATIC/GLIDEPATH/REGIME_CONDITIONED); Phase 4 =
 Lever D (jurisdiction-aware location — LOCATED default / PER_ACCOUNT); Phase 5 = MPC online
@@ -455,6 +456,12 @@ hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
   tax-efficient placement). AU super remains gold-eligible, unchanged.
 - **Dust (§12.1 D1):** liquidating a sleeve leaves no remnant; the sweep conserves gross
   value and, in isolation, cost basis; a cent-valued lot carrying real basis is left alone.
+- **Total mixes (§12.2 Q3):** an authored mix missing a class, or summing to ≠ 1, is
+  rejected at compile with the offending anchor/tag named; a narrowed stick-breaking search
+  still emits all four classes, so a harvested glidepath is always valid.
+- **Gold location (§12.2 Q4):** gold's preferred home follows residency (US ⇒ deferred
+  first, AU ⇒ super first, Roth last in both); an explicit `allocationLocationPolicy`
+  override still wins per class; every account composition still sums to its own total.
 - **Serializer round-trip** for every new param.
 
 ---
@@ -854,6 +861,12 @@ so it prevents dust being *created* but cannot clean a saved state that already 
 some. Only reachable if D2 is fixed, or by sweeping somewhere that always runs (the
 holdings reducers / `_syncBalance`), which is a much more golden-sensitive location.
 
+**D4 — ✅ CLOSED 2026-07-29 by Q3's totality enforcement (authoring, not engine): a baked
+SCHEDULE freezes its asset classes.** A partial anchor is now rejected at compile with the
+anchor named, so a class added after a bake produces a loud error instead of a silent
+liquidation; and the harvest totalizes its own output so it cannot emit one. Original
+statement follows.
+
 **D4 — OPEN (authoring, not engine): a baked SCHEDULE freezes its asset classes.** The
 MPC glidepath harvest derives its class list per epoch from what the accounts held *at
 harvest time* (`cockpit-controller.js` ~L919, via `presentAllocations`). That is correct
@@ -928,9 +941,20 @@ semantic change needing its own decision).
    - Enforcement must sit at **every** target producer: glidepath anchors, regime maps,
      stick-breaking from `allocWeight::*`, and the LOCATED per-account composition.
 
-   ✅ **RESOLVED 2026-07-29 — enforce totality; breaking existing configs is acceptable
-   (owner: only one in use, will be fixed by hand). The MPC tooling must not be able to
-   emit an invalid glidepath — that is part of the deliverable, not a follow-up.**
+   ✅ **RESOLVED + IMPLEMENTED 2026-07-29 — enforce totality; breaking existing configs is
+   acceptable (owner: only one in use, will be fixed by hand). The MPC tooling must not be
+   able to emit an invalid glidepath — that is part of the deliverable, not a follow-up.**
+
+   **Shipped:** `totalizeMix` / `isTotalMix` / `assertTotalMix` in `holdings/allocation.js`;
+   `assertAuthoredMixes` in the rebalance reducer, called from the behavioral registry at
+   compile; `synthesizeTargetAllocation` and `_fractionsOf` now totalize their derived
+   output. 17 tests in `allocation-mix-totality.test.mjs` plus ALLOC-7b/c/d. It caught the
+   live scenario immediately and by name:
+
+   ```text
+   allocationGlidepath[0] (age 47): weights must sum to 1, got 1.250000.
+   They are NOT rescaled for you …  Got: {"EQUITY":0.75,"BOND":0.25,"CASH":0,"GOLD":0.25}
+   ```
 
    **Spec.**
    1. **Validate, do not normalize.** A target mix is valid iff it carries an explicit
@@ -987,18 +1011,48 @@ semantic change needing its own decision).
    boundary even in principle. Cross-account movement remains exclusively the business of
    rollovers, contributions and `INTL_TRANSFER`.
 
-   So the change is a **preference-list edit only**: add the US tax-advantaged roles to
-   `DEFAULT_LOCATION_POLICY[GOLD]`, ordered by residency via the `residency` argument
-   `planLocatedTargets` already threads — US-resident: `[IRA, K401, ROTH, SUPER,
-   US_STOCK, AU_STOCK]` (shelter ahead of taxable to dodge the 28% collectibles rate);
-   AU-resident: `[SUPER, AU_STOCK, US_STOCK, IRA, K401, ROTH]` (super best, taxable
-   fine). The tax rationale is §4-D's, unchanged; only the guard that made it
-   unexpressible is gone.
+   So the change is a **preference-list edit only**: `GOLD_PREFERENCE_BY_RESIDENCY` +
+   `resolveLocationPolicy(residency, override)`, wired through the `residency` argument
+   `planLocatedTargets` already threaded and ignored. A caller's `allocationLocationPolicy`
+   override still wins per class (LOC-3c).
 
-   Caveat to size before building: a *taxable* account selling gold to hand the exposure
-   to a shelter **realizes CGT at 28% now** to save 28% later. It is only a win when the
-   remaining holding period is long enough, so the drift band (Q1) is doing real work
-   here — this should not be forced on the move date (§4-D's lazy relocation, OQ4b).
+   ⚠ **IMPLEMENTED 2026-07-29 — but the ORDERING SPECIFIED ABOVE IS WRONG, and the
+   measurement is what says so.** The prescription "shelter gold ahead of taxable because a
+   taxable gold sale pays 28%" optimises the wrong quantity. Asset location depends on
+   **growth × tax treatment**, not the rate alone: a shelter is a finite resource and should
+   hold the asset that benefits most. Gold grows at 5% against equity's 10% in the reference
+   plan, so sheltering gold *evicts* a 10% asset and buys a rate saving on a 5% one. Over 44
+   years the displaced compounding dominates. Measured, terminal net worth, all else equal:
+
+   | gold preference order | terminal NW | vs best |
+   |---|---|---|
+   | `IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH` | **$30.45m** | best |
+   | `US_STOCK, AU_STOCK, SUPER, IRA, K401, ROTH` | $28.42m | −$2.03m |
+   | `SUPER, AU_STOCK, US_STOCK` (pre-Q4) | $28.21m | −$2.24m |
+   | `IRA, K401, ROTH, SUPER, …` (**as specified above**) | $25.20m | −$5.25m |
+
+   The two rules that fall out, and that the shipped lists follow:
+   1. **Tax-DEFERRED first (IRA/401k).** Deferred growth converts to *ordinary income* on
+      withdrawal — the worst treatment for a high-growth asset — so a deferred account is
+      exactly where a low-growth, badly-taxed sleeve belongs. This is the same logic that
+      already heads BOND's list with IRA/K401; gold is bonds-like here, so its policy now
+      mirrors bonds'.
+   2. **Roth LAST, always.** The Roth is the most valuable shelter (tax-free forever) and
+      must hold the highest-growth asset. Ranking it third is most of that −$5.25m.
+
+   Shipped: US `[IRA, K401, US_STOCK, AU_STOCK, SUPER, ROTH]`, AU `[SUPER, IRA, K401,
+   AU_STOCK, US_STOCK, ROTH]`. Net effect on the reference plan vs pre-Q4: **+$1.93m
+   terminal (+6.9%)**, and the residency flip is visible in the cube — 2027 (US resident)
+   gold sits in the Traditional IRAs and Roths; by 2035 (post-2031 move) it has been walked
+   to AU super, lazily via the drift band rather than forced on the move date (§OQ4b).
+
+   **Still soft:** the AU arm is far less measured than the US arm — the reference plan
+   starts US and moves in 2031, so US years dominate the terminal figure. Re-measure with an
+   AU-resident-from-start plan before treating the AU ordering as settled.
+
+   Caveat that stands: a *taxable* account selling gold to hand the exposure to a shelter
+   realizes 28% **now** to save later, so it only pays over a long enough remaining horizon.
+   The drift band (Q1) is doing real work throttling that.
 ---
 
 ## 13. Relationship to design 58

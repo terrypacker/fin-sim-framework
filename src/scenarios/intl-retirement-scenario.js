@@ -36,7 +36,7 @@ import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD, AUD }            from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 import { Holding }             from '../finance/holdings/holding.js';
-import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { ALLOCATION, totalizeMix } from '../finance/holdings/allocation.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES,
          SLEEVE_WEIGHT_MODE, sleeveWeightKey } from '../finance/holdings/holdings-selection.js';
 import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
@@ -420,7 +420,14 @@ export function synthesizeTargetAllocation(parameters, presentClasses = null) {
     remaining  = +(remaining - shares[cls]).toFixed(6);
   }
   shares[classes[classes.length - 1]] = +Math.max(0, remaining).toFixed(6);
-  return shares;
+  // Totalize the OUTPUT while leaving the SEARCH narrowed (design 61 §12.2 Q3).
+  // `presentClasses` deliberately restricts stick-breaking to the classes the plan
+  // actually holds — searching a dimension the plan cannot use is wasted. But the mix
+  // that leaves here is consumed as a target, and a partial target is indistinguishable
+  // from a deliberate zero. This is what makes an MPC-harvested glidepath anchor valid
+  // and re-runnable: the harvest keeps its narrow search space and still emits every
+  // allocation explicitly.
+  return totalizeMix(shares);
 }
 
 /**

@@ -10,9 +10,9 @@
 
 import { Reducer, PRIORITY }   from '../../simulation-framework/reducers.js';
 import { REGIME_TAG }          from '../economic-regimes/regime-tag.js';
-import { ALLOCATION }          from '../holdings/allocation.js';
+import { ALLOCATION, totalizeMix, assertTotalMix } from '../holdings/allocation.js';
 import { ACCOUNT_ROLES }       from '../state/account-roles.js';
-import { planLocatedTargets, DEFAULT_LOCATION_POLICY } from './allocation-location.js';
+import { planLocatedTargets } from './allocation-location.js';
 
 const ACTION_KEY = 'rebalance_to_target';
 
@@ -108,6 +108,47 @@ export const REGIME_TARGET_PRIORITY = [
   REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER,
 ];
 
+/**
+ * Validate every AUTHORED target mix a scenario carries, at compile time.
+ *
+ * This is the enforcement point for design 61 §12.2 Q3. It deliberately sits at the
+ * boundary where scenario *parameters* become reducer configuration — not inside the
+ * reducer's own constructor — so that the authored surface is strict while the internal
+ * API stays usable from tests and tooling with a narrower mix.
+ *
+ * Throws on the first problem, naming the exact anchor or regime tag, because the error
+ * message is the migration guide: there is no back-compat shim for a partial mix.
+ *
+ * @param {object} p - the resolved scenario parameter bag
+ */
+export function assertAuthoredMixes(p) {
+  if (p?.rebalanceTargetAllocation != null) {
+    assertTotalMix(p.rebalanceTargetAllocation, 'rebalanceTargetAllocation');
+  }
+
+  if (Array.isArray(p?.allocationGlidepath)) {
+    p.allocationGlidepath.forEach((anchor, i) => {
+      if (!anchor || typeof anchor !== 'object') {
+        throw new Error(`allocationGlidepath[${i}]: expected { age, weights }, got ${JSON.stringify(anchor)}.`);
+      }
+      if (!Number.isFinite(Number(anchor.age))) {
+        throw new Error(`allocationGlidepath[${i}]: "age" must be a number, got ${JSON.stringify(anchor.age)}.`);
+      }
+      assertTotalMix(anchor.weights, `allocationGlidepath[${i}] (age ${anchor.age})`);
+    });
+  }
+
+  if (p?.allocationRegimeTargets != null) {
+    const map = p.allocationRegimeTargets;
+    if (typeof map !== 'object' || Array.isArray(map)) {
+      throw new Error(`allocationRegimeTargets: expected a { regimeTag: mix } map, got ${typeof map}.`);
+    }
+    for (const [tag, mix] of Object.entries(map)) {
+      assertTotalMix(mix, `allocationRegimeTargets["${tag}"]`);
+    }
+  }
+}
+
 /** Whole years of age as of asOfMs (matches the RMD / spending-band handlers). */
 export function ageAsOf(birthDate, asOfMs) {
   if (!birthDate || asOfMs == null) return null;
@@ -120,7 +161,16 @@ export function ageAsOf(birthDate, asOfMs) {
   return hadBirthday ? years : years - 1;
 }
 
-/** Normalize a weight map to sum to 1 (defensive; a degenerate all-zero map is returned as-is). */
+/**
+ * Normalize a weight map to sum to 1.
+ *
+ * Kept as a post-validation guard only. Authored mixes are validated by
+ * `assertAuthoredMixes` (called at compile, from the behavioral registry), which REJECTS
+ * a non-unit sum rather than rescaling it — a silent rescale is exactly what turned an
+ * authored 0.75/0.25/0/0.25 into an executed 0.6/0.2/0/0.2 with no signal (design 61
+ * §12.2 Q3). On validated input this is a no-op; it still earns its keep for the
+ * *blended* glidepath result, where two valid anchors can leave a 6-dp rounding residue.
+ */
 function _normalize(weights) {
   const total = Object.values(weights).reduce((s, v) => s + Math.max(0, v ?? 0), 0);
   if (total <= 0) return { ...weights };
@@ -276,7 +326,11 @@ export class RebalanceToTargetReducer extends Reducer {
     const locatedPlan = (this.locationMode === ALLOCATION_LOCATION.LOCATED)
       ? planLocatedTargets({
           accounts: present, portfolioTarget: scheduledTarget,
-          policy: this.locationPolicy ?? DEFAULT_LOCATION_POLICY,
+          // Pass the override through as-is (possibly null): planLocatedTargets merges it
+          // over the residency-resolved default, which is what selects gold's preferred
+          // home (design 61 §12.2 Q4). Passing DEFAULT_LOCATION_POLICY here instead would
+          // pin the residency-agnostic gold list and make the whole lever inert.
+          policy: this.locationPolicy ?? null,
           residency: _primaryResidency(state),
         })
       : null;
@@ -354,10 +408,15 @@ export class RebalanceToTargetReducer extends Reducer {
 
 /** Convert a located `{ class: dollars }` composition to fractions of `total`. */
 function _fractionsOf(composition, total) {
+  if (!composition || total <= 0) return {};
   const out = {};
-  if (!composition || total <= 0) return out;
   for (const [cls, dollars] of Object.entries(composition)) out[cls] = dollars / total;
-  return out;
+  // Totalize (design 61 §12.2 Q3). A located composition names only the classes placed
+  // in THIS account, so a shelter holding pure equity used to yield `{EQUITY: 1}` — and
+  // `needsRebalance` iterates the target's own keys, so the classes located elsewhere
+  // were never drift-checked here at all. Backfilling explicit zeros is both the correct
+  // meaning ("this account should hold none of that") and what makes the check total.
+  return totalizeMix(out);
 }
 
 /** The primary person's tax residency ('US' | 'AU'), for the Lever-D gold policy. */

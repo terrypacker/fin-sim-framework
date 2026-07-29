@@ -124,9 +124,55 @@ test('ALLOC-6: OPTIMIZED drives the rebalancer target from the synthesized conti
 });
 
 test('ALLOC-7: STATIC falls back to the Object rebalanceTargetAllocation param', () => {
-  const obj = { EQUITY: 0.5, BOND: 0.5 };
+  // Must be a TOTAL mix now (design 61 §12.2 Q3) — every allocation named explicitly.
+  const obj = { EQUITY: 0.5, BOND: 0.5, CASH: 0, GOLD: 0 };
   const target = targetFromReducers({ allocationStrategy: 'STATIC', rebalanceTargetAllocation: obj });
   assert.deepStrictEqual(target, obj);
+});
+
+test('ALLOC-7b: an authored mix that is PARTIAL or does not sum to 1 is rejected at compile', () => {
+  // Design 61 §12.2 Q3. A partial mix is indistinguishable from deliberate zeros, and a
+  // silently rescaled sum is how an authored 0.75/0.25/0/0.25 became an executed
+  // 0.6/0.2/0/0.2. Both are now loud errors at the param boundary, with no shim.
+  assert.throws(
+    () => targetFromReducers({ allocationStrategy: 'STATIC', rebalanceTargetAllocation: { EQUITY: 0.6, BOND: 0.4 } }),
+    /must name EVERY allocation explicitly — missing CASH, GOLD/);
+
+  assert.throws(
+    () => targetFromReducers({ allocationStrategy: 'STATIC',
+      rebalanceTargetAllocation: { EQUITY: 0.75, BOND: 0.25, CASH: 0, GOLD: 0.25 } }),
+    /must sum to 1, got 1\.250000/);
+
+  assert.throws(
+    () => targetFromReducers({ allocationStrategy: 'STATIC',
+      rebalanceTargetAllocation: { EQUITY: 1, BOND: 0, CASH: 0, GOLD: 0, SILVER: 0 } }),
+    /unknown allocation "SILVER"/);
+});
+
+test('ALLOC-7c: a glidepath anchor is validated per anchor, and named in the error', () => {
+  // The real-world failure: a 39-anchor glidepath baked before GOLD existed, where one
+  // anchor silently targeted gold at 0% and the next rebalance liquidated it.
+  assert.throws(
+    () => targetFromReducers({
+      allocationStrategy: 'STATIC',
+      allocationSchedule: 'GLIDEPATH',
+      allocationGlidepath: [
+        { age: 47, weights: { EQUITY: 0.76, BOND: 0.12, CASH: 0, GOLD: 0.12 } },   // fine
+        { age: 53, weights: { EQUITY: 1,    BOND: 0,    CASH: 0 } },               // missing GOLD
+      ],
+    }),
+    /allocationGlidepath\[1\] \(age 53\).*missing GOLD/s);
+});
+
+test('ALLOC-7d: a regime-target map is validated per tag', () => {
+  assert.throws(
+    () => targetFromReducers({
+      allocationStrategy: 'STATIC',
+      allocationSchedule: 'REGIME_CONDITIONED',
+      allocationRegimeTargets: { NORMAL: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 },
+                                 ECONOMIC_STRESS: { EQUITY: 0.3, BOND: 0.3, CASH: 0.2 } },
+    }),
+    /allocationRegimeTargets\["ECONOMIC_STRESS"\].*missing GOLD/s);
 });
 
 test('ALLOC-8: tax-advantaged AND taxable accounts are rebalanced; cash excluded (Phase 2)', () => {
