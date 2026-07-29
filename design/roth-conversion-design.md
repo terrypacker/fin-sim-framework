@@ -1,6 +1,6 @@
 # Roth Conversion: Design & TODO
 
-**Status**: Design — decisions resolved, ready to implement  
+**Status**: Design — decisions resolved, implemented
 **Created**: 2026-05-16  
 **Related Requirements**: EVT-42, EVT-43, EVT-44 (downstream rollover events — already implemented)
 
