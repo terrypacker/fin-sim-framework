@@ -91,6 +91,9 @@ export class SimulationHorizonError extends Error {
 
 const _isoDay = d => new Date(d).toISOString().slice(0, 10);
 
+/** 31 December of `year`, UTC — the instant a year-boundary sample is stamped at. */
+const _yearEnd = year => new Date(Date.UTC(year, 11, 31));
+
 /**
  * Telemetry levels (design 78 §4.3).
  *
@@ -195,11 +198,32 @@ export class Simulation {
     this.silent = opts.silent ?? level.silent; // when true: skip bus, clones, diffs
     this.journal = new Journal({ enabled: opts.enableJournal ?? level.journal });
 
-    // Optional (state, date) => record, called at the history-snapshot cadence.
-    // Lets a batch caller collect a time series without paying for full-state
-    // history snapshots — see design 78 §4.5 and Simulation#samples.
-    this._sampler = opts.sampler ?? null;
-    this._samples = [];
+    // Optional (state, date) => record. Lets a caller collect a time series
+    // without paying for full-state history snapshots — see design 78 §4.5 and
+    // Simulation#samples.
+    //
+    // Two cadences (design 82 §4/§5.1b), because the right one depends on what is
+    // being sampled:
+    //
+    //   'interval'       every `snapshotInterval` events — the original, and the
+    //                    default so design 78's MC series stays bit-identical.
+    //   'year-boundary'  once per calendar year, at the boundary: the state after
+    //                    the LAST event dated in year Y. Identical to what
+    //                    stepTo(31 Dec Y) produces, since events are the only
+    //                    thing that changes state.
+    //
+    // The distinction matters for anything the year-end sequence itself moves. A
+    // net-worth line barely notices where in December it was read; an ASSET MIX is
+    // precisely sensitive to whether the year-end rebalance has fired yet, so an
+    // event-count cadence would make the rebalancer's effect appear and disappear
+    // with event volume.
+    this._sampler        = opts.sampler ?? null;
+    this._samplerCadence = opts.samplerCadence ?? 'interval';
+    this._samples        = [];
+    // year → index in _samples, for the year-boundary cadence's upsert (see
+    // _recordSample). Unused by 'interval'.
+    this._sampleYearIndex   = new Map();
+    this._eventsSinceSample = 0;
 
     this.nextEventInstanceId = 0;
 
@@ -256,8 +280,89 @@ export class Simulation {
   /**
    * Records produced by the optional `sampler` opt, in run order. Empty when no
    * sampler was configured. See design 78 §4.5.
+   *
+   * Under the 'year-boundary' cadence there is exactly one record per calendar
+   * year, in ascending year order (see _recordSample).
    */
   get samples() { return this._samples; }
+
+  /**
+   * Invoke the sampler and file the record.
+   *
+   * 'interval' appends. 'year-boundary' UPSERTS on the stamp's year, which is what
+   * makes the cadence safe under playback: scrubbing to mid-2040 records a partial
+   * 2040 sample, and stepping on through 2041 replaces it with the completed one.
+   * Without the upsert the partial reading would win permanently, which is the
+   * quiet kind of wrong — a chart with one bad point and no way to see it.
+   *
+   * @param {Date} date - the instant this record is stamped "as of"
+   * @private
+   */
+  _recordSample(date) {
+    if (!this._sampler) return;
+    const record = this._sampler(this.state, date);
+    if (this._samplerCadence !== 'year-boundary') { this._samples.push(record); return; }
+
+    const year = new Date(date).getUTCFullYear();
+    const at   = this._sampleYearIndex.get(year);
+    if (at === undefined) {
+      this._sampleYearIndex.set(year, this._samples.length);
+      this._samples.push(record);
+    } else {
+      this._samples[at] = record;
+    }
+  }
+
+  /**
+   * Year-boundary cadence: about to execute an event dated in a later year than
+   * the clock currently reads, so every year from the current one up to that
+   * event's year is now COMPLETE — sample them before the event lands.
+   *
+   * Each sample is stamped at **the last year-end instant at which this state is
+   * still unchanged** (31 December of the completed year). A run with a gap year —
+   * events jumping 2040 → 2042 — emits a 2041 sample carrying the 2040 state,
+   * because that IS the state throughout 2041; skipping it would punch a hole in
+   * an x-axis whose whole purpose is being comparable across runs.
+   *
+   * @param {Date} nextEventDate
+   * @private
+   */
+  _sampleCompletedYearsBefore(nextEventDate) {
+    if (!this._sampler || this._samplerCadence !== 'year-boundary') return;
+    if (!this.currentDate) return;
+    const from = new Date(this.currentDate).getUTCFullYear();
+    const to   = new Date(nextEventDate).getUTCFullYear();
+    for (let year = from; year < to; year++) this._recordSample(_yearEnd(year));
+  }
+
+  /**
+   * Year-boundary cadence: record where the clock stopped, so the terminal year is
+   * present. Without this the most-quoted point on the chart — the end of the plan —
+   * is the one that is missing, because no later event ever arrives to trigger its
+   * boundary.
+   *
+   * The stamp follows the same rule as a boundary sample: the last instant at which
+   * this state is still current. With the queue drained that is the year's end (or
+   * the horizon, whichever comes first); with events still pending it is the clock
+   * itself, so a mid-year playback sample is visibly not a year-end reading.
+   *
+   * @private
+   */
+  _flushFinalSample() {
+    if (!this._sampler || this._samplerCadence !== 'year-boundary') return;
+    // Nothing ran, so any record would duplicate one already filed at this instant.
+    if (this._eventsSinceSample === 0) return;
+    this._eventsSinceSample = 0;
+    if (!this.currentDate) return;
+
+    let stamp = new Date(this.currentDate);
+    if (this.queue.size() === 0) {
+      stamp = _yearEnd(stamp.getUTCFullYear());
+      if (this.simEnd && stamp > this.simEnd) stamp = new Date(this.simEnd);
+      if (stamp < this.currentDate) stamp = new Date(this.currentDate);
+    }
+    this._recordSample(stamp);
+  }
 
   unschedule(type) {
     return this.queue.removeAllByType(type);
@@ -561,13 +666,19 @@ export class Simulation {
 
       // snapshot logic
       this.history.eventCounter++;
-      // Sampler runs at the same cadence and the same point as a history
-      // snapshot, so a series built from samples has identical provenance to one
-      // built from snapshots (design 78 §4.5) — but it records a few numbers
-      // instead of deep-cloning the whole state. It receives LIVE state and must
-      // not retain references into it.
-      if (this._sampler && this.history.eventCounter % this.history.snapshotInterval === 0) {
-        this._samples.push(this._sampler(this.state, this.currentDate));
+      this._eventsSinceSample++;
+      // 'interval' cadence: the sampler runs at the same cadence and the same
+      // point as a history snapshot, so a series built from samples has identical
+      // provenance to one built from snapshots (design 78 §4.5) — but it records a
+      // few numbers instead of deep-cloning the whole state. It receives LIVE
+      // state and must not retain references into it. ('year-boundary' fires from
+      // stepTo instead, where the next event's date is visible.)
+      if (
+        this._sampler &&
+        this._samplerCadence !== 'year-boundary' &&
+        this.history.eventCounter % this.history.snapshotInterval === 0
+      ) {
+        this._recordSample(this.currentDate);
       }
       if (
         this.history.enableSnapshots &&
@@ -1138,6 +1249,11 @@ export class Simulation {
       const next = this.queue.peek();
       if (next.date > end) break;
 
+      // Year-boundary sampling (design 82 §4): this event belongs to a later year
+      // than the clock reads, so the intervening years are complete — sample them
+      // BEFORE it lands, while the state is still the state they ended on.
+      this._sampleCompletedYearsBefore(next.date);
+
       // Take the initial snapshot before the first event fires so that
       // rewindToStart() + stepTo() replays ALL events (queue still contains this event).
       if (this.history.enableSnapshots && this.history.snapshots.length === 0) {
@@ -1196,6 +1312,10 @@ export class Simulation {
     }
 
     this.currentDate = end;
+    // Year-boundary sampling: record where the clock stopped. After the assignment
+    // above, so a mid-year scrub is stamped at the instant the caller asked for
+    // rather than at whatever event happened to be last.
+    this._flushFinalSample();
   }
 
   /**

@@ -349,7 +349,6 @@ export class RebalanceToTargetReducer extends Reducer {
       const taxable = TAXABLE_ROLES.has(role);
       const band    = taxable ? this.driftBandTaxable : this.driftBandSheltered;
       // LOCATED ⇒ this account's assigned composition (as fractions of its total);
-      // PER_ACCOUNT ⇒ the uniform portfolio mix with the per-role gold guard.
       // PER_ACCOUNT drives every account to the uniform portfolio mix. There is no
       // longer any role-based restriction to apply here — `targetForRole` existed only
       // to strip GOLD from US tax-advantaged accounts and was removed with that guard
@@ -357,7 +356,12 @@ export class RebalanceToTargetReducer extends Reducer {
       const target = locatedPlan
         ? _fractionsOf(locatedPlan.get(stateKey), total)
         : scheduledTarget;
-      stampPatch[stateKey] = { ...account, targetComposition: target };
+      // `targetBand` rides along for design 82 §7's target overlay: it is the band THIS
+      // reducer just drift-checked against, so a report can mark a breach exactly rather
+      // than re-deriving it from params + a role classification that could drift out of
+      // step with `TAXABLE_ROLES` here. One number per account per period, alongside the
+      // composition that is already stamped.
+      stampPatch[stateKey] = { ...account, targetComposition: target, targetBand: band };
 
       // Actual allocation fractions.
       const actual = {};
