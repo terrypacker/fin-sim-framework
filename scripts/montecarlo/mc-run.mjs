@@ -38,6 +38,12 @@
  *   --no-recentre       skip the check that MC centers match the scenario. The runner
  *                       re-centres itself now, so this only silences the verification.
  *
+ *   --mix               also record the per-year ASSET MIX on every path (design 82 §8),
+ *                       so `mc-report.mjs` can report mix bands, threshold probabilities
+ *                       and the mix conditioned on failure. Off by default: it builds an
+ *                       allocation cube per sampled year, and an ordinary solvency run
+ *                       has no reader for it. Adds roughly a megabyte per arm at n=400.
+ *
  * ─── choosing a risk model ───────────────────────────────────────────────────
  *
  * Default (neither --paths nor --shock): only the LONG-RUN AVERAGE return is
@@ -96,6 +102,7 @@ const paths = has('--paths');
 const propertyPaths = has('--property-paths');
 const shock = has('--shock');
 const recentre = !has('--no-recentre');
+const mix = has('--mix');
 
 const spec = JSON.parse(readFileSync(specFile, 'utf8'));
 const only = flag('--only')?.split(',').map(s => s.trim());
@@ -114,7 +121,7 @@ const stochastic = (paths || propertyPaths)
   : null;
 
 const riskModel = {
-  paths, propertyPaths, shock, vol: paths ? vol : null, drift: paths ? drift : null, recentre,
+  paths, propertyPaths, shock, vol: paths ? vol : null, drift: paths ? drift : null, recentre, mix,
 };
 
 console.log(`\n${describeSource(base)}`);
@@ -130,8 +137,29 @@ function describeRisk() {
   parts.push(paths ? `stochastic equity paths (vol ${vol}, drift ${drift})` : 'constant sampled return');
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push('manufactured crash');
+  if (mix) parts.push('recording asset mix');
   if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
   return parts.join(' + ');
+}
+
+/**
+ * Serialize an arm, keeping the mix matrix COMPACT inside an otherwise readable file.
+ *
+ * `JSON.stringify(x, null, 1)` puts every array element on its own line, which is what
+ * makes an arm file diffable — and what would turn 144,000 mix numbers into 144,000
+ * lines and several megabytes of indentation. The matrix goes in through a sentinel so
+ * the surrounding record keeps its formatting and the bulk arrays stay on one line.
+ *
+ * It stays INSIDE the arm file rather than beside it because `mc-report.mjs` globs the
+ * directory for `*.json` and treats each hit as an arm; a sibling `<arm>.mix.json`
+ * would silently join the next report as a nameless extra arm.
+ */
+function serializeArm(record, mixSeries) {
+  const SENTINEL = '@@MIX_SERIES@@';
+  const json = JSON.stringify({ ...record, mixSeries: mixSeries ? SENTINEL : null }, null, 1);
+  return mixSeries
+    ? json.replace(`"${SENTINEL}"`, JSON.stringify(mixSeries))
+    : json;
 }
 
 for (const [order, key] of armKeys.entries()) {
@@ -140,17 +168,17 @@ for (const [order, key] of armKeys.entries()) {
 
   const cfg = buildVariant(base.cfg, levers);
   const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });
-  const { rows, pathShape, provenance, ms } = await runArm({ cfg, n, mcConfig, shocks });
+  const { rows, mixSeries, pathShape, provenance, ms } = await runArm({ cfg, n, mcConfig, shocks, mix });
 
   const fails = rows.filter(r => r.failed).length;
   // `order` preserves the spec's arm sequence. mc-report reads a DIRECTORY, so
   // without it the report falls back to filesystem order and the default
   // baseline-vs-rest pairing gets an arbitrary baseline — the spec's first arm is
   // the one the author meant as the reference point.
-  writeFileSync(join(outDir, `${key}.json`), JSON.stringify({
+  writeFileSync(join(outDir, `${key}.json`), serializeArm({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
     riskModel, levers, recentred, provenance, pathShape, rows,
-  }, null, 1));
+  }, mixSeries));
 
   const extras = pathShape?.medianHouseCagr != null
     ? `  houseCAGR=${pct(pathShape.medianHouseCagr)} repair p50=$${Math.round((pathShape.medianRepairSpend ?? 0) / 1000)}k`
@@ -163,3 +191,6 @@ for (const [order, key] of armKeys.entries()) {
 
 console.log(`\nraw rows → ${outDir}/`);
 console.log(`report:  node scripts/montecarlo/mc-report.mjs --dir ${outDir}`);
+if (mix) {
+  console.log(`mix:     node scripts/montecarlo/mc-report.mjs --dir ${outDir} --html ${join(outDir, 'mc-mix.html')}`);
+}

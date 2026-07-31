@@ -1,6 +1,6 @@
 # 82 — Allocation over time: reporting the realized asset mix
 
-**Status** (2026-07-29, `wip/allocation-reporting`):
+**Status** (2026-07-30, `wip/allocation-reporting`): **COMPLETE.**
 
 | phase | what | status |
 |---|---|---|
@@ -8,7 +8,7 @@
 | **1b** | shared FX helper + year-boundary sampling (§5.1) | **IMPLEMENTED** (2026-07-29) |
 | **2** | workbench plugin | **IMPLEMENTED** (2026-07-29) — never needed design 81 |
 | **3** | target-vs-realized overlay | **IMPLEMENTED** (2026-07-29) — the payoff |
-| **4** | Monte Carlo mix distribution | **PROPOSED** |
+| **4** | Monte Carlo mix distribution | **IMPLEMENTED** (2026-07-30) |
 
 Scope: answer "what is my asset allocation, and how does it change over the plan" — per
 account, per country, and in total — and make the answer trustworthy enough to act on.
@@ -458,17 +458,32 @@ what is left, which is design 58/65's drawdown re-shaping the plan rather than a
 
 ---
 
-## 8. Phase 4 — the mix as a distribution (Monte Carlo)
+## 8. Phase 4 — the mix as a distribution (Monte Carlo) (IMPLEMENTED)
 
 **A different question, not a different chart.** Phase 1 answers "on the central path, what
 shape does this plan take?" Monte Carlo answers "**how often** does it take that shape?" —
 and for the finding in §9 that is the more decision-relevant of the two. "Ends 90% house" is
 alarming; "ends ≥60% house in 80% of paths" is actionable, and "in 8%" is noise.
 
+```text
+src/finance/allocation-reporting/mix-distribution.js   mixPoint / buildMixSeries /
+                                                       mixBands / thresholdProbabilities /
+                                                       mixByOutcome / outcomeGapAt
+scripts/lib/mix-report-html.mjs                        the chart page
+tests/unit/mix-distribution.test.mjs                   (16)
+tests/unit/mc-mix-sampler.test.mjs                     (4)
+```
+
+```bash
+node scripts/montecarlo/mc-run.mjs --arms <spec.json> --out <dir> -n 400 --paths --mix
+node scripts/montecarlo/mc-report.mjs --dir <dir> --html <dir>/mix.html
+node scripts/montecarlo/mc-report.mjs --dir <dir> --thresholds my-thresholds.json
+```
+
 ### 8.1 What each iteration records
 
 MC already runs with `telemetry: 'off'` plus a `sampler` (design 78 §4.5) — the exact seam
-this needs. Extend the sampler's record with a mix vector:
+this needs. The sampler's record gains a mix vector:
 
 ```text
 { date, netWorthUsd, netLiquidity, houseValueUsd,      // existing
@@ -476,21 +491,38 @@ this needs. Extend the sampler's record with a mix vector:
   mix: { EQUITY: 0.41, BOND: 0.12, … } }               // shares, summing to 1
 ```
 
-built by `buildAllocationCube` → `mixAt` — **the same shared modules the lab page uses**, so
-a share means the same thing in both places. ~10 numbers per year per iteration; still
+built by `buildAllocationCube` → the shared pivot — **the same modules the lab page uses**, so
+a share means the same thing in both places. ~9 numbers per year per iteration; still
 numbers-only, still nothing retained from state.
+
+**The denominator travels with the shares, and that is load-bearing.** A post-ruin sample is
+all zeros, which is indistinguishable from a real mix unless `grossAssetsUsd` is read — so it
+is recorded beside them and every consumer treats `gross <= 0` as *absent* rather than as a
+mix of nothing (§8.2).
 
 Rejected: keeping the **full cube** per iteration (~1.3m rows at n=1000). Maximally flexible
 post-hoc and directly against design 78's lesson; the flexibility is not worth an artifact
 nobody can open. Also rejected: **terminal mix only** — it answers the house question and
 nothing about *when* the shape turns, which is where a lever could act.
 
+**The matrix is per-path and raw in the arm file**, not pre-reduced to bands, because §8.2's
+thresholds have to move without a re-run and the failure split needs the individual paths. It
+is stored positionally — a `classes` header plus `shares[year][class]` — since the alternative
+repeats the class name ~144,000 times at n=400 to say nothing more. `mc-run.mjs` splices it in
+compactly so the surrounding arm record keeps its one-value-per-line formatting: about 1 MB
+per arm at n=400 × 45 years, against ~10 MB if the bulk arrays were indented too. It stays
+*inside* the arm file rather than beside it because `mc-report.mjs` globs the directory for
+`*.json`, and a sibling `<arm>.mix.json` would silently join the next report as a nameless arm.
+
 ### 8.2 What the run reports
 
 1. **Per-year share bands** — p10/p50/p90 of each class's share at each year index.
 2. **Threshold probabilities** — the readouts worth quoting: `P(REAL_ESTATE ≥ 60% of gross
-   assets at simEnd)`, `P(EQUITY share = 0 before age 80)`, `P(illiquid ≥ 75% at any year)`.
+   assets at simEnd)`, `P(EQUITY share = 0 …)`, `P(illiquid ≥ 75% at any year)`.
    Thresholds live in config, not in code comments, so they can move without a re-run.
+   `DEFAULT_MIX_THRESHOLDS` ships five, deliberately **horizon-relative** (offsets, not
+   calendar years) so the same set means the same thing on a 15-year synthetic run and a
+   45-year plan; `--thresholds <file.json>` replaces them wholesale.
 3. **Mix conditioned on failure** — split (1) by `scenarioFailed`. If failing paths are the
    90%-house paths, the shape *is* the failure mechanism and Phase 3's overlay is where to
    intervene. If they are not, the shape is a bequest-composition question, not a solvency
@@ -499,25 +531,92 @@ nothing about *when* the shape turns, which is where a lever could act.
 **Two honest constraints on the drawing.** Per-class percentile bands are **marginal**: the
 p90 `EQUITY` band and the p90 `REAL_ESTATE` band come from different paths, so they do not sum
 to 1. They must be drawn as separate bands per class — **never stacked**, which would assert a
-mix no path ever held. And a path with **zero gross assets** (post-ruin) has no meaningful mix:
-`0/0`. Exclude those from the share percentiles and report the excluded count as its own
-series per year, or "90% house" silently absorbs every ruined path.
+mix no path ever held. (`MIX-8` pins this: five well-formed paths whose own shares each sum to
+1 produce p90s summing to 1.4, so nobody "fixes" it later.) And a path with **zero gross
+assets** (post-ruin) has no meaningful mix: `0/0`. Those are excluded from the share
+percentiles and the excluded count is its own per-year series, or "90% house" silently absorbs
+every ruined path.
 
-### 8.3 The cost this phase must budget for
+Percentiles are **nearest-rank**, so every band value is a share some path actually held. That
+matters more here than smoothness: the chart's whole purpose is to describe mixes that
+occurred, and an interpolated p90 is a mix nobody had.
 
-Switching MC to §5.1(b)'s `'year-boundary'` cadence **moves MC's existing yearly `netWorth`
-series** — today it is the last sample *within* each year, which is mid-something. That is a
-fidelity improvement (design 78 chose the event cadence for cheapness, not for correctness),
-but it re-baselines every MC output, and MC outputs are the decision documents. Accept it
-deliberately, in one commit, with the direction stated: year-end values sit slightly higher
-than mid-year ones as growth compounds, while failure rates should barely move.
+### 8.3 The cost, measured
 
-Per design 78's own finding, the added compute (~45 cube builds per iteration) should be
-small against ~1,800 events — but **measure it before it goes on by default**, and follow the
-standing rule about long MC re-runs: ship the code and the runner change, write the re-run
-instructions into the decision doc, and do not block the phase on a 30–45 minute re-run.
-Report surface is `scripts/montecarlo/mc-report.mjs`; note that it globs the arm directory, so
-adding keys means pruning stale arm JSON or the next report silently mixes generations.
+**Compute: ~1.1%.** n=100 with stochastic paths, three runs each: 8.23/8.26/8.21s without
+`--mix`, 8.27/8.31/8.34s with. Design 78's prediction held — ~45 cube builds are nothing
+against ~1,800 events. It is nonetheless kept **opt-in behind `--mix`**, not defaulted on: the
+cost that actually bites is the ~1 MB per arm of matrix in files that get archived and
+re-reported, and an ordinary solvency run has no reader for it.
+
+**The sampler is inert on the run, exactly.** It is handed *live* state, so a cube build that
+wrote anything back would perturb the simulation it describes and every downstream MC number
+would be measuring the measurement — silently. `MCMIX-1` asserts bit-identical terminal net
+worth, `scenarioFailed` and `outOfFundsDate` with and without the mix sampler. Verified on the
+reference plan too: `$30,938,309.238792058` either way.
+
+**The cadence re-baseline, and a correction.** MC moved to §5.1(b)'s `'year-boundary'` cadence
+— design 78 chose the event cadence for cheapness, and it lands the "yearly" point at whatever
+event happened to be last in the year, which drifts with event volume. A *mix* is precisely
+sensitive to whether the year-end rebalance has fired, so an arbitrary instant was not an
+option, and having MC sample somewhere the lab page and the panel do not would defeat the
+shared-modules argument entirely.
+
+An earlier draft of this section predicted "year-end values sit slightly higher than mid-year
+ones as growth compounds". **Measured, that is backwards on a decumulating plan.** On the
+reference plan the year-boundary series is *lower* in 25 of 45 years and higher in 2 (mean
+−0.10%, worst −1.17% in 2054, terminal +0.03%); on the synthetic default, lower in 7 of 16
+(mean −0.04%). The mechanism is obvious in hindsight: within a year a retired plan is spending
+faster than it compounds, so a mid-year reading sits *above* the year-end one. Magnitudes are
+small either way.
+
+What moves and what does not is sharper than "failure rates should barely move": the sampler
+cannot affect the run, so `scenarioFailed`, `outOfFundsDate`, `cumulativeDeficit` and
+`finalNetWorthUsd` are **unchanged exactly**. Only what is *recorded* moves — `timeSeries`,
+and therefore `pathShape` (CAGR, worst-5yr, max drawdown, the decade split). Any arm JSON
+produced before this change carries a `pathShape` from the old cadence; regenerate rather than
+compare across the boundary.
+
+The switch lives in the runner, so it reaches **every** MC caller — the lab arms, the
+workbench MC panel (`monte-carlo-controller.js`) and the decision-graph runner. That is the
+point of §4's "one policy": a mix quoted in the app and a mix quoted on a page must have been
+read at the same instant. The panel's fan chart is unaffected visually, because
+`extractYearlyTimeSeries` still re-stamps each sample to 1 January of its year — deliberately,
+since the chart groups by exact timestamp and a per-path stamp would split one year into two
+columns of one path each.
+
+### 8.4 Re-running the decision documents
+
+Per the standing rule, the code and the runner change ship without blocking on a 30–45 minute
+re-run. To refresh a decision doc:
+
+```bash
+node scripts/montecarlo/mc-run.mjs --arms <spec.json> --out <dir> -n 400 --paths --mix
+node scripts/montecarlo/mc-report.mjs --dir <dir> --html <dir>/mix.html
+```
+
+Two traps to respect. **Prune the arm directory first** — `mc-report.mjs` globs it, so a
+renamed or dropped arm survives as stale JSON and silently joins the next report. (This fired
+during verification: two arms from an earlier run rejoined a two-arm report as four.) And
+**every arm in a batch must be run with the same flags**, `--mix` included, or the common
+random numbers that make the paired view valid no longer line up.
+
+### 8.5 What the verification run already showed
+
+n=40, synthetic default, stochastic paths, two spend levels — enough to exercise the report,
+not enough to quote:
+
+- At a **5% failure rate**, the failing paths sit at **94.8% `REAL_ESTATE`** at the horizon
+  against **54.8%** for the survivors — a **+40 point gap**, with `EQUITY` at 0% versus 41.7%.
+  At a 22.5% failure rate the gap is +30 points. So on this scenario the answer to §8.2's third
+  question is unambiguous: **the shape is the failure mechanism**, and Phase 3's overlay is
+  where a lever would act. That is the conversation §9's `REAL_ESTATE` finding was pointing at.
+- `P(REAL_ESTATE ≥ 60% at the end)` moves **45% → 63%** between the two spend levels, which is
+  the readout §8.2 exists to produce: it turns "the plan ends house-heavy" into a probability
+  that responds to a lever.
+- The **0/0 exclusion never fired.** A ruined path here still holds the house, so gross assets
+  stay positive; the rule guards the case where *everything* is gone, which this model reaches
+  rarely. Worth knowing before reading an `excluded` count of zero as "nothing failed".
 
 ---
 
@@ -545,7 +644,7 @@ line:
 
 ---
 
-## 10. Decision record (all questions answered 2026-07-29)
+## 10. Decision record (all questions answered; #6–#8 closed 2026-07-30)
 
 Kept as a record rather than deleted: each of these was a live fork, and the *reason* a fork
 closed the way it did is what stops it being reopened by accident.
@@ -557,6 +656,9 @@ closed the way it did is what stops it being reopened by accident.
 | 3 | **Account labels** — `_baseLabel` renders a user-named "AU House" as **"AU AU House"**, and loans have no display record at all, falling back to `auHousePropertyLoan`. | **Won't fix here.** Pre-existing design-70 behaviour; renaming the accounts is a fine workaround and fixing the prefix moves labels app-wide. It wants its own decision, not a report's. | design 70 |
 | 4 | **Share the FX conversion with `computeNetWorth`?** | **Yes** — extract one helper, wire net-worth + the cube only. The four other copies are tracked as a follow-up, deliberately out of this design's commit. | §5.1(a) |
 | 5 | **Does the cube belong to Monte Carlo?** | **Yes**, as Phase 4: a compact per-year mix vector per iteration, reported as per-class bands, threshold probabilities, and mix conditioned on failure. | §8 |
+| 6 | **Raw per-path matrix in the arm file, or pre-reduced bands?** | **Raw**, positionally encoded and spliced in compactly (~1 MB/arm at n=400). §8.2 requires thresholds to move and the failure split to be re-cut without a re-run, and both need the individual paths. An arm is minutes; a report is milliseconds; the report is what gets rewritten. | §8.1 |
+| 7 | **Should `--mix` be on by default?** | **No — opt-in**, despite the compute being ~1.1%. The cost that bites is a megabyte per arm in files that get archived and re-reported, and an ordinary solvency run has no reader for it. The measurement, not the assumption, is in §8.3. | §8.3 |
+| 8 | **Terminal report or charts?** | **Both**, off one reduction. The terminal tables answer "how often", but "when does the shape turn" needs 45 columns, and a terminal cannot draw them. `mix-report-html.mjs` is to `mc-report.mjs` what `lib/grid-report.mjs` is to the terminal grid report. | §8.2 |
 
 ### Still genuinely open
 
@@ -572,6 +674,14 @@ closed the way it did is what stops it being reopened by accident.
 - **Should the four remaining FX copies converge?** (§5.1(a).) Yes on the merits; needs an
   owner willing to re-verify four golden-locked metrics: `net-liquidity.js`, `after-tax.js`,
   `guardrail-portfolio-value.js`, `computeHouseValueUsd`.
+- **The real decision MCs have not been re-run** on the year-boundary cadence (§8.4). The
+  change is small and its direction is measured (§8.3), but every archived arm JSON carries a
+  `pathShape` from the old cadence, so those numbers are not comparable with a fresh run.
+  Regenerate before quoting a `pathShape` figure across that boundary.
+- **The mix distribution has only been exercised on the synthetic default** (§8.5). The +40
+  point failed-vs-survived `REAL_ESTATE` gap is a strong signal that the shape is the failure
+  mechanism, but it is n=40 on a scenario built from round numbers. The reference plan is where
+  it needs to be run, and that is the re-run above.
 
 ---
 
@@ -582,7 +692,7 @@ closed the way it did is what stops it being reopened by accident.
 | **61** (holding-allocation lever) | sets the target; this reports the realized mix. §12.1's defects were all found here. Phase 3 charts them together and made the reducer stamp `targetBand` (§7.4). |
 | **58 / 65** (drawdown, sleeve order) | the main *cause* of unintended drift — the report is how you see it, and §7.5 is what it looks like. `targetComposition` (design 65 §OQ1a) is what Phase 3 reads. |
 | **78** (telemetry cost) | why the cube is not a per-event derived metric — **and** the origin of the `sampler` hook every later phase samples through (§4). |
-| **74** (stochastic return paths) | the per-iteration seeding Phase 4's distribution is only meaningful under. |
+| **74** (stochastic return paths) | the per-iteration seeding Phase 4's distribution is only meaningful under. Without `--paths` a single return is drawn per world and held, so the spread of *shapes* is narrower than reality — the mix page says so in its header. |
 | **81** (replayable run artifact) | an upgrade to app-side sampling, no longer a prerequisite for it (D2). |
 | **79** (real vs nominal) | owns the restatement this report declines (D1). **Renumbered from 60** — every in-code "design 60" means the cash-sleeve yield doc. |
 | **70** (account display names) | supplies `displayNameFor`; D3 is its wart, left to it. |

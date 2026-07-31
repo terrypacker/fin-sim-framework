@@ -61,6 +61,7 @@ import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retir
 import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
+import { buildMixSeries }         from '../../src/finance/allocation-reporting/mix-distribution.js';
 import { quietAsync } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
@@ -127,10 +128,16 @@ export function buildMcConfig(cfg, { shock = false, overrides = {}, recentre = t
  *
  * `seed` is carried on every row because it is the pairing key across arms — drop
  * it and paired analysis becomes impossible after the fact.
+ *
+ * With `mix: true` the arm also carries a `mixSeries` — the per-path, per-year asset
+ * mix matrix (design 82 §8). It is kept RAW rather than reduced to bands here so
+ * `mc-report.mjs` can move a threshold or re-condition on failure without re-running
+ * the arm; that is the same minutes-vs-milliseconds split the whole run/report
+ * separation exists for.
  */
-export async function runArm({ cfg, n, mcConfig, shocks }) {
+export async function runArm({ cfg, n, mcConfig, shocks, mix = false }) {
   const runner = new IntlRetirementMcRunner({
-    n, mcConfig, cfgTemplate: cfg,
+    n, mcConfig, cfgTemplate: cfg, mix,
     simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
   });
 
@@ -162,8 +169,26 @@ export async function runArm({ cfg, n, mcConfig, shocks }) {
     firstDecadeBelow: r.firstDecadeBelowMedian ?? null,
   }));
 
+  // Per-path mix matrix (design 82 §8.1). `failed` travels with each path because
+  // §8.2's third view splits the bands by outcome, and a report that had to re-join
+  // the matrix against `rows` by seed could silently drop paths on a mismatch.
+  const mixSeries = mix
+    ? buildMixSeries(runs.map(r => ({
+        seed: r.seed,
+        failed: !!r.scenarioFailed,
+        series: (r.timeSeries ?? [])
+          .filter(p => p.mix != null)
+          .map(p => ({
+            year: p.date.getUTCFullYear(),
+            grossAssetsUsd: p.grossAssetsUsd,
+            mix: p.mix,
+          })),
+      })))
+    : null;
+
   return {
     rows,
+    mixSeries,
     pathShape:  summary?.pathShape ?? null,
     // What world these rows describe (see summarizeProvenance). Persisted with the
     // arm so a report written days later can still say whether it is about the plan.
