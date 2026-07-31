@@ -12,13 +12,14 @@
 /**
  * mc-report.mjs — turn raw Monte Carlo arm output into a decision.
  *
- * Reads the `<armKey>.json` files written by `mc-run.mjs` and prints four views,
+ * Reads the `<armKey>.json` files written by `mc-run.mjs` and prints five views,
  * in increasing order of how much they should influence a decision:
  *
  *   1. DISTRIBUTION   failure rate and low percentiles per arm.
  *   2. PAIRED         per-world rescues between two arms — the decision-relevant one.
  *   3. PATH SHAPE     sequence-risk readouts (only meaningful with --paths runs).
  *   4. DRIVERS        what separates a failing world from a surviving one.
+ *   5. MIX            the asset mix as a distribution (only after a --mix run).
  *
  * Usage:
  *   node scripts/montecarlo/mc-report.mjs --dir <dir> [--pairs "a:b,c:d"] [--json]
@@ -27,6 +28,12 @@
  *   --pairs <list>  comma-separated `baseline:changed` arm pairs for the paired view.
  *                   Omitted ⇒ every arm is paired against the first one found.
  *   --json          machine-readable output.
+ *   --html <file>   also render the mix distribution as a self-contained HTML page.
+ *   --thresholds <file.json>
+ *                   replace the mix threshold set (design 82 §8.2). An array of
+ *                   `{key, label, classes, op, share, when, fromOffset, toOffset}`.
+ *                   Thresholds are DATA so they can move without re-running an arm,
+ *                   which is why arms carry the raw per-path matrix.
  *
  * ─── why medians and never means ─────────────────────────────────────────────
  *
@@ -51,11 +58,15 @@
  * much stronger claim than any difference in headline rates.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 
 import { pairedRescues, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
 import { millions, thousands, money, pct, percentile, columns } from '../lib/format.mjs';
+import { renderMixReport } from '../lib/mix-report-html.mjs';
+import {
+  mixBands, thresholdProbabilities, outcomeGapAt, DEFAULT_MIX_THRESHOLDS,
+} from '../../src/finance/allocation-reporting/mix-distribution.js';
 
 const argv = process.argv.slice(2);
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
@@ -79,11 +90,25 @@ const keys = Object.keys(arms).sort((a, b) =>
   || a.localeCompare(b));
 const meta = arms[keys[0]];
 
+// Mix distribution (design 82 §8) — present only on arms run with `--mix`. Thresholds
+// are DATA, replaceable without re-running an arm; that is the whole reason the arm
+// carries the raw per-path matrix rather than pre-reduced bands.
+const mixKeys = keys.filter(k => arms[k].mixSeries?.paths?.length);
+// A hand-written threshold file is the normal case, so fill the two fields a report
+// prints rather than crashing on the one the author left out.
+const thresholds = (flag('--thresholds')
+  ? JSON.parse(readFileSync(flag('--thresholds'), 'utf8'))
+  : DEFAULT_MIX_THRESHOLDS
+).map((s, i) => ({ ...s, key: s.key ?? `threshold-${i}`, label: s.label ?? s.key ?? `threshold-${i}` }));
+
 if (argv.includes('--json')) {
   console.log(JSON.stringify({
     arms: Object.fromEntries(keys.map(k => [k, {
       n: arms[k].n, failureRate: failureRate(arms[k].rows), pathShape: arms[k].pathShape,
       provenance: arms[k].provenance ?? null,
+      mixThresholds: arms[k].mixSeries
+        ? thresholdProbabilities(arms[k].mixSeries, thresholds)
+        : null,
     }])),
   }, null, 1));
   process.exit(0);
@@ -250,4 +275,116 @@ if (anyBanded) {
   });
   console.log('Cell = failure rate (paths in band). This is the readout to quote: it converts');
   console.log('"12% of paths fail" into a RETURN THRESHOLD you can hold an opinion about.');
+}
+
+// ─── 5. mix distribution (design 82 §8) ──────────────────────────────────────
+//
+// The allocation report answers "on the central path, what shape does this plan take".
+// This answers HOW OFTEN it takes that shape, which for a finding like "ends 90% house"
+// is the more decision-relevant of the two.
+
+if (mixKeys.length === 0) {
+  console.log('\n\n(no arm carries a mix matrix — re-run mc-run.mjs with --mix for the');
+  console.log(' asset-mix distribution, bands, thresholds and the failure split.)');
+} else {
+  console.log('\n\n════ MIX DISTRIBUTION — how often the plan takes each shape ════');
+  console.log('Bands are MARGINAL: the p90 of one class and the p90 of another come from');
+  console.log('different paths, so they do NOT sum to 100%. Read each class on its own.');
+  if (mixKeys.length !== keys.length) {
+    console.log(`** only ${mixKeys.length}/${keys.length} arms were run with --mix: `
+      + `${mixKeys.join(', ')}`);
+  }
+
+  for (const k of mixKeys) {
+    const series = arms[k].mixSeries;
+    const bands  = mixBands(series, { percentiles: [0.10, 0.50, 0.90] });
+    const years  = bands.years;
+
+    // Four checkpoints across the horizon. A full 45-column table is unreadable in a
+    // terminal, and the question this view answers ("when does the shape turn?") is
+    // answered by the shape of a handful of columns — the HTML page draws them all.
+    const at = [...new Set([0, Math.floor(years.length / 3), Math.floor(2 * years.length / 3),
+      years.length - 1].filter(i => i >= 0 && i < years.length))];
+
+    const active = bands.classes.filter(c =>
+      [0.10, 0.50, 0.90].some(p => at.some(i => (bands.bands[c][p][i] ?? 0) > 0.0005)));
+
+    columns({
+      title: `${k} — share of gross assets, p50 (p10–p90)`,
+      rows: active,
+      columns: [
+        { head: 'CLASS', get: c => c, width: 17, align: 'left' },
+        ...at.map(i => ({
+          head: String(years[i]), width: 20,
+          get: (c) => `${pct(bands.bands[c][0.50][i], 0)} `
+            + `(${pct(bands.bands[c][0.10][i], 0)}–${pct(bands.bands[c][0.90][i], 0)})`,
+        })),
+      ],
+    });
+    console.log(`paths with a mix: ${at.map(i => `${years[i]} ${bands.n[i]}`).join('   ')}`
+      + (bands.excluded.some(e => e > 0)
+        ? `   (up to ${Math.max(...bands.excluded)} excluded — a path holding nothing has no mix)`
+        : ''));
+  }
+
+  // The readouts worth quoting. `n` is how many paths had a mix to test — a path
+  // excluded for holding nothing is not silently counted as a miss.
+  columns({
+    title: 'THRESHOLD PROBABILITIES — share of paths meeting each condition',
+    rows: thresholds,
+    columns: [
+      { head: 'READOUT', get: s => s.label.slice(0, 56), width: 58, align: 'left' },
+      ...mixKeys.map(k => {
+        const probs = thresholdProbabilities(arms[k].mixSeries, thresholds);
+        return {
+          head: k.length > 12 ? k.slice(0, 12) : k, width: 15,
+          get: (s) => {
+            const t = probs.find(p => p.key === s.key);
+            return t && t.n ? `${pct(t.rate, 0)} (${t.n})` : '·';
+          },
+        };
+      }),
+    ],
+  });
+  console.log('Cell = probability (paths tested). Thresholds are data — pass --thresholds');
+  console.log('<file.json> to move them without re-running an arm.');
+
+  // §8.2's third view, and the one that decides which conversation to have: if the
+  // failing paths ARE the illiquid paths, the shape is the failure mechanism.
+  console.log('\n\n════ MIX CONDITIONED ON FAILURE ════');
+  for (const k of mixKeys) {
+    const gap = outcomeGapAt(arms[k].mixSeries);
+    if (gap.nFailed === 0) {
+      console.log(`\n${k}: no path failed — nothing to condition on, which is itself the answer:`);
+      console.log('  the shape is not a solvency question in this arm.');
+      continue;
+    }
+    console.log(`\n${k}: median share at ${gap.year} — ${gap.nFailed} failed / ${gap.nSurvived} survived`);
+    const rows = gap.rows
+      .filter(r => (r.failed ?? 0) > 0.0005 || (r.survived ?? 0) > 0.0005)
+      .sort((a, b) => Math.abs(b.gap ?? 0) - Math.abs(a.gap ?? 0));
+    for (const r of rows) {
+      console.log(`    ${r.key.padEnd(17)} failed ${pct(r.failed).padStart(8)}`
+        + `   survived ${pct(r.survived).padStart(8)}`
+        + `   gap ${(r.gap == null ? '—' : (r.gap >= 0 ? '+' : '−') + pct(Math.abs(r.gap))).padStart(8)}`);
+    }
+  }
+  console.log('\nA large positive gap on an illiquid class says the paths that ran out of money');
+  console.log('are the ones whose wealth ended up somewhere it could not be spent — which makes');
+  console.log('the target-vs-realized overlay (design 82 §7) the place to intervene.');
+}
+
+// ─── the chart page ──────────────────────────────────────────────────────────
+
+const htmlOut = flag('--html');
+if (htmlOut) {
+  if (mixKeys.length === 0) {
+    console.error('\n** --html needs a mix matrix; re-run mc-run.mjs with --mix.');
+  } else {
+    const out = resolve(htmlOut);
+    mkdirSync(dirname(out), { recursive: true });
+    const html = renderMixReport({ arms, keys, meta, thresholds });
+    writeFileSync(out, html);
+    console.log(`\nwrote ${out}  (${(html.length / 1024 / 1024).toFixed(2)} MB)`);
+  }
 }
