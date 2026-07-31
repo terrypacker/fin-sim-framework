@@ -21,6 +21,7 @@
  *
  *   --scenario <file> Workbench export to run. Omitted ⇒ the built-in synthetic
  *                     default (round numbers, no private data, ~15y horizon).
+ *   --index <n>       Which scenario inside that file (default 0).
  *   --out <file>      Output path (default scenarios/allocation-report.html).
  *   --csv             Also write the raw cube beside the page as .csv.
  *   --nominal         Label figures nominal (the default). See the note below.
@@ -66,7 +67,7 @@ import { dirname, resolve, basename }                         from 'node:path';
 import { execFileSync }                                       from 'node:child_process';
 import { createRequire }                                      from 'node:module';
 
-import { loadBaseConfig }         from '../lib/scenario-source.mjs';
+import { loadBaseConfig, parseSourceArgs } from '../lib/scenario-source.mjs';
 import { openSim, quiet }         from '../lib/run.mjs';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { buildAllocationSeries, mixAt } from '../../src/finance/allocation-reporting/allocation-grouping.js';
@@ -81,6 +82,7 @@ allocation-report.mjs — asset allocation over time, as one HTML page.
   node scripts/lab/allocation-report.mjs [--scenario <file.json>] [options]
 
   --scenario <file> Workbench export to run (default: built-in synthetic scenario).
+  --index <n>       Which scenario inside that file (default 0).
   --out <file>      Output path (default scenarios/allocation-report.html).
   --csv             Also write the raw cube beside the page as .csv.
   --open            Open the result when done (macOS).
@@ -92,13 +94,13 @@ const has  = (n) => argv.includes(n);
 
 if (has('-h') || has('--help')) { console.log(USAGE); process.exit(0); }
 
-const scenarioFile = flag('--scenario') ?? null;
+const { file: scenarioFile, index: scenarioIndex } = parseSourceArgs(argv);
 const outFile      = resolve(flag('--out') ?? 'scenarios/allocation-report.html');
 const BASE         = 'USD';
 
 // ─── run + sample ────────────────────────────────────────────────────────────
 
-const { cfg, source } = loadBaseConfig({ file: scenarioFile });
+const { cfg, source } = loadBaseConfig({ file: scenarioFile, index: scenarioIndex });
 const start = new Date(cfg.simStart);
 const end   = new Date(cfg.simEnd);
 
