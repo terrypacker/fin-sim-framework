@@ -44,8 +44,13 @@ export const US_INCOME = {
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
+      // proceeds/costBasis/description are what put the disposal on Schedule D and
+      // Form 8949 — every other CAPITAL_GAINS type already declares them. Without
+      // them the sale reached Form 1040 line 6 (which reads the YTD accumulator) but
+      // was invisible on the schedules, since pickPayload keeps ONLY declared fields.
       { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+                  proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
     ],
   },
 

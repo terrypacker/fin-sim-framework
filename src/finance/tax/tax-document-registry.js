@@ -167,6 +167,35 @@ function _extractPeriod(currentEntry, journal, cc) {
 }
 
 /**
+ * Collapse the action×reducer fan-out while walking raw journal entries.
+ *
+ * The journal records one entry per action PER CONSUMING REDUCER, and a disposal has
+ * several consumers (`dynamic:US:…`, `state:classify:…`, `dynamic:AU:…`), so the same
+ * sale appears N times under one shared `action.instanceId`. The extractors below
+ * iterate raw entries — the aggregate reports go through `JournalQueryApi`, which
+ * already collapses this — so without a filter every proceeds/basis/gain total on
+ * Schedule D, Form 8949 and the AU CGT Schedule is multiplied by N. Form 1040 line 6
+ * is unaffected: it reads the YTD accumulator, which is written once.
+ *
+ * Returns a stateful predicate: first sighting of an instanceId passes, later ones
+ * are dropped. Entries carrying **no** instanceId always pass — hand-built journals
+ * in tests, and any legacy entry predating the field, have no fan-out to collapse and
+ * must not be silently merged into one another.
+ *
+ * @returns {(entry: object) => boolean}
+ */
+function _firstEntryPerAction() {
+  const seen = new Set();
+  return (entry) => {
+    const id = entry.action?.instanceId;
+    if (id == null) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  };
+}
+
+/**
  * Collect AU_STOCK_WITHDRAWAL_TAX and AU_HOUSE_SALE_TAX journal entries that carry
  * sale detail (proceeds field) between the previous AU TAX_SETTLE_APPLY and the current one.
  *
@@ -188,6 +217,7 @@ function _extractAuSaleRecords(currentEntry, journal) {
   }
 
   const records = [];
+  const isFirstForAction = _firstEntryPerAction();
   for (let i = yearStartIdx; i < currentIdx; i++) {
     const e = journal[i];
     const t = e.action?.type;
@@ -202,6 +232,7 @@ function _extractAuSaleRecords(currentEntry, journal) {
     const isAuResidentSale = t === 'STOCK_WITHDRAWAL_TAX' && d.residency === 'AU';
 
     if (!isAuSaleAction && !isAuResidentSale) continue;
+    if (!isFirstForAction(e)) continue;
 
     records.push({
       description:  d.description ?? (t === 'AU_HOUSE_SALE_TAX' ? 'AU Real Property' : 'Investment Account'),
@@ -216,14 +247,53 @@ function _extractAuSaleRecords(currentEntry, journal) {
 }
 
 /**
- * Collect all STOCK_WITHDRAWAL_TAX journal entries that carry sale detail
- * (proceeds field) between the previous US TAX_SETTLE_APPLY and the current one.
- * These entries are emitted by StockWithdrawalApplyReducer (explicit sales) and
- * AccountService.replenishSavings (brokerage drawdowns).
+ * Every disposal type that feeds `usCapitalGainsYTD`, i.e. Form 1040 line 6.
+ *
+ * `STOCK_WITHDRAWAL_TAX` covers explicit sales (StockWithdrawalApplyReducer) and
+ * brokerage drawdowns (`AccountService.replenishSavings`). The other two used to be
+ * missing, so Schedule D silently omitted the house and company-equity disposals
+ * while Form 1040 counted them — the reason CY2026 read `L6 650,000` against a
+ * Schedule D of `0.00`. Collectibles are deliberately absent: they carry their own
+ * 28% rate and their own Form 1040 line (§1(h)(4)), not line 6.
+ */
+const US_DISPOSAL_ACTION_TYPES = new Set([
+  'STOCK_WITHDRAWAL_TAX', 'US_HOUSE_SALE_TAX', 'COMPANY_SALE_TAX',
+]);
+
+/**
+ * Form 8949 column (g) — the adjustment that reconciles a disposal's economic gain
+ * to its taxable gain, with the column (f) code that explains it.
+ *
+ * A disposal action reports `proceeds`, `costBasis` and the **taxable** `gain`. For
+ * an ordinary sale those agree (`gain = proceeds − costBasis`) and the adjustment is
+ * zero. For a main home the §121 exclusion drives them apart, and a real return does
+ * NOT quietly report a smaller gain — per the Form 8949 instructions it reports the
+ * sale gross and carries the exclusion as a negative column (g) entry under code H:
+ *
+ *   "Report the sale or exchange on Form 8949 as you would if you weren't taking the
+ *    exclusion. Then enter the amount of excluded (nontaxable) gain as a negative
+ *    number (in parentheses) in column (g)."
+ *
+ * Schedule D then foots as (d) − (e) + (g), which is exactly its column (h).
+ *
+ * @returns {{ adjustment: number, code: string }}
+ */
+function _saleAdjustment(actionType, proceeds, costBasis, gain) {
+  const adjustment = Math.round(((gain - (proceeds - costBasis)) + Number.EPSILON) * 100) / 100;
+  if (adjustment === 0) return { adjustment: 0, code: '' };
+  // H is specifically the main-home exclusion; anything else is a real reconciling
+  // difference we have no authority to label, so it stays coded blank rather than
+  // borrowing a code that would misstate why the return differs.
+  return { adjustment, code: actionType === 'US_HOUSE_SALE_TAX' ? 'H' : '' };
+}
+
+/**
+ * Collect the US disposal journal entries carrying sale detail (a `proceeds` field)
+ * between the previous US TAX_SETTLE_APPLY and the current one.
  *
  * @param {object}   currentEntry  - The TAX_SETTLE_APPLY journal entry being reported.
  * @param {object[]} journal       - Full journal entry array.
- * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain }[]}
+ * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain, adjustment, code }[]}
  */
 function _extractUsSaleRecords(currentEntry, journal) {
   const currentIdx = journal.indexOf(currentEntry);
@@ -240,19 +310,26 @@ function _extractUsSaleRecords(currentEntry, journal) {
   }
 
   const records = [];
+  const isFirstForAction = _firstEntryPerAction();
   for (let i = yearStartIdx; i < currentIdx; i++) {
     const e = journal[i];
-    if (e.action?.type === 'STOCK_WITHDRAWAL_TAX' && e.action.data?.proceeds != null) {
-      const d = e.action.data;
-      records.push({
-        description:  d.description ?? 'Investment Account',
-        dateAcquired: 'Various',
-        dateSold:     new Date(e.date),
-        proceeds:     d.proceeds,
-        costBasis:    d.costBasis ?? (d.proceeds - (d.gain ?? 0)),
-        gain:         d.gain ?? 0,
-      });
-    }
+    const t = e.action?.type;
+    const d = e.action?.data;
+    if (!US_DISPOSAL_ACTION_TYPES.has(t) || d?.proceeds == null) continue;
+    if (!isFirstForAction(e)) continue;
+
+    const proceeds  = d.proceeds;
+    const costBasis = d.costBasis ?? (d.proceeds - (d.gain ?? 0));
+    const gain      = d.gain ?? 0;
+    records.push({
+      description:  d.description ?? 'Investment Account',
+      dateAcquired: 'Various',
+      dateSold:     new Date(e.date),
+      proceeds,
+      costBasis,
+      gain,
+      ..._saleAdjustment(t, proceeds, costBasis, gain),
+    });
   }
   return records;
 }

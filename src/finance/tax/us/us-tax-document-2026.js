@@ -240,10 +240,22 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     return [{ heading: 'Worksheet — Foreign Relief', lineItems }];
   }
 
+  /**
+   * Schedule D Part II, laid out in the real form's columns: (d) Proceeds,
+   * (e) Cost, (g) Adjustments to gain or loss from Form 8949 column (g), and
+   * (h) Gain or (loss) = (d) − (e) + (g).
+   *
+   * The adjustments line is what lets a main-home sale foot. §121 excludes gain
+   * without reducing proceeds or basis, so a return reports the disposal gross and
+   * carries the exclusion as a negative column (g) figure (Form 8949 code H) — see
+   * `_saleAdjustment` in tax-document-registry.js. Netting it into the gain instead
+   * would foot arithmetically while misstating the sale.
+   */
   _generateScheduleD(saleRecords, taxYear) {
-    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
-    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
-    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+    const totalProceeds   = saleRecords.reduce((s, r) => s + r.proceeds,  0);
+    const totalCostBasis  = saleRecords.reduce((s, r) => s + r.costBasis, 0);
+    const totalAdjustment = saleRecords.reduce((s, r) => s + (r.adjustment ?? 0), 0);
+    const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
     return {
       title:        `Schedule D — ${taxYear}`,
       country:      'US',
@@ -253,9 +265,11 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         {
           heading: 'Part II — Long-Term Capital Gains and Losses',
           lineItems: [
-            { label: 'Total Proceeds (from Form 8949)',    amount: totalProceeds  },
-            { label: 'Total Cost Basis (from Form 8949)',  amount: totalCostBasis },
-            { label: 'Net Long-Term Gain / (Loss)',        amount: totalGain      },
+            { label: 'Total Proceeds (from Form 8949)',    amount: totalProceeds   },
+            { label: 'Total Cost Basis (from Form 8949)',  amount: totalCostBasis  },
+            { label: 'Adjustments to Gain or Loss (Form 8949, column (g))',
+                                                           amount: totalAdjustment },
+            { label: 'Net Long-Term Gain / (Loss)',        amount: totalGain       },
           ],
         },
         {
@@ -269,10 +283,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     };
   }
 
+  /** Form 8949 Part II, including columns (f) Code and (g) Amount of adjustment. */
   _generateForm8949(saleRecords, taxYear) {
-    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
-    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
-    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+    const totalProceeds   = saleRecords.reduce((s, r) => s + r.proceeds,  0);
+    const totalCostBasis  = saleRecords.reduce((s, r) => s + r.costBasis, 0);
+    const totalAdjustment = saleRecords.reduce((s, r) => s + (r.adjustment ?? 0), 0);
+    const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
     return {
       title:        `Form 8949 — ${taxYear}`,
       country:      'US',
@@ -280,16 +296,19 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
       filingStatus: 'Part II — Long-Term (held more than one year)',
       table: {
         heading: 'Sales and Other Dispositions of Capital Assets',
-        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain / (Loss)'],
+        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis',
+                  'Code', 'Adjustment', 'Gain / (Loss)'],
         rows: saleRecords.map(r => [
           r.description,
           r.dateAcquired,
           _fmtDate(r.dateSold),
           r.proceeds,
           r.costBasis,
+          r.code ?? '',
+          r.adjustment ?? 0,
           r.gain,
         ]),
-        totals: ['Totals', '', '', totalProceeds, totalCostBasis, totalGain],
+        totals: ['Totals', '', '', totalProceeds, totalCostBasis, '', totalAdjustment, totalGain],
       },
     };
   }

@@ -49,7 +49,11 @@ export const AU_TAX = {
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any(),
                   fxRate: ValueType.number(), fundTax: ValueType.currency('AUD') } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
-        fields: { amount: ValueType.currency('AUD') } },
+        // `escalated` marks the re-issue that pays the part of the SAME bill the
+        // first pass could not fund (see TaxPaymentDebitReducerBase). Must be
+        // declared: pickPayload keeps ONLY declared fields, and "Tax Paid by Year"
+        // filters on it to avoid counting the funded part twice.
+        fields: { amount: ValueType.currency('AUD'), escalated: ValueType.boolean() } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },
     ],
   },
