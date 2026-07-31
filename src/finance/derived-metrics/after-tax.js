@@ -11,6 +11,8 @@
 import { isDrawdownAccessible } from './net-liquidity.js';
 import { TaxSettleService }     from '../tax-settle-service.js';
 import { isCollectibleAllocation } from '../holdings/allocation.js';
+import { getResidency, primaryPersonKey } from '../residency-utils.js';
+import { toAUD }                from '../tax/tax-fx.js';
 
 /**
  * After-tax re-pricing (design/40).
@@ -30,12 +32,20 @@ import { isCollectibleAllocation } from '../holdings/allocation.js';
  * Option A (configured effective rates) behind a C-shaped `rateProvider`
  * contract; Options B/C (marginal / liquidation-waterfall) drop into the same
  * seam later (design/40 §3, D1).
+ *
+ * The same par-value error has a second, opposite-signed form across a border
+ * (design 84 G1): a Roth is tax-free to a US holder but a foreign trust to an
+ * Australian one, whose earnings are s99B ordinary income with NO foreign tax
+ * credit. Valuing it at par for an AU resident overstates household wealth and hid
+ * the decant-before-the-move decision entirely. Tax class alone cannot express that
+ * — the same account is two different things to two owners — so the ROTH branch of
+ * `computeAfterTaxValue` reads per-account ownership and residency.
  */
 
 /** Tax-class taxonomy (design/40 §2.1). Fixes each account's discount formula. */
 export const TAX_CLASS = Object.freeze({
   PRE_TAX:       'PRE_TAX',        // ordinary income on withdrawal (IRA, 401k)
-  ROTH:          'ROTH',           // qualified, tax-free
+  ROTH:          'ROTH',           // US: qualified, tax-free. AU resident: s99B (design 84 G1)
   TAXABLE_BASIS: 'TAXABLE_BASIS',  // gains taxed on sale (brokerage)
   CASH:          'CASH',           // already taxed (savings/checking)
   SUPER:         'SUPER',          // jurisdiction-specific (AU super)
@@ -57,10 +67,15 @@ const _ROLE_TAX_CLASS = {
 
 /**
  * Map an account `role` to its tax class. Unknown roles fall back to CASH (valued
- * at par — the conservative no-op, never an over-discount). `residency` is
- * accepted for the C-shaped contract but unused in Phase 1 (the provider decides
- * rates); it is wired so Phase 2's residency-aware classification needs no
- * signature change.
+ * at par — the conservative no-op, never an over-discount).
+ *
+ * `residency` is accepted for the C-shaped contract but remains unused, and that is
+ * now a settled decision rather than a pending phase: a tax CLASS describes the
+ * asset, residency describes the HOLDER, and the same Roth is two different things
+ * to two owners. Residency-dependent pricing therefore lives on the rate path —
+ * `computeAfterTaxValue`'s ROTH branch plus `rothLiquidationRate` (design 84 G1) —
+ * where it can read per-account ownership instead of being baked into a global
+ * role→class map.
  */
 export function taxClassForRole(role, { residency } = {}) { // eslint-disable-line no-unused-vars
   return _ROLE_TAX_CLASS[role] ?? TAX_CLASS.CASH;
@@ -106,6 +121,14 @@ export function defaultRateProvider({
     },
     capGainsLiquidationRate(/* account, unrealizedGain, state, date */) {
       return cg;
+    },
+    // A Roth wrapper is US-domiciled, so `_isAu(account)` is false for it and
+    // `ordinaryLiquidationRate` would answer the US rate. But the s99B charge is
+    // AUSTRALIAN — it falls on the AU-resident beneficiary, not on the account's
+    // domicile — so this deliberately answers `ordAu` (design 84 G1). Reached only
+    // when the owner is an AU resident; a US-resident Roth never consults a rate.
+    rothLiquidationRate(/* account, assessable, state, date */) {
+      return ordAu;
     },
     // Gold sleeve (design 56 §7.3): US collectibles 28%; an AU-domiciled gold sleeve
     // disposes as an ordinary AU capital gain, so it takes the cap-gains rate there.
@@ -178,6 +201,24 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
       if (_isAu(account)) return engineDelta(computeAu, 'auCapitalGainsYTD', gain, state, fb);
       return engineDelta(computeUs, 'usCapitalGainsYTD', gain, state, fb);
     },
+    // Roth earnings distributed to an AU resident stack on `auOrdinaryIncomeYTD` as
+    // s99B trust income. No US-source removal set is involved: the US taxes nothing
+    // here, so FITO has nothing to relieve and the engine delta IS the whole marginal
+    // cost — no credit offsets it (design 84 §4). This is the number the Option-A
+    // constant can only approximate, and it is the one the study needs, because the
+    // slice sits on TOP of the year's other income and is taxed in the highest bracket
+    // the household reaches.
+    // FX: the Roth is USD but `auOrdinaryIncomeYTD` is an AUD accumulator, so the
+    // slice must be converted before it is stacked — otherwise it lands in too low a
+    // bracket and the rate comes back understated. The result is a ratio (ΔAUD tax /
+    // AUD slice) and so is currency-neutral: the caller may apply it to the USD
+    // amount unchanged. `toAUD` is the same helper the s99B reducer uses, and it
+    // returns the native amount when the run records no rate.
+    rothLiquidationRate(account, assessable, state, date) {
+      const fb  = () => fallback.rothLiquidationRate(account, assessable, state, date);
+      const ccy = account?.currency?.code ?? account?.currency ?? 'USD';
+      return engineDelta(computeAu, 'auOrdinaryIncomeYTD', toAUD(assessable, ccy, state), state, fb);
+    },
     // Gold sleeve (design 56 §7.3): a US gold gain stacks on usCollectibleGainsYTD (the
     // 28%-rate accumulator); an AU-domiciled gold sleeve is an ordinary AU capital gain.
     collectibleLiquidationRate(account, gain, state, date) {
@@ -211,6 +252,59 @@ function _unrealizedGainSplit(account, assumedGainFraction) {
 }
 
 /**
+ * True when this account's owner is an AU resident **right now**.
+ *
+ * The metric is a "liquidate today" valuation, so it keys off CURRENT residency
+ * rather than a planned future move. That is not an approximation: a Roth emptied
+ * while still US-resident genuinely is tax-free, which is the entire premise of the
+ * design 45 decant lever. Pricing a pre-move Roth as if the move had already
+ * happened would erase the very gap the decant exists to exploit.
+ *
+ * `ownerId` first, primary as the fallback — the convention `RothWithdrawalEarningsHandler`
+ * already uses. Unknown owner, or no `state.people` at all ⇒ false (par), the
+ * conservative no-op that never over-discounts.
+ */
+function _isAuResidentOwner(account, state) {
+  const key = account?.ownerId ?? primaryPersonKey(state);
+  return key != null && getResidency(state, key) === 'AU';
+}
+
+/**
+ * The s99B-assessable slice of a Roth balance: the earnings, plus the IRA-earnings
+ * portion of any converted principal.
+ *
+ * `earningsBasis` is DERIVED (design 53 §8) as balance − contributionBasis −
+ * rollovers, so it already excludes converted principal. Converted principal is
+ * mostly corpus and does come out free — but the portion attributable to the source
+ * IRA's *earnings* is pre-tax money that "would have been included in assessable
+ * income if derived by a resident", so s99B(2)(a) denies it the corpus exemption.
+ * `roth-conversion-classes.js` stamps exactly that figure per lot as `taxableAmount`
+ * for this purpose, so add it back. Growth ON converted principal needs no special
+ * handling — it lands in `earningsBasis` already, since the rollover basis does not
+ * grow with the balance.
+ *
+ * NOTE — the known conservative bias (design 84 G2): `earningsBasis` is
+ * mark-to-market APPRECIATION, whereas s99B reaches "amounts derived by the trust
+ * estate" — dividends, interest, realised gains — and unrealised growth is derived by
+ * nobody. This therefore OVER-states the assessable slice for a buy-and-hold wrapper.
+ * That direction is deliberate: the metric never understates a liability. Tracking
+ * derived income separately is the design 84 P7 follow-up.
+ *
+ * No ledger at all ⇒ the whole balance is assessable, mirroring SUPER's back-compat
+ * fallback.
+ */
+function _s99bAssessable(account, balance) {
+  const eb = account?.earningsBasis;
+  const earnings = Number.isFinite(eb) ? Math.min(Math.max(0, eb), balance) : balance;
+  let converted = 0;
+  for (const lot of account?.rolloverConversions ?? []) {
+    const t = lot?.taxableAmount;
+    if (Number.isFinite(t) && t > 0) converted += t;
+  }
+  return Math.min(balance, earnings + converted);
+}
+
+/**
  * After-tax value of a single account, in the account's own currency (FX is
  * applied by the summing functions, mirroring computeNetWorth). The shared core
  * of both scope metrics — one place defines the per-class discount.
@@ -231,10 +325,30 @@ export function computeAfterTaxValue(account, state, date, {
   const cls = taxClassForRole(account?.role);
 
   switch (cls) {
-    case TAX_CLASS.ROTH:
+    case TAX_CLASS.ROTH: {
+      // US holder: a qualified distribution is excluded from gross income
+      // (IRC §408A(d)(1)) — par. (Still ignores §408A 5-year recapture and the
+      // §72(t) charge on a non-qualified draw — design/40 Q5, unchanged.)
+      //
+      // AU holder (design 84 G1): the ATO does not recognise the wrapper. It is a
+      // foreign trust, distributed EARNINGS are ordinary income under s99B ITAA 1936,
+      // and there is NO foreign tax credit — the US levies nothing here, so FITO has
+      // nothing to relieve. Pricing that at par overvalued the worst-taxed dollar a
+      // cross-border household owns, and it is what blinded this metric to the
+      // decant-before-the-move decision.
+      //
+      // Corpus still comes out free, so only the assessable slice is discounted —
+      // the same shape as SUPER below.
+      if (!_isAuResidentOwner(account, state)) return balance;
+      const assessable = _s99bAssessable(account, balance);
+      const r = rateProvider.rothLiquidationRate
+        ? rateProvider.rothLiquidationRate(account, assessable, state, date)
+        : rateProvider.ordinaryLiquidationRate(account, assessable, state, date);
+      return (balance - assessable) + assessable * (1 - clampRate(r));
+    }
+
     case TAX_CLASS.CASH:
-      // Roth: qualified, tax-free (Phase 1 ignores §408A recapture — design/40 Q5).
-      // Cash: already taxed. Both at par.
+      // Already taxed — par.
       return balance;
 
     case TAX_CLASS.PRE_TAX: {

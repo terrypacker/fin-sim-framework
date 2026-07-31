@@ -30,6 +30,9 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+import { computeAfterTaxNetWorth, defaultRateProvider, liquidationRateProvider }
+  from '../../src/finance/derived-metrics/after-tax.js';
+import { allParams } from './variant.mjs';
 
 /** Silence the sim's per-event logging; hundreds of runs otherwise drown the report. */
 export function quiet(fn) {
@@ -98,19 +101,47 @@ export function openSim(cfg, { telemetry = 'full', sampler = null, samplerCadenc
 export function run(cfg, { telemetry = 'off' } = {}) {
   const sim = openSim(cfg, { telemetry });
   quiet(() => sim.stepTo(new Date(cfg.simEnd)));
-  return summarize(sim);
+  return summarize(sim, allParams(cfg));
 }
 
-export function summarize(sim) {
+/**
+ * Reduce a finished sim to one comparable row.
+ *
+ * `params` (the cfg's param bag) unlocks `afterTaxNW`. It is optional only because
+ * some callers hold a sim and not its cfg; pass it whenever you have it, because on
+ * any question involving WHERE wealth sits — a wrapper swap, a conversion, a decant —
+ * nominal `netWorth` prices a pre-tax dollar at par with a Roth dollar and is the
+ * wrong scoreboard (design/40). The provider is constructed exactly as
+ * `OptimizationProblem` constructs it, so a grid row and an optimizer score are the
+ * same number rather than two plausible ones.
+ */
+export function summarize(sim, params = null) {
   const s = sim.state;
-  return {
+  const row = {
     failed:        s.scenarioFailed ?? false,
     oofDate:       s.outOfFundsDate ? new Date(s.outOfFundsDate).toISOString().slice(0, 10) : null,
     deficit:       Math.round(s.cumulativeDeficit ?? 0),
     deficitMonths: s.deficitMonths ?? 0,
     netWorth:      Math.round(s.metrics?.netWorth ?? 0),
     netLiq:        Math.round(computeNetLiquidity(s, sim.currentDate)),
+    // Lifetime tax, including the AU super fund tax that never touches a member's
+    // cash — see the design 77 §5.4 note on why it rides along.
+    taxPaid:       Math.round(s.cumulativeTaxesPaid ?? 0),
   };
+  if (params) {
+    const rateCfg = {
+      ordinaryRate:   params.afterTaxOrdinaryRate,
+      ordinaryRateAu: params.afterTaxOrdinaryRateAu,
+      capGainsRate:   params.afterTaxCapGainsRate,
+    };
+    const rateProvider = params.afterTaxRateMethod === 'liquidation'
+      ? liquidationRateProvider(rateCfg)
+      : defaultRateProvider(rateCfg);
+    row.afterTaxNW = Math.round(computeAfterTaxNetWorth(s, sim.currentDate, {
+      rateProvider, assumedGainFraction: params.assumedGainFraction,
+    }));
+  }
+  return row;
 }
 
 /**
