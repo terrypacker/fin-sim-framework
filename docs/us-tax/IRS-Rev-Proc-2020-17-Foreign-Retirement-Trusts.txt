@@ -1,0 +1,427 @@
+26 CFR 601.105: Examination of returns and claims for refund, credit, or abatement;
+determination of correct tax liability.
+(Also: Part I, Sections 6048 and 6677)
+
+
+
+
+Rev. Proc. 2020-17
+
+
+SECTION 1. PURPOSE
+
+       This revenue procedure provides an exemption from the information reporting
+
+requirements under section 6048 of the Internal Revenue Code for certain U.S. citizen
+
+and resident individuals (U.S. individuals) with respect to their transactions with, and
+
+ownership of, certain tax-favored foreign retirement trusts and certain tax-favored
+
+foreign nonretirement savings trusts, as described in sections 5.03 and 5.04 of this
+
+revenue procedure (collectively, applicable tax-favored foreign trusts). Only eligible
+
+individuals described in section 5.02 of this revenue procedure (generally U.S.
+
+individuals who have been compliant with respect to their income tax obligations related
+
+to such trusts) may rely on this revenue procedure.
+
+       In addition, this revenue procedure establishes procedures for eligible individuals
+
+to request abatement of penalties that have been assessed or a refund of penalties that
+
+have been paid pursuant to section 6677 for the individuals’ failure to comply with the
+
+information reporting requirements of section 6048 with respect to an applicable tax-
+favored foreign trust. Eligible individuals may request relief from section 6677 penalties,
+
+subject to the limitations of sections 6402 and 6511, in accordance with section 6 of this
+
+revenue procedure.
+
+       The Department of the Treasury (Treasury Department) and the Internal
+
+Revenue Service (IRS) intend to issue proposed regulations that would modify the
+
+requirements under section 6048 to exclude eligible individuals’ transactions with, or
+
+ownership of, these applicable tax-favored foreign trusts from information reporting.
+
+The Treasury Department and the IRS request comments about these and other similar
+
+types of foreign trusts that should be considered for an exemption from section 6048
+
+reporting.
+
+SECTION 2. BACKGROUND
+
+       .01 Section 6048, enacted in 1996, generally requires annual information
+
+reporting of a United States person’s transfers of money or other property to, ownership
+
+of, and distributions from, foreign trusts, and section 6677 imposes penalties on United
+
+States persons for failing to comply with section 6048. As relevant here, section
+
+6048(a)(3)(B)(ii) provides an exception from reporting with respect to transfers to foreign
+
+compensatory trusts described in section 402(b), 404(a)(4), or 404A. In addition,
+
+section 6048(d)(4) authorizes the Secretary to suspend or modify any requirement
+
+under section 6048 if the United States has no significant tax interest in obtaining the
+
+required information. The Treasury Department and the IRS have previously issued
+
+guidance providing that reporting is not required under section 6048(c) with respect to
+
+distributions from certain foreign compensatory trusts, provided that the recipient of the
+
+distribution reports the distribution as compensation income on an applicable federal
+income tax return, and that information reporting under section 6048(a) through (c) is
+
+not required with respect to certain Canadian retirement plans. See Section V of Notice
+
+97-34, 1997-1 C.B. 422; Rev. Proc. 2014-55, 2014-44 I.R.B. 753. Section 6048
+
+information reporting is provided on Form 3520, Annual Return To Report Transactions
+
+With Foreign Trusts and Receipt of Certain Foreign Gifts, and Form 3520-A, Annual
+
+Information Return of Foreign Trust With a U.S. Owner (Under section 6048(b)).
+
+        .02 Section 6038D, enacted in 2010, and the regulations thereunder generally
+
+require a specified person, which includes a U.S. citizen or resident alien, to report any
+
+interest in a specified foreign financial asset provided that the aggregate value of all
+
+such assets exceeds certain thresholds. See §1.6038D-2(a). Section 6038D(d)
+
+imposes a penalty for failing to comply. A specified foreign financial asset includes
+
+interests in certain foreign retirement, pension, and non-retirement savings funds or
+
+accounts. See §§1.6038D-3. Section 6038D information reporting is provided on Form
+
+8938, Statement of Specified Foreign Financial Assets. A specified person who is
+
+required to report information under section 6038D on Form 8938 may also be required
+
+to report similar identifying information under section 6048 on Form 3520 or Form 3520-
+
+A. For more information about section 6038D information reporting, see
+
+https://www.irs.gov/businesses/corporations/basic-questions-and-answers-on-form-
+
+8938.
+
+SECTION 3. INFORMATION REPORTING UNDER SECTION 6048 WITH RESPECT
+TO APPLICABLE TAX-FAVORED FOREIGN TRUSTS
+
+        The Treasury Department and the IRS have determined that, because applicable
+
+tax-favored foreign trusts generally are subject to written restrictions, such as
+
+contribution limitations, conditions for withdrawal, and information reporting, which are
+imposed under the laws of the country in which the trust is established, and because
+
+U.S. individuals with an interest in these trusts may be required under section 6038D to
+
+separately report information about their interests in accounts held by, or through, these
+
+trusts, it would be appropriate to exempt U.S. individuals from the requirement to
+
+provide information about these trusts under section 6048. Accordingly, pursuant to the
+
+authority granted under section 6048(d)(4), the Treasury Department and the IRS are
+
+exempting from section 6048 information reporting an eligible individual’s transactions
+
+with, or ownership of, an applicable tax-favored foreign trust. As a result, the penalties
+
+under section 6677 do not apply to eligible individuals who fail to report transactions
+
+with, or ownership of, these trusts under section 6048. In addition, eligible individuals
+
+who have been assessed penalties under section 6677 for failing to comply with section
+
+6048 with respect to these trusts may, subject to the limitations of sections 6402 and
+
+6511, request abatement of penalties that have been assessed or refund of penalties
+
+that have been paid, by following the procedures described in section 6 of this revenue
+
+procedure.
+
+       This revenue procedure does not affect any reporting obligations under section
+
+6038D or under any other provision of U.S. law, including the requirement to file
+
+FinCEN Form 114, Report of Foreign Bank and Financial Accounts (FBAR), imposed by
+
+31 U.S.C. section 5314 and the regulations thereunder. This revenue procedure does
+
+not affect previously issued guidance providing an exception from section 6048
+
+reporting with respect to distributions from certain foreign compensatory trusts under
+
+Section V of Notice 97-34, and an exception from all information reporting requirements
+
+under section 6048 with respect to certain Canadian retirement plans under Revenue
+Procedure 2014-55. See also section 6048(a)(3)(B)(ii) (providing an exception from
+
+reporting with respect to transfers to foreign compensatory trusts described in section
+
+402(b), 404(a)(4), or 404A).
+
+SECTION 4. SCOPE
+
+       Sections 3 and 6 of this revenue procedure apply to any eligible individual who,
+
+but for this revenue procedure, is (or was) required to report a transaction with, or
+
+ownership of, an applicable tax-favored foreign trust under section 6048.
+
+SECTION 5. DEFINITIONS
+
+       .01 Applicable tax-favored foreign trust. For purposes of this revenue procedure,
+
+an applicable tax-favored foreign trust means a tax-favored foreign retirement trust as
+
+defined under section 5.03 of this revenue procedure or a tax-favored foreign non-
+
+retirement savings trust as defined under section 5.04 of this revenue procedure.
+
+       .02 Eligible Individual. For purposes of this revenue procedure, an eligible
+
+individual means an individual who is, or at any time was, a U.S. citizen or resident
+
+(within the meaning of section 7701(a)(30)(A)) and who, for any period during which an
+
+amount of tax may be assessed under section 6501 (without regard to section
+
+6501(c)(8)), is compliant (or comes into compliance) with all requirements for filing a
+
+U.S. federal income tax return (or returns) covering the period such individual was a
+
+U.S. citizen or resident, and to the extent required under U.S. tax law, has reported as
+
+income any contributions to, earnings of, or distributions from, an applicable tax-favored
+
+foreign trust on the applicable return (including on an amended return).
+
+       .03 Tax-Favored Foreign Retirement Trust. For purposes of this revenue
+
+procedure, a tax-favored foreign retirement trust means a foreign trust for U.S. tax
+purposes that is created, organized, or otherwise established under the laws of a
+
+foreign jurisdiction (the trust’s jurisdiction) as a trust, plan, fund, scheme, or other
+
+arrangement (collectively, a trust) to operate exclusively or almost exclusively to
+
+provide, or to earn income for the provision of, pension or retirement benefits and
+
+ancillary or incidental benefits, and that meets the following requirements established by
+
+the laws of the trust’s jurisdiction.
+
+       (1) The trust is generally exempt from income tax or is otherwise tax-favored
+
+under the laws of the trust’s jurisdiction. For purposes of this revenue procedure, a trust
+
+is tax-favored if it meets any one or more of the following conditions: (i) contributions to
+
+the trust that would otherwise be subject to tax are deductible or excluded from income,
+
+are taxed at a reduced rate, give rise to a tax credit, or are otherwise eligible for another
+
+tax benefit (such as a government subsidy or contribution); and (ii) taxation of
+
+investment income earned by the trust is deferred until distribution or the investment
+
+income is taxed at a reduced rate.
+
+       (2) Annual information reporting with respect to the trust (or of its participants or
+
+beneficiaries) is provided, or is otherwise available, to the relevant tax authorities in the
+
+trust’s jurisdiction.
+
+       (3) Only contributions with respect to income earned from the performance of
+
+personal services are permitted.
+
+       (4) Contributions to the trust are limited by a percentage of earned income of the
+
+participant, are subject to an annual limit of $50,000 or less to the trust, or are subject to
+
+a lifetime limit of $1,000,000 or less to the trust. These contribution limits are
+
+determined using the U.S. Treasury Bureau of Fiscal Service foreign currency
+conversion rate on the last day of the tax year (available at
+
+https://www.fiscal.treasury.gov/reports-statements/treasury-reporting-rates-exchange).
+
+       (5) Withdrawals, distributions, or payments from the trust are conditioned upon
+
+reaching a specified retirement age, disability, or death, or penalties apply to
+
+withdrawals, distributions, or payments made before such conditions are met. A trust
+
+that otherwise meets the requirements of this section 5.03(5), but that allows
+
+withdrawals, distributions, or payments for in-service loans or for reasons such as
+
+hardship, educational purposes, or the purchase of a primary residence, will be treated
+
+as meeting the requirements of this section 5.03(5).
+
+       (6) In the case of an employer-maintained trust, (i) the trust is nondiscriminatory
+
+insofar as a wide range of employees, including rank and file employees, must be
+
+eligible to make or receive contributions or accrue benefits under the terms of the trust
+
+(alone or in combination with other comparable plans), (ii) the trust (alone or in
+
+combination with other comparable plans) actually provides significant benefits for a
+
+substantial majority of eligible employees, and (iii) the benefits actually provided under
+
+the trust to eligible employees are nondiscriminatory.
+
+       A trust that otherwise meets the requirements of this section 5.03 will not fail to
+
+be treated as a tax-favored foreign retirement trust within the meaning of this section
+
+solely because it may receive a rollover of assets or funds transferred from another tax-
+
+favored foreign retirement trust established and operated under the laws of the same
+
+jurisdiction, provided that the trust transferring assets or funds also meets the
+
+requirements of this section 5.03.
+
+       .04 Tax-Favored Foreign Non-Retirement Savings Trust. For purposes of this
+revenue procedure, a tax-favored foreign non-retirement savings trust means a foreign
+
+trust for U.S. tax purposes that is created, organized, or otherwise established under the
+
+laws of a foreign jurisdiction (the trust’s jurisdiction) as a trust, plan, fund, scheme, or
+
+other arrangement (collectively, a trust) to operate exclusively or almost exclusively to
+
+provide, or to earn income for the provision of, medical, disability, or educational
+
+benefits, and that meets the following requirements established by the laws of the trust’s
+
+jurisdiction.
+
+       (1) The trust is generally exempt from income tax or is otherwise tax-favored
+
+under the laws of the trust’s jurisdiction as defined in section 5.03(1) of this revenue
+
+procedure.
+
+       (2) Annual information reporting with respect to the trust (or about the beneficiary
+
+or participant) is provided, or is otherwise available, to the relevant tax authorities in the
+
+trust’s jurisdiction.
+
+       (3) Contributions to the trust are limited to $10,000 or less annually or $200,000
+
+or less on a lifetime basis, determined using the U.S. Treasury Bureau of Fiscal Service
+
+foreign currency conversion rate on the last day of the tax year (available at
+
+https://www.fiscal.treasury.gov/reports-statements/treasury-reporting-rates-exchange).
+
+       (4) Withdrawals, distributions, or payments from the trust are conditioned upon
+
+the provision of medical, disability, or educational benefits, or apply penalties to
+
+withdrawals, distributions, or payments made before such conditions are met.
+
+       A trust that otherwise meets the requirements of this section 5.04 will not fail to
+
+be treated as a tax-favored foreign non-retirement savings trust within the meaning of
+
+this section 5.04 solely because it may receive a rollover of assets or funds transferred
+from another tax-favored foreign non-retirement savings trust established and operated
+
+under the laws of the same jurisdiction, provided that the trust transferring assets or
+
+funds also meets the requirements of this section 5.04.
+
+SECTION 6. PROCEDURES FOR REQUESTING ABATEMENT OR REFUND OF
+SECTION 6677 PENALTIES
+
+       .01 In General. Subject to the limitations of sections 6402 and 6511, eligible
+
+individuals who have been assessed a penalty under section 6677 for failing to comply
+
+with section 6048 with respect to an applicable tax-favored foreign trust (without regard
+
+to whether such failure was due to reasonable cause under section 6677(d)) and who
+
+wish to obtain relief under this revenue procedure may request an abatement of the
+
+penalty assessed, or a refund of the penalty paid, under section 6677 by filing Form
+
+843, Claim for Refund and Request for Abatement. Eligible individuals are not
+
+precluded from requesting relief under any other applicable relief provisions.
+
+       Under section 6402(a), the Secretary is authorized to credit, within the applicable
+
+period of limitations, an overpayment against any liability in respect of an internal
+
+revenue tax of the person who made the overpayment, and must generally refund any
+
+balance to that person, subject to the requirements of section 6402(c), (d), (e), and (f)
+
+(providing for offset for past-due support and certain debts to federal and state
+
+governments). Section 6511(b)(1) provides that no credit or refund shall be allowed or
+
+made after the expiration of the period of limitation prescribed in section 6511(a), unless
+
+the taxpayer filed a claim for credit or refund within that period.
+
+       .02 Where to File. A Form 843 requesting relief under this revenue procedure
+
+should be mailed to Internal Revenue Service, Ogden, UT 84201-0027.
+        .03 Filing Requirements for Form 843. Eligible individuals should complete the
+
+form and write the statement “Relief pursuant to Revenue Procedure 2020-17” on Line 7
+
+of the form. In addition, Line 7 should include an explanation of how the eligible
+
+individual meets each relevant requirement under section 5.02 of this revenue
+
+procedure and how the foreign trust meets each relevant requirement under section
+
+5.03 or 5.04 of this revenue procedure.
+
+SECTION 7. EFFECTIVE DATE
+
+        This revenue procedure is effective as of the date this revenue procedure is
+
+published in the Internal Revenue Bulletin, and applies to all prior open taxable years,
+
+subject to the limitations of section 6511.
+
+SECTION 8. DRAFTING INFORMATION
+
+        The principal author of this revenue procedure is Tracy M. Villecco of the Office
+
+of Associate Chief Counsel (International). For further information regarding this
+
+revenue procedure contact Tracy Villecco or Lara Banjanin at (202) 317-6933 (not a toll-
+
+free call).
+

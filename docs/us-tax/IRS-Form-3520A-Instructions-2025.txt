@@ -1,0 +1,526 @@
+Instructions for Form 3520-A
+(Rev. December 2025)
+(Use with the December 2023 revision of Form 3520-A.)
+Annual Information Return of Foreign Trust With a U.S. Owner
+Section references are to the Internal Revenue Code              Line 22 in the Instructions for Form 3520. See Penalties,
+unless otherwise noted.                                          later.
+
+Future Developments                                              Exceptions To Filing
+                                                                 Rev. Proc. 2014-55 exempts from foreign trust information
+For the latest information about developments related to         reporting certain Canadian retirement plans, including
+Form 3520-A and its instructions, such as legislation            Canadian registered retirement savings plans (RRSPs)
+enacted after they were published, go to IRS.gov/                and Canadian registered retirement income funds
+Form3520A.                                                       (RRIFs). For more information about whether a Canadian
+                                                                 retirement plan qualifies for an exemption from foreign
+Reminders                                                        trust information reporting, see sections 3 and 5 of Rev.
+                                                                 Proc. 2014-55, 2014-44 I.R.B. 753, available at
+Due date. Form 3520-A is due by the 15th day of the 3rd          IRS.gov/IRB/2014-44_IRB#RP-2014-55.
+month after the end of the foreign trust’s tax year.
+However, a substitute Form 3520-A attached to a U.S                 Rev. Proc. 2020-17 exempts from foreign trust
+owner’s Form 3520 is due the same day as Form 3520.              information reporting certain eligible individuals’
+See When To File, later.                                         transactions with, and ownership of, certain tax-favored
+                                                                 foreign trusts that are established and operated
+Continuous-use revision. Use these instructions for tax          exclusively or almost exclusively to provide pension or
+year 2025 and subsequent years until a superseding               retirement benefits, or to provide medical, disability, or
+revision is issued.                                              educational benefits. For more information, see section 5
+Tax year and statements. Enter the tax year at the top           of Rev. Proc. 2020-17, 2020-12 I.R.B. 539, available at
+of the first page and all statements. If the foreign trust has   IRS.gov/IRB/2020-12_IRB#REV-PROC-2020-17.
+adopted a fiscal tax year, enter the calendar year in which
+                                                                     Proposed regulations under section 6048 exempt from
+the fiscal tax year begins on all statements.
+                                                                 foreign trust information reporting certain eligible
+Note: All information provided must be in English. All           individuals’ transactions with, and ownership of, certain
+amounts reported must be in U.S. currency.                       tax-favored foreign trusts that are established and
+                                                                 operated exclusively or almost exclusively to provide
+                                                                 pension or retirement benefits, or to provide medical,
+General Instructions                                             disability, or educational benefits. You may rely on these
+                                                                 proposed regulations for any tax year ending after May 8,
+Purpose of Form                                                  2024, and beginning on or before the date that final
+Form 3520-A is the annual information return of a foreign        regulations are published in the Federal Register,
+trust with at least one U.S. owner. The form provides            provided you and all related persons (within the meaning
+information about the foreign trust, its U.S. beneficiaries,     of sections 267(b) and 707(b)(1)) apply the proposed
+and any U.S. person who is treated as an owner of any            regulations in their entirety and in a consistent manner for
+portion of the foreign trust under the grantor trust rules       all tax years beginning with the first tax year of reliance
+(sections 671 through 679).                                      until the applicability date of the final regulations. For more
+                                                                 information, see Proposed Regulations section 1.6048-5
+Who Must File                                                    as published in the Federal Register at govinfo.gov/
+A foreign trust with a U.S. owner must file Form 3520-A in       content/pkg/FR-2024-05-08/pdf/2024-09434.pdf.
+order for the U.S. owner to satisfy its annual information
+reporting requirements under section 6048(b). Each U.S.             The exemptions from foreign trust information reporting
+person treated as an owner of any portion of a foreign           described in Rev. Proc. 2014-55, Rev. Proc. 2020-17, and
+trust under the grantor trust rules (sections 671 through        the proposed regulations under section 6048 do not affect
+679) is responsible for ensuring that the foreign trust files    any reporting obligations under section 6038D or under
+Form 3520-A and furnishes the required annual                    any other provision of the U.S. law, including the
+statements to its U.S. owners and U.S. beneficiaries. If a       requirement to file Financial Crimes Enforcement
+foreign trust fails to file Form 3520-A, the U.S. owner must     (FinCEN) Form 114, Report of Foreign Bank and Financial
+complete and attach a substitute Form 3520-A for the             Accounts (FBAR), imposed by 31 U.S.C. section 5314
+foreign trust to the U.S. owner’s Form 3520, Annual Return       and the regulations thereunder. For more information, go
+To Report Transactions With Foreign Trusts and Receipt of        to IRS.gov/FBAR.
+Certain Foreign Gifts, to avoid being subject to the penalty
+for the foreign trust’s failure to file a Form 3520-A. See
+                               Instructions for Form 3520-A (Rev. 12-2025) Catalog Number 25096U
+Oct 8, 2025                     Department of the Treasury Internal Revenue Service www.irs.gov
+When To File                                                   receiver, trustee, or assignee, the fiduciary must sign the
+                                                               return, instead of the partner, LLC member, or corporate
+The foreign trust must file Form 3520-A, including the         officer. A Form 3520-A signed by a receiver or trustee in
+Foreign Grantor Trust Owner Statement (pages 3 and 4)          bankruptcy on behalf of a trustee that is a partnership or
+and the Foreign Grantor Trust Beneficiary Statement            corporation must be accompanied by a copy of the order
+(page 5), by the 15th day of the third month following the     or instructions of the court authorizing signing of Form
+end of the trust’s tax year unless an extension of time to     3520-A.
+file is granted. The foreign trust must also provide copies
+of the Foreign Grantor Trust Owner Statement (pages 3             A substitute Form 3520-A must be signed by the U.S.
+and 4) and the Foreign Grantor Trust Beneficiary               owner. The U.S. owner’s name and taxpayer identification
+Statement (page 5) to the U.S. owners and U.S.                 number (TIN) must be provided on the “Title” line of the
+beneficiaries by the due date of Form 3520-A.                  signature box.
+   If the foreign trust fails to file Form 3520-A, the U.S.
+                                                                  When using a paid preparer, the paid preparer must do
+owner must file a substitute Form 3520-A, including the
+                                                               the following.
+Foreign Grantor Trust Owner Statement (pages 3 and 4)
+and the Foreign Grantor Trust Beneficiary Statement
+                                                               • Complete the required preparer information, including
+                                                               their name, Preparer Tax Identification Number (PTIN),
+(page 5), along with the U.S. owner’s Form 3520, by the
+                                                               and other identifying details.
+Form 3520 due date. The U.S. owner must also provide
+copies of the Foreign Grantor Trust Owner Statement
+                                                               • Sign the return in the space provided for the preparer’s
+                                                               signature.
+(pages 3 and 4) and the Foreign Grantor Trust Beneficiary
+Statement (page 5) to the U.S. owners and U.S.
+                                                               • Provide a copy of the return to the trustee or U.S. owner.
+beneficiaries by the Form 3520 due date. See the               Inconsistent Treatment of Items
+Instructions for Form 3520 for the due date of Form 3520.      The U.S. beneficiary’s and U.S. owner’s tax returns must
+Caution: Only a complete Form 3520-A is considered             be consistent with the Form 3520-A filed by the foreign
+timely filed. Form 3520-A is considered complete only if all   trust unless you report the inconsistency to the IRS. If the
+required attachments are included.                             U.S. beneficiaries or U.S. owners are treating items on
+                                                               their tax returns differently from the way the foreign trust
+Extension of time to file. File Form 7004, Application for     treated them on its return, they must file Form 8082,
+Automatic Extension of Time To File Certain Business           Notice of Inconsistent Treatment or Administrative
+Income Tax, Information, and Other Returns, using the          Adjustment Request (AAR). See Form 8082 for more
+foreign trust’s employer identification number (EIN), to       details.
+request an extension of time to file Form 3520-A. Form
+7004 must be filed by the 15th day of the 3rd month            Penalties
+following the end of the trust’s tax year. See Form 7004 for   The U.S. owner is subject to an initial penalty equal to the
+additional information.                                        greater of $10,000 or 5% of the gross value, defined later,
+                                                               of the portion of the trust’s assets treated as owned by the
+Note: An extension of time to file an income tax return        U.S. person at the close of that tax year if the foreign trust
+does NOT extend the time to file Form 3520-A. You MUST         (a) fails to file a timely Form 3520-A, or (b) does not
+file Form 7004 using the foreign trust’s EIN to request an     furnish all of the information required by section 6048(b) or
+extension of time to file Form 3520-A.                         includes incorrect information. See section 6677(a)
+Where To File                                                  through (c).
+File Form 3520-A, including the Foreign Grantor Trust             If a foreign trust fails to file a Form 3520-A, the U.S.
+Owner Statement (pages 3 and 4) and the Foreign                owner must complete and attach a substitute Form
+Grantor Trust Beneficiary Statement (page 5), at the           3520-A to the U.S. owner’s Form 3520 by the due date of
+following address.                                             the U.S. owner’s Form 3520 (and not the due date for
+                                                               Form 3520-A) in order to avoid being subject to a penalty
+    Internal Revenue Service Center                            for the foreign trust’s failure to file a Form 3520-A. For
+    P.O. Box 409101                                            example, a substitute Form 3520-A that, to the best of the
+    Ogden, UT 84409                                            U.S. owner’s ability, is completed and attached to the U.S.
+                                                               owner’s Form 3520 by the due date for the Form 3520
+See the Instructions for Form 3520 for where to file a         (such as April 15 for the U.S. owners who are individuals)
+substitute Form 3520-A attached to the U.S. owner’s Form       is considered timely filed.
+3520.
+                                                                  Additional penalties will be imposed if the
+Who Must Sign                                                  noncompliance continues for more than 90 days after the
+Form 3520-A must be signed by the trustee of the foreign       IRS mails a notice of failure to comply with the required
+trust. If the trustee is a partnership, a partner or limited   reporting. If the IRS can determine the gross value,
+liability company (LLC) member must sign Form 3520-A. If       defined later, of the portion of the trust’s assets treated as
+the trustee is a corporation, the president, vice president,   owned by the U.S. person at the close of the tax year, then
+treasurer, assistant treasurer, chief accounting officer, or   the penalties will be reduced as necessary to assure that
+any other corporate officer authorized to sign must sign       the aggregate amount of such penalties does not exceed
+Form 3520-A. However, if Form 3520-A is filed on behalf        the gross value of the trust. For more information, see
+of a trustee that is a partnership or corporation by a         section 6677.
+
+2                                                                              Instructions for Form 3520-A (Rev. 12-2025)
+    Criminal penalties may be imposed under sections              services have an FMV of $20, the U.S. owner has
+7203, 7206, and 7207 for failure to file on time and for          received a distribution of $80.
+filing a false or fraudulent return.
+                                                                  Foreign Trust and Domestic Trust
+Note: If a U.S. owner of a foreign trust is subject to a 20%      A foreign trust is any trust other than a domestic trust. A
+penalty imposed under section 6662 for an underpayment            domestic trust is any trust if:
+of tax required to be shown on a return, then such penalty
+                                                                     1. A court within the United States is able to exercise
+may be increased to 40% under section 6662(j) for any
+                                                                  primary supervision over the administration of the trust,
+portion of an underpayment that is attributable to any
+                                                                  and
+transaction involving any asset with respect to which
+information was required to be provided on Form 3520-A.              2. One or more U.S. persons have the authority to
+For more information about undisclosed foreign financial          control all substantial decisions of the trust.
+asset understatements, see section 6662(j).
+                                                                  Grantor
+Reasonable cause. No penalties will be imposed if the             A grantor includes any person who creates a trust or
+taxpayer can demonstrate that the failure to comply with          directly or indirectly makes a gratuitous transfer of cash or
+the reporting requirements was due to reasonable cause            other property to a trust. A grantor includes any person
+and not willful neglect.                                          treated as the owner of any part of a foreign trust’s assets
+Note: The fact that a foreign country would impose                under sections 671 through 679, excluding section 678.
+penalties for disclosing the required information is not          Note: If a partnership or corporation makes a gratuitous
+reasonable cause. See section 6677(d). Similarly,                 transfer to a trust, the partners or shareholders are
+reluctance on the part of a foreign fiduciary or provisions       generally treated as the grantors of the trust, unless the
+in the trust instrument that prevent the disclosure of            partnership or corporation made the transfer for a
+required information is not reasonable cause.                     business purpose of the partnership or corporation.
+Definitions                                                           If a trust makes a gratuitous transfer to another trust,
+                                                                  the grantor of the transferor trust is treated as the grantor
+Distribution                                                      of the transferee trust, except that if a person with a
+A distribution received directly or indirectly from a foreign     general power of appointment over the transferor trust
+trust for section 6048(c) reporting purposes is any               exercises that power in favor of another trust, such person
+gratuitous transfer of money or other property from a             is treated as the grantor of the transferee trust, even if the
+foreign trust, whether or not a portion of such trust is          grantor of the transferor trust is treated as the owner of the
+treated as a grantor trust under the grantor trust rules of       transferor trust.
+sections 671 through 679, and without regard to whether
+the recipient is designated as a beneficiary by the terms of
+                                                                  Grantor Trust
+the trust. A distribution includes the receipt of trust corpus    A grantor trust is any trust to the extent that the assets of
+and the receipt of a gift or bequest described in section         the trust are treated as owned by a person other than the
+663(a).                                                           trust. See the grantor trust rules in sections 671 through
+                                                                  679. A part of the trust may be treated as a grantor trust to
+    A distribution also includes constructive transfers from      the extent that only a portion of the trust assets are owned
+a foreign trust. For example, if a U.S. beneficiary, defined      by a person other than the trust.
+later, or U.S. owner makes charges on a credit card that
+are paid by a foreign trust or guaranteed or secured by the       Note: Under the HIRE Act, effective after March 18, 2010,
+assets of a foreign trust, the amount charged will be             if a foreign trust directly or indirectly loans cash or
+treated as a distribution to that U.S. beneficiary or U.S.        marketable securities to a U.S. person who does not repay
+owner by the foreign trust. Similarly, if a U.S. beneficiary or   the loan at a market rate of interest, or allows a U.S.
+U.S. owner writes checks on a foreign trust’s bank                person to use trust property without paying FMV within a
+account, the amount will be treated as a distribution. Also,      reasonable period of time, the trust will be treated as
+if a U.S. beneficiary or U.S. owner receives a payment            having a U.S. beneficiary and is therefore treated as a
+from a foreign trust in exchange for property transferred to      grantor trust under the grantor trust rules. See section
+the trust or services rendered to the trust, and the fair         679.
+market value (FMV) of the payment received exceeds the
+FMV of the property transferred or services rendered, the         Gross Value
+excess will be treated as a distribution to that U.S.             Gross value is the value of property as determined under
+beneficiary or U.S. owner. See section V of Notice 97-34,         section 2512 and its regulations, without regard to any
+1997-25 I.R.B. 22, available at IRS.gov/pub/irs-irbs/             prohibitions or restrictions on a person’s interest in the
+irb97-25.pdf.                                                     property. See section VII of Notice 97-34. Although formal
+   Example 1. If a U.S. beneficiary sells stock with an           appraisals are generally not required, you should keep
+FMV of $100 to a foreign trust and receives $150 in               contemporaneous records of how you arrived at your
+exchange, the U.S. beneficiary has received a distribution        good faith estimate.
+of $50.
+                                                                  Nongrantor Trust
+   Example 2. If a U.S. owner receives $100 from a
+                                                                  A nongrantor trust is any trust to the extent that the assets
+foreign trust for performing services for the trust, and the
+                                                                  of the trust are not treated as owned by a person other
+
+Instructions for Form 3520-A (Rev. 12-2025)                                                                                     3
+than the trust under the grantor trust rules in sections 671                     AUTHORIZATION OF AGENT
+through 679. Thus, a nongrantor trust is treated as a
+                                                               [ Name of foreign trust ] hereby expressly authorizes [ name of
+taxable entity. A trust may be treated as a nongrantor trust   U.S. agent ] to act as its agent solely for purposes of sections
+with respect to only a portion of the trust assets. See        7602, 7603, and 7604 of the Internal Revenue Code with respect to
+Grantor Trust, earlier.                                        any request to examine records or produce testimony related to the
+                                                               proper treatment of amounts required to be taken into account
+                                                               under the rules of section 6048(b)(2)(A) or to any summons for such
+Owner                                                          records or testimony. I certify that I have the authority to execute
+An owner of a foreign trust is the person that is treated as   this authorization of agent to act on behalf of [ name of foreign
+                                                               trust ].
+owning any of the assets of a foreign trust under the
+grantor trust rules.
+                                                               Signature of trustee                       (title)           (date)
+Property                                                       (or other authorized person)
+
+Property means any property, whether tangible or
+intangible, including cash.                                    Your Name (type or print)
+
+U.S. Agent                                                     Taxpayer Identification Number (if any)
+A U.S. agent is a U.S. person, defined later, that has a
+binding contract with a foreign trust that allows the U.S.     Address
+person to act as the trust’s authorized U.S. agent, in
+applying sections 7602, 7603, and 7604 with respect to:        [ Name of agent ] accepts this appointment to act as agent
+                                                               for [ name of foreign trust ] for the above purpose. I certify that I
+• Any request by the IRS to examine records or produce         have the authority to execute this authorization of agent to act on
+testimony related to the proper U.S. tax treatment of          behalf of [ name of foreign trust ] and agree to accept service of
+                                                               process for the above purposes.
+amounts distributed, or required to be taken into account
+under the grantor trust rules, with respect to a foreign
+trust; or                                                      Signature of agent                         (title)           (date)
+• Any summons by the IRS for such records or testimony.
+   A U.S. grantor, a U.S. beneficiary, or a domestic           Your Name (type or print)
+corporation controlled by the grantor or beneficiary may
+act as a U.S. agent. However, a foreign trust will not be      Taxpayer Identification Number (if any)
+treated as having a U.S. agent unless the U.S. agent’s
+name, address, and TIN are entered on lines 3a through         Address
+3g of Part I of Form 3520-A. See Taxpayer identification
+numbers (TINs), later.
+                                                               Caution: Do not enter a PTIN on the Authorization of
+   If a foreign trust with a U.S. owner does not have a U.S.   Agent form.
+agent, the IRS may redetermine the amounts required to
+be taken into account with respect to the foreign trust by        If the U.S. person’s responsibility as an agent of the
+the U.S. owner. See section 6048(b)(2). In order to avoid      foreign trust is terminated for any reason (for example,
+this, a U.S. owner of a foreign trust should ensure that the   resignation, liquidation, or death), the U.S. owner of the
+foreign trust appoints a U.S. person to act as the foreign     foreign trust must make sure the foreign trust files an
+trust’s limited agent for purposes of applying sections        amended Form 3520-A with the IRS within 90 days. See
+7602, 7603, and 7604. The agency relationship must be          section IV.B of Notice 97-34.
+established by the time the U.S. person files Form 3520-A
+for the relevant tax year and must continue as long as the     U.S. Beneficiary
+statute of limitations remains open for the relevant tax       A U.S. beneficiary generally includes any U.S. person that
+year.                                                          could possibly benefit (directly or indirectly) from the trust
+                                                               (including an amended trust) at any time, whether or not
+    In order to authorize a U.S. person to act as an agent     the person is designated in the trust instrument as a
+under section 6048(b), the trust and the agent must enter      beneficiary and whether or not the person can receive a
+into a binding agreement substantially in the format that      distribution from the trust in the current year. In addition, a
+follows.                                                       U.S. beneficiary includes:
+                                                               • A foreign corporation that is a controlled foreign
+                                                               corporation (as defined in section 957(a)),
+                                                               • A foreign partnership if a U.S. person is a partner of the
+                                                               partnership, and
+                                                               • A foreign estate or trust if the estate or trust has a U.S.
+                                                               beneficiary. See section II of Notice 97-34 and the
+                                                               regulations under section 679 for additional information.
+                                                               Foreign trust treated as having a U.S. beneficiary. In
+                                                               general, if a U.S. person, directly or indirectly, transfers
+                                                               property to a foreign trust (other than a deferred
+                                                               compensation or charitable trust described in section
+                                                               6048(a)(3)(B)(ii)), the foreign trust will be treated as
+
+4                                                                                     Instructions for Form 3520-A (Rev. 12-2025)
+having a U.S. beneficiary unless the terms of the trust              For guidance on determining resident alien status, go
+instrument specifically prohibit any distribution of income       to Pub. 519, U.S. Tax Guide for Aliens.
+or corpus to a U.S. person at any time, even after the
+death of the U.S. transferor or any event terminating the
+trust, and the trust cannot be amended or revised to allow        Specific Instructions
+such a distribution. For these purposes, an amount will be
+treated as accumulated for the benefit of a U.S. person
+                                                                  Period Covered
+even if the U.S. person’s interest in the trust is contingent     For calendar-year filers, fill in the “calendar year” space at
+on a future event and regardless of whether anything is           the top of the form. For fiscal-year filers, fill in the “tax year
+actually distributed to a U.S. person during that tax year.       beginning” and “ending” spaces at the top of the form.
+   Special rule in case of discretion to identify                 Initial Return, Final Return, Amended
+beneficiaries. For purposes of the general rule above, if
+any person has the discretion of making a distribution            Return, Extension Filed, Substitute
+from the trust to, or for the benefit of, any person, the trust
+will be treated as having a beneficiary who is a U.S.
+                                                                  Form 3520-A
+person, unless the terms of the trust specifically identify       Initial return. If this is the foreign trust’s first return, check
+the class of persons to whom such distributions may be            the “Initial return” box.
+made, and none of those persons are U.S. persons during
+                                                                  Final return. If the foreign trust ceases to exist, check the
+the tax year.
+                                                                  “Final return” box.
+   Certain agreements and understandings treated as
+terms of the trust. For purposes of the general rule              Amended return. If this Form 3520-A is filed to amend a
+above, if any U.S. person who directly or indirectly              previously filed Form 3520-A, check the “Amended return”
+transfers property to the trust is directly or indirectly         box.
+involved in any agreement or understanding (whether               Extension filed. If the Form 7004 was timely filed to
+written, oral, or otherwise) that may result in the income or     request an extension for the Form 3520-A, check the
+corpus of the trust being paid or accumulated to, or for the      “Extension filed” box.
+benefit of, a U.S. person, such agreement or
+understanding will be treated as a term of the trust.             Substitute Form 3520-A. If you are a U.S. owner of the
+   Certain loans or uncompensated use of trust                    foreign trust filing a substitute Form 3520-A and attaching
+property. If a foreign trust is not already treated as having     it to your Form 3520, check the “Substitute Form 3520-A”
+a U.S. beneficiary under the rules described above, the           box.
+trust will be treated as having a U.S. beneficiary if, after      Excepted Specified Foreign Financial
+March 18, 2010, either:
+• The foreign trust loans cash or marketable securities,          Assets Reported
+directly or indirectly, to a U.S. person and the U.S. person      Check the box only if a U.S. person treated as the owner
+does not repay the loan at a market rate of interest within a     of any portion of the trust under the grantor trust rules also
+reasonable period of time; or                                     files Form 8938, Statement of Specified Foreign Financial
+• A U.S. person, directly or indirectly, uses property that is    Assets, for the tax year and includes this form in the total
+owned by the foreign trust and does not pay FMV of the            number of Forms 3520-A reported on line 16 of Part IV,
+use of such property within a reasonable period of time.          Excepted Specified Foreign Financial Assets, of Form
+Presumption that foreign trust has U.S. beneficiary. If           8938. For more information, see the Instructions for Form
+a U.S. person, directly or indirectly, transfers property to a    8938, generally, and in particular, Duplicative reporting
+foreign trust (other than a deferred compensation or              and the specific instructions for Part IV.
+charitable trust described in section 6048(a)(3)(B)(ii)), the     Part I—General Information
+IRS may treat such trust as having a U.S. beneficiary for
+purposes of applying section 679(d) to such transfer if the       Taxpayer identification numbers (TINs). Use social
+IRS requests information with respect to the transfer and         security numbers (SSNs) or individual taxpayer
+the U.S. person fails to demonstrate to the satisfaction of       identification numbers (ITINs) to identify individuals. Use
+the IRS that no portion of the income or corpus of the trust      EINs to identify estates, trusts, partnerships, and
+may ever be paid to or accumulated for the benefit of a           corporations. Don’t use an SSN in place of an EIN.
+U.S. person.                                                      Applying for an EIN. If the foreign trust doesn’t have an
+U.S. Person                                                       EIN, the foreign trust may apply for one online at IRS.gov/
+                                                                  EIN. If the foreign trust’s principal place of business is
+A U.S. person is:                                                 outside the United States or its territories, the foreign trust
+• A citizen or resident of the United States, including dual      can apply for an EIN by phone at 267-941-1099. See
+residents who claim the benefits under an income tax              International EIN applicants under Other ways to apply for
+treaty;                                                           an EIN at IRS.gov/EIN.
+• A domestic partnership;
+• A domestic corporation;                                         Caution: Do not enter a PTIN in any entry space on Form
+• Any estate (other than a foreign estate, within the             3520-A other than the entry space for “PTIN” at the bottom
+meaning of section 7701(a)(31)(A)); and                           of page 1 of the form.
+• Any domestic trust (defined earlier).
+
+Instructions for Form 3520-A (Rev. 12-2025)                                                                                        5
+Address. Include the room, suite, or other unit number          • Accounts (including certificates of deposit and money
+after the street address. If the post office does not deliver   market accounts) with banks, credit unions, and thrift
+mail to the street address and the U.S. person has a P.O.       institutions.
+box, show the box number instead.                               • Notes, loans, and mortgages.
+                                                                • U.S. Treasury bills, notes, and bonds.
+Foreign address. Do not abbreviate the country name.            • U.S. savings bonds.
+Line 1b. Enter the EIN of the foreign trust. Do not enter       • Original issue discount.
+an SSN or ITIN. Only an EIN should be used to identify          • Income received as a regular interest holder of a real
+the foreign trust.                                              estate mortgage investment conduit (REMIC).
+Line 2. Check “Yes” if the foreign trust appointed a U.S.          For taxable bonds acquired after 1987, amortizable
+agent and enter the year the Authorization of Agent form        bond premium is treated as an offset to the interest
+was last attached. See U.S. Agent, earlier, for the             income instead of as a separate interest deduction. See
+Authorization of Agent form.                                    Pub. 550, Investment Income and Expenses.
+   The Authorization of Agent form should be attached           Line 2. Dividends. Report all ordinary dividends
+every 3 years unless there has been a change, and if so, it     received during the tax year.
+should be attached in the year with respect to which the
+change relates.                                                 Note: Report capital gain distributions on Line 5. Capital
+                                                                gains (losses) of this section.
+   Check “No” if the foreign trust did not appoint a U.S.
+agent, and attach the following documents to Form               Line 4. Income (loss) from partnerships, fiduciaries,
+3520-A.                                                         etc. Enter the trust’s share of income or (losses) from
+• A summary of the terms of the trust that includes a           partnerships, S corporations, estates, other trusts, and
+summary of any oral agreements or understandings you            REMICs.
+have with the trustee, whether or not legally enforceable.         If the trust received a Schedule K-1 from a partnership,
+• A copy of all trust documents (and any revisions),            S corporation, or other flow-through entity, use the
+including the trust instrument, any memoranda of wishes         corresponding lines on Form 3520-A to report the interest,
+prepared by the trustees summarizing the settlor’s wishes,      dividends, capital gains, etc., from the flow-through entity.
+any letter of wishes prepared by the settlor summarizing
+                                                                Line 5. Capital gains (losses). For capital gains or
+his or her wishes, and any similar documents.
+                                                                (losses) attributable to a U.S. owner, use Schedule D
+• A copy of the trust’s organizational chart, including         (corporate or individual, whichever applies) and Form
+ownership structure and percentage of ownership.
+                                                                8949, Sales and Other Dispositions of Capital Assets, if
+Note: If these documents have been attached to a Form           applicable.
+3520-A filed within the previous 3 years, attach only           Line 6. Ordinary gains (losses). Enter the ordinary gain
+relevant updates.                                               or (loss) from the sale or exchange of property other than
+Lines 3a through 3g. Enter the name, TIN, and address           capital assets and also from involuntary conversions
+of the U.S. agent appointed. See U.S. Agent, earlier.           (other than casualty or theft).
+Line 5. Enter the number of Foreign Grantor Trust Owner         Line 7. Other income. Enter other items of income not
+Statements (pages 3 and 4) included with this Form              included on lines 1 through 6. List the types and amounts
+3520-A.                                                         on an attached statement if the trust has more than one
+                                                                item.
+Line 6. Enter the number of Foreign Grantor Trust
+Beneficiary Statements (page 5) included with this Form            Items to be reported on line 7 include any part of a total
+3520-A.                                                         distribution shown on Form 1099-R, Distributions From
+                                                                Pensions, Annuities, Retirement or Profit-Sharing Plans,
+Sign here. The trustee of the foreign trust must sign the       IRAs, Insurance Contracts, etc., that is treated as ordinary
+Form 3520-A; however, if the U.S. owner of the foreign          income. For more information, see the instructions for
+trust is filing a substitute Form 3520-A, the U.S. owner        Form 4972, Tax on Lump-Sum Distributions.
+must sign. See Who Must Sign, earlier.
+                                                                Expenses
+Part II—Foreign Trust Income
+                                                                Line 9. Interest expense. Enter the amount of interest
+Statement                                                       (subject to limitations) paid or incurred by the trust on
+Include all income from U.S. and non-U.S. sources. This         amounts borrowed by the trust, or on debt acquired by the
+financial statement must reasonably reflect the trust’s         trust, that is not reported elsewhere in Part II.
+income under U.S. income tax principles.                           If the proceeds of a loan were used for more than one
+                                                                purpose (for example, to purchase a portfolio investment
+Income                                                          and to acquire an interest in a passive activity), the
+Line 1. Interest. Report all taxable interest income that       fiduciary must make an interest allocation according to the
+was received during the tax year. Examples of taxable           rules in Temporary Regulations section 1.163-8T.
+interest include, but are not limited to, interest from the        Do not include interest paid on indebtedness incurred
+following.                                                      or continued to purchase or carry obligations on which the
+                                                                interest is wholly exempt from income tax.
+
+
+6                                                                               Instructions for Form 3520-A (Rev. 12-2025)
+Line 10a. Foreign taxes. A foreign tax includes only a          (if any), and country of organization of all entities in which
+tax imposed by the authority of a foreign country.              the trust has an ownership interest, including an
+                                                                ownership chart showing the trust’s position in the chain of
+Line 10b. State and local taxes. Enter any deductible           ownership and the percentages of ownership.
+state and local income or real property taxes paid or
+incurred during the tax year that are not reported              Note: The term “person” includes an individual or an
+elsewhere in Part II.                                           entity, whether U.S. or foreign. See the definition of U.S.
+   Do not deduct on line 10b or on any other line of Part II:   person, earlier. A foreign person is an individual or entity
+• Federal income taxes;                                         that is not a U.S. person.
+• Estate, inheritance, legacy, succession, and gift taxes;      Lines 17b and 17c. Distributions to U.S. owners and
+or                                                              U.S. beneficiaries. Separately list the total amount of
+• Federal duties and excise taxes.                              distributions (including the uncompensated use of trust
+Line 11. Amortization and depreciation (depletion). A           property) to each U.S. owner and U.S. beneficiary. List the
+reasonable amount is allowed as a depreciation deduction        full name, TIN, date of distribution, and FMV on the date
+for the exhaustion, wear, and tear of:                          of distribution (dollar amount) for each U.S. owner and
+• Property used in a trade or business, or                      U.S. beneficiary who receives a distribution. If more space
+• Property held for the production of income.                   is needed, attach a statement.
+Line 12. Trustee and advisor fees. Enter the deductible             Prepare a separate Foreign Grantor Trust Owner
+fees paid or incurred to the fiduciary for administering the    Statement (see below) or Foreign Grantor Trust
+trust during the tax year.                                      Beneficiary Statement (see below) for each U.S. owner
+                                                                or for each U.S. beneficiary who receives a distribution
+Line 13. Charitable contributions. Generally, any part          from the trust.
+of the income reported on line 8 that is paid (or treated as
+paid) during the tax year for a charitable purpose specified    Part III—Foreign Trust Balance Sheet
+in section 170(c) is allowed as a deduction. It is not          List all assets and liabilities of the trust, including those
+necessary that the charitable organization be created or        assets and liabilities attributable to the portion(s) of the
+organized in the United States.                                 trust (if any) not treated as owned by a U.S. person.
+Line 14. Other expenses. Enter other items of expense             The balance sheet should reflect FMV. Include
+not listed on lines 9 through 13. List the type and amount      certificates of deposit as cash on line 1.
+on an attached statement if the trust has more than one
+item.                                                              For purposes of completing Part III, it is not necessary
+                                                                or required to reconcile any differences between the book
+Line 17a. FMV of total distributions. Attach a                  and tax basis of assets and liabilities.
+statement that provides the following information
+concerning the transfer.                                        Line 18. Accumulated trust income. Include the total
+                                                                amount of trust income accumulated and not distributed.
+   1. Name, U.S. TIN (if any), and country of organization
+or residence of the person to whom the property was             Foreign Grantor Trust Owner
+transferred.
+   2. A general description of the transfer, and any
+                                                                Statement
+broader transaction of which it forms a part, including a       Caution: On the top of each statement, fill in the tax year.
+chronology of the transfers involved and an identification      If the foreign trust has adopted a fiscal tax year, use the
+of the other parties to the transaction to the extent known.    calendar year in which the fiscal tax year begins.
+                                                                    A copy of this statement (pages 3 and 4 of Form
+   3. A description of the property transferred, including
+                                                                3520-A) must be (a) furnished to each U.S. person who is
+the estimated FMV and the adjusted basis of the property.
+                                                                treated as an owner of the foreign trust under the grantor
+   4. A description of the consideration received by the        trust rules, and (b) included with this Form 3520-A. The
+trust, including its estimated FMV, and for stock or            statement must be furnished to each U.S. owner no later
+securities, the class or type, amount, and characteristics      than the 15th day of the 3rd month following the end of the
+of the interest received. If no consideration was received      trust’s tax year, or later if an extension of time to file is
+by the trust, indicate whether the trust or a U.S. owner        granted, or if filing a substitute Form 3520-A. See When
+exercises any powers over the entity to which the property      and Where To File, earlier.
+was transferred (including a description of such powers),
+and identify the name, U.S. TIN (if any), and country of        TINs and addresses. See the instructions for Part I,
+organization or residence of all beneficial owners of such      earlier, for information on entering TINs and addresses.
+entity.                                                         Line 8. Trust documents. If the trust did not appoint a
+   5. To the extent known, a description of any                 U.S. agent, list the documents attached to the current year
+subsequent transfer of the property, including the name,        Form 3520-A and those attached to a Form 3520-A filed
+U.S. TIN (if any), and country of organization or residence     within the last 3 years. Specify the years the documents
+of the person to whom the property was subsequently             were attached. See Line 2 under Part I, earlier, for a list of
+transferred.                                                    documents the trust is required to attach to Form 3520-A.
+   The statement must also contain a description of the
+trust ownership structure setting forth the name, U.S. TIN
+
+Instructions for Form 3520-A (Rev. 12-2025)                                                                                     7
+Statement of Foreign Trust Income Attributable                    Paperwork Reduction Act Notice. We ask for the
+to U.S. Owner                                                     information on this form to carry out the Internal Revenue
+Caution: On the top of each statement, fill in the tax year.      laws of the United States. You are required to give us the
+For fiscal-year filers, use the year in which your fiscal tax     information. We need it to ensure that you are complying
+year begins.                                                      with these laws and to allow us to figure and collect the
+    The amounts on the statement must include the portion         right amount of tax.
+of income reported by the foreign trust deemed
+attributable to the U.S. owner.                                      You are not required to provide the information
+    The foreign trust may need to furnish to the U.S. owner       requested on a form that is subject to the Paperwork
+additional information, including applicable statements, to       Reduction Act unless the form displays a valid OMB
+ensure that the owner accurately reports income and               control number. Books or records relating to a form or its
+expenses on the owner’s U.S. income tax return.                   instructions must be retained for as long as their contents
+                                                                  may become material in the administration of any Internal
+Foreign Grantor Trust Beneficiary                                 Revenue law.
+Statement                                                           The time needed to complete and file the form will vary
+Caution: On the top of each statement, fill in the tax year.      depending on individual circumstances. The estimated
+If the foreign trust has adopted a fiscal tax year, use the       average time is:
+calendar year in which the fiscal tax year begins.
+    A copy of this statement (page 5 of Form 3520-A) must         Recordkeeping . . . . . . . . . . . . . . . . .          37 hr., 18 min.
+be (a) furnished to each U.S. beneficiary who receives a
+                                                                  Learning about the law or the
+distribution, directly or indirectly, from the foreign trust
+                                                                  form . . . . . . . . . . . . . . . . . . . . . . . . .    2 hr., 40 min.
+during the tax year; and (b) included with this Form
+3520-A. See the definitions for U.S. beneficiary and              Preparing and sending the form to
+distribution provided earlier in these instructions.              the IRS . . . . . . . . . . . . . . . . . . . . . . .     3 hr., 24 min.
+Exception. Do not complete this statement for a U.S.
+person for any portion of the trust of which that U.S.
+person is treated as the owner; instead, complete the                If you have comments concerning the accuracy of
+Foreign Grantor Trust Owner Statement for that U.S.               these time estimates or suggestions for making this form
+person (as described earlier).                                    simpler, we would be happy to hear from you. You can
+    The statement must be furnished to the U.S.                   send us comments through IRS.gov/FormComments. Or
+beneficiary no later than the 15th day of the 3rd month           you can send your comments to Internal Revenue Service,
+following the end of the trust’s tax year, or later if an         Tax Forms and Publications Division, 1111 Constitution
+extension of time to file is granted, or if filing a substitute   Ave. NW, IR-6526, Washington, DC 20224. Do not send
+Form 3520-A. See When and Where To File, earlier.                 the form to this office. Instead, see When and Where To
+                                                                  File, earlier.
+TINs and addresses. See the instructions for Part I,
+earlier, for information on entering TINs and addresses.
+
+
+
+
+8                                                                                       Instructions for Form 3520-A (Rev. 12-2025)
+
