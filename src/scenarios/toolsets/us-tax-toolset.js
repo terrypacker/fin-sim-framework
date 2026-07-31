@@ -47,7 +47,11 @@ export const US_TAX = {
         // fields, so an undeclared field never reaches the document modules.
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
-        fields: { amount: ValueType.currency('USD') } },
+        // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
+        // unfunded part of this same bill. Declared so "Tax Paid by Year" can
+        // exclude it; pickPayload would otherwise drop it and the filter would
+        // silently pass everything.
+        fields: { amount: ValueType.currency('USD'), escalated: ValueType.boolean() } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },
     ],
   },

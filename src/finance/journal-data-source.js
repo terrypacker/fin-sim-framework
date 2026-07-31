@@ -153,6 +153,13 @@ function _project(entry) {
     residency:    d.residency     ?? null,
     description:  d.description   ?? null,
     personKey:    d.personKey     ?? null,
+    // Marks an action RE-ISSUED for the part of itself a first pass could not
+    // fund (TaxPaymentDebitReducerBase). Projected so reports that sum `amount`
+    // can exclude it — the original action's amount already covers the whole
+    // liability, so counting both charges the funded part twice. This projection
+    // is an allowlist: a query on an unprojected field matches nothing and
+    // silently no-ops, so a filter on `escalated` only works once it is listed here.
+    escalated:    d.escalated     ?? null,
 
     // ── Derived from stateDiff ────────────────────────────────────────────────
     // Stored as a comma-joined string for QueryApi `contains` predicate matching.

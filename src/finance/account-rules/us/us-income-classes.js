@@ -208,6 +208,10 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     // Design 76 Gap B: carry the equity's ownership so the AU gain is attributed to
     // its holder rather than halved across the household (mirrors AU_HOUSE_SALE_TAX).
     return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
+      // Sale detail for Schedule D / Form 8949 (mirrors US_HOUSE_SALE_TAX). `gain`
+      // alone identifies the tax, not the disposal — a return has to show what was
+      // sold, for how much, and against what basis.
+      proceeds: salePrice, costBasis, description: stateKey || 'Company Equity',
       ownershipType: eq?.ownershipType, ownerId: eq?.ownerId, owners: eq?.owners }]);
   }
 }
