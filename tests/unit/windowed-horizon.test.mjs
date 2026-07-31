@@ -82,7 +82,17 @@ describe('windowed horizon drives the Roth lever (real IntlRetirement rollout)',
   const KEY = 'rothConversionSchedule[0].incomeTarget';
   const mkProblem = (objective, horizonYears) => new OptimizationProblem({
     variables: [{ paramKey: KEY, type: OPT_PARAM_TYPES.CONTINUOUS, min: 0, max: 400_000, step: 1_000 }],
-    baseParams: { rothConversionEnabled: true, rothConversionSchedule: [{ year: 2030, incomeTarget: 0 }] },
+    // `moveYear` past simEnd keeps this US-domestic. The subject here is the WINDOW
+    // (design 41), and the reference scenario otherwise moves US→AU in 2031 — inside
+    // the 8-year window below. Since design 84 G1 an AU-resident Roth is discounted
+    // for its s99B earnings, which reverses the sign of the conversion gradient and
+    // would make this test fail for a reason that has nothing to do with windowing.
+    // The reversal itself is asserted in after-tax.test.mjs, where it belongs.
+    baseParams: {
+      rothConversionEnabled: true,
+      rothConversionSchedule: [{ year: 2030, incomeTarget: 0 }],
+      moveYear: 2061,
+    },
     objective,
     simStart: Y(2026), simEnd: Y(2060),
     // A 2030 snapshot is unavailable here; compile-from-t0 measures the window

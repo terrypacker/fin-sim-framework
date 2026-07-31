@@ -165,13 +165,22 @@ describe('after-tax net worth gives the Roth conversion lever a real gradient', 
   // gradient vanishes (design/40 §5.1 — verified in the browser). The 20y window
   // keeps the IRA alive at the terminal, which is exactly the bequest/windowed
   // framing in which after-tax terminal worth is the right anchor.
-  const evalAt = (afterTaxOrdinaryRate, target) => {
+  // `moveYear` past the horizon keeps this a US-DOMESTIC test, which is the framing
+  // design/40's claim was established in. The reference scenario otherwise moves
+  // US→AU in 2031, and since design 84 G1 an AU-resident Roth is discounted for its
+  // s99B earnings — a second, opposite-signed effect that swamps the one under test
+  // here and flips every assertion below. That interaction is real and is asserted
+  // on purpose in its own test at the end of this block; isolating it here is what
+  // keeps THIS test about the pre-tax embedded liability it claims to measure.
+  const evalAt = (afterTaxOrdinaryRate, target, extra = {}) => {
     const problem = new OptimizationProblem({
       variables: [{ paramKey: KEY, type: OPT_PARAM_TYPES.CONTINUOUS, min: 0, max: 400_000, step: 1_000 }],
       baseParams: {
         rothConversionEnabled:  true,
         rothConversionSchedule: [{ year: 2030, incomeTarget: 0 }],
         afterTaxOrdinaryRate,
+        moveYear: 2060,
+        ...extra,
       },
       simStart: new Date(Date.UTC(2026, 0, 1)),
       simEnd:   new Date(Date.UTC(2046, 0, 1)),
@@ -204,6 +213,27 @@ describe('after-tax net worth gives the Roth conversion lever a real gradient', 
     assert.ok(d22 > 0, `with a 22% liability, conversion should be rewarded: Δ=${d22}`);
     assert.ok(d40 > d22 && d22 > d0,
       `reward should grow with the assumed liability: d40=${d40} d22=${d22} d0=${d0}`);
+  });
+
+  // ─── the cross-border reversal (design 84 G1) ──────────────────────────────
+  //
+  // Everything above holds for a household that stays put. Let the SAME household
+  // move to Australia before the terminal and the sign flips: the wrapper the
+  // conversion fills is a foreign trust to the ATO, its earnings are s99B ordinary
+  // income with no foreign tax credit, and the converted principal's IRA-earnings
+  // portion is denied the corpus exemption outright (`roth-conversion-classes.js`
+  // stamps it per lot; EVT-43 assesses it). So the conversion pays US tax up front
+  // AND hands the growth to Australia — and the metric now says so.
+  //
+  // This is the bias G1 removed. Before it, the metric priced the destination
+  // wrapper at par and could only ever reward converting.
+  test('moving to AU reverses the conversion reward the US-domestic case shows', () => {
+    const delta = (extra) =>
+      evalAt(0.22, 300_000, extra).finalAfterTaxNetWorth - evalAt(0.22, 0, extra).finalAfterTaxNetWorth;
+    const staying = delta({});                  // moveYear 2060 — never leaves
+    const moving  = delta({ moveYear: 2031 });  // the reference scenario's own move
+    assert.ok(staying > 0, `US-domestic: conversion rewarded, Δ=${staying}`);
+    assert.ok(moving  < 0, `cross-border: conversion penalised, Δ=${moving}`);
   });
 });
 
@@ -287,6 +317,43 @@ describe('liquidationRateProvider (Option C) — the tax-engine waterfall', () =
     assert.equal(rp.ordinaryLiquidationRate(usIra, 100_000, null, LATE), 0.22, 'no state → fallback');
     assert.equal(rp.ordinaryLiquidationRate(usIra, 0, { usOrdinaryIncomeYTD: 0 }, LATE), 0.22, 'tiny amount → fallback');
   });
+
+  test('Roth earnings route through computeAuTax as s99B ordinary income (design 84 G1)', () => {
+    const rp   = liquidationRateProvider({ ordinaryRateAu: 0.99 });   // fallback would be 0.99
+    const roth = acct('roth-ira', 200_000, { earningsBasis: 200_000 });
+    const state = { auOrdinaryIncomeYTD: 0, people: { primary: { residency: 'AU' } } };
+    const r = rp.rothLiquidationRate(roth, 200_000, state, LATE);
+    assert.ok(r > 0 && r < 0.99, `AU engine effective rate, got ${r}`);
+    assert.notEqual(r, 0.99, 'used the AU engine, not the configured fallback');
+  });
+
+  test('Roth: progressive, and stacked on top of the year\'s other income', () => {
+    const rp   = liquidationRateProvider();
+    const roth = acct('roth-ira', 100_000, { earningsBasis: 100_000 });
+    const people = { primary: { residency: 'AU' } };
+    const small = rp.rothLiquidationRate(roth, 20_000,  { auOrdinaryIncomeYTD: 0, people }, LATE);
+    const big   = rp.rothLiquidationRate(roth, 400_000, { auOrdinaryIncomeYTD: 0, people }, LATE);
+    assert.ok(big > small, `progressive: big=${big} small=${small}`);
+    // The slice sits ON TOP of the year's other income, so the same draw costs more
+    // in a year that already has income in it. This is what picks the decant years.
+    const alone   = rp.rothLiquidationRate(roth, 50_000, { auOrdinaryIncomeYTD: 0,       people }, LATE);
+    const stacked = rp.rothLiquidationRate(roth, 50_000, { auOrdinaryIncomeYTD: 250_000, people }, LATE);
+    assert.ok(stacked > alone, `marginal, not average: stacked=${stacked} alone=${alone}`);
+  });
+
+  test('Roth: the USD slice is converted before it is stacked on the AUD accumulator', () => {
+    // Without the toAUD conversion the slice lands in too low a bracket and the rate
+    // comes back understated. A run with a USD→AUD rate above 1 must therefore price
+    // the same USD slice no lower than a run with no rate recorded at all.
+    const rp   = liquidationRateProvider();
+    const roth = acct('roth-ira', 100_000, { earningsBasis: 100_000 });
+    const people = { primary: { residency: 'AU' } };
+    const noRate   = rp.rothLiquidationRate(roth, 60_000, { auOrdinaryIncomeYTD: 0, people }, LATE);
+    const withRate = rp.rothLiquidationRate(roth, 60_000, {
+      auOrdinaryIncomeYTD: 0, people, effectiveExchangeRates: { USD_AUD: 1.55 },
+    }, LATE);
+    assert.ok(withRate >= noRate, `converted slice sits no lower: ${withRate} vs ${noRate}`);
+  });
 });
 
 describe('defaultRateProvider (Option A) — the C-shaped contract', () => {
@@ -299,5 +366,109 @@ describe('defaultRateProvider (Option A) — the C-shaped contract', () => {
     assert.equal(rp.ordinaryLiquidationRate(acct('ira', 1), 999_999, { foo: 1 }, new Date()), 0.22);
     const dflt = defaultRateProvider();
     assert.ok(Number.isFinite(dflt.ordinaryLiquidationRate(acct('ira', 1))));
+  });
+
+  test('rothLiquidationRate answers the AU rate despite the wrapper being USD (design 84 G1)', () => {
+    // The s99B charge is Australian — it follows the AU-resident BENEFICIARY, not the
+    // account's US domicile. `ordinaryLiquidationRate` would answer the US rate here,
+    // which is why the Roth needs its own contract entry rather than reusing that one.
+    const rp = defaultRateProvider({ ordinaryRate: 0.22, ordinaryRateAu: 0.39 });
+    assert.equal(rp.rothLiquidationRate(acct('roth-ira', 1)), 0.39);
+    assert.equal(rp.ordinaryLiquidationRate(acct('roth-ira', 1)), 0.22, 'the US-rate trap this avoids');
+  });
+});
+
+// ─── design 84 G1: a Roth is not tax-free to an Australian resident ──────────────
+//
+// The ATO treats it as a foreign trust; distributed EARNINGS are ordinary income
+// under s99B ITAA 1936 with NO foreign tax credit, because the US levies nothing for
+// FITO to relieve. Valuing it at par for an AU resident overstated the household's
+// wealth on the single worst-taxed dollar it owns.
+describe('computeAfterTaxValue — ROTH is residency-dependent (design 84 G1)', () => {
+  const rp = defaultRateProvider({ ordinaryRate: 0.25, ordinaryRateAu: 0.40 });
+  const US_STATE = { people: { primary: { residency: 'US' } } };
+  const AU_STATE = { people: { primary: { residency: 'AU' } } };
+
+  const roth = (balance, extra = {}) => acct('roth-ira', balance, extra);
+
+  test('US resident: still par — IRC §408A(d)(1) qualified distribution', () => {
+    const a = roth(100_000, { earningsBasis: 60_000 });
+    assert.equal(computeAfterTaxValue(a, US_STATE, LATE, { rateProvider: rp }), 100_000);
+  });
+
+  test('AU resident: corpus at par, only the earnings slice discounted', () => {
+    const a = roth(100_000, { earningsBasis: 60_000 });
+    // contributions 40k (s99B(2)(a) corpus, par) + earnings 60k·(1 − 0.40) = 40k + 36k
+    assert.equal(computeAfterTaxValue(a, AU_STATE, LATE, { rateProvider: rp }), 76_000);
+  });
+
+  test('AU resident, no ledger: whole balance assessable (back-compat, mirrors SUPER)', () => {
+    assert.equal(computeAfterTaxValue(roth(100_000), AU_STATE, LATE, { rateProvider: rp }), 60_000);
+  });
+
+  test('converted principal: the IRA-earnings portion loses the corpus exemption', () => {
+    // `earningsBasis` is derived net of rollovers, so converted principal is NOT in it.
+    // Most of a conversion is genuine corpus — but the part attributable to the source
+    // IRA's earnings would have been assessable if derived by a resident, so s99B(2)(a)
+    // denies it the exemption. `roth-conversion-classes.js` stamps it as `taxableAmount`.
+    const a = roth(100_000, {
+      earningsBasis: 20_000,
+      rolloverConversions: [
+        { amount: 30_000, taxableAmount: 25_000 },
+        { amount: 10_000, taxableAmount: 5_000 },
+      ],
+    });
+    // assessable = 20k earnings + 30k converted-earnings = 50k
+    // value = 50k corpus + 50k·(1 − 0.40) = 50k + 30k = 80k
+    assert.equal(computeAfterTaxValue(a, AU_STATE, LATE, { rateProvider: rp }), 80_000);
+  });
+
+  test('the assessable slice never exceeds the balance', () => {
+    // A stale/oversized ledger must not produce a negative corpus and inflate the discount.
+    const a = roth(50_000, { earningsBasis: 90_000, rolloverConversions: [{ taxableAmount: 40_000 }] });
+    // clamped to the full 50k ⇒ 50k·(1 − 0.40) = 30k, not something below it
+    assert.equal(computeAfterTaxValue(a, AU_STATE, LATE, { rateProvider: rp }), 30_000);
+  });
+
+  test('per-owner: two Roths in one household are priced by their own owner residency', () => {
+    const state = {
+      people: { primary: { residency: 'US' }, spouse: { residency: 'AU' } },
+    };
+    const his  = roth(100_000, { ownerId: 'primary', earningsBasis: 100_000 });
+    const hers = roth(100_000, { ownerId: 'spouse',  earningsBasis: 100_000 });
+    assert.equal(computeAfterTaxValue(his,  state, LATE, { rateProvider: rp }), 100_000);
+    assert.equal(computeAfterTaxValue(hers, state, LATE, { rateProvider: rp }), 60_000);
+  });
+
+  test('unknown owner / no people ⇒ par, the conservative no-op', () => {
+    assert.equal(computeAfterTaxValue(roth(100_000, { earningsBasis: 100_000 }), {}, LATE,
+      { rateProvider: rp }), 100_000);
+    assert.equal(computeAfterTaxValue(roth(100_000, { ownerId: 'ghost', earningsBasis: 100_000 }),
+      AU_STATE, LATE, { rateProvider: rp }), 100_000);
+  });
+
+  test('a provider predating rothLiquidationRate falls back to ordinaryLiquidationRate', () => {
+    const legacy = { ordinaryLiquidationRate: () => 0.30, capGainsLiquidationRate: () => 0 };
+    const a = roth(100_000, { earningsBasis: 100_000 });
+    assert.equal(computeAfterTaxValue(a, AU_STATE, LATE, { rateProvider: legacy }), 70_000);
+  });
+
+  test('a degenerate rate clamps to [0,1] and never inflates value', () => {
+    const bad = { ordinaryLiquidationRate: () => 0, rothLiquidationRate: () => 5 };
+    const a = roth(100_000, { earningsBasis: 100_000 });
+    assert.equal(computeAfterTaxValue(a, AU_STATE, LATE, { rateProvider: bad }), 0);
+  });
+
+  test('the bug this closes: an AU household\'s after-tax net worth drops below par', () => {
+    const state = {
+      people: { primary: { residency: 'AU' } },
+      roth: acct('roth-ira', 200_000, { earningsBasis: 200_000 }),
+    };
+    const opts = { rateProvider: rp, assumedGainFraction: 0 };
+    assert.equal(computeAfterTaxNetWorth(state, LATE, opts), 120_000);
+    // and the same household while still US-resident is untouched — the gap the
+    // design 45 decant lever exists to exploit.
+    const preMove = { ...state, people: { primary: { residency: 'US' } } };
+    assert.equal(computeAfterTaxNetWorth(preMove, LATE, opts), 200_000);
   });
 });

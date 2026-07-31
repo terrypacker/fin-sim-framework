@@ -208,7 +208,41 @@ test('EW-3: Roth earnings at or above age 59.5 — no penalty', () => {
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
 
   assert.ok(Math.abs(target.balance - 5000) < 0.01);
-  assert.deepStrictEqual(pendingTaxActions, []); // eligible withdrawal — no penalty action
+  // No PENALTY — which is what EW-3 is about. This used to assert no action AT ALL,
+  // conflating the two, and that is precisely how design 84 G7 hid: an age-eligible
+  // Roth drawn by the generic path emitted nothing, so an AU resident's s99B charge
+  // was never raised. The action is emitted; its penalty is zero.
+  assert.strictEqual(pendingTaxActions.length, 1);
+  assert.strictEqual(pendingTaxActions[0].type, 'ROTH_WITHDRAWAL_EARNINGS_TAX');
+  assert.strictEqual(pendingTaxActions[0].penaltyAmount, 0);
+  assert.strictEqual(pendingTaxActions[0].amount, 5000);
+  // US resident ⇒ the reducer books nothing from it, so this stays economically a
+  // no-op on that side of the border (IRC §408A(d)(1)).
+  assert.strictEqual(pendingTaxActions[0].residency, 'US');
+});
+
+test('EW-3b: age-eligible Roth earnings drawn by an AU resident raise s99B (design 84 G7)', () => {
+  // The regression guard for G7. Past 59.5 the Roth is penalty-free-ELIGIBLE, so the
+  // ordinary drawdown path — the one that funds spending and tax bills — drains it
+  // through `_drawPenaltyFree`. Australia taxes those earnings as trust income under
+  // s99B ITAA 1936 with no foreign tax credit, so the action must carry `residency`
+  // and the owning account, or the charge silently never happens.
+  const svc    = makeSvc();
+  const date   = new Date(2026, 0, 1);
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = new RothAccount(10000, { contributionBasis: 2000, earningsBasis: 8000, drawdownPriority: 1 });
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1966, 0, 1), residency: 'AU' } } };
+
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
+
+  const earnings = pendingTaxActions.filter(a => a.type === 'ROTH_WITHDRAWAL_EARNINGS_TAX');
+  assert.strictEqual(earnings.length, 1, 'the s99B charge is raised');
+  assert.strictEqual(earnings[0].residency, 'AU', 'residency reaches the tax module');
+  assert.ok(earnings[0].stateKey, 'attributed to an account (design 76 per-person)');
+  assert.strictEqual(earnings[0].penaltyAmount, 0, 'age-eligible ⇒ no §72(t)');
+  // Contributions come out first and are corpus under s99B(2)(a): of the 5000 drawn,
+  // 2000 is corpus and only 3000 is assessable.
+  assert.strictEqual(earnings[0].amount, 3000, 'only the earnings slice is assessable');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -24,6 +24,30 @@ import {
 const EARLY_WITHDRAWAL_ORDER = 10;
 
 /**
+ * Resolve a schedule entry's `destinationKey` for one owner (design 84 G6).
+ *
+ * Two forms, because one destination for the whole household is not always right:
+ *   - a **string** — every owner's decant lands there (the original form);
+ *   - an **object** keyed by `ownerId` — `{ primary: 'usStockAccount', spouse: 'sharedBrokerageAccount' }`.
+ *
+ * The map exists because the fallback below resolves by ROLE, first match wins, and
+ * an owner whose only `us-stock` account is a special-purpose sleeve would silently
+ * have their decant land there — changing its post-move growth, and therefore the
+ * answer, with nothing visible in the schedule. An owner absent from the map falls
+ * back to the role lookup exactly as before.
+ *
+ * @param {string|object|null} spec
+ * @param {string} ownerId
+ * @returns {string|null} a state key, or null to fall back to the role lookup
+ */
+export function resolveDecantDestination(spec, ownerId) {
+  if (spec == null) return null;
+  if (typeof spec === 'string') return spec;
+  if (typeof spec === 'object') return spec[ownerId] ?? null;
+  return null;
+}
+
+/**
  * Forward-effective re-target of queued SCHEDULED_EARLY_WITHDRAWAL events from a
  * per-year schedule (design 45 Phase 3) — the rollout-side twin of the live
  * `COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate`, mirroring `retargetRothConversionEvents`.
@@ -166,7 +190,7 @@ export const US_EARLY_WITHDRAWAL = {
         type: 'EarlyWithdrawalScheduleList', group: 'Early Withdrawal', mc: false, opt: false,
         controllable: true,
         defaultValue: [],
-        description: 'Per-year decant schedule [{ year, taxDeferredAmount, rothAmount, destinationKey? }]. Amounts are REAL base-year (2025) USD GROSS, compounded by inflation to the year\'s nominal draw; routed NET (gross − 10% penalty) to destinationKey (default the owner\'s US brokerage). Years absent = no withdrawal.',
+        description: 'Per-year decant schedule [{ year, taxDeferredAmount, rothAmount, destinationKey? }]. Amounts are REAL base-year (2025) USD GROSS, compounded by inflation to the year\'s nominal draw; routed NET (gross − 10% penalty) to destinationKey. `destinationKey` is either a state key (all owners) or an object keyed by ownerId, e.g. { primary: \'usStockAccount\', spouse: \'sharedBrokerageAccount\' }; omitted or an absent owner falls back to that owner\'s first us-stock account. Years absent = no withdrawal.',
       },
     ];
   },
@@ -232,7 +256,8 @@ export const US_EARLY_WITHDRAWAL = {
 
       const factor = Math.pow(1 + infl, year - BRACKET_BASE_YEAR);
       for (const person of owners) {
-        const destinationKey = entry?.destinationKey ?? keyOf(ACCOUNT_ROLES.US_STOCK, person.id);
+        const destinationKey = resolveDecantDestination(entry?.destinationKey, person.id)
+          ?? keyOf(ACCOUNT_ROLES.US_STOCK, person.id);
         if (!destinationKey) continue;          // nowhere to land the cash → skip
 
         events.push(new OneOffEvent({
