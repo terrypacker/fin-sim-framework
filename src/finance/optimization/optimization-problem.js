@@ -14,7 +14,7 @@ import { ScenarioLoader }      from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth }     from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
-import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, defaultRateProvider, liquidationRateProvider }
+import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFromParams }
   from '../derived-metrics/after-tax.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { scenarioParamValues } from '../param-schema-utils.js';
@@ -543,15 +543,7 @@ export class OptimizationProblem {
     // C-shaped provider seam selects the rate source: 'liquidation' (Option C —
     // the real tax-engine waterfall, design 40 Phase 3) or 'configured' (Option A,
     // the default — fixed effective rates).
-    const rateCfg = {
-      ordinaryRate:   params.afterTaxOrdinaryRate,
-      ordinaryRateAu: params.afterTaxOrdinaryRateAu,
-      capGainsRate:   params.afterTaxCapGainsRate,
-    };
-    const rateProvider = params.afterTaxRateMethod === 'liquidation'
-      ? liquidationRateProvider(rateCfg)
-      : defaultRateProvider(rateCfg);
-    const afterTaxOpts = { rateProvider, assumedGainFraction: params.assumedGainFraction };
+    const afterTaxOpts = afterTaxOptionsFromParams(params);
     return {
       finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       finalNetLiquidity: computeNetLiquidity(state, endDate),

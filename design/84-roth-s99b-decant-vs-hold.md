@@ -1,24 +1,48 @@
 # 84 — Roth IRA under s99B: decant before the move, or hold and pay Australia?
 
-**Status** (2026-07-31, `main`): **PROPOSED**
+**Status** (2026-08-04, `wip/roth-analysis`): **ANSWERED** — hold; see "Where this stands"
 
 | gap | what | status |
 |---|---|---|
 | **G1** | the after-tax metric prices a Roth dollar at par regardless of residency | **IMPLEMENTED** (2026-07-31) |
-| **G2** | `earningsBasis` is mark-to-market appreciation, not "amounts derived by the trust estate" | **PROPOSED** |
+| **G2** | `earningsBasis` is mark-to-market appreciation, not "amounts derived by the trust estate" | **IMPLEMENTED** (2026-08-04) — s99B base roughly halves |
 | **G3** | Roth-attributable AU tax is not observable — it lands in the undifferentiated ordinary-income bucket | **IMPLEMENTED** (2026-07-31) |
 | **G7** | an age-eligible Roth drawn by the ordinary drawdown path emitted no withdrawal-tax action, so s99B was never assessed | **IMPLEMENTED** (2026-07-31) |
 | **G9** | converted principal drawn on the generic path is invisible to the basis ledger, so its s99B-assessable slice escapes too | **IMPLEMENTED** (2026-08-04) — and the bias ran the *other* way |
-| **G11** | a conversion lot's s99B corpus stamp treats pre-tax IRA principal as corpus, contradicting the US charge on the same dollars | **OPEN — larger than G9, and points the other way** |
+| **G11** | a conversion sent the source IRA's basis across contributions-first, so the rollover was almost all s99B corpus | **IMPLEMENTED** (2026-08-04) — pro-rata provenance split |
 | **G10** | the spouse's AU return does not foot in 9 years — credits appear on the return but are not reflected in the net | **OPEN — pre-existing, not design 84's** |
-| **G8** | a market shock revalues the balance without adjusting the basis ledger, stranding phantom `earningsBasis` | **OPEN** |
+| **G8** | a market shock revalues the balance without adjusting the basis ledger, stranding phantom `earningsBasis` | **IMPLEMENTED** (2026-08-04) — also fixed the bond-mark path |
+| **G12** | every earnings handler discards a negative-return year outright — the loss is never applied to balance or holdings | **IMPLEMENTED** (2026-08-04) — median max drawdown was 0.00% |
 | **G4** | no first-class lever for the Roth leg of the decant schedule | **IMPLEMENTED** (2026-07-31) |
 | **G6** | the decant's landing account is resolved by role, first match wins — and an owner with no `us-stock` account is skipped in silence | **IMPLEMENTED** (2026-07-31) |
 | **G5** | `moveYear` is a confounded axis in any scenario with an inflation differential and a dated shock | **PROPOSED — method** |
 
 ### Where this stands (read first)
 
-**The question is not settled, and the early answer was wrong.** P4, run in the scenario as
+**ANSWERED (2026-08-04, P6f): hold.** Over 400 stochastic paths, decanting early is
+behind in 67% of worlds (median −0.63%) and raises failure; arm C — P5's surviving
+candidate — is a coin flip at 51.7% ahead and median +0.05%. The tax saving is real
+(lifetime tax falls ~0.1%) and is swamped by the tax-free compounding given up, which is
+the mechanism P5 inferred from one dated crash and this confirms endogenously. Decanting
+also raises failure *specifically* in bad-first-decade worlds (34.0% vs 31.5%), which is
+state-dependent harm, not a difference in means.
+
+**The larger finding is that the decant was never the decision.** Deferring the move from
+2031 to 2044 is worth **+26.75% median** and is ahead in 94% of worlds, against the
+decant's +0.05%. This study priced a lever worth approximately nothing sitting next to one
+worth roughly a quarter of the terminal estate. That move-year number is **confounded by
+design** — it carries thirteen more years of US-source earnings, the AU/US inflation
+differential, and everything else a deferred move touches — so it is a finding that a
+question exists, not an answer to it. It needs its own study with the confounds controlled
+the way §7b controlled the crash date.
+
+The history below is left intact because the sequence is the lesson: three engine states
+produced three different answers (P4 "empty it early, +4.1%", P5 "arm C only, +0.30%",
+P6f "hold"), and each looked confident at the time.
+
+---
+
+**Historical (superseded): the question is not settled, and the early answer was wrong.** P4, run in the scenario as
 authored, said "empty the wrapper early, +4.1%". P5 paired that against three controlled
 worlds and the **sign reverses** once the authored scenario's dated crash is removed or
 moved: in an uninterrupted market, holding usually wins. The reason is not a tax effect at
@@ -32,24 +56,55 @@ the two owners' 59½ gates and empty the wrapper penalty-free just before moving
 earnings never become s99B income. Robust in sign, not in magnitude (+0.30% in the
 weakest world), and it trades against everything else a deferred move affects.
 
+> **That is also now in doubt (2026-08-04).** With G8, G2 and the G12/drawdown fixes in,
+> the re-run grids put the decant behind in most cells, arm C included. The deterministic
+> evidence has moved from "empty it early" (P4) through "arm C only" (P5) to "hold" —
+> three different answers from three states of the engine, which is the strongest possible
+> argument that none of them should be acted on until P6f reports. An 8-path smoke of the
+> arm-C contrast came back 3 ahead / 5 behind.
+
 **Reproduce**: `variant-grid --spec` the two specs in the gitignored `scripts/specs/`,
 then `scripts/lab/paired-delta.mjs --pair decant`. Never read the level table for the
 move-year grid — see §7b.
 
-**The open gaps still bias the numbers**, and not all the same way: G2 and G8 overstate
-the cost of holding (flattering the decant); **G11** understates it (flattering the hold),
-and it is the big one now — bigger than G9 was. None is large enough to explain the sign
-reversal, which is a return-path effect, but the margins should not be quoted to two
-significant figures until G11 is settled.
+**P6 is now gated on closing the gaps first** (re-ordered 2026-08-04, see §9). Three
+reasons, in order of severity:
 
-**G9 is closed, and closing it moved the answer the opposite way from the prediction.**
-This document said G9 understated the cost of holding. On the plan it does the reverse:
-the leak was letting converted principal escape the ledger *and* the ordering was drawing
-assessable earnings when §408A(d)(4)(B) says converted principal comes out first. Fixing
-both took the hold arm's lifetime s99B charge **down** 6%, from A\$341,394 to A\$320,908.
-The prediction was wrong because it assumed the escaping money was assessable; most
-converted principal is corpus. What it exposed instead is G11, which is where the real
-understatement lives.
+- **G12 — FIXED (P6a).** Every earnings handler *discarded* a negative-return year
+  rather than applying it, so under `--paths` every wrapper booked its up years and
+  skipped its down years. The measurement is stark: before the fix the **median max
+  drawdown across a 40-year stochastic run at 18% vol was 0.00%**. Median CAGR
+  6.16% → 4.36%, median terminal wealth −21%. Engine-wide, and upstream of anything any
+  study has drawn from `--paths` — including designs 74 and 82.
+- **G8 — FIXED (P6b).** Measured on a shocked synthetic scenario: 8 accounts carried a
+  ledger over-stating their balance (≈\$715k total, including 401(k)s at a **zero balance
+  still holding \$43k and \$110k of `earningsBasis`**); now none do. After-tax net worth
+  +0.81% with nominal net worth unchanged — the fix re-classifies corpus vs earnings and
+  moves no money, confirming G8 overstated the cost of holding. The same defect was found
+  and fixed on the bond rate-mark path, which needs no shock to fire.
+- **G2 — FIXED (P6c).** Building it turned up something the gap text did not anticipate:
+  equity dividends were **not modelled at all** inside sheltered wrappers, so a strict
+  reading would have given an all-equity Roth a derived pool of ~0 and made holding look
+  free. Resolved by carving a dividend yield out of the existing growth rate — total
+  return unchanged, classification only. Measured: **the s99B assessable base roughly
+  halves** (100% → 52.5% of earnings at the conservative default, 30.5% at the aggressive
+  end). The opening balance is unknowable and is now a sweep axis
+  (`openingDerivedFraction`), not a guess.
+- **The MC path was never moved onto the after-tax metric** (§6.4). MC rows carry nominal
+  net worth only — the metric G1 exists to replace. Running P6 on it would re-introduce
+  the exact bias this design opened by fixing.
+
+Neither G2 nor G8 is large enough to explain the sign reversal, which is a return-path
+effect.
+
+**G9 and G11 are closed, and neither moved the answer the way this document predicted.**
+G9 was supposed to understate the cost of holding; on the plan it did the reverse, taking
+the hold arm's s99B charge down 6% (A\$341,394 → A\$320,908), because the leak was letting
+*corpus* escape while the ledger drew assessable earnings in its place. G11 was then
+projected at "three to four times G9, in the opposite direction"; measured, it is **+0.03%
+of household net worth**. Both projections were made without measuring, and both were
+wrong — see the postmortem at the end of G11 for the two specific reasoning errors, because
+they are the kind that will recur.
 
 ---
 
@@ -100,6 +155,7 @@ Primary authority, checked into `docs/`:
 | `docs/au-tax/ITAA-1936/C2026C00333VOL02.txt` | ITAA 1936 **s99B**, s99C | the operative charge on trust distributions |
 | `docs/au-tax/ITAA-1997/C2026C00324VOL09.txt` | ITAA 1997 **s855-45** | the residency cost-base step-up and deemed acquisition |
 | `docs/au-tax/ITAA-1997/…` Div 115 | the 50% CGT discount | the 12-month clock the deemed acquisition restarts |
+| `docs/au-tax/ATO-PBR-1051558091470-Lump-Sum-From-Foreign-Fund.txt` | ATO private advice, 6 Aug 2019 | a rollover between foreign funds is **not** wholly corpus (G11); no residency-date shelter (Q1) |
 | `docs/us-tax/…` | IRC §408A(d)(1), §72(t) | qualified distributions; the 10% additional tax |
 
 Both ITAA compilations are current (compilation date 01/07/2026). Note the standing
@@ -107,6 +163,13 @@ constraint from prior work: **ato.gov.au and AustLII return 403 to programmatic 
 so anything not already on disk has to be obtained as a PDF and run through
 `pdftotext -layout`, or flagged unverified. Do not transcribe a rate or threshold from our
 own output — reproduce it from the authority.
+
+The private ruling is the one document here that is **not** authority: archived, edited,
+non-binding, and carrying the ATO's own "not indicative of current views" banner. It is
+kept because its Question 2 is G11's question verbatim and because it states the corpus
+test in words — but where it and the current general guidance (TD 2024/9, PCG 2024/3)
+could differ, the guidance wins. Its own header records that caveat so nobody has to
+rediscover it.
 
 ---
 
@@ -139,11 +202,13 @@ the country's deemed-acquisition date and excludes lots sold within 12 months of
 This is a real cost of decanting that the engine already charges: a decanted asset sold
 soon after the move gets **no** 50% discount. It is not a gap; it is a term in the answer.
 
-**Conversion provenance.** `roth-conversion-classes.js` stamps each conversion lot with the
-IRA-earnings portion as `taxableAmount`, denying it the s99B corpus exemption on the way
-out. The model will not let a conversion launder pre-tax money into Australian-exempt
-corpus. (Out of scope here, but it means the exclusion in §8 Q2 is an exclusion of a
-*question*, not of a modelled effect.)
+**Conversion provenance.** `roth-conversion-classes.js` splits each conversion **pro rata**
+(IRC §408(d)(2)) and sends the source IRA's contributions to the Roth's corpus bucket and
+its earnings to the Roth's earnings bucket, so the earnings stay s99B-assessable on the way
+out. The model will not let a conversion launder trust income into Australian-exempt corpus
+— which ATO private advice 1051558091470 confirms it must not (G11). (Conversions are out
+of scope here, but it means the exclusion in §8 Q2 is an exclusion of a *question*, not of
+a modelled effect.)
 
 ---
 
@@ -299,6 +364,129 @@ because (1) is a fidelity project of its own and would delay the decision this s
 to inform. But the bias direction must be in the write-up: **the study, as it will be run,
 overstates the case for decanting.** If decanting still loses, that conclusion is robust. If
 it wins narrowly, the margin is inside the modelling error and the answer is "not proven".
+
+*(Superseded 2026-08-04: P5 landed inside the error bar, Q3's revisit condition fired, and
+option 1 was built as P6c. What follows is what it took.)*
+
+### What P6c had to add first — equity dividends were not modelled inside wrappers
+
+The gap text above assumes dividends exist inside the Roth and merely need separating from
+appreciation. They do not. `DividendScheduledHandler` is registered **only for the
+`US_STOCK` brokerage role**. Inside a Roth, IRA or 401(k) the entire equity return arrives
+as one undifferentiated appreciation number from the growth handler. The only genuinely
+derived streams already present were CASH-sleeve interest, BOND-sleeve coupons and
+realised gains from rebalancing — and the rebalance path computed a FIFO gain for
+sheltered accounts and then **discarded** it.
+
+So applying G2 strictly to the model as it stood would have given an all-equity Roth a
+derived pool of approximately **zero**, collapsed the s99B charge, and made holding look
+nearly free. That is a modelling artefact reported as a legal finding — the same failure
+as the bias G2 exists to fix, with the sign flipped. Worth stating because the gap looked
+like a pure bookkeeping change right up until the handler registration was read.
+
+**Decision: carve the yield out of the existing growth rate.** The sheltered equity return
+splits into a dividend yield (derived) and residual appreciation (corpus), with the yield
+taken **out of** the existing rate rather than added on top, so total return — and every
+result that depends on it — is unchanged and only the *classification* moves. The yield
+defaults to the plan's own `brokerageDividendRate`, so sheltered and taxable equity are
+described consistently and no new magic number enters; per-holding `dividendYield` still
+wins where set.
+
+### The opening balance, and why it is a sweep axis
+
+The subtlest part, and it surfaced as a failing test rather than as a thought. A wrapper
+that starts the sim already holding earnings has a history the plan carries no records of:
+some of it was distributions, some was price growth. Seeding the derived pool at 0 asserts
+it was *all* appreciation and retroactively un-derives decades of dividends — again the
+same error, pointing the other way, and material here because the plan's Roth is mostly
+opening balance.
+
+`openingDerivedFraction` therefore defaults to **1**: opening earnings are treated as
+fully derived, which reproduces the pre-G2 charge on that slice exactly, so G2 changes only
+what the sim itself accrues. That keeps the metric's standing rule that it never
+understates a liability. The true value is unknowable from the plan, so it is a sweep axis,
+not a number to guess — and the study must report the range, not the default.
+
+### What landed
+
+- `derivedIncomeBasis`, a **subset tag** of `earningsBasis` rather than a replacement, so
+  the deferred-tax split that IRA/401(k)/super are taxed on is untouched. Same shape as
+  NIIT's subset tag on `usOrdinaryIncomeYTD`. Invariant `0 ≤ derived ≤ earnings`.
+- Three helpers, and the distinction between them is the part worth remembering:
+  `creditDerivedIncome` (new money — a coupon raises earnings *and* the pool),
+  `realiseDerivedGain` (**reclassify only** — the appreciation was already booked as it
+  accrued, so raising earnings again would double it), and `drawDerivedProRata` (a
+  distribution takes derived and appreciation in the proportion held, matching the G11
+  provenance split).
+- **Both** the metric and the runtime tax. `_s99bAssessable` reads the pool, and
+  `ROTH_WITHDRAWAL_EARNINGS_TAX` now carries `auAssessableAmount` — reusing G9's existing
+  name for the same concept. The §72(t) penalty is deliberately *not* scaled by it: that
+  is a US rule about earnings and does not care how Australia characterises them.
+- The standing `pickPayload` trap applies and was hit: an undeclared field is dropped in
+  silence and the tax module falls back to assessing everything. Declared.
+
+### Measured
+
+Synthetic default, moved to AU residency, at terminal:
+
+| | s99B base as % of earnings | after-tax NW |
+|---|---|---|
+| pre-G2 | 100% | — |
+| `openingDerivedFraction` 1 (default) | **52.5%** | +0.42% |
+| `openingDerivedFraction` 0.25 | 36.0% | +0.48% |
+| `openingDerivedFraction` 0 | 30.5% | +0.50% |
+
+**The assessable base roughly halves at the conservative default, and falls to about a
+third at the aggressive end.** That is the size of the G2 bias, and it is much larger than
+the after-tax net-worth column suggests — the synthetic default is not a Roth-heavy
+household, so most of its wealth is untouched by the reclassification. Nominal net worth is
+identical across every row, which is the check that this reclassifies rather than re-prices.
+
+**A side effect worth recording: this closed the ≈\$89k `earningsBasis` under-statement
+P6b flagged and left unchased.** The cause was cash-sleeve interest and bond coupons
+crediting `balance` without ever touching the ledger, so every wrapper's taxable earnings
+quietly shrank over a lifetime. Crediting the ledger fixed it, and the total earnings
+figure rose by exactly that amount.
+
+**Correction (2026-08-04, found while preparing the P6f run).** The measurement above
+was taken with G2 only half-wired, and the half that was missing is the one that
+matters on a real plan.
+
+G2 was wired into `roth-classes.js`, the *event-driven* withdrawal reducer. Retirement
+spending does not go through it: it goes through
+`AccountService.reduceLedgerForWithdrawal`, which mutates the ledger directly and emits
+its own tax actions. So the derived pool was never drawn down, and the s99B charge never
+saw it — `auAssessableAmount` was simply absent and the tax module fell back to
+assessing the whole withdrawal.
+
+It announced itself as a broken invariant: on the plan, a Roth drained to `balance 0`
+and `earningsBasis 0` while `derivedIncomeBasis` still held a five-figure sum, stranded
+for the remaining thirty years — the same shape as the G8 defect G2 was meant to help
+fix. Both halves are now wired, with 6 tests.
+
+**This is the third design 84 gap of the form "the ordinary drawdown path did not see
+it"** — G7 emitted no action at all, G9 could not see the rollover buckets, G2 could not
+see the derived pool. Three independent times, a change was made to the event-driven
+reducers in `roth-classes.js` and was inert on every real plan until the drawdown path
+was taught the same thing. That is a structural property of this codebase worth stating
+plainly: **the reducers in `roth-classes.js` are not the path a retired household's Roth
+actually leaves by.** Anything taught to them must be taught to
+`reduceLedgerForWithdrawal` too, and the cheapest check is a per-year ledger trace on the
+plan rather than a unit test on the reducer.
+
+The synthetic-default table above is unchanged by the fix (that scenario's Roth is small
+and barely drawn while AU-resident, which is exactly why it was a weak probe). On the
+plan the fix is worth over a million dollars of terminal net worth, and — because it
+reduces the s99B charge early and lets the difference compound — it *raises* lifetime
+tax paid while raising wealth. Both directions are coherent and neither is quotable from
+the synthetic default.
+
+**`rebalanceDriftBandSheltered` is not demonstrated end-to-end.** The mechanism is proven
+at unit level — rebalancing a sheltered wrapper with a 40% embedded gain realises exactly
+that gain into the pool — but sweeping the band on the synthetic default moves nothing,
+because that scenario configures no rebalancing strategy at all. That is an inert scenario,
+not a dead lever (the standing trap: a zero delta in a "lever bites" check means the
+scenario, not the shim). Demonstrating it needs the real plan, which is study work.
 
 ### G3 — Roth-attributable AU tax is not observable
 
@@ -473,10 +661,11 @@ is what moved the number; the leak fix is what made the ledger tie.
 Which raises the question the fix could not answer on its own: is this plan's converted
 principal really corpus? See G11.
 
-### G11 — a conversion lot's corpus stamp contradicts the US charge on the same dollars
+### G11 — a conversion sent the IRA's basis across contributions-first
 
-Found by G9, and **larger than G9**. Not fixed — it is a modelling decision, not a bug
-with one obvious repair, and it moves the study's headline.
+Found by G9. **IMPLEMENTED 2026-08-04** as Option 2b below. Read the resolution before
+the history: two magnitude claims made while this was open were both wrong, and the
+record of *why* is worth more than the claims were.
 
 `RothConversionApplyReducer` stamps each lot's s99B-assessable share as
 
@@ -514,19 +703,203 @@ principal is the **first** thing the drawdown consumes: the `convtd $` column ru
 at \$168k from 2028 to 2036 and empties across 2037–2039, ahead of every assessable
 dollar. The hold arm's cheapest years are cheap because of this.
 
-Order of magnitude if the stamp were corrected: roughly A\$250k of additional assessable
-income landing in years whose marginal rates run 15–40%, so **A\$50–90k of extra lifetime
-tax on the hold arm** — three to four times the size of G9's effect, in the opposite
-direction. That is enough to matter to the decision, which is why it should be settled
-before P6 rather than after.
+**Resolution: Option 2b — the conversion carries provenance, split pro rata.**
 
-The fix itself is small — stamp `taxableAmount` at the full conversion amount, matching
-what `ROTH_CONVERSION_TAX` already charges — but it is a *tax-treatment* change on a
-shared path and needs its own decision, its own tests, and a golden re-read. The one
-argument for the present behaviour is a user who seeds `contributionBasis` on a
-Traditional IRA meaning "my after-tax Form 8606 basis"; if that reading is to be
-supported it needs its own field, not a silent reinterpretation of a field the rest of
-the engine treats as pre-tax.
+The decision was between three readings, and the labels moved around while it was being
+argued, so they are pinned here once:
+
+| | converted money becomes | `taxableAmount` |
+|---|---|---|
+| **Option 1 — reset** | all Roth corpus | 0 |
+| **Option 2 — carry provenance** | IRA contributions → Roth corpus; IRA earnings → Roth earnings | the earnings leg |
+| **Option 3 — all caught** | all trust income | the whole conversion |
+
+Option 3 is wrong on its own terms: if IRA contributions are corpus while sitting in the
+IRA, converting them cannot transmute them into income. It was the first proposal here and
+it does not survive the corpus principle the rest of this section rests on.
+
+Option 1 is answered directly by **ATO private advice 1051558091470**
+(`docs/au-tax/ATO-PBR-1051558091470-Lump-Sum-From-Foreign-Fund.txt`, 6 Aug 2019). Its
+Question 2 is this question verbatim — *"Is the whole amount rolled over from the Fund A to
+the account considered corpus?"* — and the answer is **No**:
+
+> The whole amount that was rolled into the account from the Fund A fund would not be
+> corpus in the account. You would need to pay tax on the interest amount from the
+> Fund A fund when it was withdrawn from the IRA account.
+
+The same advice defines corpus as "the total amount received less any amounts **deposited**
+to the fund by the taxpayer, **or on their behalf**" — so employer contributions are corpus
+too — and confirms Q1 above ("the whole amount of the earnings is assessable … not just the
+earnings that accrued from when you became a resident", citing ATO ID 2011/93).
+
+Weight it correctly: it is an **archived, edited private ruling** carrying the ATO's own
+"should not be regarded as indicative of the ATO's current views" banner and "you cannot
+rely on this record". It binds nobody but its applicant. The current general guidance is
+TD 2024/9 / PCG 2024/3, whose relevant contribution is the **onus**: the beneficiary must
+substantiate the corpus reduction, and failing that the reduction is not available. That
+cuts the same way — Option 1 asserts corpus for an entire rollover with no evidence trail.
+
+**Within Option 2, the ordering is the whole ballgame, and it is why this was filed as a
+gap at all.** The implementation was contributions-first, which means that for any
+conversion no larger than the source IRA's contribution basis, Option 2 silently produces
+Option 1's answer. The lot machinery existed and did nothing. On the plan the 2028
+conversion of a wrapper whose IRA held slightly more contributions than the conversion
+amount was stamped `taxableAmount: 0` — Option 1, reached by accident.
+
+So the fix is **pro rata**, per IRC §408(d)(2): all traditional IRAs aggregate and any
+distribution carries basis and earnings in proportion. The taxpayer does not choose to send
+the basis out first — it is the rule that defeats the backdoor Roth — so contributions-first
+was wrong on the US side independently of anything Australian.
+
+**What landed.**
+
+- **The split happens at conversion, into the ledger**, not onto a per-lot stamp: the IRA's
+  contribution share credits `rolloverContribBasis`, its earnings share credits
+  `rolloverEarningsBasis`. Every withdrawal path already reads those buckets, so the AU
+  character is now visible to all of them rather than only to the conversion-aware ones.
+  `taxableAmount` is stamped 0 and kept only so pre-2b saved states still price correctly.
+- **The IRA is debited on the same basis it credits** (`debitIra(..., { proRata: true })`),
+  via a shared `proRataIraSplit`. Crediting one way and debiting another would leave the two
+  ledgers describing different transactions. Other `debitIra` callers keep contributions-first
+  deliberately — for a wholly pre-tax IRA the US charge is the gross either way, and nothing
+  downstream of them turns on the split.
+- **`rolloverEarningsBasis` is now drawn BEFORE `earningsBasis`.** G9 had ordered these the
+  other way and documented the choice as arbitrary, which was true while a conversion's
+  assessable leg lived on a lot stamp. Under 2b that pool holds conversion-sourced money and
+  §408A(d)(4)(B) puts everything that arrived by conversion ahead of the wrapper's own
+  earnings, so the order is a real question with a real answer.
+- **`_s99bAssessable` had to be taught the bucket.** It read `earningsBasis` plus the lot
+  stamps; under 2b the assessable slice moves into `rolloverEarningsBasis`, which it did not
+  read. Left alone it would have silently under-priced the hold arm — the exact failure mode
+  G1 exists to prevent.
+
+**Known simplification.** `rolloverEarningsBasis` now holds two things with different *US*
+treatment: the IRA earnings carried across at conversion (which were includible income then,
+so §408A(d)(3)(F)'s five-year window should govern them) and post-conversion growth (genuine
+earnings, §72(t) whenever the distribution is non-qualified). Only the corpus leg carries the
+windowed test; the earnings leg gets flat §72(t). The two differ only for a withdrawal that
+is **under 59½ *and* outside the five-year window**, where this over-charges by 10% of the
+carried-across slice. Conservative, and unreachable on this plan (conversions 2028–29,
+drawdown from age 59+). Making it exact needs the lots to track both legs while excluding
+post-conversion growth — a fifth pool — which is not worth it until a scenario reaches it.
+
+**Measured.** Full suite green (4304 unit + 975 viz); three tests moved, each of which
+encoded the contributions-first behaviour.
+
+| | Roth-attributable AU tax | household net worth |
+|---|---|---|
+| contributions-first | A\$320,908 | \$32,504,699 |
+| **pro-rata (2b)** | **A\$289,688** | **\$32,515,977** |
+
+**+0.03% of household net worth. This is a correctness fix, not a material one**, and the
+two numbers quoted for it while it was open were both wrong:
+
+- *"A\$50–90k of extra lifetime tax"* — an estimate, made by multiplying the extra
+  assessable income by a 15–40% marginal rate. Wrong because the converted principal is
+  drawn in 2037–2039, which are the household's **low-income** years. Adding income there
+  costs far less than the average rate suggests. The ledger has a `margRate` column for
+  exactly this reason and the estimate ignored it.
+- *"+A\$62,019"* — measured, but of a **half-change**: a scratch patch that moved the stamp
+  to pro-rata while leaving the IRA debited contributions-first and the buckets unsplit.
+  That is not Option 2b and its number does not describe it.
+
+The Roth-attributable figure *falls* under 2b while the Roth's own assessable income rises,
+which looks contradictory and is not: debiting the IRA pro-rata leaves less `earningsBasis`
+in the IRA, and IRA earnings are the part that reaches the AU return. Exposure moved between
+two wrappers and the Roth ledger only reports one of them. **Any future comparison of these
+variants has to be scored on a household metric**, not on the instrument built to explain a
+single wrapper.
+
+### G12 — a negative-return year is discarded, not applied
+
+Found while checking whether G8 fires under P6's instrument. It does not — but this does,
+and it is worse.
+
+Every handler in `src/finance/handlers/earnings-handlers.js` ends its `call()` with the
+same guard:
+
+```js
+if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+```
+
+`computeHoldingsGrowth` computes the year's growth correctly, including when it is
+negative, and returns the matching `HoldingTransactAction`s. The guard then throws all of
+it away: no `*_EARNINGS_APPLY`, no holding actions, only a balance recording. **A losing
+year does not reduce the balance and does not reduce the holdings — it simply does not
+happen.**
+
+Verified directly rather than read off the source. Driving `IntlRothEarningsHandler` at
++10% and at −20% against the same one-holding account:
+
+| rate | `computeHoldingsGrowth.amount` | actions emitted |
+|---|---|---|
+| +10% | +100,000 | `ROTH_EARNINGS_APPLY`, `HOLDING_TRANSACT`, `RECORD_METRIC`, `RECORD_BALANCE` |
+| −20% | −200,000 | `RECORD_BALANCE` only |
+
+Ten handlers carry the guard; six are equity-growth paths that can realistically go
+negative — Roth, IRA, 401(k), US stock, AU stock, super. The interest handlers carry it
+too, where it is nearly harmless.
+
+**Why this blocks P6 specifically.** P5's worlds moved the market with dated shocks, which
+travel by `REVALUE_ASSET_APPLY` — a different mechanism, which applies correctly. That is
+why the P4/P5 shock arms behaved sensibly and why this went unseen. P6 uses `--paths`,
+where `EquityReturnTickHandler` folds a mean-0 deviation onto
+`effectiveGrowthRates[<sleeve>]` and the year's *effective rate* goes negative. Those are
+exactly the years the guard discards. At the default vol a meaningful share of drawn years
+are negative, so under `--paths` every wrapper ratchets: it books every up year and skips
+every down year.
+
+That is not a bias to be stated and worked around. Sequence-of-returns risk **is** the
+instrument P6 exists to be, and this removes it. Worse for this study than for most: the
+whole P5 finding is that the decision is a bet on the return path, and a one-sided return
+process would answer that bet by construction — a Roth compounding without drawdowns makes
+holding look unbeatable, which is the direction P6 is meant to adjudicate.
+
+Not a Roth gap and not a design 84 gap; it is engine-wide, and it is upstream of any
+result any study has drawn from `--paths`.
+
+**What landed (P6a, 2026-08-04).** The handlers now split into two families. Roth, IRA,
+401(k), US stock, AU stock and super are **two-sided**: a negative year applies in full —
+balance down, holdings down — and for the ledger-bearing wrappers the loss is charged to
+`earningsBasis` before `contributionBasis` via a new shared `debitLedgerForLoss`, both
+components flooring at zero. Only an exactly-flat year short-circuits (`amount === 0`
+rather than `<= 0`). Dividends and interest keep the old guard and are **one-directional**
+by nature: a negative receipt would book negative *taxable income*, and bond price moves
+are not on this path anyway. Super is the asymmetric case — a loss reaches the member's
+balance in full but carries `grossAmount: 0`, because Div 295 is levied on earnings and a
+losing year produces none; the fund gets no refund, and the loss-carry-forward that would
+offset future fund earnings is not modelled, which over-taxes slightly in the conservative
+direction.
+
+Charging the loss to earnings first is the same ordering G8 needs, which is why the helper
+is shared rather than inlined — G8 (P6b) is its second caller.
+
+16 tests. Ten of them fail against the pre-fix code and five pass on both — the five that
+pin what must *not* change (flat years, the design 77 super-gain path, the three
+one-directional guards).
+
+**Measured, on the synthetic default scenario, `--paths` at n=120 per arm:**
+
+| | before | after |
+|---|---|---|
+| median terminal net worth | — | **−21%** |
+| median net-worth CAGR | 6.16% | 4.36% |
+| **median max drawdown** | **0.00%** | **6.95%** |
+| worst max drawdown | 0.5% | 25.1% |
+| p90/p10 spread | 2.26× | 2.71× |
+
+**The median max drawdown was zero.** Forty-odd years, 18% annual vol, and the median path
+never had a losing stretch — that single figure is the whole gap, and it is the one to
+quote. Every previous `--paths` run measured a portfolio that could not fall.
+
+Failure counts did not move here (the synthetic default is wealthy enough that no arm
+fails either way), so this is not yet a statement about ruin probabilities. Scenario- and
+plan-specific magnitudes are unmeasured.
+
+What this implies for design 74's and 82's conclusions is now **substantiated but still
+unassessed**: those runs were centred on a one-sided process, so any statement they make
+about sequence risk, drawdown or path shape needs re-deriving. Out of scope here; recorded
+so it is not rediscovered a third time.
 
 ### G8 — a shock revalues the balance but not the basis ledger
 
@@ -550,6 +923,56 @@ the G2 bias that already does.
 Distinct from G7, and not blocking — G7 inverts the answer, this one shades it — but it
 should be fixed before the margin is quoted to two significant figures. Likely wider than
 the Roth: any basis-bearing account revalued by a shock has the same shape.
+
+**Scope note (added with G12).** This is the *shock* path, `REVALUE_ASSET_APPLY`. P6 runs
+`--paths` with `--shock` off — the two are not combined, because together they
+double-count the downside — so G8 never fires in a P6 arm. It is live in every P4/P5 world
+that carries a dated crash, which means it shades the numbers already published in §7a/§7b
+but not the ones P6 will produce. Fix it for the published margins, not for P6.
+
+**What landed (P6b, 2026-08-04).** A shared `revalueLedger(account, prevBalance,
+nextBalance)` carries any pure revaluation through the ledger: a fall lands on the gain
+first (`debitLedgerForLoss`, shared with G12), a rise is appreciation and is credited
+entirely to `earningsBasis`. It returns null for a no-op or a ledger-less account, so
+callers spread-or-skip; the presence test is the one `reconcileLedgerToBalance` already
+uses, which keeps brokerage — whose CGT basis lives per-holding — out of it.
+
+**Two sites, not one.** The reported defect was the shock path. `BondPriceAdjustReducer`
+has the identical shape — it marks a BOND sleeve to a new rate curve and `_syncBalance`s
+the account, with the ledger standing still — so a bond sleeve inside a Roth, IRA or super
+was drifting on *every* rate move, with no shock required. That was found by asking which
+other reducers move balance via holdings, and it is the more insidious of the two because
+it needs no dramatic event to fire.
+
+**Measured** on the synthetic default with a dated crash, at the terminal state:
+
+| | before | after |
+|---|---|---|
+| accounts whose ledger OVER-states balance | 8 | **0** |
+| total over-statement | ≈\$715k | **0** |
+| after-tax net worth | — | **+\$55k (+0.81%)** |
+| nominal net worth | unchanged | unchanged |
+
+Two details worth keeping. The worst offenders were **401(k)s sitting at a zero balance
+still carrying \$43k and \$110k of `earningsBasis`** — the stranded-phantom case the gap
+was described from, reproduced exactly. And on the Roth, `earningsBasis` alone had reached
+99% of the balance, so almost the entire wrapper was classified as s99B-assessable when a
+third of it was corpus.
+
+Nominal net worth is **unchanged** while after-tax net worth rises: the fix moves no
+money, it only re-classifies what is corpus and what is earnings. That is the right
+signature for this gap, and it confirms the stated direction — G8 was **overstating the
+cost of holding**, exactly as predicted, and correcting it makes the hold arm cheaper.
++0.81% is a floor, not the figure for this study: the synthetic default is not an
+AU-resident Roth-heavy household, which is where the misclassification bites hardest.
+
+**Inertness check:** with no shock the fix is a byte-for-byte no-op (identical after-tax
+net worth before and after), which is what it should be — no revaluation, no ledger move.
+
+One residual: the synthetic IRA's ledger *under*-states its balance by ≈\$89k. That is
+present before the fix, after the fix, and with the shock removed — pre-existing,
+unrelated to G8, and in the direction `reconcileLedgerToBalance` documents as benign
+("earnings not yet recorded"). Not chased.
 
 ### G10 — the spouse's AU return does not foot
 
@@ -734,6 +1157,70 @@ into a break-even per cell), `frontier.mjs` where a single edge is wanted, `mc-r
 page, `export-tax-csv.mjs` + `crossfoot` to validate that the per-year story foots across
 years before any of it is believed.
 
+### 6.4 What P6 needs that does not exist yet
+
+"Reused as-is" was written before P6 was scoped, and it is wrong about the MC path. Three
+things have to land first. None is large; all three are silent failures if skipped.
+
+*(Both closed in P6d, 2026-08-04. Kept as written because the reasoning is why the
+runner is shaped the way it is.)*
+
+**(a) MC rows carry no after-tax metric.** `runArm()` in `scripts/lib/mc.mjs` records `nw`
+from `finalNetWorthUsd`, and `evaluate()` in `intl-retirement-mc-runner.js` never computes
+an after-tax figure — `computeAfterTaxNetWorth` is wired only into `summarize()` on the
+grid path in `scripts/lib/run.mjs`. So P6 as currently specified would score a
+*wrapper-location* question on nominal net worth: the exact metric G1 was raised, argued
+and implemented to replace, which prices a Roth dollar at par with a pre-tax dollar and
+therefore favours holding by construction. The whole grid path was moved off it in P4 and
+the MC path was never followed. Thread the rate provider into `evaluate()` — the sim and
+the per-path params are both in scope there — and add `afterTaxNW` and `taxPaid` to the
+row. The provider must be constructed the same way `summarize()` constructs it, for the
+same reason: a grid cell, an optimizer score and an MC path should be one number, not
+three plausible ones.
+
+**(b) The paired view counts solvency, not money.** `pairedRescues()` in
+`scripts/lib/mc-analysis.mjs` classifies each seed by the `failed` flag — both fail, only
+A, only B, neither. That is the right shape for a ruin question and the wrong one here:
+the decant/hold contrast is about terminal after-tax wealth on plans that mostly do not
+fail at all, so the paired counts would be near-empty and the reverse count uninformative.
+What P6 needs is the same pairing on a money metric — per seed, `decant − hold`; report
+the share of seeds where the sign is positive, the reverse count, and the paired
+distribution. `paired-delta.mjs` already settled these semantics for grids; this is the
+MC-row equivalent, and it belongs beside `pairedRescues`, not as a flag on it.
+
+**(c) G12, or the instrument does not measure what it claims.** See G12. This is a
+correctness fix in the engine, not tooling, and it is the one that actually gates the run.
+
+**Never quote a mean.** Already in §7 step 3, repeated here because it is the thing most
+likely to be lost when the runner is written by one person and read by another weeks
+later.
+
+### 6.5 P6 runs offline, from a committed script
+
+P6 is a paired MC over several worlds at a few hundred paths each. That is tens of
+minutes at best, and the standing rule from prior studies applies: do not spend a working
+session watching an MC run. The deliverable is therefore **a script that can be started
+and walked away from**, not a run.
+
+What that script owes its reader:
+
+- one command, no arguments required, and a `--dry-run` that prints the arm matrix and an
+  estimated wall-clock without running anything;
+- **arms and seeds written down**, so the run is reproducible by someone who was not there
+  when it was launched — the arm spec belongs in the gitignored `scripts/specs/`, but
+  *which* spec, at what `n`, with what flags, belongs in the script;
+- resumability, or at minimum one output file per arm written as that arm finishes, so an
+  interrupted run costs one arm and not the whole thing;
+- a provenance stamp on every output — scenario file, commit SHA, flags, `n` — because
+  `mc-report` globs its arm directory and a stale JSON from a previous shape will
+  otherwise join the next report in silence;
+- **no analysis.** The script writes raw per-path rows and stops. Interpretation is the
+  next session's job, against `mc-report` and the new paired-money view, for the same
+  minutes-versus-milliseconds reason the run/report split exists everywhere else here.
+
+Pruning the arm directory when arm keys change is part of the script's job, not the
+operator's memory.
+
 ---
 
 ## 7. Method
@@ -792,6 +1279,22 @@ mortgage arithmetic), and `spendTotal` collides with any named `spendingStrategy
 ---
 
 ## 7a. P4 result — decant vs hold at the plan's own move year
+
+> **SUPERSEDED (2026-08-04). The sign has inverted; do not quote the +4.1% below.**
+>
+> Re-run after G8, G2 and the G12/drawdown-path fixes landed: **hold now beats every
+> decant level, monotonically** — the more of the wrapper you empty, the worse the
+> outcome. A corner solution at *hold*, where P4 found a corner solution at *empty it*.
+>
+> Both G8 and G2 were predicted to push this way. What was not predicted is that they
+> would jointly be large enough to flip the sign of the headline result. The original
+> text is kept below because the reasoning about corner-vs-interior solutions still
+> holds — only the direction changed.
+>
+> The move year is fixed in this grid, so levels are directly comparable and this is
+> read as a level table, not a paired delta (its `decant` axis is a six-value sweep and
+> `paired-delta` will refuse it).
+
 
 Run 2026-07-31 on `wip/roth-analysis`, all six gaps above closed except G2/G8/G9. Spec in
 the gitignored `scripts/specs/`; figures in the study directory, not here.
@@ -863,6 +1366,21 @@ cell that is not constant is the cheapest bug detector in a grid, and it only wo
 control is actually included.
 
 ## 7b. P5 result — the move-date axis, with the confounds controlled
+
+> **RE-RUN 2026-08-04. Direction changed, character did not.**
+>
+> The paired deltas are now negative in most cells — roughly −4% to −10% in the authored
+> world — where the table below shows them positive. But the *finding* of §7b survives
+> intact: cells still go positive in the re-dated-shock world (+2.8%, +3.2%), so the
+> sign still moves with the crash date. It remains a bet on the return path; the bet has
+> simply shifted hard toward holding.
+>
+> **The G2 opening-balance assumption is not load-bearing.** Swept end to end
+> (`openingDerivedFraction` 1 → 0), the decant delta moves only from about −4.95% to
+> −5.48%. That axis was flagged as potentially the largest single lever in the study;
+> measured, it is not. A welcome negative result, and the third time in this design that
+> a projected magnitude has been wrong — see the G11 postmortem.
+
 
 Run 2026-07-31. 80 cells: move year × decant × decant-window-start × world.
 
@@ -974,9 +1492,13 @@ mistake — but it roughly doubles the grid and is separable. Its own study.
 > results, not just about future ones. Quantifying it is the separate study's job; noting
 > that the sign flipped is this one's.
 
-**Q3 — do we model derived-vs-appreciation (G2) before running?** **No** — conservative
-treatment, bias direction stated in the write-up, fidelity work as follow-up. Revisit if the
-study lands inside the error bar.
+**Q3 — do we model derived-vs-appreciation (G2) before running?** ~~**No**~~ — **reversed
+2026-08-04: yes, before P6.** The original answer was no: conservative treatment, bias
+direction stated in the write-up, fidelity work as follow-up, *revisit if the study lands
+inside the error bar*. P5 put the only path-robust strategy at +0.30% in its weakest world,
+which is inside it. The stated revisit condition fired, so G2 moves ahead of the run as
+P6c. Recorded as a reversal rather than edited away, because the condition doing its job is
+the useful part.
 
 **Q4 — which owner's 59½ gate binds arm C?** Empirical, per scenario. Determined in step 2,
 not assumed.
@@ -1002,8 +1524,10 @@ not assumed.
   mirror-image defect in the under-age branch, and a fixed-point gross-up. Leak check
   silent; hold arm A\$341,394 → A\$320,908, i.e. the opposite direction to the one
   predicted. Surfaced G11.
-- **P3c — G11.** The conversion lot's corpus stamp. Needs a decision before P6, because
-  it is worth several times G9 and pushes the other way.
+- **P3c — G11. ✅ DONE (2026-08-04).** Option 2b: pro-rata provenance split at conversion,
+  into the ledger rather than onto a lot stamp; IRA debited on the same basis; conversion
+  money drawn ahead of the wrapper's own earnings; `_s99bAssessable` taught the bucket.
+  +0.03% of household net worth — a correctness fix, not a material one.
 - **P4 — study step 1. ✅ DONE (2026-07-31).** Fixed move year, arms A/B/D swept as one
   axis, ledger for the extremes. Result in §7a: decant wins, corner solution, +4.1%.
   Added `afterTaxNW`/`taxPaid` to the shared `summarize()` row and a general money-metric
@@ -1012,13 +1536,63 @@ not assumed.
 - **P5 — study step 2. ✅ DONE (2026-07-31).** Move-date axis, paired deltas, four worlds.
   Result in §7b: inflation confound cleared, **shock confound inverts the sign**, P4
   downgraded to world-conditional, arm C the only path-robust strategy.
-- **P6 — study step 3.** Paired-worlds MC on the surviving contrast. **Gated on a G11
-  decision**: P6 is expensive and it would price a hold arm whose cheapest years are
-  cheap for a reason the engine contradicts elsewhere. Run it after G11 is settled
-  (either way — "we keep the current stamp, here is why" is a settlement).
-- **P7 — G2** (fidelity follow-up, out of the study's critical path): derived income tracked
-  separately from appreciation inside sheltered wrappers; makes
-  `rebalanceDriftBandSheltered` an honest lever for an AU resident.
+**Re-ordered 2026-08-04: close the gaps, then run.** P6 was previously marked un-gated on
+the strength of G11 being settled. That was true of G11 and false in general — G12 was not
+known, and the two MC tooling gaps in §6.4 had not been looked for. The revised order runs
+P6 last, and the reasons are specific rather than a general preference for tidiness:
+
+- **G12 is a blocker, not a bias.** It removes the sequence-of-returns risk that is P6's
+  entire instrument, in the direction that decides the open question.
+- **Q3's own revisit condition has fired.** Q3 deferred G2 on the grounds that the bias
+  direction could be stated and the study would land outside the error bar. P5 landed the
+  surviving strategy at +0.30% in its weakest world. That is inside it. G2 and G8 both
+  overstate the cost of holding, both flatter the decant, and the margin they shade is now
+  the margin the recommendation rests on.
+- **But not *every* gap.** G5 needs no code — the paired-delta method closed it. G10 is a
+  pre-existing per-person AU attribution defect that belongs to design 76/77, is four
+  figures against a six-figure charge, and should be fixed on its own terms rather than
+  held in front of this study.
+
+- **P6a — G12. ✅ DONE (2026-08-04).** Two-sided appreciation applies losses (with
+  `debitLedgerForLoss` charging them to earnings before corpus); one-directional receipts
+  keep the guard; super takes the loss with no Div 295 base. 16 tests, 10 of which fail
+  against the pre-fix code. **The golden did not move** — no re-baseline was needed, and
+  the reason is itself the finding: deterministic scenarios never draw a negative rate, so
+  nothing in the committed test corpus ever exercised the path. Only `--paths` does.
+- **P6b — G8. ✅ DONE (2026-08-04).** Shared `revalueLedger` carries a revaluation
+  through the ledger — loss to earnings first, gain credited to earnings — applied at
+  **two** sites, not one: `RevalueAssetReducer` (the shock, G8 as reported) and
+  `BondPriceAdjustReducer` (a rate mark, the identical defect, found while fixing it).
+  8 tests, 6 of which fail against the pre-fix code. Measured below. §7a/§7b still need
+  re-running: those worlds carry dated shocks, so their published margins move.
+- **P6c — G2. ✅ DONE (2026-08-04).** `derivedIncomeBasis` as a subset tag of
+  `earningsBasis`; the yield slice carved out of sheltered equity growth with total return
+  unchanged; cash interest, coupons, accretion and sheltered realised gains credited;
+  both the metric **and** the runtime withdrawal tax assessing the derived slice.
+  `openingDerivedFraction` added as the sweep axis for the opening balance. 16 tests.
+  Measured below: **the s99B base roughly halves.** Scope was larger than the gap text
+  implied — see "what P6c had to add first".
+- **P6d — MC tooling. ✅ DONE (2026-08-04).** (a) `afterTaxNW` + `taxPaid` on MC rows,
+  via a new shared `afterTaxOptionsFromParams` in `after-tax.js`. The provider was being
+  open-coded in three places (`OptimizationProblem._readResult`, `summarize()`, and
+  nowhere at all in MC); all three now call the one factory, so a grid cell, an
+  optimizer score and an MC path are the same number by construction rather than by
+  three people remembering the same five lines. (b) `pairedMetric` beside
+  `pairedRescues` in `mc-analysis.mjs`, wired into `mc-report.mjs` as a second paired
+  block with `--metric` (default `afterTaxNW`, and a warning if scored on nominal `nw`).
+  7 tests, the first of which pins the motivation: on rows where nothing fails, the
+  rescue view reports 0/0 while the money view is decisive.
+- **P6e — the runner.** §6.5. A committed script, started and left alone.
+- **P6f — study step 3. ✅ DONE (2026-08-04).** 4 arms × 400 stochastic paths, three
+  pairs. **The question is answered: hold.** Decanting early is behind in 67% of worlds;
+  arm C is a coin flip (51.7% ahead, median +0.05%). The decisive finding is that the
+  decant was never the decision — deferring the move is worth +26.75% median against the
+  decant's +0.05%, and this study spent its length pricing the smaller lever. Full
+  write-up in the gitignored study directory; percentages only here.
+
+After P6b and P6c land, §7a and §7b are stale and must be re-run before either is quoted.
+Both fixes push the same way — against the decant — so the P4 headline and the arm-C
+margin are the two figures most exposed.
 
 Run outputs, specs and any figure derived from the plan stay in the gitignored study
 directory. This document stays free of them.

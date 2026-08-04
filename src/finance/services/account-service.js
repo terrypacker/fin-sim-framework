@@ -12,6 +12,7 @@ import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
+import { computeConversionRecapture } from '../account-rules/us/roth-conversion-lots.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
@@ -45,6 +46,28 @@ const SAVINGS_ROLES = new Set([
  * Accounts are persisted as part of the scenario configuration via
  * ScenarioSerializer.
  */
+/**
+ * Draw a wrapper's derived-income pool down alongside an earnings withdrawal, and
+ * return the slice of that withdrawal which is s99B-assessable (design 84 G2).
+ *
+ * Pro-rata on the wrapper's own composition, matching `drawDerivedProRata` and the
+ * G11 provenance split: a distribution carries derived income and pure appreciation
+ * in the proportion the wrapper holds them.
+ *
+ * Returns `undefined` — not 0 — for an account with no pool, so the tax action omits
+ * `auAssessableAmount` and the tax module falls back to assessing the whole amount.
+ * Returning 0 there would silently zero the s99B charge on every legacy save.
+ */
+function _drawDerived(account, fromEarnings, preDrawEarnings) {
+  const d = account?.derivedIncomeBasis;
+  if (!Number.isFinite(d)) return undefined;
+  if (!(fromEarnings > 0) || !(preDrawEarnings > 0)) return 0;
+  const share = Math.min(1, fromEarnings / preDrawEarnings);
+  const drawn = +(d * share).toFixed(2);
+  account.derivedIncomeBasis = Math.max(0, +(d - drawn).toFixed(2));
+  return drawn;
+}
+
 export class AccountService extends AssetService {
   /**
    * @param {import('../../graph/graph.js').Graph} [graph]
@@ -754,29 +777,62 @@ export class AccountService extends AssetService {
       const netNeeded = (remaining + fee) / fx;
 
       if (account.type === ACCOUNT_TYPE.ROTH) {
-        // Phase 1 already drew contributions; any residual balance is earnings.
-        // Use the larger of tracked earningsBasis or implied earnings (balance minus
-        // remaining contributions) to handle accounts where earningsBasis was never
-        // explicitly initialised but the balance exceeds the contribution basis.
+        // Phase 1 already drew contributions; any residual balance is converted
+        // principal and earnings. Use the larger of the tracked non-contribution
+        // ledger or the implied residue (balance minus remaining contributions) to
+        // handle accounts whose basis was never explicitly initialised.
         const impliedEarnings = Math.max(0, account.balance - (account.contributionBasis ?? 0));
         const earningsAvail   = Math.min(Math.max(account.earningsBasis ?? 0, impliedEarnings), account.balance);
         if (earningsAvail <= 0) continue;
 
-        // Gross up: to net `netNeeded` (source ccy) after penalty, withdraw netNeeded/netFactor.
-        const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
-        const gross       = Math.min(grossNeeded, earningsAvail);
-        const net         = gross * netFactor;
+        // Gross up: to net `netNeeded` (source ccy) after penalty, withdraw
+        // `netNeeded + penalty(gross)`. Design 84 G9 made that a fixed point rather
+        // than a division: on a Roth carrying conversions the penalised FRACTION of
+        // a draw is no longer 1 — regular contributions and conversion lots past
+        // their five-year window come out clean — so `netNeeded / netFactor`
+        // over-draws by up to the penalty rate on the unpenalised part. The penalty
+        // is monotone in the gross with slope ≤ penaltyRate, so iterating is a
+        // contraction and converges to the cent in a handful of passes. Where the
+        // whole draw IS penalised (a Roth with no conversions, or an
+        // un-initialised ledger) the fixed point is exactly `netNeeded / netFactor`,
+        // so nothing about the old behaviour moves.
+        let gross = Math.min(netFactor > 0 ? netNeeded / netFactor : netNeeded, earningsAvail);
+        for (let i = 0; i < 12; i++) {
+          const next = Math.min(netNeeded + this._rothEarlyPenalty(account, gross, penaltyRate, date), earningsAvail);
+          if (Math.abs(next - gross) < 1e-9) break;
+          gross = next;
+        }
+        // Bail out BEFORE touching the ledger. `netFactor` penalises the whole
+        // gross, so it is a lower bound on the net: clearing the fee here
+        // guarantees clearing it below, and no ledger is consumed on a draw that
+        // never happens.
+        if (gross * netFactor * fx - fee <= 0) continue;
 
+        // Design 84 G9, the mirror image of the age-eligible leak: this branch used
+        // to declare the WHOLE residue "earnings", which on a Roth carrying
+        // conversions charged §72(t) and full s99B against money that is mostly
+        // corpus, and decremented only `earningsBasis` (floored at 0) so the
+        // rollover buckets were left stranded on the account. Split it properly
+        // instead — §408A(d)(4)(B) order, dated lots consumed, recapture per lot —
+        // and take the penalty from the split rather than from `netFactor`, so the
+        // cash that leaves and the penalty that is charged are the same number.
+        const split = this.reduceLedgerForWithdrawal(account, gross, { underAge: true, date });
+        // An un-initialised ledger under-states the balance; charge the residue as
+        // earnings, which is the conservative reading this branch always took.
+        const ledgered = split.fromContrib + split.fromEarnings
+                       + split.fromRolloverContrib + split.fromRolloverEarnings;
+        split.fromEarnings += Math.max(0, gross - ledgered);
+
+        const { penalty, taxActions } = this.earlyWithdrawalTaxActions(account, {
+          ...split, penaltyRate, residency, stateKey: account.stateKey ?? key,
+        });
+        const net      = gross - penalty;
         const credited = net * fx - fee; // target currency, net of cross-border fee
-        if (credited <= 0) continue;     // draw too small to clear the cross-border fee
         this.transaction(targetAccount, +credited, date);
         this.transaction(account,       -gross,    date);
         pushTransfer(account, key, gross, credited, fee);
-        account.earningsBasis = Math.max(0, (account.earningsBasis ?? 0) - gross);
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
-        // Phase 2 Roth draws earnings only (contributions went in Phase 1), so the
-        // whole gross is the earnings portion (design 45 §6 shared shapes).
-        pendingTaxActions.push(...this.earlyWithdrawalTaxActions(account, { fromEarnings: gross, penaltyRate, residency }).taxActions);
+        pendingTaxActions.push(...taxActions);
         remaining -= credited;
 
       } else if (account.type === ACCOUNT_TYPE.TRADITIONAL_IRA) {
@@ -858,9 +914,12 @@ export class AccountService extends AssetService {
    * Reduce a ledger-bearing account's contribution/earnings basis to reflect a
    * withdrawal of `amount` (in the account's own currency), using the same
    * per-type ordering the dedicated withdrawal reducers apply (design 43 §3):
-   *   - ROTH / TRADITIONAL_IRA → contributions first, then earnings
-   *   - FOUR_OH_ONE_K          → earnings first, then contributions
-   *   - SUPER / default        → proportional (pro-rata across both components)
+   *   - TRADITIONAL_IRA → contributions first, then earnings
+   *   - FOUR_OH_ONE_K   → earnings first, then contributions
+   *   - SUPER / default → proportional (pro-rata across both components)
+   *   - ROTH            → the statutory order of IRC §408A(d)(4)(B): regular
+   *     contributions, then CONVERTED principal (FIFO across the dated lots),
+   *     then earnings. See below.
    *
    * No-op for accounts without the ledger fields (plain cash/savings). This is
    * for the GENERIC drawdown paths (replenishSavings eligible draws) that bypass
@@ -868,30 +927,152 @@ export class AccountService extends AssetService {
    * withdrawals flow through them and must NOT also call this (double-count).
    * BROKERAGE is handled inline in `_drawPenaltyFree` (gain ratio + step-up).
    *
-   * Keeps invariant 1 (contributionBasis + earningsBasis == balance): when the
-   * ledger ties to balance before the draw, reducing both by the same `amount`
-   * the balance fell by preserves it.
+   * **The Roth has FOUR layers, not two** (design 84 G9). The full design 53 §8
+   * invariant is
+   *   `balance == contributionBasis + earningsBasis
+   *             + rolloverContribBasis + rolloverEarningsBasis`
+   * — the rollover buckets (design 36) are converted principal and the growth on
+   * it. This function used to know only the first two and cap the draw at their
+   * sum, so on a Roth carrying conversions the balance exceeded the ledger and the
+   * excess left the wrapper represented NOWHERE: no basis reduction, no action, no
+   * assessment. Most converted principal genuinely is s99B corpus and comes out
+   * free, but the portion attributable to the source IRA's earnings does not — it
+   * is pre-tax money that "would have been included in assessable income if
+   * derived by a resident", so s99B(2)(a) denies it the corpus exemption. Each lot
+   * carries that figure as `taxableAmount`, stamped at conversion for exactly this
+   * purpose, and the shared `computeConversionRecapture` consumes it here on the
+   * identical terms EVT-43 uses on the event path — including the
+   * §408A(d)(3)(F) five-year recapture window.
+   *
+   * `rolloverEarningsBasis` is drawn BEFORE `earningsBasis`. Under design 84
+   * Option 2b it holds conversion-sourced money — the source IRA's earnings,
+   * carried across at conversion because a conversion does not launder them into
+   * corpus — and §408A(d)(4)(B) puts everything that arrived by conversion ahead of
+   * the wrapper's own earnings.
+   *
+   * Keeps the invariant: the four reductions sum to exactly `draw`, so a ledger
+   * that tied to balance before the draw still ties after.
    *
    * @param {import('../account.js').Account} account
    * @param {number} amount - positive withdrawal size, account currency
-   * @returns {{ fromContrib: number, fromEarnings: number }} the split actually
-   *          applied (zeros when there is no ledger to reduce) — callers use it
-   *          to emit matching withdrawal-tax actions (design 44 Gap B).
+   * @param {object} [opts]
+   * @param {boolean} [opts.underAge] - owner below the Roth 59½ gate; drives the
+   *        §408A(d)(3)(F) recapture on the converted-principal slice. Default
+   *        false — the age-eligible case, where §72(t) does not reach.
+   * @param {Date|number|null} [opts.date] - withdrawal date, for the five-year
+   *        window test. Absent ⇒ no window test (never penalise on a guess).
+   * @returns {{ fromContrib: number, fromEarnings: number,
+   *             fromRolloverContrib: number, fromRolloverEarnings: number,
+   *             rolloverPenalty: number, rolloverAuAssessable: number }}
+   *          the split actually applied (zeros when there is no ledger to reduce)
+   *          — callers use it to emit matching withdrawal-tax actions (design 44
+   *          Gap B). The rollover fields are always 0 for a non-Roth.
    */
-  reduceLedgerForWithdrawal(account, amount) {
-    const none = { fromContrib: 0, fromEarnings: 0 };
-    if (!account || !(amount > 0)) return none;
-    if (!('contributionBasis' in account) || !('earningsBasis' in account)) return none;
+  reduceLedgerForWithdrawal(account, amount, { underAge = false, date = null } = {}) {
+    const split = this._splitLedgerForWithdrawal(account, amount);
+    const {
+      contrib, earnings, rollContrib, rollEarnings,
+      fromContrib, fromEarnings, fromRolloverContrib, fromRolloverEarnings,
+    } = split;
+    if (split.draw <= 0) return split.result;
+
+    // Consume the dated conversion lots for the converted-principal slice, on the
+    // same terms EVT-43 applies: the FIFO order, the per-lot five-year window, and
+    // the pro-rata `taxableAmount` that is the s99B-assessable share.
+    let rolloverPenalty      = 0;
+    let rolloverAuAssessable = 0;
+    if (fromRolloverContrib > 0) {
+      const { penaltyAmount, auAssessableAmount, newLots } = computeConversionRecapture(
+        account.rolloverConversions, fromRolloverContrib, date, { underAge }
+      );
+      rolloverPenalty      = penaltyAmount;
+      rolloverAuAssessable = auAssessableAmount;
+      account.rolloverConversions = newLots;
+    }
+
+    // Unrounded (like the type-specific reducers): the reduction sums to exactly
+    // `draw`, so when the ledger tied to balance before the draw it still ties
+    // after (inv-1), with no per-withdrawal cent drift.
+    account.contributionBasis = Math.max(0, contrib  - fromContrib);
+    // Design 84 G2 — the s99B-assessable pool leaves with the earnings it belongs to,
+    // pro-rata, and `derivedDrawn` is the assessable slice of THIS withdrawal.
+    // Computed against the PRE-draw earnings, so it must happen before the line below.
+    //
+    // This is the third time a design 84 gap has been "the ordinary drawdown path did
+    // not see it" (G7 emitted no action, G9 could not see the rollover buckets). The
+    // event-driven reducers in roth-classes.js are not this path: retirement spending
+    // drains the wrapper HERE, so anything taught to those reducers has to be taught
+    // to this function too or it is inert on every real plan.
+    const derivedDrawn = _drawDerived(account, fromEarnings, earnings);
+    account.earningsBasis     = Math.max(0, earnings - fromEarnings);
+    // Only ever write the rollover buckets on an account that has them — a Roth
+    // with no conversions must not sprout a `rolloverContribBasis: 0` field that
+    // the serializer would then persist.
+    if (fromRolloverContrib  > 0) account.rolloverContribBasis  = Math.max(0, rollContrib  - fromRolloverContrib);
+    if (fromRolloverEarnings > 0) account.rolloverEarningsBasis = Math.max(0, rollEarnings - fromRolloverEarnings);
+    return {
+      fromContrib, fromEarnings, fromRolloverContrib, fromRolloverEarnings,
+      rolloverPenalty, rolloverAuAssessable, derivedDrawn,
+    };
+  }
+
+  /**
+   * The per-type ordering of `reduceLedgerForWithdrawal`, with nothing mutated.
+   *
+   * Split out so the involuntary early-withdrawal path can ask "how much of a
+   * hypothetical draw would be penalised?" before committing to a draw size —
+   * a gross-up needs the answer, and answering it by consuming the ledger and
+   * putting it back is how a rounding bug gets written.
+   *
+   * @returns the four portions, the pre-draw bucket values (so the caller can
+   *          write back without re-reading), the capped `draw`, and a zeroed
+   *          `result` for the no-ledger case.
+   */
+  _splitLedgerForWithdrawal(account, amount) {
+    const zero = {
+      contrib: 0, earnings: 0, rollContrib: 0, rollEarnings: 0,
+      fromContrib: 0, fromEarnings: 0, fromRolloverContrib: 0, fromRolloverEarnings: 0,
+      draw: 0,
+      result: {
+        fromContrib: 0, fromEarnings: 0, fromRolloverContrib: 0, fromRolloverEarnings: 0,
+        rolloverPenalty: 0, rolloverAuAssessable: 0,
+      },
+    };
+    if (!account || !(amount > 0)) return zero;
+    if (!('contributionBasis' in account) || !('earningsBasis' in account)) return zero;
     const contrib  = account.contributionBasis ?? 0;
     const earnings = account.earningsBasis ?? 0;
-    const total    = contrib + earnings;
-    if (total <= 0) return none;
+    const isRoth       = account.type === ACCOUNT_TYPE.ROTH;
+    const rollContrib  = isRoth ? (account.rolloverContribBasis  ?? 0) : 0;
+    const rollEarnings = isRoth ? (account.rolloverEarningsBasis ?? 0) : 0;
+    const total    = contrib + earnings + rollContrib + rollEarnings;
+    if (total <= 0) return zero;
     const draw = Math.min(amount, total);
 
-    let fromContrib;
-    let fromEarnings;
+    let fromContrib          = 0;
+    let fromEarnings         = 0;
+    let fromRolloverContrib  = 0;
+    let fromRolloverEarnings = 0;
     switch (account.type) {
-      case ACCOUNT_TYPE.ROTH:
+      case ACCOUNT_TYPE.ROTH: {
+        // §408A(d)(4)(B): regular contributions → conversions → earnings, where
+        // "conversions" is ALL the money that arrived by conversion — both legs of
+        // the design 84 Option 2b split, since the US made the whole conversion
+        // includible income and runs one five-year clock over it. So the rollover
+        // EARNINGS pool is drawn ahead of the wrapper's own earnings, not after.
+        //
+        // G9 originally ordered these the other way round and documented the choice
+        // as arbitrary, which was true while a conversion's assessable leg lived on
+        // a lot stamp: both pools were then plain earnings and nothing turned on it.
+        // Under 2b `rolloverEarningsBasis` carries conversion-sourced money, so the
+        // order is a real US-ordering question and this is the answer to it.
+        let rest = draw;
+        fromContrib          = Math.min(rest, contrib);       rest -= fromContrib;
+        fromRolloverContrib  = Math.min(rest, rollContrib);   rest -= fromRolloverContrib;
+        fromRolloverEarnings = Math.min(rest, rollEarnings);  rest -= fromRolloverEarnings;
+        fromEarnings         = rest;
+        break;
+      }
       case ACCOUNT_TYPE.TRADITIONAL_IRA:
         fromContrib  = Math.min(draw, contrib);
         fromEarnings = draw - fromContrib;
@@ -904,12 +1085,31 @@ export class AccountService extends AssetService {
         fromContrib  = draw * (contrib / total);
         fromEarnings = draw - fromContrib;
     }
-    // Unrounded (like the type-specific reducers): the reduction sums to exactly
-    // `draw`, so when the ledger tied to balance before the draw it still ties
-    // after (inv-1), with no per-withdrawal cent drift.
-    account.contributionBasis = Math.max(0, contrib  - fromContrib);
-    account.earningsBasis     = Math.max(0, earnings - fromEarnings);
-    return { fromContrib, fromEarnings };
+    return {
+      contrib, earnings, rollContrib, rollEarnings,
+      fromContrib, fromEarnings, fromRolloverContrib, fromRolloverEarnings,
+      draw, result: zero.result,
+    };
+  }
+
+  /**
+   * §72(t) + §408A(d)(3)(F) charge on a hypothetical early Roth draw of `gross`,
+   * computed without touching the account. Pure — the gross-up below calls it
+   * repeatedly.
+   *
+   * A ledger that under-states the balance (never initialised) has its residue
+   * charged as earnings, which is the conservative reading the involuntary path
+   * has always taken.
+   */
+  _rothEarlyPenalty(account, gross, penaltyRate, date) {
+    if (!(gross > 0) || !(penaltyRate > 0)) return 0;
+    const s = this._splitLedgerForWithdrawal(account, gross);
+    const ledgered = s.fromContrib + s.fromEarnings + s.fromRolloverContrib + s.fromRolloverEarnings;
+    const residue  = Math.max(0, gross - ledgered);
+    const recapture = s.fromRolloverContrib > 0
+      ? computeConversionRecapture(account.rolloverConversions, s.fromRolloverContrib, date, { underAge: true }).penaltyAmount
+      : 0;
+    return (s.fromEarnings + s.fromRolloverEarnings + residue) * penaltyRate + recapture;
   }
 
   /**
@@ -925,32 +1125,65 @@ export class AccountService extends AssetService {
    * the draw and reduce the basis their own way, then pass the split here.
    *
    * Penalty rule by type:
-   *   - ROTH          → contributions are penalty/tax free; only the earnings
-   *                     portion is penalized + reported (ROTH_WITHDRAWAL_EARNINGS_TAX).
+   *   - ROTH          → regular contributions are penalty/tax free. Converted
+   *                     principal carries the §408A(d)(3)(F) recapture penalty
+   *                     computed per lot upstream, and its IRA-earnings-sourced
+   *                     share is s99B-assessable (ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX).
+   *                     Both earnings pools are penalized + reported
+   *                     (ROTH_WITHDRAWAL_EARNINGS_TAX and its rollover twin).
    *   - TRADITIONAL_IRA → whole gross is ordinary income + penalty, reported as
    *                     CONTRIB + EARNINGS actions (each carrying its own penalty).
    *   - FOUR_OH_ONE_K  → whole gross is ordinary income + penalty, one action.
    *
    * @param {import('../account.js').Account} account
-   * @param {object} split
+   * @param {object} split - as returned by `reduceLedgerForWithdrawal`, plus the rate
    * @param {number} split.fromContrib  - contribution portion of the gross (account ccy)
    * @param {number} split.fromEarnings - earnings portion of the gross (account ccy)
+   * @param {number} [split.fromRolloverContrib]  - converted-principal portion (Roth)
+   * @param {number} [split.fromRolloverEarnings] - growth-on-converted portion (Roth)
+   * @param {number} [split.rolloverPenalty]      - §408A(d)(3)(F) recapture, per lot
+   * @param {number} [split.rolloverAuAssessable] - s99B share of the converted principal
    * @param {number} split.penaltyRate  - 0..1 (0 above the age gate)
    * @param {string} [split.residency]  - stamped on the AU-assessable earnings actions
+   * @param {string} [split.stateKey]   - design 76 per-person attribution for the
+   *        rollover actions; omitted ⇒ the tax module's canonical fallback
    * @returns {{ penalty: number, taxActions: Array<object> }}
    */
-  earlyWithdrawalTaxActions(account, { fromContrib = 0, fromEarnings = 0, penaltyRate = 0, residency } = {}) {
+  earlyWithdrawalTaxActions(account, {
+    fromContrib = 0, fromEarnings = 0,
+    fromRolloverContrib = 0, fromRolloverEarnings = 0,
+    rolloverPenalty = 0, rolloverAuAssessable = 0, derivedDrawn = undefined,
+    penaltyRate = 0, residency, stateKey,
+  } = {}) {
     const gross      = fromContrib + fromEarnings;
     const taxActions = [];
     let   penalty    = 0;
     switch (account?.type) {
-      case ACCOUNT_TYPE.ROTH:
+      case ACCOUNT_TYPE.ROTH: {
         // Contributions out first are penalty/tax free; earnings carry the penalty.
-        penalty = fromEarnings * penaltyRate;
+        const earningsPenalty        = fromEarnings         * penaltyRate;
+        const rolloverEarnPenalty    = fromRolloverEarnings * penaltyRate;
+        penalty = earningsPenalty + rolloverEarnPenalty + rolloverPenalty;
         if (fromEarnings > 0) {
-          taxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: penalty, residency });
+          // Design 84 G2 — `auAssessableAmount` is the DERIVED slice; absent ⇒ the tax
+          // module assesses the whole amount, i.e. pre-G2 behaviour.
+          taxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: earningsPenalty, auAssessableAmount: derivedDrawn, residency, stateKey });
+        }
+        // Converted principal: mostly s99B corpus, so this action only exists when
+        // there is something to charge — the recapture penalty, or the slice
+        // s99B(2)(a) denies the exemption to. Same emit test as EVT-43, so the two
+        // paths put the same rows in the journal.
+        if (rolloverPenalty > 0 || (residency === 'AU' && rolloverAuAssessable > 0)) {
+          taxActions.push({
+            type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', amount: fromRolloverContrib,
+            penaltyAmount: rolloverPenalty, auAssessableAmount: rolloverAuAssessable, residency, stateKey,
+          });
+        }
+        if (fromRolloverEarnings > 0) {
+          taxActions.push({ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount: fromRolloverEarnings, penaltyAmount: rolloverEarnPenalty, residency, stateKey });
         }
         break;
+      }
       case ACCOUNT_TYPE.TRADITIONAL_IRA:
         penalty = gross * penaltyRate;
         if (fromContrib > 0) {
@@ -1098,7 +1331,13 @@ export class AccountService extends AssetService {
         // branch is precisely where an AU resident's Roth gets drained by ordinary
         // spending and tax-bill funding, so the omission zeroed the entire s99B charge
         // on the involuntary path.
-        const { fromContrib, fromEarnings } = this.reduceLedgerForWithdrawal(account, withdraw);
+        // `underAge: false` — this whole branch is the age-eligible one, so the
+        // §408A(d)(3)(F) recapture on converted principal is switched off by the
+        // §72(t) 59½ exception.
+        const {
+          fromContrib, fromEarnings, fromRolloverContrib, fromRolloverEarnings, rolloverAuAssessable,
+          derivedDrawn,
+        } = this.reduceLedgerForWithdrawal(account, withdraw, { underAge: false, date });
         switch (account.type) {
           case ACCOUNT_TYPE.TRADITIONAL_IRA:
             if (fromContrib > 0)  pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX',   amount: fromContrib,  penaltyAmount: 0 });
@@ -1110,17 +1349,37 @@ export class AccountService extends AssetService {
           case ACCOUNT_TYPE.SUPER:
             if (fromEarnings > 0) pendingTaxActions.push({ type: 'SUPER_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings });
             break;
-          case ACCOUNT_TYPE.ROTH:
+          case ACCOUNT_TYPE.ROTH: {
             // Corpus is silent under s99B(2)(a) and never US-taxable, so only the
-            // earnings slice is emitted. `penaltyAmount: 0` because this branch is by
-            // definition the age-eligible one — §72(t) does not reach it. For a US
-            // resident the reducer books nothing at all, so this stays a no-op there.
+            // assessable slices are emitted. Every `penaltyAmount` is 0 because this
+            // branch is by definition the age-eligible one — §72(t) does not reach
+            // it, and nor does the §408A(d)(3)(F) recapture. For a US resident the
+            // reducers book nothing at all, so this stays a no-op there.
+            //
+            // Design 76 Gap B: every action carries the wrapper's own key, so the AU
+            // return attributes to its owner rather than the household.
+            const sk = account.stateKey ?? key;
             if (fromEarnings > 0) pendingTaxActions.push({
-              type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: 0, residency,
-              // Design 76 Gap B: attribute to the wrapper's owner, not the household.
-              stateKey: account.stateKey ?? key,
+              // Design 84 G2 — assess the DERIVED slice, not all the earnings.
+              type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: 0,
+              auAssessableAmount: derivedDrawn, residency, stateKey: sk,
+            });
+            // Design 84 G9: converted principal drawn on this path used to be
+            // invisible — the ledger did not know the rollover buckets, so the slice
+            // left the wrapper with no basis reduction and no action, and the
+            // s99B-assessable share of it (the source IRA's earnings, denied the
+            // corpus exemption by s99B(2)(a)) escaped assessment entirely. Emitted on
+            // exactly EVT-43's terms: only when there is something to charge.
+            if (residency === 'AU' && rolloverAuAssessable > 0) pendingTaxActions.push({
+              type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', amount: fromRolloverContrib,
+              penaltyAmount: 0, auAssessableAmount: rolloverAuAssessable, residency, stateKey: sk,
+            });
+            if (fromRolloverEarnings > 0) pendingTaxActions.push({
+              type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount: fromRolloverEarnings,
+              penaltyAmount: 0, residency, stateKey: sk,
             });
             break;
+          }
         }
       }
 

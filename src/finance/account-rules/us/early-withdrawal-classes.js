@@ -75,6 +75,9 @@ export class ScheduledEarlyWithdrawalApplyReducer extends AccountServiceReducer 
     this.generatedActionTypes = [
       'IRA_WITHDRAWAL_CONTRIB_TAX', 'IRA_WITHDRAWAL_EARNINGS_TAX',
       'K401_WITHDRAWAL_TAX', 'ROTH_WITHDRAWAL_EARNINGS_TAX',
+      // Design 84 G9: a decant deep enough to reach converted principal reports it
+      // on the EVT-43/44 twins, not as plain Roth earnings.
+      'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',
     ];
   }
 
@@ -105,9 +108,12 @@ export class ScheduledEarlyWithdrawalApplyReducer extends AccountServiceReducer 
       if (gross <= 1e-9) return 0;
 
       const penaltyRate = penaltyRateFor(account, state, key, asOfMs);
-      const { fromContrib, fromEarnings } = svc.reduceLedgerForWithdrawal(account, gross);
-      const { penalty, taxActions: ta }   = svc.earlyWithdrawalTaxActions(
-        account, { fromContrib, fromEarnings, penaltyRate, residency }
+      // `underAge` is the same test the penalty rate came from — a non-zero rate IS
+      // "below the gate", including the unknown-birth-date fallback above. It drives
+      // the §408A(d)(3)(F) recapture on any converted principal in the slice.
+      const split = svc.reduceLedgerForWithdrawal(account, gross, { underAge: penaltyRate > 0, date });
+      const { penalty, taxActions: ta } = svc.earlyWithdrawalTaxActions(
+        account, { ...split, penaltyRate, residency, stateKey: account.stateKey ?? key }
       );
       svc.transaction(account, -gross, date);   // balance + holdings (ledger already reduced)
       taxActions.push(...ta);

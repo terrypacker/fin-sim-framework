@@ -564,3 +564,240 @@ test('EW-9: SuperannuationAccount is never drawn before age 60 even when no othe
   );
   assert.strictEqual(sup.balance, 100000); // completely untouched
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EW-12: converted principal on the generic drawdown path (design 84 G9)
+//
+// A Roth carrying IRA conversions has FOUR ledger layers, not two:
+//   balance == contributionBasis + earningsBasis
+//            + rolloverContribBasis + rolloverEarningsBasis
+// `reduceLedgerForWithdrawal` knew only the first two and capped the draw at their
+// sum, so on such an account the excess left the wrapper represented nowhere — no
+// basis reduction, no action, no assessment. Most converted principal IS s99B
+// corpus and legitimately comes out free; the portion attributable to the source
+// IRA's earnings is not, and s99B(2)(a) denies it the corpus exemption.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * A Roth whose balance is 40k regular contributions, 30k converted principal
+ * (of which 12k was IRA earnings, so s99B-assessable), 5k growth on that
+ * converted principal, and 25k regular earnings. 100k in total, ledger-tied.
+ *
+ * The rollover buckets are stamped ON the account rather than passed to the
+ * constructor, because that is how they arrive in production too: `RothAccount`
+ * carries no conversion fields, and `RothConversionApplyReducer` adds them the
+ * first time a conversion lands.
+ */
+function rothWithConversions(opts = {}) {
+  const roth = new RothAccount(100_000, {
+    contributionBasis: 40_000,
+    earningsBasis:     25_000,
+    drawdownPriority:  1,
+    ...opts,
+  });
+  roth.rolloverContribBasis  = 30_000;
+  roth.rolloverEarningsBasis =  5_000;
+  roth.rolloverConversions   = [
+    { amount: 20_000, conversionMs: Date.UTC(2015, 0, 1), taxableAmount: 8_000 },
+    { amount: 10_000, conversionMs: Date.UTC(2024, 0, 1), taxableAmount: 4_000 },
+  ];
+  return roth;
+}
+
+test('EW-12: the ledger now ties to the balance a draw removes (the G9 leak)', () => {
+  // The leak check the roth-ledger reporter runs, as a unit test: every dollar that
+  // leaves the wrapper must be accounted for by some basis bucket falling.
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+  const before = roth.contributionBasis + roth.earningsBasis
+               + roth.rolloverContribBasis + roth.rolloverEarningsBasis;
+
+  const split = svc.reduceLedgerForWithdrawal(roth, 90_000, { underAge: false, date: new Date(2040, 0, 1) });
+
+  const after = roth.contributionBasis + roth.earningsBasis
+              + roth.rolloverContribBasis + roth.rolloverEarningsBasis;
+  assert.ok(Math.abs((before - after) - 90_000) < 0.01, 'ledger falls by exactly the draw');
+  const booked = split.fromContrib + split.fromEarnings
+               + split.fromRolloverContrib + split.fromRolloverEarnings;
+  assert.ok(Math.abs(booked - 90_000) < 0.01, 'every dollar is reported in some slice');
+});
+
+test('EW-12: Roth draws in the §408A(d)(4)(B) order — contributions, conversions, earnings', () => {
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+
+  // 55k: exhausts the 40k of regular contributions, then 15k of converted principal.
+  const split = svc.reduceLedgerForWithdrawal(roth, 55_000, { underAge: false, date: new Date(2040, 0, 1) });
+
+  assert.strictEqual(split.fromContrib,          40_000);
+  assert.strictEqual(split.fromRolloverContrib,  15_000);
+  assert.strictEqual(split.fromEarnings,              0, 'earnings come LAST, not second');
+  assert.strictEqual(split.fromRolloverEarnings,      0);
+  assert.strictEqual(roth.contributionBasis,          0);
+  assert.strictEqual(roth.rolloverContribBasis,  15_000);
+  assert.strictEqual(roth.earningsBasis,         25_000, 'untouched');
+});
+
+test('EW-12: converted principal is assessed on its IRA-earnings share only, FIFO by lot', () => {
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+
+  // 60k: 40k contributions + 20k of conversions — exactly the first (2015) lot,
+  // whose IRA-earnings portion is 8k. The 2024 lot is untouched.
+  const split = svc.reduceLedgerForWithdrawal(roth, 60_000, { underAge: false, date: new Date(2040, 0, 1) });
+
+  assert.strictEqual(split.fromRolloverContrib,  20_000);
+  assert.strictEqual(split.rolloverAuAssessable,  8_000, 'only the IRA-earnings share is s99B income');
+  assert.strictEqual(split.rolloverPenalty,            0, 'age-eligible ⇒ no §408A(d)(3)(F) recapture');
+  assert.strictEqual(roth.rolloverConversions.length,  1, 'the consumed lot is gone');
+  assert.strictEqual(roth.rolloverConversions[0].amount,        10_000);
+  assert.strictEqual(roth.rolloverConversions[0].taxableAmount,  4_000);
+});
+
+test('EW-12: a partially consumed lot keeps its taxableAmount pro-rata', () => {
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+
+  // 50k: 40k contributions + 10k of the 20k first lot ⇒ half its 8k taxable share.
+  const split = svc.reduceLedgerForWithdrawal(roth, 50_000, { underAge: false, date: new Date(2040, 0, 1) });
+
+  assert.strictEqual(split.rolloverAuAssessable, 4_000);
+  assert.strictEqual(roth.rolloverConversions.length, 2);
+  assert.strictEqual(roth.rolloverConversions[0].amount,        10_000);
+  assert.strictEqual(roth.rolloverConversions[0].taxableAmount,  4_000);
+});
+
+test('EW-12: §408A(d)(3)(F) recapture reaches only the lots inside the 5-year window', () => {
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+
+  // Under 59.5, withdrawing in 2026: the 2015 lot is seasoned (2026−2015 ≥ 5), the
+  // 2024 lot is not (2026−2024 < 5). Draw 40k contributions + all 30k of conversions.
+  const split = svc.reduceLedgerForWithdrawal(roth, 70_000, { underAge: true, date: new Date(2026, 5, 1) });
+
+  assert.strictEqual(split.fromRolloverContrib, 30_000);
+  assert.strictEqual(split.rolloverPenalty,       1_000, '10% of the 10k unseasoned lot only');
+  assert.strictEqual(split.rolloverAuAssessable, 12_000, 'the IRA-earnings share of both lots');
+});
+
+test('EW-12: both earnings pools are drawn once the conversions are exhausted', () => {
+  const svc  = makeSvc();
+  const roth = rothWithConversions();
+
+  const split = svc.reduceLedgerForWithdrawal(roth, 100_000, { underAge: false, date: new Date(2040, 0, 1) });
+
+  assert.strictEqual(split.fromEarnings,         25_000);
+  assert.strictEqual(split.fromRolloverEarnings,  5_000);
+  assert.strictEqual(roth.balance, 100_000, 'reduceLedger touches the ledger, never the balance');
+  assert.strictEqual(roth.earningsBasis,         0);
+  assert.strictEqual(roth.rolloverEarningsBasis, 0);
+});
+
+test('EW-12: a Roth with no conversions never sprouts rollover fields', () => {
+  // The serializer persists whatever it finds; a zero-valued bucket on an account
+  // that never had one is noise that later reads as "this Roth had conversions".
+  const svc  = makeSvc();
+  const roth = new RothAccount(10_000, { contributionBasis: 4_000, earningsBasis: 6_000 });
+
+  const split = svc.reduceLedgerForWithdrawal(roth, 10_000);
+
+  assert.strictEqual(split.fromContrib,  4_000);
+  assert.strictEqual(split.fromEarnings, 6_000);
+  assert.ok(!('rolloverContribBasis'  in roth));
+  assert.ok(!('rolloverEarningsBasis' in roth));
+});
+
+test('EW-12: an age-eligible AU resident is assessed on converted principal (G9 end to end)', () => {
+  // G7 closed the earnings half of this; G9 is the other half. Past 59.5 the whole
+  // wrapper is penalty-free-eligible, so the involuntary drawdown drains it through
+  // `_drawPenaltyFree` — where the converted principal used to leave silently.
+  const svc    = makeSvc();
+  const date   = new Date(2040, 0, 1);
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = rothWithConversions({ stateKey: 'roth' });
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1966, 0, 1), residency: 'AU' } } };
+
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 60_000, date);
+
+  const conv = pendingTaxActions.find(a => a.type === 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX');
+  assert.ok(conv, 'the converted-principal charge is raised at all');
+  assert.strictEqual(conv.auAssessableAmount, 8_000, 'the IRA-earnings share of the consumed lot');
+  assert.strictEqual(conv.penaltyAmount, 0, 'age-eligible ⇒ no recapture');
+  assert.strictEqual(conv.residency, 'AU');
+  assert.strictEqual(conv.stateKey, 'roth', 'attributed to the wrapper (design 76)');
+  // Corpus (the 40k of regular contributions) raises nothing, and the draw never
+  // reached either earnings pool.
+  assert.ok(!pendingTaxActions.some(a => a.type === 'ROTH_WITHDRAWAL_EARNINGS_TAX'));
+});
+
+test('EW-12: a US resident is charged nothing on the same draw', () => {
+  // The corpus/income split is an AU question. Domestically a qualified distribution
+  // of converted principal is free (IRC §408A(d)(1) + the seasoned 5-year window),
+  // so no action should be manufactured to say so.
+  const svc    = makeSvc();
+  const date   = new Date(2040, 0, 1);
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = rothWithConversions({ stateKey: 'roth' });
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1966, 0, 1), residency: 'US' } } };
+
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 60_000, date);
+
+  assert.deepStrictEqual(pendingTaxActions, []);
+});
+
+test('EW-12: an under-age draw no longer calls converted principal "earnings"', () => {
+  // The mirror-image defect in the involuntary phase-2 branch: it declared the whole
+  // post-contribution residue to be earnings, charging §72(t) and full s99B against
+  // money that is mostly corpus, and decremented only `earningsBasis` so the rollover
+  // buckets were stranded.
+  const svc    = makeSvc();
+  const date   = new Date(2026, 5, 1);
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = rothWithConversions({ stateKey: 'roth' });
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AU' } } };
+
+  // 40k contributions in phase 1, then phase 2 reaches into the conversions.
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 55_000, date);
+
+  const conv = pendingTaxActions.find(a => a.type === 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX');
+  assert.ok(conv, 'the conversion slice is reported as conversions');
+  assert.ok(!pendingTaxActions.some(a => a.type === 'ROTH_WITHDRAWAL_EARNINGS_TAX'),
+    'and NOT as earnings — the draw never reached the earnings pools');
+  // FIFO reaches the 2015 lot, seasoned long past its five-year window, so there is
+  // NO §408A(d)(3)(F) recapture despite the owner being 36. That is the whole point
+  // of the fix: the old branch charged 10% on all of it.
+  assert.strictEqual(conv.penaltyAmount, 0, 'a seasoned conversion lot is penalty-free');
+  // ...so the target is topped up exactly, with no penalty skimmed off the way.
+  assert.ok(Math.abs(target.balance - 55_000) < 0.01, 'no phantom penalty, no over-draw');
+  // The ledger absorbed the draw; nothing is stranded.
+  const ledger = roth.contributionBasis + roth.earningsBasis
+               + roth.rolloverContribBasis + roth.rolloverEarningsBasis;
+  assert.ok(Math.abs(ledger - roth.balance) < 0.01, 'ledger still ties to balance');
+});
+
+test('EW-12: an unseasoned conversion lot IS recaptured, and only it', () => {
+  // Same draw, but the wrapper's only conversion is recent. The gross-up must now
+  // account for a penalty that applies to part of the draw, not all and not none.
+  const svc    = makeSvc();
+  const date   = new Date(2026, 5, 1);
+  const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  const roth   = new RothAccount(100_000, {
+    contributionBasis: 40_000, earningsBasis: 25_000, drawdownPriority: 1, stateKey: 'roth',
+  });
+  roth.rolloverContribBasis  = 30_000;
+  roth.rolloverEarningsBasis =  5_000;
+  roth.rolloverConversions   = [{ amount: 30_000, conversionMs: Date.UTC(2024, 0, 1), taxableAmount: 12_000 }];
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AU' } } };
+
+  const { pendingTaxActions } = svc.replenishSavings(state, 'target', 55_000, date);
+
+  const conv = pendingTaxActions.find(a => a.type === 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX');
+  assert.ok(conv);
+  // Phase 1 takes the 40k of contributions clean. Phase 2 needs 15k net from a slice
+  // charged 10%, so it grosses up to 16,666.67 and the recapture is 1,666.67.
+  assert.ok(Math.abs(conv.amount        - 16_666.67) < 0.05);
+  assert.ok(Math.abs(conv.penaltyAmount -  1_666.67) < 0.05);
+  assert.ok(Math.abs(target.balance     - 55_000)    < 0.01, 'the deficit is covered exactly');
+  // 40% of the conversion was IRA earnings, so 40% of the slice is s99B income.
+  assert.ok(Math.abs(conv.auAssessableAmount - 6_666.67) < 0.05);
+});

@@ -54,6 +54,73 @@ export function pairedRescues(aRows, bRows) {
   };
 }
 
+/**
+ * PAIRED comparison of two arms on a MONEY metric — the sibling of `pairedRescues`
+ * for decisions that are not about ruin (design 84 §6.4b).
+ *
+ * `pairedRescues` classifies each seed by the `failed` flag, which is exactly right
+ * for "will this plan survive" and useless for "which wrapper should this money sit
+ * in". A decant-vs-hold contrast runs on plans that mostly do not fail at all, so the
+ * rescue counts come back near-empty and the reverse count says nothing. The sharp
+ * question there is the same shape, asked of wealth: in how many individual worlds is
+ * the treatment ahead, and — the one that matters — in how many is it BEHIND?
+ *
+ * Same pairing discipline as its sibling and as `paired-delta.mjs` on the grid side:
+ * arms share the seed sequence, so seed s is the same world in both, and the reported
+ * quantity is `treatment − control` WITHIN a world. Anything that moves both halves
+ * equally cancels. That is what makes a 4%-effect visible inside a scenario where
+ * sliding one date moves terminal wealth by tens of percent.
+ *
+ * **Never quote the mean of terminal wealth.** It is dominated by the right tail —
+ * a handful of lucky paths — and it answers a question nobody asked. `winRate` and
+ * `losses` are the readout; the percentiles are there to show the spread of the
+ * DIFFERENCE, which is a different and more honest object than the spread of levels.
+ *
+ * @param {Array}  aRows   control arm rows
+ * @param {Array}  bRows   treatment arm rows
+ * @param {string} [metric='afterTaxNW']  row field to difference
+ * @param {number} [tolerance=0]          |delta| at or below this counts as a tie
+ */
+export function pairedMetric(aRows, bRows, metric = 'afterTaxNW', tolerance = 0) {
+  const byB = new Map(bRows.map(r => [r.seed, r]));
+  const deltas = [];
+  const relDeltas = [];
+  let wins = 0, losses = 0, ties = 0, unpaired = 0, missing = 0;
+
+  for (const ra of aRows) {
+    const rb = byB.get(ra.seed);
+    if (!rb) { unpaired++; continue; }
+    const a = ra[metric], b = rb[metric];
+    if (!Number.isFinite(a) || !Number.isFinite(b)) { missing++; continue; }
+    const d = b - a;
+    deltas.push(d);
+    if (a !== 0) relDeltas.push(d / Math.abs(a));
+    if (Math.abs(d) <= tolerance) ties++;
+    else if (d > 0) wins++;
+    else losses++;
+  }
+
+  const n = deltas.length;
+  const sorted = [...deltas].sort((x, y) => x - y);
+  const at = (q) => (n ? sorted[Math.min(n - 1, Math.max(0, Math.floor(q * n)))] : null);
+  const relSorted = [...relDeltas].sort((x, y) => x - y);
+  const relAt = (q) => (relSorted.length
+    ? relSorted[Math.min(relSorted.length - 1, Math.max(0, Math.floor(q * relSorted.length)))]
+    : null);
+
+  return {
+    metric, n, unpaired, missing,
+    wins, losses, ties,
+    winRate:  n ? wins / n : 0,
+    lossRate: n ? losses / n : 0,
+    // Percentiles of the paired DIFFERENCE, not of either arm's level.
+    p10: at(0.10), p50: at(0.50), p90: at(0.90),
+    worst: n ? sorted[0] : null,
+    best:  n ? sorted[n - 1] : null,
+    medianRel: relAt(0.50),
+  };
+}
+
 /** Failure rate of an arm. */
 export const failureRate = (rows) => (rows.length ? rows.filter(r => r.failed).length / rows.length : null);
 

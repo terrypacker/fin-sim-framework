@@ -116,6 +116,7 @@ function _accountToStatePlain(account) {
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;
     plain.earningsBasis            = account.earningsBasis ?? 0;
+    plain.derivedIncomeBasis       = account.derivedIncomeBasis ?? 0;
     plain.loanBalance              = account.loanBalance   ?? 0;
     plain.minimumAge               = account.minimumAge    ?? null;
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
@@ -197,8 +198,11 @@ export const US_RETIREMENT = {
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
+      // `auAssessableAmount` (design 84 G2) is the DERIVED slice s99B reaches. It MUST
+      // be declared: pickPayload keeps only declared fields, so an undeclared one is
+      // silently dropped and the tax module falls back to assessing the whole amount.
+      { type: 'ROTH_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
+      { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
       { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY',        fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text(), rolloverConversions: ValueType.any() } },
@@ -211,14 +215,14 @@ export const US_RETIREMENT = {
       { type: 'IRA_WITHDRAWAL_CONTRIB_TAX',     fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
+      { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_RMD_TAX',                    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
-      { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
+      { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_WITHDRAWAL_TAX',            fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
@@ -876,6 +880,10 @@ export const US_RETIREMENT = {
           stateRegistry: sr, role: ACCOUNT_ROLES.IRA,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
           growthRate: acct.growthRate ?? p.iraGrowthRate,
+          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
+          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
+          // equity are described consistently; per-holding `dividendYield` still wins.
+          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
         });
         h.handledEvents.push(iraEvent);
         handlers.push(h);
@@ -900,6 +908,10 @@ export const US_RETIREMENT = {
           stateRegistry: sr, role: ACCOUNT_ROLES.ROTH,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
           growthRate: acct.growthRate ?? p.rothGrowthRate,
+          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
+          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
+          // equity are described consistently; per-holding `dividendYield` still wins.
+          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
         });
         h.handledEvents.push(rothEvent);
         handlers.push(h);
@@ -915,6 +927,10 @@ export const US_RETIREMENT = {
           stateRegistry: sr, role: ACCOUNT_ROLES.K401,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
           growthRate: acct.growthRate ?? p.k401GrowthRate,
+          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
+          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
+          // equity are described consistently; per-holding `dividendYield` still wins.
+          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
         });
         h.handledEvents.push(k401Event);
         handlers.push(h);

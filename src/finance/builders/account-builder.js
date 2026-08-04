@@ -158,12 +158,14 @@ class RetirementBuilder extends BaseInvestmentBuilder {
     super();
     this._contributionBasis     = null; // defaults to balance in RetirementAccount
     this._earningsBasis         = 0;
+    this._derivedIncomeBasis    = 0;
     this._minimumAge            = null;
     this._allowsEarlyWithdrawal = null; // null = defer to account class default
   }
 
   contributionBasis(v)     { this._contributionBasis     = v; return this; }
   earningsBasis(v)         { this._earningsBasis         = v; return this; }
+  derivedIncomeBasis(v)    { this._derivedIncomeBasis    = v; return this; }
   minimumAge(v)            { this._minimumAge            = v; return this; }
   allowsEarlyWithdrawal(v) { this._allowsEarlyWithdrawal = v; return this; }
 
@@ -171,6 +173,7 @@ class RetirementBuilder extends BaseInvestmentBuilder {
     const opts = this._investmentOpts();
     if (this._contributionBasis !== null) opts.contributionBasis = this._contributionBasis;
     opts.earningsBasis = this._earningsBasis;
+    opts.derivedIncomeBasis = this._derivedIncomeBasis;
     if (this._minimumAge !== null) opts.minimumAge = this._minimumAge;
     if (this._allowsEarlyWithdrawal !== null) opts.allowsEarlyWithdrawal = this._allowsEarlyWithdrawal;
     return opts;

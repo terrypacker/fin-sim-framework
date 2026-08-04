@@ -149,6 +149,13 @@ function main() {
     balance:  sum(state, ownerOf, 'balance'),
     contrib:  sum(state, ownerOf, 'contributionBasis'),
     earnings: sum(state, ownerOf, 'earningsBasis'),
+    // Converted principal is the THIRD corpus layer (design 36). It comes out
+    // s99B-free except for the IRA-earnings share each lot carries, so a fall in
+    // it explains a balance fall without any tax action — sample it, or the leak
+    // check below reports every corpus distribution as an escape (which is what
+    // it did until design 84 G9 gave the drawdown path a way to reach it at all).
+    rollContrib:  sum(state, ownerOf, 'rolloverContribBasis'),
+    rollEarnings: sum(state, ownerOf, 'rolloverEarningsBasis'),
     residency: state.people?.[[...ownerOf.values()][0] ?? 'primary']?.residency ?? null,
   });
 
@@ -208,6 +215,8 @@ function main() {
       rothBalance:  bal?.balance   ?? null,
       rothContrib:  bal?.contrib   ?? null,
       rothEarnings: bal?.earnings  ?? null,
+      rothRollContrib:  bal?.rollContrib  ?? 0,
+      rothRollEarnings: bal?.rollEarnings ?? 0,
       auOrdinary:   s.state.auOrdinaryIncomeYTD ?? 0,
       slice:        sliceTotal,
       penaltyUsd:   b?.penaltyUsd ?? 0,
@@ -270,13 +279,21 @@ function report({ rows, drift, cfg, synthetic, source }) {
   // Australia never assesses it and every tax column below is understated while
   // looking perfectly well-formed. Balance is the independent witness: while resident
   // and past the growth, a fall the booked withdrawals do not explain is a leak.
+  //
+  // "Explained" means SOME ledger layer came down by it. Three of the four are
+  // s99B corpus and emit nothing on the way out — regular contributions, converted
+  // principal, and (for the converted part) everything except each lot's stamped
+  // IRA-earnings share. Counting only the earnings actions would flag every corpus
+  // distribution as an escape.
   const leaks = [];
   for (let i = 1; i < rows.length; i++) {
     const prev = rows[i - 1], cur = rows[i];
     if (cur.residency !== 'AU' || prev.rothBalance == null || cur.rothBalance == null) continue;
     const drop = prev.rothBalance - cur.rothBalance;
     if (drop <= 1000) continue;                       // growth or noise
-    const booked = cur.wdEarningsUsd + (prev.rothContrib - cur.rothContrib);
+    const booked = cur.wdEarningsUsd
+                 + (prev.rothContrib     - cur.rothContrib)
+                 + (prev.rothRollContrib - cur.rothRollContrib);
     if (drop - booked > Math.max(1000, drop * 0.05)) {
       leaks.push({ year: cur.year, drop, booked, gap: drop - booked });
     }
@@ -312,6 +329,13 @@ function report({ rows, drift, cfg, synthetic, source }) {
       { head: 'res',        get: r => r.residency ?? '—', width: 5 },
       { head: 'balance $',  get: r => money(r.rothBalance),  width: 13 },
       { head: 'corpus $',   get: r => money(r.rothContrib),  width: 12 },
+      // Converted principal, kept in its OWN column rather than folded into corpus.
+      // It is corpus for the most part, but each lot carries a stamped IRA-earnings
+      // share that s99B(2)(a) refuses the exemption to, so "how much of the wrapper
+      // is conversions" is a different question from "how much is contributions" —
+      // and under §408A(d)(4)(B) it is drawn BEFORE earnings, which is what decides
+      // whether a given year's withdrawal is assessable at all.
+      { head: 'convtd $',   get: r => money(r.rothRollContrib), width: 12 },
       { head: 'earnings $', get: r => money(r.rothEarnings), width: 13 },
       { head: 'wdEarn $',   get: r => money(r.wdEarningsUsd), width: 12 },
       { head: 'penalty $',  get: r => money(r.penaltyUsd),   width: 11 },

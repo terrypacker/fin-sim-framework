@@ -61,8 +61,8 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 
-import { pairedRescues, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
-import { millions, thousands, money, pct, percentile, columns } from '../lib/format.mjs';
+import { pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
+import { millions, thousands, money, moneyAuto, pct, percentile, columns } from '../lib/format.mjs';
 import { renderMixReport } from '../lib/mix-report-html.mjs';
 import {
   mixBands, thresholdProbabilities, outcomeGapAt, DEFAULT_MIX_THRESHOLDS,
@@ -72,7 +72,7 @@ const argv = process.argv.slice(2);
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 
 const dir = flag('--dir');
-if (!dir) { console.error('usage: mc-report.mjs --dir <dir> [--pairs "a:b"] [--json]'); process.exit(2); }
+if (!dir) { console.error('usage: mc-report.mjs --dir <dir> [--pairs "a:b"] [--metric afterTaxNW] [--json]'); process.exit(2); }
 
 const files = readdirSync(dir).filter(f => f.endsWith('.json'));
 if (!files.length) { console.error(`no arm JSON files in ${dir}`); process.exit(2); }
@@ -184,6 +184,45 @@ for (const [a, b] of pairs) {
   } else if (p.n > 0) {
     console.log(`  (no reverse-rescues — on this evidence the change weakly dominates)`);
   }
+}
+
+// ─── 2b. paired MONEY view ───────────────────────────────────────────────────
+//
+// The rescue counts above answer "will this plan survive". A question about WHERE
+// wealth sits — a decant, a conversion, a wrapper swap — runs on plans that mostly do
+// not fail either way, so those counts come back near-empty and say nothing. This is
+// the same paired discipline asked of wealth instead (design 84 §6.4b).
+
+const moneyMetric = flag('--metric') ?? 'afterTaxNW';
+const hasMoney = keys.some(k => arms[k].rows?.some(r => Number.isFinite(r[moneyMetric])));
+
+if (hasMoney) {
+  console.log(`\n\n════ PAIRED — ${moneyMetric}, world by world ════`);
+  if (moneyMetric === 'nw') {
+    console.log('** scoring on NOMINAL net worth: this prices a Roth dollar at par with a');
+    console.log('   pre-tax one, so any arm that moves wealth BETWEEN wrappers is mis-scored.');
+    console.log('   Use --metric afterTaxNW for wrapper questions.');
+  }
+  for (const [a, b] of pairs) {
+    if (!arms[a] || !arms[b]) { console.log(`\n${a} → ${b}: (missing arm)`); continue; }
+    const m = pairedMetric(arms[a].rows, arms[b].rows, moneyMetric);
+    if (!m.n) { console.log(`\n${a} → ${b}: (no paired rows carrying ${moneyMetric})`); continue; }
+    console.log(`\n${a}  →  ${b}`);
+    console.log(`  ahead in ${m.wins}/${m.n} worlds (${pct(m.winRate)}); `
+      + `BEHIND in ${m.losses} (${pct(m.lossRate)})`
+      + (m.ties ? `; ${m.ties} tied` : '')
+      + (m.unpaired ? `  [${m.unpaired} unpaired]` : ''));
+    console.log(`  paired delta   p10 ${moneyAuto(m.p10)}   p50 ${moneyAuto(m.p50)}   p90 ${moneyAuto(m.p90)}`);
+    console.log(`  worst world ${moneyAuto(m.worst)}   best ${moneyAuto(m.best)}`
+      + (m.medianRel != null ? `   median ${(m.medianRel * 100).toFixed(2)}%` : ''));
+    if (m.losses > 0) {
+      console.log(`  ** not a free win: ${m.losses} worlds end WORSE off. The count is the finding,`);
+      console.log(`     not the average — a sign that flips is a bet, not a recommendation.`);
+    } else {
+      console.log(`  (ahead in every paired world — on this evidence it weakly dominates)`);
+    }
+  }
+  console.log('\nPaired DIFFERENCES within a world, never a mean of terminal wealth.');
 }
 
 // ─── 3. path shape ───────────────────────────────────────────────────────────

@@ -258,3 +258,64 @@ test('integration (Phase 3): the optimization window seeds 0-amount placeholder 
   assert.deepStrictEqual(ew.map(e => new Date(e.date).getUTCFullYear()).sort(), [2027, 2028]);
   assert.ok(ew.every(e => e.data.taxDeferredAmount === 0 && e.data.rothAmount === 0));
 });
+
+// ── D. Design 84 G9: a decant deep enough to reach converted principal ──────────
+
+test('integration: decanting converted principal reports it as a conversion, not as earnings', () => {
+  // 2027 converts 60k IRA→Roth. The IRA holds 40k contributions and 60k earnings, so
+  // pro-rata (design 84 Option 2b) sends 36k across as Roth EARNINGS and 24k as Roth
+  // corpus. The 36k is trust income s99B(2)(a) refuses the corpus exemption to. 2028
+  // then empties the wrapper. Before design 84 G9 the ledger had no idea the rollover
+  // buckets existed: it capped the draw at contributionBasis + earningsBasis (both
+  // zero here), so the whole 60k left the Roth with no basis reduction and no tax
+  // action at all.
+  const { sim } = loadToolsetScenario(makeConfig({
+    rothConversionEnabled:   true,
+    rothConversionSchedule:  [{ year: 2027, incomeTarget: 60_000 }],
+    earlyWithdrawalSchedule: [{ year: 2028, rothAmount: 60_000 }],
+    moveYear:                2027,          // AU-resident by the 2028 decant
+    simEnd:                  '2029-01-01',
+  }));
+  sim.stepTo(new Date('2028-12-15'));
+
+  const roth = sim.state.rothAccount;
+  assert.ok(near(roth.balance, 0), `Roth emptied: ${roth.balance}`);
+  // The ledger emptied with it — the leak was that it did not.
+  assert.ok(near(roth.rolloverContribBasis ?? 0, 0), `rolloverContribBasis ${roth.rolloverContribBasis}`);
+  assert.strictEqual((roth.rolloverConversions ?? []).length, 0, 'the conversion lot was consumed');
+
+  // Primary is 48 in 2028 and the conversion was 2027, so the corpus leg is inside
+  // the §408A(d)(3)(F) five-year window and is recaptured at 10%; the earnings leg
+  // carries §72(t) at the same 10%. Either way the whole 60k is penalised once.
+  assert.ok(sim.state.usPenaltyYTD > 0, 'the recapture penalty reached the US return');
+  assert.ok(near(sim.state.usPenaltyYTD, 6_000, 10), `penalty ${sim.state.usPenaltyYTD}`);
+  // The charge is attributed to the wrapper's owner (design 76), so it lands in the
+  // per-person map rather than the household total — the same place the AU return
+  // reads it from. 36k USD of IRA-earnings-sourced money, converted to AUD.
+  const perPerson = sim.state.auPersonOrdinaryIncomeYTD ?? {};
+  const s99b = perPerson.primary ?? 0;
+  assert.ok(s99b > 0, `the s99B charge reached the AU return: ${JSON.stringify(perPerson)}`);
+  const audPerUsd = s99b / 36_000;
+  assert.ok(audPerUsd > 1 && audPerUsd < 2.5, `assessed the 36k IRA-earnings share at ${audPerUsd} AUD/USD`);
+  // The corpus leg raised nothing — that is the half s99B(2)(a) exempts.
+  assert.ok(near(sim.state.rothAccount.rolloverEarningsBasis ?? 0, 0));
+});
+
+test('integration: the same decant while still US-resident raises no Australian income', () => {
+  // The control. Same wrapper, same lot, same age — only the residency differs. This
+  // is the gap the whole design 84 study turns on, so it is worth pinning that the
+  // engine charges it on residency and nothing else.
+  const { sim } = loadToolsetScenario(makeConfig({
+    rothConversionEnabled:   true,
+    rothConversionSchedule:  [{ year: 2027, incomeTarget: 60_000 }],
+    earlyWithdrawalSchedule: [{ year: 2028, rothAmount: 60_000 }],
+    moveYear:                null,
+    simEnd:                  '2029-01-01',
+  }));
+  sim.stepTo(new Date('2028-12-15'));
+
+  assert.ok(near(sim.state.rothAccount.balance, 0), 'the wrapper still empties');
+  assert.ok(near(sim.state.usPenaltyYTD, 6_000, 10), 'the US recapture is unchanged');
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0, 'Australia charges nothing');
+  assert.strictEqual((sim.state.auPersonOrdinaryIncomeYTD ?? {}).primary ?? 0, 0);
+});

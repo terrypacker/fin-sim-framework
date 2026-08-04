@@ -14,6 +14,25 @@ import { FieldValueAction, RecordBalanceAction } from '../../../simulation-frame
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
+
+/**
+ * The DERIVED slice of an earnings withdrawal (design 84 G2), pro-rata on the
+ * wrapper's own composition — the same split `drawDerivedProRata` applies to the
+ * pool it leaves behind, so the two cannot disagree.
+ *
+ * Returns null when the account carries no derived pool, which the tax module reads
+ * as "assess the whole amount" — the pre-G2 behaviour, and the safe direction for a
+ * saved state written before the pool existed.
+ */
+function _derivedShareOf(account, earningsDrawn) {
+  const d = account?.derivedIncomeBasis;
+  if (!Number.isFinite(d)) return null;
+  const earnings = Math.max(0, account?.earningsBasis ?? 0);
+  if (earnings <= 0) return 0;
+  const share = Math.min(1, Math.max(0, d) / earnings);
+  return +(Math.max(0, earningsDrawn) * share).toFixed(2);
+}
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -122,11 +141,21 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           ...ra,
           balance:       newBalance,
           earningsBasis: ra.earningsBasis - amount,
+          // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
+          ...drawDerivedProRata(ra, amount),
           holdings:      scaleHoldings(ra.holdings, ra.balance, newBalance),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
-      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency, stateKey: key }]
+      // Design 84 G2: `auAssessableAmount` is the DERIVED slice of the earnings being drawn —
+      // the part s99B actually reaches. The §72(t) penalty still bites on the whole
+      // `amount`, because that is a US rule about earnings, not about trust income.
+      // Absent (no ledger, or a pre-G2 saved action) ⇒ the tax module falls back to
+      // `amount`, i.e. the old assess-everything behaviour.
+      [{
+        type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency, stateKey: key,
+        auAssessableAmount: _derivedShareOf(ra, amount),
+      }]
     );
   }
 }
@@ -147,11 +176,29 @@ export class RothEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const key = action.stateKey ?? 'rothAccount';
     const ra = state[key];
+    // A negative year charges the loss to earnings before corpus (design 84 G12).
+    // Adding it straight to `earningsBasis` would drive the s99B-assessable slice
+    // negative and, once clamped, would leave assessable earnings standing that the
+    // market has already removed.
+    const ledger = action.amount < 0
+      ? debitLedgerForLoss(ra, -action.amount)
+      : { earningsBasis: ra.earningsBasis + action.amount, contributionBasis: ra.contributionBasis };
+    // Design 84 G2 — the yield slice of this year's return is DERIVED income and
+    // joins the s99B pool; the appreciation slice does not. On a losing year
+    // `debitLedgerForLoss` has already clamped the pool to the reduced earnings, so
+    // only a gain year adds. Absent `derivedAmount` (legacy/serialized actions) ⇒ 0,
+    // i.e. pre-G2 behaviour.
+    if (Number.isFinite(ra.derivedIncomeBasis)) {
+      ledger.derivedIncomeBasis = Math.min(
+        Math.max(0, (ra.derivedIncomeBasis) + Math.max(0, action.derivedAmount ?? 0)),
+        Math.max(0, ledger.earningsBasis),
+      );
+    }
     return this.newState(state, {
       [key]: {
         ...ra,
-        balance:       ra.balance       + action.amount,
-        earningsBasis: ra.earningsBasis + action.amount,
+        ...ledger,
+        balance: Math.max(0, ra.balance + action.amount),
       },
     });
   }

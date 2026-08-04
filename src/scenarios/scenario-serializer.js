@@ -675,6 +675,7 @@ export class ScenarioSerializer {
     if ('contributionBasis' in account) {
       d.contributionBasis = account.contributionBasis;
       d.earningsBasis     = account.earningsBasis ?? 0;
+      d.derivedIncomeBasis = account.derivedIncomeBasis ?? 0;
       d.minimumAge        = account.minimumAge    ?? null;
       // Roth rollover (conversion) buckets — only emitted when present so
       // accounts without conversions round-trip unchanged.
@@ -1100,6 +1101,7 @@ export class ScenarioSerializer {
     if (d.contributionBasis !== undefined) {
       opts.contributionBasis = d.contributionBasis;
       opts.earningsBasis     = d.earningsBasis ?? 0;
+      opts.derivedIncomeBasis = d.derivedIncomeBasis ?? 0;
       // Only set minimumAge when the serialized value is non-null; otherwise let
       // the subclass constructor apply its own default (59.5, 60, etc.).
       if (d.minimumAge != null) opts.minimumAge = d.minimumAge;
