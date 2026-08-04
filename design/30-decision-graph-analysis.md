@@ -395,7 +395,7 @@ EVT-X test files under `tests/unit/`:
 
 - **Heavier insight engine** — automated `top_driver` / `concentration` / `cascade` classification. Deferred; revisit only if the lightweight comparison UI proves insufficient.
 - **Merge / reconciliation of two scenarios** — explicitly deprecated (design 5 supersede note).
-- **Automatic state bucketing** — the proposal's "$1.0M–$1.1M bucket" compression. Out of scope while decision-graph leaves are user-declared and bounded by construction.
+- **Automatic state bucketing** — the proposal's "\$1.0M–\$1.1M bucket" compression. Out of scope while decision-graph leaves are user-declared and bounded by construction.
 - **Continuous decision spaces** — the optimizer already covers single-numeric-param sweeps; combining the decision-graph with continuous optimization (mixed integer / continuous joint search) is its own design.
 - **Real-time interactive branching** — paused-mid-run forking the way design 3 originally proposed. Not currently asked for; if it shows up, a separate design against the current architecture.
 - **Multi-user collaborative branching** — design 5's late-stage idea. No traction; deferred indefinitely.

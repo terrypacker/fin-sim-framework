@@ -24,7 +24,7 @@ fidelity, and the §11 questions are resolved (see **Decisions locked** below).
   → projected into `state.people` → `computeAuTaxPerPerson` stamps `auMinTaxExempt` →
   `AuTaxRates2027._cgtRelief` zeroes `minTaxRate`). New classes are registered in the
   serializer's framework-class list and the reducer coverage manifest. **Reference scenario
-  net worth moves $10,978,107 → $10,914,370** — the reform now bites on post-2027 AU-resident
+  net worth moves \$10,978,107 → \$10,914,370** — the reform now bites on post-2027 AU-resident
   gains (exemption of pre-2027 gains, offset by discount removal + 30% floor).
 
 ### ⚠️ Post-implementation correction — TWO COUPLED BUGS zero out AU CGT (2026-07-11, OPEN)
@@ -47,7 +47,7 @@ action (replenish-savings drawdowns), which carries `auGain` but **no `auIndexed
 `AU_HOUSE_SALE_TAX` to fill `auRealCapitalGainsYTD` — **not** the generic type. So the
 real-gain bucket stays **0** while the gross bucket fills. `AuTaxRates2027._cgtRelief` then
 does `realGain = auRealCapitalGainsYTD ?? gross`; because the bucket is **present-and-zero**
-(not undefined), `??` never falls back → assesses **0** → **100% relief, AU CGT ≈ $0**.
+(not undefined), `??` never falls back → assesses **0** → **100% relief, AU CGT ≈ \$0**.
 
 **Interaction:** Bug 1 *masked* Bug 2. With the wrapper reverting to the 50% discount on the
 (populated) gross bucket, drawdown-path gains were at least taxed at 50%. "Fixing" Bug 1 alone
@@ -58,7 +58,7 @@ must be fixed together. Observed on the design-52 golden: wrapper-fix-alone swun
 **Status: reverted to a clean baseline pending a proper fix.** The wrapper delegation and the
 design-52 regold were both backed out; only the safe report changes remain (`AuTaxDocument2027`
 registered; "Tax on Income" ordinary-vs-CGT breakdown sub-rows). The Phase-4 reference figures
-(§ −$63.7k, "reform bites") were measured **under Bug 1+2** and are **not trustworthy**.
+(§ −\$63.7k, "reform bites") were measured **under Bug 1+2** and are **not trustworthy**.
 
 **Full inventory of AU-resident capital-gain paths (verified 2026-07-11):**
 
@@ -373,7 +373,7 @@ ATO source for gold treatment (bullion = ordinary CGT asset, not a collectible):
 ### Decisions locked (review, 2026-07-10)
 
 1. **Operative year = `2027`** (FY2027-28). `year=2026` keeps the 50% discount. (§2)
-2. **FY2026-27 bracket cut**: the **$18,201–$45,000 rate drops 16% → 15%** (legislated
+2. **FY2026-27 bracket cut**: the **\$18,201–\$45,000 rate drops 16% → 15%** (legislated
    personal tax cuts; CGT is the only *CGT* change). ⚠️ The existing `AuTaxRates2025`
    carries **19%** on this band (`au-tax-rates-2025.js:32`), not 16% — so `AuTaxRates2026`
    sets 15% **explicitly** rather than inheriting. The 2025=19% figure looks like a
@@ -532,7 +532,7 @@ FY≤2026, `minTaxRate = 0` ⇒ byte-identical output (the existing `au-tax-rate
 
 New `au-tax-rates-2026.js extends AuTaxRatesBase` (**not** `AuTaxRates2025` — see below).
 CGT treatment is unchanged (flat 50% discount), but the personal tax cut moves the
-**$18,201–$45,000 band from 16% → 15%**:
+**\$18,201–\$45,000 band from 16% → 15%**:
 
 ```js
 this._brackets = [
@@ -553,7 +553,7 @@ carry forward unchanged. Register in `tax-settle-service.js`.
 ### 6.3 `AuTaxRates2027` (FY2027-28) — the new regime
 
 `AuTaxRates2027 extends AuTaxRatesBase` sets the FY2027-28 brackets (the same package cuts
-the **$18,201–$45,000 band 15% → 14%** — *confirm*) and overrides `_cgtRelief`:
+the **\$18,201–\$45,000 band 15% → 14%** — *confirm*) and overrides `_cgtRelief`:
 
 - **Indexation**: the discountable gain becomes the **real gain** = `Σ over lots max(0,
   proceeds_lot − indexedBase_lot)` where `indexedBase = costBase × idx(disposal)/idx(acq)`
@@ -715,7 +715,7 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
 - **Phase 4 ✅ done** — 1 July 2027 deemed cost base reset (Method 1: restamps
   `costBaseByCountry.AU` + `acquisitionPriceLevel`, scheduled only when the sim spans the
   date) + the Age Pension / JobSeeker exemption flag (§6.6). This activates indexation and
-  moves the reference scenario's ending net worth (−$63.7k).
+  moves the reference scenario's ending net worth (−\$63.7k).
 - **Phase 5 (deferred)** — apportionment Method 2 election, new-build election, dedicated
   ATO CPI series.
 
@@ -726,7 +726,7 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
 All six review questions are resolved — see **Decisions locked** at the top. Summary:
 
 1. Operative year = `2027`; `year=2026` unchanged. ✅
-2. FY2026-27 moves the $18,201–$45,000 band 16% → 15% (and 15% → 14% at FY2027-28); CGT is
+2. FY2026-27 moves the \$18,201–\$45,000 band 16% → 15% (and 15% → 14% at FY2027-28); CGT is
    the only CGT change. `AuTaxRates2026` sets 15% explicitly (2025's 19% flagged, not fixed). ✅
 3. Age Pension / JobSeeker exemption — **in scope** (Phase 4). ✅
 4. Indexation via Option A (per-lot in sale reducers). ✅

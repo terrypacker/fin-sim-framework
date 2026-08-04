@@ -72,7 +72,7 @@ The `CASH_SLEEVE_INTEREST_APPLY` action carries a `taxMode`:
 ## 4. Notes / risks
 
 - **Direction of the ending number can go DOWN.** In the reference scenario, net
-  worth moved $60.7m → $59.1m: the direct interest is tiny (cash sleeves are
+  worth moved \$60.7m → \$59.1m: the direct interest is tiny (cash sleeves are
   small), but the extra taxable income and the monthly balance nudges re-sequence
   drawdowns — a known chaotic lever (see [[residency-drives-drawdown-sequencing]]),
   not a mis-credit. The end-to-end test confirms the sleeve grows and is taxed.

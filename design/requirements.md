@@ -67,11 +67,11 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-31 | AU Brokerage | Stocks – Withdrawal as Resident | − earnings or contribution | Capital Gain | Capital Gain | Y | ✅ |
 | EVT-32 | AU Brokerage | Stocks – Withdrawal as Non-Resident | − earnings or contribution | Capital Gain | N | N | ✅ |
 | EVT-33 | Real Property | House Sale – Australia | − contribution & basis | Capital Gain | Non-Resident Tax Rates | Y | ✅ |
-| EVT-34 | Real Property | House Sale – US | − contribution & basis | Capital Gain (after $500K exemption) | Capital Gain if resident | N | ✅ |
+| EVT-34 | Real Property | House Sale – US | − contribution & basis | Capital Gain (after \$500K exemption) | Capital Gain if resident | N | ✅ |
 | EVT-35 | IRA | IRA Rollover Withdrawal | − contribution & earnings | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-36 | Collectible | Sale – Baseball Cards | − contribution & basis | Collectible (28%) | Capital Gain if resident | N | ✅ |
-| EVT-37 | US Checking | Social Security Income | + $ amount/month | Social Security Income (85% taxable) | Ordinary Income if resident | N | ✅ |
-| EVT-38 | US Checking | Wages (Gross) | + $ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
+| EVT-37 | US Checking | Social Security Income | + \$ amount/month | Social Security Income (85% taxable) | Ordinary Income if resident | N | ✅ |
+| EVT-38 | US Checking | Wages (Gross) | + \$ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-39 | US Checking | Wages – Taxes Withheld | − % of amount | N/A (withholding) | N/A | N | ✅ |
 | EVT-40 | IRA | IRA Withdrawal – RMD | − contribution & earnings | Ordinary Income (required at age 72) | Ordinary Income if resident | N | ✅ |
 | EVT-41 | Roth | Roth Rollover Contribution | + contribution | N | N | N | ✅ |
@@ -81,10 +81,10 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-45 | Collectible | Change in Value – Baseball Cards | +/− balance | N | N | N | ✅ |
 | EVT-46 | Collectible | Sale – Gold | − contribution & basis | Collectible (28%) | Capital Gain if resident | N | ✅ |
 | EVT-47 | Collectible | Change in Value – Gold | +/− balance | N | N | N | ✅ |
-| EVT-48 | US Checking | Self-Employment Income | + $ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
-| EVT-49 | AU Savings | Self-Employment Income | + $ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
-| EVT-50 | US Checking | Bonus | + $ amount | Ordinary Income | Ordinary Income if resident | N | ✅ |
-| EVT-51 | US Checking | Company Sale | + $ amount | Capital Gain | Capital Gain if resident | N | ✅ |
+| EVT-48 | US Checking | Self-Employment Income | + \$ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
+| EVT-49 | AU Savings | Self-Employment Income | + \$ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
+| EVT-50 | US Checking | Bonus | + \$ amount | Ordinary Income | Ordinary Income if resident | N | ✅ |
+| EVT-51 | US Checking | Company Sale | + \$ amount | Capital Gain | Capital Gain if resident | N | ✅ |
 | EVT-52 | Roth Conversion | IRA → Roth Conversion | −IRA, +Roth rollover contribs | Ordinary Income | N (s99B — no distribution received) | N | ✅ |
 
 **EVT coverage: 52 / 52 tested**

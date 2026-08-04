@@ -2,7 +2,7 @@
 
 **Status: COMPLETE — P1–P5 implemented (Gaps A, B, C, D).** §7's four questions are answered and settled.
 P1 landed bit-for-bit inert on both scenarios, as its phase contract required. P2 then moved
-attribution onto true ownership: **+$2** on the reference scenario (where all re-attributed AU income
+attribution onto true ownership: **+\$2** on the reference scenario (where all re-attributed AU income
 is flat-rate or joint) but **+2.15%** on the design 52 default (where a solely-owned account pays
 franked dividends into progressive brackets) — the correct removal of a phantom income split, since
 Australia has no joint assessment. **That second figure disproved a claim in §5, which now carries a
@@ -28,7 +28,7 @@ attributed, through a progressive rate schedule where the split changes the answ
 
 **Measured sensitivity.** Re-allocating the shared pool from 50/50 to 100/0 in
 `computeAuTaxPerPerson` — changing nothing else — moves lifetime tax on
-`scenarios/fin-sim-scenarios.json` from **$1,831,460 to $2,024,926**, a swing of **$193,466
+`scenarios/fin-sim-scenarios.json` from **\$1,831,460 to \$2,024,926**, a swing of **\$193,466
 (+10.6%)**. That is the size of the quantity currently being decided by a headcount divisor rather
 than by ownership. The true answer is somewhere inside that band and is not knowable without doing
 the attribution properly.
@@ -191,7 +191,7 @@ spouseSuperAccount  { ownershipType: undefined, ownerId: 'spouse',  owners: unde
    fractions: [ { primary, 0.5 }, { spouse, 0.5 } ]
 ```
 
-This is the user's reported symptom exactly. Super balances of $51,360 (Terry) and $343,470
+This is the user's reported symptom exactly. Super balances of \$51,360 (Terry) and \$343,470
 (Jeanne) — a 7× difference — produce identical super tax:
 
 ```
@@ -252,7 +252,7 @@ Two of these are worth calling out because their misattribution is flagrant rath
 imprecise:
 
 - **`SS_INCOME_TAX`** — Social Security is definitionally per-recipient, and the two people have
-  different entitlements ($2,000/mo and $1,000/mo). It is split 50/50.
+  different entitlements (\$2,000/mo and \$1,000/mo). It is split 50/50.
 - **The retirement-account family** (IRA, 401k, Roth, inherited IRA) — these are individual
   accounts by statute. A distribution from Terry's 401k is Terry's income. There is no reading
   under which half of it is Jeanne's.
@@ -286,8 +286,8 @@ accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auSavingsAcco
 `AU_SAVINGS_EARNINGS_TAX` is emitted from five call sites (`au-savings-classes.js`,
 `cash-sleeve-interest-apply-reducer.js`, `bond-sleeve-coupon-apply-reducer.js`,
 `bond-accretion-apply-reducer.js`) carrying only `{ amount, residency }`. The household has two AU
-savings accounts — Terry's `auSavingsAccount` ($50,000) and Jeanne's `spouseAuSavingsAccount`
-($119,000) — and *all* interest from both is attributed through Terry's account object. The same
+savings accounts — Terry's `auSavingsAccount` (\$50,000) and Jeanne's `spouseAuSavingsAccount`
+(\$119,000) — and *all* interest from both is attributed through Terry's account object. The same
 pattern applies to `state.auStockAccount`, `state.auFixedIncomeAccount`, and
 `SUPER_CONTRIBUTION_TAX`'s `state.superAccount`.
 
@@ -334,8 +334,8 @@ individually harmful.
 | Phase | Work | Golden impact |
 |---|---|---|
 | **P1** ✅ **DONE** | Gap C — resolve the account from `action.stateKey` in the AU module; thread `stateKey` onto `AU_SAVINGS_EARNINGS_TAX` (5 sites), `AU_FIXED_INCOME_EARNINGS_TAX`, the AU brokerage actions and `SUPER_CONTRIBUTION_TAX`, with the toolset field declarations. Follow `SUPER_EARNINGS_TAX`. | **Inert — confirmed.** Golden byte-identical; per-person accumulators unchanged. This is the point: it lands the plumbing under a fallback that masks it. |
-| **P2** ✅ **DONE** | Gap A — carry `ownershipType` through both `_accountToStatePlain` functions (accounts have no `owners[]`; that field is RealProperty-only), and carry `owners[]` through the four *asset* projections, which dropped it. | Per-person values move to true ownership. Totals move **+$2** on the reference scenario but **+2.15%** on the design 52 default — this row originally predicted "~$17, barely moves", which was wrong and is corrected in §5. Safe only because P1 landed first. |
-| **P3** ✅ **DONE** | Gap B — migrate the 20 action types. Largest phase; split by family (retirement accounts / brokerage+bond / income / capital gains) so each lands testable. Carries Gap D's first three scalars along with it. | **This is where the money is.** Expect movement inside the ±$193k band. |
+| **P2** ✅ **DONE** | Gap A — carry `ownershipType` through both `_accountToStatePlain` functions (accounts have no `owners[]`; that field is RealProperty-only), and carry `owners[]` through the four *asset* projections, which dropped it. | Per-person values move to true ownership. Totals move **+\$2** on the reference scenario but **+2.15%** on the design 52 default — this row originally predicted "~\$17, barely moves", which was wrong and is corrected in §5. Safe only because P1 landed first. |
+| **P3** ✅ **DONE** | Gap B — migrate the 20 action types. Largest phase; split by family (retirement accounts / brokerage+bond / income / capital gains) so each lands testable. Carries Gap D's first three scalars along with it. | **This is where the money is.** Expect movement inside the ±\$193k band. |
 | **P4** ✅ **DONE** | Gap D *(remainder)* — apportion `usTaxPaidOnUsSourceAud` by each person's US-source share. The other three FITO scalars shipped with P3, which proved they could not be deferred. | Second-order; changes FITO relief, not assessable income. |
 | **P5** ✅ **DONE** | Delete the `/ numResidents` fallback in `computeAuTaxPerPerson`, or convert it to a dev-mode assertion that fires if any AU household scalar is non-zero at settle. | None if P3 is complete — and that is the test. |
 
@@ -393,7 +393,7 @@ Measured impact, by scenario — the two differ, and the difference is the point
 
 | | reference scenario | design 52 default |
 |---|---|---|
-| lifetime tax | 4,563,500 → 4,563,517 deficit; tax **+$2** | 700,352 → 715,426 (**+2.15%**) |
+| lifetime tax | 4,563,500 → 4,563,517 deficit; tax **+\$2** | 700,352 → 715,426 (**+2.15%**) |
 | why | all re-attributed income is flat-rate or joint | `auStockAccount` is solely owned and pays franked dividends into progressive brackets |
 
 The design 52 lock was re-pinned (698,420 → 715,426; net worth 12,273,473 → 12,268,463) with the full
@@ -427,8 +427,8 @@ US savings / cash-sleeve interest straight onto the household scalar. Shared sea
 which pairs each AU field with its per-person twin.
 
 **Result on the reference scenario: every AU household scalar drains to zero.** FY2032 ordinary income
-went from `primary=2,982 spouse=2,982` (an even split of $33k) to `primary=33,403 spouse=5,581`, and
-capital gains from a $9,523 shared scalar to 100% on the owner of the brokerage account. Nothing
+went from `primary=2,982 spouse=2,982` (an even split of \$33k) to `primary=33,403 spouse=5,581`, and
+capital gains from a \$9,523 shared scalar to 100% on the owner of the brokerage account. Nothing
 reaches `computeAuTaxPerPerson`'s divisor any more, so P5's assertion would pass today.
 
 | | reference scenario | design 52 default |
@@ -444,7 +444,7 @@ set "migrates for free" with the income. It does not migrate for free; it migrat
 FITO limit is sized by re-running the assessment with each person's US-source slice subtracted from
 their own income, so attributing the income while leaving the removal set on an even split gives every
 person a limit computed off a base they do not have. Measured on the design 52 scenario: income-only
-migration lands at **949,884 (+32.8%)** versus **699,756** with the removal set aligned — a $250k
+migration lands at **949,884 (+32.8%)** versus **699,756** with the removal set aligned — a \$250k
 swing, and in the wrong direction. The two halves of P3 are one change.
 
 **P3 tripped an invariant test, and that is the part worth remembering.** FTC-US-9 asserts that AU tax
@@ -484,14 +484,14 @@ limit cannot absorb it is simply lost. Matching the offset to the income share w
 Zero household US-source income falls back to the even split rather than dividing by zero.
 
 **P4 exposed a second latent defect, again caught by FTC-US-9 and again invisible to the golden.**
-The A$1,000 FITO de-minimis test is *per person*, but the fallback in `_auTaxOnUsSourceIncome` that
+The A\$1,000 FITO de-minimis test is *per person*, but the fallback in `_auTaxOnUsSourceIncome` that
 handles it was all-or-nothing across the household: the apportionment branch fired only when EVERY
 person's `fitoLimit` was null. A mixed household — one spouse over the threshold with a computed
 limit, one under with a null one — contributed **zero** for the under-threshold spouse, declaring
 their entire AU liability to be AU-source and therefore creditable against US tax. Roughly 24k of
 leak in the reference run.
 
-It had been latent for as long as the even split kept both spouses on the same side of the A$1,000
+It had been latent for as long as the even split kept both spouses on the same side of the A\$1,000
 threshold. P4's income-share apportionment is exactly what pushes them apart, so the fix ships with
 it: the fallback is now applied per detail, using each person's own US-source share (surfaced as
 `inputs.usSourceOrdinary` / `usSourceCapGains`). Peak current-year passive foreign tax fell from
@@ -515,7 +515,7 @@ It has to read the journal's `stateDiff.before`, not final state, because the se
 zeroes these buckets: end-of-run state is 0 whether or not attribution works. **The first version of
 this test did read final state and was therefore vacuous — it passed against the pre-migration
 module.** Mutation-checking against `34dc682` is what caught that; the corrected version reports 39
-residues there, including $189k of capital gains and $283k of US-source ordinary income in single
+residues there, including \$189k of capital gains and \$283k of US-source ordinary income in single
 years. A second, weaker case guards against a wholesale revert to the even split.
 
 **The advisory part** is a one-warning-per-field `console.warn` in `computeAuTaxPerPerson` naming any
@@ -570,7 +570,7 @@ converts "migrated" from an assertion into something the suite can check.
 (`au-tax-rates-base.js:237`: `grossTax = ... + auSuperTaxYTD + minTaxTopUp`), and non-resident
 withholding is flat at the treaty caps (10% interest, 15% unfranked dividends). Splitting a flat-rate
 amount differently between two people cannot change its total. This is why fixing Gap A — which
-visibly corrects super tax from 1,937/1,937 to 504/3,371 — moves lifetime taxes by **$17**.
+visibly corrects super tax from 1,937/1,937 to 504/3,371 — moves lifetime taxes by **\$17**.
 
 So the headline totals will *not* validate P1 and P2. Only the progressive machinery is
 split-sensitive: the resident marginal brackets, the tax-free threshold, the Medicare levy, the CGT
@@ -585,7 +585,7 @@ than golden locks to be tested at all.
 > The error was generalising from one scenario. On the *reference* scenario
 > (`fin-sim-scenarios.json`) every AU-taxed dollar that P2 re-attributes is either flat-rate (super
 > at 15%, NR withholding at the treaty caps) or genuinely joint (rent from a jointly-owned house), so
-> P2 moved it by **+$2** — and the flat-tax-invariance reasoning above held perfectly.
+> P2 moved it by **+\$2** — and the flat-tax-invariance reasoning above held perfectly.
 >
 > But the split-sensitive machinery does **not** only act on Gap B's fields. `auPersonFrankingCreditYTD`
 > and the per-person ordinary/gains maps already feed the progressive brackets today. On the design 52
@@ -616,7 +616,7 @@ out-of-funds in 2060. Sensitivity analysis on this change must read `cumulativeT
   `auPersonXYTD` for a two-person household with deliberately unequal accounts.
 - **Unequal-by-construction fixtures.** Two people with equal balances cannot distinguish a correct
   attribution from the even-split fallback. Fixtures must be lopsided — the real scenario's
-  $51k/$343k super is a good template.
+  \$51k/\$343k super is a good template.
 - **A sole-ownership regression guard for Gap A.** Assert `ownershipFractions()` returns
   `[{ personKey: 'spouse', fraction: 1.0 }]` for a sole-owned account read *out of runtime state*,
   not off the `Asset` instance. Testing the `Asset` is what let this bug live.

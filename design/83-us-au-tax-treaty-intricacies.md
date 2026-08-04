@@ -91,7 +91,7 @@ share of deductions*. The form computes it explicitly:
 | 3g | `3c × 3f` — the ratable share of the standard deduction |
 | 7 | `1a − 6`, i.e. gross foreign income minus 3g and any definitely-related deductions |
 
-The model never computes 3g, so the $40,790 standard deduction is apportioned to nothing.
+The model never computes 3g, so the \$40,790 standard deduction is apportioned to nothing.
 
 ### Redone the Form 1116 way
 
@@ -116,12 +116,12 @@ inverts, and the pools are separate and 10-year limited:
 ### Lifetime effect
 
 Rebuilding every year of the export the Form 1116 way (G1 and G2 together): **the model
-over-credits by ≈ $87,430**, concentrated in 2030 (+2,466), 2043 (+5,089), 2045 (+6,697),
+over-credits by ≈ \$87,430**, concentrated in 2030 (+2,466), 2043 (+5,089), 2045 (+6,697),
 2067 (+8,467), 2069 (+7,410). One-directional — both defects inflate the limit.
 
 > Caveat on that figure: where apportioned deductions exceed a basket's gross income this
 > estimate clamps line 17 to zero, whereas a real return carries a foreign loss with recapture
-> (§904(f)). That mainly distorts the thin early years. Treat ~$87k as the order of magnitude.
+> (§904(f)). That mainly distorts the thin early years. Treat ~\$87k as the order of magnitude.
 
 ### Work
 
@@ -343,7 +343,7 @@ with `299,234.45` of AU tax sitting unused in the resourced pool the whole time.
 
 Across the four super-withdrawal years (2038, 2043, 2044, 2045; 397,972 USD of super income):
 
-**US tax over-paid ≈ $26,481** — 2044 (+15,383) and 2045 (+10,922) carry almost all of it.
+**US tax over-paid ≈ \$26,481** — 2044 (+15,383) and 2045 (+10,922) carry almost all of it.
 
 ### 7a.5 What is NOT in scope here
 
@@ -610,12 +610,12 @@ use** — any post-2008 period the dwelling was not the main home — and Pub 52
 1. gain = price − adjusted basis (basis already net of depreciation);
 2. **subtract depreciation** — never excludable (§7b.2b-dep);
 3. allocate what remains between qualified and nonqualified use **by a time fraction**;
-4. exclude only the qualified slice, capped at $250k / $500k.
+4. exclude only the qualified slice, capped at \$250k / \$500k.
 
 Pub 523's worked example is nearly this exact fact pattern: a property rented 2 years, converted
-to a principal residence for 2 years, sold after 5. Of $300,000 post-depreciation gain, 2/5 —
-$120,000 — is allocated to nonqualified use and is **ineligible**; depreciation is recaptured
-separately under §1250; *"the balance of the $250,000 exclusion can't be used."*
+to a principal residence for 2 years, sold after 5. Of \$300,000 post-depreciation gain, 2/5 —
+\$120,000 — is allocated to nonqualified use and is **ineligible**; depreciation is recaptured
+separately under §1250; *"the balance of the \$250,000 exclusion can't be used."*
 
 One asymmetry worth planning around: Exception 1 excludes from nonqualified use *"any portion of
 the 5-year period ending on the date of the sale … **after** the last date you … used the
@@ -632,7 +632,7 @@ exclusion is zero. Sample either side of the 2-year mark rather than trusting a 
 | | AU main residence | AU discount | US §121 | model |
 |---|---|---|---|---|
 | **1. Sell while still non-resident** | **denied** — s118-110(3), excluded foreign resident | denied | fails 2-of-5 use test | **correct** |
-| **2. Sell as resident, moved in as main residence** | partial (s118-185/145) | apportioned | **$500k applies** | **wrong both sides** |
+| **2. Sell as resident, moved in as main residence** | partial (s118-185/145) | apportioned | **\$500k applies** | **wrong both sides** |
 | **3. Sell as resident, never main residence** | none | apportioned | none | **discount wrong** |
 
 **Case 1 is right today — but by omission, not by rule.** The model applies no exemption
@@ -733,7 +733,7 @@ worksheet lines that carry a `drillReport` link, and none of the §904 worksheet
 | 2 | Are IRA withdrawals general? | **Yes** | not in the passive list; general is the residual category |
 | 3 | Should the resourced basket be labelled passive/general? | **Moot — it should not exist** | §1.904-4(k)(1)(iv)(A) disapplies (k)(1) for Art. 22(4) relief |
 | 4 | Is the L41 = 1.0 clamp a bug? | **No — the clamp is correct** | Form 1116 line 19 mandates it; the bug is a numerator that reaches it |
-| 5 | Does G1 cost real money? | **Yes, ≈ $87k over the run** | both G1 and G2 inflate the limit in the same direction |
+| 5 | Does G1 cost real money? | **Yes, ≈ \$87k over the run** | both G1 and G2 inflate the limit in the same direction |
 | 6 | Migrate or re-derive the pools? | **Re-derive** | a simulator has no filed return to preserve |
 | 7 | Can AU tax offset US tax on super it was never imposed on? | **Yes** | §904 limits per basket, not per item — no tracing |
 | 8 | Which basket for super withdrawals? | **General, foreign source** | Pub 514 sourcing: earnings → location of pension trust; pensions absent from the passive list |
@@ -753,7 +753,7 @@ worksheet lines that carry a `drillReport` link, and none of the §904 worksheet
 ## 10. Open questions
 
 - **G5** — does the FITO ↔ FTC handoff honour Art. 22(4)'s non-erosion sentence?
-- §904(f) overall foreign loss recapture is unmodelled; it is what makes the $87k figure
+- §904(f) overall foreign loss recapture is unmodelled; it is what makes the \$87k figure
   approximate, and it bites hardest in thin-income years.
 - **Does s118-192's deemed acquisition also reset the s115-105 discount testing period?**
   s115-105(2)(d)(i) fixes the period from *"the day you acquired the CGT asset"*, and s115-30

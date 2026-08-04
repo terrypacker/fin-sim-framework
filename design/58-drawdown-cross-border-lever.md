@@ -29,7 +29,7 @@ A `moveYear` optimization surfaced a genuine but non-obvious result: maximizing
 final net worth prefers an **earlier** US→AU move, while minimizing lifetime tax
 prefers a **later** one. Investigation (headless sweep of the reference scenario)
 showed this is **not a contradiction and not a bug** — every move year funds the
-*same* real consumption (~$6.17M) with zero deficit; the entire net-worth swing
+*same* real consumption (~\$6.17M) with zero deficit; the entire net-worth swing
 lives in the tax-free **Roth**, which is drawn *last*. Moving to AU sooner flips
 the drawdown order so AU-side and US-taxable accounts drain first (realizing
 taxable gains → more tax now), sheltering the Roth to compound into a large
@@ -324,7 +324,7 @@ warm-start from the named presets; UI (advanced "tune order" panel).
   (`enabled:false`), gated by `visibleWhen: drawdownStrategy=WEIGHTED`. Same-role
   siblings share a weight → one tier (Lever C splits it); owner banding + Lever A
   compose unchanged. Golden unchanged (3335 unit + 864 viz). Verified end-to-end:
-  `WEIGHTED` default ≡ `TAX_EFFICIENT`; a Roth-first weight vector ends ~$48k poorer
+  `WEIGHTED` default ≡ `TAX_EFFICIENT`; a Roth-first weight vector ends ~\$48k poorer
   at moderate spend — the lever bites. Tests in `evt-drawdown-strategy.test.mjs`.
   *(Deferred: a dedicated drag-to-reorder "tune order" UI panel — the generic
   continuous-slider params render under Spending when `WEIGHTED` is selected.)*
@@ -359,7 +359,7 @@ separate actuation surface, phased to shadow the levers:
   injection and re-stamps them after. **Root-cause fix:** the weight keys were
   `drawdownWeight.<role>` (dotted), which `set()` silently drops (it never creates the
   missing `drawdownWeight` parent) — so the Lever-B axis was inert through the one-shot
-  optimizer AND MPC. Switching to `::` made it bite in both (verified Δ≈$35k). CEM
+  optimizer AND MPC. Switching to `::` made it bite in both (verified Δ≈\$35k). CEM
   `advise()` searches the 8-dim order and returns a full recommended order + fan.
   Harness `drawdownWeights` PASS; guarded by `mpc-drawdown-xborder.test.mjs`.
 

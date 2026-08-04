@@ -39,15 +39,15 @@ The mixing is **bidirectional**. Two concrete leaks, both live today:
 
 **(a) AU-source income (AUD) → US buckets (USD).** Every `AU_*_TAX` reducer adds its
 native AUD `amount` straight into `usOrdinaryIncomeYTD` (worldwide income) and
-`ftcYTD`. Example: `AU_WAGES_INCOME_TAX` with `amount = 2000` (A$) does
-`usOrdinaryIncomeYTD += 2000`, treating A$2,000 as US$2,000. At the default rate
-1.55, the correct figure is **US$1,290**. US ordinary income is overstated ~55%.
+`ftcYTD`. Example: `AU_WAGES_INCOME_TAX` with `amount = 2000` (A\$) does
+`usOrdinaryIncomeYTD += 2000`, treating A\$2,000 as US\$2,000. At the default rate
+1.55, the correct figure is **US\$1,290**. US ordinary income is overstated ~55%.
 
 **(b) US-source income (USD) → AU buckets (AUD).** Every US-source reducer, in its
 `isAuResident` branch, adds its native USD `amount` into `auOrdinaryIncomeYTD` /
-`auPersonOrdinaryIncomeYTD`. Example: `WAGES_INCOME_TAX` with `amount = 8000` (US$)
-does `auPersonOrdinaryIncomeYTD[key] += 8000`, treating US$8,000 as A$8,000. Correct
-is **A$12,400**. AU ordinary income is understated ~35%.
+`auPersonOrdinaryIncomeYTD`. Example: `WAGES_INCOME_TAX` with `amount = 8000` (US\$)
+does `auPersonOrdinaryIncomeYTD[key] += 8000`, treating US\$8,000 as A\$8,000. Correct
+is **A\$12,400**. AU ordinary income is understated ~35%.
 
 `ftcYTD` is a third victim: it is consumed as a **USD** credit
 (`credits = min(ftcYTD, grossTax)` in `us-tax-rates-base.js:85`) but accreted from
@@ -216,9 +216,9 @@ The behavioral change is intentional and broad, so the test plan is mostly re-ba
 
 - **New unit — `tests/unit/tax-fx-normalization.test.mjs`**:
   - AUD-source income into `usOrdinaryIncomeYTD`/`ftcYTD` is divided by the rate
-    (A$2000 @1.55 → US$1290.32), AU buckets stay A$2000.
+    (A\$2000 @1.55 → US\$1290.32), AU buckets stay A\$2000.
   - USD-source income (AU-resident) into `auOrdinaryIncomeYTD` is multiplied
-    (US$8000 @1.55 → A$12400), US buckets stay US$8000.
+    (US\$8000 @1.55 → A\$12400), US buckets stay US\$8000.
   - Rate-less state (`effectiveExchangeRates` absent) → native fallback, no throw.
   - Same-currency single-country reducer path is unchanged.
 - **Regold the cross-border evt/tax suites**: the `evt-income`, `evt-*` AU income,

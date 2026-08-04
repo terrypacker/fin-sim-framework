@@ -54,9 +54,9 @@ through the SE path, and **(b)** implement US SECA.
 
 | Component | Rate | Base | Cap |
 |---|---|---|---|
-| Social Security (OASDI) | 12.4% | 92.35% of net SE earnings | Annual wage base ($176,100 in 2025, $184,500 in 2026) |
+| Social Security (OASDI) | 12.4% | 92.35% of net SE earnings | Annual wage base (\$176,100 in 2025, \$184,500 in 2026) |
 | Medicare (HI) | 2.9% | 92.35% of net SE earnings | Uncapped |
-| Additional Medicare | 0.9% | earned income (Medicare wages + net SE) over threshold | $200k single / $250k MFJ |
+| Additional Medicare | 0.9% | earned income (Medicare wages + net SE) over threshold | \$200k single / \$250k MFJ |
 
 Key rules the model honors:
 
@@ -243,13 +243,13 @@ and states do not levy SECA.
 
 ## 6. Test plan (`SE-1..N`)
 
-- **SE-1** SECA basic: $100k US SE income, single → seNet 92,350; SS 12.4% +
+- **SE-1** SECA basic: \$100k US SE income, single → seNet 92,350; SS 12.4% +
   Medicare 2.9%; half deducted from AGI.
 - **SE-2** Wage-base coordination: US wages already at/above the wage base ⇒ SE SS
   portion is 0 (only 2.9% Medicare on SE).
 - **SE-3** Partial coordination: wages fill part of the base; SE SS applies to the
   remainder only.
-- **SE-4** Additional Medicare: combined earned income over $250k MFJ ⇒ 0.9% on the
+- **SE-4** Additional Medicare: combined earned income over \$250k MFJ ⇒ 0.9% on the
   excess; under threshold ⇒ 0.
 - **SE-5** Half-deduction reduces ordinary income tax (AGI lower than gross).
 - **SE-6** FTC does not offset SECA/surtax (added on top).

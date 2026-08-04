@@ -44,7 +44,7 @@ Requirements (from the design conversation):
 - **US §1250 recapture *rate*** (taxing the recaptured slice at up to 25% ordinary instead of the LTCG rate). v1 **does** reduce basis by accumulated depreciation at sale (§4.5) — so the extra gain is taxed — but taxes it at the ordinary capital-gains rate. Only the US-specific 25% rate differential is deferred. (Appreciation itself never touches `costBasis` — `AssetAppreciateReducer` is mark-to-market on `value` only — so there is no basis-inflation interaction; depreciation is the *only* thing that moves basis, and it moves it **down**.)
 - **Fractional / per-room rental**, multiple tenancies, or lease-term scheduling. One unit, one occupancy scalar.
 - **Rent inflation *pass-through* / real growth.** Rent tracks effective inflation **1:1** (§4.6). A configurable pass-through (`rentInflationPassThrough < 1` for sticky rents) or a real-growth premium on top of inflation is a clean Phase 2 (§9). *(Note: nominal-fixed rent — the original v1 non-goal — was superseded; rent is now inflation-indexed.)*
-- **US passive-activity-loss (PAL) limitation nuance.** We take the simple "loss offsets ordinary income" model (approximating the §469 $25k active-participation allowance) rather than a full PAL carryforward engine.
+- **US passive-activity-loss (PAL) limitation nuance.** We take the simple "loss offsets ordinary income" model (approximating the §469 \$25k active-participation allowance) rather than a full PAL carryforward engine.
 - **Ownership-split attribution of rental income across `owners[]`.** v1 attributes to the primary `ownerId` (per-person maps) or the shared accumulator; multi-owner split mirrors the house-sale `accumulateByOwnership` path as Phase 2.
 - **State-level (US state) rental income tax.** Follows whatever `design/34` state-income classification already does for ordinary income; no rental-specific state rule.
 
@@ -137,7 +137,7 @@ gain          = max(0, salePrice − adjustedBasis)        // was: salePrice −
 ```
 
 - **AU — fully correct.** Div 43 capital-works deductions reduce the CGT cost base; the larger `gain` flows through `AU_HOUSE_SALE_TAX` and the 50% CGT discount / existing per-owner path unchanged. No separate recapture regime exists in AU, so nothing else is needed.
-- **US — mostly correct, one deferral.** The larger `gain` is taxed via `US_HOUSE_SALE_TAX` (after the $500K primary-residence exemption, which rental properties won't qualify for). The only simplification vs. the IRC is that the recaptured slice (min(gain, accumulatedDepreciation)) is taxed at the ordinary **capital-gains** rate rather than the up-to-25% unrecaptured-§1250 rate. That rate differential is the sole deferred item (§9.1) — the *dollars* are captured now.
+- **US — mostly correct, one deferral.** The larger `gain` is taxed via `US_HOUSE_SALE_TAX` (after the \$500K primary-residence exemption, which rental properties won't qualify for). The only simplification vs. the IRC is that the recaptured slice (min(gain, accumulatedDepreciation)) is taxed at the ordinary **capital-gains** rate rather than the up-to-25% unrecaptured-§1250 rate. That rate differential is the sole deferred item (§9.1) — the *dollars* are captured now.
 
 Both sale reducers already zero the property `value`/`mortgageBalance`; `accumulatedDepreciation` can be left as-is (property is disposed) or zeroed — cosmetic.
 

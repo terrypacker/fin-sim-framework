@@ -262,11 +262,11 @@ mix is preserved; no move-date CGT spike.
 
 > **✅ DONE (2026-07-16)** on `wip/holding-allocation-lever`. Built as a pure planner
 > (`allocation-location.js` `planLocatedTargets({accounts-with-totals, portfolioTarget,
-> policy, residency})` → `Map<stateKey, {class:$}>`) rather than extending the swap-based
+> policy, residency})` → `Map<stateKey, {class:\$}>`) rather than extending the swap-based
 > `StrategicAssetLocationReducer` — consistent with the dedicated design-61 path. **Design
 > insight that made this tractable:** locating needs NO cross-account transfer. The planner
 > fills every account to exactly its own total (gold capped at eligible capacity + excess
-> redistributed so Σclass$ = Σcapacity), so each account just rebalances to its assigned
+> redistributed so Σclass\$ = Σcapacity), so each account just rebalances to its assigned
 > composition — the Phase-2 per-account value-conservation + CGT path are reused unchanged,
 > and the aggregate over the lever's accounts hits the target. `RebalanceToTargetReducer`
 > gained `locationMode` (**LOCATED default**, per the owner's call) + `locationPolicy`;

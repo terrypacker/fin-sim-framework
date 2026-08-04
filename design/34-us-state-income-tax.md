@@ -268,11 +268,11 @@ Wiring when built: `US_STATE_TAX.schedules()` reads `context.parameters.stateMov
 
 ## 13. Tax-settle ordering — ✅ implemented 2026-06-19
 
-**Landed.** Added an event-level `order` field (`BaseEvent`/`EventSeries`/`OneOffEvent`, serialized) and made the queue comparator total: `(a.date - b.date) || ((a.order ?? 0) - (b.order ?? 0))` (`simulation.js`). Income/earnings keep the default `0`; the federal/AU settles (`TaxService`) use `order: 100` and the state settle (`StateTaxService`) `order: 101`. Result: all year income is booked before any settlement, and federal settles immediately before state, so both jurisdictions see the identical income set every year. Verified: the HI-resident 2030 federal vs. state gross income now reconcile **exactly** (was an $18,837 straddle). Fallout was two RMD tests that had codified the old "year-end income escapes the settle" behavior — updated to assert the RMD is captured in the settlement (the corrected behavior). The original analysis below is retained for context.
+**Landed.** Added an event-level `order` field (`BaseEvent`/`EventSeries`/`OneOffEvent`, serialized) and made the queue comparator total: `(a.date - b.date) || ((a.order ?? 0) - (b.order ?? 0))` (`simulation.js`). Income/earnings keep the default `0`; the federal/AU settles (`TaxService`) use `order: 100` and the state settle (`StateTaxService`) `order: 101`. Result: all year income is booked before any settlement, and federal settles immediately before state, so both jurisdictions see the identical income set every year. Verified: the HI-resident 2030 federal vs. state gross income now reconcile **exactly** (was an \$18,837 straddle). Fallout was two RMD tests that had codified the old "year-end income escapes the settle" behavior — updated to assert the RMD is captured in the settlement (the corrected behavior). The original analysis below is retained for context.
 
 
 
-**Symptom.** For a HI resident, 2030 state ordinary income came out **$18,837 higher** than the federal ordinary base because a **year-end stock dividend** landed in different years for the two settlements. Observed Dec-31-2030 sequence:
+**Symptom.** For a HI resident, 2030 state ordinary income came out **\$18,837 higher** than the federal ordinary base because a **year-end stock dividend** landed in different years for the two settlements. Observed Dec-31-2030 sequence:
 
 ```
 … → US_TAX_SETTLE_APPLY (federal, resets usOrdinaryIncomeYTD)

@@ -2,10 +2,10 @@
 
 **Status**: Implemented + browser-verified (2026-06-28).
 
-> **Verified.** With the fix, the reported symptom is gone — at the conversion window the three solvers now **agree** on an interior optimum instead of scattering on a flat landscape: GRID `$115,000`, CEM `$106,965`, QP-polish `$114,402` (all ~$110k, the top of the 12% bracket) for *Maximize After-Tax Net Liquidity* on an 8-yr window. A live objective sweep is **concave** (J rises to a peak at ~$100k real income-fill, then falls for over-conversion) — was perfectly flat before. The lever also correctly targets the next *actionable* year (2028 window-start) when "now" sits before/at the window. Tests: `roth-retarget.test.mjs` (+5 incl. the snapshot-rollout regression gate), `cockpit-controller.test.mjs` (+3 year-selection). Full suite green (2953 unit, 798 viz).
+> **Verified.** With the fix, the reported symptom is gone — at the conversion window the three solvers now **agree** on an interior optimum instead of scattering on a flat landscape: GRID `$115,000`, CEM `$106,965`, QP-polish `$114,402` (all ~\$110k, the top of the 12% bracket) for *Maximize After-Tax Net Liquidity* on an 8-yr window. A live objective sweep is **concave** (J rises to a peak at ~\$100k real income-fill, then falls for over-conversion) — was perfectly flat before. The lever also correctly targets the next *actionable* year (2028 window-start) when "now" sits before/at the window. Tests: `roth-retarget.test.mjs` (+5 incl. the snapshot-rollout regression gate), `cockpit-controller.test.mjs` (+3 year-selection). Full suite green (2953 unit, 798 viz).
 **Related**: `design/39-mpc-financial-controller.md` (§10 Q4 snapshot-seeded rollout, Step 10 live Roth actuation — this is its missing rollout-side twin), `design/40-after-tax-net-worth.md` / `design/41-windowed-prediction-horizon.md` (the objective + horizon this lets the Roth lever finally exercise), `src/finance/optimization/optimization-problem.js` (`_seededSim`), `src/scenarios/toolsets/us-roth-conversion-toolset.js` (the conversion events), `src/finance/mpc/cockpit-controller.js` (`COCKPIT_CONTROLS.ROTH`).
 
-> **Symptom (reported).** At Dec 31 2027 with ~$290k in the IRA, an 8-year window on *Maximize After-Tax Net Liquidity*: **CEM and QP-polish advise the maximum conversion, Grid advises none.** A solver disagreement like that is the signature of a **flat objective** — and the Roth income-target lever is indeed **inert** in the cockpit's rollout.
+> **Symptom (reported).** At Dec 31 2027 with ~\$290k in the IRA, an 8-year window on *Maximize After-Tax Net Liquidity*: **CEM and QP-polish advise the maximum conversion, Grid advises none.** A solver disagreement like that is the signature of a **flat objective** — and the Roth income-target lever is indeed **inert** in the cockpit's rollout.
 
 ---
 
@@ -24,7 +24,7 @@ The cockpit seeds every advise rollout from the "now" snapshot. `OptimizationPro
 
 ### Two amplifiers (context, not the bug)
 
-- **Small IRA vs. an aggressive window.** The IRA (~$290k) is below the window's bracket ceilings (~$258k+), so even when the queue *is* honored the window fully drains it within ~1–2 years — so per-epoch leverage is modest in this scenario. The fix makes the lever *function*; how much it *moves* is scenario-dependent (a longer window, `MIN_LIFETIME_TAXES`, or `MAX_AFTER_TAX_NET_WORTH` give more signal).
+- **Small IRA vs. an aggressive window.** The IRA (~\$290k) is below the window's bracket ceilings (~\$258k+), so even when the queue *is* honored the window fully drains it within ~1–2 years — so per-epoch leverage is modest in this scenario. The fix makes the lever *function*; how much it *moves* is scenario-dependent (a longer window, `MIN_LIFETIME_TAXES`, or `MAX_AFTER_TAX_NET_WORTH` give more signal).
 - **`prepareBaseParams` picks the wrong year.** It seeds/tunes `now.getUTCFullYear()` = **2027**, whose conversion date (Dec 1) is already **past** at Dec 31 — so even with the re-target there is no 2027 event to move. The lever must target the **next actionable** conversion year (2028).
 
 ---

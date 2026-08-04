@@ -163,7 +163,7 @@ The owner's framing is exactly right and worth preserving as the model's shape:
   Predictable, recurring, and rises with **inflation** (and partly with the house's value). This
   is deterministic given the inflation path.
 - **Stochastic** — a leaking roof, a dead water heater, a failed AC compressor, storm damage.
-  **Lumpy and occasional**: most years cost near zero, then one year costs $18k. A smooth
+  **Lumpy and occasional**: most years cost near zero, then one year costs \$18k. A smooth
   "average maintenance %" understates the *liquidity* danger because the danger is the timing of
   the lump, not its long-run average — the same sequence-risk logic design 74 applied to
   returns, now applied to outflows.
@@ -409,7 +409,7 @@ nothing stochastic about it.
 
 ### 5.2 Component 2 — stochastic repairs (lumpy, seeded)
 
-This is the "leaking roof / dead water heater" piece: most years ≈ $0, occasional large hits.
+This is the "leaking roof / dead water heater" piece: most years ≈ \$0, occasional large hits.
 Modelled as a **compound process** — a frequency draw for *whether/how many* repairs occur, and a
 severity draw for *how big* each is. A `RealPropertyRepairTickHandler` fires annually and is the
 **4th in-loop `sim.rng` consumer** (after FX/47, yield curve/67, equity return/74).
@@ -572,7 +572,7 @@ across runs.
 > `median`/`p10`/`p90` repair spend (new `percentile()` helper). **Gotcha found wiring D:** the
 > series sums **all** properties, so in an arm where the US house sells early the CAGR/drawdown are
 > the *held* (AU) house; and repairs only accrue while `value > 0`, so a house sold in year 1
-> shows ~$0 lifetime repair — correct, but it means the holding-cost signal lives in the
+> shows ~\$0 lifetime repair — correct, but it means the holding-cost signal lives in the
 > **never-sell** arms, which is exactly where the decision's failure risk concentrates.
 
 **D. Re-run the company-equity decision** (`scenarios/company-equity-decision.md`) with Part A + B

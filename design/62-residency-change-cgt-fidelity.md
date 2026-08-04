@@ -51,7 +51,7 @@ implemented faithfully.
 - No move-date tax settlement — defensible for a US citizen taxed on full-year worldwide
   income (`ChangeResidencyHandler` header).
 
-`scripts/probe-residency-cgt.mjs` CONTROL block confirms the step-up: AU basis = $300,000
+`scripts/probe-residency-cgt.mjs` CONTROL block confirms the step-up: AU basis = \$300,000
 (market at move), `acquisitionPriceLevel` = the AU CPI level at the move.
 
 ---
@@ -77,7 +77,7 @@ GAP 1b: consumeHoldingsFifo held12mo = true (uses purchaseDate); ATO-correct = f
 GAP 1a: 50% discount granted unconditionally → over-relief $4,800 on a $30,000 gain (16.0%)
 ```
 
-The $4,800 is per this single small lot; the error scales with the AU gain on every lot
+The \$4,800 is per this single small lot; the error scales with the AU gain on every lot
 disposed within 12 months of the move (or, pre-2027, within 12 months of *any* acquisition —
 the discount has literally no holding test today).
 
@@ -164,7 +164,7 @@ but its **indexation** ≥12-month test now benefits from Step 2 (correct clock)
   per-person slice (`computeAuTaxPerPerson`), `StateSchemaRegistry`, `intl-retirement-state`.
 - **P4 ✅** — `tests/unit/evt-residency-cgt.test.mjs` (8 cases, EVT-62); `probe-residency-cgt.mjs`
   reworked into a pass/fail regression check (Lot A <12mo denied, Lot B ≥12mo allowed, over-
-  relief $4,800 recovered on a $30k gain). Reference golden (`cross-border-relief-scenario`,
+  relief \$4,800 recovered on a \$30k gain). Reference golden (`cross-border-relief-scenario`,
   moveYear 2031) did **not move** — post-2027 (discount already gone) and no <12-month post-move
   sale trips the indexation-clock fix, exactly as predicted.
 
@@ -189,7 +189,7 @@ the move). Today:
 - `RealPropertyService.recordResidencyChange` (real-property-service.js:104) snapshots `value`
   only — **no** step-up, even for foreign (non-TAP) property.
 - `US_HOUSE_SALE_APPLY` emits `US_HOUSE_SALE_TAX` with only a US `gain` (after the US
-  $250k/$500k primary-home exemption). The handler already stamps `residency` on the action,
+  \$250k/\$500k primary-home exemption). The handler already stamps `residency` on the action,
   but **no AU classifier consumes it** — `US_HOUSE_SALE_TAX` is classified in the US module
   only (design 57 §3 table row "US real property — US-only, no AU assessment").
 
@@ -215,7 +215,7 @@ brokerage pattern: route `auGain = max(0, proceeds − auSteppedBasis − auExem
 `state[stateKey].costBaseByCountry.AU` and pass it on the action alongside the existing `gain`.
 Register the AU reducer additively (`TaxEngine.registerDynamic` runs US + AU per action-type).
 
-**Step 3 — main-residence exemption (DECISION, §8 Q1).** The US $250k/$500k exclusion is US-
+**Step 3 — main-residence exemption (DECISION, §8 Q1).** The US \$250k/\$500k exclusion is US-
 only. Australia's main-residence exemption for a *foreign* dwelling has its own rules (and
 foreign residents lost it from 2020, but here the seller is an AU *resident*). Options:
 (a) treat the US house as fully AU-assessable from the stepped-up base (conservative, simplest);
@@ -247,7 +247,7 @@ absence rule then apply to the post-move gain on the dwelling.
   on ≥12 months from the deemed acquisition (Gap 1 §4). Simplification: assumes the foreign
   dwelling retains the exemption — a competing AU main-residence claim would reduce it (not
   modeled). Tests: `tests/unit/evt-foreign-property-cgt.test.mjs` (5 cases) + the runtime probe
-  (Run A primary-not-rented ⇒ auGain 0; Run B investment ⇒ auGain $206,659 on a $1.42M sale).
+  (Run A primary-not-rented ⇒ auGain 0; Run B investment ⇒ auGain \$206,659 on a \$1.42M sale).
   Reference golden unchanged (the default US house is never sold).
 
 ---
@@ -305,7 +305,7 @@ indexation-clock fix). `npm run test:unit` + `npm run test:viz` + `npm run build
 1. **AU main-residence exemption for the foreign (US) house** (§5.3): **model the AU main-
    residence rules** (not the fully-assessable simplification). Gap 3 / §5.3 option (b). The AU
    proportional main-residence exemption + absence rule apply to the foreign dwelling; the US
-   $250k/$500k exclusion stays US-side only.
+   \$250k/\$500k exclusion stays US-side only.
 2. **Discount-split placement:** compute `auDiscountableGain` inside `consumeHoldingsFifo` (per-
    lot, most accurate), consistent with design 57 Option A. **Confirmed.**
 3. **New field naming:** `Holding.acquisitionDateByCountry` (parallels `costBaseByCountry`), a

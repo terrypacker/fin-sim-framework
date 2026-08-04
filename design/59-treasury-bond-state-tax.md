@@ -164,7 +164,7 @@ per-holding fields.
   + split, fallback, all-Treasury exempt, end-to-end federal+state split, flag
   lowers state not federal); reducer coverage manifest updated; full suite green
   (3360 unit + 865 viz). Real-app verified: flagging Terry's Treasury Direct bond
-  makes its $468.60 coupon federally taxable but `stateTaxable: 0`, other bonds
+  makes its \$468.60 coupon federally taxable but `stateTaxable: 0`, other bonds
   unchanged.
 
 ---
