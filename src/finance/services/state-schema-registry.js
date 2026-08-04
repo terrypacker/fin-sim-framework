@@ -158,6 +158,7 @@ export class StateSchemaRegistry {
     this.registerPattern('*.balance',           ParameterValueType.currency());
     this.registerPattern('*.contributionBasis', ParameterValueType.currency());
     this.registerPattern('*.earningsBasis',     ParameterValueType.currency());
+    this.registerPattern('*.derivedIncomeBasis', ParameterValueType.currency());
     // Per-country residency cost-base step-up / per-lot AU cost base (design 36 §12.2).
     this.registerPattern('*.costBaseStepUpByCountry.*',   ParameterValueType.currency());
     this.registerPattern('*.holdings.*.costBaseByCountry.*', ParameterValueType.currency());
@@ -383,6 +384,7 @@ export class StateSchemaRegistry {
     // register its display paths only when the account actually carries them.
     if ('contributionBasis' in account) this.register(`${stateKey}.contributionBasis`, vt);
     if ('earningsBasis' in account)     this.register(`${stateKey}.earningsBasis`,     vt);
+    if ('derivedIncomeBasis' in account) this.register(`${stateKey}.derivedIncomeBasis`, vt);
     // Loan (liability) interest rate (design 54).
     if ('interestRate' in account)      this.register(`${stateKey}.interestRate`, ParameterValueType.rate());
     this.register(`${stateKey}.minimumBalance`,   vt);

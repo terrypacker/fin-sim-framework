@@ -719,6 +719,7 @@ function _accountToStatePlain(account) {
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;
     plain.earningsBasis            = account.earningsBasis ?? 0;
+    plain.derivedIncomeBasis       = account.derivedIncomeBasis ?? 0;
     plain.loanBalance              = account.loanBalance   ?? 0;
     plain.minimumAge               = account.minimumAge    ?? null;
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;

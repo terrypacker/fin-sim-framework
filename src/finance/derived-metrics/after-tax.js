@@ -158,6 +158,38 @@ export function defaultRateProvider({
  * realized income (not a joint multi-account liquidation), matching the per-entry
  * metric. Joint-liquidation ordering is a later refinement.
  */
+/**
+ * Build the after-tax options a scenario's params ask for — provider plus
+ * `assumedGainFraction` — from the param bag.
+ *
+ * There is one correct way to turn params into an after-tax scoring option set, and
+ * before this it was open-coded in three places: `OptimizationProblem._readResult`,
+ * `summarize()` on the grid path, and (missing entirely) the Monte Carlo runner. Three
+ * copies of a five-line construction is how a grid cell, an optimizer score and an MC
+ * path end up being three plausible numbers instead of one, and design 84 §6.4 is the
+ * bug report: MC never got the after-tax metric at all, so a wrapper-location question
+ * would have been scored on nominal net worth — the exact bias G1 exists to remove.
+ *
+ * `afterTaxRateMethod: 'liquidation'` selects the real tax-engine waterfall (design 40
+ * Phase 3); anything else takes the configured fixed effective rates.
+ *
+ * @param {object} [params] - scenario param bag
+ * @returns {{rateProvider: object, assumedGainFraction: number|undefined}}
+ */
+export function afterTaxOptionsFromParams(params = {}) {
+  const rateCfg = {
+    ordinaryRate:   params.afterTaxOrdinaryRate,
+    ordinaryRateAu: params.afterTaxOrdinaryRateAu,
+    capGainsRate:   params.afterTaxCapGainsRate,
+  };
+  return {
+    rateProvider: params.afterTaxRateMethod === 'liquidation'
+      ? liquidationRateProvider(rateCfg)
+      : defaultRateProvider(rateCfg),
+    assumedGainFraction: params.assumedGainFraction,
+  };
+}
+
 export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate, collectibleRate } = {}) {
   const fallback = defaultRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate, collectibleRate });
   const svc = new TaxSettleService();
@@ -270,38 +302,59 @@ function _isAuResidentOwner(account, state) {
 }
 
 /**
- * The s99B-assessable slice of a Roth balance: the earnings, plus the IRA-earnings
- * portion of any converted principal.
+ * The s99B-assessable slice of a Roth balance: everything that is not corpus.
  *
- * `earningsBasis` is DERIVED (design 53 §8) as balance − contributionBasis −
- * rollovers, so it already excludes converted principal. Converted principal is
- * mostly corpus and does come out free — but the portion attributable to the source
- * IRA's *earnings* is pre-tax money that "would have been included in assessable
- * income if derived by a resident", so s99B(2)(a) denies it the corpus exemption.
- * `roth-conversion-classes.js` stamps exactly that figure per lot as `taxableAmount`
- * for this purpose, so add it back. Growth ON converted principal needs no special
- * handling — it lands in `earningsBasis` already, since the rollover basis does not
- * grow with the balance.
+ * Corpus is "the total amount received less any amounts deposited to the fund by
+ * the taxpayer, or on their behalf" (ATO private advice 1051558091470). In this
+ * ledger that is `contributionBasis` — regular contributions — plus
+ * `rolloverContribBasis`, the *contributions* leg of any converted principal.
+ * Everything else is trust income:
  *
- * NOTE — the known conservative bias (design 84 G2): `earningsBasis` is
- * mark-to-market APPRECIATION, whereas s99B reaches "amounts derived by the trust
- * estate" — dividends, interest, realised gains — and unrealised growth is derived by
- * nobody. This therefore OVER-states the assessable slice for a buy-and-hold wrapper.
- * That direction is deliberate: the metric never understates a liability. Tracking
- * derived income separately is the design 84 P7 follow-up.
+ *   - `earningsBasis`          — growth on regular contributions
+ *   - `rolloverEarningsBasis`  — the source IRA's earnings carried across at
+ *                                conversion (design 84 Option 2b), plus growth on
+ *                                the converted principal thereafter
+ *
+ * Both are DERIVED against the same balance (design 53 §8), so summing them and
+ * clamping to the balance is safe against a stale ledger.
+ *
+ * The pre-2b shape read `earningsBasis` plus each conversion lot's `taxableAmount`
+ * stamp. That stamp is gone: the assessable leg of a conversion now lands in
+ * `rolloverEarningsBasis` at conversion time, so it is visible to every path rather
+ * than only to the conversion-aware ones. Lots are still read for back-compat with
+ * saved states written before 2b, where the stamp is the only record of it.
+ *
+ * DERIVED vs APPRECIATION (design 84 G2, resolved). `earningsBasis` is mark-to-market
+ * appreciation, whereas s99B reaches "amounts derived by the trust estate" — dividends,
+ * interest, realised gains — and unrealised growth is derived by nobody. So the pool
+ * read here is `derivedIncomeBasis`, the subset of `earningsBasis` the wrapper actually
+ * derived, not `earningsBasis` itself. `rolloverEarningsBasis` stays in: those earnings
+ * were derived by the SOURCE trust before the conversion carried them across (design 84
+ * G9/G11), and crossing a wrapper boundary does not un-derive them.
+ *
+ * An account with an earnings ledger but NO derived pool (a saved state written before
+ * this change) falls back to `earningsBasis` — the old, over-stating behaviour — rather
+ * than to zero. Zero would silently price a decades-old Roth as if it had never earned
+ * anything, which is the one direction this metric must never fail in.
  *
  * No ledger at all ⇒ the whole balance is assessable, mirroring SUPER's back-compat
  * fallback.
  */
 function _s99bAssessable(account, balance) {
   const eb = account?.earningsBasis;
-  const earnings = Number.isFinite(eb) ? Math.min(Math.max(0, eb), balance) : balance;
-  let converted = 0;
+  if (!Number.isFinite(eb)) return balance;
+  const dib = account?.derivedIncomeBasis;
+  const derived = Number.isFinite(dib) ? Math.max(0, dib) : Math.max(0, eb);
+  const reb = account?.rolloverEarningsBasis;
+  let assessable = derived + (Number.isFinite(reb) ? Math.max(0, reb) : 0);
+  // Legacy stamp (pre-2b saved states): the conversion's assessable leg sat on the
+  // lot rather than in the earnings bucket. Post-2b conversions stamp 0, so this
+  // adds nothing and cannot double-count.
   for (const lot of account?.rolloverConversions ?? []) {
     const t = lot?.taxableAmount;
-    if (Number.isFinite(t) && t > 0) converted += t;
+    if (Number.isFinite(t) && t > 0) assessable += t;
   }
-  return Math.min(balance, earnings + converted);
+  return Math.min(balance, assessable);
 }
 
 /**

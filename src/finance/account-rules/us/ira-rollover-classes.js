@@ -18,14 +18,45 @@ import { resolveCashKey } from '../cash-routing.js';
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /**
+ * Split `amount` across an IRA's contribution/earnings basis **pro rata** — the
+ * IRC §408(d)(2) aggregation rule, under which any distribution from a
+ * traditional IRA carries basis and earnings in proportion rather than letting
+ * the taxpayer choose. (It is the rule that defeats the backdoor Roth.)
+ *
+ * Exported because the Roth conversion path (design 84, Option 2b) has to credit
+ * the Roth on exactly the basis it debits the IRA, or the two ledgers describe
+ * different transactions.
+ */
+export function proRataIraSplit(ia, amount) {
+  const contrib  = ia?.contributionBasis ?? 0;
+  const earnings = ia?.earningsBasis     ?? 0;
+  const total    = contrib + earnings;
+  if (!(total > 0) || !(amount > 0)) return { fromContrib: 0, fromEarnings: 0 };
+  const draw         = Math.min(amount, total);
+  const fromEarnings = +(draw * (earnings / total)).toFixed(2);
+  return { fromContrib: +(draw - fromEarnings).toFixed(2), fromEarnings };
+}
+
+/**
  * Reduce IRA by `amount`, drawing from contributionBasis first then earningsBasis.
  * Scales holdings proportionally to maintain the §4.4 invariant.
  * Returns the updated iraAccount object.
+ *
+ * `proRata` switches the split to `proRataIraSplit` above. The contribution-first
+ * default is left alone deliberately: it is what every other rollover path has
+ * always done, and for a traditional IRA — whose basis is pre-tax in this engine —
+ * the US charge is the whole gross either way, so nothing downstream of those
+ * callers turns on it. It DOES turn on it for a Roth conversion, where the split
+ * decides how much of the money is s99B corpus (design 84 G11).
  */
-export function debitIra(ia, amount) {
-  const fromContrib  = Math.min(amount, ia.contributionBasis);
-  const fromEarnings = Math.min(amount - fromContrib, ia.earningsBasis);
-  const newBalance   = ia.balance - amount;
+export function debitIra(ia, amount, { proRata = false } = {}) {
+  const { fromContrib, fromEarnings } = proRata
+    ? proRataIraSplit(ia, amount)
+    : {
+        fromContrib:  Math.min(amount, ia.contributionBasis),
+        fromEarnings: Math.min(amount - Math.min(amount, ia.contributionBasis), ia.earningsBasis),
+      };
+  const newBalance = ia.balance - amount;
 
   const result = {
     ...ia,

@@ -13,6 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { RATE_KEY_META }      from './rate-keys.js';
 import { interpolateSpread, countryOfRateKey } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
+import { revalueLedger }     from '../assets/investment-account.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -151,7 +152,13 @@ export class BondPriceAdjustReducer extends Reducer {
       });
 
       if (holdingsTouched) {
-        accountUpdates[key] = _syncBalance({ ...account, holdings: nextHoldings });
+        const synced = _syncBalance({ ...account, holdings: nextHoldings });
+        // A rate mark is a pure revaluation — no cash crosses the account boundary —
+        // so it must move the contribution/earnings ledger too (design 84 G8). Same
+        // defect as the shock path, found while fixing it: a bond sleeve inside a
+        // Roth/IRA/super was marking to market while the ledger stood still.
+        const ledger = revalueLedger(account, account.balance ?? 0, synced.balance ?? 0);
+        accountUpdates[key] = ledger ? { ...synced, ...ledger } : synced;
       }
     }
 

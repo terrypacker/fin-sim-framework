@@ -220,8 +220,12 @@ export class StockEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const key = action.stateKey ?? 'usStockAccount';
     const sa = state[key];
+    // `action.amount` is negative in a losing year (design 84 G12). Brokerage carries
+    // no contribution/earnings ledger — its CGT basis lives per-holding — so the loss
+    // needs no ledger split; the floor is defensive only, since a rate below −100%
+    // is not reachable and holdings are re-synced by HoldingTransactReducer.
     return this.newState(state, {
-      [key]: { ...sa, balance: sa.balance + action.amount },
+      [key]: { ...sa, balance: Math.max(0, sa.balance + action.amount) },
     });
   }
 }

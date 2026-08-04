@@ -218,35 +218,58 @@ test('EVT-52/EVT-43: Roth Conversion stamps a dated lot for the §408A(d)(3)(F) 
 });
 
 test('EVT-52→EVT-43: converted IRA earnings stay AU-assessable, deferred to Roth withdrawal (stricter s99B)', () => {
-  // AU resident converts 70k from an IRA that is 60k contributions + 40k earnings,
-  // so 10k of the conversion is IRA-earnings-sourced. The conversion itself is not
-  // an AU event; when the converted principal is later withdrawn, that 10k is
-  // assessed as AU ordinary income under s99B (the 60k corpus stays AU-free).
+  // AU resident converts 70k from an IRA that is 60k contributions + 40k earnings.
+  // A conversion does NOT launder the source IRA's earnings into corpus — ATO
+  // private advice 1051558091470 answers "is the whole rollover corpus?" with No —
+  // so provenance travels: 40% of the IRA is earnings, so 28k of the 70k lands as
+  // Roth EARNINGS and 42k as Roth corpus (design 84 Option 2b, pro-rata per IRC
+  // §408(d)(2)). The conversion itself is not an AU event; the 28k is assessed when
+  // it is withdrawn, and the 42k of corpus stays AU-free forever.
   const { sim } = loadToolsetScenario(makeConversionConfig({
     initialChecking: 5_000,
     iraBalance: 100_000, iraContribBasis: 60_000, iraEarningsBasis: 40_000,
     startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 2, 1), type: 'ROTH_CONVERSION', data: { amount: 70_000 } });
-  sim.schedule({ date: new Date(2026, 4, 1), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 70_000 } });
-  sim.stepTo(new Date(2026, 4, 31));
+  sim.stepTo(new Date(2026, 2, 31));
 
+  // The split lands in the ledger, where every withdrawal path can see it — rather
+  // than on a per-lot stamp only the conversion-aware paths knew to read.
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis,  42_000);
+  assert.strictEqual(sim.state.rothAccount.rolloverEarningsBasis, 28_000);
   // Conversion: US ordinary income on the full 70k; no AU event at conversion.
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 70_000);
-  // Withdrawal: only the 10k IRA-earnings-sourced share is AU ordinary income.
-  assert.strictEqual(auOrdinaryFor(sim.state), 10_000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
+  assert.strictEqual(auOrdinaryFor(sim.state), 0);
+
+  // Draw the corpus leg: s99B(2)(a) exempts it, so Australia charges nothing.
+  sim.schedule({ date: new Date(2026, 4, 1), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 42_000 } });
+  sim.stepTo(new Date(2026, 4, 31));
+  assert.strictEqual(auOrdinaryFor(sim.state), 0, 'converted contributions are corpus');
+
+  // Draw the earnings leg: assessable in full, with no US tax for FITO to relieve.
+  sim.schedule({ date: new Date(2026, 6, 1), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 28_000 } });
+  sim.stepTo(new Date(2026, 6, 31));
+  assert.strictEqual(auOrdinaryFor(sim.state), 28_000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
   assert.strictEqual(sim.state.usPenaltyYTD, 0); // primary is age 60
 });
 
-test('EVT-52: Roth Conversion — debit draws from contributionBasis first then earningsBasis', () => {
+test('EVT-52: Roth Conversion — debit is PRO-RATA across contributions and earnings', () => {
+  // IRC §408(d)(2) aggregates all traditional IRAs and makes any distribution
+  // proportional — the taxpayer does not get to send the basis out first. This used
+  // to draw contributions-first, which for a cross-border household silently
+  // maximised the corpus (and therefore AU-free) share of every conversion.
   const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 60_000, iraEarningsBasis: 40_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 70_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.iraAccount.contributionBasis, 0);       // 60k exhausted
-  assert.strictEqual(sim.state.iraAccount.earningsBasis, 30_000);      // 40k - 10k remainder
-  assert.strictEqual(sim.state.iraAccount.balance, 30_000);
+  // 70k drawn from a 60/40 IRA takes 42k of contributions and 28k of earnings.
+  assert.strictEqual(sim.state.iraAccount.contributionBasis, 18_000);  // 60k − 42k
+  assert.strictEqual(sim.state.iraAccount.earningsBasis,     12_000);  // 40k − 28k
+  assert.strictEqual(sim.state.iraAccount.balance,           30_000);
+  // The Roth is credited on exactly the basis the IRA was debited on.
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis,  42_000);
+  assert.strictEqual(sim.state.rothAccount.rolloverEarningsBasis, 28_000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

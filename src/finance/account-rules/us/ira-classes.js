@@ -14,6 +14,7 @@ import { FieldValueAction, RecordBalanceAction } from '../../../simulation-frame
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -136,6 +137,8 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           ...ia,
           balance:       newBalance,
           earningsBasis: ia.earningsBasis - amount,
+          // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
+          ...drawDerivedProRata(ia, amount),
           holdings:      scaleHoldings(ia.holdings, ia.balance, newBalance),
         },
       },
@@ -161,11 +164,26 @@ export class IraEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const key = action.stateKey ?? 'iraAccount';
     const ia = state[key];
+    // Negative year: charge the loss to earnings before corpus (design 84 G12).
+    const ledger = action.amount < 0
+      ? debitLedgerForLoss(ia, -action.amount)
+      : { earningsBasis: ia.earningsBasis + action.amount, contributionBasis: ia.contributionBasis };
+    // Design 84 G2 — the yield slice of this year's return is DERIVED income and
+    // joins the s99B pool; the appreciation slice does not. On a losing year
+    // `debitLedgerForLoss` has already clamped the pool to the reduced earnings, so
+    // only a gain year adds. Absent `derivedAmount` (legacy/serialized actions) ⇒ 0,
+    // i.e. pre-G2 behaviour.
+    if (Number.isFinite(ia.derivedIncomeBasis)) {
+      ledger.derivedIncomeBasis = Math.min(
+        Math.max(0, (ia.derivedIncomeBasis) + Math.max(0, action.derivedAmount ?? 0)),
+        Math.max(0, ledger.earningsBasis),
+      );
+    }
     return this.newState(state, {
       [key]: {
         ...ia,
-        balance:       ia.balance       + action.amount,
-        earningsBasis: ia.earningsBasis + action.amount,
+        ...ledger,
+        balance: Math.max(0, ia.balance + action.amount),
       },
     });
   }

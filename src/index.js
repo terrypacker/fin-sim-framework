@@ -24,10 +24,11 @@ import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaym
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
-import { debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
+import { proRataIraSplit, debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
 import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler, K401ToIraConversionApplyReducer, K401ToIraConversionHandler } from './finance/account-rules/us/k401-classes.js';
 import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler } from './finance/account-rules/us/roth-classes.js';
 import { RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler } from './finance/account-rules/us/roth-conversion-classes.js';
+import { PENALTY_RATE, AGE_THRESHOLD, computeConversionRecapture } from './finance/account-rules/us/roth-conversion-lots.js';
 import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from './finance/account-rules/us/roth-rollover-classes.js';
 import { UsAccountModule2024 } from './finance/account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
@@ -38,15 +39,22 @@ import { getUsEarlyWithdrawalRules } from './finance/account-rules/us/us-early-w
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, resolveBonusEarner, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
 import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
+import { CUBE_SOURCE, buildAllocationCube } from './finance/allocation-reporting/allocation-cube.js';
+import { NO_VALUE, groupKey, buildAllocationSeries, mixAt } from './finance/allocation-reporting/allocation-grouping.js';
+import { ASSET_CLASS_COLOR, ASSET_CLASS_COLOR_DARK, PALETTE_CYCLE, PALETTE_CYCLE_DARK, colorForSeriesKey } from './finance/allocation-reporting/allocation-palette.js';
+import { createAllocationSampler, summarizeSamples, lastYearEndIndex, samplesToRows, samplesToTargetRows } from './finance/allocation-reporting/allocation-sampler.js';
+import { ASSET_CLASS, ASSET_CLASS_VALUES, LIABILITY_CLASSES, assetClassForAllocation, exposureCountryForRateKey } from './finance/allocation-reporting/asset-class.js';
+import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
+import { buildTargetCube, targetedStateKeys, driftAgainstTarget } from './finance/allocation-reporting/target-cube.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
 import { Bequest } from './finance/assets/bequest.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
 import { INHERITANCE_META_FIELDS, applyInheritanceMeta, serializeInheritanceMeta } from './finance/assets/inheritance-meta.js';
-import { reconcileLedgerToBalance, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
+import { reconcileLedgerToBalance, debitLedgerForLoss, creditDerivedIncome, drawDerivedProRata, realiseDerivedGain, revalueLedger, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
-import { DEFAULT_LOCATION_POLICY, planLocatedTargets } from './finance/behavioral/allocation-location.js';
+import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationPolicy, planLocatedTargets } from './finance/behavioral/allocation-location.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
@@ -57,8 +65,8 @@ import { DownturnRothConversionReducer } from './finance/behavioral/downturn-rot
 import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportunistic-rebalance-apply-reducer.js';
 import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
-import { RebalanceToTargetApplyReducer } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
-import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
+import { RebalanceToTargetApplyReducer, _sweepDust } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
+import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
@@ -73,7 +81,7 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
-import { TAX_CLASS, taxClassForRole, defaultRateProvider, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
+import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
@@ -110,6 +118,7 @@ import { FxStepApplyReducer } from './finance/fx/fx-step-apply-reducer.js';
 import { FxTickHandler } from './finance/fx/fx-tick-handler.js';
 import { FxTransferApplyReducer } from './finance/fx/fx-transfer-apply-reducer.js';
 import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
+import { toBaseCurrency, currencyOf } from './finance/fx/to-base-currency.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { BondAccretionHandler } from './finance/handlers/bond-accretion-handler.js';
@@ -129,7 +138,7 @@ import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
-import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation } from './finance/holdings/allocation.js';
+import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
@@ -149,7 +158,7 @@ import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-re
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computeNetWorthUsd, computeHouseValueUsd, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { computeNetWorthUsd, computeHouseValueUsd, createMcSampler, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
@@ -324,7 +333,7 @@ import { US_BANKING } from './scenarios/toolsets/us-banking-toolset.js';
 import { US_BROKERAGE } from './scenarios/toolsets/us-brokerage-toolset.js';
 import { US_COLLECTIBLES } from './scenarios/toolsets/us-collectibles-toolset.js';
 import { US_COMPANY_SALE } from './scenarios/toolsets/us-company-sale-toolset.js';
-import { retargetEarlyWithdrawalEvents, US_EARLY_WITHDRAWAL } from './scenarios/toolsets/us-early-withdrawal-toolset.js';
+import { resolveDecantDestination, retargetEarlyWithdrawalEvents, US_EARLY_WITHDRAWAL } from './scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { US_INCOME } from './scenarios/toolsets/us-income-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
 import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
@@ -462,7 +471,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -568,6 +577,7 @@ export const Finance = {
   IraWithdrawalContributionsHandler,
   IraWithdrawalEarningsHandler,
   IraEarningsHandler,
+  proRataIraSplit,
   debitIra,
   IraRolloverWithdrawalApplyReducer,
   IraRmdApplyReducer,
@@ -595,6 +605,9 @@ export const Finance = {
   RothConversionApplyReducer,
   RothConversionHandler,
   RothConversionPolicyHandler,
+  PENALTY_RATE,
+  AGE_THRESHOLD,
+  computeConversionRecapture,
   RothRolloverContributionApplyReducer,
   RothRolloverEarningsApplyReducer,
   RothRolloverWithdrawalContribApplyReducer,
@@ -643,6 +656,40 @@ export const Finance = {
   UsHouseSaleApplyReducer,
   UsHouseSaleHandler,
   getUniformDistributionPeriod,
+  CUBE_SOURCE,
+  buildAllocationCube,
+  NO_VALUE,
+  groupKey,
+  buildAllocationSeries,
+  mixAt,
+  ASSET_CLASS_COLOR,
+  ASSET_CLASS_COLOR_DARK,
+  PALETTE_CYCLE,
+  PALETTE_CYCLE_DARK,
+  colorForSeriesKey,
+  createAllocationSampler,
+  summarizeSamples,
+  lastYearEndIndex,
+  samplesToRows,
+  samplesToTargetRows,
+  ASSET_CLASS,
+  ASSET_CLASS_VALUES,
+  LIABILITY_CLASSES,
+  assetClassForAllocation,
+  exposureCountryForRateKey,
+  MIX_CLASSES,
+  ILLIQUID_CLASSES,
+  mixPoint,
+  buildMixSeries,
+  mixBands,
+  DEFAULT_MIX_THRESHOLDS,
+  thresholdProbability,
+  thresholdProbabilities,
+  mixByOutcome,
+  outcomeGapAt,
+  buildTargetCube,
+  targetedStateKeys,
+  driftAgainstTarget,
   USD,
   AUD,
   ACCOUNT_TYPE,
@@ -660,6 +707,11 @@ export const Finance = {
   applyInheritanceMeta,
   serializeInheritanceMeta,
   reconcileLedgerToBalance,
+  debitLedgerForLoss,
+  creditDerivedIncome,
+  drawDerivedProRata,
+  realiseDerivedGain,
+  revalueLedger,
   deriveEarningsBasis,
   InvestmentAccount,
   BrokerageAccount,
@@ -670,6 +722,8 @@ export const Finance = {
   SuperannuationAccount,
   RealProperty,
   DEFAULT_LOCATION_POLICY,
+  GOLD_PREFERENCE_BY_RESIDENCY,
+  resolveLocationPolicy,
   planLocatedTargets,
   AssetLocationRebalanceApplyReducer,
   BehavioralPanicSellApplyReducer,
@@ -683,6 +737,7 @@ export const Finance = {
   OpportunisticRebalanceReducer,
   PanicSellReducer,
   RebalanceToTargetApplyReducer,
+  _sweepDust,
   ALLOCATION_LOCATION,
   TAX_ADVANTAGED_ROLES,
   TAXABLE_ROLES,
@@ -691,6 +746,7 @@ export const Finance = {
   roleCanHoldGold,
   ALLOCATION_SCHEDULE,
   REGIME_TARGET_PRIORITY,
+  assertAuthoredMixes,
   ageAsOf,
   interpolateGlidepath,
   resolveRegimeTarget,
@@ -718,6 +774,7 @@ export const Finance = {
   TAX_CLASS,
   taxClassForRole,
   defaultRateProvider,
+  afterTaxOptionsFromParams,
   liquidationRateProvider,
   computeAfterTaxValue,
   computeAfterTaxNetWorth,
@@ -787,6 +844,8 @@ export const Finance = {
   FxTickHandler,
   FxTransferApplyReducer,
   FxTransferToHandler,
+  toBaseCurrency,
+  currencyOf,
   UsdAudPair,
   AssetAppreciationHandler,
   AssetAppreciateReducer,
@@ -821,6 +880,10 @@ export const Finance = {
   ALLOCATION_VALUES,
   COLLECTIBLE_ALLOCATIONS,
   isCollectibleAllocation,
+  MIX_SUM_EPSILON,
+  totalizeMix,
+  isTotalMix,
+  assertTotalMix,
   resolveScheduledRate,
   bootstrapHoldingSplit,
   DEFAULT_ALLOCATION_BY_ROLE,
@@ -897,6 +960,7 @@ export const Finance = {
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   computeHouseValueUsd,
+  createMcSampler,
   computePathShape,
   summarizeProvenance,
   IntlRetirementMcRunner,
@@ -1346,6 +1410,7 @@ export const Scenarios = {
   US_BROKERAGE,
   US_COLLECTIBLES,
   US_COMPANY_SALE,
+  resolveDecantDestination,
   retargetEarlyWithdrawalEvents,
   US_EARLY_WITHDRAWAL,
   US_INCOME,
@@ -1537,6 +1602,7 @@ export const FinancePlugins = {
   DgResultsPlugin,
   CrossActionQueryPlugin,
   HoldingsPlugin,
+  AllocationPlugin,
   MpcCockpitPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,

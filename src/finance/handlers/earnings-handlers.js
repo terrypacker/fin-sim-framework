@@ -8,6 +8,41 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+/**
+ * earnings-handlers.js — per-account accrual handlers.
+ *
+ * ─── negative years (design 84 G12) ──────────────────────────────────────────
+ *
+ * Every handler here used to end `call()` with `if (amount <= 0) return
+ * [RecordBalance]`. `computeHoldingsGrowth` computes a negative year correctly and
+ * returns the matching holding actions; that guard then threw all of it away, so a
+ * LOSING YEAR DID NOT REDUCE THE BALANCE OR THE HOLDINGS — it simply did not happen.
+ *
+ * It stayed invisible because the dated market shock travels a different path
+ * (`REVALUE_ASSET_APPLY`, which applies correctly), so shock-driven scenarios looked
+ * sane. Stochastic return paths (design 74) do not: `EquityReturnTickHandler` folds a
+ * mean-0 deviation onto `effectiveGrowthRates[<sleeve>]`, so the *effective rate*
+ * itself goes negative and lands on this guard. Under `--paths` every wrapper was
+ * therefore booking its up years and skipping its down years, which removes
+ * sequence-of-returns risk — the one thing a stochastic-path run exists to measure.
+ *
+ * The handlers now split into two families, and the split is deliberate:
+ *
+ *   · **Two-sided (appreciation).** Roth, IRA, 401(k), US stock, AU stock, super.
+ *     A negative year is applied in full: balance down, holdings down, and for the
+ *     ledger-bearing wrappers the loss charged to `earningsBasis` before
+ *     `contributionBasis` (`debitLedgerForLoss`). Only an exactly-flat year
+ *     short-circuits, so `amount === 0` rather than `<= 0`.
+ *   · **One-directional (receipts).** Dividends and interest. These cannot be
+ *     negative — a negative receipt would book negative taxable income — so they keep
+ *     the `<= 0` guard. Bond PRICE moves are not on this path: BOND/CASH sleeves are
+ *     skipped by the growth path and marked to market by `BondPriceAdjustReducer`.
+ *
+ * Super is the one asymmetric case: a loss reaches the member's balance in full but
+ * carries no Div 295 base, because the fund is taxed on earnings and a losing year
+ * produces none. See the note at `SuperEarningsHandler.call`.
+ */
+
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
@@ -35,37 +70,43 @@ export class IntlRothEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_ROTH_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US_ROTH;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
     super(null, 'Roth IRA Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
     this.ownerId         = ownerId;
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
+    // Design 84 G2 — yield slice of this wrapper's equity return. Null ⇒ the whole
+    // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
+    this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
+      dividendYield:   this.dividendYield,
     });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
+    // short-circuits. See the file header.
+    if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'ROTH_EARNINGS_APPLY', amount, stateKey },
+      { type: 'ROTH_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
       new RecordMetricAction('roth_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
@@ -83,37 +124,43 @@ export class IntlIraEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_IRA_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US_IRA;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
     super(null, 'IRA Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
     this.ownerId         = ownerId;
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
+    // Design 84 G2 — yield slice of this wrapper's equity return. Null ⇒ the whole
+    // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
+    this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['IRA_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
+      dividendYield:   this.dividendYield,
     });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
+    // short-circuits. See the file header.
+    if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'IRA_EARNINGS_APPLY', amount, stateKey },
+      { type: 'IRA_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
       new RecordMetricAction('ira_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
@@ -131,37 +178,43 @@ export class IntlK401EarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_K401_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US_K401;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
     super(null, '401k Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
     this.ownerId         = ownerId;
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
+    // Design 84 G2 — yield slice of this wrapper's equity return. Null ⇒ the whole
+    // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
+    this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['K401_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate, dividendYield: this.dividendYield };
   }
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    const { amount, derivedAmount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
+      dividendYield:   this.dividendYield,
     });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
+    // short-circuits. See the file header.
+    if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'K401_EARNINGS_APPLY', amount, stateKey },
+      { type: 'K401_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
       new RecordMetricAction('k401_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
@@ -208,7 +261,9 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
     });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
+    // short-circuits. See the file header.
+    if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount, stateKey },
       ...holdingActions,
@@ -256,7 +311,9 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
     });
-    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
+    // short-circuits. See the file header.
+    if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount },
       ...holdingActions,
@@ -315,6 +372,11 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
     });
+    // One-directional by nature: a dividend/interest receipt cannot be negative, and
+    // crediting one would book negative TAXABLE income. The G12 fix deliberately does
+    // NOT extend here — see the file header. (Bond PRICE moves are not this path:
+    // BOND/CASH sleeves are skipped by the growth path and marked to market by
+    // BondPriceAdjustReducer.)
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
@@ -382,6 +444,11 @@ export class AuSavingsInterestHandler extends HandlerEntry {
       rateSource:      'effectiveInterestRates',
       factor:          1 / 12,
     });
+    // One-directional by nature: a dividend/interest receipt cannot be negative, and
+    // crediting one would book negative TAXABLE income. The G12 fix deliberately does
+    // NOT extend here — see the file header. (Bond PRICE moves are not this path:
+    // BOND/CASH sleeves are skipped by the growth path and marked to market by
+    // BondPriceAdjustReducer.)
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
@@ -439,6 +506,11 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
       rateSource:      'effectiveInterestRates',
       factor:          1 / 12,
     });
+    // One-directional by nature: a dividend/interest receipt cannot be negative, and
+    // crediting one would book negative TAXABLE income. The G12 fix deliberately does
+    // NOT extend here — see the file header. (Bond PRICE moves are not this path:
+    // BOND/CASH sleeves are skipped by the growth path and marked to market by
+    // BondPriceAdjustReducer.)
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
@@ -496,6 +568,11 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
       rateSource:      'effectiveInterestRates',
       factor:          1 / 12,
     });
+    // One-directional by nature: a dividend/interest receipt cannot be negative, and
+    // crediting one would book negative TAXABLE income. The G12 fix deliberately does
+    // NOT extend here — see the file header. (Bond PRICE moves are not this path:
+    // BOND/CASH sleeves are skipped by the growth path and marked to market by
+    // BondPriceAdjustReducer.)
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
@@ -555,7 +632,24 @@ export class SuperEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
     };
     const gross = computeHoldingsGrowth(growthArgs);
-    if (gross.amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    if (gross.amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+
+    // A LOSS reaches the member's balance in full, and carries NO Div 295 base
+    // (design 84 G12). The fund's 15% earnings tax is levied on earnings; a losing
+    // year produces none, and the fund does not receive a refund — the loss becomes
+    // a carried-forward deduction against the fund's FUTURE earnings, which is a
+    // fidelity item this model does not carry (it would make the levy path-dependent
+    // across years). Withholding nothing therefore slightly OVER-taxes a fund that
+    // has losing years, which is the conservative direction. `grossAmount: 0` keeps
+    // `auSuperTaxYTD` off a negative base rather than crediting a phantom refund.
+    if (gross.amount < 0) {
+      return [
+        { type: 'SUPER_EARNINGS_APPLY', amount: gross.amount, grossAmount: 0, stateKey, taxRate: 0 },
+        ...gross.holdingActions,
+        new RecordMetricAction('super_earnings', gross.amount),
+        new RecordBalanceAction(`${stateKey}.balance`, stateKey),
+      ];
+    }
 
     // Pension/retirement phase (member ≥ 60, condition-of-release proxy — same
     // gate the super withdrawal handlers use): fund earnings are tax-free (0%).

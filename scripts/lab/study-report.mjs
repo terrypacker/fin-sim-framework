@@ -54,8 +54,8 @@ import { join, basename, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { buildGridModel } from '../lib/grid-report.mjs';
-import { pairedRescues, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
-import { percentile } from '../lib/format.mjs';
+import { pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
+import { percentile, moneyAuto } from '../lib/format.mjs';
 
 const USAGE = `
 study-report.mjs — render a study directory as one HTML page.
@@ -536,6 +536,18 @@ for (const s of mcSets) {
     .filter(([a, b]) => s.arms[a] && s.arms[b])
     .map(([a, b]) => ({ a, b, res: pairedRescues(s.arms[a].rows, s.arms[b].rows) }));
 
+  // Design 84 §6.4b — the money-metric pairing. The rescue view above classifies each
+  // seed by the `failed` flag, which is the right question for ruin and an empty one
+  // for "where should this money sit": arms that mostly do not fail give near-zero
+  // rescue counts and say nothing. Rendered only when the rows carry `afterTaxNW`,
+  // so arm files written before that field existed degrade to the old page.
+  const moneyMetric = 'afterTaxNW';
+  const moneyPairs = pairs
+    .filter(({ a, b }) => s.arms[a].rows?.some(r => Number.isFinite(r[moneyMetric]))
+                       && s.arms[b].rows?.some(r => Number.isFinite(r[moneyMetric])))
+    .map(({ a, b }) => ({ a, b, m: pairedMetric(s.arms[a].rows, s.arms[b].rows, moneyMetric) }))
+    .filter(({ m }) => m.n > 0);
+
   const shape = s.keys.filter(k => s.arms[k].pathShape?.medianNetWorthCagr != null);
   const bandKey = rm.paths ? 'netWorthCagr' : 'growth';
   const EDGES = [0, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10, 0.12, 1];
@@ -570,7 +582,21 @@ for (const s of mcSets) {
       ? `<div class="alert warn"><strong>Some changes break worlds they don't rescue.</strong> ${pairs.filter(p => p.res.reverseRescues > 0).map(p => `<code>${esc(p.a)}→${esc(p.b)}</code>`).join(', ')} — understand the mechanism before acting on the average.</div>`
       : `<div class="alert ok">No reverse-rescues in any pair — on this evidence every change shown weakly dominates.</div>`}` : ''}
 
-    ${shape.length ? `<h3>Sequence risk</h3>
+        ${moneyPairs.length ? `<h3>Paired — after-tax net worth, world by world</h3>
+    <p class="lede">The same pairing asked of <em>wealth</em> rather than survival, and for any decision about where money sits this is the decisive table. Scored on after-tax net worth: nominal net worth prices a Roth dollar at par with a pre-tax one, which mis-scores every arm that moves wealth between wrappers. <strong>The loss count is the finding</strong> — a favourable median sitting on top of a nonzero loss count is state-dependent harm, and a sign that flips is a bet, not a recommendation.</p>
+    ${dataTable([
+      { head: 'pair',    get: r => `<code>${esc(r.a)} → ${esc(r.b)}</code>` },
+      { head: 'ahead',   num: true, get: r => esc(`${r.m.wins}/${r.m.n}`) },
+      { head: 'ahead %', num: true, get: r => esc(pctS(r.m.winRate)) },
+      { head: 'BEHIND',  num: true, get: r => esc(String(r.m.losses)) },
+      { head: 'behind %',num: true, get: r => esc(pctS(r.m.lossRate)) },
+      { head: 'p10 Δ',   num: true, get: r => esc(moneyAuto(r.m.p10)) },
+      { head: 'median Δ',num: true, get: r => esc(moneyAuto(r.m.p50)) },
+      { head: 'p90 Δ',   num: true, get: r => esc(moneyAuto(r.m.p90)) },
+    ], moneyPairs)}
+    <p class="meta">Percentiles are of the paired DIFFERENCE within a world, not of either arm's level. No mean is shown.</p>` : ''}
+
+${shape.length ? `<h3>Sequence risk</h3>
     <p class="lede"><code>fail|lo10</code> and <code>fail|hi10</code> are failure rates among paths whose <em>first decade</em> finished below / above the cross-path median. A wide gap is sequence risk stated directly: the same long-run average is survivable or fatal depending on when the bad years land.</p>
     ${dataTable([
       { head: 'arm',       get: k => esc(k) },

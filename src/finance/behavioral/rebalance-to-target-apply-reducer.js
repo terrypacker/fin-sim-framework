@@ -14,6 +14,7 @@ import { consumeHoldingsFifo }  from '../holdings/holdings-fifo.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
+import { realiseDerivedGain } from '../assets/investment-account.js';
 
 /**
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
@@ -83,6 +84,11 @@ export class RebalanceToTargetApplyReducer extends Reducer {
 
     let holdings = [...account.holdings];
     const taxActions = [];
+    // Design 84 G2 — realised gain inside a SHELTERED wrapper. It pays no tax today,
+    // which is why this path never computed it, but for an Australian resident it is
+    // an amount DERIVED by the trust estate and therefore assessable under s99B when
+    // it is eventually distributed. Accumulated here and reclassified at the end.
+    let shelteredGain = 0;
 
     // ── Sell legs first (delta < 0) — frees value the buy legs redeploy ──────────
     for (const { allocation, delta } of legs) {
@@ -99,6 +105,15 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
         taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
       } else {
+        // Gain realised by a pro-rata reduction, computed BEFORE it happens and
+        // without altering it. `_reduceProRata` scales each lot's costBasis with its
+        // marketValue, so the basis consumed is take × (Σbasis / Σmv) and the gain is
+        // the remainder. Sheltered only: a taxable CASH leg also lands here and
+        // yields ~0, and a brokerage account carries no ledger to credit anyway.
+        if (!taxable && allocation !== ALLOCATION.CASH) {
+          const totalBasis = matching.reduce((sum, h) => sum + (h.costBasis ?? 0), 0);
+          if (availMv > 0) shelteredGain += Math.max(0, +(take * (1 - totalBasis / availMv)).toFixed(2));
+        }
         holdings = _reduceProRata(holdings, allocation, take);
       }
     }
@@ -123,7 +138,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
     const newBalance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     return this.newState(
       state,
-      { [stateKey]: { ...account, holdings, balance: newBalance } },
+      { [stateKey]: { ...account, ...realiseDerivedGain(account, shelteredGain), holdings, balance: newBalance } },
       taxActions,
     );
   }

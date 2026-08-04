@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { debitLedgerForLoss } from '../../assets/investment-account.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from '../../tax/au/super-tax-rate.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
@@ -176,13 +177,19 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const key = action.stateKey ?? 'superAccount';
     const sa = state[key];
+    // Negative year: charge the loss to earnings before corpus (design 84 G12). The
+    // handler sends `grossAmount: 0` on a loss, so the chained SUPER_EARNINGS_TAX
+    // below is levied on a zero base rather than refunding a phantom Div 295 credit.
+    const ledger = action.amount < 0
+      ? debitLedgerForLoss(sa, -action.amount)
+      : { earningsBasis: sa.earningsBasis + action.amount, contributionBasis: sa.contributionBasis };
     return this.newState(
       state,
       {
         [key]: {
           ...sa,
-          balance:       sa.balance       + action.amount,
-          earningsBasis: sa.earningsBasis + action.amount,
+          ...ledger,
+          balance: Math.max(0, sa.balance + action.amount),
         },
       },
       [{

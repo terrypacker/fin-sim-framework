@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { resolveRateKey }    from '../holdings/default-allocations.js';
+import { revalueLedger }     from '../assets/investment-account.js';
 
 /**
  * RevalueAssetReducer — applies a shock's instantaneous level effect.
@@ -75,7 +76,12 @@ export class RevalueAssetReducer extends Reducer {
       if (!hit) continue;
 
       const nextBalance = +nextHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-      updates[key] = { ...entry, holdings: nextHoldings, balance: nextBalance };
+      // Carry the revaluation through the contribution/earnings ledger (design 84 G8).
+      // Without this the crash removed value while `earningsBasis` kept its pre-crash
+      // figure, so the loss was charged to nobody and the excess stayed stranded —
+      // visibly so, as an `earningsBasis` larger than the balance it belongs to.
+      const ledger = revalueLedger(entry, entry.balance ?? 0, nextBalance);
+      updates[key] = { ...entry, ...(ledger ?? {}), holdings: nextHoldings, balance: nextBalance };
     }
 
     // ── Scalar assets (RealProperty / Collectible): whole `value` ────────────

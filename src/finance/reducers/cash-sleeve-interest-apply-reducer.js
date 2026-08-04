@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { accumulateByOwnership } from '../ownership-utils.js';
+import { creditDerivedIncome } from '../assets/investment-account.js';
 
 /**
  * Handles CASH_SLEEVE_INTEREST_APPLY actions (design 60) — money-market interest
@@ -46,7 +47,9 @@ export class CashSleeveInterestApplyReducer extends Reducer {
     const acct = state[key];
     if (!acct || !(amount > 0)) return this.newState(state);
 
-    const base = { ...state, [key]: { ...acct, balance: acct.balance + amount } };
+    // Design 84 G2 — interest is DERIVED income inside a sheltered wrapper: it raises
+    // the ledger, not just the balance.
+    const base = { ...state, [key]: { ...acct, ...creditDerivedIncome(acct, amount), balance: acct.balance + amount } };
 
     if (taxMode === 'deferred') {
       // 401k / IRA / Roth / super — no immediate tax; taxed (or not, for Roth) on withdrawal.

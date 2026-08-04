@@ -171,8 +171,10 @@ export class AuStockEarningsApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const sa = state.auStockAccount;
+    // Negative in a losing year (design 84 G12) — see the US sibling: no ledger to
+    // split, floor is defensive.
     return this.newState(state, {
-      auStockAccount: { ...sa, balance: sa.balance + action.amount },
+      auStockAccount: { ...sa, balance: Math.max(0, sa.balance + action.amount) },
     });
   }
 }

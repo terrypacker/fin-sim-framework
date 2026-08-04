@@ -147,6 +147,12 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false }) {
   const rows = runs.map(r => ({
     seed:   r.seed,
     nw:     Math.round(r.finalNetWorthUsd ?? 0),
+    // Design 84 §6.4a. `nw` is NOMINAL: it prices a Roth dollar at par with a pre-tax
+    // one, so any arm that moves wealth BETWEEN wrappers scores wrong on it. Score
+    // wrapper questions on `afterTaxNW`; `nw` remains the right lens for "how much is
+    // there", and both are carried so a report can show the gap between them.
+    afterTaxNW: Math.round(r.afterTaxNetWorthUsd ?? 0),
+    taxPaid:    Math.round(r.cumulativeTaxesPaid ?? 0),
     failed: !!r.scenarioFailed,
     // ISO, not String(): `outOfFundsDate` arrives as a Date, and `String(date)` is
     // "Tue Feb 27 2061 00:00:00 GMT…", whose first ten characters are "Tue Feb 27" —

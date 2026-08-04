@@ -108,6 +108,7 @@ export function computeHoldingsGrowth({
   factor       = 1,
   rateOverride = null,
   currentDate  = null,
+  dividendYield = null,
 }) {
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
@@ -129,7 +130,9 @@ export function computeHoldingsGrowth({
     // No holdings (defensive): fall back to the scalar-balance code path.
     const balance = account?.balance ?? 0;
     const amount  = +(balance * fbRate * factor).toFixed(2);
-    return { amount, holdingActions: [] };
+    const derivedAmount = dividendYield
+      ? +(balance * dividendYield * factor).toFixed(2) : 0;
+    return { amount, derivedAmount, holdingActions: [] };
   }
 
   // On the fixed-income path, a non-null per-holding `couponRate` is a FIXED
@@ -142,6 +145,7 @@ export function computeHoldingsGrowth({
   const useCoupon = rateSource === 'effectiveInterestRates';
 
   let total = 0;
+  let derived = 0;
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
@@ -168,6 +172,18 @@ export function computeHoldingsGrowth({
       : baseRate;
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
+    // Design 84 G2 — carve the DERIVED slice out of the same return, without
+    // changing it. `growth` is still mv x rate: balance and holdings move exactly
+    // as before. `derived` is the part of that return attributable to yield
+    // (dividends/distributions), which the trust HAS derived, as opposed to price
+    // appreciation, which nobody has. Callers carrying a ledger tag this into
+    // `derivedIncomeBasis`; callers that do not simply ignore it.
+    //
+    // Deliberately NOT clamped to `growth`: a holding can pay its distribution in a
+    // year its price fell, which is the real case where the two diverge — s99B
+    // reaches the distribution regardless of the capital loss beside it.
+    const yld = h.dividendYield ?? dividendYield;
+    if (yld) derived += +(mv * yld * factor).toFixed(2);
     if (growth !== 0) {
       holdingActions.push(new HoldingTransactAction({
         stateKey,
@@ -177,7 +193,7 @@ export function computeHoldingsGrowth({
       }));
     }
   }
-  return { amount: +total.toFixed(2), holdingActions };
+  return { amount: +total.toFixed(2), derivedAmount: +derived.toFixed(2), holdingActions };
 }
 
 /**

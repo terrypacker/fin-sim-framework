@@ -109,7 +109,16 @@ function getExports(filePath) {
   const code = fs.readFileSync(filePath, 'utf-8');
   const ast = parse(code, { sourceType: 'module', plugins: ['classProperties'] });
 
+  // Names this file IMPORTS. A name that is imported and then exported again is a
+  // pass-through re-export, not this file's own export — see `reExported` below.
+  const importedHere = new Set();
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    for (const spec of node.specifiers ?? []) importedHere.add(spec.local.name);
+  }
+
   const exports = [];
+  const reExported = new Set();
   for (const node of ast.program.body) {
     if (node.type === 'ExportNamedDeclaration') {
       if (node.declaration) {
@@ -124,12 +133,20 @@ function getExports(filePath) {
       }
       if (node.specifiers) {
         for (const spec of node.specifiers) {
-          exports.push(spec.exported.name);
+          const name = spec.exported.name;
+          exports.push(name);
+          // `export { X } from './y.js'` (node.source) is definitionally a re-export.
+          // `import { X } ...; export { X };` is the same thing spelled in two
+          // statements — indistinguishable from a local declaration by syntax alone,
+          // which is why the imported-name check above exists.
+          if (node.source != null || importedHere.has(spec.local?.name ?? name)) {
+            reExported.add(name);
+          }
         }
       }
     }
   }
-  return exports;
+  return { exports, reExported };
 }
 
 //
@@ -144,6 +161,29 @@ const imports = [];
 const namespaces = {};
 const topLevel = [];
 
+// Every exported name must be imported EXACTLY ONCE. Two modules offering the same
+// name — almost always because one re-exports the other's — used to emit two imports
+// of the same identifier, which is a duplicate binding: a hard SyntaxError that fails
+// every module load in the suite, from a file nobody edits by hand. Attribute each
+// name to a single origin first, preferring the module that actually declares it over
+// any module that merely passes it through.
+const originOf = new Map();   // exported name → { file, isReExport }
+for (const file of files) {
+  const rel = relPath(file);
+  if (isExcluded(rel) || !getNamespace(rel)) continue;
+  const { exports, reExported } = getExports(file);
+  for (const name of exports) {
+    const isReExport = reExported.has(name);
+    const prev = originOf.get(name);
+    if (!prev) { originOf.set(name, { file, isReExport }); continue; }
+    if (prev.isReExport && !isReExport) { originOf.set(name, { file, isReExport }); continue; }
+    if (!prev.isReExport && !isReExport) {
+      console.warn(`⚠️  '${name}' is declared by two modules — ${relPath(prev.file)} and ${rel}. `
+        + `Keeping the first; rename one, or the namespace objects will disagree about which it means.`);
+    }
+  }
+}
+
 for (const file of files) {
   const rel = relPath(file);
   if (isExcluded(rel)) continue;
@@ -151,12 +191,18 @@ for (const file of files) {
   const namespace = getNamespace(rel);
   if (!namespace) continue; // no namespace match → skip
 
-  const exports = getExports(file);
+  const { exports } = getExports(file);
   if (exports.length === 0) continue;
 
   if (!namespaces[namespace]) namespaces[namespace] = [];
 
-  imports.push(`import { ${exports.join(', ')} } from '${importPath(file)}';`);
+  // Import only the names this file OWNS. A name it re-exports is imported from its
+  // origin instead; the namespace object below still lists it either way, since one
+  // import can be referenced from as many namespaces as claim it.
+  const owned = exports.filter(name => originOf.get(name)?.file === file);
+  if (owned.length > 0) {
+    imports.push(`import { ${owned.join(', ')} } from '${importPath(file)}';`);
+  }
 
   for (const exp of exports) {
     namespaces[namespace].push(exp);

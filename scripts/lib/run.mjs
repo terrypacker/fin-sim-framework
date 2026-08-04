@@ -30,7 +30,7 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
-import { computeAfterTaxNetWorth, defaultRateProvider, liquidationRateProvider }
+import { computeAfterTaxNetWorth, afterTaxOptionsFromParams }
   from '../../src/finance/derived-metrics/after-tax.js';
 import { allParams } from './variant.mjs';
 
@@ -129,17 +129,8 @@ export function summarize(sim, params = null) {
     taxPaid:       Math.round(s.cumulativeTaxesPaid ?? 0),
   };
   if (params) {
-    const rateCfg = {
-      ordinaryRate:   params.afterTaxOrdinaryRate,
-      ordinaryRateAu: params.afterTaxOrdinaryRateAu,
-      capGainsRate:   params.afterTaxCapGainsRate,
-    };
-    const rateProvider = params.afterTaxRateMethod === 'liquidation'
-      ? liquidationRateProvider(rateCfg)
-      : defaultRateProvider(rateCfg);
-    row.afterTaxNW = Math.round(computeAfterTaxNetWorth(s, sim.currentDate, {
-      rateProvider, assumedGainFraction: params.assumedGainFraction,
-    }));
+    row.afterTaxNW = Math.round(
+      computeAfterTaxNetWorth(s, sim.currentDate, afterTaxOptionsFromParams(params)));
   }
   return row;
 }
