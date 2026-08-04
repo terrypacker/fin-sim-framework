@@ -17,7 +17,7 @@ the three real regimes that govern a US/AU dual filer:
 2. **FTC** — the US Foreign Tax Credit (Form 1116), **per §904 basket**, with a
    10-year carryforward *per basket*.
 3. **FITO** — the Australian Foreign Income Tax Offset, with its **own, different**
-   rules (single bucket, **no** carryforward, $1,000 de-minimis, with/without limit).
+   rules (single bucket, **no** carryforward, \$1,000 de-minimis, with/without limit).
 
 **Builds on**:
 - The annual settle machinery in `src/finance/tax/tax-settle-classes.js`
@@ -61,7 +61,7 @@ The current single-line model (`us/us-tax-rates-base.js:85`,
 `au/au-tax-rates-base.js` franking-only) has five defects:
 
 1. **No FEIE.** A US citizen resident in AU can exclude up to the annual cap
-   (**US$132,900 for 2026**) of *foreign earned* income (AU wages/SE) from US tax
+   (**US\$132,900 for 2026**) of *foreign earned* income (AU wages/SE) from US tax
    entirely. The model has no exclusion, so it over-taxes AU-earned wages on the US
    return and then leans on the `ftcYTD` hack to erase it.
 2. **Credits income, not tax.** `min(ftcYTD, grossTax)` treats every doubly-taxed
@@ -93,7 +93,7 @@ The current single-line model (`us/us-tax-rates-base.js:85`,
   basket** (Passive, General). Income excluded by FEIE earns **no** FTC (mutual
   exclusivity on the same dollars).
 - **AU FITO (real ATO rules).** Offset AU tax by US tax paid on US-source income —
-  **single bucket, no carryforward, A$1,000 de-minimis shortcut, with/without limit.**
+  **single bucket, no carryforward, A\$1,000 de-minimis shortcut, with/without limit.**
 - **A sourcing + basket rule (§4.1)** assigning each taxable dollar to exactly one
   *source country* and (for AU-source) one *basket*, so no dollar is relieved twice.
 - Preserve `design/51`'s canonical-currency invariant: US pools are **USD**; the FITO
@@ -352,7 +352,7 @@ New `tax-cross-border-relief.test.mjs`:
 - **FTC-5 (reset asymmetry):** income numerators zero at the US settle; pools persist.
 - **FITO-1:** AU resident with US-source IRA withdrawal — AU tax drops by the US tax
   paid, capped by the with/without limit; **no** carryforward of the excess.
-- **FITO-2 (de-minimis):** US tax ≤ A$1,000 → offset in full, limit calc skipped.
+- **FITO-2 (de-minimis):** US tax ≤ A\$1,000 → offset in full, limit calc skipped.
 - **RELIEF-1 (no double relief / sourcing):** with everything active, a US-source dollar
   is relieved only by FITO and an AU-source dollar only by FTC/FEIE; total tax on each ≈
   the higher of the two rates, never < either.
@@ -407,7 +407,7 @@ FEIE + basketed FTC + carryforward and a FITO with no double taxation.
    per-basket FTC + carryforward line items.
 5. **Fund US pools (§4.4):** `AuTaxSettleApplyReducer` apportions AU tax to baskets →
    USD → pool contributions.
-6. **AU FITO (§4.5–4.6):** `au/au-tax-rates-base.js` with/without limit, $1,000
+6. **AU FITO (§4.5–4.6):** `au/au-tax-rates-base.js` with/without limit, \$1,000
    de-minimis, no carryforward; `UsTaxSettleApplyReducer` produces
    `usTaxPaidOnUsSourceAud`.
 7. **Tests + regold (§7):** `tax-cross-border-relief.test.mjs`; regold cross-border

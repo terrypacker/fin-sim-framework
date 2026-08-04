@@ -26,7 +26,7 @@ what was decided, and why, so a closed fork stays closed.
 
 ## 1. Motivation
 
-A net-worth line hides the shape of the plan. The reference plan ends at ~$28m and looks
+A net-worth line hides the shape of the plan. The reference plan ends at ~\$28m and looks
 healthy the whole way; the allocation view shows `REAL_ESTATE` going **16.3% → 90.2%** of
 gross assets while `EQUITY` drains to zero, and gold making a ~94% round trip in a single
 year. None of that is visible in a total, and all of it is decision-relevant.
@@ -130,7 +130,7 @@ It is therefore load-bearing that inclusion uses net worth's *own* rule — a nu
 
 > ⚠ An earlier draft scoped accounts to `StateSchemaRegistry#accountBalanceKeys()`, which
 > looks more precise and is strictly worse: **loan accounts do not register under the
-> `account` display kind**, so every loan silently vanished and the cube ran **$218,710**
+> `account` display kind**, so every loan silently vanished and the cube ran **\$218,710**
 > above net worth on a real plan, decaying to zero as the mortgages amortized. The synthetic
 > default scenario has no loans and tied perfectly throughout, so only a real plan exposed
 > it. `type === 'loan'` is now tested first and on its own.
@@ -218,7 +218,7 @@ node through the shared module; the browser only picks which precomputed object 
 
 Sections: Provenance (tie-out first — the page is not quotable until the cube ties),
 Headlines, Total, By country, By account, By return series, Year-end mix table. Every chart
-has a share/$ toggle; Total has a net-worth checkbox, By country a domicile/exposure toggle,
+has a share/\$ toggle; Total has a net-worth checkbox, By country a domicile/exposure toggle,
 By account a picker. ECharts is inlined from `node_modules` (~1.2 MB, offline).
 
 ### 5.1 Phase 1b — the two cleanups Phase 1 deferred (IMPLEMENTED 2026-07-29)
@@ -281,7 +281,7 @@ loop dropped it (`if (at > end) break` skipped a 31 December it could not reach)
 had never shown the terminal state at all.
 
 It is worth more than a footnote, because of *how much* it differs: equity in one account reads
-**$8.60m at 2069-12-31 and $11.29m at 2070-01-01**. One day, +31%. The cause is that the
+**\$8.60m at 2069-12-31 and \$11.29m at 2070-01-01**. One day, +31%. The cause is that the
 annual investment family hangs off `PERIOD_ADVANCE_US`, which is dated **1 January**, together
 with the appreciation events for property, company equity and collectibles. So:
 
@@ -397,7 +397,7 @@ Both consumers render it: a **Target vs realized** section on the lab page and a
 
 `targetComposition` is fractions **of each account's own holdings total**. Fractions of
 different denominators cannot be summed, so emitting them raw makes every aggregate wrong in
-a way that still looks plausible — average a $10k account with a $10m one and the "portfolio
+a way that still looks plausible — average a \$10k account with a \$10m one and the "portfolio
 target" is fiction. Each row therefore carries `marketValue = weight × that account's holdings
 total`, FX-converted. Dollars add up, so **the ordinary group-by produces the aggregate
 target** and normalizing it gives the target share: one pivot, both tables.
@@ -627,14 +627,14 @@ line:
 
 - **`REAL_ESTATE` 16.3% → 90.2%** of gross assets by 2069 while `EQUITY` drains to zero
   (~2063). Terminal net worth still looks fine; the shape becomes a single illiquid asset.
-- **Gold drained by *drawdown*, not allocation** — grew to $1.85m, then removed from the
+- **Gold drained by *drawdown*, not allocation** — grew to \$1.85m, then removed from the
   taxable brokerage at the 28% collectibles rate during depletion.
-- **A ~94% one-year gold round trip in 2031** (Terry age 53): $200k → $12k → $277k, caused by
+- **A ~94% one-year gold round trip in 2031** (Terry age 53): \$200k → \$12k → \$277k, caused by
   a single glidepath anchor of `{EQUITY: 1, GOLD: 0}`. Almost certainly MPC harvest noise
   (the step-faithful `age`/`age.99` pairs), and it lands on `moveYear` — so it realizes
   collectibles CGT at the residency cost-base step-up (design 57 straddle territory).
   **Still open** — see §10.
-- **Four defects in design 61**, recorded as §12.1 D1–D4 there: the immortal $0.01
+- **Four defects in design 61**, recorded as §12.1 D1–D4 there: the immortal \$0.01
   liquidation remnant (fixed), the drift band's blindness to a zero-target class, uncleaned
   pre-existing dust, and a baked SCHEDULE freezing its asset classes (closed by §12.2 Q3).
 - **The US-retirement gold guard was modelling the wrong instrument** (§12 OQ4a, reversed),
@@ -666,7 +666,7 @@ closed the way it did is what stops it being reopened by accident.
   is read before 2069's investment growth is credited, because the annual family hangs off the
   1 January `PERIOD_ADVANCE`. Self-consistent, but the year labels lag the growth they name.
   Moving the boundary would move every figure on the page, so it is a decision, not a fix.
-- **The 2031 gold round trip** (§9): $200k → $12k → $277k in one year off a single
+- **The 2031 gold round trip** (§9): \$200k → \$12k → \$277k in one year off a single
   `{EQUITY: 1, GOLD: 0}` glidepath anchor, landing on `moveYear`. Almost certainly MPC harvest
   noise, but it realizes collectibles CGT at a residency cost-base step-up, so it is not
   cosmetic. **Belongs to design 61 / 39's harvest, not here** — this report is how it was

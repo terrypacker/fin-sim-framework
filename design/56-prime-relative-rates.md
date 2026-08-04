@@ -3,7 +3,7 @@
 **Status**: **COMPLETE** — all phases (1, 2a, 2b, 3, 4) implemented and green
 (3242 unit + 864 viz + build). Verified end-to-end against `scenarios/terry-jeanne-evaluation.json`
 via `scripts/run-scenario.mjs`: the sim runs cleanly to 2070 and its net worth is
-**byte-for-byte identical to the stored baseline** ($10,970,797.43), confirming the
+**byte-for-byte identical to the stored baseline** (\$10,970,797.43), confirming the
 capability-only Gold work (Phase 4) is non-disruptive to a gold-free scenario.
 
 Model the real-world relationship between a central bank's **Prime** (policy) rate and

@@ -13,7 +13,7 @@ A drawdown strategy ranks accounts **by role** (e.g. Roth = 3, US Stock = 7). Wh
 rec.drawdownPriority = base + ownerRank * ownerStride;   // ownerStride = 100
 ```
 
-with `ownerOrder: ['primary','spouse']`. So every spouse account is offset by +100 and the **entire primary band (1–8) drains before any spouse account (101–106)**, regardless of role. This starves the spouse's high-priority buckets: in a real run a Spouse Roth (dp 103) was never drawn and compounded to ~$10.9M while the primary Roth (dp 3) was depleted early. The banding was hard-coded and not user-selectable.
+with `ownerOrder: ['primary','spouse']`. So every spouse account is offset by +100 and the **entire primary band (1–8) drains before any spouse account (101–106)**, regardless of role. This starves the spouse's high-priority buckets: in a real run a Spouse Roth (dp 103) was never drawn and compounded to ~\$10.9M while the primary Roth (dp 3) was depleted early. The banding was hard-coded and not user-selectable.
 
 This design exposes the banding as a scenario param so the user can instead **pool** same-role accounts across owners (both Roths in one tier), or flip which owner drains first.
 

@@ -121,7 +121,7 @@ registry.displayNameFor(stateKey) -> string | null      // the label, or null wh
   the same instance (threaded through the query api, §6.2). One resolver, one source of truth, both
   sides.
 - **The canonical label = generalize `_accountLabel`.** `_accountLabel(account)` =
-  `` `${country} ${name || stateKey}` `` (`journal-report-plugin.js:797`) is *already* the mapper the
+  `` `\${country} \${name || stateKey}` `` (`journal-report-plugin.js:797`) is *already* the mapper the
   journal filter dropdown and (in spirit) the Holdings dropdown use. Lift this one function into the
   registry as the label rule so every surface reads identically instead of re-deriving it.
 - **Fallback contract.** `displayNameFor(sk) ?? toLabel(sk)` — a key with no registered name (a bare

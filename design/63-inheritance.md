@@ -70,7 +70,7 @@ via a scheduled `INHERIT` event, and routes each through the correct country/sta
 - Serializer round-trip, net-worth, editor UI, and a param-gated `inheritanceYear`.
 
 ### Non-Goals (deferred)
-- **Decedent-side estate tax** (US $15M / HI $5.49M estate tax). **Resolved decision §4.1:
+- **Decedent-side estate tax** (US \$15M / HI \$5.49M estate tax). **Resolved decision §4.1:
   config amounts are what the heir receives (net of any estate tax).** A decedent gross-estate +
   estate-tax toggle is a clean Phase 2.
 - **Spousal / tax-dependant inheritance** (US spousal IRA rollover; AU tax-free super to a
@@ -92,7 +92,7 @@ via a scheduled `INHERIT` event, and routes each through the correct country/sta
 | Item | Treatment |
 |---|---|
 | Inheritance tax on heir | **None** (federal has no inheritance tax). |
-| Estate tax | On the **decedent's estate**; **$15M/person** exemption (2026, permanent per OBBB, Jul 2025). External decedent ⇒ settled pre-distribution (§4.1). |
+| Estate tax | On the **decedent's estate**; **\$15M/person** exemption (2026, permanent per OBBB, Jul 2025). External decedent ⇒ settled pre-distribution (§4.1). |
 | Brokerage / real property / collectibles | **Step-up, IRC §1014** — basis = **FMV at date of death**. |
 | Traditional IRA / 401(k) | **No step-up** (IRD). Ordinary income to heir on distribution; **SECURE Act 10-year** full-drawdown rule for non-spouse. |
 | Inherited Roth | 10-year drawdown clock, but **tax-free**. |
@@ -100,8 +100,8 @@ via a scheduled `INHERIT` event, and routes each through the correct country/sta
 ### US states (all key off the **decedent's** situs, not the heir's residency — §4.2)
 | State | Regime | Detail |
 |---|---|---|
-| **HI** | Estate tax only (decedent side) | 10–20% graduated, **$5.49M** exemption. Deferred with §4.1. |
-| **NE** | **Inheritance tax (heir-paid)** | County-level, post-LB310 (eff. 2023): **Class 1** (parents, grandparents, children, grandchildren, siblings) **$100k exempt + 1%**; **Class 2** (aunts/uncles/nieces/nephews + descendants/spouses) **$40k + 11%**; **Class 3** (unrelated) **$25k + 15%**. |
+| **HI** | Estate tax only (decedent side) | 10–20% graduated, **\$5.49M** exemption. Deferred with §4.1. |
+| **NE** | **Inheritance tax (heir-paid)** | County-level, post-LB310 (eff. 2023): **Class 1** (parents, grandparents, children, grandchildren, siblings) **\$100k exempt + 1%**; **Class 2** (aunts/uncles/nieces/nephews + descendants/spouses) **\$40k + 11%**; **Class 3** (unrelated) **\$25k + 15%**. |
 | **SD** | None | No estate or inheritance tax. |
 
 ### Australia
@@ -262,8 +262,8 @@ function bracketFillPlan(balance, yearIndex, ctx) {
 ```
 
 **Why the ceiling is optimized, not fixed.** A too-low ceiling under-drains and forces a
-terminal spike: e.g. a $500k IRA + $60k/yr other income under a $100k ceiling fills $40k/yr,
-leaving ~$140k dumped in year 9 (income spikes to ~$200k); a ~$115k ceiling fills ~$55k/yr and
+terminal spike: e.g. a \$500k IRA + \$60k/yr other income under a \$100k ceiling fills \$40k/yr,
+leaving ~\$140k dumped in year 9 (income spikes to ~\$200k); a ~\$115k ceiling fills ~\$55k/yr and
 drains smoothly. The spike is *self-penalizing* in the objective (the year-9 bracket jump raises
 lifetime tax), so the solver raises the ceiling — unless late-window bracket rates or an
 intervening residency change genuinely favor deferral, in which case it keeps it low on purpose.
@@ -304,8 +304,8 @@ Inherited super is **not** funded as an ongoing `SuperannuationAccount`. On `INH
 ### 6.5 NE inheritance tax (heir-paid)
 When `decedentState === 'NE'`, the reducer computes, **per inherited asset's funded value**, the
 class-based tax: `max(0, assetValue − classExemption) × classRate`, where the class derives from
-`Bequest.relationship` (`immediate` → Class 1 1%/$100k; `remote` → Class 2 11%/$40k; `unrelated`
-→ Class 3 15%/$25k). Emit `NE_INHERITANCE_TAX` → a `neInheritanceTaxYTD` bucket in the US tax
+`Bequest.relationship` (`immediate` → Class 1 1%/\$100k; `remote` → Class 2 11%/\$40k; `unrelated`
+→ Class 3 15%/\$25k). Emit `NE_INHERITANCE_TAX` → a `neInheritanceTaxYTD` bucket in the US tax
 module (a **state** liability, additive to the US state-tax settle, not federal). The exemption
 is per-beneficiary per-class; v1 applies it once across the bequest (aggregate the class-eligible
 inherited value, subtract one exemption, apply the rate) — matching NE's per-beneficiary basis.
@@ -419,7 +419,7 @@ contributes no state/schedules, and every run is byte-identical to today. The re
   through the optimizer `set()` path (dotted equivalents are dropped — assert both).
 - **AU super**: non-dependant taxable component × 15% (direct ⇒ ×17%); tax-free component untaxed;
   net lump sum credited to AU cash.
-- **NE inheritance tax**: Class 1 ($100k/1%), Class 2 ($40k/11%), Class 3 ($25k/15%);
+- **NE inheritance tax**: Class 1 (\$100k/1%), Class 2 (\$40k/11%), Class 3 (\$25k/15%);
   `decedentState` SD/HI ⇒ no heir tax.
 - **Fallback safety**: no `bequests` ⇒ byte-identical; old-save round-trip for `Bequest`.
 
@@ -427,7 +427,7 @@ contributes no state/schedules, and every run is byte-identical to today. The re
 
 ## 11. Deferred / documented-only
 
-- **Decedent-side estate tax** (US $15M / HI $5.49M) — §4.1; a gross-estate + estate-tax toggle.
+- **Decedent-side estate tax** (US \$15M / HI \$5.49M) — §4.1; a gross-estate + estate-tax toggle.
 - **Spousal / tax-dependant inheritance** — US spousal IRA rollover (no 10-year rule); AU tax-free
   super to a dependant. `relationship` already carries the discriminator.
 - **Foreign-resident-beneficiary CGT** on an AU deceased estate (non-TAP deemed disposal) — §2.

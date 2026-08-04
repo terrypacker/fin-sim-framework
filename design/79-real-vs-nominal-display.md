@@ -29,12 +29,12 @@ years, US equity growth 10%, US inflation 3%):
 
 | Basis | Ending net worth |
 |---|---|
-| Nominal (what the UI shows today) | **$190.5M** |
-| Real, deflated by `inflationAccumulator.US` (÷ 1.03⁴⁴ ≈ 3.67) | **~$51.9M** |
+| Nominal (what the UI shows today) | **\$190.5M** |
+| Real, deflated by `inflationAccumulator.US` (÷ 1.03⁴⁴ ≈ 3.67) | **~\$51.9M** |
 
-A user who mentally models "10% nominal − 3% inflation ≈ 7% real" sees $190M and
+A user who mentally models "10% nominal − 3% inflation ≈ 7% real" sees \$190M and
 assumes a bug, because their intuition is in real dollars while the display is
-nominal. The same $190M in today's purchasing power (~$52M) matches the intuition
+nominal. The same \$190M in today's purchasing power (~\$52M) matches the intuition
 exactly. There is no bug — only a missing lens.
 
 The deflator we need **already exists in state** (`inflationAccumulator[cc]`,
@@ -47,7 +47,7 @@ CGT indexation, etc. This design surfaces that same deflator as a **display lens
 
 ## 2. Concept & precise semantics
 
-### 2.1 What "Real (today's $)" means
+### 2.1 What "Real (today's \$)" means
 
 `inflationAccumulator[cc]` starts at `1.0` at **sim start** and compounds by the
 effective inflation rate at each `*_PERIOD_ADVANCE`. Define the display transform:
@@ -58,7 +58,7 @@ realValue(nominalValue, cc, atState) = nominalValue / (atState.inflationAccumula
 
 - **Base year = sim start.** In the reference scenario sim start (2026-01-01) ≈
   "today", so "real" == "today's dollars". If a scenario's `simStart` is not the
-  present, the label should read **"Real (base-year $)"** — the base year is
+  present, the label should read **"Real (base-year \$)"** — the base year is
   whenever the accumulator was seeded to 1.0, not the wall-clock present. (A
   future refinement could re-base to an arbitrary anchor year; out of scope here.)
 
@@ -169,7 +169,7 @@ timestamp. The user's instinct — "always show values in relation to the date t
 slider is on" — is one of two coherent policies; they answer different questions:
 
 - **Policy R1 — per-row real (recommended).** Deflate each row by the price level
-  **at that row's own date**. A $10k expense in 2050 and a $10k expense in 2026
+  **at that row's own date**. A \$10k expense in 2050 and a \$10k expense in 2026
   both display as their real base-year magnitude, so the column is comparable
   down the page. This is the honest "constant-dollar report" and it needs the
   same recorded accumulator series from §5, keyed by row date. Every journal row
@@ -238,7 +238,7 @@ round-trip in `_loadFromStorage`/`_persist`, and the field in the
 `DISPLAY_SETTINGS_CHANGED` payload.
 
 **Base-year hint lives on the toggle, not on panels.** Rather than adding a
-"(base-year $)" annotation to every panel (which would clutter each one — see the
+"(base-year \$)" annotation to every panel (which would clutter each one — see the
 global-vs-per-panel decision in §12), the **`real` option's own label carries the
 base year**: `Real (2026 $)`, derived from the loaded scenario's `simStart` year.
 The label is rewritten whenever a scenario loads (and re-rewritten if `simStart`
@@ -289,7 +289,7 @@ per-panel work.
   (currency then deflate), `?? 1` fallbacks, basis round-trips through storage.
 - **Series alignment:** chart deflation picks the nearest-prior accumulator
   sample; a value at sim start deflates by 1.0; the terminal point matches
-  `nominal / inflationAccumulator.US` from final state (the $190.5M → ~$51.9M
+  `nominal / inflationAccumulator.US` from final state (the \$190.5M → ~\$51.9M
   check from §1 becomes a golden assertion).
 - **No-op invariant:** `valueBasis === 'nominal'` reproduces byte-identical output
   to pre-feature (guard the whole feature behind the default).
@@ -311,7 +311,7 @@ per-panel work.
    only exception is the hard-coded **tax-document nominal** exemption (§6).
 2. **Base year shown explicitly, on the toggle label.** The `real` option reads
    `Real (<simStart-year> $)`, so a scenario whose `simStart` is not the present
-   never overclaims "today's $". Single source of truth; no per-panel labels (§8).
+   never overclaims "today's \$". Single source of truth; no per-panel labels (§8).
 
 **Still open:**
 
@@ -372,8 +372,8 @@ single-factor deflation.
   `state.inflationAccumulator.US`. Makes the §1 nominal/real pair reproducible in
   CI.
 
-**P1 acceptance:** toggle flips every point-in-time panel between $190.5M and
-~$51.9M for the reference scenario; `nominal` output is byte-identical to today;
+**P1 acceptance:** toggle flips every point-in-time panel between \$190.5M and
+~\$51.9M for the reference scenario; `nominal` output is byte-identical to today;
 chart still shows nominal (documented, resolved in P2).
 
 **P1 tests:** `_deflate` math + `?? 1` fallback; storage round-trip; order

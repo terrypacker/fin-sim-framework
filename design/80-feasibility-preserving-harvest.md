@@ -96,11 +96,11 @@ score = running_reward − λ·|realTerminal − target| − μ·deficit
 Both correction terms actively refuse to reward a buffer:
 
 - **λ is two-sided.** `Math.abs(realTerminal − target)` penalises *overshoot* exactly as hard as shortfall. Ending with margin is a cost. That is the whole point of "die with zero" and it is correct.
-- **μ is a cliff, not a gradient.** The `DEFAULT_DEFICIT_PENALTY` docblock says so explicitly: it "is **zero for any solvent plan** … so it never perturbs the interior spend-early ⇄ leave-less optimum." Deliberate, and right for the closed loop — but it means a plan that clears every month by **$1** and a plan that clears by **$500k** score *identically* on the solvency term, and the $1 plan scores strictly better on λ.
+- **μ is a cliff, not a gradient.** The `DEFAULT_DEFICIT_PENALTY` docblock says so explicitly: it "is **zero for any solvent plan** … so it never perturbs the interior spend-early ⇄ leave-less optimum." Deliberate, and right for the closed loop — but it means a plan that clears every month by **\$1** and a plan that clears by **\$500k** score *identically* on the solvency term, and the \$1 plan scores strictly better on λ.
 
 So the optimum this goal selects is, by construction, a **knife-edge plan**: no margin, because margin is penalised and safety is not rewarded.
 
-**With `terminal: 'liquid'` the knife edge *is* the ruin boundary.** The motivating run used `DIE_WITH_TARGET_LIQUID` (`finalNetLiquidity`) with `terminalWealthTarget = 0` — chosen for the reason the code itself recommends (`optimization-objectives.js:260`: *"Prefer the LIQUID terminal when the lever set can't liquidate illiquid assets (house equity, age-locked super), so the 'die with $X' target is actually reachable by the controls"*). That is the right call for reachability and it has a consequence nobody wrote down:
+**With `terminal: 'liquid'` the knife edge *is* the ruin boundary.** The motivating run used `DIE_WITH_TARGET_LIQUID` (`finalNetLiquidity`) with `terminalWealthTarget = 0` — chosen for the reason the code itself recommends (`optimization-objectives.js:260`: *"Prefer the LIQUID terminal when the lever set can't liquidate illiquid assets (house equity, age-locked super), so the 'die with \$X' target is actually reachable by the controls"*). That is the right call for reachability and it has a consequence nobody wrote down:
 
 > **Terminal net liquidity = 0 and insolvency are the same state.** They differ only in *when* you arrive. λ pulls liquidity to zero; μ is the only thing distinguishing "zero at `simEnd`" from "zero in 2051" — and μ is a cliff with no gradient. The objective is not merely *indifferent* to margin here; it is actively **optimising toward the failure boundary** and relying on a step function to stop at the right moment.
 
@@ -147,7 +147,7 @@ And §13.6.3's warning would not have caught it. `"changed in 7 of 22 epochs"` m
 
 ### 2.5 What actually fired — measured, 2026-07-26
 
-`scenarios/fin-sim-die-with.json` (an all-levers `terminalWealthTarget=0` harvest, sim 2026→2070, Terry b1978 / Jeanne b1983, move 2031) fails at **out-of-funds 2051-04-30, $5,705,589 cumulative deficit, 194 deficit months — with terminal net worth still $4,803,802.** The plan is *asset-rich and cash-poor*: $4.8M is the illiquid residue (the AU house + collectibles) sitting there while every liquid account is drained. Every insolvent arm below lands on that same $4.8M, which is a useful tell.
+`scenarios/fin-sim-die-with.json` (an all-levers `terminalWealthTarget=0` harvest, sim 2026→2070, Terry b1978 / Jeanne b1983, move 2031) fails at **out-of-funds 2051-04-30, \$5,705,589 cumulative deficit, 194 deficit months — with terminal net worth still \$4,803,802.** The plan is *asset-rich and cash-poor*: \$4.8M is the illiquid residue (the AU house + collectibles) sitting there while every liquid account is drained. Every insolvent arm below lands on that same \$4.8M, which is a useful tell.
 
 **Attribution** (`scripts/lab/attribute-ruin.mjs` — revert one harvested lever group at a time, re-run, look for a flip to solvent):
 
@@ -161,7 +161,7 @@ And §13.6.3's warning would not have caught it. `"changed in 7 of 22 epochs"` m
 | glidepath → `STATIC` | ❌ ruin 2040-02-29 (11 years worse) |
 | roth schedule → off | ❌ ruin 2051-05-31 (1 month better) |
 | bond ladder → 1 rung | ❌ ruin 2051-04-30 (unchanged) |
-| **spending bands → pre-MPC flat $5,500** | **✅ SOLVENT, NW $13,384,480** |
+| **spending bands → pre-MPC flat \$5,500** | **✅ SOLVENT, NW \$13,384,480** |
 
 So the four POINT-collapsed drawdown levers — the entire §2.3/§2.4 hypothesis — move the ruin date by **months**. `drawdownWeight::super = 0.0398` (super drawn *first*, despite preservation age) looked exactly like the predicted signature and is **not** load-bearing. The lever that broke the plan is **`SPENDING`** — which is a **SCHEDULE** lever, harvested *faithfully*, with near-zero discretization loss.
 
@@ -169,19 +169,19 @@ So the four POINT-collapsed drawdown levers — the entire §2.3/§2.4 hypothesi
 
 **How far over the line** (`scripts/lab/spend-ceiling.mjs` — scale the MPC-decided bands and bisect for solvency):
 
-- harvested: 23 decided bands, ages 47–89, **mean $8,731/mo** real base-year USD;
-- largest open-loop-affordable version: **×0.830 ≈ $7,244/mo**;
+- harvested: 23 decided bands, ages 47–89, **mean \$8,731/mo** real base-year USD;
+- largest open-loop-affordable version: **×0.830 ≈ \$7,244/mo**;
 - **feedback premium: 20.5%** — the controller baked a fifth more consumption than the same plan sustains without the right to re-decide.
 
 **And it is not a time-keying artifact.** Replacing the whole schedule with a single flat level fails at *every* recorded level, including the controller's own final answer:
 
 | Flat-for-life level | Result |
 |---|---|
-| $9,941/mo (first decided epoch) | ❌ ruin 2049-05-31 |
-| $10,000/mo (max) | ❌ ruin 2048-11-30 |
-| $8,731/mo (mean) | ❌ ruin 2059-06-30 |
-| $8,559/mo (**last** epoch — the controller's final answer) | ❌ ruin 2061-06-30 |
-| the harvested schedule (mean $8,731) | ❌ ruin 2051-04-30 |
+| \$9,941/mo (first decided epoch) | ❌ ruin 2049-05-31 |
+| \$10,000/mo (max) | ❌ ruin 2048-11-30 |
+| \$8,731/mo (mean) | ❌ ruin 2059-06-30 |
+| \$8,559/mo (**last** epoch — the controller's final answer) | ❌ ruin 2061-06-30 |
+| the harvested schedule (mean \$8,731) | ❌ ruin 2051-04-30 |
 
 Two things follow. First, the schedule is *worse* than its own mean held flat (2051 vs 2059) because the front-loaded bands do the damage early — so time-variation actively hurt here, a **negative VoTV**. Second, and much more important: **no level the controller ever committed to is affordable over this horizon.** Its final decision goes broke nine years before `simEnd`.
 
@@ -203,7 +203,7 @@ The bankrupt plan scores a **perfect zero** on the goal's own terminal term. `fi
 Two things break because of this, both in shipped code:
 
 1. **§13.7's verify cannot catch this class of failure.** It compares A vs B on `objectivePrimaryMetric` — here `finalNetLiquidity`. A faithful bake of a solvent plan and a bake that goes bankrupt both land near 0, so the drift reads ≈0% and the check **passes a bankrupt plan**. Worse, `verify-harvest.mjs` guards its verdict on `a !== 0`, so at a=0 it prints no verdict at all. A Δ% on a metric whose target is 0 is not a fidelity measure.
-2. **The cockpit card shows the same number.** The recommended-move card reports the projected terminal; a plan headed for ruin displays "$0" — i.e. *on target*.
+2. **The cockpit card shows the same number.** The recommended-move card reports the projected terminal; a plan headed for ruin displays "\$0" — i.e. *on target*.
 
 This is the strongest possible argument for **F1: feasibility is a separate axis from fidelity, checked before apply, and never expressed as a percentage of the goal metric.**
 
@@ -545,7 +545,7 @@ Without A′ a user cannot tell whether the harvest broke the plan or the scenar
 - ~~The attribution to the drawdown levers is **inferred**, not yet measured.~~ **Measured 2026-07-26 and refuted** (§2.5). The general theory in §2.1–2.2 survives — an objective indifferent to solvency margin produces knife-edge plans — but it is `SPENDING`, not the drawdown levers, that carries it here. Worth keeping as a caution: the predicted signature (`drawdownWeight::super` drawn first, ahead of preservation age) was *visibly present in the harvested params* and still not load-bearing. A plausible-looking artifact in a harvested scenario is not evidence.
 - P3 (statutory-knot drawdown schedules) has therefore **lost its motivating case** and should not be built on this evidence. Worse, §2.5 measures a **negative VoTV** for spending — the schedule is 8 years worse than its own mean held flat — which is a direct hit on rung 2 and points at design 39 §13.13.2's rung-3 prediction (guardrail spending, design 26) instead.
 - ~~§2.5's central puzzle is unresolved.~~ **Resolved (§2.7):** it is **not** primarily a harvest defect. λ saturates at the boundary, μ's calibration assumes a gradient that has vanished, and the controller commits plans its own rollout flags as failed. See §10 for the revised priority.
-- **The reproduction is not exact.** `epoch-solvency.mjs` reconstructs the pre-run scenario by reverting spending to the preserved pre-MPC bands, but leaves the other harvested params as the starting point, and runs 34 epochs to age 80 against the original's ~42 to age 89 at a different CEM seed/budget. Its committed levels ($7,596–$8,037) are tighter than the saved scenario's ($7,489–$10,000). Every *mechanism* reported here is directly observed; the specific ruin date is not reproduced and should not be quoted as such.
+- **The reproduction is not exact.** `epoch-solvency.mjs` reconstructs the pre-run scenario by reverting spending to the preserved pre-MPC bands, but leaves the other harvested params as the starting point, and runs 34 epochs to age 80 against the original's ~42 to age 89 at a different CEM seed/budget. Its committed levels (\$7,596–\$8,037) are tighter than the saved scenario's (\$7,489–\$10,000). Every *mechanism* reported here is directly observed; the specific ruin date is not reproduced and should not be quoted as such.
 - The `--spend-range` and `--goal` flags are not cosmetic. Both were needed to reproduce the behaviour and neither is the default; a lab result on this scenario without both is measuring a different system.
 - Nothing here makes an open-loop plan as good as the controller. It makes it **solvent**, and states what it cost. §13.7's open-loop caveat stands unchanged and still belongs on the panel.
 - A margin floor is a robustness heuristic, not a guarantee. Multi-seed feasibility (F2b) is closer to honest; full chance-constrained harvest is design 39 §10 Q5's territory and stays out of scope.

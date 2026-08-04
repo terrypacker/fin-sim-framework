@@ -389,8 +389,8 @@ saved out of Excel, since Excel always writes one.
 Reference artifact: **`scenarios/example-tax-report.csv`** (columns 1–15 as saved; `personKey` and
 `currency` per §5.1 append to each row as empty/`USD`).
 
-Scenario: MFJ, 2025 bracket table. Ordinary income $300,000; $23,000 pre-tax 401(k); $40,000 LTCG;
-$8,000 interest and dividends; no foreign activity.
+Scenario: MFJ, 2025 bracket table. Ordinary income \$300,000; \$23,000 pre-tax 401(k); \$40,000 LTCG;
+\$8,000 interest and dividends; no foreign activity.
 
 | line | label | rowType | amount | rate | lower | upper | bracketIncome | bracketTax |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
@@ -427,7 +427,7 @@ The three checks this makes possible, all one spreadsheet formula each:
 3. Lines 8 + 9 + 10 + 11 + 12 = 52,798.00 = line 13, and line 13 − line 14 = line 15.
 
 Note how check 2 falls out of the LTCG differential too: `Σ bracketIncome where parentLine = 9` =
-40,000.00 = line 6, confirming the whole gain landed in the 15% band given $247,000 of ordinary
+40,000.00 = line 6, confirming the whole gain landed in the 15% band given \$247,000 of ordinary
 income beneath it.
 
 ---
@@ -820,8 +820,8 @@ On the reference scenario's 2033 US return:
 | Passive — credit taken | **521.58** |
 | Passive — carryforward remaining | 420,604.68 |
 
-$393,770 of AU tax was paid, $522 was creditable, and $420,605 went to carryforward — because the
-passive basket's *numerator* is $3,186 while the denominator includes the whole $996k of taxable
+\$393,770 of AU tax was paid, \$522 was creditable, and \$420,605 went to carryforward — because the
+passive basket's *numerator* is \$3,186 while the denominator includes the whole \$996k of taxable
 income. The limitation arithmetic is internally consistent; what the worksheet raises is whether the
 **AU-source capital gain that generated that tax is reaching a basket numerator at all**
 (`foreignGeneralIncomeYTD` / `foreignPassiveIncomeYTD`), given the denominator plainly includes the
@@ -833,7 +833,7 @@ deliberately — it changes lifetime tax and belongs in its own change.
 
 ## 14. The §904 finding, run down — AU tax on US-source income was creditable
 
-§13.4 flagged that the 2033 return credited $522 against $393,770 of "foreign tax". Investigating it
+§13.4 flagged that the 2033 return credited \$522 against \$393,770 of "foreign tax". Investigating it
 turned up a real over-relief defect. **The §904 numerator was correct; the pool funding was not.**
 
 ### 14.1 The company gain is US-source, so the numerator was right
@@ -866,9 +866,9 @@ least the AU tax on it. On a large capital gain it is not: AU taxes at ~45% whil
 | Staged as creditable US foreign tax (old) | **610,343** → 393,770 USD |
 
 Essentially the *entire* AU liability was tax on the US-source gain, and essentially all of it was
-staged as creditable. §904 correctly refused to credit it that year ($522 taken) — but the unused
-$420,605 banked as a 10-year carryforward vintage. From 2040, with `currentTax` at zero because AU
-income had ceased, the pool funded credits of $655–1,503 **every year, entirely from carryover**.
+staged as creditable. §904 correctly refused to credit it that year (\$522 taken) — but the unused
+\$420,605 banked as a 10-year carryforward vintage. From 2040, with `currentTax` at zero because AU
+income had ceased, the pool funded credits of \$655–1,503 **every year, entirely from carryover**.
 The over-relief was deferred, not prevented — the exact failure mode design 52 was written to kill.
 
 ### 14.3 The fix
@@ -898,8 +898,8 @@ limitation already blocked the bulk in-year; what leaked was the decade of carry
 after AU income stopped. Golden re-pinned; guarded by `ftc-us-source-not-creditable.test.mjs`
 (FTC-US-1…FTC-US-9), including an end-to-end assertion that the pool stays bounded.
 
-**Known gap:** under the A$1,000 FITO de-minimis shortcut the ATO limit is deliberately not
-computed, so `fitoLimit` is null and nothing is excluded. The US tax on US-source income is ≤A$1,000
+**Known gap:** under the A\$1,000 FITO de-minimis shortcut the ATO limit is deliberately not
+computed, so `fitoLimit` is null and nothing is excluded. The US tax on US-source income is ≤A\$1,000
 in those years, so the exposure is negligible — but it is an approximation, not an exact rule.
 
 ### 14.4 Retracted: the "`taxYear` freezes at 2041" finding
