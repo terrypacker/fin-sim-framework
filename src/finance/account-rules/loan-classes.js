@@ -52,6 +52,8 @@ export function synthesizeLoanForProperty(prop) {
     // null keeps the fixed absolute `interestRate` (back-compat).
     primeSpread:       prop.mortgagePrimeSpread ?? null,
     monthlyPayment:    prop.monthlyMortgage      ?? 0,
+    // Interest-only mortgage (design 86 G2). Absent ⇒ false ⇒ the P&I path, byte-for-byte.
+    interestOnly:      prop.mortgageInterestOnly ?? false,
     linkedPropertyKey: prop.stateKey,
     country:           prop.country ?? 'US',
     currency:          prop.currency ?? null,
@@ -206,9 +208,18 @@ export class LoanPaymentHandler extends HandlerEntry {
       const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
       const cash      = state[cashKey];
       const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * resolveLoanRate(state, loan) / 12);
-      // Never pay past payoff: cap at the balance plus this month's interest. All
-      // loan-side figures (interest, payment, balance) are in the LOAN's currency.
-      const payment   = Math.min(loan.monthlyPayment ?? 0, balance + interest);
+      // Interest-only (design 86 G2): pay exactly the accrued interest, so the
+      // principal is flat by construction and the payment tracks a variable
+      // Prime-linked rate month by month. A FULLY offset IO loan accrues nothing and
+      // therefore costs nothing — payment 0 falls through the guard below, which is
+      // the correct cash flow, not a skipped payment.
+      //
+      // Otherwise: never pay past payoff — cap at the balance plus this month's
+      // interest. All loan-side figures (interest, payment, balance) are in the
+      // LOAN's currency.
+      const payment   = loan.interestOnly
+        ? interest
+        : Math.min(loan.monthlyPayment ?? 0, balance + interest);
       if (payment <= 0) continue;
 
       // FX (design 54 P4): the payment is denominated in the loan's currency, but the

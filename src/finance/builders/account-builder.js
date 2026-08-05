@@ -95,12 +95,15 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._monthlyPayment    = 0;
     this._linkedPropertyKey = null;
     this._paymentSourceKey  = null;
+    this._interestOnly      = false;
   }
 
   interestRate(v)      { this._interestRate      = v; return this; }
   monthlyPayment(v)    { this._monthlyPayment    = v; return this; }
   linkedPropertyKey(v) { this._linkedPropertyKey = v; return this; }
   paymentSourceKey(v)  { this._paymentSourceKey  = v; return this; }
+  /** Interest-only: the payment is derived as the accrued interest (design 86 G2). */
+  interestOnly(v = true) { this._interestOnly    = v; return this; }
 
   build() {
     return new LoanAccount(this._balance, {
@@ -109,6 +112,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       monthlyPayment:    this._monthlyPayment,
       linkedPropertyKey: this._linkedPropertyKey,
       paymentSourceKey:  this._paymentSourceKey,
+      interestOnly:      this._interestOnly,
     });
   }
 }

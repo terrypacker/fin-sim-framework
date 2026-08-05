@@ -33,6 +33,10 @@
  *   companyEquity     {stateKey: {...}} per-equity overrides on tranches the scenario
  *                                      ALREADY carries (sale year, value, …)
  *   property          {stateKey: {...}} per-property overrides (sale year, value, costs)
+ *   loan              {loanKey: {...}}  per-loan overrides (balance, payment, rate,
+ *                                       interestOnly) — works on a synthesized
+ *                                       mortgage or a standalone LoanAccount
+ *   offset            {offsetKey: {...}} offset balance, and where the freed cash goes
  *   spendingStrategy  string           FIXED | GUARDRAIL | EXPLICIT_BANDS | …
  *   monthlyExpenses   number           the raw expense line (EXCLUDES loan payments)
  *   spendTotal        number           all-in monthly outflow INCLUDING mortgage
@@ -79,6 +83,14 @@ export function buildVariant(cfg, levers = {}) {
   }
   if (levers.property) {
     for (const [stateKey, o] of Object.entries(levers.property)) applyProperty(out, set, stateKey, o);
+  }
+  // Loans before offsets: `offset.deployTo` is a wealth-preserving MOVE, and sizing an
+  // offset against its loan (the common case) needs the loan's final balance.
+  if (levers.loan) {
+    for (const [loanKey, o] of Object.entries(levers.loan)) applyLoan(out, set, loanKey, o);
+  }
+  if (levers.offset) {
+    for (const [stateKey, o] of Object.entries(levers.offset)) applyOffset(out, stateKey, o);
   }
   if (levers.stochastic) applyStochastic(out, set, levers.stochastic);
   // Accepts one spec or a LIST applied in order. The list form exists because a study
@@ -346,6 +358,194 @@ export function applyProperty(cfg, set, stateKey, o = {}) {
   }
 }
 
+// ─── debt levers (design 86) ─────────────────────────────────────────────────
+
+/**
+ * Per-loan overrides, keyed by the LOAN's state key.
+ *
+ *   balance        number   outstanding principal
+ *   monthlyPayment number   fixed P&I payment (inert when interestOnly)
+ *   primeSpread    number|null   rate = Prime(country,t) + spread; null ⇒ fixed
+ *   interestRate   number   the fixed absolute rate (used only when primeSpread is null)
+ *   interestOnly   boolean  pay exactly the accrued interest (design 86 G2)
+ *
+ * **Two places a loan can come from**, and this writes whichever exists:
+ *
+ *  1. A mortgage — the loan does not exist as an authored account at all. It is
+ *     SYNTHESIZED at build time from the property record's `mortgage*` /
+ *     `monthlyMortgage` fields (`synthesizeLoanForProperty`, design 54 P2), under the
+ *     deterministic key `${propStateKey}Loan`. So the fields to write are on the
+ *     PROPERTY, not on any account.
+ *  2. A standalone `LoanAccount` in `cfg.accounts`.
+ *
+ * In both cases a *persisted* `initialState[loanKey]` may also exist — a workbench
+ * export carries one — and it shadows whatever the toolset synthesizes. Writing the
+ * record without the state entry gives a lever that is silently inert against exactly
+ * the configs studies are run on.
+ *
+ * `monthlyPayment` is left alone when absent, which is a trap worth knowing:
+ * a payment below the accrued interest does not error, it negatively amortizes
+ * (design 86 G2). Raising `balance` without raising the payment is how a study
+ * silently ends up measuring a runaway loan. Prefer `interestOnly: true`, which
+ * derives the payment and cannot be set wrong.
+ */
+export function applyLoan(cfg, set, loanKey, o = {}) {
+  const acct = (cfg.accounts ?? []).find(a => a.stateKey === loanKey);
+  const prop = (cfg.realProperties ?? []).find(p => `${p.stateKey}Loan` === loanKey);
+  const st   = cfg.initialState?.[loanKey];
+  if (!acct && !prop && !st) throw new Error(`loan lever: no loan "${loanKey}" `
+    + `(have: ${loanKeys(cfg).join(', ') || 'none'})`);
+
+  // record field → (property field, loan/account field)
+  const MAP = {
+    balance:        ['mortgageBalance',      'balance'],
+    monthlyPayment: ['monthlyMortgage',      'monthlyPayment'],
+    primeSpread:    ['mortgagePrimeSpread',  'primeSpread'],
+    interestRate:   ['mortgageInterestRate', 'interestRate'],
+    interestOnly:   ['mortgageInterestOnly', 'interestOnly'],
+  };
+
+  for (const [field, [propField, loanField]] of Object.entries(MAP)) {
+    if (!(field in o)) continue;          // `in`, not != null: primeSpread null is meaningful
+    const v = o[field];
+    if (prop) prop[propField] = v;
+    if (acct) acct[loanField] = v;
+    if (st)   st[loanField]   = v;
+  }
+
+  // The AU/US real-property toolsets only schedule a LOAN_PAYMENT event for a
+  // property with BOTH a positive mortgageBalance and a positive monthlyMortgage.
+  // An interest-only mortgage derives its payment, so `monthlyMortgage` is inert —
+  // but leaving it at 0 means no payment event is ever scheduled and the loan runs
+  // free. Seed a placeholder so the event exists.
+  if (prop && o.interestOnly && !(prop.monthlyMortgage > 0)) {
+    prop.monthlyMortgage = 1;
+    if (st) st.monthlyPayment = 1;
+  }
+
+  // `prop.*` params are read by the param→node cascade on the compile branch and
+  // would otherwise re-stamp the record from a stale param value.
+  if (prop && 'balance' in o) set(`prop.${prop.stateKey}.mortgageBalance`, o.balance);
+}
+
+/** Every loan state key this cfg can address, for a useful error message. */
+function loanKeys(cfg) {
+  const keys = new Set();
+  for (const a of cfg.accounts ?? []) if (a.type === 'loan' || a.__type === 'LoanAccount') keys.add(a.stateKey);
+  for (const p of cfg.realProperties ?? []) if ((p.mortgageBalance ?? 0) > 0) keys.add(`${p.stateKey}Loan`);
+  for (const [k, v] of Object.entries(cfg.initialState ?? {})) if (v?.type === 'loan') keys.add(k);
+  return [...keys];
+}
+
+/**
+ * Offset-account overrides, keyed by the offset's state key.
+ *
+ *   balance   number    the offset's cash balance
+ *   deployTo  stateKey  where the DIFFERENCE goes (see below)
+ *
+ * **`deployTo` moves value, it does not create it.** Lowering an offset from X to Y
+ * without a destination destroys `X − Y` of wealth, and arms that don't hold total
+ * wealth constant are not comparable — the whole point of an offset study is *where*
+ * a fixed pot sits, not how big it is. Raising the balance pulls the difference back
+ * out of `deployTo` the same way.
+ *
+ * Holdings are kept in step with the balance on both sides. An account's balance and
+ * its holdings' `marketValue` are separate stores that do NOT self-reconcile: editing
+ * one leaves the other stale, and the next year-end sync silently reverts to whichever
+ * the engine treats as authoritative. `costBasis` is scaled with `marketValue` so
+ * moving cash into a taxable account does not manufacture a phantom capital gain.
+ *
+ * An AU offset is AUD and the obvious `deployTo` targets are often USD, so the move is
+ * FX-converted at the scenario's `exchangeRateUsdToAud`. Moving the raw number across
+ * a currency boundary would conserve *digits* rather than value — an A$500k offset
+ * emptied into a USD brokerage would create roughly a third of itself out of nothing,
+ * and every arm would be measuring a different-sized pot.
+ */
+export function applyOffset(cfg, stateKey, o = {}) {
+  if (o.balance == null) return;
+  const target = resolveAccountPair(cfg, stateKey, 'offset lever');
+  const before = target.balance();
+  const delta  = before - o.balance;      // > 0 ⇒ this much leaves the offset (source currency)
+
+  target.setBalance(o.balance);
+
+  if (o.deployTo && Math.abs(delta) > 0.005) {
+    const dest = resolveAccountPair(cfg, o.deployTo, 'offset lever deployTo');
+    const rate = fxFactor(cfg, target.currency(), dest.currency());
+    dest.setBalance(dest.balance() + delta * rate);
+  }
+}
+
+/**
+ * Multiplier converting an amount in `from` into `to`, using the scenario's
+ * USD→AUD rate. Unknown or equal currencies ⇒ 1.
+ */
+function fxFactor(cfg, from, to) {
+  if (!from || !to || from === to) return 1;
+  const usdToAud = numericParams(cfg).get('exchangeRateUsdToAud');
+  if (!usdToAud) throw new Error(
+    `offset lever: moving ${from} → ${to} needs exchangeRateUsdToAud, which this cfg does not set`);
+  if (from === 'USD' && to === 'AUD') return usdToAud;
+  if (from === 'AUD' && to === 'USD') return 1 / usdToAud;
+  throw new Error(`offset lever: no rate for ${from} → ${to}`);
+}
+
+/**
+ * Both representations of one account — the authored record in `cfg.accounts` and the
+ * persisted `cfg.initialState` entry — behind a single balance accessor that keeps
+ * them, and their holdings, consistent. Either may be absent; at least one must exist.
+ */
+function resolveAccountPair(cfg, stateKey, who) {
+  const rec = (cfg.accounts ?? []).find(a => a.stateKey === stateKey);
+  const st  = cfg.initialState?.[stateKey];
+  if (!rec && !st) throw new Error(`${who}: no account "${stateKey}"`);
+
+  const balance = () => (rec?.balance ?? rec?.initialValue ?? st?.balance ?? 0);
+
+  // `currency` is a {code, symbol} object on a record and sometimes a bare string.
+  const currency = () => {
+    const c = rec?.currency ?? st?.currency;
+    return (typeof c === 'string' ? c : c?.code) ?? null;
+  };
+
+  const setBalance = (next) => {
+    const v = Math.round(next * 100) / 100;
+    for (const node of [rec, st]) {
+      if (!node) continue;
+      const prev = node.balance ?? node.initialValue ?? 0;
+      node.balance = v;
+      if ('initialValue' in node) node.initialValue = v;
+      scaleHoldings(node.holdings, prev, v);
+    }
+  };
+
+  return { balance, currency, setBalance };
+}
+
+/**
+ * Rescale an account's holdings from `prev` to `next` total, preserving the mix.
+ * A holdings-less (plain cash) account is left alone. When `prev` is 0 there is no
+ * mix to preserve, so a single holding absorbs the whole amount and a multi-holding
+ * account is left for the caller to notice — silently inventing an allocation is
+ * worse than an obviously untouched one.
+ */
+function scaleHoldings(holdings, prev, next) {
+  if (!Array.isArray(holdings) || holdings.length === 0) return;
+  if (prev > 0.005) {
+    const k = next / prev;
+    for (const h of holdings) {
+      h.marketValue = Math.round((h.marketValue ?? 0) * k * 100) / 100;
+      if (h.costBasis != null) h.costBasis = Math.round(h.costBasis * k * 100) / 100;
+    }
+    return;
+  }
+  if (holdings.length === 1) {
+    const h = holdings[0];
+    h.marketValue = next;
+    if (h.costBasis != null) h.costBasis = next;   // fresh money: basis = market, no phantom gain
+  }
+}
+
 /**
  * Read one param from EITHER store, list first — the same precedence
  * `numericParams` uses, extended to non-numeric values (schedules are arrays).
@@ -563,7 +763,41 @@ export function applyStochastic(cfg, set, s = {}) {
  * With `ownStrategy: false` the bands are NOT installed and no strategy is set: only
  * `monthlyExpenses` moves, to the mortgage-adjusted level. Use that when another
  * spending strategy (GUARDRAIL, …) must stay in control — see the call site.
+ *
+ * An INTEREST-ONLY mortgage (design 86 G2) has no fixed payment to subtract — the
+ * engine derives it monthly from the live rate and the offset-reduced principal — so
+ * `monthlyMortgage` on such a property is a placeholder, not a cash flow. Its debt
+ * service is estimated here at the t0 rate. That estimate drifts as Prime moves and as
+ * an offset drains, which is a real limitation: arms that differ in loan structure do
+ * not hold total outflow exactly constant, only approximately. Sweep the rate rather
+ * than trusting one cell.
  */
+/**
+ * A mortgaged property's monthly debt service at t0, in the property's currency.
+ *
+ * P&I: the authored `monthlyMortgage`. Interest-only: the accrued interest on the
+ * offset-reduced principal at the t0 rate, because `monthlyMortgage` is inert there.
+ * A Prime-linked loan resolves `Prime(country) + spread` from the params, falling back
+ * to the absolute `mortgageInterestRate`.
+ */
+function monthlyDebtService(cfg, prop) {
+  if (!prop) return 0;
+  if (!prop.mortgageInterestOnly) return prop.monthlyMortgage ?? 0;
+
+  const params = numericParams(cfg);
+  const prime  = params.get(prop.country === 'AU' ? 'auPrimeRate' : 'usPrimeRate');
+  const rate   = (prop.mortgagePrimeSpread != null && prime != null)
+    ? prime + prop.mortgagePrimeSpread
+    : (prop.mortgageInterestRate ?? 0);
+
+  // Offsets linked to this property suppress the interest-bearing principal 1:1.
+  let offset = 0;
+  for (const a of cfg.accounts ?? []) {
+    if (a.offsetsPropertyKey === prop.stateKey) offset += Math.max(0, a.balance ?? 0);
+  }
+  return Math.max(0, (prop.mortgageBalance ?? 0) - offset) * rate / 12;
+}
+
 export function applySpendTotal(cfg, set, total, propertyKey, { ownStrategy = true } = {}) {
   const mortgaged = (cfg.realProperties ?? []).filter(p => (p.monthlyMortgage ?? 0) > 0);
   const prop = propertyKey
@@ -576,7 +810,7 @@ export function applySpendTotal(cfg, set, total, propertyKey, { ownStrategy = tr
       + `(${mortgaged.map(p => p.stateKey).join(', ')}) — pass spendTotalProperty to pick one`);
   }
 
-  const mortgage = prop?.monthlyMortgage ?? 0;
+  const mortgage = monthlyDebtService(cfg, prop);
   const saleYear = prop
     ? (prop.plannedSaleYear ?? cfg.initialState?.[prop.stateKey]?.plannedSaleYear ?? null)
     : null;

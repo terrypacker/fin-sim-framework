@@ -691,6 +691,7 @@ export class ScenarioSerializer {
       d.monthlyPayment    = account.monthlyPayment    ?? 0;
       d.linkedPropertyKey = account.linkedPropertyKey ?? null;
       d.paymentSourceKey  = account.paymentSourceKey  ?? null;
+      d.interestOnly      = account.interestOnly      ?? false;
     }
     // OffsetAccount (cash-like, linked) field (design 53 §3 / 54 P3).
     if (account.type === 'offset') {
@@ -769,6 +770,7 @@ export class ScenarioSerializer {
       rentalExpenseRatio:         p.rentalExpenseRatio         ?? 0.25,
       mortgageInterestRate:       p.mortgageInterestRate       ?? 0,
       mortgagePrimeSpread:        p.mortgagePrimeSpread        ?? null,
+      mortgageInterestOnly:       p.mortgageInterestOnly       ?? false,
       landValueRatio:             p.landValueRatio             ?? 0.2,
       annualDepreciationOverride: p.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
@@ -823,6 +825,7 @@ export class ScenarioSerializer {
       rentalExpenseRatio:         d.rentalExpenseRatio         ?? 0.25,
       mortgageInterestRate:       d.mortgageInterestRate       ?? 0,
       mortgagePrimeSpread:        d.mortgagePrimeSpread        ?? null,
+      mortgageInterestOnly:       d.mortgageInterestOnly       ?? false,
       landValueRatio:             d.landValueRatio             ?? 0.2,
       annualDepreciationOverride: d.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
@@ -1112,6 +1115,8 @@ export class ScenarioSerializer {
       opts.monthlyPayment    = d.monthlyPayment    ?? 0;
       opts.linkedPropertyKey = d.linkedPropertyKey ?? null;
       opts.paymentSourceKey  = d.paymentSourceKey  ?? null;
+      // design 86 G2 — absent on legacy saves ⇒ false ⇒ the P&I path unchanged.
+      opts.interestOnly      = d.interestOnly      ?? false;
     }
     // OffsetAccount (cash-like, linked) opts (design 53 §3 / 54 P3).
     if (d.__type === 'OffsetAccount') {
