@@ -1,6 +1,8 @@
 # 76 — AU per-person income attribution
 
-**Status: COMPLETE — P1–P5 implemented (Gaps A, B, C, D).** §7's four questions are answered and settled.
+**Status: COMPLETE for the attribution work — P1–P5 implemented (Gaps A, B, C, D).** §7's four questions are answered and settled.
+**§8 is a later, still-OPEN addition on a different axis** — the *quantum* of a franked dividend rather than
+its split — and it blocks expanding AU share holdings. Nothing in §1–§7 depends on it.
 P1 landed bit-for-bit inert on both scenarios, as its phase contract required. P2 then moved
 attribution onto true ownership: **+\$2** on the reference scenario (where all re-attributed AU income
 is flat-rate or joint) but **+2.15%** on the design 52 default (where a solely-owned account pays
@@ -645,3 +647,143 @@ out-of-funds in 2060. Sensitivity analysis on this change must read `cumulativeT
 4. **Saved-state compatibility.** Existing saved states carry non-zero household scalars. P5's
    assertion needs either a migration that redistributes them by ownership at load, or an explicit
    version gate.  Answer: Either is fine, but we will need to upgrade one scenario that is currently loaded in the chrome debug session.
+
+---
+
+## 8. The quantum, not the split — AU franked dividends  🔶 OPEN
+
+**Status: OPEN, blocking any expansion of AU share holdings. Not yet scheduled.** Raised
+2026-08-04 while closing design 84 G10 (see `design/57` Part 3), which surfaced the franking
+offset cap and prompted the question "is it safe to ignore this if AU share support grows?"
+
+This section is about a different axis from the rest of the document. §1–§7 fix **who** an
+AU-assessable dollar belongs to. This is about **how many dollars there are** on a franked
+dividend before anyone splits them — and a perfect attribution of a wrong quantum is still
+wrong. It lands here rather than in its own design because franked dividends are already this
+document's worked example: P2's **+2.15%** on the design 52 default came precisely from "a
+solely-owned account paying franked dividends into progressive brackets", and P2 is the phase
+that made those credits attributable at all.
+
+### 8.1 What the model actually does
+
+Established by **running** `AU_DIVIDEND_FRANKED_RESIDENT_TAX` (`au-tax-module-2026.js`)
+directly, not by reading it — the same method §2 credits for catching Gap A. A A\$7,000 fully
+franked resident dividend produces:
+
+```
+auOrdinaryIncomeYTD    -> 0        (per-person map likewise 0)
+franking credit booked -> 7,000
+usOrdinaryIncomeYTD    -> 7,000
+```
+
+The US side is right. The AU side books **no assessable income at all** and a credit equal to
+**100% of the cash dividend**.
+
+### 8.2 Three gaps, ranked — and they do not cancel
+
+| # | Gap | Direction | Size |
+|---|---|---|---|
+| 1 | **No assessable income.** ITAA 1997 Div 207-20 includes *both* the cash dividend and the franking gross-up in assessable income, then gives an offset equal to the credit. The model books neither. | Favours household | Large |
+| 2 | **Credit = 100% of cash.** The credit on a fully franked dividend is `cash × 30/70` ≈ 0.4286 × cash at a 30% company rate — overstated ≈ **2.33×**. | Favours household | Large |
+| 3 | **Excess forfeited, not refunded.** `frankingOffset = Math.min(auFrankingCreditYTD, baseTax)` in `au-tax-rates-base.js`. Real franking offsets are **refundable** for individuals and complying super funds (ITAA 1997 s67-25); the cap also excludes the Medicare levy from the offsettable base. | Costs household | Small |
+
+Gaps 1 and 2 compound into a single distortion: a franked dividend is currently a **pure tax
+shield** that offsets tax on *other* income, rather than income that is roughly neutral at a
+30% marginal rate. It is tempting to assume gap 3 offsets them. It does not — they run two
+against one, and they are not close in magnitude:
+
+| Marginal rate | Correct net AU tax on a A\$7,000 fully franked dividend | Model | Swing |
+|---|---:|---:|---:|
+| 45% | 4,500 − 3,000 = **1,500** | −7,000 (shields other income) | **8,500** |
+| 30% | 3,000 − 3,000 = **0** | −7,000 | **7,000** |
+| 0% (retiree, no other income) | 0 − 3,000 = **−3,000 refund** | 0 (offset capped at a zero `baseTax`) | **−3,000** |
+
+Only the last row is gap 3, and only there does the model under-credit. Note it is the
+**low-income filer** who is short-changed — the same person design 84 G10 landed on, for the
+same structural reason: their `baseTax` is too small to absorb anything.
+
+### 8.3 Why it is inert today
+
+Franking credits arise only on `auStockAccount`. In the reference scenario they are non-zero
+(A\$4,142 in 2031 rising to A\$9,035 by 2039) but land **entirely on `primary`** — a solely-owned
+account under P2's attribution — whose `baseTax` runs A\$51k–127k across those years. So the
+gap-3 cap never binds, and gaps 1–2 are a steady overstatement nobody has had reason to price.
+A household holding no AU shares sees nothing at all.
+
+**Expanding AU share holdings turns all three live simultaneously**, and gap 2's 2.33× is a
+multiplier on whatever the new holdings pay. This is the reason the section exists: the model
+is currently accurate enough for a household that barely holds Australian equities and
+systematically over-generous for one that does.
+
+### 8.4 Two more, if AU shares go into super
+
+- **Franking credits inside the fund are unmodelled**, and `super-tax-rate.js` says so
+  explicitly in its "NOT modelled here" list. The fund rate is 15%, and **0% in pension phase**
+  (`superEarningsTaxRate`), against a 30% credit — so a complying fund holding franked
+  Australian shares receives a systematic **cash refund**, and in pension phase the entire
+  credit is refundable. This runs **opposite** to gaps 1–2: it understates super returns.
+- Interaction with design 77's Div 295 withholding needs checking — the fund's own offsets are
+  what make the *effective* rate on fund earnings lower than the headline 15%.
+
+### 8.5 Cross-border — flag, do not assert
+
+Not resolved here, and deliberately not asserted:
+
+- A franking credit is **company**-paid, so it is likely not a foreign income tax *paid by the
+  taxpayer* for IRC §901 purposes, and should probably not generate a US FTC.
+- Because the AU side currently assesses nothing, AU tax paid on a franked dividend is ~0,
+  which feeds `ftcYTD`. Whatever the right answer to the first bullet, the number flowing today
+  is a by-product of gap 1 rather than a considered treatment.
+
+Check both against **`design/83`** before trusting any franked-dividend FTC figure. Per the
+standing constraint, `ato.gov.au` and AustLII 403 on fetch — get the PDFs on disk and read them
+with `pdftotext -layout`, or mark the treatment unverified.
+
+### 8.6 The first decision is a spec amendment, not a code change
+
+`design/requirements.md` line 62 specifies EVT-26's AU treatment as **"Franking Credit"**,
+where EVT-28 (unfranked resident) says **"Ordinary Income"**. Gap 1 is therefore a
+**deliberate-looking spec-level simplification**, not a code slip — the reducer implements the
+table faithfully. Nothing should be "fixed" in `au-tax-module-2026.js` until that row is
+amended, or the code and the spec will disagree and the next reader will trust the wrong one.
+
+Proposed EVT-26 row: AU treatment **"Ordinary Income (cash + gross-up) + Franking Credit
+offset"**, which is what Div 207-20 actually does and what makes EVT-26 and EVT-28 differ by
+the offset alone rather than by whether income exists.
+
+### 8.7 Suggested sequencing
+
+Deliberately ordered so the spec settles first and the two big gaps land together — fixing gap
+2 alone (shrinking the credit 2.33× with no offsetting income) would make franked dividends
+look *worse* than reality, which is a wrong answer arrived at by a correct edit.
+
+1. **Amend `design/requirements.md`** EVT-26 (and check EVT-27's non-resident row still reads
+   correctly against §0's fix).
+2. **Gaps 1 + 2 in one change** — carry the franking credit as `cash × rate/(1−rate)` on the
+   action, book `cash + credit` to `auOrdinaryIncomeYTD` (per-person via `accumulateByOwnership`,
+   as P2 already does for the credit), and keep the credit going where it goes today. The
+   company tax rate belongs in the rates module, not a literal: 30% is the full rate, but the
+   base-rate-entity rate is 25% and partial franking exists.
+3. **Gap 3** — make the offset refundable and widen its base past `baseTax`. Note this
+   **changes the design 71 §6 footing shape**: a refundable credit can drive the net negative,
+   so `verifyWorksheetRows` and the return's Net Tax Liability line both need to accept a
+   negative net rather than treating it as a violation. Do not simply relax the invariant —
+   distinguish "refund owed" from "clamped".
+4. **Super fund franking (§8.4)** — separate, and only if AU shares actually land in super.
+5. **Re-check §8.5 against design 83** once 1–3 have moved the AU-side numbers.
+
+**Open questions for this section:**
+
+1. **Is the 45-day qualified-person rule worth modelling?** Excess franking refunds are
+   contingent on holding the shares at risk for 45 days, with a small-shareholder exemption
+   (a franking-credit threshold, believed A\$5,000 — **verify against the authority**). For a
+   buy-and-hold retirement model every holding qualifies, so this is probably a documented
+   non-modelled simplification rather than work. Recommend: note it, do not build it.
+2. **Partial franking.** Everything above assumes 100% franked. Is a franking *percentage* per
+   holding worth carrying, or is fully-franked an acceptable default for ASX blue chips?
+   Recommend: a per-holding percentage defaulting to 100%, since it costs one field and the
+   alternative silently overstates credits on any partially franked payer.
+3. **Does gap 3's refundability change drawdown behaviour?** A refund is cash arriving that the
+   spending path does not currently expect from a tax settle. Confirm the AU tax-payment path
+   tolerates a negative liability rather than treating it as an unpayable bill — see the
+   standing `OUT_OF_FUNDS` escalation behaviour on the tax path.
