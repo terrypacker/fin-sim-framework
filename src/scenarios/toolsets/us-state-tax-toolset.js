@@ -17,6 +17,7 @@ import { ChangeStateResidencyHandler }
   from '../../finance/handlers/change-state-residency-handler.js';
 import { ChangeStateResidencyApplyReducer }
   from '../../finance/reducers/change-state-residency-apply-reducer.js';
+import { US_STATE_CODES } from '../../finance/tax/state/us-states.js';
 import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 
@@ -75,7 +76,7 @@ export const US_STATE_TAX = {
       },
       {
         key: 'stateMoveDestination', label: 'State Move Destination',
-        type: 'Enum', options: ['NE', 'HI', 'SD'], group: 'US Tax', mc: false, opt: true,
+        type: 'Enum', options: [...US_STATE_CODES], group: 'US Tax', mc: false, opt: true,
         defaultValue: null,
         description: 'Destination US state for the Jan-1 state move (design 34 §9).',
       },

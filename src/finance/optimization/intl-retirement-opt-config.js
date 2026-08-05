@@ -15,6 +15,7 @@ import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchem
          ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, buildSleeveWeightSchema } from '../../scenarios/intl-retirement-scenario.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES } from '../holdings/holdings-selection.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
+import { US_STATE_CODES }             from '../tax/state/us-states.js';
 import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
@@ -156,7 +157,7 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     paramKey: 'stateMoveDestination',
     label:    'State Move Destination',
     type:     OPT_PARAM_TYPES.ENUM,
-    values:   ['NE', 'HI', 'SD'],
+    values:   [...US_STATE_CODES],
     group:    'US Tax',
     enabled:  false,
   },

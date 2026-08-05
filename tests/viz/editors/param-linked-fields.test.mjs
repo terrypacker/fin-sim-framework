@@ -157,6 +157,40 @@ describe('Param-linked editor fields', () => {
     expect('monthlyWage' in editor._readForm(editor._rootEl)).toBe(false);
   });
 
+  test('Person residencyState routes through its param (primary only)', () => {
+    const param = { name: 'residencyState', value: 'HI', label: 'US Residency State',
+                    node: { type: 'person', id: 'primary', field: 'residencyState' } };
+    const links = new ParamFieldLinks([param]);
+
+    const primary = new PersonEditor({
+      container: makeMockContainer(),
+      node: { id: 'primary', name: 'Alice', citizen: ['US'], residencyState: null },
+      links,
+    });
+    primary.render();
+    const sel = primary._rootEl.querySelector('[data-id="residencyState"]');
+    // Reads the param, not the (null) person field.
+    expect(sel.value).toBe('HI');
+    expect(sel.closest('.node-field').querySelector('.param-link-badge')).toBeTruthy();
+    sel.value = 'SD';
+    fire(sel, 'change');
+    expect(param.value).toBe('SD');
+    expect('residencyState' in primary._readForm(primary._rootEl)).toBe(false); // owned by the param
+
+    // The spouse has no linked param, so the field is free and rides the payload.
+    const spouse = new PersonEditor({
+      container: makeMockContainer(),
+      node: { id: 'spouse', name: 'Bob', citizen: ['US'], residencyState: null },
+      links,
+    });
+    spouse.render();
+    const spouseSel = spouse._rootEl.querySelector('[data-id="residencyState"]');
+    expect(spouseSel.value).toBe('');
+    expect(spouseSel.closest('.node-field').querySelector('.param-link-badge')).toBeNull();
+    spouseSel.value = 'HI';
+    expect(spouse._readForm(spouse._rootEl).residencyState).toBe('HI');
+  });
+
   test('RealProperty plannedSaleYear routes through its param', () => {
     const param = { name: 'usHouseSaleYear', value: 2035,
                     node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } };
@@ -270,5 +304,21 @@ describe('Param-linked editor fields', () => {
     editor.render();
     expect(editor._rootEl.querySelector('[data-id="monthlyWage"]').value).toBe('4200');
     expect(editor._readForm(editor._rootEl).monthlyWage).toBe(4200);
+  });
+
+  test('Person residencyState is optional — blank round-trips as null', () => {
+    const editor = new PersonEditor({
+      container: makeMockContainer(),
+      node: { id: 'primary', name: 'Alice', citizen: ['US'], residencyState: 'HI' },
+      links: new ParamFieldLinks([]),
+    });
+    editor.render();
+    const sel = editor._rootEl.querySelector('[data-id="residencyState"]');
+    expect(sel.value).toBe('HI');
+    expect(editor._readForm(editor._rootEl).residencyState).toBe('HI');
+
+    // Selecting "None" stores null, not '' — Person's own default shape.
+    sel.value = '';
+    expect(editor._readForm(editor._rootEl).residencyState).toBeNull();
   });
 });
