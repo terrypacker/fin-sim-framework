@@ -26,6 +26,9 @@ fidelity, and the §11 questions are resolved (see **Decisions locked** below).
   serializer's framework-class list and the reducer coverage manifest. **Reference scenario
   net worth moves \$10,978,107 → \$10,914,370** — the reform now bites on post-2027 AU-resident
   gains (exemption of pre-2027 gains, offset by discount removal + 30% floor).
+- **Part 3 (done, 2026-08-04)** — the 30% top-up was added *outside* the offset clamp, so no
+  franking credit or FITO could reach it and the printed return did not foot. Reported as
+  design 84 G10 and misfiled there as a per-person attribution defect. See **Part 3** below.
 
 ### ⚠️ Post-implementation correction — TWO COUPLED BUGS zero out AU CGT (2026-07-11, OPEN)
 
@@ -177,6 +180,77 @@ What landed:
   `AU_TAX`; removed the dead EVT-CGT-RESET tests + coverage-manifest entry. A straddling lot now
   keeps its residency-step-up AU basis and applies the new regime to its **whole** gain (no
   apportionment, no pre-2027 carve-out) — covered by the new STRADDLE unit test.
+
+---
+
+### ✅ Part 3 (2026-08-04) — the top-up sat OUTSIDE the offsets
+
+Reported as **design 84 G10** ("the spouse's AU return does not foot in nine years") and filed
+there against design 76/77 per-person attribution. **That diagnosis was wrong**, and how it went
+wrong is the transferable part: the violation appeared on one filer and not the other, and a
+per-person defect is the obvious reading of a per-person symptom. It is a design 57 defect, and
+the split was a red herring — the spouse is simply the low-ordinary-income filer, the only one
+whose liability the 30% floor ever dominates. The primary's top-up is **0.00 in every year of
+the run**, because their ordinary income pushes every gain into the ≥30% brackets, which is the
+floor working as designed. One filer showing a defect is not evidence the defect is about
+filers.
+
+**The defect.** `netLiability` added the minimum-tax top-up *after* the offset clamp:
+
+```js
+netLiability = Math.max(0, baseTax + medicareLevy - frankingOffset - fito) + minTaxTopUp;
+```
+
+so the top-up was a levy no offset could reach. A return whose whole liability was the top-up
+paid it in full while its Foreign Income Tax Offset was clamped away against a zero `baseTax`
+and silently lost. The same shape sat in `netLiabilityPreFito`.
+
+Three things were mutually inconsistent, so the code was wrong under *either* reading of the
+reform:
+
+1. The **document** has always printed the top-up inside `Gross Tax`, with the Credits section
+   beneath it — i.e. as offsettable.
+2. The **§770-75 limit** is a difference of two `netLiabilityPreFito` values, both of which
+   include the top-up — so the offset was *sized* as though the top-up were offsettable.
+3. The **net** then applied it as though it were not.
+
+Resolved in favour of offsettable. §6.3 already defines the top-up as an incremental floor on
+the *gain's own marginal tax* and explicitly rejects whole-liability `max()` semantics; it
+floors the rate applied to the gain against the bracket schedule, and nothing in §1's sourced
+material makes it an anti-offset levy. So:
+
+```js
+netLiability = baseTax + medicareLevy + minTaxTopUp - frankingOffset - fito;
+```
+
+**A second, smaller defect fell out of it.** The A\$1,000 de-minimis shortcut skips the limit
+calculation entirely, so it could hand over more offset than the return had liability to absorb
+— which the old `Math.max(0, …)` swallowed silently. `fito` is now capped at the pre-FITO
+liability, so it means "offset actually **taken**", which is what the Credits line states and
+what the worksheet's "excess forfeited" row subtracts. A wasted de-minimis offset now shows as
+forfeited instead of vanishing.
+
+With both caps in place the net is a plain subtraction with no clamp, which is what makes
+design 71 §6's `Gross Tax + credits = Net Tax Liability` hold **by construction** rather than
+by luck.
+
+**Franking credits cannot trigger this** — `frankingOffset` is capped at `baseTax`, so it can
+never exceed `baseTax + medicareLevy` and never reached the clamp. Every observed violation
+showed zero franking credits. That cap is a separate, pre-2027 fidelity question (real franking
+credits are refundable and apply against the whole liability including the Medicare levy); it
+foots either way, so it is **not** part of this fix and is left open deliberately rather than
+widened in passing.
+
+**Inert except where it bites.** For FY≤2026 `minTaxTopUp` is 0 and the new formula collapses
+to the old one exactly. For FY2027+ it differs only when the offsets exceed `baseTax +
+medicareLevy` — the ordinary-income-dominated return, which is most of them, is untouched. The
+golden did not move and no baseline was re-taken. That is the same signature as design 84 G12:
+nothing in the committed corpus exercised the path, which is why 4,367 green tests and a
+passing golden coexisted with a return that did not add up.
+
+7 tests in `tests/unit/au-min-tax-topup-offsets.test.mjs`, 5 of which fail against the pre-fix
+code (the two that pass are the inertness assertions, which must pass both ways or they are
+testing nothing).
 
 ---
 

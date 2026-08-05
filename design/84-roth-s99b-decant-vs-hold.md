@@ -10,7 +10,7 @@
 | **G7** | an age-eligible Roth drawn by the ordinary drawdown path emitted no withdrawal-tax action, so s99B was never assessed | **IMPLEMENTED** (2026-07-31) |
 | **G9** | converted principal drawn on the generic path is invisible to the basis ledger, so its s99B-assessable slice escapes too | **IMPLEMENTED** (2026-08-04) — and the bias ran the *other* way |
 | **G11** | a conversion sent the source IRA's basis across contributions-first, so the rollover was almost all s99B corpus | **IMPLEMENTED** (2026-08-04) — pro-rata provenance split |
-| **G10** | the spouse's AU return does not foot in 9 years — credits appear on the return but are not reflected in the net | **OPEN — pre-existing, not design 84's** |
+| **G10** | the spouse's AU return does not foot — credits appear on the return but are not reflected in the net | **FIXED IN `design/57`** (2026-08-04) — *not* a per-person defect |
 | **G8** | a market shock revalues the balance without adjusting the basis ledger, stranding phantom `earningsBasis` | **IMPLEMENTED** (2026-08-04) — also fixed the bond-mark path |
 | **G12** | every earnings handler discards a negative-return year outright — the loss is never applied to balance or holdings | **IMPLEMENTED** (2026-08-04) — median max drawdown was 0.00% |
 | **G4** | no first-class lever for the Roth leg of the decant schedule | **IMPLEMENTED** (2026-07-31) |
@@ -996,6 +996,25 @@ document. It does mean the per-person AU return is not currently trustworthy as 
 line-by-line artifact, which matters for anything that reads the return rather than the
 netLiability total.
 
+**✅ FIXED 2026-08-04 — and the diagnosis above was wrong.** Not design 76/77 at all. The
+three "distinct patterns" are one defect: design 57's 30% CGT minimum-tax top-up was added
+*outside* the offset clamp in `netLiability`, so it was a levy no offset could reach, and
+the three patterns are just how much of the liability the top-up happened to be. Full
+write-up, including the second de-minimis defect it uncovered, in **`design/57` Part 3**.
+
+Worth keeping the wrong reasoning visible, because the inference was reasonable and still
+false: **a per-person symptom is not evidence of a per-person cause.** "The primary's
+return foots in every year" was read as *the split is broken*; it actually meant *the
+primary's ordinary income is high enough that the 30% floor never binds* — their top-up is
+0.00 in every year of the run. The mechanic was household-blind the whole time; only who
+it lands on was person-shaped. The check that would have distinguished the two — group the
+violations by which line item is non-zero rather than by which filer — costs one pass over
+the same CSV that was already open.
+
+The four-figures magnitude call was right and the "does not move any conclusion" call held:
+fixing it moves the study scenario's terminal net worth by **+0.09%**, in the expected
+direction (the household had been overpaying).
+
 ### G4 — no first-class lever for the Roth leg of the decant
 
 `earlyWithdrawalSchedule` is an array of per-year objects carrying both a `taxDeferredAmount`
@@ -1549,9 +1568,10 @@ P6 last, and the reasons are specific rather than a general preference for tidin
   overstate the cost of holding, both flatter the decant, and the margin they shade is now
   the margin the recommendation rests on.
 - **But not *every* gap.** G5 needs no code — the paired-delta method closed it. G10 is a
-  pre-existing per-person AU attribution defect that belongs to design 76/77, is four
-  figures against a six-figure charge, and should be fixed on its own terms rather than
-  held in front of this study.
+  pre-existing AU defect, four figures against a six-figure charge, to be fixed on its own
+  terms rather than held in front of this study. (Done 2026-08-04 — and it turned out to
+  belong to design 57, not design 76/77 as guessed here. Deferring it was still the right
+  call; the misattribution cost nothing because the deferral did not depend on it.)
 
 - **P6a — G12. ✅ DONE (2026-08-04).** Two-sided appreciation applies losses (with
   `debitLedgerForLoss` charging them to earnings before corpus); one-directional receipts
