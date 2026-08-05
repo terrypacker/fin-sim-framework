@@ -243,8 +243,18 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // the same tax twice, once out of the fund and once out of the member's pocket.
     // It stays on the return as a memo line only. Same treatment as the two other
     // withheld-at-source buckets, `auSuperDeathTaxYTD` and `neInheritanceTaxYTD`.
-    const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy - frankingOffset)
-                              + minTaxTopUp;
+    //
+    // Design 57's minimum-tax top-up is INSIDE the offset, not bolted on after it.
+    // It was added outside the clamp, which made it a levy no offset could reach:
+    // a return whose whole liability was the top-up paid it in full while its
+    // franking credits and FITO evaporated (design 84 G10). The reform floors the
+    // rate applied to the *gain* against the bracket schedule (§6.3 — an
+    // incremental top-up, explicitly not a floor on the whole liability); it is not
+    // an anti-offset rule, and nothing in the sourced material makes it one. The
+    // return already presented it this way — the top-up sits inside Gross Tax with
+    // the Credits section beneath it — so this brings the arithmetic into line with
+    // the document the model has been printing all along.
+    const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy + minTaxTopUp - frankingOffset);
 
     // Split baseTax into its ordinary-income and capital-gain components for
     // display (design 57 report breakdown). AU has no separate CGT schedule of
@@ -327,11 +337,25 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           fitoLimit = Math.max(0, a.netLiabilityPreFito - without);
           fito      = Math.min(foreignTaxAud, fitoLimit);
         }
+        // The offset is non-refundable: it can only wipe out AU tax that exists.
+        // The §770-75 limit already implies this (it is a difference of two
+        // pre-FITO liabilities, so it can never exceed the larger one), but the
+        // de-minimis shortcut skips the limit entirely and can hand over more
+        // offset than the return has liability to absorb. Capping here rather than
+        // clamping the net below keeps `fito` meaning "offset actually taken",
+        // which is what the Credits line states and what the "excess forfeited"
+        // worksheet row subtracts — so a wasted de-minimis offset now shows up as
+        // forfeited instead of vanishing silently.
+        fito = Math.min(fito, a.netLiabilityPreFito);
       }
 
       // Design 77 §5.3 — super fund tax excluded (see _assessResidentPreFito).
-      const netLiability = Math.max(0, a.baseTax + a.medicareLevy - a.frankingOffset - fito)
-                         + a.minTaxTopUp;
+      // No clamp: `frankingOffset` is capped at `baseTax` and `fito` at the
+      // pre-FITO liability, so this cannot go negative. Stating it as a plain
+      // subtraction is what makes "Gross Tax + credits = Net Tax Liability" hold
+      // by construction rather than by luck (design 71 §6).
+      const netLiability = a.baseTax + a.medicareLevy + a.minTaxTopUp
+                         - a.frankingOffset - fito;
 
       const totalGrossIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
