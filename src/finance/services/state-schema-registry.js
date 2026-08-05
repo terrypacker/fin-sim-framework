@@ -268,6 +268,21 @@ export class StateSchemaRegistry {
     // US-source income booked while AU-resident — the FITO "without" removal set,
     // captured in both currencies (USD funds §4.6, AUD funds §4.5).
     this.register('usSourceOrdinaryUsdYTD',      ParameterValueType.currency('USD'));
+    // Design 83 G3 — US-source income re-sourced to foreign by Art. 27(1)(c),
+    // split by the §904 category it lands in. Kept apart from foreign*IncomeYTD
+    // so the FITO counterfactual can remove it from the baskets (design 83 G8).
+    // Design 83 G10 — the realised AU effective rate on capital gains, carried from the
+    // last AU settle that had gains. Feeds the IRC §865(g)(2) 10% test that decides
+    // whether a personal-property gain is foreign source. Persists across settles by
+    // design: it is a determination about the PRIOR year, not a YTD accumulator.
+    this.register('auCgtEffectiveRate',          ParameterValueType.percentage());
+    // Design 83 G10 part 2 — subset tags on the US-source removal set, so the Art. 22(2)
+    // figure can apply the Art. 10(2)(b) 15% dividend and Art. 11(2) 10% interest ceilings.
+    // Both are SUBSETS of usSourceOrdinaryUsdYTD, never additional income.
+    this.register('usSourceDividendsUsdYTD',     ParameterValueType.currency('USD'));
+    this.register('usSourceInterestUsdYTD',      ParameterValueType.currency('USD'));
+    this.register('usSourceGeneralUsdYTD',       ParameterValueType.currency('USD'));
+    this.register('usSourcePassiveUsdYTD',       ParameterValueType.currency('USD'));
     this.register('usSourceCapGainsUsdYTD',      ParameterValueType.currency('USD'));
 
     // Cross-border relief — AU side, canonical AUD (design 52).

@@ -95,6 +95,14 @@ export const US_TAX = {
       // US-source *real* (indexed) AU cap gain (AUD) — funds the FY2027 FITO
       // "without" pass's CG slice (design 57 Part 2, Item D).
       usSourceRealCapGainsAudYTD: 0,
+      // Design 83 G3 — US-source income re-sourced to foreign by Art. 27(1)(c),
+      // split by the §904 category it lands in. Kept apart from foreign*IncomeYTD
+      // so the FITO counterfactual can remove it from the baskets (design 83 G8).
+      auCgtEffectiveRate:      null,
+      usSourceDividendsUsdYTD: 0,
+      usSourceInterestUsdYTD:  0,
+      usSourceGeneralUsdYTD:   0,
+      usSourcePassiveUsdYTD:   0,
       ftcCurrentGeneral:       0,
       ftcCurrentPassive:       0,
       // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).

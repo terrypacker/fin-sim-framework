@@ -149,17 +149,6 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
                 ...(taxDetail.ftc.passive.carryforwardRemaining > 0
                   ? [{ label: '  Passive carryforward remaining', amount: taxDetail.ftc.passive.carryforwardRemaining }]
                   : []),
-                // Design 72 §1 — Form 1116 category F. Omitting this line breaks the
-                // return's footing check: the credit is taken against gross tax, so it
-                // must appear among the credits.
-                ...(taxDetail.ftc.resourced
-                  ? [
-                      { label: 'Foreign Tax Credit — Re-sourced by treaty (§904)', amount: -taxDetail.ftc.resourced.credit },
-                      ...(taxDetail.ftc.resourced.carryforwardRemaining > 0
-                        ? [{ label: '  Re-sourced carryforward remaining', amount: taxDetail.ftc.resourced.carryforwardRemaining }]
-                        : []),
-                    ]
-                  : []),
               ]
             : [
                 { label: 'Foreign Tax Credit', amount: -taxDetail.credits },
@@ -214,16 +203,24 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
 
     if (ftc?.hasActivity) {
       // §904 limitation denominators — `frac` and `limit` cannot be checked without
-      // them, and neither appears anywhere else on the return.
+      // them, and neither appears anywhere else on the return. The Form 1116 line-3
+      // pair is here for the same reason: without 3e and 3c, the apportioned
+      // deduction on each basket is an unexplained subtraction (design 83 G1).
       lineItems.push(
-        money('§904 limitation base (Chapter-1 gross tax)', ftc.limitationBase),
-        money('§904 total taxable income (denominator)',    ftc.totalTaxable),
+        money('§904 limitation base (§26(b)(1) regular tax)',       ftc.limitationBase),
+        money('§904 total taxable income (denominator)',            ftc.totalTaxable),
+        money('Form 1116 line 3e — gross income, all sources',      ftc.grossIncomeAllSources ?? 0),
+        money('Form 1116 line 3c — deductions not definitely related', ftc.unrelatedDeductions ?? 0),
       );
       const baskets = [['General', ftc.general], ['Passive', ftc.passive]];
-      if (ftc.resourced) baskets.push(['Re-sourced by treaty', ftc.resourced]);
       for (const [name, basket] of baskets) {
         lineItems.push(
-          money(`${name} — foreign income in basket`,   basket.numerator),
+          money(`${name} — gross foreign income (3d)`,  basket.gross ?? 0),
+          ...(basket.excluded > 0
+            ? [money(`${name} — less Form 2555 exclusion`, -basket.excluded)]
+            : []),
+          money(`${name} — less apportioned deduction (3g)`, -(basket.apportionedDeduction ?? 0)),
+          money(`${name} — foreign taxable income (line 7)`, basket.numerator),
           ratio(`${name} — limitation fraction`,        basket.frac),
           money(`${name} — §904 limit`,                 basket.limit),
           money(`${name} — current-year foreign tax`,   basket.currentTax),

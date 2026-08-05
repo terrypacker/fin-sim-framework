@@ -95,6 +95,117 @@ function bookAuResident(state, next, action, canonicalKey, amounts) {
  *   usSourceOrdinaryUsdYTD / usSourceCapGainsUsdYTD  (USD, §4.6 US marginal pass)
  *   usSourceOrdinaryAudYTD / usSourceCapGainsAudYTD  (AUD, §4.5 AU limit)
  */
+/**
+ * §865(g)(2) threshold — foreign tax of at least this share of the gain must be
+ * *actually paid* before a US citizen counts as a "nonresident" for personal-property
+ * sourcing. Statutory, not indexed.
+ */
+const SEC865_FOREIGN_TAX_THRESHOLD = 0.10;
+
+/**
+ * Art. 18(1) pensions — design 83 G10 part 3. Books a **periodic** retirement or
+ * death benefit for an AU-resident US citizen, where Australia's taxing right is
+ * exclusive and the US charge survives only through the saving clause.
+ *
+ * Art. 18(1): *"pensions and other similar remuneration paid to an individual who is
+ * a resident of one of the Contracting States in consideration of past employment
+ * shall be taxable **only in that State**."* The residence State is Australia.
+ *
+ * The US taxes it anyway, and legitimately: Art. 1(3) lets a State tax its citizens
+ * "as if this Convention had not entered into force", and Art. 1(4)(a) lists the
+ * paragraphs that survive the saving clause — *"paragraph (2) or (6) of Article 18"*.
+ * **18(1) is not among them.** That single omission is the whole difference between
+ * this rule and G11 (Social Security, Art. 18(2)), where the carve-out applies and
+ * Australia may not tax at all.
+ *
+ * So the US charge is tax imposed *solely by reason of citizenship*, and that is the
+ * exact quantity Art. 22(2) excludes from Australia's credit — Art. 27(1)(b) refuses
+ * even to deem it US-source for 22(2) purposes. Relief runs the other way instead,
+ * under Art. 22(4): the US credits the Australian tax, and Art. 27(1)(c) resources
+ * the income to Australia "to the extent necessary" to make §904 room for it.
+ *
+ * Hence the booking:
+ *   · AU assessable income — kept. Australia is the State with the taxing right.
+ *   · the Art. 22(2) removal set (`usSource*UsdYTD` / `usSourceOrdinaryAudYTD`) —
+ *     dropped. There is no creditable US source tax, so there is no FITO to fund.
+ *   · `foreignGeneralIncomeYTD` — added, NOT `usSourceGeneralUsdYTD`. Both feed the
+ *     same §904 general numerator, but the latter exists so the FITO counterfactual
+ *     can strip it back out (§14.1). Income that never enters the 22(2) base must
+ *     stay in the counterfactual, so it belongs in the genuinely-foreign accumulator.
+ *   · General category, per Pub 514: a pension is absent from the passive list, and
+ *     general is the residual — the same reasoning as super in G6.
+ *
+ * **Scope is periodicity, and it is deliberate.** Art. 18(4) defines the term as
+ * *"**periodic** payments made by reason of retirement or death, in consideration for
+ * services rendered"*, and Art. 18(5) requires periodicity of annuities too. A
+ * discretionary lump-sum drawdown is neither, so it falls out of Art. 18 entirely and
+ * into Art. 21(3), where the US **may** tax as source State and Australia **must**
+ * credit — i.e. the removal-set treatment those classifiers already have. This is why
+ * `IRA_RMD_TAX` and `K401_RMD_TAX` route here while `IRA_WITHDRAWAL_EARNINGS_TAX` and
+ * `IRA_ROLLOVER_WITHDRAWAL_TAX` do not.
+ *
+ * @param {object} state          state before this action
+ * @param {object} next           state accumulated so far by the caller
+ * @param {object} action         the tax action
+ * @param {string} canonicalKey   fallback state key for per-person attribution
+ * @param {number} amount         USD distribution amount
+ */
+function bookArt18Pension(state, next, action, canonicalKey, amount) {
+  const patched = {
+    ...next,
+    foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + amount,
+  };
+  return bookAuResident(state, patched, action, canonicalKey, {
+    auOrdinaryIncomeYTD: toAUD(amount, 'USD', state),
+  });
+}
+
+/**
+ * Is a gain on PERSONAL property foreign-source for this taxpayer? — design 83 G10.
+ *
+ * §865(a) sources gain on the sale of personal property by the **residence of the
+ * seller**, not by where the asset or the account sits. §865(g)(1)(A)(i)(I) defines a
+ * "United States resident" as a citizen who does **not** have a tax home in a foreign
+ * country — so a US citizen resident in Australia is a *nonresident* here, and
+ * §865(a)(2) sources the gain outside the United States. The treaty agrees from the
+ * other side: portfolio share gains appear nowhere in Art. 13 (even as amended by
+ * Art. 9 of the 2001 Protocol), so Art. 21 (Other Income) governs, and its
+ * source-State permission reaches only income *"from sources in the other Contracting
+ * State"*. (Art. 11 of the 2001 Protocol replaced Art. 21 outright; the operative
+ * paragraph is now **21(3)**, not the 1982 original's 21(2).)
+ *
+ * §865(g)(2) attaches a condition, and it is a real test rather than a formality:
+ *
+ *   > a United States citizen … shall not be treated as a nonresident with respect
+ *   > to any sale of personal property **unless an income tax equal to at least 10
+ *   > percent of the gain** derived from such sale **is actually paid** to a foreign
+ *   > country with respect to that gain.
+ *
+ * Australia normally clears it comfortably — a discounted gain at the top marginal
+ * rate is ~22.5% — but not always: the 50% CGT discount against the lowest bracket
+ * is ~8%, and carried-forward capital losses can drive the realised rate to zero. So
+ * the model measures rather than assumes, using the effective rate Australia actually
+ * charged, carried forward from the last AU settle that had gains.
+ *
+ * **On the one-settle lag.** The AU FY ends 30 June and the US CY on 31 December, so
+ * a real filer always knows the AU tax on the earlier gains of a US tax year and
+ * estimates the later ones. Using the prior settle's realised rate is that same
+ * position, not an approximation the model invented.
+ *
+ * Before any AU settle has measured a rate there is nothing to test against, and the
+ * answer defaults to foreign source. That is the right default rather than a
+ * convenient one: §865(g)(2) exists to catch gains the residence country does not
+ * tax, and Australia assesses residents on worldwide gains as a matter of course.
+ *
+ * @param {object} state
+ * @returns {boolean} true ⇒ foreign source (no re-sourcing needed, not US-source
+ *                    income for the Art. 22(2) handoff)
+ */
+function isPersonalPropertyGainForeignSource(state) {
+  const rate = state.auCgtEffectiveRate;
+  return rate == null || rate >= SEC865_FOREIGN_TAX_THRESHOLD;
+}
+
 export class UsTaxModule2026 extends BaseTaxModule {
   get countryCode() { return 'US'; }
   get year()        { return 2026; }
@@ -173,6 +284,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-7: IRA withdrawal of earnings — US-source ordinary income + optional
       //        penalty; AU ordinary income (worldwide) if resident, relieved by FITO.
+      //
+      //        Design 83 G10 part 3 — this stays on the Art. 21(3) removal-set path
+      //        and does NOT become an Art. 18(1) pension. A drawdown sized by this
+      //        year's cash need is not one of Art. 18(4)'s "periodic payments", so
+      //        Art. 18 does not reach it; Art. 21(3) (as replaced by Protocol Art. 11)
+      //        lets the US tax it as source State and Australia must credit that tax.
       ['IRA_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
         const { amount, penaltyAmount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -186,6 +303,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceGeneralUsdYTD: (state.usSourceGeneralUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the IRA it was drawn from, rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -214,26 +332,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
         usPenaltyYTD:        state.usPenaltyYTD        + action.penaltyAmount,
       })],
 
-      // EVT-40 (401k RMD): US-source ordinary income, no penalty; AU ordinary
-      //        income (worldwide) if resident, relieved by FITO.
+      // EVT-40 (401k RMD): US ordinary income, no penalty. For an AU resident this
+      //        is an Art. 18(1) pension — a periodic payment by reason of retirement
+      //        in consideration for services rendered, and an employer plan at that,
+      //        so 18(4) is met on every limb. Design 83 G10 part 3: Australia has the
+      //        taxing right, the US charge is citizenship-only and therefore outside
+      //        Art. 22(2), and relief comes from Art. 22(4) via the general basket.
+      //        See `bookArt18Pension`.
       ['K401_RMD_TAX', (state, action) => {
         const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
-        if (isAuResident) {
-          const aud = toAUD(amount, 'USD', state);
-          next = {
-            ...next,
-            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-          };
-          // Design 76 Gap B — attributed to the 401k the RMD came from, rather than
-          // halved across the household by computeAuTaxPerPerson at settle.
-          next = bookAuResident(state, next, action, 'k401Account', {
-            auOrdinaryIncomeYTD:    aud,
-            usSourceOrdinaryAudYTD: aud,
-          });
-        }
-        return next;
+        const next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (residency !== 'AU') return next;
+        // Design 76 Gap B — attributed to the 401k the RMD came from, rather than
+        // halved across the household by computeAuTaxPerPerson at settle.
+        return bookArt18Pension(state, next, action, 'k401Account', amount);
       }],
     ];
   }
@@ -256,6 +368,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + amount,
+            // Design 83 G10 part 2 — subset tag on the US-source removal set.
+            // Art. 11(2) caps the US tax Australia may credit under
+            // Art. 22(2) at 10% of the GROSS amount, so the settle needs this slice
+            // identifiable inside usSourceOrdinaryUsdYTD, not just its total.
+            usSourceInterestUsdYTD: (state.usSourceInterestUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the account that earned it, rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -283,6 +401,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + amount,
+            // Design 83 G10 part 2 — subset tag on the US-source removal set.
+            // Art. 10(2) caps the US tax Australia may credit under
+            // Art. 22(2) at 15% of the GROSS amount, so the settle needs this slice
+            // identifiable inside usSourceOrdinaryUsdYTD, not just its total.
+            usSourceDividendsUsdYTD: (state.usSourceDividendsUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the account that received it, rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -320,6 +444,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + fedAmount,
+            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + fedAmount,
+            // Design 83 G10 part 2 — subset tag on the US-source removal set.
+            // Art. 11(2) caps the US tax Australia may credit under
+            // Art. 22(2) at 10% of the GROSS amount, so the settle needs this slice
+            // identifiable inside usSourceOrdinaryUsdYTD, not just its total.
+            usSourceInterestUsdYTD: (state.usSourceInterestUsdYTD ?? 0) + fedAmount,
           };
           // Design 76 Gap B — attributed to the account holding the bond. Note the
           // two amounts differ: AU assesses the FULL coupon (it grants no US-Treasury
@@ -349,17 +479,27 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           const audGain = toAUD(auGain, 'USD', state);
           const audDiscountableGain = toAUD(auDiscountableGain, 'USD', state);
-          next = {
-            ...next,
-            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-          };
+          // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
+          // residence, so for an AU-resident US citizen this gain is FOREIGN source,
+          // not US-source, whatever the account's domicile. It therefore books as
+          // genuine foreign passive income and stays OUT of the Art. 22(2) removal
+          // set: Australia is not crediting US tax on it, because the US taxes it
+          // only by reason of citizenship (Art. 27(1)(b) refuses to deem that
+          // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
+          // US-source and is re-sourced by Art. 27(1)(c) like any other item.
+          const foreignSource = isPersonalPropertyGainForeignSource(state);
+          next = foreignSource
+            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            : { ...next,
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
           // Design 76 Gap B — the gain belongs to the owner(s) of the account that
           // held the lots; the discountable slice must follow the same split so the
           // CGT discount is applied against the right person's gain.
           next = bookAuResident(state, next, action, 'usStockAccount', {
             auCapitalGainsYTD:      audGain,
             auDiscountableGainsYTD: audDiscountableGain,
-            usSourceCapGainsAudYTD: audGain,
+            ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
         return next;
@@ -383,6 +523,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + action.auGain,
+            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + action.gain,
           };
           // Design 76 Gap B — attributed to the property's owner(s), stamped inline
           // by the sale reducer (mirrors AU_HOUSE_SALE_TAX, which already did this).
@@ -419,6 +560,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the property's owners (stamped inline), rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -434,28 +576,30 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _incomeReducerFns() {
     return [
-      // EVT-37: SS income — 85% taxable as US-source ordinary income; AU ordinary
-      // income (full amount) if resident, relieved by FITO. US slice = taxable
-      // (85%); AU slice = full amount — each removal set matches its own bucket.
+      // EVT-37: SS income — 85% taxable as US ordinary income (§86), and taxable
+      // in the United States ONLY, whatever the recipient's residency.
+      //
+      // Design 83 G11 — Art. 18(2) of the 1982 Convention:
+      //   "Social Security payments and other public pensions paid by one of the
+      //    Contracting States to an individual who is a resident of the other
+      //    Contracting State or a citizen of the United States shall be taxable
+      //    only in the first-mentioned State."
+      //
+      // The paying State is the US, so US Social Security is taxable only in the
+      // US — for an AU-resident US citizen on either limb of that sentence. The
+      // Art. 1(3) saving clause does NOT let Australia reach it back: Art. 1(4)(a)
+      // exempts "paragraph (2) or (6) of Article 18" from the saving clause by
+      // name, and the 2001 Protocol amended neither Art. 1(4) nor Art. 18.
+      //
+      // So there is no AU booking, and therefore nothing to relieve: with no AU
+      // tax on the payment there is no Art. 22(2) credit for Australia to give, and
+      // no Art. 27(1)(c) re-sourcing — that provision resources income only "to the
+      // extent necessary" to give effect to Art. 22(4) relief, and none is due.
+      // The benefit therefore stays plain US-source income in no foreign §904
+      // basket, exactly as it would for a US resident.
       ['SS_INCOME_TAX', (state, action) => {
-        const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        const taxable = amount * 0.85;
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + taxable };
-        if (isAuResident) {
-          const aud = toAUD(amount, 'USD', state);
-          next = {
-            ...next,
-            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + taxable,
-          };
-          // Design 76 Gap B — attributed to the recipient (personKey) — each person has their own entitlement, rather than
-          // halved across the household by computeAuTaxPerPerson at settle.
-          next = bookAuResident(state, next, action, null, {
-            auOrdinaryIncomeYTD:    aud,
-            usSourceOrdinaryAudYTD: aud,
-          });
-        }
-        return next;
+        const taxable = action.amount * 0.85;
+        return { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + taxable };
       }],
 
       // EVT-38: US wages — US-source ordinary income; AU per-person income if
@@ -475,6 +619,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceGeneralUsdYTD: (state.usSourceGeneralUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B/D — attributed to the earner via personKey; personal
           // services income is never apportionable. Replaces a hand-rolled per-person
@@ -506,6 +651,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceGeneralUsdYTD: (state.usSourceGeneralUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B/D — attributed to the earner via personKey; personal
           // services income is never apportionable. Replaces a hand-rolled per-person
@@ -535,6 +681,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceGeneralUsdYTD: (state.usSourceGeneralUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the earner (personKey) — W-2 wages are never apportionable, rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -558,10 +705,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // original basis. Falls back to `gain` when no step-up was stamped.
           const auGainUsd = action.auGain ?? gain;
           const audGain = toAUD(auGainUsd, 'USD', state);
-          next = {
-            ...next,
-            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-          };
+          // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
+          // residence, so for an AU-resident US citizen this gain is FOREIGN source,
+          // not US-source, whatever the account's domicile. It therefore books as
+          // genuine foreign passive income and stays OUT of the Art. 22(2) removal
+          // set: Australia is not crediting US tax on it, because the US taxes it
+          // only by reason of citizenship (Art. 27(1)(b) refuses to deem that
+          // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
+          // US-source and is re-sourced by Art. 27(1)(c) like any other item.
+          const foreignSource = isPersonalPropertyGainForeignSource(state);
+          next = foreignSource
+            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            : { ...next,
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
           // Design 76 Gap B — attributed to the equity holder, stamped inline by the
           // sale reducer (company equity has no account state key).
           next = bookAuResident(state, next, action, null, {
@@ -571,7 +728,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
             // period gate targets brokerage lots; company/collectible/property
             // holding-period gating is out of Gap 1's scope).
             auDiscountableGainsYTD: audGain,
-            usSourceCapGainsAudYTD: audGain,
+            ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
         return next;
@@ -597,17 +754,27 @@ export class UsTaxModule2026 extends BaseTaxModule {
         };
         if (isAuResident) {
           const audGain = toAUD(gain, 'USD', state);
-          next = {
-            ...next,
-            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-          };
+          // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
+          // residence, so for an AU-resident US citizen this gain is FOREIGN source,
+          // not US-source, whatever the account's domicile. It therefore books as
+          // genuine foreign passive income and stays OUT of the Art. 22(2) removal
+          // set: Australia is not crediting US tax on it, because the US taxes it
+          // only by reason of citizenship (Art. 27(1)(b) refuses to deem that
+          // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
+          // US-source and is re-sourced by Art. 27(1)(c) like any other item.
+          const foreignSource = isPersonalPropertyGainForeignSource(state);
+          next = foreignSource
+            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            : { ...next,
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
           // Design 76 Gap B — attributed to the collectible's owner(s), stamped
           // inline by the sale reducer (a collectible has no account state key).
           next = bookAuResident(state, next, action, null, {
             auCapitalGainsYTD:      audGain,
             // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
             auDiscountableGainsYTD: audGain,
-            usSourceCapGainsAudYTD: audGain,
+            ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
         return next;
@@ -618,7 +785,9 @@ export class UsTaxModule2026 extends BaseTaxModule {
   _iraRolloverReducerFns() {
     return [
       // EVT-35: IRA rollover withdrawal — US-source ordinary income (no penalty);
-      //         AU ordinary income if resident, relieved by FITO.
+      //         AU ordinary income if resident, relieved by FITO. Design 83 G10
+      //         part 3: a discretionary drawdown, so Art. 21(3) and not Art. 18(1) —
+      //         same reasoning as IRA_WITHDRAWAL_EARNINGS_TAX above.
       ['IRA_ROLLOVER_WITHDRAWAL_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -628,6 +797,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceGeneralUsdYTD: (state.usSourceGeneralUsdYTD ?? 0) + amount,
           };
           // Design 76 Gap B — attributed to the rollover IRA, rather than
           // halved across the household by computeAuTaxPerPerson at settle.
@@ -639,26 +809,23 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
-      // EVT-40: IRA RMD — US-source ordinary income (no penalty); AU ordinary
-      //         income if resident, relieved by FITO.
+      // EVT-40: IRA RMD — US ordinary income (no penalty). For an AU resident this is
+      //         an Art. 18(1) pension: a §401(a)(9) required minimum distribution is
+      //         periodic and is made by reason of retirement, so Art. 18(4) is met.
+      //         Design 83 G10 part 3 — see `bookArt18Pension`.
+      //
+      //         The residual doubt is 18(4)'s "in consideration for services
+      //         rendered", which fits a 401(k) rollover squarely and a purely
+      //         contributory IRA badly; the model carries no field separating the two
+      //         inside an IRA, and the reference plan's IRA is rollover-funded
+      //         (K401_TO_IRA_CONVERSION). Recorded in design 83 §17, not papered over.
       ['IRA_RMD_TAX', (state, action) => {
         const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
-        if (isAuResident) {
-          const aud = toAUD(amount, 'USD', state);
-          next = {
-            ...next,
-            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-          };
-          // Design 76 Gap B — attributed to the IRA the RMD came from, rather than
-          // halved across the household by computeAuTaxPerPerson at settle.
-          next = bookAuResident(state, next, action, 'iraAccount', {
-            auOrdinaryIncomeYTD:    aud,
-            usSourceOrdinaryAudYTD: aud,
-          });
-        }
-        return next;
+        const next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (residency !== 'AU') return next;
+        // Design 76 Gap B — attributed to the IRA the RMD came from, rather than
+        // halved across the household by computeAuTaxPerPerson at settle.
+        return bookArt18Pension(state, next, action, 'iraAccount', amount);
       }],
     ];
   }
@@ -755,27 +922,21 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // Design 63 §6.2: SECURE 10-year inherited traditional IRA/401(k)
       // distribution — IRD, taxed as US ordinary income to the heir (no basis,
-      // no penalty). AU ordinary income (worldwide) if the heir is AU-resident,
-      // relieved by FITO — mirrors the RMD classifiers. Inherited Roth emits no
-      // tax action (tax-free), so it never reaches this classifier.
+      // no penalty). Inherited Roth emits no tax action (tax-free), so it never
+      // reaches this classifier.
+      //
+      // Design 83 G10 part 3: for an AU-resident heir this is an Art. 18(1) pension,
+      // and it is the cleanest case in the family — Art. 18(4) reaches periodic
+      // payments made "by reason of retirement **or death**" in terms, and a SECURE
+      // 10-year drawdown is a defined series rather than a discretionary one. Mirrors
+      // the RMD classifiers; see `bookArt18Pension`.
       ['INHERITED_RA_DISTRIBUTION_TAX', (state, action) => {
         const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
-        if (isAuResident) {
-          const aud = toAUD(amount, 'USD', state);
-          next = {
-            ...next,
-            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-          };
-          // Design 76 Gap B — attributed to the inherited account's beneficiary, rather than
-          // halved across the household by computeAuTaxPerPerson at settle.
-          next = bookAuResident(state, next, action, null, {
-            auOrdinaryIncomeYTD:    aud,
-            usSourceOrdinaryAudYTD: aud,
-          });
-        }
-        return next;
+        const next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (residency !== 'AU') return next;
+        // Design 76 Gap B — attributed to the inherited account's beneficiary, rather
+        // than halved across the household by computeAuTaxPerPerson at settle.
+        return bookArt18Pension(state, next, action, null, amount);
       }],
     ];
   }

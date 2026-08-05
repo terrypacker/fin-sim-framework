@@ -508,7 +508,8 @@ test('TE-7: AU collectible gains use capital gains treatment (50% CGT discount)'
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// TE-8: Social Security Income — US: 85% taxable; AU: full ordinary income
+// TE-8: Social Security Income — 85% taxable in the US, and in the US ONLY
+//       (design 83 G11: Convention Art. 18(2), saving-clause carve-out Art. 1(4)(a))
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('TE-8: SS income classifier applies 85% rule to US ordinary income', () => {
@@ -519,13 +520,21 @@ test('TE-8: SS income classifier applies 85% rule to US ordinary income', () => 
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 85000); // 100000 * 0.85
 });
 
-test('TE-8: SS income classifier adds full amount to AU ordinary income for AU residents', () => {
+test('TE-8: SS income is reserved to the US — an AU resident is assessed nothing (Art. 18(2))', () => {
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'SS_INCOME_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 100000, residency: 'AU' });
-  assert.strictEqual(s1.usOrdinaryIncomeYTD, 85000);  // 85% for US
-  assert.strictEqual(s1.auOrdinaryIncomeYTD, 100000); // 100% for AU ordinary income
+  const s1 = fn(s0, { amount: 100000, residency: 'AU', personKey: 'primary' });
+  // Residency-invariant: the AU-resident result is the US-resident result.
+  assert.deepStrictEqual(s1, fn(s0, { amount: 100000, residency: null }));
+  assert.strictEqual(s1.usOrdinaryIncomeYTD, 85000);
+  assert.strictEqual(s1.auOrdinaryIncomeYTD, 0);
+  assert.strictEqual(s1.auPersonOrdinaryIncomeYTD ?? undefined, undefined);
+  // Nothing is re-sourced: Art. 27(1)(c) resources only "to the extent necessary"
+  // to give effect to Art. 22(4), and with no AU tax there is nothing to relieve.
+  assert.strictEqual(s1.usSourceOrdinaryUsdYTD ?? 0, 0);
+  assert.strictEqual(s1.usSourceGeneralUsdYTD ?? 0, 0);
+  assert.strictEqual(s1.usSourceOrdinaryAudYTD ?? 0, 0);
 });
 
 test('TE-8: US rates module taxes SS income at ordinary brackets on the 85% taxable portion', () => {

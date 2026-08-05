@@ -232,8 +232,14 @@ test('EVT-36: collectible sale records gain as AU capital gain if AU resident', 
   const expectedGain = AU_COLLECTIBLE_JSON.collectibles[0].value - AU_COLLECTIBLE_JSON.collectibles[0].costBasis;
   assert.ok(auGainsDiff != null, 'AU gain must be attributed to the collectible owner');
   assert.strictEqual(auGainsDiff.delta, expectedGain);
-  const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
-  assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
+  // Design 83 G10 — this gain is on PERSONAL property, so §865(a) sources it by the
+  // seller's residence: for an AU-resident US citizen it is FOREIGN source, not
+  // US-source re-sourced. It lands in the §904 passive basket directly and stays
+  // OUT of the Art. 22(2) removal set (Australia is not crediting US tax on it).
+  assert.strictEqual(allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD'), undefined);
+  const basketDiff = allDiffs.find(d => d.field === 'foreignPassiveIncomeYTD');
+  assert.ok(basketDiff != null && basketDiff.delta > 0,
+    'the gain must still create §904 passive limitation room');
 });
 
 test('EVT-36: collectible sale is not AU taxable if not AU resident', () => {
@@ -353,8 +359,14 @@ test('EVT-46: gold collectible sale records AU capital gain if AU resident', () 
   const auGainsDiff = allDiffs.find(d => d.field === 'auPersonCapitalGainsYTD.primary');
   assert.ok(auGainsDiff != null, 'AU gain must be attributed to the collectible owner');
   assert.strictEqual(auGainsDiff.delta, 20000);
-  const ftcDiff = allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD');
-  assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
+  // Design 83 G10 — this gain is on PERSONAL property, so §865(a) sources it by the
+  // seller's residence: for an AU-resident US citizen it is FOREIGN source, not
+  // US-source re-sourced. It lands in the §904 passive basket directly and stays
+  // OUT of the Art. 22(2) removal set (Australia is not crediting US tax on it).
+  assert.strictEqual(allDiffs.find(d => d.field === 'usSourceCapGainsUsdYTD'), undefined);
+  const basketDiff = allDiffs.find(d => d.field === 'foreignPassiveIncomeYTD');
+  assert.ok(basketDiff != null && basketDiff.delta > 0,
+    'the gain must still create §904 passive limitation room');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

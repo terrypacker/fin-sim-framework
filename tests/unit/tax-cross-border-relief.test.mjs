@@ -28,6 +28,7 @@ import assert     from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
 import { _drawDownBasket } from '../../src/finance/tax/us/us-tax-rates-base.js';
 import {
@@ -66,10 +67,15 @@ test('FTC-2: §904 per-basket cap — high foreign tax on a small passive share'
     foreignPassiveIncomeYTD: 10_000,
     ftcCurrentPassive: 5_000,           // AU tax far exceeds the §904 headroom
   });
-  // grossTax tax(70k)=7,923; passive frac 10k/70k → limit = 7923*10/70 = 1,131.857.
-  assert.ok(Math.abs(r.credits - 1_131.857) < 0.5, `credit ${r.credits}`);
-  assert.ok(Math.abs(r.ftc.passive.carryforwardRemaining - 3_868.143) < 0.5, 'excess → passive pool');
-  assert.ok(Math.abs((r.ftc.nextPoolPassive[2025] ?? 0) - 3_868.143) < 0.5, 'banked at the 2025 vintage');
+  // grossTax tax(70k)=7,923. Design 83 G1 — the numerator is Form 1116 line 7, not
+  // gross: 3e=100k, 3c=30k std deduction, 3f=10k/100k=0.1, 3g=3,000, so the passive
+  // basket's foreign TAXABLE income is 10,000−3,000=7,000. frac = 7k/70k = 0.1 and
+  // the limit is 7,923 × 0.1 = 792.30 (it was 1,131.857 on the gross numerator).
+  assert.ok(Math.abs(r.ftc.passive.apportionedDeduction - 3_000) < 0.005, 'ratable share of the std deduction');
+  assert.ok(Math.abs(r.ftc.passive.numerator - 7_000) < 0.005, 'Form 1116 line 7');
+  assert.ok(Math.abs(r.credits - 792.30) < 0.5, `credit ${r.credits}`);
+  assert.ok(Math.abs(r.ftc.passive.carryforwardRemaining - 4_207.70) < 0.5, 'excess → passive pool');
+  assert.ok(Math.abs((r.ftc.nextPoolPassive[2025] ?? 0) - 4_207.70) < 0.5, 'banked at the 2025 vintage');
   assert.equal(Object.keys(r.ftc.nextPoolGeneral).length, 0, 'General pool untouched');
 });
 
@@ -86,7 +92,90 @@ test('FTC-3: basket isolation — excess General tax does not shelter Passive US
   });
   // Passive credit is capped at its own avail (500), NOT topped up by the General excess.
   assert.equal(r.ftc.passive.credit, 500, 'General excess must not spill into Passive');
-  assert.ok(Math.abs(r.ftc.general.credit - 6_791.14) < 0.5, 'General credit at its §904 limit');
+  // Design 83 G1 — general line 7 = 60,000 − 30,000×(60k/100k) = 42,000, so
+  // frac = 42k/70k = 0.6 and the limit is 7,923 × 0.6 = 4,753.80 (was 6,791.14).
+  assert.ok(Math.abs(r.ftc.general.credit - 4_753.80) < 0.5, 'General credit at its §904 limit');
+  // The whole point of the apportionment: two baskets over one taxpayer's income
+  // can no longer claim more than 100% of it between them.
+  assert.ok(r.ftc.general.frac + r.ftc.passive.frac <= 1 + 1e-9,
+    `fractions sum to ${r.ftc.general.frac + r.ftc.passive.frac}`);
+});
+
+// ─── §904 limitation base and invariants — design 83 G1/G2 ──────────────────
+
+test('FTC-G2: the §72(t) penalty is tax owed but NOT part of the §904 limitation base', () => {
+  const base = {
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD: 100_000,
+    foreignPassiveIncomeYTD: 10_000,
+    ftcCurrentPassive: 5_000,          // far more AU tax than the limit can absorb
+  };
+  const clean     = new UsTaxRates2025().computeTax(base);
+  const penalised = new UsTaxRates2025().computeTax({ ...base, usPenaltyYTD: 20_000 });
+
+  // Form 1116 line 20 takes Form 1040 line 16 + Schedule 2 line 1z. The §72(t)
+  // additional tax is a §26(b)(2) tax reported in Schedule 2 PART II, so it must
+  // not enlarge the limitation — the credit is identical with and without it.
+  assert.equal(penalised.regularTax, clean.regularTax, 'regular tax is penalty-free');
+  assert.equal(penalised.ftc.limitationBase, clean.regularTax, 'the base IS the regular tax');
+  assert.equal(penalised.ftc.passive.limit, clean.ftc.passive.limit, 'the §904 limit does not move');
+  assert.equal(penalised.credits, clean.credits, 'nor does the credit');
+
+  // It is still real tax: it rides in grossTax, and lands in netLiability AFTER
+  // the credit rather than being sheltered by it.
+  assert.equal(penalised.grossTax - clean.grossTax, 20_000);
+  assert.equal(penalised.netLiability - clean.netLiability, 20_000);
+  // Footing survives: gross − credits = net.
+  assert.ok(Math.abs(penalised.grossTax - penalised.credits - penalised.netLiability) < 0.005);
+});
+
+test('FTC-G1: the §904 fractions cannot sum past 1 even when all income is foreign', () => {
+  // The failure design 83 was opened on: a 5.157 limitation fraction, from gross
+  // numerators divided by a denominator net of the standard deduction.
+  const r = new UsTaxRates2025().computeTax({
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD: 100_000,
+    foreignGeneralIncomeYTD: 40_000,
+    foreignPassiveIncomeYTD: 60_000,     // general + passive = 100% of gross income
+    ftcCurrentGeneral: 9_000,
+    ftcCurrentPassive: 9_000,
+  });
+  const sum = r.ftc.general.frac + r.ftc.passive.frac;
+  assert.ok(Math.abs(sum - 1) < 1e-9, `all-foreign income ⇒ fractions sum to exactly 1, got ${sum}`);
+  // …and the identity that makes it hold: denominator = 3e − 3c − FEIE.
+  assert.ok(Math.abs(r.ftc.totalTaxable
+    - (r.ftc.grossIncomeAllSources - r.ftc.unrelatedDeductions)) < 0.005);
+  // Neither basket may claim more room than the whole return has.
+  for (const b of [r.ftc.general, r.ftc.passive]) {
+    assert.ok(b.numerator <= r.ftc.totalTaxable + 0.005);
+  }
+  // And the credit can never exceed the tax it is credited against.
+  assert.ok(r.credits <= r.ftc.limitationBase + 0.005);
+});
+
+test('FTC-G1: the ½-SE-tax and pre-tax-contribution deductions are apportioned too', () => {
+  // Form 1116 line 3b — "any other deductions that don't definitely relate to any
+  // specific type of income (for example, deductions shown on Schedule 1 (Form
+  // 1040), Part II, Adjustments to Income)". Apportioning the standard deduction
+  // alone would leave these unallocated and the fractions could still overshoot.
+  const r = new UsTaxRates2025().computeTax({
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD: 100_000,
+    usNegativeIncomeYTD: 10_000,          // deductible IRA / 401k contribution
+    foreignPassiveIncomeYTD: 100_000,     // every dollar is foreign
+    ftcCurrentPassive: 50_000,
+  });
+  assert.ok(Math.abs(r.ftc.unrelatedDeductions - 40_000) < 0.005,
+    '30,000 standard deduction + 10,000 of adjustments');
+  assert.ok(Math.abs(r.ftc.passive.apportionedDeduction - 40_000) < 0.005,
+    'all income is foreign, so the whole of 3c is apportioned to the one basket');
+  assert.ok(Math.abs(r.ftc.passive.frac - 1) < 1e-9);
 });
 
 // ─── FTC vintage draw-down / aging (§4.3) ────────────────────────────────────
@@ -162,6 +251,98 @@ test('FITO funding: US settle measures the marginal US tax on US-source income (
   } });
   // tax(70k)=7,923 with; without the 40k → tax(30k)=3,123; marginal = 4,800.
   assert.ok(Math.abs(apply.usTaxPaidOnUsSourceAud - 4_800) < 0.5, `handoff ${apply.usTaxPaidOnUsSourceAud}`);
+});
+
+test('FITO-G5: the Art. 22(2) figure is measured BEFORE the credit for Australian tax', () => {
+  // Art. 22(4): "The credit so allowed against United States tax shall not reduce that
+  // portion of the United States tax that is creditable against Australian tax in
+  // accordance with paragraph (2)." So piling Australian tax into the §904 pools must
+  // not shrink what Australia is told the US charged on US-source income — which is
+  // exactly what a post-credit `netLiability` differential did (design 83 §13.1).
+  const base = {
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    people: { primary: { residency: 'AU' } },
+    usOrdinaryIncomeYTD: 100_000,
+    usSourceOrdinaryUsdYTD: 40_000,
+    usSourceGeneralUsdYTD:  40_000,   // re-sourced under Art. 27(1)(c), general basket
+  };
+  const [noAuTax] = new UsTaxSettleHandler().call({ state: base });
+  // Far more Australian tax than the general basket can absorb, so the credit is
+  // limitation-bound and takes as much of the liability as §904 permits.
+  const [credited] = new UsTaxSettleHandler().call({
+    state: { ...base, ftcCurrentGeneral: 50_000 },
+  });
+
+  assert.ok(noAuTax.usTaxPaidOnUsSourceAud > 0, 'sanity: there is a figure to erode');
+  assert.strictEqual(credited.usTaxPaidOnUsSourceAud, noAuTax.usTaxPaidOnUsSourceAud,
+    'the Art. 22(4) credit must not erode the Art. 22(2) base — pre-G5 this fell with it');
+  // The credit really did bite, so the old post-credit differential had a smaller
+  // liability to measure. Without this the test could pass on a state where the
+  // credit never bound at all and nothing was being tested.
+  assert.ok(credited.taxDetail.netLiability < noAuTax.taxDetail.netLiability * 0.7,
+    `credit did not bind: ${credited.taxDetail.netLiability} vs ${noAuTax.taxDetail.netLiability}`);
+});
+
+test('FITO-G10: Art. 10/11 cap the dividend and interest slices of the Art. 22(2) figure', () => {
+  // Same 40k of US-source income, but now it is all dividends and interest. The
+  // citizen's marginal rate on it is 12% (4,800 / 40,000); the treaty lets Australia
+  // credit only 15% of gross dividends + 10% of gross interest.
+  const base = {
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    people: { primary: { residency: 'AU' } },
+    usOrdinaryIncomeYTD: 100_000,
+    usSourceOrdinaryUsdYTD: 40_000,
+  };
+  const [uncapped] = new UsTaxSettleHandler().call({ state: base });
+
+  // 30k interest (ceiling 3,000) + 10k dividends (ceiling 1,500) = 4,500 < 4,800.
+  const [capped] = new UsTaxSettleHandler().call({ state: {
+    ...base,
+    usSourceInterestUsdYTD:  30_000,
+    usSourceDividendsUsdYTD: 10_000,
+  } });
+  assert.ok(Math.abs(capped.usTaxPaidOnUsSourceAud - 4_500) < 0.5,
+    `treaty ceiling should bind at 4,500, got ${capped.usTaxPaidOnUsSourceAud}`);
+  assert.ok(capped.usTaxPaidOnUsSourceAud < uncapped.usTaxPaidOnUsSourceAud,
+    'the excess over the treaty rate is US tax imposed by reason of citizenship, which Art. 22(2) excludes');
+});
+
+test('FITO-G10: the cap is a ceiling, not a substitution', () => {
+  // A tiny amount of US-source interest inside a low-income year: the actual US tax
+  // on it is under 10% of gross, and Australia may credit only what was PAID.
+  const [apply] = new UsTaxSettleHandler().call({ state: {
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    people: { primary: { residency: 'AU' } },
+    usOrdinaryIncomeYTD: 32_000,      // barely over the 30k standard deduction
+    usSourceOrdinaryUsdYTD: 2_000,
+    usSourceInterestUsdYTD: 2_000,    // ceiling would be 200
+  } });
+  // Taxable is 2,000, all in the 10% bracket ⇒ 200 with, 0 without ⇒ marginal 200,
+  // which happens to equal the ceiling here; the point is it is never MORE than paid.
+  assert.ok(apply.usTaxPaidOnUsSourceAud <= 200 + 0.5,
+    `credit ${apply.usTaxPaidOnUsSourceAud} exceeds both the tax paid and the ceiling`);
+});
+
+test('G6: a super withdrawal creates GENERAL basket limitation room', () => {
+  // Design 83 G6. Australian super is tax-free after 60, so there is no AU tax on the
+  // super itself — but Pub 514 sources investment earnings on pension contributions to
+  // the location of the pension trust, so the distribution is foreign-source general
+  // income and generates limitation room that AU tax from OTHER sources can fill.
+  const fn = new AuTaxModule2026().getReducerFns().get('SUPER_WITHDRAWAL_EARNINGS_TAX');
+  const next = fn(
+    { usOrdinaryIncomeYTD: 0, foreignGeneralIncomeYTD: 0, effectiveExchangeRates: rate1 },
+    { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX', amount: 50_000 });
+  assert.equal(next.usOrdinaryIncomeYTD, 50_000, 'still US ordinary income');
+  assert.equal(next.foreignGeneralIncomeYTD, 50_000,
+    'and now general-basket room — before G6 it raised the §904 denominator and no numerator');
+  assert.equal(next.foreignPassiveIncomeYTD ?? 0, 0,
+    'a pension is absent from Pub 514’s passive list; general is the residual category');
 });
 
 // ─── AU FITO (§4.5) ──────────────────────────────────────────────────────────

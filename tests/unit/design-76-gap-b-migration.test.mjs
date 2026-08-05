@@ -120,23 +120,33 @@ describe('design 76 P3 — ordinary income follows the account owner', () => {
 // ── Person-derived income ─────────────────────────────────────────────────────
 
 describe('design 76 P3 — person-derived income follows the person', () => {
-  test('SS_INCOME_TAX attributes the whole benefit to its recipient', () => {
-    // The two people have different entitlements, so an even split is always wrong.
-    const next = run('SS_INCOME_TAX', { amount: 24000, residency: 'AU', personKey: 'spouse' });
-    assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD), { spouse: 24000 });
-    assertNothingOnHousehold(next, 'SS_INCOME_TAX');
-  });
-
-  test('two benefits accrue separately rather than pooling', () => {
-    let s = makeState();
-    s = run('SS_INCOME_TAX', { amount: 24000, residency: 'AU', personKey: 'primary' }, s);
-    s = run('SS_INCOME_TAX', { amount: 12000, residency: 'AU', personKey: 'spouse'  }, s);
-    assert.deepEqual(nz(s.auPersonOrdinaryIncomeYTD), { primary: 24000, spouse: 12000 });
-  });
-
+  // SS_INCOME_TAX used to be this section's headline example. Design 83 G11 removed
+  // it from the AU return entirely (Art. 18(2)), so there is nothing left to
+  // attribute — the case now belongs to the "never AU-assessable" test below.
   test('WAGES_INCOME_TAX attributes to the earner', () => {
     const next = run('WAGES_INCOME_TAX', { amount: 50000, residency: 'AU', personKey: 'spouse' });
     assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD), { spouse: 50000 });
+    assertNothingOnHousehold(next, 'WAGES_INCOME_TAX');
+  });
+
+  test('two wages accrue separately rather than pooling', () => {
+    let s = makeState();
+    s = run('WAGES_INCOME_TAX', { amount: 50000, residency: 'AU', personKey: 'primary' }, s);
+    s = run('WAGES_INCOME_TAX', { amount: 20000, residency: 'AU', personKey: 'spouse'  }, s);
+    assert.deepEqual(nz(s.auPersonOrdinaryIncomeYTD), { primary: 50000, spouse: 20000 });
+  });
+});
+
+// ── Income Australia may not assess at all ───────────────────────────────────
+
+describe('design 83 G11 — US Social Security never reaches the AU return', () => {
+  test('SS_INCOME_TAX books nothing AU-side, per person or household', () => {
+    const next = run('SS_INCOME_TAX', { amount: 24000, residency: 'AU', personKey: 'spouse' });
+    assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD), {});
+    assertNothingOnHousehold(next, 'SS_INCOME_TAX');
+    // …nor into the per-person US-source removal maps that size each FITO limit.
+    assert.deepEqual(nz(next.auPersonUsSourceOrdinaryAudYTD), {});
+    assert.strictEqual(next.usOrdinaryIncomeYTD, 24000 * 0.85);
   });
 });
 
@@ -181,19 +191,54 @@ describe('design 76 P3 — capital gains and their discountable slice stay toget
 
 describe('design 76 P3 — the US-source removal set tracks the income exactly', () => {
   test('ordinary income and its removal slice land on the SAME person', () => {
-    const next = run('IRA_RMD_TAX', { amount: 10000, residency: 'AU', stateKey: 'spouseIraAccount' });
+    // Was IRA_RMD_TAX; design 83 G10 part 3 moved RMDs off the removal set entirely
+    // (Art. 18(1)). A discretionary drawdown from the same account is still Art. 21(3)
+    // income and still carries a removal slice, so it makes the same point.
+    const next = run('IRA_ROLLOVER_WITHDRAWAL_TAX', { amount: 10000, residency: 'AU', stateKey: 'spouseIraAccount' });
     assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD),      { spouse: 10000 });
     assert.deepEqual(nz(next.auPersonUsSourceOrdinaryAudYTD), { spouse: 10000 },
       'a mismatched removal set sizes the FITO limit off the wrong base (+32.8% measured)');
   });
 
+  test('an Art. 18(1) pension is attributed but carries NO removal slice', () => {
+    // Design 83 G10 part 3 — Australia has the exclusive taxing right, so the income
+    // is assessed there; the US charge survives only through the Art. 1(3) saving
+    // clause and Art. 22(2) excludes it, so there is no FITO for it to fund. Both
+    // halves matter: attribution without a removal slice is the CORRECT pairing here,
+    // and the Gap D invariant above must not be read as requiring one.
+    const next = run('IRA_RMD_TAX', { amount: 10000, residency: 'AU', stateKey: 'spouseIraAccount' });
+    assert.deepEqual(nz(next.auPersonOrdinaryIncomeYTD),      { spouse: 10000 });
+    assert.deepEqual(nz(next.auPersonUsSourceOrdinaryAudYTD), {});
+    assert.strictEqual(next.usSourceOrdinaryUsdYTD ?? 0, 0);
+    // Relief runs the other way — Art. 22(4) + Art. 27(1)(c) — so the §904 general
+    // numerator is fed through the genuinely-foreign accumulator, which the FITO
+    // counterfactual does not strip (design 83 §14.1).
+    assert.strictEqual(next.foreignGeneralIncomeYTD, 10000);
+    assert.strictEqual(next.usSourceGeneralUsdYTD ?? 0, 0);
+  });
+
   test('capital gains and their removal slice land on the SAME person', () => {
+    // Design 83 G10 — a stock gain only ENTERS the removal set when the §865(g)(2)
+    // 10% test fails, i.e. when Australia charged less than 10% of the gain and the
+    // citizen is therefore NOT a "nonresident" for §865 sourcing. Below 10% is where
+    // the attribution this test is about has to hold, so that is the state to run in.
     const next = run('STOCK_WITHDRAWAL_TAX', {
       gain: 20000, auGain: 20000, auDiscountableGain: 20000,
       residency: 'AU', stateKey: 'spouseStockAccount',
-    });
+    }, { ...makeState(), auCgtEffectiveRate: 0.08 });
     assert.deepEqual(nz(next.auPersonCapitalGainsYTD),        { spouse: 20000 });
     assert.deepEqual(nz(next.auPersonUsSourceCapGainsAudYTD), { spouse: 20000 });
+  });
+
+  test('above the §865(g)(2) threshold the gain is foreign source, so there is no removal slice', () => {
+    const next = run('STOCK_WITHDRAWAL_TAX', {
+      gain: 20000, auGain: 20000, auDiscountableGain: 20000,
+      residency: 'AU', stateKey: 'spouseStockAccount',
+    }, { ...makeState(), auCgtEffectiveRate: 0.225 });   // the usual discounted top rate
+    assert.deepEqual(nz(next.auPersonCapitalGainsYTD),        { spouse: 20000 },
+      'Australia still assesses it — only the US SOURCING changes');
+    assert.deepEqual(nz(next.auPersonUsSourceCapGainsAudYTD), {},
+      'nothing to relieve: the US taxes this only by reason of citizenship');
   });
 
   test('BOND_COUPON_TAX books the FULL coupon to AU but only the federal slice as US-source', () => {

@@ -178,9 +178,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // Australian rent should lodge annually and declare NET rental income [R12].
       // It is not withholding income and there is no exemption.
       //
-      // The amount stays SIGNED. A rental loss reduces assessable income and must
-      // not be floored at the accumulator — the Math.max(0) above is correct for
-      // the basket numerator alone, where a loss contributes zero limitation room.
+      // The amount stays SIGNED — in every accumulator, including the §904 passive
+      // basket. A loss month contributes zero *limitation room*, but the floor
+      // belongs on the YEAR's net rental income, not on each month: this action
+      // fires monthly, so flooring per event summed the positive months and threw
+      // the negative ones away, leaving foreignPassiveIncomeYTD larger than the
+      // rent that actually reached usOrdinaryIncomeYTD. The baskets then no longer
+      // partitioned gross income and the §904 fractions could sum past 1 — caught
+      // by _assertFtcInvariants once design 83 G1 landed. computeTax applies the
+      // single annual Math.max(0, …) when it forms the basket numerator.
       //
       // Step 3: attributed by ownership rather than written to the household
       // scalar. perPersonShare splits a household scalar evenly across residents,
@@ -197,7 +203,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
           ...state,
           usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
-          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
+          foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
         };
         // Resident or not, AU-situs rent is AU assessable income on the marginal
         // bracket path — the resident schedule for a resident, the foreign-resident
@@ -321,10 +327,33 @@ export class AuTaxModule2026 extends BaseTaxModule {
       }],
 
       // EVT-22: super withdrawal of earnings — US ordinary income, no AU tax
-      ['SUPER_WITHDRAWAL_EARNINGS_TAX', (state, action) => ({
-        ...state,
-        usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
-      })],
+      // (tax-free after 60), and — design 83 G6 — §904 GENERAL basket income.
+      //
+      // Foreign source. Pub 514's sourcing table puts "investment earnings on pension
+      // contributions" at the *location of the pension trust*, and the trust is
+      // Australian, so this is foreign-source income that was never US-source and
+      // needs no re-sourcing. General category because a pension distribution is
+      // absent from Pub 514's passive list (dividends, interest, rents, royalties,
+      // annuities, net gain on investment property) and general is the residual;
+      // treaty Art. 18(5) confirms super is not an "annuity" for treaty purposes,
+      // since annuities require consideration *other than* services rendered.
+      //
+      // Before this, the classifier touched usOrdinaryIncomeYTD and nothing else,
+      // which is worse than a missing numerator: the withdrawal RAISED the §904
+      // denominator, diluting every other basket, while adding nothing to any
+      // numerator. US tax went up and the capacity to relieve it went down, from the
+      // same dollar. Australian super is tax-free after 60, so there is no AU tax on
+      // the super itself to credit — but the distribution still generates general-
+      // basket limitation room that AU tax from other sources can fill, which is why
+      // this was inert until G3 moved that tax into the general pool.
+      ['SUPER_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
+        const usd = toUSD(action.amount, 'AUD', state);
+        return {
+          ...state,
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd,
+        };
+      }],
 
       // EVT-23: super earnings — AU super tax at 15% in accumulation phase;
       //   0% in pension/retirement phase (member ≥ 60), signalled by action.taxRate.

@@ -441,5 +441,11 @@ test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(auOrdinaryFor(sim.state), 20000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
+  // Design 83 G10 part 3 — an RMD is an Art. 18(1) pension: Australia has the taxing
+  // right and the US charge survives only on the Art. 1(3) saving clause, which
+  // Art. 22(2) excludes from Australia's credit. So there is no FITO removal slice;
+  // relief runs the other way, through the §904 general basket under Art. 22(4).
+  // This assertion used to require `usSourceOrdinaryUsdYTD > 0`.
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD ?? 0, 0);
+  assert.strictEqual(sim.state.foreignGeneralIncomeYTD, 20000);
 });

@@ -90,6 +90,10 @@ export class UsSavingsInterestCreditReducer extends Reducer {
         auPersonOrdinaryIncomeYTD:      add(state.auPersonOrdinaryIncomeYTD, share),
         auPersonUsSourceOrdinaryAudYTD: add(state.auPersonUsSourceOrdinaryAudYTD, share),
         usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + action.amount,
+        usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + action.amount,
+        // Design 83 G10 part 2 — subset tag: Art. 11(2) caps the US tax Australia
+        // may credit under Art. 22(2) at 10% of the gross interest.
+        usSourceInterestUsdYTD: (state.usSourceInterestUsdYTD ?? 0) + action.amount,
       });
     }
     return this.newState(base);
