@@ -262,7 +262,23 @@ function runDefaultIntlRetirement() {
 // netLiability, plus the second-order drawdown differences a smaller super book causes.
 // A sharp DROP of ~A$81k-equivalent here would mean that hand-off was lost and the
 // metric has stopped counting tax the household is still paying.
-const EXPECTED_LIFETIME_TAX = 723_849;
+//
+// Design 83 G5 (Art. 22(4) non-erosion), −5.8% (723,849 → 682,015). Net worth moved
+// under the tolerance and is unchanged. The Art. 22(2) figure handed to Australia is
+// now the marginal US **regularTax** on US-source income — measured before any credit
+// for Australian tax, which is what Art. 22(4)'s second sentence requires — instead of
+// a marginal `netLiability` that had already been reduced by that very credit.
+//
+// DOWN is the expected direction and is not the ftcYTD over-relief this test guards
+// against. The relief being handed to Australia is bounded twice and independently:
+// by the §770-75 FITO limit on the AU side (the marginal AU tax on the US-source
+// income — Australia cannot forgive more than it charged) and by the Art. 10(2)(b) /
+// 11(2) rate ceilings on the US side. Design 83 §18 measures both. What changed is
+// which country collects, not whether relief exists — and note the sign is
+// plan-specific: on the full reference plan the same change moved lifetime tax the
+// other way (+US$103k), because there the displaced AU tax had been fully usable as
+// US foreign tax credit and here it is not.
+const EXPECTED_LIFETIME_TAX = 682_015;
 const EXPECTED_NET_WORTH     = 12_183_627;
 const TOL = 0.01;
 

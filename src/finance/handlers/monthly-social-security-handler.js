@@ -68,9 +68,15 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
       if (retDate && date < new Date(retDate)) continue;
 
       actions.push(
-        // Design 76 Gap B: stamp WHOSE benefit this is. Social Security is
+        // Design 76 Gap B: stamp WHOSE benefit this is — Social Security is
         // per-recipient by definition and the two people have different
-        // entitlements, so it must never be halved across the household.
+        // entitlements, so it must never be halved across a household.
+        //
+        // Design 83 G11: no AU return currently consumes either stamp. Art. 18(2)
+        // reserves US Social Security to the United States, so the classifier books
+        // it identically whatever `residency` says. Both fields stay on the action:
+        // they describe the payment, and a country that *may* assess a foreign
+        // public pension would need exactly them.
         { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null, personKey: key },
         new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
       );

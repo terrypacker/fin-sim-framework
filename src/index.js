@@ -288,7 +288,7 @@ import { US_STATES, US_STATE_CODES, usStateName, usStateOptionPairs } from './fi
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
-import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
@@ -1206,6 +1206,7 @@ export const Finance = {
   toAUD,
   TAX_FX_PAIR,
   taxFxRate,
+  withoutUsSourceIncome,
   UsTaxSettleHandler,
   AuTaxSettleHandler,
   UsTaxSettleApplyReducer,

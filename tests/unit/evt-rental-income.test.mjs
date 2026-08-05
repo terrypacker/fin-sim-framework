@@ -307,10 +307,14 @@ test('EVT-RENT-11: a US-resident landlord\'s AU rent IS assessed in Australia', 
   assert.strictEqual(findDiff(taxes[0], 'auPersonNonResidentWithholdingYTD.primary'), undefined);
 });
 
-test('EVT-RENT-12: a rental LOSS stays signed into the AU accumulator', () => {
-  // The Math.max(0, ...) floor is correct for the §904 basket numerator alone —
-  // a loss contributes zero limitation room. It must not reach the assessable
-  // accumulator, where a negative net rent legitimately reduces taxable income.
+test('EVT-RENT-12: a rental LOSS stays signed into EVERY accumulator', () => {
+  // A negative net rent legitimately reduces assessable income, and it must reach
+  // the §904 passive accumulator signed as well (design 83 G1). The zero floor
+  // belongs on the YEAR's net rent, applied once when computeTax forms the basket
+  // numerator — not on each monthly event. Flooring per event summed the positive
+  // months and discarded the negative ones, so foreignPassiveIncomeYTD drifted
+  // above the rent that reached usOrdinaryIncomeYTD, the baskets stopped
+  // partitioning gross income, and the §904 fractions could sum past 1.
   const cfg = auConfig({ mortgageBalance: 500000, mortgageInterestRate: 0.06, monthlyMortgage: 0 });
   cfg.persons = [{ ...primary, citizen: ['US'], residency: 'US' }];
   const { sim } = loadToolsetScenario(cfg);
@@ -321,6 +325,8 @@ test('EVT-RENT-12: a rental LOSS stays signed into the AU accumulator', () => {
   const auDelta = findDiff(taxes[0], 'auPersonOrdinaryIncomeYTD.primary').delta;
   assert.ok(auDelta < 0, `a geared property should book a negative net rent, got ${auDelta}`);
   assert.strictEqual(auDelta, -1475);
-  // The basket numerator, by contrast, is floored at zero — so it records no change.
-  assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD'), undefined);
+  // The §904 accumulator moves by the same signed amount as the US ordinary income
+  // it is a subset of — that equality is what keeps the baskets a partition.
+  assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD').delta, -1475);
+  assert.strictEqual(findDiff(taxes[0], 'usOrdinaryIncomeYTD').delta, -1475);
 });

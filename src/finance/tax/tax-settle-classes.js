@@ -33,6 +33,10 @@ const YTD_FIELDS = {
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
+       // design 83 G3 — re-sourced income, split by §904 category
+       'usSourceGeneralUsdYTD', 'usSourcePassiveUsdYTD',
+       // design 83 G10 part 2 — treaty-rate-capped subsets of usSourceOrdinaryUsdYTD
+       'usSourceDividendsUsdYTD', 'usSourceInterestUsdYTD',
        'ftcCurrentGeneral', 'ftcCurrentPassive', 'ftcCurrentResourced',
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
        'neInheritanceTaxYTD'],
@@ -60,6 +64,65 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonUsSourceCapGainsAudYTD',
   'auPersonUsSourceRealCapGainsAudYTD',
 ];
+
+/**
+ * The Art. 22(2) counterfactual: this taxpayer's state with every trace of US-source
+ * income removed — design 52 §4.6, corrected by design 83 G8.
+ *
+ * Exported because more than one caller needs it and they must not drift apart. The
+ * FITO handoff builds it, and so does any probe measuring that handoff; when this
+ * lived inline in the handler, a probe's copy silently went stale the moment G3 added
+ * the per-character accumulators, and the §904 invariants caught it as a partition
+ * violation rather than as the duplication it was.
+ *
+ * Everything the US-source income created has to go with it: the tax buckets, the
+ * §904 limitation room it opened (`usSource{General,Passive}UsdYTD`), and the AU tax
+ * staged against that room. Leaving any of them behind produces a return that claims
+ * relief for income it no longer contains, at a *larger* limitation fraction than the
+ * real one — which understates the counterfactual's tax, widens the differential, and
+ * over-funds Australia's FITO.
+ *
+ * @param {object} state
+ * @returns {object} a new state; the input is not mutated
+ */
+export function withoutUsSourceIncome(state, { keepTreatyCapped = false } = {}) {
+  // Design 83 G10 part 2 — `keepTreatyCapped` leaves the dividend and interest slices
+  // in place, so a second counterfactual can isolate the US tax attributable to the
+  // rate-capped items from the tax on everything else. Both are always passive, which
+  // is why only the passive basket needs the adjustment.
+  const capped = keepTreatyCapped
+    ? (state.usSourceDividendsUsdYTD ?? 0) + (state.usSourceInterestUsdYTD ?? 0)
+    : 0;
+  return {
+    ...state,
+    usOrdinaryIncomeYTD:     (state.usOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryUsdYTD ?? 0) + capped,
+    usCapitalGainsYTD:       (state.usCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsUsdYTD ?? 0),
+    usSourceOrdinaryUsdYTD:  capped,
+    usSourceCapGainsUsdYTD:  0,
+    usSourceGeneralUsdYTD:   0,
+    usSourcePassiveUsdYTD:   capped,
+    usSourceDividendsUsdYTD: keepTreatyCapped ? (state.usSourceDividendsUsdYTD ?? 0) : 0,
+    usSourceInterestUsdYTD:  keepTreatyCapped ? (state.usSourceInterestUsdYTD  ?? 0) : 0,
+    // Pre-G3 saved states only; `_computeFtc` folds these into general, so the
+    // counterfactual has to drop them for the same reason as the rest.
+    ftcCurrentResourced:     0,
+    ftcPoolResourced:        {},
+  };
+}
+
+/**
+ * Art. 10(2)(b) — the US may tax dividends paid to an Australian resident at no more
+ * than **15 percent of the gross amount**. (The 5% rate in sub-paragraph (a) is for a
+ * company holding ≥10% of the voting power, which an individual never is.)
+ */
+const TREATY_DIVIDEND_CAP = 0.15;
+
+/**
+ * Art. 11(2) — the US may tax interest arising in the US at no more than **10 percent
+ * of the gross amount**. The paragraph (3) exemptions cover governments, central banks
+ * and unrelated financial institutions, none of which is an individual investor.
+ */
+const TREATY_INTEREST_CAP = 0.10;
 
 // ─── TaxSettleHandler base + per-country subclasses ───────────────────────────
 
@@ -98,13 +161,95 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
     // with/without pass is exact where a proportional split is not: it holds FEIE
     // and the AU-source FTC constant and reflects that US-source income consumes
     // §904 headroom (removing it raises the foreign fraction in the "without" pass).
-    const withoutState = {
-      ...state,
-      usOrdinaryIncomeYTD: (state.usOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryUsdYTD ?? 0),
-      usCapitalGainsYTD:   (state.usCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsUsdYTD ?? 0),
-    };
-    const usTaxWithout   = this._settleService.computeUsTax(withoutState).netLiability;
-    const usTaxOnUsSource = Math.max(0, taxDetail.netLiability - usTaxWithout);
+    //
+    // Design 83 G8: the counterfactual is "this taxpayer had no US-source income",
+    // so everything that income created has to go with it — the tax buckets, the
+    // §904 limitation room, and the AU tax staged against that room. Leaving any of
+    // them behind produced a return that claimed relief for income it no longer
+    // contained, and because totalTaxable fell while the numerators held, at a
+    // *larger* limitation fraction than the real return. The "without" pass then
+    // paid LESS tax than it should, which widened the differential, OVER-stated the
+    // US tax on US-source income, and over-funded Australia's FITO. Measured on the
+    // reference plan: fixing this raises lifetime AU tax ~A$64k and lowers lifetime
+    // US tax ~US$43k (the extra AU tax returns as FTC).
+    //
+    // After G3 the re-sourced income lives in the general/passive baskets, so the
+    // per-character accumulators come out too. This is exactly why they are tracked
+    // apart from foreign*IncomeYTD: a merged accumulator cannot be un-merged here.
+    //
+    // Design 83 G5 — the differential is taken on `regularTax`, NOT `netLiability`.
+    //
+    // Art. 22(2) speaks of United States tax "paid", which reads as post-credit and is
+    // what this line used to compute. Art. 22(4) then adds the sentence that exists
+    // precisely to stop that reading eroding it: "The credit so allowed against United
+    // States tax **shall not reduce that portion of the United States tax that is
+    // creditable against Australian tax in accordance with paragraph (2)**." So the
+    // 22(2) portion must be measured with the 22(4) credit disregarded, and the 22(4)
+    // credit computed against it — a one-directional dependency, which is why the
+    // treaty states the paragraphs in that order.
+    //
+    // §11 offered a narrower option (a): suppress only the re-sourced basket. G3
+    // deleted that basket, and §14.5 measured (a) as an exact no-op afterwards. The
+    // objection §11 raised to this broader form — "the general/passive credits are not
+    // 22(4) relief" — was true only while the third basket existed. Australia is the
+    // model's only foreign taxing jurisdiction, so **every** credit in every basket is
+    // credit for Australian income tax allowed under Art. 22(1)/(4), and the whole of
+    // it is what the non-erosion sentence protects against. That also makes §14.5's
+    // "apportion a blended basket credit between its foreign and re-sourced halves"
+    // moot: there is nothing to apportion when both halves are 22(4) relief.
+    //
+    // `regularTax` and not `grossTax`: §26(b)(1) Chapter-1 income tax, so the §72(t)
+    // additional tax, NIIT, SECA and the Additional Medicare surtax stay out — the same
+    // line design 83 G2 drew for the §904 limitation base, and the same one Art. 2
+    // (Taxes Covered) draws for what Australia is being asked to credit.
+    const usTaxWithout   = this._settleService.computeUsTax(withoutUsSourceIncome(state)).regularTax;
+    const marginalOnAll  = Math.max(0, taxDetail.regularTax - usTaxWithout);
+
+    // Design 83 G10 part 2 — cap the rate-capped slices at what the treaty allows.
+    //
+    // Art. 22(2) lets Australia credit "United States tax paid … in respect of income
+    // derived from sources in the United States", and Art. 10(2)(b)/11(2) cap what the
+    // US may charge a resident of Australia on dividends and interest at 15% and 10%
+    // of the GROSS amount. The marginal figure above is the *citizen's* rate, which is
+    // higher; the excess is US tax imposed by reason of citizenship, and Art. 22(2)
+    // expressly excludes that (Art. 27(1)(b) refuses to deem it US-source at all).
+    //
+    // Decomposed by chaining two counterfactuals rather than apportioning:
+    //   marginalOnUncapped = full − (full without the uncapped items)
+    //   marginalOnCapped   = marginalOnAll − marginalOnUncapped
+    // Marginal attribution is order-dependent, so the order is a choice: uncapped
+    // first, then the capped slice on top. That is the conservative reading for the
+    // cap — the capped items are measured at the taxpayer's HIGHEST rates, so the
+    // ceiling binds where it should rather than being flattered by a low-bracket
+    // measurement. The two parts still sum to marginalOnAll exactly.
+    //
+    // `min` and not a flat substitution: the treaty caps the credit, it does not
+    // create one. Where the actual US tax on the slice is below the ceiling — a
+    // qualified dividend inside the 0% LTCG bracket, or a year the FTC already wiped
+    // the liability — Australia may credit only the tax actually paid.
+    const cappedGross = (state.usSourceDividendsUsdYTD ?? 0) + (state.usSourceInterestUsdYTD ?? 0);
+    let usTaxOnUsSource = marginalOnAll;
+    if (cappedGross > 0) {
+      // Design 83 G5 — `regularTax` here too, so both legs of the decomposition are
+      // measured on the same pre-credit basis and still sum to marginalOnAll exactly.
+      const usTaxWithoutUncapped = this._settleService
+        .computeUsTax(withoutUsSourceIncome(state, { keepTreatyCapped: true })).regularTax;
+      const marginalOnUncapped = Math.max(0, taxDetail.regularTax - usTaxWithoutUncapped);
+      const marginalOnCapped   = Math.max(0, marginalOnAll - marginalOnUncapped);
+      const treatyCeiling      = TREATY_DIVIDEND_CAP * (state.usSourceDividendsUsdYTD ?? 0)
+                               + TREATY_INTEREST_CAP * (state.usSourceInterestUsdYTD  ?? 0);
+      // Stated as "either the ceiling binds or it does not", rather than as
+      // `uncapped + min(capped, ceiling)`. The two agree whenever the decomposition
+      // is monotone, but the zero clamps above can make the parts sum to slightly
+      // more than the whole in a year where removing income RAISES tax (the §904
+      // limitation is not monotone in income). Writing it this way means a
+      // non-binding ceiling is exactly inert instead of leaving a rounding scar on
+      // the handoff — which is what the reference plan showed: the ceiling never
+      // binds there, and the naive form still shifted lifetime tax by ~\$2k.
+      usTaxOnUsSource = marginalOnCapped > treatyCeiling
+        ? marginalOnUncapped + treatyCeiling
+        : marginalOnAll;
+    }
     const usTaxPaidOnUsSourceAud = toAUD(usTaxOnUsSource, 'USD', state);
 
     return [
@@ -246,7 +391,12 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     if (ftc) {
       patches.ftcPoolGeneral   = ftc.nextPoolGeneral   ?? {};
       patches.ftcPoolPassive   = ftc.nextPoolPassive   ?? {};
-      patches.ftcPoolResourced = ftc.nextPoolResourced ?? {};
+      // Design 83 G4 — the re-sourced basket is gone. `_computeFtc` folded any
+      // surviving balance into the general pool, so clearing it here is what makes
+      // the heal idempotent: leaving it would fold the same vintages in again at
+      // every subsequent settle. `ftcCurrentResourced` needs no line — it is in
+      // YTD_FIELDS and resets to 0 with the rest of the US accumulators.
+      patches.ftcPoolResourced = {};
     }
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
@@ -269,21 +419,32 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static description     = 'Resets AU YTD tax fields after settlement; funds the US §904 current-year foreign tax per basket; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
 
   /**
-   * Fund the US §904 pools (design 52 §4.4). Apportion the creditable AU liability
-   * to the two baskets by AU-source income share, convert to USD, and stage it as
-   * the current-year foreign tax the next US settle consumes.
+   * Fund the US §904 pools (design 52 §4.4). Apportion the AU liability across the
+   * two baskets by basket income share, convert to USD, and stage it as the
+   * current-year foreign tax the next US settle consumes.
    *
-   * One amount is removed before apportioning:
+   * **Design 83 G3 — nothing is removed before apportioning any more.** This method
+   * used to subtract the AU tax on US-SOURCE income and stage it in a third,
+   * "re-sourced by treaty" basket of its own. Both halves of that are now gone:
    *
-   *   **AU tax on US-SOURCE income** (design 71 §14). Foreign tax on US-source
-   *      income is not creditable: §904 exists precisely to stop it, and the US is
-   *      the source country here — AU relieves the double tax from its side, via
-   *      FITO. `fitoLimit` is exactly this quantity, since the ATO "step 1 − step 2"
-   *      calculation is the marginal AU tax on the US-source slice; FITO already
-   *   relieved `fito` of it, so `fitoLimit − fito` is what survives inside the AU
-   *   net liability.
+   *   - **The third basket should never have existed** for this taxpayer.
+   *     Reg. §1.904-4(k)(1)(iv)(A) switches off the separate-category treatment of
+   *     §904(d)(6) for *"any item of income deemed to be from foreign sources by
+   *     reason of the relief from double taxation rules in any U.S. income tax
+   *     treaty that is solely applicable to U.S. citizens who are residents of the
+   *     other Contracting State"*. Art. 22(4) opens with exactly that clause. The
+   *     income is still re-sourced (Art. 27(1)(c)), it just lands in its ordinary
+   *     category — the US classifiers now book it into general/passive by character.
+   *   - **So the whole AU liability is creditable**, and the general/passive income
+   *     shares below already include the re-sourced income, which is what makes the
+   *     apportionment land the tax in the same basket as the income that bore it.
    *
-   * **Super fund tax used to be removed here too, and no longer needs to be.**
+   * Two baskets partitioning one taxpayer's income also means the §904 fractions
+   * cannot sum past 1 — the invariant design 83 G1 asserts. Before G3, the third
+   * basket's numerator was a subset of the other two's denominator, which is how a
+   * limitation fraction of 5.157 became possible.
+   *
+   * **Super fund tax is not removed here either, and no longer needs to be.**
    * Design 77 took the Div 295 fund tax out of the AU *member's* net liability
    * entirely (it is withheld inside the fund at accrual), so `action.tax` no longer
    * contains it and subtracting it again would understate the creditable base by
@@ -292,95 +453,57 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    * §901 credits the person on whom foreign law imposes legal liability
    * (Treas. Reg. §1.901-2(f)) and that person is the fund's trustee, not the member.
    * Design 77 §3.1 carries the reasoning.
-   *
-   * Removing the US-source amount is the fix for a real over-relief leak. The previous code removed
-   * only super tax, on the stated assumption that "FITO has already reduced the AU
-   * liability by the US tax on US-source income, so the residual is predominantly
-   * AU-source tax". That holds only while FITO fully relieves — i.e. while the US
-   * tax on the US-source income is at least the AU tax on it. When AU's rate is the
-   * higher one (a large capital gain: ~45% AU against 15–20% US LTCG), most of the
-   * AU tax survives FITO and was being staged as creditable foreign tax. The §904
-   * limitation then correctly refused to credit it *that year* — but it banked as a
-   * 10-year carryforward vintage and was drawn down in later years against genuinely
-   * foreign income, so the over-relief was deferred rather than prevented.
    */
   _extraStatePatches(state, action) {
-    const usSourceAuTax = _auTaxOnUsSourceIncome(action, state);
-    const auCreditable  = Math.max(0, (action.tax ?? 0) - usSourceAuTax);
-    const gen   = state.foreignGeneralIncomeYTD ?? 0;
-    const pass  = state.foreignPassiveIncomeYTD ?? 0;
+    const auCreditable = Math.max(0, action.tax ?? 0);
+    const gen   = Math.max(0, state.foreignGeneralIncomeYTD ?? 0);
+    const pass  = Math.max(0, state.foreignPassiveIncomeYTD ?? 0);
     const denom = gen + pass;
-    const generalShare = denom > 0 ? gen / denom : 0;
+    // Design 83 G10 — carry this FY's realised AU rate on capital gains forward for
+    // the §865(g)(2) test on the next US return. A one-settle lag is not a
+    // compromise here, it is the real filing sequence: the AU FY ends 30 June and
+    // the US CY on 31 December, so a taxpayer filing a US return always knows the AU
+    // tax on the earlier gains and estimates the later ones. Null (no gains this FY)
+    // leaves the previous determination standing rather than reading as 0%.
+    const cgtRate = _auCgtEffectiveRate(action);
+    // With no basket income there is nothing to apportion against. Default to
+    // general: it is the residual §904 category, and a pool with no income to sit
+    // against is limited to zero credit anyway, so this only decides which pool
+    // banks the vintage.
+    const generalShare = denom > 0 ? gen / denom : 1;
     return {
       ftcCurrentGeneral: toUSD(auCreditable * generalShare,       'AUD', state),
       ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
-      // Design 72 §1 — treaty re-sourcing. The AU tax that FITO did NOT relieve
-      // (usSourceAuTax) is AU tax on US-SOURCE income. Excluded from the general/
-      // passive baskets above because §904 will not credit foreign tax against
-      // US-source income — correct as far as it goes, but previously it was simply
-      // DROPPED, so the US and AU taxes on the same gain became additive.
-      //
-      // The US–AU treaty (Art. 27) re-sources such income to foreign source "as
-      // necessary to permit relief from double taxation under Art. 22", for §904
-      // limitation purposes only — Form 1116's "certain income re-sourced by
-      // treaty" category. So it belongs in its own basket with its own limitation,
-      // not in the bin. Result: max(US, AU) rather than US + AU.
-      ftcCurrentResourced: toUSD(usSourceAuTax, 'AUD', state),
+      ...(cgtRate != null ? { auCgtEffectiveRate: cgtRate } : {}),
     };
   }
 }
 
 /**
- * AU tax attributable to US-source income that FITO did not relieve, in AUD —
- * the amount the US must not treat as creditable foreign tax (design 71 §14).
+ * The household's realised effective AU rate on capital gains this FY — design 83
+ * G10, the §865(g)(2) input.
  *
- * Sums over the per-person returns (or the single household return). `fitoLimit` is
- * null under the A$1,000 de-minimis shortcut, where the limit is deliberately not
- * computed; those years contribute 0, leaving the prior behavior untouched for
- * amounts too small to matter.
+ * Weighted by each person's gross gains rather than averaged, because the test is
+ * about the tax borne by *the gain*: one spouse realising a large discounted gain in
+ * a low bracket and the other a small one in the top bracket must not average into a
+ * rate neither of them paid. Returns null when nobody realised a gain, which the
+ * caller treats as "no new information" rather than as 0%.
  *
  * @param {object} action  the AU_TAX_SETTLE_APPLY action
- * @returns {number} AUD
+ * @returns {?number} 0..1, or null
  */
-function _auTaxOnUsSourceIncome(action, state) {
+function _auCgtEffectiveRate(action) {
   const details = action.personTaxDetails?.length > 0
     ? action.personTaxDetails.map(p => p.taxDetail)
     : (action.taxDetail ? [action.taxDetail] : []);
-  if (details.length === 0) return 0;
-
-  // Per-person, because the A$1,000 de-minimis test is per-person (design 76 P4).
-  //
-  // Two ways a person's return can tell us how much of their AU tax sits on
-  // US-source income:
-  //
-  //   (a) fitoLimit computed — the limit IS the AU tax on their US-source income
-  //       (ATO "step 1 − step 2"), so the unrelieved part is limit − fito.
-  //   (b) fitoLimit null — they fell under the A$1,000 shortcut, where the limit is
-  //       deliberately not computed. Apportion their gross AU tax by their own
-  //       US-source share of assessable income instead. Approximate (the CGT
-  //       discount means gross buckets are not exactly the taxed amounts) but
-  //       bounded, and far closer than the zero this used to contribute.
-  //
-  // This was previously all-or-nothing: the (b) branch fired only when EVERY detail
-  // had a null limit, so a MIXED household — one spouse over the threshold, one
-  // under — contributed 0 for the under-threshold spouse and silently declared their
-  // whole liability to be AU-source, hence creditable. Latent for as long as the
-  // even split kept both spouses on the same side of the threshold; design 76 P4's
-  // income-share apportionment pushed them apart and FTC-US-9 caught it (~24k of a
-  // spouse's AU tax on US-source income leaking into the creditable base).
-  const perPersonUsSource = (d) => {
-    const usSource = (d?.inputs?.usSourceOrdinary ?? 0) + (d?.inputs?.usSourceCapGains ?? 0);
-    const total    = (d?.inputs?.ordinaryIncome   ?? 0) + (d?.inputs?.capitalGains    ?? 0);
-    if (!(usSource > 0) || !(total > 0)) return 0;
-    const fito     = d?.fito ?? 0;
-    const grossTax = (d?.netLiability ?? 0) + fito;
-    return Math.max(0, grossTax * Math.min(1, usSource / total) - fito);
-  };
-
-  return details.reduce((sum, d) => sum + (d?.fitoLimit != null
-    ? Math.max(0, d.fitoLimit - (d.fito ?? 0))   // (a)
-    : perPersonUsSource(d)),                     // (b)
-    0);
+  let taxed = 0, gains = 0;
+  for (const d of details) {
+    const g = d?.inputs?.capitalGains ?? 0;
+    if (!(g > 0) || d?.auCgtEffectiveRate == null) continue;
+    gains += g;
+    taxed += g * d.auCgtEffectiveRate;
+  }
+  return gains > 0 ? taxed / gains : null;
 }
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────

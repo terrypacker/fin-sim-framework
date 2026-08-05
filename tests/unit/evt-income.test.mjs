@@ -135,14 +135,22 @@ test('EVT-37: SS income records only 85% as US ordinary income', () => {
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1700); // 85% of 2000
 });
 
-test('EVT-37: SS income records full amount as AU ordinary income if AU resident', () => {
+// Design 83 G11 — Art. 18(2) reserves US Social Security to the United States, and
+// Art. 1(4)(a) exempts Art. 18(2) from the Art. 1(3) saving clause, so Australia
+// cannot reach it back as a resident. The AU-resident case must therefore look
+// exactly like the US-resident one. This assertion was inverted: it used to require
+// the full benefit in auOrdinaryIncomeYTD.
+test('EVT-37: SS income is taxable only in the US, even for an AU resident (Art. 18(2))', () => {
   const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  // design 51: US-source SS (USD) is normalized into the AUD auOrdinaryIncomeYTD bucket.
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1700);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+  // No AU tax on it ⇒ no Art. 22(2) credit for Australia to give, so nothing enters
+  // the FITO removal set and no Art. 27(1)(c) re-sourcing is "necessary".
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD ?? 0, 0);
+  assert.strictEqual(sim.state.usSourceGeneralUsdYTD ?? 0, 0);
 });
 
 test('EVT-37: SS income is not AU taxable if not AU resident', () => {
@@ -381,7 +389,12 @@ test('EVT-51: company sale records gain as AU capital gain if AU resident', () =
 
   // design 51: US-source company-sale gain (USD) is normalized into the AUD CGT bucket.
   assert.strictEqual(sim.state.auCapitalGainsYTD, 120000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.usSourceCapGainsUsdYTD > 0, 'FTC should be recorded for AU resident');
+  // Design 83 G10 — company shares are personal property, so §865(a) sources the
+  // gain by the seller's residence: foreign source for an AU-resident US citizen.
+  // It creates §904 passive limitation room and no Art. 22(2) removal slice.
+  assert.strictEqual(sim.state.usSourceCapGainsUsdYTD ?? 0, 0);
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0,
+    'the gain must still create §904 passive limitation room');
 });
 
 test('EVT-51: company sale is not AU taxable if not AU resident', () => {

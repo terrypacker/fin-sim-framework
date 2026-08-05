@@ -197,7 +197,27 @@ test('US STOCK_WITHDRAWAL_TAX: AU resident routes gain→US, auGain→AU & FTC',
   const next = fn(base, { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, auGain: 400, residency: 'AU' });
   assert.ok(near(next.usCapitalGainsYTD, 1000)); // US: original basis
   assert.ok(near(next.auCapitalGainsYTD, 400));  // AU: stepped-up basis
-  assert.ok(near(next.usSourceCapGainsAudYTD, 400));             // pre-move gain (600) earns no credit
+  // Design 83 G10 — §865(a) sources a personal-property gain by the seller's
+  // residence, so for an AU resident this is FOREIGN source: §904 passive limitation
+  // room, and NOT the Art. 22(2) removal set. `base` carries no measured AU CGT rate,
+  // so the §865(g)(2) test defaults to satisfied.
+  assert.ok(near(next.foreignPassiveIncomeYTD, 1000));
+  assert.ok(near(next.usSourceCapGainsAudYTD ?? 0, 0));
+});
+
+test('US STOCK_WITHDRAWAL_TAX: under the §865(g)(2) 10% floor the gain reverts to US-source', () => {
+  // The test has teeth: a 50%-discounted gain against Australia's lowest bracket is
+  // ~8%, below the statutory 10%, so the citizen is NOT treated as a nonresident and
+  // §865(a)(1) sources the gain in the United States after all — re-sourced by
+  // Art. 27(1)(c) into passive, and back inside the FITO removal set.
+  const fn = new UsTaxModule2026().getReducerFns().get('STOCK_WITHDRAWAL_TAX');
+  const base = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, usSourceCapGainsAudYTD: 0,
+                 auCgtEffectiveRate: 0.08 };
+  const next = fn(base, { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, auGain: 400, residency: 'AU' });
+  assert.ok(near(next.usSourceCapGainsUsdYTD, 1000));
+  assert.ok(near(next.usSourcePassiveUsdYTD,  1000));
+  assert.ok(near(next.usSourceCapGainsAudYTD, 400));
+  assert.ok(near(next.foreignPassiveIncomeYTD ?? 0, 0));
 });
 
 test('US STOCK_WITHDRAWAL_TAX: non-AU resident books US gain only', () => {
@@ -214,7 +234,11 @@ test('US STOCK_WITHDRAWAL_TAX: back-compat — missing auGain falls back to gain
   const next = fn({ usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, usSourceCapGainsAudYTD: 0 },
     { type: 'STOCK_WITHDRAWAL_TAX', gain: 1000, residency: 'AU' });
   assert.ok(near(next.auCapitalGainsYTD, 1000));
-  assert.ok(near(next.usSourceCapGainsAudYTD, 1000));
+  // Design 83 G10 — foreign source by default (no measured AU CGT rate to fail the
+  // §865(g)(2) test against), so the limitation room is passive and there is no
+  // Art. 22(2) removal slice. The back-compat point of this test is auGain → gain.
+  assert.ok(near(next.foreignPassiveIncomeYTD, 1000));
+  assert.ok(near(next.usSourceCapGainsAudYTD ?? 0, 0));
 });
 
 test('AU AU_STOCK_WITHDRAWAL_TAX: AU resident routes auGain to AU CGT & FTC', () => {

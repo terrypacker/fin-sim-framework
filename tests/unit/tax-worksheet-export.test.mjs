@@ -588,14 +588,25 @@ test('TWE-30: the US §904 worksheet exposes the limitation and its denominators
 
   // The §904 limit is `grossTax × basketIncome / totalTaxable`. All four inputs are
   // now on the worksheet, so the reader can recompute it.
-  const base   = at('§904 limitation base (Chapter-1 gross tax)');
+  const base   = at('§904 limitation base (§26(b)(1) regular tax)');
   const denom  = at('§904 total taxable income (denominator)');
-  const numer  = at('Passive — foreign income in basket');
+  const numer  = at('Passive — foreign taxable income (line 7)');
   const frac   = at('Passive — limitation fraction');
   const limit  = at('Passive — §904 limit');
   assert.ok(base && denom && numer && frac && limit);
   assert.ok(Math.abs(frac.amount - numer.amount / denom.amount) < 1e-9, 'frac is checkable');
   assert.ok(Math.abs(limit.amount - base.amount * frac.amount) < 0.005, 'limit is checkable');
+
+  // Design 83 G1 — the numerator is a Form 1116 line 7, so the two figures that
+  // turn gross basket income into foreign taxable income must be on the worksheet
+  // too. Without them the apportioned deduction is an unexplained subtraction.
+  const gross3e = at('Form 1116 line 3e — gross income, all sources');
+  const ded3c   = at('Form 1116 line 3c — deductions not definitely related');
+  const gross3d = at('Passive — gross foreign income (3d)');
+  const share3g = at('Passive — less apportioned deduction (3g)');
+  assert.ok(gross3e && ded3c && gross3d && share3g, 'the line-3 inputs are exposed');
+  assert.ok(Math.abs(-share3g.amount - ded3c.amount * (gross3d.amount / gross3e.amount)) < 0.005,
+    '3g = 3c × (3d ÷ 3e) is checkable from the worksheet alone');
 
   // credit = min(available, limit), drawn current-year first.
   const avail  = at('Passive — available (current + pool)');
