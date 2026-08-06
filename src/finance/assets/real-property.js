@@ -122,6 +122,12 @@ export class RealProperty extends Asset {
     // must be discharged by `mortgageMaturityYear`. Both null ⇒ no term (pre-86).
     this.mortgageInterestOnlyUntilYear = opts.mortgageInterestOnlyUntilYear ?? null;
     this.mortgageMaturityYear          = opts.mortgageMaturityYear          ?? null;
+    // §988 booking rate (design 86 G7): foreign units per USD on the date the
+    // mortgage was incurred. Only meaningful on a non-USD mortgage held by a US
+    // person, where each principal repayment realizes ordinary exchange gain or
+    // loss measured against it. null ⇒ stamped at the first payment, which treats
+    // the debt as incurred then and so UNDERSTATES §988 for an existing loan.
+    this.mortgageBookingFxRate         = opts.mortgageBookingFxRate         ?? null;
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;

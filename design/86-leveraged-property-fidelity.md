@@ -9,6 +9,11 @@ liquidity option* rather than a return bet. That reframing is what finally gives
 **G8** (dated, currency-denominated one-off expense) and **G9** (fund an expense from
 a nominated account) — plus it promotes **G7** from unscheduled to load-bearing.
 
+**P7 and P8 are now BUILT** (2026-08-05), so every gap in this document is closed
+except G3's standalone-loan half. Full suite green (4,487 + 977). What that leaves
+before §8's question can actually be answered is no longer engine work — it is
+running the study. See §8.8.
+
 Found while designing a study of AU mortgage **offset accounts** — whether cash is
 better parked in an offset (earning the loan rate, certain and untaxed) or invested
 (earning the market, risky and taxed). That question is decided almost entirely by the
@@ -349,10 +354,55 @@ a moving USD/AUD path this is not small, and it is a **cost of holding foreign
 leverage specifically** — which makes it in-scope for the question this design serves,
 even though it is the lowest-value item here. Documented, not scheduled.
 
-**Promoted by §8.** This was the lowest-value item while every run held the exchange
-rate constant, because a §988 gain on a pinned rate is identically zero. §8 requires a
-live FX process, and the moment the rate moves this stops being a rounding error and
-becomes a term in the very comparison §8 exists to make. It is now P8.
+**Promoted by §8, and BUILT as P8.** This was the lowest-value item while every run
+held the exchange rate constant, because a §988 gain on a pinned rate is identically
+zero — measured, and confirmed: `fxProcessModel: NONE` produces exactly zero §988
+events in every year. §8 requires a live FX process, and the moment the rate moves this
+stops being a rounding error.
+
+**Built.** `bookingFxRate` on `LoanAccount` and `mortgageBookingFxRate` on
+`RealProperty` record the rate the debt was incurred at; each principal repayment
+emits `SECTION_988_GAIN`, classified on the US return as ordinary income
+(§988(a)(1)(A)), US-sourced by the taxpayer's residence (§988(a)(3)(A)) and therefore
+in no foreign §904 basket. Four things are worth recording because they were decisions,
+not transcription:
+
+- **It is computed in the reducer, not the handler.** The handler's `payment` is only
+  the *scheduled* one; when the cash pool is short the reducer funds less, and only
+  principal actually repaid realizes exchange gain or loss. Computing it upstream
+  would book §988 on money that was never paid.
+- **The §988(e) asymmetry is modelled, because it is the point.** The income-producing
+  share recognizes gain *and* loss; the personal share recognizes gain (above the
+  §988(e)(2) \$200 de minimis) while the matching loss is disallowed as a personal loss
+  under §165(c). Measured on an identical currency move: a loss that is fully
+  deductible against a rental is worth **nothing at all** on the same property
+  unrented. The business fraction reuses G3's `deductibleFraction` — §988(e)(3)'s "to
+  the extent … §162 or §212" is the same fraction as s8-1's, and inventing a second
+  knob would mean maintaining two independently-wrong ones.
+- **A §988 loss must NOT be netted into `usOrdinaryIncomeYTD`.** That is G5b exactly:
+  gross income falls, the baskets do not, and the §904 partition collapses. It is
+  carried in `usSection988LossYTD` and enters `computeTax` through **both** `agi` and
+  `unrelatedDeductions` — the pair `usNegativeIncomeYTD` already uses, which is what
+  keeps `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE` exact.
+  There is a regression asserting a large §988 loss beside foreign income leaves the
+  invariant satisfied.
+- **Added principal re-books at a balance-weighted harmonic mean.** Negative
+  amortization or a redraw makes the debt a blend of dollars borrowed at two rates;
+  preserving the total USD booking value is the only blend that does not manufacture
+  §988 later out of an accounting choice.
+
+**Two structural silences, and they are the finding rather than a caveat.** An
+interest-only loan repays no principal, so it recognizes **nothing** until it
+amortises or matures — deferring decades of currency movement into whichever year the
+balloon lands, as a single lump of ordinary income. A fully offset loan is equally
+silent, because an offset suppresses interest without repaying principal. **§988 bites
+on repayment, not on holding the debt**, which means it does not weigh against holding
+a fully-offset facility at all — it weighs against *exercising* it.
+
+**Not modelled:** the §988 item on interest between accrual and payment
+(Reg. §1.988-2(b)(3)) is identically zero here because the two are simultaneous. Nor is
+§988 on the AUD *deposit* in the offset account itself; that is a separate transaction
+class and is out of scope.
 
 ---
 
@@ -374,6 +424,20 @@ amount, in a stated currency, on a stated date, funded from a stated account*.
 
 So "a known large domestic-currency expense in year *T*" is unreachable, and it is the
 event the entire §8 question is about.
+
+**BUILT as P7**, exactly as proposed below. `HEALTHCARE` → `EXPENSE_EVENTS`,
+`healthcareEvents` → `expenseEvents`, `HEALTHCARE_EXPENSE` → `EXPENSE_EVENT`. The
+scheduling helper (`buildExpenseEventSchedule`) lives beside the handler rather than in
+either toolset, because both retirement toolsets schedule these and a field added on
+one side only would change behaviour depending on which toolset owned the scenario.
+The `healthcareSpendingYTD` defect below was real and is fixed. Two things the
+implementation learned:
+
+- **`reducer-coverage-manifest.js` gates reducer renames** and caught this one, which
+  is what that gate is for.
+- **A blank UI field must write `null`, not `''`.** The handler resolves the
+  denomination with `currency ?? property ?? household`, and an empty string is not
+  nullish — it would win that chain and reach the converter as a bogus currency code.
 
 **Proposed: generalize `HEALTHCARE` rather than add a sibling strategy.** It is the
 same machinery two fields short; healthcare is one *category* of a general thing, not a
@@ -424,10 +488,16 @@ it was built to test. "Hold it" and "spend it first" are the only two behaviours
 available today, and the one that matters — **draw it when the need arrives** — is
 neither of them.
 
-**Proposed.** `fundFrom` on an expense event: a state key debited **directly**, falling
-back to the existing residency-default path when absent, or when the nominated account
-cannot cover the amount. Explicitly *not* routed through `drawdownPriority`, or the
-artefact above returns by another door.
+**BUILT as P7**, as proposed. `fundFrom` on an expense event: a state key debited
+**directly**, falling back to the existing residency-default path when absent, or when
+the nominated account cannot cover the amount. Explicitly *not* routed through
+`drawdownPriority`, or the artefact above returns by another door.
+
+Verified end-to-end across two currencies: an A\$150,000 event against a nominated
+account holding less than that drew what the account had, sent the remainder down the
+default path, and the two legs summed to **exactly** the event amount — each converting
+at its own account's edge. A part-funded event must not silently under-spend, and does
+not.
 
 This is the smallest change that makes a targeted draw expressible, and it generalizes:
 "fund this from that account" is a missing verb everywhere in the expense machinery, not
@@ -452,10 +522,11 @@ consumer costs a day rather than a redesign.
 
 ## 4. Tooling that must land alongside
 
-`scripts/lib/variant.mjs` has **no loan or offset lever**, and the parameter generator
-emits no params for a property's mortgage balance, payment, or rate spread, nor for an
-offset balance. Every axis of a leverage study is currently unreachable from a spec
-file, so none of this is measurable even once it is built.
+When this document was written `scripts/lib/variant.mjs` had **no loan or offset
+lever**, and the parameter generator emitted no params for a property's mortgage
+balance, payment, or rate spread, nor for an offset balance. Every axis of a leverage
+study was unreachable from a spec file, so none of this would have been measurable even
+once built. **All of the following are now built** (P1, then P7).
 
 - **`loan` lever** — `{ balance, monthlyPayment, primeSpread, interestOnly,
   deductibleFraction, termMonths }` against a loan state key.
@@ -463,6 +534,13 @@ file, so none of this is measurable even once it is built.
   **moves** value to a named account rather than creating it. Arms that don't hold
   total wealth constant are not comparable, and that is the easiest thing in this
   whole area to get wrong.
+- **`expenseEvents` lever** (P7) — dated one-off expenses in a chosen currency,
+  optionally funded from a nominated account. It **appends** rather than replacing, and
+  auto-enables the `EXPENSE_EVENTS` strategy by appending to `spendingStrategy` —
+  which is a multi-select, so clobbering it would disable the plan's real spending
+  strategy and change every arm rather than the one under test.
+- **`randomSeed` param** (§8.8) — not a `variant.mjs` lever but the same class of
+  problem: until it existed, no spec file could vary a stochastic run's path at all.
 
 Both follow the existing `applyProperty` pattern: write the record **and** the state
 entry **and** the param, via `makeSetParam`, because a workbench export populates the
@@ -482,12 +560,15 @@ the other source.
 | **P5** | G5 + G5b US §469 and the §904 partition | **done** | Promoted ahead of P4: until this landed, no unoffset arm could run at all without `FTC_LIMITATION_STRICT=off`. Reuses P3's pool pattern in the other jurisdiction.      |
 | **P4** | G3 `deductibleFraction`                 | **half** | The rental-path half is built. The standalone borrow-to-invest half is deferred — see §3 G3, it needs a §163(d) channel that must NOT reuse the §469 one P5 just built. |
 | **P6** | G6 term / IO expiry                     | open     | Depends on G2. Turns "hold leverage forever" into a testable assumption.                                                                                                |
-| **P7** | G8 expense events + G9 `fundFrom`       | open     | One change: G9 is a field on G8's entry. Together they are the whole of what §8 needs from the engine, and neither is useful alone.                                     |
-| **P8** | G7 §988                                 | open     | Promoted from unscheduled. §8 requires a live FX process; on a pinned rate a §988 gain is identically zero, so this was free to defer and no longer is.                 |
+| **P7** | G8 expense events + G9 `fundFrom`       | **done** | One change: G9 is a field on G8's entry. Together they are the whole of what §8 needs from the engine, and neither is useful alone.                                     |
+| **P8** | G7 §988                                 | **done** | Promoted from unscheduled. §8 requires a live FX process; on a pinned rate a §988 gain is identically zero, so this was free to defer and no longer is.                 |
 
 P7 is behaviour-preserving for any scenario that authors no expense events — which,
-measured, is **every** saved scenario. P8 is not: it changes tax in any plan holding
-foreign-currency debt across a moving rate.
+measured before the change, was **every** saved scenario, so there was no migration.
+P8 is not behaviour-preserving in principle, but it is inert wherever the exchange rate
+is pinned, which is every run predating §8.
+
+Both landed with the full suite green (4,487 + 977).
 
 P1, P2 and the built half of P4 are behaviour-preserving for any scenario that doesn't
 opt in. **P3 and P5 are not** — they change tax in any plan with a loss year.
@@ -515,6 +596,13 @@ Per-gap tests are listed above. Across all of them:
   the absence of a wiring. Absences are not self-documenting; pin it.
 - **Golden re-baseline** at P3, with the direction and magnitude of the change stated
   in the commit rather than inferred later.
+- **A regression that a §988 loss leaves the §904 partition intact** (P8). This is the
+  same failure G5b already cost a study run once; the loss is routed away from
+  `usOrdinaryIncomeYTD` precisely to avoid it, and that routing is a decision nothing
+  else in the code makes obvious.
+- **A regression that omitting `randomSeed` is byte-identical to seed 1** (§8.8), and
+  that an explicit `buildSim({ seed })` still wins. The second is what stops a scenario
+  parameter from silently collapsing every Monte Carlo path onto one ordering.
 
 ## 7. Open questions
 
@@ -536,6 +624,18 @@ Per-gap tests are listed above. Across all of them:
    directions, and §8 leans hard on the second. `deductibleFraction: null` preserves
    what I take to be the correct treatment, so nothing is broken — but the reading
    should be settled before anyone acts on §8's tax argument. See §8.3.
+
+   **P8 raised the stakes on this one.** `deductibleFraction` is now doing double duty:
+   it sets the s8-1 deduction *and*, via §988(e)(3), decides whether an exchange loss is
+   deductible at all. Reusing it is right — the two provisions ask the same question —
+   but it means an answer to Q4 moves two numbers, not one.
+
+5. **Should the AU offset *deposit* be a §988 transaction too?** P8 covers foreign
+   currency **debt** only. A US person's foreign-currency bank balance is also §988
+   property, with gain or loss on disposition. For a personal account §988(e) and its
+   \$200 de minimis apply, so the amounts are usually small — but "usually" is not
+   "always" for a balance of this size, and the offset is precisely the account §8 is
+   about. Out of scope, deliberately, and flagged rather than silently omitted.
 
 ---
 
@@ -602,19 +702,20 @@ facility that already exists; it is a bet on a future underwriting decision. Thi
 one part of the original premise — *take it while you can qualify* — that was always
 right, and it is right for this reason rather than for a return reason.
 
-### 8.4 None of this is currently measurable, and the reason is specific
+### 8.4 What blocked this, and what remains
 
-Three blockers, in order of severity:
+Three blockers were identified; **all three are now closed.**
 
 - **FX is pinned.** `fxProcessModel` defaults to `NONE`. **An option on an exchange rate
   is worth exactly zero in a model with a constant rate.** This does not invalidate any
   existing result — those answer the return question, which is FX-insensitive by
-  construction — but it does mean every result to date is *silent* on this one, rather
-  than negative on it.
-- **No dated, currency-denominated expense** (G8). The event the question is about
-  cannot be authored.
-- **No targeted funding** (G9). The draw itself cannot be expressed as distinct from
-  "hold forever" or "spend it first."
+  construction — but it does mean every result predating §8 is *silent* on this one,
+  rather than negative on it. Turning the process on is a parameter, not a change.
+- **No dated, currency-denominated expense** — G8, built as P7.
+- **No targeted funding** — G9, built as P7.
+
+A fourth blocker surfaced only once P8 made it visible, and it was the most dangerous
+of the four because it fails quietly: see §8.8.
 
 ### 8.5 The FX process, decided
 
@@ -651,3 +752,41 @@ does so at the moment cash is tightest — the payment steps up precisely when t
 for drawing has not gone away. Any arm that exercises must run G6 live, and a study that
 holds G6 fixed because "it was inert last time" will silently understate the cost of
 exercising.
+
+P8 adds a second interaction of the same shape. §988 recognizes nothing on a
+fully-offset or interest-only loan (§3 G7), so exchange gain and loss are **also** zero
+until exercise — and then arrive concentrated. Both of the plan's deferred risks,
+IO-expiry and currency, are triggered by the same act.
+
+### 8.8 The seed was not reaching the RNG — found while building P8
+
+Every stochastic process in the engine — FX (design 47), the yield curve (design 67),
+equity return paths (design 74) — draws from the single seeded `sim.rng`. There was **no
+scenario-level parameter feeding it.** `buildSim({ seed })` defaulted to 1 and only the
+Monte Carlo runner ever passed anything else, so every deterministic run of a stochastic
+scenario drew the identical sequence.
+
+This is worse than a missing feature, and it is worth stating plainly because it is the
+kind of thing that produces confident wrong answers: a seed sweep *appeared* to work.
+Eight different seeds returned eight results that happened to be identical, which reads
+as "the answer is robust to the path" when it actually means "one path was measured
+eight times." Design 74 fixed the mirror-image defect inside Monte Carlo; the single-run
+side was never wired at all.
+
+**Fixed** by a `randomSeed` parameter applied in `ScenarioLoader`. The location is
+forced: `buildSim()` runs *before* the params are loaded, so at construction time the
+scenario does not yet know its own seed. `Simulation.reseed()` repoints the generator in
+place, which is safe because `createRNG` returns a closure that re-reads `rngState` on
+every call, so a handler that already captured `sim.rng` is unaffected.
+
+**Precedence is the load-bearing part.** An explicit `buildSim({ seed })` always wins
+over the parameter. Monte Carlo depends on that: its per-iteration seed is the entire
+mechanism by which paths differ, and letting a scenario parameter override it would
+collapse every iteration onto one ordering — design 74's defect, re-entered from the
+other side. The default changed from `1` to `null` purely so that "the caller said
+nothing" is distinguishable from "the caller asked for 1"; a run that sets no seed is
+byte-identical to before, and there is a regression pinning that.
+
+**Consequence for §8.6's study:** paired arms on shared seeds are now actually possible.
+They were not before, and a paired Monte Carlo run on the old code would have compared
+arms across a single FX world while reporting per-path deltas.

@@ -218,6 +218,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._usBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
       ...this._rentalReducerFns(),
+      ...this._section988ReducerFns(),
       ...this._incomeReducerFns(),
       ...this._collectibleReducerFns(),
       ...this._iraRolloverReducerFns(),
@@ -575,6 +576,49 @@ export class UsTaxModule2026 extends BaseTaxModule {
           });
         }
         return next;
+      }],
+    ];
+  }
+
+  _section988ReducerFns() {
+    return [
+      // Design 86 G7 / P8 — exchange gain or loss on foreign-currency DEBT.
+      //
+      // §988(a)(1)(A) makes it ORDINARY, not capital, and §988(a)(3)(A) sources it
+      // by the residence of the taxpayer — so for this model it is US-source
+      // ordinary income and reaches NO foreign §904 basket. That is deliberate and
+      // it is the whole reason the loss half is booked separately below.
+      //
+      // A gain simply joins usOrdinaryIncomeYTD. A LOSS may not: reducing
+      // usOrdinaryIncomeYTD (hence grossIncomeAllSources) while leaving every
+      // foreign basket untouched is exactly the failure mode design 86 G5b records
+      // — basket gross comes to exceed total gross income, the baskets stop
+      // partitioning it, and the §904 denominator collapses. So the loss is carried
+      // in its own accumulator and enters computeTax as an unrelated deduction,
+      // which is apportioned across the baskets pro-rata. That is the same
+      // treatment usNegativeIncomeYTD already gets, and it keeps the identity
+      // totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE exact.
+      //
+      // `disallowedLoss` is the §988(e) personal share: recorded for the return, and
+      // deliberately NOT deductible anywhere. It is the foreign-mortgage trap — a
+      // currency move that cost real money and still produces no deduction.
+      ['SECTION_988_GAIN', (state, action) => {
+        const { amount = 0, disallowedLoss = 0 } = action;
+        const next = {
+          ...state,
+          usSection988DisallowedLossYTD: (state.usSection988DisallowedLossYTD ?? 0) + disallowedLoss,
+        };
+        if (amount >= 0) {
+          return {
+            ...next,
+            usOrdinaryIncomeYTD:  state.usOrdinaryIncomeYTD + amount,
+            usSection988GainYTD: (state.usSection988GainYTD ?? 0) + amount,
+          };
+        }
+        return {
+          ...next,
+          usSection988LossYTD: (state.usSection988LossYTD ?? 0) - amount,   // stored positive
+        };
       }],
     ];
   }

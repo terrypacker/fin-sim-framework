@@ -585,6 +585,16 @@ export const ECONOMIC_REGIMES = {
         description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor. Each sleeve scales this by its beta (US large-cap 1.0; AU stock 0.9; super 0.7 by default). Only used when Stochastic Equity Returns is on.',
       },
       {
+        key:          'randomSeed',
+        label:        'Random Seed',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Seed for the simulation\'s in-loop RNG — the single sequence every stochastic process draws from: FX (design 47), the yield curve (design 67) and equity return paths (design 74). null = 1, so a default run is unchanged. Changing it draws a DIFFERENT path from the same distribution, which is how a single deterministic run is varied without a Monte Carlo. Monte Carlo ignores this: it supplies its own per-iteration seed, and must, or every path would collapse onto one ordering.',
+      },
+      {
         key:          'equityReturnModel',
         label:        'Equity Return Process Model',
         type:         'Enum',

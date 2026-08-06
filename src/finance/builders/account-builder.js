@@ -99,6 +99,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._deductibleFraction = null;
     this._interestOnlyUntilYear = null;
     this._maturityYear          = null;
+    this._bookingFxRate         = null;
   }
 
   interestRate(v)      { this._interestRate      = v; return this; }
@@ -113,6 +114,8 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   interestOnlyUntilYear(v) { this._interestOnlyUntilYear = v; return this; }
   /** Calendar year the loan must be discharged (design 86 G6). */
   maturityYear(v) { this._maturityYear = v; return this; }
+  /** Foreign units per USD when the debt was incurred — the §988 basis (design 86 G7). */
+  bookingFxRate(v) { this._bookingFxRate = v; return this; }
 
   build() {
     return new LoanAccount(this._balance, {
@@ -125,6 +128,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       deductibleFraction: this._deductibleFraction,
       interestOnlyUntilYear: this._interestOnlyUntilYear,
       maturityYear:          this._maturityYear,
+      bookingFxRate:         this._bookingFxRate,
     });
   }
 }

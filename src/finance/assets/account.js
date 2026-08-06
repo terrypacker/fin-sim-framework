@@ -232,6 +232,13 @@ export class LoanAccount extends Account {
     // interest-only) forever, which is the pre-86 behaviour.
     this.interestOnlyUntilYear = opts.interestOnlyUntilYear ?? null;
     this.maturityYear          = opts.maturityYear          ?? null;
+    // §988 booking rate (design 86 G7 / P8): foreign units per USD on the date the
+    // debt was incurred. A non-USD loan held by a US person realizes ordinary
+    // exchange gain or loss on each PRINCIPAL repayment, measured against this rate.
+    // `null` ⇒ stamped at the first payment from the live rate, i.e. the loan is
+    // treated as incurred then. That understates §988 for a loan already outstanding
+    // at t0 rather than inventing a history; state the real rate to model it properly.
+    this.bookingFxRate      = opts.bookingFxRate      ?? null;
     this.drawdownPriority   = null; // a liability is never a source of drawdown cash
   }
 }

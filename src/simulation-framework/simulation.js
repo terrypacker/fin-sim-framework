@@ -435,6 +435,24 @@ export class Simulation {
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   }
 
+  /**
+   * Re-seed the in-loop RNG in place.
+   *
+   * `createRNG` returns a closure that reads `this.rngState` on every call, so the
+   * generator can be repointed after construction without rebuilding it — and
+   * without invalidating any handler that already captured `sim.rng`.
+   *
+   * Only meaningful BEFORE the run starts drawing. ScenarioLoader uses it to apply
+   * the scenario's `randomSeed` parameter, which is not known at `buildSim()` time
+   * because the params are loaded afterwards.
+   *
+   * @param {number} seed
+   */
+  reseed(seed) {
+    if (seed == null || !Number.isFinite(Number(seed))) return;
+    this.rngState = Math.trunc(Number(seed));
+  }
+
   createRNG(seed) {
     this.rngState = seed;
 

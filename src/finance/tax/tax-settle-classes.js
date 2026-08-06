@@ -42,7 +42,12 @@ const YTD_FIELDS = {
        'usSourceDividendsUsdYTD', 'usSourceInterestUsdYTD',
        'ftcCurrentGeneral', 'ftcCurrentPassive', 'ftcCurrentResourced',
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
-       'neInheritanceTaxYTD'],
+       'neInheritanceTaxYTD',
+       // design 86 G7 / P8 — §988 exchange gain/loss on foreign-currency debt. All
+       // three are per-year: §988 gain and loss are ordinary and current, with no
+       // carryforward of their own (a loss that outruns income becomes an NOL, which
+       // this model does not have — stated in design 86 §3 "Out of scope").
+       'usSection988GainYTD', 'usSection988LossYTD', 'usSection988DisallowedLossYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
        // design 73 Gap 2 — per-type non-resident final withholding
        'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',

@@ -174,3 +174,58 @@ test('EVT-FXP-4: FX_PROCESS_MODELS step functions behave per spec', () => {
   const decayed = FX_PROCESS_MODELS.MEAN_REVERTING(0.4, { ...ctx, z: 0 });
   assert.ok(decayed > 0 && decayed < 0.4, `expected decay toward 0, got ${decayed}`);
 });
+
+// ─── randomSeed parameter (design 86 P8 follow-up) ────────────────────────────
+
+/**
+ * `randomSeed` is applied by ScenarioLoader, not buildSim, because buildSim runs
+ * BEFORE the params are loaded. Before it existed the key was simply unread, so
+ * every run of a stochastic scenario drew the identical sequence and a "seed sweep"
+ * measured one path repeatedly.
+ */
+function fxPathForSeed(randomSeed, { explicitSeed = null } = {}) {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const cfg = makeConfig({ fxProcessModel: 'RANDOM_WALK', fxVolatility: 0.12 });
+  if (randomSeed != null) cfg.parameters.randomSeed = randomSeed;
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(cfg.simStart),
+    simEnd:   new Date(cfg.simEnd),
+  });
+  scenario.buildSim(explicitSeed != null ? { seed: explicitSeed } : {});
+  new ScenarioLoader().load(structuredClone(cfg), services);
+  scenario.sim.stepTo(new Date('2031-01-01'));
+  return scenario.sim.state.effectiveExchangeRates?.USD_AUD;
+}
+
+test('EVT-FXP-5: the same randomSeed reproduces the identical FX path', () => {
+  const a = fxPathForSeed(7);
+  const b = fxPathForSeed(7);
+  assert.strictEqual(a, b);
+});
+
+test('EVT-FXP-6: DIFFERENT randomSeeds draw different FX paths', () => {
+  const seen = new Set();
+  for (const s of [1, 2, 3, 4, 5]) seen.add(fxPathForSeed(s));
+  assert.ok(seen.size > 1,
+    'every seed produced the same rate — randomSeed is not reaching sim.rng, which '
+    + 'makes any seed sweep one path measured repeatedly');
+});
+
+test('EVT-FXP-7: omitting randomSeed is unchanged from seed 1', () => {
+  const absent = fxPathForSeed(null);
+  const one    = fxPathForSeed(1);
+  assert.strictEqual(absent, one, 'the default must stay byte-identical');
+});
+
+test('EVT-FXP-8: an explicit buildSim seed WINS over the parameter', () => {
+  // Monte Carlo depends on this: its per-iteration seed is the only thing making
+  // paths differ, so a scenario parameter must never be able to override it and
+  // collapse every iteration onto one ordering.
+  const viaParam    = fxPathForSeed(9);
+  const overridden  = fxPathForSeed(9, { explicitSeed: 3 });
+  const viaExplicit = fxPathForSeed(null, { explicitSeed: 3 });
+  assert.strictEqual(overridden, viaExplicit, 'the explicit seed must decide the path');
+  assert.notStrictEqual(overridden, viaParam, 'and the parameter must be ignored');
+});
