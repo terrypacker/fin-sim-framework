@@ -25,6 +25,7 @@ import assert   from 'node:assert/strict';
 import { computeGuardrailPortfolioValue } from '../../src/finance/spending/guardrail-portfolio-value.js';
 import { RetirementDateHandler }          from '../../src/finance/spending/strategies/retirement-date-handler.js';
 import { GuardrailAnnualCheckReducer }    from '../../src/finance/spending/strategies/guardrail-annual-check-reducer.js';
+import { computeNetWorth }                from '../../src/finance/derived-metrics/net-worth.js';
 
 // USD_AUD = 1.55 → 1 USD = 1.55 AUD
 const FX_RATE = 1.55;
@@ -83,6 +84,46 @@ test('SPEND-GR-FX-5: fallback rate 1:1 when exchange rate absent', () => {
   const v = computeGuardrailPortfolioValue(state, 'USD');
   // fallback rate = 1 → 200_000 / 1 = 200_000
   assert.ok(Math.abs(v - 200_000) < 0.01);
+});
+
+// ── The {code} descriptor shape a REAL run produces (design 82 §5.3) ─────────
+//
+// Every test above builds `currency` as a bare string. No real run does: an
+// account projected into state carries the `{code, symbol}` descriptor from
+// `Account#currency`. Guardrail's private FX copy compared that object against a
+// bare code, so the base-currency short-circuit never matched, the pair id came
+// out `USD_[object Object]`, and the missing-rate fallback of 1 valued every
+// FOREIGN drawdown account at FACE — an AUD super balance counted as if it were
+// USD, inflating the portfolio the guardrail rate is measured against by the FX
+// rate. USD accounts were right by accident, which is why nothing looked wrong.
+//
+// These two pin the descriptor shape specifically, because a string-only fixture
+// is what let the drift live. See src/finance/fx/to-base-currency.js.
+
+const USD_DESC = { code: 'USD', symbol: '$'  };
+const AUD_DESC = { code: 'AUD', symbol: 'A$' };
+
+test('SPEND-GR-FX-8: {code} descriptor currencies convert identically to bare codes', () => {
+  const state = {
+    effectiveExchangeRates: { USD_AUD: FX_RATE },
+    usSavings: { stateKey: 'usSavings', balance: 500_000, currency: USD_DESC, drawdownPriority: 1 },
+    auSuper:   { stateKey: 'auSuper',   balance: 310_000, currency: AUD_DESC, drawdownPriority: 2 },
+  };
+  const v = computeGuardrailPortfolioValue(state, 'USD');
+  // 500_000 USD + 310_000 AUD / 1.55 = 700_000 USD — NOT 810_000, which is what
+  // the unconverged copy returned.
+  assert.ok(Math.abs(v - 700_000) < 0.01, `got ${v}`);
+});
+
+test('SPEND-GR-FX-9: guardrail agrees with computeNetWorth on the same accounts', () => {
+  // The tie the convergence buys: two metrics quoted side by side cannot hold
+  // different opinions about what a dollar is.
+  const state = {
+    effectiveExchangeRates: { USD_AUD: FX_RATE },
+    usSavings: { stateKey: 'usSavings', balance: 500_000, currency: USD_DESC, drawdownPriority: 1 },
+    auSuper:   { stateKey: 'auSuper',   balance: 310_000, currency: AUD_DESC, drawdownPriority: 2 },
+  };
+  assert.ok(Math.abs(computeGuardrailPortfolioValue(state, 'USD') - computeNetWorth(state, 'USD')) < 1e-9);
 });
 
 // ── RetirementDateHandler with FX state ──────────────────────────────────────

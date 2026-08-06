@@ -20,6 +20,7 @@ import { get, set }                   from './mc-param-paths.js';
 import { computeNetWorth }            from '../derived-metrics/net-worth.js';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../derived-metrics/after-tax.js';
 import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
 import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
 
@@ -39,10 +40,9 @@ export function computeHouseValueUsd(state, baseCurrency = 'USD') {
   for (const val of Object.values(state)) {
     if (val == null || typeof val !== 'object') continue;
     if (val.kind !== 'real-property' || typeof val.value !== 'number') continue;
-    const currency = val.currency?.code ?? val.currency ?? baseCurrency;
-    if (currency === baseCurrency) { total += val.value; continue; }
-    const rate = state.effectiveExchangeRates?.[`${baseCurrency}_${currency}`] ?? 1;
-    total += val.value / rate;
+    // Shared valuation convention (design 82 §5.1a) — the house series and the net
+    // worth it is compared against must price AUD the same way.
+    total += toBaseCurrency(val.value, currencyOf(val, baseCurrency), baseCurrency, state);
   }
   return total;
 }
@@ -64,6 +64,16 @@ export function computeHouseValueUsd(state, baseCurrency = 'USD') {
  * @param {boolean} [opts.mix=false] also record the asset MIX (design 82 §8.1). Costs
  *        one cube build per sample; see §8.3 on why it is measured, not assumed cheap.
  */
+/**
+ * The cadence every MC `timeSeries` — and therefore every `pathShape` — is recorded
+ * on (design 82 §4/§8.3). Exported so an arm artifact can STAMP it: the switch off
+ * design 78's event cadence re-baselined the recorded series without changing a
+ * single run outcome, so an old arm JSON and a new one look equally well-formed and
+ * are silently not comparable. A stamp turns "remember not to compare across that
+ * boundary" into something a reader can check — see `mc-run.mjs` / `mc-report.mjs`.
+ */
+export const MC_SAMPLER_CADENCE = 'year-boundary';
+
 export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
   return function sampleTimeSeriesPoint(state, date) {
     const point = {
@@ -396,7 +406,7 @@ export class IntlRetirementMcRunner {
         // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
         // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
         // See design 82 §8.3; an arm JSON from before this change is not comparable.
-        scenario.buildSim({ seed, telemetry: 'off', sampler, samplerCadence: 'year-boundary' });
+        scenario.buildSim({ seed, telemetry: 'off', sampler, samplerCadence: MC_SAMPLER_CADENCE });
 
         const cfg = structuredClone(cfgTemplate);
         // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.

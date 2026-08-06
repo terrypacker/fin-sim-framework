@@ -9,6 +9,7 @@
  */
 
 import { getBirthDate } from '../residency-utils.js';
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -86,15 +87,10 @@ export function computeNetLiquidity(state, date = null, baseCurrency = 'USD') {
     if (val == null || typeof val !== 'object') continue;
     if (!isDrawdownAccessible(val, state, date)) continue;
 
-    const currency = val.currency?.code ?? val.currency ?? baseCurrency;
-
-    if (currency === baseCurrency) {
-      total += val.balance;
-    } else {
-      const pairId = `${baseCurrency}_${currency}`;
-      const rate   = state.effectiveExchangeRates?.[pairId] ?? 1;
-      total += val.balance / rate;
-    }
+    // The one valuation FX convention (design 82 §5.1a) — shared with computeNetWorth
+    // and the allocation cube so no two metrics can hold different opinions about
+    // what a dollar is.
+    total += toBaseCurrency(val.balance, currencyOf(val, baseCurrency), baseCurrency, state);
   }
 
   return total;

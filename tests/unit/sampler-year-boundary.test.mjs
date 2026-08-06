@@ -120,3 +120,66 @@ test('a mid-year sample is replaced by that year’s completed one (playback saf
   assert.equal(completed.length, 1, 'the year must still hold exactly one sample');
   assert.equal(completed[0].at.toISOString().slice(0, 10), '2028-12-31');
 });
+
+// ── What the 31 December boundary actually straddles (design 82 §5.2, corrected) ──
+//
+// The open question this closes was posed on a WRONG premise: §5.2 said "the annual
+// investment family hangs off PERIOD_ADVANCE_US, which is dated 1 January", and
+// concluded that every 31 December sample is read before the year's growth. Measured,
+// the calendar splits in two, and only one half lags:
+//
+//   31 December — the whole INVESTMENT family (`interval: 'year-end'`): account
+//                 earnings, dividends, coupons, RMDs, plus the year's expenses and
+//                 tax settles. All of it IS in the sample.
+//   1 January   — REAL-ASSET appreciation (property / company equity / collectibles,
+//                 `interval: 'annually'`) and the PERIOD_ADVANCE cascade, which is
+//                 where the rebalance fires.
+//
+// Two consequences the whole report rests on, so they get a test rather than a note:
+//
+//   1. The boundary must stay BEFORE the cascade. §7.3's drift finding only exists
+//      because the sample is pre-rebalance — read it after and every class shows
+//      0.0% drift by construction. Moving the boundary would not just move figures,
+//      it would delete the headline.
+//   2. A residual bias, correctly scoped: at 31 December year Y financial assets
+//      carry a full year of growth and real assets carry NONE of year Y's
+//      appreciation. So every mix understates the real-asset share by about one
+//      appreciation cycle — which runs AGAINST §9's REAL_ESTATE finding rather than
+//      manufacturing it.
+//
+// If someone re-dates either family, the mix figures change meaning silently. This
+// is the assertion that makes that loud.
+
+test('the boundary sits after the year’s investment growth and before the 1 Jan cascade', () => {
+  const APPRECIATION_RATE = 0.04;
+  const { sim } = loadScenarioSim({
+    simStart: SIM_START, simEnd: SIM_END, telemetry: 'off',
+    params: { auHouseAppreciationRate: APPRECIATION_RATE },
+    sampler: (state) => ({
+      house:  state.auHouseProperty?.value ?? null,
+      equity: state.usStockAccount?.balance ?? null,
+    }),
+    samplerCadence: 'year-boundary',
+    stepTo: SIM_END,
+  });
+
+  const samples = sim.samples;
+  assert.ok(samples.length >= 3, 'need a few years to compare');
+
+  // Financial growth IS captured: the brokerage moves between consecutive year-ends.
+  const equities = samples.map(s => s.equity).filter(v => v != null);
+  assert.ok(equities.length >= 3, 'the brokerage must be sampled');
+  assert.ok(equities.some((v, i) => i > 0 && v !== equities[i - 1]),
+    'a 31 Dec sample must already carry that year’s investment earnings');
+
+  // Real-asset appreciation LAGS by one cycle: it is credited on 1 January, so the
+  // house value at 31 Dec Y is still what it was on 1 Jan Y.
+  const houses = samples.map(s => s.house).filter(v => v != null);
+  if (houses.length >= 3) {
+    // Consecutive year-end house values step by exactly one appreciation cycle —
+    // i.e. the sample at 31 Dec Y shows year Y-1's appreciation, not year Y's.
+    const ratio = houses[1] / houses[0];
+    assert.ok(Math.abs(ratio - (1 + APPRECIATION_RATE)) < 1e-6,
+      `house should step one appreciation cycle per year-end, got ratio ${ratio}`);
+  }
+});

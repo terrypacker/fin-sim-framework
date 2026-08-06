@@ -878,6 +878,52 @@ one. Candidate mitigations: warn when a held class is absent from every anchor; 
 `interpolateGlidepath` treat an absent class as "unconstrained" rather than zero (a
 semantic change needing its own decision).
 
+**D5 — OPEN: harvested glidepath CORNERS liquidate a whole asset class and buy it back.**
+Filed here 2026-08-05, having been found by design 82's report and referred here by its
+§10 without ever landing. Re-measured, and it is **far wider than design 82 described** —
+that doc charted it as a one-year gold round trip on a single anchor; it is a recurring
+pattern, and it takes other classes with it.
+
+The signature in the realized mix is unmistakable: a class sits at a steady share for
+years, drops to **exactly 0.0%** for one to three years, then returns to a normal share.
+On the reference plan this happens to **gold and bonds together** in one year, to
+**equity** for three consecutive years in late retirement, to bonds again immediately
+after, and to gold permanently thereafter — driven entirely by the glidepath, with no
+market event involved.
+
+The cause is visible in the glidepath's own anchors: **step-faithful anchor pairs**
+(`age: N` and `age: N.99` carrying identical weights) that sit at a **corner of the
+simplex** — one class at 1.0 and the rest at 0, or one class at 0 with the rest sharing
+the remainder — inside an otherwise smooth ladder. That `.99` pairing is the
+representation the MPC glidepath harvest emits to hold a value flat across a step
+(design 39 §13), so these are **harvest output, not authored policy**. Nobody chose to
+leave the equity market for three years at 76.
+
+Four reasons it is not cosmetic:
+
+- Each corner **realizes CGT on an entire asset class** and buys it straight back — pure
+  friction, and design 82's chart renders it as though it were a decision.
+- One of them lands on **`moveYear`**, so the disposal straddles the residency cost-base
+  step-up (design 57 straddle territory). Which side of the move it falls on decides the
+  tax, and nothing is choosing that deliberately.
+- **It corrupts a Monte Carlo readout.** Because the glidepath is keyed on AGE, a corner
+  fires in *every* path. Design 82 §8.2's `P(EQUITY share = 0 at any year)` readout —
+  designed to mean "the plan ran out of equity" — comes back **100% on the reference
+  plan**, and the finding it reports is this artefact, not a drawdown. A threshold that
+  reads 100% for a structural reason is worse than no threshold.
+- It is **exactly D4's failure mode arriving from the other direction**. D4 is "a class
+  absent from an anchor is silently zeroed"; this is "a class *explicitly* zeroed by a
+  harvest artefact". Q3's totality enforcement closes D4 and is **blind to this**,
+  because a corner anchor is perfectly well-formed and sums to 1.
+
+So the mitigation belongs with the harvest's representation, not the rebalancer: a
+harvested anchor pair that moves a class from a material share to **exactly zero and back
+within a step or two** is far more likely a step artefact than an intent, and is worth
+rejecting or flagging at bake time. Owner call — see design 39 §13.13's representation
+ladder, which is where this lands. The cost has **not** been sized; the counterfactual is
+cheap (re-run with the corners smoothed and diff terminal after-tax net worth) and is the
+obvious next step.
+
 ## 12.2 Open questions arising (2026-07-29)
 
 1. **Should a zero-target holding trigger a rebalance (D2)?** ⇢ **Reframed 2026-07-29 by

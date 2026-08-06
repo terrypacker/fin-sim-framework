@@ -83,6 +83,7 @@ import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario
 import { buildVariant } from '../lib/variant.mjs';
 import { buildMcConfig, runArm } from '../lib/mc.mjs';
 import { pct } from '../lib/format.mjs';
+import { MC_SAMPLER_CADENCE } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 
 const argv = process.argv.slice(2);
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
@@ -175,8 +176,14 @@ for (const [order, key] of armKeys.entries()) {
   // without it the report falls back to filesystem order and the default
   // baseline-vs-rest pairing gets an arbitrary baseline — the spec's first arm is
   // the one the author meant as the reference point.
+  // `samplerCadence` stamps WHICH INSTANT the recorded series was read at (design 82
+  // §8.3). Switching MC off design 78's event cadence re-baselined `timeSeries` — and
+  // therefore `pathShape` — while leaving every run OUTCOME bit-identical, so an arm
+  // from before the switch is indistinguishable from one after it and silently not
+  // comparable. An unstamped arm is a pre-switch arm; mc-report says so out loud.
   writeFileSync(join(outDir, `${key}.json`), serializeArm({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
+    samplerCadence: MC_SAMPLER_CADENCE,
     riskModel, levers, recentred, provenance, pathShape, rows,
   }, mixSeries));
 
