@@ -331,6 +331,10 @@ export class StateSchemaRegistry {
     this.register('usPassiveActivityIncomeYTD',        ParameterValueType.currency('USD'));
     this.register('usForeignPassiveActivityIncomeYTD', ParameterValueType.currency('USD'));
     this.register('usPassiveLossCarryforward',         ParameterValueType.currency('USD'));
+    // design 86 G3 error 1 — §163(d) investment interest, USD. The YTD expense resets
+    // at the US settle; the disallowed pool carries forward indefinitely.
+    this.register('usInvestmentInterestYTD',           ParameterValueType.currency('USD'));
+    this.register('usInvestmentInterestCarryforward',  ParameterValueType.currency('USD'));
     // FEIE cap accumulator (design 52 §4.2): AU-source *earned* income only
     // (wages/SE), per person — distinct from auPersonOrdinaryIncomeYTD which mixes
     // wages with AU interest/rent and so cannot back the per-person FEIE cap.

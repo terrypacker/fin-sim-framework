@@ -118,6 +118,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const pal = _computePassiveLossLimitation(state);
     const usOrdinaryIncomeYTD = _usOrdinaryIncomeRaw + pal.adjustment;
 
+    // Step 0b: §163(d) investment interest (design 86 G3 error 1). Computed after the
+    // §469 pass because its own limit reads `usPassiveActivityIncomeYTD` to carve
+    // passive rents out of net investment income, and taken as a deduction below
+    // rather than netted into income — see the function's header for both reasons.
+    const invInt = _computeInvestmentInterestLimitation(state);
+
     const brackets     = usFilingSingle ? this._brackets_single     : this._brackets_mfj;
     const ltcgBrackets = usFilingSingle ? this._ltcg_single         : this._ltcg_mfj;
     const stdDeduction = usFilingSingle ? this._stdDeduction_single : this._stdDeduction_mfj;
@@ -143,7 +149,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
     // Step 1: AGI and taxable ordinary income (AGI reduced by the ½ SE-tax
     // deduction — the surtax is not deductible).
-    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction - usSection988LossYTD;
+    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction - usSection988LossYTD
+                            - invInt.allowed;
     const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
     // Step 1b: FEIE (Form 2555) — exclude foreign *earned* income up to the cap
@@ -245,7 +252,16 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
     const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
-                                  + Math.max(0, usSection988LossYTD);
+                                  + Math.max(0, usSection988LossYTD)
+                                  // §163(d) investment interest (design 86 G3 error 1).
+                                  // Form 1116 would apportion it against the investment
+                                  // income it definitely relates to; here it joins the
+                                  // unrelated pool for the same reason the §988 loss
+                                  // does — it is the only route that keeps the identity
+                                  // above exact, and both errors point the same way
+                                  // (slightly less foreign taxable income in every
+                                  // basket, so slightly less credit, never more).
+                                  + Math.max(0, invInt.allowed);
 
     // Step 6: Foreign Tax Credit — per §904 basket (design 52 §4.3). Replaces the
     // pre-52 `min(ftcYTD, grossTax)` income-credit hack: credit the *actual* AU
@@ -346,6 +362,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // §469 suspended-loss pool (design 86 G5). `closing` is what the settle
       // reducer persists; the rest is the return's own arithmetic.
       passiveLoss: pal,
+      // §163(d) investment interest (design 86 G3 error 1). `closing` is what the
+      // settle reducer persists; same contract as `passiveLoss` above.
+      investmentInterest: invInt,
       brackets: this._bracketBreakdown({
         filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
         ltcgStacked, ltcgBase, collectibles, collectiblesTax,
@@ -385,6 +404,17 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         ...((state.usSection988DisallowedLossYTD ?? 0) > 0
           ? [{ label: '§988 Personal Exchange Loss — DISALLOWED (§165(c))', amount: 0 }]
+          : []),
+        // §163(d) (design 86 G3 error 1). The deduction alone cannot show a reader
+        // that interest was DISALLOWED this year — which is the entire behaviour of
+        // the limitation — so the pool gets its own line whenever it is non-empty,
+        // exactly as the §469 pool does above.
+        ...(invInt.allowed > 0
+          ? [{ label: 'Investment Interest Deduction (§163(d))', amount: -invInt.allowed }]
+          : []),
+        ...(invInt.closing > 0
+          ? [{ label: 'Disallowed Investment Interest — carried forward (limited to net investment income)',
+               amount: invInt.closing }]
           : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },
@@ -723,6 +753,67 @@ function _ftcStrict() {
  *   `adjustment` is added to `usOrdinaryIncomeYTD`; `foreignAdjustment` is its
  *   foreign-source share, added to the passive basket's gross.
  */
+/**
+ * IRC §163(d) investment interest limitation — design 86 G3 error 1.
+ *
+ * Interest on money borrowed to buy income-producing property that is NOT a rental is
+ * deductible only up to the year's **net investment income**; the disallowed excess is
+ * treated as investment interest paid in the following year (§163(d)(2)) and so carries
+ * forward indefinitely. Before this, a standalone `LoanAccount` accrued interest and
+ * produced no deduction at all, which is why §10.2 recorded "an arm that borrows
+ * against something other than the rental and invests the proceeds is not modellable".
+ *
+ * ─── this is NOT the §469 pool, and must never become it ─────────────────────
+ * Both limitations suspend a deduction and release it later, which is exactly what
+ * makes the shortcut tempting. They are not interchangeable: §469 releases against
+ * later *passive* income and frees the whole pool on disposal of the activity;
+ * §163(d) releases against later *investment* income and has no disposal event at
+ * all. Routing investment interest through the passive pool would suspend it behind
+ * rental profits it has nothing to do with.
+ *
+ * ─── the deduction is taken above the line, which the real return does not ───
+ * §163(d) interest is an itemized deduction (Schedule A, line 9). This model has no
+ * itemized-deduction machinery — every taxpayer takes the standard deduction — so the
+ * allowed amount enters AGI directly, the same shortcut `usSection988LossYTD` takes.
+ * It therefore relieves tax for a taxpayer who in reality would not itemize, and
+ * over-relieves by the standard deduction's shadow for one who would. Stated here
+ * rather than buried: it is the largest single approximation in this channel.
+ *
+ * Pure — the caller persists `closing` at the settle. `computeTax` is re-run on
+ * counterfactual states (the FITO handoff), so this must never draw down the pool it
+ * was handed.
+ *
+ * @param {object} state
+ * @returns {{ opening: number, expense: number, nii: number, allowed: number, closing: number }}
+ *   `allowed` is the deduction for the year (USD); `closing` is the new pool.
+ */
+export function _computeInvestmentInterestLimitation(state) {
+  const opening = Math.max(0, state?.usInvestmentInterestCarryforward ?? 0);
+  const expense = Math.max(0, state?.usInvestmentInterestYTD ?? 0);
+
+  // §163(d)(4)(A) net investment income = investment income − investment expenses.
+  // This model's `usNetInvestmentIncomeYTD` is the §1411 pool: interest, dividends,
+  // coupons AND net rents. Rents must come out — §163(d)(4)(D) excludes income from a
+  // passive activity, and rental activity is passive per se (§469(c)(2)), which is the
+  // same classification G5 already relies on. Subtracting the passive result (floored,
+  // because a passive LOSS never enlarges investment income) is exactly that carve-out
+  // expressed against the accumulators we have.
+  //
+  // Net capital gain and qualified dividends are deliberately NOT included. §163(d)(4)
+  // (B)(iii) lets a taxpayer ELECT to treat them as investment income, at the price of
+  // giving up the preferential rate on the elected amount. The election is a real
+  // planning lever, but modelling it means modelling the trade-off, and defaulting it
+  // ON would silently overstate the deduction in every gain year. Not electing is the
+  // statutory default and the conservative one.
+  const nii = Math.max(0, (state?.usNetInvestmentIncomeYTD ?? 0)
+                        - Math.max(0, state?.usPassiveActivityIncomeYTD ?? 0));
+
+  const available = opening + expense;
+  const allowed   = Math.min(available, nii);
+  const closing   = available - allowed;
+  return { opening, expense, nii, allowed, closing };
+}
+
 export function _computePassiveLossLimitation(state) {
   const opening    = Math.max(0, state?.usPassiveLossCarryforward ?? 0);
   const netPassive = state?.usPassiveActivityIncomeYTD ?? 0;

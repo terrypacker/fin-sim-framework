@@ -382,6 +382,57 @@ export function blendSection988BookingRate(oldBalance, bookingRate, added, spotR
   return usdValue > 0 ? (oldBalance + added) / usdValue : spotRate;
 }
 
+/** First-person residency, mirroring the rental and income handlers. */
+const firstResidency = (state) =>
+  state?.people?.[Object.keys(state?.people ?? {})[0]]?.residency ?? null;
+
+/**
+ * The investment-interest deduction action for one loan-month — design 86 G3, the
+ * half that was deferred at P4.
+ *
+ * **Which loans.** A loan with a `linkedPropertyKey` is already handled: its interest
+ * reaches the return through `computeRentalMonth`'s `deductibleInterest`, scaled by
+ * the same `deductibleFraction`. Emitting here as well would deduct it twice. So this
+ * fires only for a **standalone** loan — no linked property — which is precisely the
+ * borrow-to-invest case §10.2 records as unmodellable.
+ *
+ * **Only when stated.** `deductibleFraction: null` is the pre-86 default and every
+ * legacy loan, and it means "unstated". Deductibility follows the USE of the borrowed
+ * funds (s8-1; *Munro*; TR 95/33), and nothing in the engine traces a loan's proceeds
+ * into what they bought — so an unstated fraction deducts nothing, exactly as before.
+ * `0` is a real, authored answer ("purely private borrowing") and also deducts
+ * nothing; the two agree on the number and differ on what they claim.
+ *
+ * **How much.** `min(interest, payment)`: an individual is a cash-basis taxpayer and
+ * deducts interest when PAID (§163(a); s8-1 incurred-and-paid). On a negatively
+ * amortising loan the unpaid interest is capitalised into the balance and is not yet
+ * deductible — deducting the full accrual there would relieve tax on money that never
+ * left the borrower.
+ *
+ * Country-keyed action type, mirroring the rental pair, because the two classifiers
+ * differ in currency and in which per-person AU pool they reach — and because a
+ * US-only scenario never loads the AU tax module.
+ *
+ * @returns {?object} the action, or null when this loan deducts nothing
+ */
+export function investmentInterestAction(loan, loanKey, interest, payment, residency) {
+  if (loan?.linkedPropertyKey) return null;
+  const fraction = loan?.deductibleFraction;
+  if (fraction == null) return null;
+  const share = Math.min(1, Math.max(0, fraction));
+  const paidInterest = Math.min(Math.max(0, interest), Math.max(0, payment));
+  const amount = +(paidInterest * share).toFixed(2);
+  if (!(amount > 0)) return null;
+  return {
+    type: loan.country === 'AU' ? 'AU_INVESTMENT_INTEREST_DEDUCTION' : 'US_INVESTMENT_INTEREST_DEDUCTION',
+    loanKey, amount, residency,
+    currency:      currencyCode(loan) ?? (loan.country === 'AU' ? 'AUD' : 'USD'),
+    ownerId:       loan.ownerId       ?? null,
+    ownershipType: loan.ownershipType ?? null,
+    owners:        loan.owners        ?? null,
+  };
+}
+
 /**
  * Handles LOAN_PAYMENT events (design 54 §4). For each liability account with a
  * positive balance, accrues one month of interest on the effective (offset-reduced)
@@ -406,7 +457,8 @@ export class LoanPaymentHandler extends HandlerEntry {
     super(null, 'Loan Payment');
     this.country = country;
     this.stateRegistry = stateRegistry;
-    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'LOAN_PAYMENT_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'LOAN_PAYMENT_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE',
+                                 'US_INVESTMENT_INTEREST_DEDUCTION', 'AU_INVESTMENT_INTEREST_DEDUCTION'];
   }
 
   static fromJSON(d, services) {
@@ -459,6 +511,9 @@ export class LoanPaymentHandler extends HandlerEntry {
       }
 
       actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx });
+      const deduction = investmentInterestAction(loan, loanKey, interest, payment,
+                                                 firstResidency(state));
+      if (deduction) actions.push(deduction);
       actions.push(new RecordBalanceAction(`${loanKey}.balance`, loanKey));
       // Snapshot the debited cash pool too (design 54 P4): the payment mutates its
       // balance, and its charted `metrics.<cashKey>` series only updates when a
