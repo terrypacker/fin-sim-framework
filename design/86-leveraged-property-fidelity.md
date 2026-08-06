@@ -1,6 +1,7 @@
 # 86 — Leveraged property fidelity: loss carryforward, interest-only debt, and interest deductibility
 
-**Status** (2026-08-05): **PROPOSED**. No code.
+**Status** (2026-08-05): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3),
+G6's UI surface, and G7. Phase table in §5. Full suite green (4,435 + 977).
 
 Found while designing a study of AU mortgage **offset accounts** — whether cash is
 better parked in an offset (earning the loan rate, certain and untaxed) or invested
@@ -26,14 +27,15 @@ value of a dollar invested          =  E[r_asset] − tax drag,  with variance
 
 Every gap below moves one of those two terms:
 
-| gap | term it corrupts | direction of the error |
-|---|---|---|
-| G1 no revenue-loss carryforward | `MTR_marginal` too low | favours holding the debt |
-| G2 no interest-only mode | `r_loan` uncontrollable | corrupts both arms |
-| G3 interest deductible only via the rental path | `MTR_marginal` = 0 or 1, never in between | both directions |
-| G4 offset capacity unmeasured | hides idle capital | favours the offset |
-| G5 no US passive-loss limitation | `MTR_marginal` too high | favours holding the debt |
-| G5b the same loss breaks the §904 partition | — | **throws** in dev/test, silent in prod |
+| gap                                             | term it corrupts                          | direction of the error                |
+|-------------------------------------------------|-------------------------------------------|---------------------------------------|
+| G1 no revenue-loss carryforward                 | `MTR_marginal` too low                    | favours holding the debt              |
+| G2 no interest-only mode                        | `r_loan` uncontrollable                   | corrupts both arms                    |
+| G3 interest deductible only via the rental path | `MTR_marginal` = 0 or 1, never in between | both directions                       |
+| G4 offset capacity unmeasured                   | hides idle capital                        | favours the offset                    |
+| G5 no US passive-loss limitation                | `MTR_marginal` too high                   | favours holding the debt              |
+| G5b the same loss breaks the §904 partition     | —                                         | **threw** in dev/test, silent in prod |
+| G6 no loan term / IO expiry                     | `r_loan` optimistic for life              | favours holding the debt              |
 
 A model can be wrong in one direction and still be useful for ranking. **Wrong in
 both directions at once, on the same lever, is not** — you can no longer sign the
@@ -200,9 +202,33 @@ Explicitly **not** proposed: automatic tracing of borrowed funds through account
 That is a mixed-purpose-account problem with no clean model, and stating the fraction
 is both honest and sufficient.
 
-**Test.** Deductible fraction 0 / 0.5 / 1 on a standalone loan produces exactly
-proportional deductions; `null` on a rental-linked loan reproduces current output
-byte-for-byte.
+**Test.** Deductible fraction 0 / 0.5 / 1 on a rental-linked loan produces exactly
+proportional deductions; `null` reproduces current output byte-for-byte.
+
+#### G3 splits in two, and only half is built
+
+**Built (error 2):** `deductibleFraction` on `LoanAccount`, `mortgageDeductibleFraction`
+on `RealProperty`, applied in `computeRentalMonth`. This is the half that matters for a
+property-secured loan — drawing an offset down for private use no longer inflates the
+deduction — and it is inert at `null`.
+
+**Deferred (error 1): a standalone investment loan still deducts nothing.** The
+tempting shortcut is to emit the existing `AU_RENTAL_INCOME_TAX` action with a negative
+amount, which needs no new action type, reducer or toolset wiring. **That is now
+wrong**, and only became wrong when G5 landed: that action feeds
+`usPassiveActivityIncomeYTD`, so a borrow-to-invest interest deduction routed through
+it would be *suspended under §469*. Interest on money borrowed to buy securities is
+**§163(d) investment interest** — limited to net investment income, with its own
+indefinite carryforward — not a passive activity loss. The two limitations have
+different bases, different carryforwards and different release conditions.
+
+So this needs its own channel, and the §163(d) limitation with it. That is a design
+decision rather than a typing exercise, and it is deferred deliberately rather than
+approximated. Consequence to state in any result: **an arm that borrows against
+something other than the rental and invests the proceeds is not yet modellable.** An
+arm that borrows against the rental is, and always was — under tracing rules the
+loan's character is fixed by what it originally funded, and drawing on an *offset*
+(the borrower's own money) does not disturb it.
 
 ---
 
@@ -289,10 +315,19 @@ term — a payment step-up precisely when a "hold the leverage into later life" 
 relying on it. A plan that assumes indefinite interest-only is assuming away the main
 risk of the strategy.
 
-**Proposed.** `termMonths` and `interestOnlyMonths` on `LoanAccount`. At IO expiry,
-recompute `monthlyPayment` as the amortising payment over the remaining term at the
-live rate. At maturity, require payoff — and route a shortfall through the existing
-insufficient-funds path rather than inventing a new one. Depends on G2.
+**Built**, as `interestOnlyUntilYear` and `maturityYear` — absolute calendar years
+rather than durations, matching `plannedSaleYear` / `moveYear` elsewhere, and matching
+how a borrower actually knows these dates. `scheduledLoanPayment()` resolves the
+payment for the point in the loan's life: the interest inside the IO window, the
+amortising payment over the REMAINING months once it expires (recomputed each month,
+so a variable rate re-amortises the way a real P&I loan does), the whole balance at
+maturity, and the authored fixed payment for a term-less loan. A maturity shortfall
+runs through the existing replenish / insufficient-funds path.
+
+Measured on the reference plan: reverting an IO loan to P&I after five years costs
+roughly half a million dollars of terminal wealth against the same loan left
+interest-only for life. That gap was previously unmodellable, and it is the main risk
+of a "hold the leverage into later life" plan.
 
 ---
 
@@ -340,19 +375,24 @@ the other source.
 
 ## 5. Phasing
 
-| phase | contents | why here |
-|---|---|---|
-| **P1** | Tooling levers (§4) + G2 interest-only | Nothing is measurable without levers, and G2 is the smallest fidelity fix that stops a study silently measuring negative amortization. |
-| **P2** | G4 offset capacity metric | An hour's work; it is a study output and it makes P1's arms readable. |
-| **P3** | G1 AU revenue-loss carryforward | The load-bearing one. Own session — it touches the settle, the FITO counterfactual and the tax document. |
-| **P4** | G3 `deductibleFraction` | Unlocks borrow-to-invest. Independent of P3; sequenced after because P3 determines what a deduction is worth. |
-| **P5** | G5 + G5b US §469 and the §904 partition | Reuses P3's pool pattern in the other jurisdiction, and stops the assertion firing. Promote ahead of P4 if a study needs the invest-side arm before then — today it cannot run without `FTC_LIMITATION_STRICT=off`. |
-| **P6** | G6 term / IO expiry | Depends on G2. Turns "hold leverage forever" into a testable assumption. |
-| — | G7 §988 | Documented, unscheduled. |
+| phase  | contents                                | status   | why here                                                                                                                                                                |
+|--------|-----------------------------------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **P1** | Tooling levers (§4) + G2 interest-only  | **done** | Nothing is measurable without levers, and G2 is the smallest fidelity fix that stops a study silently measuring negative amortization.                                  |
+| **P2** | G4 offset capacity metric               | **done** | An hour's work; it is a study output and it makes P1's arms readable.                                                                                                   |
+| **P3** | G1 AU revenue-loss carryforward         | **done** | The load-bearing one. Touches the settle, the FITO counterfactual and the tax document.                                                                                 |
+| **P5** | G5 + G5b US §469 and the §904 partition | **done** | Promoted ahead of P4: until this landed, no unoffset arm could run at all without `FTC_LIMITATION_STRICT=off`. Reuses P3's pool pattern in the other jurisdiction.      |
+| **P4** | G3 `deductibleFraction`                 | **half** | The rental-path half is built. The standalone borrow-to-invest half is deferred — see §3 G3, it needs a §163(d) channel that must NOT reuse the §469 one P5 just built. |
+| **P6** | G6 term / IO expiry                     | open     | Depends on G2. Turns "hold leverage forever" into a testable assumption.                                                                                                |
+| —      | G7 §988                                 | open     | Documented, unscheduled.                                                                                                                                                |
 
-P1 and P2 are behaviour-preserving for any scenario that doesn't opt in. **P3 is not**
-— it changes tax in any plan with a loss year, so it needs a golden re-baseline and
-the direction of the change recorded before it is believed.
+P1, P2 and the built half of P4 are behaviour-preserving for any scenario that doesn't
+opt in. **P3 and P5 are not** — they change tax in any plan with a loss year.
+
+Measured after the fact: the full suite (4,428 + 977) stayed green through both, which
+means the golden scenarios contain **no AU loss year and no net passive loss**. That is
+a statement about the goldens' coverage, not evidence the changes are inert — the
+reference cross-border plan moves under both, and any result predating them is not
+comparable.
 
 Two habits this repo has earned the hard way apply to P3 and P5 in particular:
 transcribe published bases from the authority rather than from our own output, and

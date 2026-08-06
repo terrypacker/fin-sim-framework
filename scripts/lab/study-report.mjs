@@ -233,7 +233,8 @@ if (!grids.length && !mcSets.length) {
 const levers = grids.flatMap(g =>
   g.model.leverValues
     .filter(l => l.spread > 0)
-    .map(l => ({ ...l, grid: g.key, gridTitle: g.model.title, unit: g.model.reduceAxis })))
+    .map(l => ({ ...l, grid: g.key, gridTitle: g.model.title,
+                 unit: g.model.reduceAxis, reduceUnit: g.model.reduceUnit })))
   .sort((a, b) => b.spread - a.spread);
 
 const money = (n) => (n == null ? '—' : '$' + Math.round(n).toLocaleString());
@@ -242,6 +243,25 @@ const compact = (n) => {
   const a = Math.abs(n);
   if (a >= 1000) return '$' + (n / 1000).toFixed(a % 1000 === 0 ? 0 : 1) + 'k';
   return '$' + Math.round(n);
+};
+
+/**
+ * Format a frontier value in ITS OWN unit (`model.reduceUnit`).
+ *
+ * `compact` assumes dollars, which is right for a spend-ceiling frontier and silently
+ * wrong for every other kind: a break-even-return frontier of -0.03 came out as "$0",
+ * so a grid that had moved by three points of return advertised itself as inert. A
+ * study whose headline panel reads "$0 – $0" trains the reader to skip the panel.
+ */
+const unitVal = (n, unit) => {
+  if (n == null) return '—';
+  switch (unit) {
+    case 'rate':   return `${n > 0 ? '+' : ''}${(n * 100).toFixed(n * 100 % 1 === 0 ? 0 : 1)}pp`;
+    case 'year':   return String(Math.round(n));
+    case 'number': return String(+n.toFixed(3));
+    case 'money':
+    default:       return compact(n);
+  }
 };
 const pctS = (r, dp = 1) => (r == null ? '—' : `${(r * 100).toFixed(dp)}%`);
 const esc = (s) => String(s ?? '')
@@ -333,7 +353,7 @@ function barList(items, { max, fmt = compact, tone = 'series' } = {}) {
     <li>
       <span class="bar-label" title="${esc(i.title ?? i.label)}">${esc(i.label)}</span>
       <span class="bar-track"><span class="bar-fill ${tone}" style="width:${(Math.abs(i.value ?? 0) / hi * 100).toFixed(1)}%"></span></span>
-      <span class="bar-val">${esc(fmt(i.value))}</span>
+      <span class="bar-val">${esc(i.display ?? fmt(i.value))}</span>
     </li>`).join('') + `</ul>`;
 }
 
@@ -440,8 +460,8 @@ let hasCompanions = false;
       <p class="hero">${esc(ref?.text ?? '—')}</p>
       <p class="card-sub">${esc(m.panels[0]?.rows[0] ?? '')}${m.colAxis ? ' · ' + esc(m.panels[0]?.cols[0] ?? '') : ''}${m.panels[0]?.label ? ' · ' + esc(m.panels[0].label) : ''}</p>
       <dl class="card-facts">
-        <div><dt>range</dt><dd>${esc(compact(m.min))} – ${esc(compact(m.max))}</dd></div>
-        ${top ? `<div><dt>biggest axis</dt><dd>${esc(top.axis)} (${esc(compact(top.spread))})</dd></div>` : ''}
+        <div><dt>range</dt><dd>${esc(unitVal(m.min, m.reduceUnit))} – ${esc(unitVal(m.max, m.reduceUnit))}</dd></div>
+        ${top ? `<div><dt>biggest axis</dt><dd>${esc(top.axis)} (${esc(unitVal(top.spread, m.reduceUnit))})</dd></div>` : ''}
         <div><dt>cells</dt><dd>${m.total}${m.errors ? ` <span class="badge crit">${m.errors} errored</span>` : ''}</dd></div>
       </dl>
       ${m.warnings.length ? `<p class="card-warn">${m.warnings.length} non-monotone cell${m.warnings.length > 1 ? 's' : ''}</p>` : ''}
@@ -472,6 +492,7 @@ if (levers.length) {
     label: `${l.axis} · ${l.grid}`,
     title: `${l.gridTitle ?? l.grid} — ${l.axis}: best ${l.best}, worst ${l.worst}`,
     value: l.spread,
+    display: unitVal(l.spread, l.reduceUnit),
   }));
   sections.push(`<section id="levers"><h2>What moves the answer</h2>
     <p class="lede">Median frontier spread between the best and worst level of each swept axis, in units of
@@ -484,7 +505,7 @@ if (levers.length) {
       { head: 'grid',        get: l => esc(l.grid) },
       { head: 'best level',  get: l => esc(l.best) },
       { head: 'worst level', get: l => esc(l.worst) },
-      { head: 'spread', num: true, get: l => esc(compact(l.spread)) },
+      { head: 'spread', num: true, get: l => esc(unitVal(l.spread, l.reduceUnit)) },
     ], levers)}</section>`);
 }
 
@@ -506,9 +527,9 @@ for (const g of grids) {
       <em>every panel in this grid</em>, so panels are directly comparable. Values are printed in
       every cell — the color is a second channel, never the only one.</p>
     ${heatTable(g)}
-    <div class="legend"><span class="legend-lab">${esc(compact(m.min))}</span>
+    <div class="legend"><span class="legend-lab">${esc(unitVal(m.min, m.reduceUnit))}</span>
       ${HEAT_LIGHT.map((_, i) => `<span class="legend-swatch" data-bin="${i}"></span>`).join('')}
-      <span class="legend-lab">${esc(compact(m.max))}</span></div>
+      <span class="legend-lab">${esc(unitVal(m.max, m.reduceUnit))}</span></div>
   </section>`);
 }
 

@@ -30,6 +30,9 @@ function _sumMap(map) {
 // and consumed (excess lost) at the next AU settle.
 const YTD_FIELDS = {
   US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usNetInvestmentIncomeYTD', 'usPenaltyYTD',
+       // design 86 G5 — the SIGNED per-year passive results. The suspended-loss POOL
+       // (usPassiveLossCarryforward) is deliberately NOT here: it must survive.
+       'usPassiveActivityIncomeYTD', 'usForeignPassiveActivityIncomeYTD',
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
@@ -398,6 +401,12 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
       // YTD_FIELDS and resets to 0 with the rest of the US accumulators.
       patches.ftcPoolResourced = {};
     }
+    // §469 suspended passive losses (design 86 G5). Same shape as the FTC pools and
+    // for the same reason: `computeTax` is PURE and is re-run on counterfactual states
+    // (the FITO handoff), so it reports a closing balance rather than drawing the pool
+    // down in place. This is the only place the pool is written.
+    const pal = action.taxDetail?.passiveLoss;
+    if (pal?.closing != null) patches.usPassiveLossCarryforward = +pal.closing.toFixed(2);
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }
@@ -475,8 +484,41 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
       ftcCurrentGeneral: toUSD(auCreditable * generalShare,       'AUD', state),
       ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
       ...(cgtRate != null ? { auCgtEffectiveRate: cgtRate } : {}),
+      ..._auLossPoolPatch(state, action),
     };
   }
+}
+
+/**
+ * Persist each person's Div 36 carried-forward tax loss pool (design 86 G1).
+ *
+ * **This is the only place the pool is written.** `_assessResidentPreFito` computes
+ * the deduction but never mutates, because it is evaluated more than once per settle
+ * — the FITO limit and the §865(g)(2) CGT rate each re-assess a counterfactual state.
+ * A pool drawn down inside that function would be spent by whichever pass ran first,
+ * and the surviving passes would then assess against a pool that no longer existed.
+ *
+ * The pool sits outside `PER_PERSON_AU_FIELDS`, so the settle's reset loop leaves it
+ * alone — surviving the year boundary is the whole point. That also means it must be
+ * written explicitly here rather than accumulated by an action, and that a person with
+ * no return this year keeps their pool untouched rather than silently losing it.
+ *
+ * The map is CREATED when absent rather than skipped. A scenario loaded from a saved
+ * export carries whatever `initialState` was serialized before design 86 existed, so
+ * the constructor's zeroed map never reaches it — guarding on the map's presence made
+ * the whole feature silently inert against exactly the saved plans it was built for.
+ */
+function _auLossPoolPatch(state, action) {
+  const details = action.personTaxDetails;
+  if (!details?.length) return {};
+  const next = { ...(state.auPersonTaxLossPool ?? {}) };
+  let touched = false;
+  for (const { personKey, taxDetail } of details) {
+    if (personKey == null || taxDetail?.closingLossPool == null) continue;
+    next[personKey] = +taxDetail.closingLossPool.toFixed(2);
+    touched = true;
+  }
+  return touched ? { auPersonTaxLossPool: next } : {};
 }
 
 /**

@@ -239,3 +239,18 @@ describe('lever ordering', () => {
     assert.equal(cfg.accounts[1].balance, 0, 'the brokerage funded the offset top-up');
   });
 });
+
+describe('offset drawdownPriority', () => {
+  test('sets it on both representations, independently of the balance', () => {
+    // An offset left at the default `drawdownPriority: null` is EXCLUDED from
+    // drawdown, so a grid sweeping the offset balance unknowingly sweeps how much of
+    // the portfolio is spendable — and reports that filling the offset wrecks
+    // solvency. That is an artefact of unreachable cash, not economics.
+    const cfg = exportedCfg();
+    assert.equal(cfg.accounts[0].drawdownPriority, undefined);
+    applyOffset(cfg, 'off', { drawdownPriority: 2 });
+    assert.equal(cfg.accounts[0].drawdownPriority, 2);
+    assert.equal(cfg.initialState.off.drawdownPriority, 2);
+    assert.equal(cfg.accounts[0].balance, 100_000, 'balance untouched when not given');
+  });
+});

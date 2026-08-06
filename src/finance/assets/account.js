@@ -203,6 +203,7 @@ export class LoanAccount extends Account {
    * @param {string|null} [opts.linkedPropertyKey=null] - stateKey of a property this loan finances (design 54 P2)
    * @param {string|null} [opts.paymentSourceKey=null]  - cash pool the payment debits (default: country cash)
    * @param {boolean}     [opts.interestOnly=false]     - pay exactly the accrued interest (design 86 G2)
+   * @param {?number}     [opts.deductibleFraction=null] - income-producing share of the loan's purpose (design 86 G3)
    */
   constructor(balance = 0, opts = {}) {
     super(balance, { ...opts, type: ACCOUNT_TYPE.LOAN });
@@ -217,6 +218,20 @@ export class LoanAccount extends Account {
     // rate, a fixed number cannot express "pay exactly the interest", and guessing
     // one low enough silently produces unbounded negative amortization instead.
     this.interestOnly      = opts.interestOnly      ?? false;
+    // Deductibility follows the USE the borrowed funds are put to, not the security
+    // taken over them (s8-1; Munro; TR 95/33) — design 86 G3. `null` keeps the
+    // pre-86 rule (deductible in full iff the loan finances a renting property);
+    // a number in [0,1] states the income-producing share explicitly, which is how
+    // a part-private redraw or a loan drawn down to buy something private is
+    // expressed. Stated rather than traced: mixed-purpose accounts have no clean
+    // tracing model, and a stated fraction is both honest and sufficient.
+    this.deductibleFraction = opts.deductibleFraction ?? null;
+    // Loan term (design 86 G6), absolute calendar years. An IO loan reverts to P&I
+    // amortised over the remaining term at `interestOnlyUntilYear`, and must be
+    // discharged by `maturityYear`. Both null ⇒ no term: the loan amortises (or stays
+    // interest-only) forever, which is the pre-86 behaviour.
+    this.interestOnlyUntilYear = opts.interestOnlyUntilYear ?? null;
+    this.maturityYear          = opts.maturityYear          ?? null;
     this.drawdownPriority   = null; // a liability is never a source of drawdown cash
   }
 }

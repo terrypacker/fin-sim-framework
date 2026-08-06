@@ -96,6 +96,9 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._linkedPropertyKey = null;
     this._paymentSourceKey  = null;
     this._interestOnly      = false;
+    this._deductibleFraction = null;
+    this._interestOnlyUntilYear = null;
+    this._maturityYear          = null;
   }
 
   interestRate(v)      { this._interestRate      = v; return this; }
@@ -104,6 +107,12 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   paymentSourceKey(v)  { this._paymentSourceKey  = v; return this; }
   /** Interest-only: the payment is derived as the accrued interest (design 86 G2). */
   interestOnly(v = true) { this._interestOnly    = v; return this; }
+  /** Income-producing share of the loan's purpose, 0..1 (design 86 G3). */
+  deductibleFraction(v) { this._deductibleFraction = v; return this; }
+  /** Calendar year the IO period ends and the loan reverts to P&I (design 86 G6). */
+  interestOnlyUntilYear(v) { this._interestOnlyUntilYear = v; return this; }
+  /** Calendar year the loan must be discharged (design 86 G6). */
+  maturityYear(v) { this._maturityYear = v; return this; }
 
   build() {
     return new LoanAccount(this._balance, {
@@ -113,6 +122,9 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       linkedPropertyKey: this._linkedPropertyKey,
       paymentSourceKey:  this._paymentSourceKey,
       interestOnly:      this._interestOnly,
+      deductibleFraction: this._deductibleFraction,
+      interestOnlyUntilYear: this._interestOnlyUntilYear,
+      maturityYear:          this._maturityYear,
     });
   }
 }

@@ -189,3 +189,120 @@ test('IO-LOAN-5: without the flag the P&I path is byte-for-byte unchanged', () =
   const small = runMonths({ hLoan: loanEntry({ balance: 5_000, paymentSourceKey: 'cash' }), cash: cashEntry() }, 24);
   assert.strictEqual(small.state.hLoan.balance, 0);
 });
+
+// ── design 86 G3: deductibleFraction ────────────────────────────────────────
+
+import { computeRentalMonth } from '../../src/finance/account-rules/rental-income-classes.js';
+
+/** A renting property with a mortgage, and the loan behind it. */
+function rentalSetup(deductibleFraction) {
+  const loan = loanEntry({ balance: 400_000, interestRate: 0.06, deductibleFraction });
+  const state = { hLoan: loan };
+  const p = { stateKey: 'h', monthlyRent: 4_000, occupancyRate: 1, rentalExpenseRatio: 0.25,
+              landValueRatio: 0.2, annualDepreciationOverride: 0 };
+  return computeRentalMonth(p, { costBasis: 0 }, 'AU', 1, loan, state);
+}
+
+test('DEDUCT-1: deductibleFraction scales the rental interest deduction', () => {
+  const full = rentalSetup(null);            // pre-86 default
+  const one  = rentalSetup(1);
+  const half = rentalSetup(0.5);
+  const none = rentalSetup(0);
+
+  assert.equal(full.deductibleInterest, 2_000, '400k at 6% ÷ 12');
+  assert.equal(one.deductibleInterest,  2_000, 'null and 1 must agree — the flag is inert by default');
+  assert.equal(half.deductibleInterest, 1_000);
+  assert.equal(none.deductibleInterest, 0, 'a wholly private purpose deducts nothing');
+
+  // …and the taxable rental moves the other way by exactly the lost deduction.
+  assert.equal(none.taxableRental - full.taxableRental, 2_000);
+});
+
+test('DEDUCT-2: an out-of-range fraction is clamped, not trusted', () => {
+  assert.equal(rentalSetup(5).deductibleInterest,  2_000);
+  assert.equal(rentalSetup(-1).deductibleInterest, 0);
+});
+
+test('DEDUCT-3: deductibleFraction round-trips, and defaults to null', () => {
+  const loan = new LoanAccount(BALANCE, { stateKey: 'hLoan', deductibleFraction: 0.4 });
+  assert.equal(ScenarioSerializer._makeAccount(ScenarioSerializer._serializeAccount(loan)).deductibleFraction, 0.4);
+
+  const legacy = ScenarioSerializer._serializeAccount(new LoanAccount(BALANCE, { stateKey: 'hLoan' }));
+  delete legacy.deductibleFraction;
+  assert.equal(ScenarioSerializer._makeAccount(legacy).deductibleFraction, null);
+
+  const prop = { stateKey: 'h', mortgageBalance: 1, monthlyMortgage: 1, mortgageDeductibleFraction: 0.25 };
+  assert.equal(synthesizeLoanForProperty(prop).deductibleFraction, 0.25);
+  assert.equal(synthesizeLoanForProperty({ ...prop, mortgageDeductibleFraction: undefined }).deductibleFraction, null);
+});
+
+// ── design 86 G6: loan term and IO expiry ───────────────────────────────────
+
+import { scheduledLoanPayment } from '../../src/finance/account-rules/loan-classes.js';
+
+/** Run months with a period clock, so the term logic has a calendar year. */
+function runYears(state, fromYear, toYear, opts = {}) {
+  const payments = [];
+  let s = state;
+  for (let y = fromYear; y <= toYear; y++) {
+    s = { ...s, currentPeriods: { US: { startMs: Date.UTC(y, 0, 1) } } };
+    const { state: next, payments: p } = runMonths(s, 12, opts);
+    s = next;
+    payments.push({ y, first: p[0] ?? 0, balance: s.hLoan.balance });
+  }
+  return { state: s, byYear: payments };
+}
+
+test('TERM-1: an IO loan reverts to P&I at interestOnlyUntilYear and pays off by maturity', () => {
+  const loan = loanEntry({
+    balance: BALANCE, interestRate: RATE, interestOnly: true,
+    interestOnlyUntilYear: 2031, maturityYear: 2041, paymentSourceKey: 'cash',
+  });
+  const { state: end, byYear } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2041);
+
+  // Flat through the IO window…
+  const io = byYear.filter(r => r.y < 2031);
+  for (const r of io) assert.ok(Math.abs(r.balance - BALANCE) < 0.01, `${r.y} balance moved`);
+  assert.ok(Math.abs(io[0].first - IO_PMT) < 0.01, 'IO payment is the interest');
+
+  // …then the payment steps UP and the balance starts falling.
+  const firstPI = byYear.find(r => r.y === 2031);
+  assert.ok(firstPI.first > IO_PMT * 1.4,
+    `reversion should be a real step-up: ${IO_PMT.toFixed(0)} → ${firstPI.first.toFixed(0)}`);
+  assert.ok(firstPI.balance < BALANCE, 'principal now amortizes');
+
+  assert.ok(Math.abs(end.hLoan.balance) < 0.01,
+    `must be discharged at maturity, got ${end.hLoan.balance}`);
+});
+
+test('TERM-2: maturity forces payoff even if the IO period never ended', () => {
+  const loan = loanEntry({
+    balance: BALANCE, interestRate: RATE, interestOnly: true,
+    maturityYear: 2030, paymentSourceKey: 'cash',
+  });
+  const { state: end } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2030);
+  assert.ok(Math.abs(end.hLoan.balance) < 0.01, 'a balloon repayment at maturity');
+});
+
+test('TERM-3: no term means no change — an IO loan runs flat forever', () => {
+  const loan = loanEntry({ balance: BALANCE, interestRate: RATE, interestOnly: true,
+                           paymentSourceKey: 'cash' });
+  const { state: end } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2060);
+  assert.ok(Math.abs(end.hLoan.balance - BALANCE) < 0.01);
+});
+
+test('TERM-U1: scheduledLoanPayment, at each branch', () => {
+  const io = { interestOnly: true, monthlyPayment: 99, interestOnlyUntilYear: 2031, maturityYear: 2041 };
+  // inside the IO window → the interest
+  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2030), 2_500);
+  // past maturity → balance + interest
+  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2041), 502_500);
+  // reverted → amortising over the months left, above the interest and below payoff
+  const rev = scheduledLoanPayment(io, 500_000, 2_500, 0.06, 2031);
+  assert.ok(rev > 2_500 && rev < 502_500, rev);
+  // no term at all → the authored fixed payment, capped at payoff
+  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 500_000, 2_500, 0.06, 2031), 3_000);
+  assert.equal(scheduledLoanPayment({ monthlyPayment: 3_000 }, 1_000, 5, 0.06, 2031), 1_005);
+  // unknown year (a synthetic state with no period) → IO stays IO, never a surprise balloon
+  assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, null), 2_500);
+});

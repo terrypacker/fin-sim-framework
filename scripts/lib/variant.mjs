@@ -368,6 +368,7 @@ export function applyProperty(cfg, set, stateKey, o = {}) {
  *   primeSpread    number|null   rate = Prime(country,t) + spread; null ⇒ fixed
  *   interestRate   number   the fixed absolute rate (used only when primeSpread is null)
  *   interestOnly   boolean  pay exactly the accrued interest (design 86 G2)
+ *   deductibleFraction number|null  income-producing share of the loan's purpose (G3)
  *
  * **Two places a loan can come from**, and this writes whichever exists:
  *
@@ -403,6 +404,12 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     primeSpread:    ['mortgagePrimeSpread',  'primeSpread'],
     interestRate:   ['mortgageInterestRate', 'interestRate'],
     interestOnly:   ['mortgageInterestOnly', 'interestOnly'],
+    // design 86 G3 — income-producing share of the loan's purpose. `null` (default)
+    // keeps the pre-86 rule: fully deductible while the property rents.
+    deductibleFraction: ['mortgageDeductibleFraction', 'deductibleFraction'],
+    // design 86 G6 — absolute calendar years, not durations.
+    interestOnlyUntilYear: ['mortgageInterestOnlyUntilYear', 'interestOnlyUntilYear'],
+    maturityYear:          ['mortgageMaturityYear',          'maturityYear'],
   };
 
   for (const [field, [propField, loanField]] of Object.entries(MAP)) {
@@ -440,8 +447,22 @@ function loanKeys(cfg) {
 /**
  * Offset-account overrides, keyed by the offset's state key.
  *
- *   balance   number    the offset's cash balance
- *   deployTo  stateKey  where the DIFFERENCE goes (see below)
+ *   balance          number       the offset's cash balance
+ *   deployTo         stateKey     where the DIFFERENCE goes (see below)
+ *   drawdownPriority number|null  where the offset sits in the liquidation order
+ *
+ * **`drawdownPriority` on an offset is a DECISION, not a detail.** It is tempting to
+ * reason that an offset is a transaction account, so the money is liquid, so it ought
+ * to carry a priority. Do not: giving it one models a third strategy that is neither
+ * arm of an offset study — "park the money in the offset, then spend it down FIRST".
+ * Measured on a real plan, `drawdownPriority: 2` drained a full A$500k offset to zero
+ * within four years, before the brokerage was touched at all, and the arm that was
+ * supposed to test parking the money quietly stopped testing anything.
+ *
+ * `null` (excluded from drawdown) is the correct expression of "it stays in the
+ * offset". The liquidity is real, but it is optionality the strategy is choosing not
+ * to exercise. Set a priority only when spending the offset down is the thing being
+ * modelled — and then say so in the spec.
  *
  * **`deployTo` moves value, it does not create it.** Lowering an offset from X to Y
  * without a destination destroys `X − Y` of wealth, and arms that don't hold total
@@ -462,8 +483,9 @@ function loanKeys(cfg) {
  * and every arm would be measuring a different-sized pot.
  */
 export function applyOffset(cfg, stateKey, o = {}) {
-  if (o.balance == null) return;
   const target = resolveAccountPair(cfg, stateKey, 'offset lever');
+  if ('drawdownPriority' in o) target.setField('drawdownPriority', o.drawdownPriority);
+  if (o.balance == null) return;
   const before = target.balance();
   const delta  = before - o.balance;      // > 0 ⇒ this much leaves the offset (source currency)
 
@@ -519,7 +541,11 @@ function resolveAccountPair(cfg, stateKey, who) {
     }
   };
 
-  return { balance, currency, setBalance };
+  const setField = (field, value) => {
+    for (const node of [rec, st]) if (node) node[field] = value;
+  };
+
+  return { balance, currency, setBalance, setField };
 }
 
 /**
@@ -763,6 +789,23 @@ export function applyStochastic(cfg, set, s = {}) {
  * With `ownStrategy: false` the bands are NOT installed and no strategy is set: only
  * `monthlyExpenses` moves, to the mortgage-adjusted level. Use that when another
  * spending strategy (GUARDRAIL, …) must stay in control — see the call site.
+ *
+ * ─── do NOT use spendTotal to compare loan structures ────────────────────────
+ *
+ * `spendTotal` splits one budget into an expense line that INFLATES (the bands are
+ * real, scaled by the price level each year) and a debt-service line that does NOT
+ * (a nominal interest or P&I figure on a nominal balance). The two arms of an offset
+ * study therefore diverge enormously in REAL spending even though both were asked for
+ * the same all-in number: a fully offset loan puts the whole budget on the inflating
+ * line, while an unoffset one freezes a third of it in nominal terms for the horizon.
+ * Measured on a real plan, that made the *unoffset* arm look ~4 percentage points more
+ * robust to a market downturn — an artefact of it quietly spending far less in real
+ * terms, with no economic content whatsoever.
+ *
+ * For any study varying loan structure, hold `monthlyExpenses` equal instead and let
+ * total outflow differ. Debt service is then a genuine cost difference between the
+ * arms, which is the thing being measured, and it shows up in terminal wealth rather
+ * than hiding inside a spending assumption.
  *
  * An INTEREST-ONLY mortgage (design 86 G2) has no fixed payment to subtract — the
  * engine derives it monthly from the live rate and the offset-reduced principal — so

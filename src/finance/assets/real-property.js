@@ -114,6 +114,14 @@ export class RealProperty extends Asset {
     // becomes inert — but it must still be > 0 for the toolsets to schedule a
     // LOAN_PAYMENT event for this property at all.
     this.mortgageInterestOnly       = opts.mortgageInterestOnly       ?? false;
+    // Income-producing share of the mortgage's purpose (design 86 G3). null keeps the
+    // pre-86 rule: fully deductible while the property is renting, nil otherwise.
+    this.mortgageDeductibleFraction = opts.mortgageDeductibleFraction ?? null;
+    // Loan term (design 86 G6), absolute calendar years. An IO mortgage reverts to
+    // P&I amortised over the remaining term at `mortgageInterestOnlyUntilYear`, and
+    // must be discharged by `mortgageMaturityYear`. Both null ⇒ no term (pre-86).
+    this.mortgageInterestOnlyUntilYear = opts.mortgageInterestOnlyUntilYear ?? null;
+    this.mortgageMaturityYear          = opts.mortgageMaturityYear          ?? null;
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;

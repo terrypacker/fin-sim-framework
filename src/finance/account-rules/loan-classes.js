@@ -54,6 +54,12 @@ export function synthesizeLoanForProperty(prop) {
     monthlyPayment:    prop.monthlyMortgage      ?? 0,
     // Interest-only mortgage (design 86 G2). Absent ⇒ false ⇒ the P&I path, byte-for-byte.
     interestOnly:      prop.mortgageInterestOnly ?? false,
+    deductibleFraction: prop.mortgageDeductibleFraction ?? null,
+    // Loan term (design 86 G6). Absolute calendar years, like plannedSaleYear /
+    // moveYear elsewhere — a real offset loan has an IO period of ~5 years and a
+    // 25–30 year term, and both are dates the borrower knows, not durations.
+    interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
+    maturityYear:          prop.mortgageMaturityYear          ?? null,
     linkedPropertyKey: prop.stateKey,
     country:           prop.country ?? 'US',
     currency:          prop.currency ?? null,
@@ -61,6 +67,16 @@ export function synthesizeLoanForProperty(prop) {
     drawdownPriority:  null,
     holdings:          [],
   };
+}
+
+/**
+ * The calendar year of the loan country's current tax period, or null when the state
+ * carries no period (synthetic states in unit tests). `PERIOD_ADVANCE` actions have no
+ * usable date at runtime, so the period's `startMs` is the reliable clock here.
+ */
+function periodYear(state, country) {
+  const ms = state?.currentPeriods?.[country === 'AU' ? 'AU' : 'US']?.startMs;
+  return ms != null ? new Date(ms).getUTCFullYear() : null;
 }
 
 /** Currency code of an account/loan state entry ('USD'/'AUD'), tolerant of shape. */
@@ -165,6 +181,59 @@ export function resolveLoanRate(state, loan) {
 }
 
 /**
+ * The scheduled monthly payment for a loan, at this point in its life (design 86 G6).
+ *
+ * Real offset loans are not interest-only forever. A lender grants an IO period —
+ * typically five years — after which the loan **reverts to P&I amortised over the
+ * REMAINING term**, which is a payment step-up precisely when a "hold the leverage
+ * into later life" plan is relying on the low payment. A plan that assumes indefinite
+ * interest-only has assumed away the main risk of the strategy, so the reversion has
+ * to be expressible.
+ *
+ * Precedence, given the current year:
+ *   1. **past maturity** — the whole balance plus this month's interest, so the loan
+ *      is discharged. Funding it is the cash pool's problem, and a shortfall runs
+ *      through the existing replenish/insufficient-funds path rather than a new one.
+ *   2. **inside the IO period** (or `interestOnly` with no term) — exactly the
+ *      accrued interest; the balance is flat by construction.
+ *   3. **after IO expiry, with a maturity year** — the amortising payment over the
+ *      months remaining, recomputed each month at the live rate. Recomputing is
+ *      deliberate: a variable-rate P&I loan really is re-amortised when the rate
+ *      moves, so this tracks Prime the way the IO payment does.
+ *   4. **otherwise** — the authored fixed `monthlyPayment`, capped at payoff. This is
+ *      the pre-86 path and every term-less loan takes it, byte-for-byte.
+ *
+ * @param {object} loan      loan state entry
+ * @param {number} balance   outstanding principal (loan currency)
+ * @param {number} interest  interest accrued this month on the EFFECTIVE principal
+ * @param {number} rate      the loan's live annual rate
+ * @param {?number} year     current calendar year, or null when unknown
+ */
+export function scheduledLoanPayment(loan, balance, interest, rate, year) {
+  const { interestOnlyUntilYear = null, maturityYear = null } = loan ?? {};
+
+  if (year != null && maturityYear != null && year >= maturityYear) {
+    return balance + interest;
+  }
+
+  const inIoWindow = loan?.interestOnly
+    && (interestOnlyUntilYear == null || year == null || year < interestOnlyUntilYear);
+  if (inIoWindow) return interest;
+
+  // Reverted from IO to P&I: amortise what is left over the months that remain.
+  if (loan?.interestOnly && maturityYear != null && year != null) {
+    const monthsLeft = Math.max(1, (maturityYear - year) * 12);
+    const i = rate / 12;
+    const payment = i > 0
+      ? balance * i / (1 - Math.pow(1 + i, -monthsLeft))
+      : balance / monthsLeft;
+    return Math.min(payment, balance + interest);
+  }
+
+  return Math.min(loan?.monthlyPayment ?? 0, balance + interest);
+}
+
+/**
  * Handles LOAN_PAYMENT events (design 54 §4). For each liability account with a
  * positive balance, accrues one month of interest on the effective (offset-reduced)
  * principal, computes the fixed payment (capped so the last payment never overpays
@@ -208,18 +277,14 @@ export class LoanPaymentHandler extends HandlerEntry {
       const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
       const cash      = state[cashKey];
       const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * resolveLoanRate(state, loan) / 12);
-      // Interest-only (design 86 G2): pay exactly the accrued interest, so the
-      // principal is flat by construction and the payment tracks a variable
-      // Prime-linked rate month by month. A FULLY offset IO loan accrues nothing and
-      // therefore costs nothing — payment 0 falls through the guard below, which is
-      // the correct cash flow, not a skipped payment.
-      //
-      // Otherwise: never pay past payoff — cap at the balance plus this month's
-      // interest. All loan-side figures (interest, payment, balance) are in the
-      // LOAN's currency.
-      const payment   = loan.interestOnly
-        ? interest
-        : Math.min(loan.monthlyPayment ?? 0, balance + interest);
+      // The scheduled payment for this point in the loan's life (design 86 G2 + G6):
+      // interest-only inside the IO window, re-amortised P&I after it expires, the
+      // whole balance at maturity, and the authored fixed payment for a term-less
+      // loan. A FULLY offset IO loan accrues nothing and therefore costs nothing —
+      // payment 0 falls through the guard below, which is the correct cash flow, not
+      // a skipped payment. All loan-side figures are in the LOAN's currency.
+      const year      = periodYear(state, loan.country);
+      const payment   = scheduledLoanPayment(loan, balance, interest, resolveLoanRate(state, loan), year);
       if (payment <= 0) continue;
 
       // FX (design 54 P4): the payment is denominated in the loan's currency, but the
