@@ -14,7 +14,18 @@ import { ACCOUNT_ROLES }  from '../../finance/state/account-roles.js';
 import { deriveEarningsBasis } from '../../finance/assets/investment-account.js';
 
 // Account types whose country/currency are variable (US or AU).
-const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset']);
+const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset', 'loan']);
+
+// Loan (liability) fields the editor sends (design 54 §2 + design 86 terms). Split by
+// coercion so create() and update() agree on what a blank field means: a nullable
+// number stays null ("unset"), never 0 — 0 is a real maturity year and a real
+// "nothing is deductible" fraction.
+// `interestRate` is deliberately absent: the generic line above already coerces it,
+// and it must stay nullable there (a cash account clearing its rate sends null, which
+// a loan-style `Number(null) || 0` would silently turn into a 0% pinned rate).
+const LOAN_NUM_FIELDS      = ['monthlyPayment'];
+const LOAN_NULLABLE_FIELDS = ['interestOnlyUntilYear', 'maturityYear', 'deductibleFraction', 'bookingFxRate'];
+const LOAN_KEY_FIELDS      = ['linkedPropertyKey', 'paymentSourceKey'];
 
 /**
  * Derive the semantic {@link ACCOUNT_ROLES} role for a UI-created account from its
@@ -39,6 +50,7 @@ function _deriveRole(type, country) {
     case 'ira':       return ACCOUNT_ROLES.IRA;
     case 'super':     return ACCOUNT_ROLES.SUPER;
     case 'offset':    return au ? ACCOUNT_ROLES.AU_OFFSET : ACCOUNT_ROLES.US_OFFSET;
+    case 'loan':      return au ? ACCOUNT_ROLES.AU_LOAN   : ACCOUNT_ROLES.US_LOAN;
     default:          return null;
   }
 }
@@ -47,6 +59,23 @@ function _deriveRole(type, country) {
 // ledger (design 53 §2). Brokerage is holdings-only and its builder has no basis
 // setters, so it must be excluded from the basis-write path below.
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
+
+/** Coerce a form value to a number, treating blank/absent/garbage as 0. */
+function _num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Coerce a form value to a number OR null. Blank/absent stays null — "unset", which
+ * for every design-86 loan field means the pre-86 behaviour. Collapsing it to 0 would
+ * author a maturity year of 0 and a 0% deductible fraction instead.
+ */
+function _nullableNum(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 /** Map a currency code string to its descriptor ({code, symbol}); null when unknown. */
 function _currencyDescriptor(code) {
@@ -111,6 +140,23 @@ export class AccountsController {
     // Offset account (design 53 §3 / 54 P3): links to the property whose loan it offsets.
     if (data.type === 'offset') {
       builder.offsetsPropertyKey(data.offsetsPropertyKey || null);
+    }
+
+    // Loan (liability) terms (design 54 §2 + design 86 G2/G3/G6/G7). Every setter is
+    // called unconditionally so an omitted field lands on the builder's default
+    // (0 / false / null) rather than on whatever a previous edit left — the builder
+    // defaults ARE the pre-86 loan.
+    if (data.type === 'loan') {
+      builder
+        .interestRate(_num(data.interestRate))
+        .monthlyPayment(_num(data.monthlyPayment))
+        .linkedPropertyKey(data.linkedPropertyKey || null)
+        .paymentSourceKey(data.paymentSourceKey  || null)
+        .interestOnly(!!data.interestOnly)
+        .deductibleFraction(_nullableNum(data.deductibleFraction))
+        .interestOnlyUntilYear(_nullableNum(data.interestOnlyUntilYear))
+        .maturityYear(_nullableNum(data.maturityYear))
+        .bookingFxRate(_nullableNum(data.bookingFxRate));
     }
 
     const account = builder.build();
@@ -178,6 +224,12 @@ export class AccountsController {
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);
+    // Loan (liability) terms (design 54 §2 + design 86). Same null-vs-0 discipline as
+    // create(): a cleared year/fraction is `null` (unset), not 0.
+    for (const f of LOAN_NUM_FIELDS)      if (f in n) n[f] = _num(n[f]);
+    for (const f of LOAN_NULLABLE_FIELDS) if (f in n) n[f] = _nullableNum(n[f]);
+    for (const f of LOAN_KEY_FIELDS)      if (f in n) n[f] = n[f] || null;
+    if ('interestOnly' in n) n.interestOnly = !!n.interestOnly;
     // Currency arrives from the editor as a code string; the account stores a
     // {code, symbol} descriptor. Map it, dropping an unknown/empty value.
     if ('currency' in n) {
@@ -231,6 +283,7 @@ export class AccountsController {
       case 'ira':      return AccountBuilder.traditionalIRA();
       case 'super':    return AccountBuilder.super();
       case 'offset':   return AccountBuilder.offset();
+      case 'loan':     return AccountBuilder.loan();
       default:         throw new Error(`AccountsController: unknown account type "${type}"`);
     }
   }

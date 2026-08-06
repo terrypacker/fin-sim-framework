@@ -11,7 +11,8 @@
 import { OneOffEvent }           from '../../simulation-framework/events/one-off-event.js';
 import { EventSeries }           from '../../simulation-framework/events/event-series.js';
 import { UsHouseSaleHandler, UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
-import { UsLoanPaymentHandler, LoanPaymentApplyReducer, synthesizeLoanForProperty } from '../../finance/account-rules/loan-classes.js';
+import { UsLoanPaymentHandler, LoanPaymentApplyReducer, synthesizeLoanForProperty,
+         propertyNeedsLoanPayment, accountNeedsLoanPayment } from '../../finance/account-rules/loan-classes.js';
 import { UsRentalIncomeHandler, UsRentalIncomeApplyReducer } from '../../finance/account-rules/rental-income-classes.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
@@ -117,8 +118,12 @@ export const US_REAL_PROPERTY = {
         enabled: true,
         color:   '#795548',
       }));
-    const mortgagedProps = usProps.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
-    if (mortgagedProps.length > 0) {
+    // A monthly payment event is needed for a mortgage OR for a standalone US
+    // LoanAccount (design 54); the handler pays every `type: 'loan'` state entry in
+    // the country, so one event covers both (design 86 G6 UI).
+    const needsLoanPayment = usProps.some(propertyNeedsLoanPayment)
+      || (context.accounts ?? []).some(a => accountNeedsLoanPayment(a, 'US'));
+    if (needsLoanPayment) {
       schedules.push(new EventSeries({
         name:     'US Loan Payment',
         type:     'US_LOAN_PAYMENT',
@@ -152,12 +157,17 @@ export const US_REAL_PROPERTY = {
 
   handlers(context) {
     const props = (context.realProperties ?? []).filter(p => p.country === 'US');
-    if (props.length === 0) return [];
-    const handlers = [new UsHouseSaleHandler()];
-    const mortgagedProps = props.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
-    if (mortgagedProps.length > 0) {
+    // A standalone LoanAccount needs the payment handler even with no US property at
+    // all, so the loan gate is evaluated before the no-property early return.
+    const needsLoanPayment = props.some(propertyNeedsLoanPayment)
+      || (context.accounts ?? []).some(a => accountNeedsLoanPayment(a, 'US'));
+    if (props.length === 0) {
       // Country-filtered so it pays only US loans; the shared LoanPaymentApplyReducer
       // is registered once by the compiler substrate (design 54 P2).
+      return needsLoanPayment ? [new UsLoanPaymentHandler({ stateRegistry: context.stateRegistry })] : [];
+    }
+    const handlers = [new UsHouseSaleHandler()];
+    if (needsLoanPayment) {
       handlers.push(new UsLoanPaymentHandler({ stateRegistry: context.stateRegistry }));
     }
     const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);

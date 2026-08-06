@@ -15,6 +15,10 @@ import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
+// Liability types: `balance` is debt owed (positive), net worth subtracts it, and
+// neither a drawdown priority nor a minimum balance means anything — the ctor forces
+// drawdownPriority null and nothing reads minimumBalance on a loan (design 54 §8).
+const LIABILITY_TYPES  = new Set(['loan']);
 // Cash account types eligible to be flagged the country's transaction account
 // (design 55 §7). Only these expose the isTransactionAccount checkbox + param.
 const CASH_TYPES       = new Set(['checking', 'savings']);
@@ -60,6 +64,19 @@ function _defaultCurrency(type, country) {
 }
 
 /**
+ * Properties a standalone loan may be linked to: those that do NOT already carry a
+ * mortgage of their own. A property with `mortgageBalance > 0` synthesizes its own
+ * `<propertyKey>Loan` state entry at build time (design 54 P2), so pointing a second
+ * authored loan at it would put two debts on one house — and `findLoanForProperty`
+ * prefers the synthesized slot, so the authored one would be the invisible half of the
+ * double-count. A property whose mortgage is authored here instead is fair game.
+ */
+function _linkableProperties(properties, currentKey) {
+  return (properties ?? []).filter(p =>
+    p?.stateKey && ((p.mortgageBalance ?? 0) <= 0 || p.stateKey === currentKey));
+}
+
+/**
  * AccountEditor — renders the account edit form from tpl-account-editor into
  * a given container (typically a modal body).
  *
@@ -75,19 +92,22 @@ export class AccountEditor extends BaseComponent {
    *   container: HTMLElement,
    *   node:      object|null,    — Account graph node, or null for a new account
    *   people:    object[],       — Person graph nodes for owner dropdown
-   *   realProperties: object[],  — RealProperty nodes for the offset property picker
+   *   realProperties: object[],  — RealProperty nodes for the offset/loan property picker
+   *   accounts:  object[],       — sibling Account nodes for the loan payment-source picker
    *   onSave:    function(object): void,
    *   onDelete:  function(string): void,
    *   onHistory: function(object): void,
    * }}
    */
-  constructor({ parent, container, node, people = [], realProperties = [], onSave, onDelete, onHistory,
+  constructor({ parent, container, node, people = [], realProperties = [], accounts = [],
+                onSave, onDelete, onHistory,
                 links = null, onParamChange = null, onOpenParam = null, primeRates = {} }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this._people    = people;
     this._realProperties = realProperties;
+    this._accounts  = accounts;
     // Central-bank Prime rates by country (design 56), e.g. { US: 0.045, AU: 0.0435 }.
     // Used to render the cash "Interest Rate" field as an absolute (Prime + spread)
     // and to convert the entered absolute back to a stored `primeSpread` on save.
@@ -179,6 +199,9 @@ export class AccountEditor extends BaseComponent {
     // Offset → property picker (design 53 §3 / 54 P3)
     this._populatePropertySelect(el, this._realProperties, this._node?.offsetsPropertyKey ?? null);
 
+    // Loan (liability) fields — design 54 §2 terms + design 86 G2/G3/G6/G7.
+    this._renderLoanFields(el);
+
     // Show/hide conditional sections
     this._applyTypeVisibility(el, typeSelect.value);
     this.listen(typeSelect, 'change', () => {
@@ -260,6 +283,137 @@ export class AccountEditor extends BaseComponent {
         onOpen:   (p) => this.onOpenParam?.(p),
       });
       this._linkedFields.add(field);
+    }
+  }
+
+  // ─── Loan (liability) — design 54 §2 + design 86 ────────────────────────────
+
+  /**
+   * Populate and wire the loan section. Every design-86 field is blank/off by default,
+   * which reproduces the pre-86 loan exactly: no term, no interest-only, the
+   * "deductible iff a linked property rents" rule, and a §988 booking rate stamped at
+   * the first payment. Blanks must round-trip as **null**, not 0 — 0 is a real maturity
+   * year and a real "nothing is deductible" fraction.
+   */
+  _renderLoanFields(el) {
+    const n = this._node;
+    // The rate field edits the ABSOLUTE the lender quotes; storage is Prime-relative
+    // (design 56), exactly as on a cash account and on the property's mortgage rate.
+    const rateInput = el.querySelector('[data-id="loanRate"]');
+    rateInput.value = this._loanRateAbsolute(n, n?.country ?? 'US');
+    this.listen(rateInput, 'input', () => this._refreshLoanRateHint(el));
+    this.listen(el.querySelector('[data-id="country"]'), 'change', () => this._refreshLoanRateHint(el));
+
+    el.querySelector('[data-id="monthlyPayment"]').value        = n?.monthlyPayment        ?? 0;
+    el.querySelector('[data-id="interestOnly"]').checked        = n?.interestOnly          ?? false;
+    el.querySelector('[data-id="interestOnlyUntilYear"]').value = n?.interestOnlyUntilYear ?? '';
+    el.querySelector('[data-id="maturityYear"]').value          = n?.maturityYear          ?? '';
+    el.querySelector('[data-id="deductibleFraction"]').value    = n?.deductibleFraction    ?? '';
+    el.querySelector('[data-id="bookingFxRate"]').value         = n?.bookingFxRate         ?? '';
+
+    this._populateLoanPropertySelect(el, n?.linkedPropertyKey ?? null);
+    this._populatePaymentSourceSelect(el, n?.paymentSourceKey ?? null);
+
+    const refreshTerm = () => this._refreshLoanTermHint(el);
+    for (const id of ['interestOnly', 'interestOnlyUntilYear', 'maturityYear']) {
+      this.listen(el.querySelector(`[data-id="${id}"]`), 'change', refreshTerm);
+      this.listen(el.querySelector(`[data-id="${id}"]`), 'input',  refreshTerm);
+    }
+    refreshTerm();
+    this._refreshLoanRateHint(el);
+  }
+
+  /**
+   * The absolute loan rate this account currently implies (design 56): Prime(country) +
+   * primeSpread when Prime-linked, else the fixed absolute. Note `LoanAccount` reuses
+   * `interestRate` for the LOAN rate — a different meaning from the cash-earnings
+   * `interestRate` the savings/brokerage field above edits, which is why the loan
+   * section has its own input rather than sharing `cashRate`.
+   */
+  _loanRateAbsolute(node, country) {
+    const prime = this._primeRates?.[country];
+    if (node?.primeSpread != null && prime != null) return prime + node.primeSpread;
+    return node?.interestRate ?? 0;
+  }
+
+  /** Mirror of _refreshCashRateHint for the loan rate. */
+  _refreshLoanRateHint(el) {
+    const hint = el.querySelector('[data-id="loanRateHint"]');
+    if (!hint) return;
+    const prime = this._primeRates?.[el.querySelector('[data-id="country"]').value];
+    const raw   = el.querySelector('[data-id="loanRate"]').value;
+    if (raw === '' || raw == null) { hint.textContent = ''; return; }
+    if (prime == null) { hint.textContent = 'Prime not configured — stored as an absolute rate'; return; }
+    const spread = Number(raw) - prime;
+    hint.textContent = `= Prime (${this._fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${this._fmtPct(Math.abs(spread))}`;
+  }
+
+  /**
+   * Describe the loan's life from the three term fields, because their interaction is
+   * the part that is easy to author wrong — in particular an IO expiry with no maturity
+   * year has nothing to amortise over, so `scheduledLoanPayment` falls back to the
+   * authored fixed payment (a real behaviour, almost never the intended one).
+   */
+  _refreshLoanTermHint(el) {
+    const hint = el.querySelector('[data-id="loanTermHint"]');
+    if (!hint) return;
+    const io       = el.querySelector('[data-id="interestOnly"]').checked;
+    const ioUntil  = el.querySelector('[data-id="interestOnlyUntilYear"]').value;
+    const maturity = el.querySelector('[data-id="maturityYear"]').value;
+
+    if (!io && !ioUntil && !maturity) { hint.textContent = ''; return; }
+    if (!io) {
+      hint.textContent = maturity
+        ? `P&I, discharged in full in ${maturity}.`
+        : 'IO Until Year applies to an interest-only loan only — tick Interest Only.';
+      return;
+    }
+    if (!ioUntil) { hint.textContent = 'Interest-only for life — Monthly Payment is inert.'; return; }
+    hint.textContent = maturity
+      ? `Interest-only to ${ioUntil}, then P&I re-amortised over the remaining term to ${maturity}.`
+      : `Interest-only to ${ioUntil}, then the fixed Monthly Payment — set a Maturity Year to re-amortise instead.`;
+  }
+
+  /** Loan → property picker; see {@link _linkableProperties} for what is offered. */
+  _populateLoanPropertySelect(el, selectedKey) {
+    const sel = el.querySelector('[data-id="linkedPropertyKey"]');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— none (standalone) —</option>';
+    for (const p of _linkableProperties(this._realProperties, selectedKey)) {
+      const opt       = document.createElement('option');
+      opt.value       = p.stateKey;
+      opt.textContent = p.name || p.stateKey;
+      if (p.stateKey === selectedKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  /**
+   * Loan → payment-source picker (design 54 P4). Keyed by **stateKey**, the only form
+   * `resolveLoanCashKey` can look up; the loan itself is excluded (it cannot pay
+   * itself), as are other loans.
+   */
+  _populatePaymentSourceSelect(el, selectedKey) {
+    const sel = el.querySelector('[data-id="paymentSourceKey"]');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— default —</option>';
+    let matched = false;
+    for (const a of (this._accounts ?? [])) {
+      if (!a?.stateKey || a.type === 'loan') continue;
+      const opt       = document.createElement('option');
+      opt.value       = a.stateKey;
+      opt.textContent = a.name || a.stateKey;
+      if (a.stateKey === selectedKey) { opt.selected = true; matched = true; }
+      sel.appendChild(opt);
+    }
+    // Preserve a key that no longer names a live account rather than silently
+    // re-defaulting the loan's payment source on the next save.
+    if (selectedKey && !matched) {
+      const opt       = document.createElement('option');
+      opt.value       = selectedKey;
+      opt.textContent = `${selectedKey} (missing)`;
+      opt.selected    = true;
+      sel.appendChild(opt);
     }
   }
 
@@ -781,6 +935,42 @@ export class AccountEditor extends BaseComponent {
     if (type === 'offset') {
       data.offsetsPropertyKey = el.querySelector('[data-id="offsetsPropertyKey"]').value || null;
     }
+    // Loan terms (design 54 §2 + design 86). A blank numeric field is `null` ("unset"),
+    // never 0 — see _renderLoanFields. The rate follows the same Prime-relative storage
+    // as the cash rate above, but writes the LOAN's `interestRate`, so it is read here
+    // rather than in the CASH_RATE_TYPES branch (loan is deliberately not in that set).
+    if (LIABILITY_TYPES.has(type)) {
+      const num = (dataId, round = false) => {
+        const raw = el.querySelector(`[data-id="${dataId}"]`).value;
+        if (raw === '' || raw == null) return null;
+        const v = Number(raw);
+        if (!Number.isFinite(v)) return null;
+        return round ? Math.round(v) : v;
+      };
+      const rateRaw = el.querySelector('[data-id="loanRate"]').value;
+      const prime   = this._primeRates?.[data.country];
+      const rateAbs = rateRaw === '' || rateRaw == null ? 0 : Number(rateRaw);
+      if (prime != null && rateRaw !== '' && rateRaw != null) {
+        data.primeSpread  = rateAbs - prime;
+        data.interestRate = 0;             // the spread wins in resolveLoanRate
+      } else {
+        data.primeSpread  = null;
+        data.interestRate = rateAbs;
+      }
+      data.monthlyPayment        = Number(el.querySelector('[data-id="monthlyPayment"]').value) || 0;
+      data.interestOnly          = el.querySelector('[data-id="interestOnly"]').checked;
+      data.interestOnlyUntilYear = num('interestOnlyUntilYear', true);
+      data.maturityYear          = num('maturityYear', true);
+      // Clamped to [0,1] because it is a share: a stray 50 (percent, not fraction)
+      // would otherwise multiply both the s8-1 deduction and the §988(e) business
+      // split by fifty.
+      const frac = num('deductibleFraction');
+      data.deductibleFraction    = frac == null ? null : Math.min(1, Math.max(0, frac));
+      data.bookingFxRate         = num('bookingFxRate');
+      data.linkedPropertyKey     = el.querySelector('[data-id="linkedPropertyKey"]').value || null;
+      data.paymentSourceKey      = el.querySelector('[data-id="paymentSourceKey"]').value  || null;
+      data.drawdownPriority      = null;   // a liability is never a source of drawdown cash
+    }
     // Param-backed fields are owned by their scenario param (design/32) — drop
     // them so the service update doesn't write a competing value on the account.
     for (const f of this._linkedFields) delete data[f];
@@ -847,6 +1037,18 @@ export class AccountEditor extends BaseComponent {
     }
     const offsetFields = el.querySelector('[data-id="offsetFields"]');
     if (offsetFields) offsetFields.style.display = type === 'offset' ? '' : 'none';
+
+    // Loan (liability): show its terms, and hide the two rows that mean nothing on a
+    // liability — the ctor forces drawdownPriority null (a loan is never a source of
+    // drawdown cash, design 54 §8) and nothing reads a loan's minimumBalance.
+    const loanFields = el.querySelector('[data-id="loanFields"]');
+    if (loanFields) loanFields.style.display = LIABILITY_TYPES.has(type) ? '' : 'none';
+    for (const rowId of ['drawdownRow', 'minimumBalanceRow']) {
+      const row = el.querySelector(`[data-id="${rowId}"]`);
+      if (row) row.style.display = LIABILITY_TYPES.has(type) ? 'none' : '';
+    }
+    const balanceLabel = el.querySelector('[data-id="balance"]')?.closest('.node-field')?.querySelector('label');
+    if (balanceLabel) balanceLabel.textContent = LIABILITY_TYPES.has(type) ? 'Principal Owed' : 'Balance';
 
     const holdingsSection = el.querySelector('[data-id="holdingsSection"]');
     if (holdingsSection) {

@@ -425,15 +425,11 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     if (st)   st[loanField]   = v;
   }
 
-  // The AU/US real-property toolsets only schedule a LOAN_PAYMENT event for a
-  // property with BOTH a positive mortgageBalance and a positive monthlyMortgage.
-  // An interest-only mortgage derives its payment, so `monthlyMortgage` is inert —
-  // but leaving it at 0 means no payment event is ever scheduled and the loan runs
-  // free. Seed a placeholder so the event exists.
-  if (prop && o.interestOnly && !(prop.monthlyMortgage > 0)) {
-    prop.monthlyMortgage = 1;
-    if (st) st.monthlyPayment = 1;
-  }
+  // No placeholder `monthlyMortgage` is needed to force a payment event: the real
+  // -property toolsets now gate the LOAN_PAYMENT schedule on `propertyNeedsLoanPayment`,
+  // which counts an interest-only or term-bearing mortgage as payable even though its
+  // authored `monthlyMortgage` is inert (design 86 G6). A spec that sets `interestOnly`
+  // and leaves the payment at 0 gets the derived interest payment, not a free loan.
 
   // `prop.*` params are read by the param→node cascade on the compile branch and
   // would otherwise re-stamp the record from a stale param value.
@@ -882,8 +878,21 @@ function monthlyDebtService(cfg, prop) {
   return Math.max(0, (prop.mortgageBalance ?? 0) - offset) * rate / 12;
 }
 
+/**
+ * A property whose mortgage is actually serviced — the same gate the real-property
+ * toolsets schedule LOAN_PAYMENT on (`propertyNeedsLoanPayment`, loan-classes.js),
+ * restated here because this module deliberately imports nothing from `src/`.
+ * `monthlyMortgage > 0` alone is not it: an interest-only or term-bearing mortgage
+ * derives its payment and leaves that field at 0, and missing those properties here
+ * makes `spendTotal` subtract no debt service at all.
+ */
+function _isServicedMortgage(p) {
+  if (!((p?.mortgageBalance ?? 0) > 0)) return false;
+  return (p.monthlyMortgage ?? 0) > 0 || !!p.mortgageInterestOnly || p.mortgageMaturityYear != null;
+}
+
 export function applySpendTotal(cfg, set, total, propertyKey, { ownStrategy = true } = {}) {
-  const mortgaged = (cfg.realProperties ?? []).filter(p => (p.monthlyMortgage ?? 0) > 0);
+  const mortgaged = (cfg.realProperties ?? []).filter(_isServicedMortgage);
   const prop = propertyKey
     ? (cfg.realProperties ?? []).find(p => p.stateKey === propertyKey)
     : mortgaged[0];

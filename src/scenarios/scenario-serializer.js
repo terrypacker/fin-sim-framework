@@ -695,6 +695,11 @@ export class ScenarioSerializer {
       d.deductibleFraction = account.deductibleFraction ?? null;
       d.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
       d.maturityYear          = account.maturityYear          ?? null;
+      // design 86 G7 — the rate the debt was booked at, and so the basis every §988
+      // gain is measured against. Omitting it made an authored booking rate silently
+      // revert to "stamped at the first payment" on the next load, which understates
+      // §988 rather than erroring.
+      d.bookingFxRate         = account.bookingFxRate         ?? null;
     }
     // OffsetAccount (cash-like, linked) field (design 53 §3 / 54 P3).
     if (account.type === 'offset') {
@@ -1134,6 +1139,8 @@ export class ScenarioSerializer {
       // design 86 G6 — absent ⇒ null ⇒ no term, the pre-86 behaviour.
       opts.interestOnlyUntilYear = d.interestOnlyUntilYear ?? null;
       opts.maturityYear          = d.maturityYear          ?? null;
+      // design 86 G7 — absent ⇒ null ⇒ stamped at the first payment, as before.
+      opts.bookingFxRate         = d.bookingFxRate         ?? null;
     }
     // OffsetAccount (cash-like, linked) opts (design 53 §3 / 54 P3).
     if (d.__type === 'OffsetAccount') {
