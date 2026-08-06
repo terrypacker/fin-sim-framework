@@ -18,7 +18,7 @@ import { BondSleeveCouponHandler }    from '../../finance/handlers/bond-sleeve-c
 import { BondAccretionHandler }       from '../../finance/handlers/bond-accretion-handler.js';
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
-import { HealthcareEventHandler }     from '../../finance/spending/strategies/healthcare-event-handler.js';
+import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
 import { MonthlyWagesHandler }        from '../../finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler }
   from '../../finance/handlers/monthly-social-security-handler.js';
@@ -108,7 +108,7 @@ export const AU_RETIREMENT = {
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
-      { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },
+      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number() } },
       { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
     ],
   },
@@ -166,13 +166,13 @@ export const AU_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED', 'EXPLICIT_BANDS'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'EXPENSE_EVENTS', 'AGE_BANDED', 'EXPLICIT_BANDS'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
-      ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.EXPENSE_EVENTS.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
@@ -344,19 +344,13 @@ export const AU_RETIREMENT = {
       }
     }
 
-    // Healthcare — HEALTHCARE_EXPENSE one-off events.
-    if (strategies.includes('HEALTHCARE') && !context._auSharedDelegated) {
-      const healthcareEvents = p.healthcareEvents ?? [];
-      for (const evt of healthcareEvents) {
+    // One-off expenses — EXPENSE_EVENT events (design 86 G8/G9). The
+    // `_auSharedDelegated` guard is load-bearing: without it a cross-border scenario
+    // schedules every event TWICE, once from each retirement toolset.
+    if (strategies.includes('EXPENSE_EVENTS') && !context._auSharedDelegated) {
+      for (const evt of p.expenseEvents ?? []) {
         if (!evt.date || !evt.amount) continue;
-        schedules.push(new OneOffEvent({
-          name:    `Healthcare Expense${evt.category ? ` — ${evt.category}` : ''}`,
-          type:    'HEALTHCARE_EXPENSE',
-          date:    new Date(evt.date),
-          data:    { amount: evt.amount, category: evt.category ?? 'healthcare', personId: evt.personId ?? null },
-          enabled: true,
-          color:   '#E91E63',
-        }));
+        schedules.push(buildExpenseEventSchedule(evt));
       }
     }
 
@@ -586,17 +580,17 @@ export const AU_RETIREMENT = {
           handlers.push(retH);
         }
       }
-      if (strategiesH.includes('HEALTHCARE')) {
-        const hcEvents = Object.values(context.schedulesById).filter(e => e?.type === 'HEALTHCARE_EXPENSE');
-        if (hcEvents.length > 0) {
-          const hcH = new HealthcareEventHandler({
+      if (strategiesH.includes('EXPENSE_EVENTS')) {
+        const expEvents = Object.values(context.schedulesById).filter(e => e?.type === 'EXPENSE_EVENT');
+        if (expEvents.length > 0) {
+          const expH = new ExpenseEventHandler({
             stateRegistry: sr,
             expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
             usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
             auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
           });
-          for (const evt of hcEvents) hcH.handledEvents.push(evt);
-          handlers.push(hcH);
+          for (const evt of expEvents) expH.handledEvents.push(evt);
+          handlers.push(expH);
         }
       }
 

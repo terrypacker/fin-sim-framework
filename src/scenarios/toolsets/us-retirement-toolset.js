@@ -31,7 +31,7 @@ import {
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../../finance/holdings/holdings-selection.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
-import { HealthcareEventHandler }       from '../../finance/spending/strategies/healthcare-event-handler.js';
+import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
 import { ExpenseDebitReducer }          from '../../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer }      from '../../finance/reducers/replenish-savings-reducer.js';
 import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-dividend-cash-apply-reducer.js';
@@ -230,7 +230,7 @@ export const US_RETIREMENT = {
       { type: 'K401_TO_IRA_CONVERSION_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
-      { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },
+      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number() } },
       { type: 'HOUSE_REPAIR_APPLY',         fields: { stateKey: ValueType.text(), amount: ValueType.number(), capitalize: ValueType.number() } },
       { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
     ],
@@ -345,13 +345,13 @@ export const US_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED', 'EXPLICIT_BANDS'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'EXPENSE_EVENTS', 'AGE_BANDED', 'EXPLICIT_BANDS'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, EXPENSE_EVENTS = dated one-off expenses in a chosen currency, optionally funded from a nominated account (design 86 G8/G9; supersedes HEALTHCARE, which is now the `healthcare` category), AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
-      ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.EXPENSE_EVENTS.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
@@ -725,19 +725,12 @@ export const US_RETIREMENT = {
       }
     }
 
-    // Healthcare — schedule HEALTHCARE_EXPENSE one-off events from parameters (design/26 step 16).
-    if (strategies.includes('HEALTHCARE')) {
-      const healthcareEvents = p.healthcareEvents ?? [];
-      for (const evt of healthcareEvents) {
+    // One-off expenses — schedule EXPENSE_EVENT events from parameters
+    // (design/26 step 16, generalized by design 86 G8/G9).
+    if (strategies.includes('EXPENSE_EVENTS')) {
+      for (const evt of p.expenseEvents ?? []) {
         if (!evt.date || !evt.amount) continue;
-        schedules.push(new OneOffEvent({
-          name:    `Healthcare Expense${evt.category ? ` — ${evt.category}` : ''}`,
-          type:    'HEALTHCARE_EXPENSE',
-          date:    new Date(evt.date),
-          data:    { amount: evt.amount, category: evt.category ?? 'healthcare', personId: evt.personId ?? null },
-          enabled: true,
-          color:   '#E91E63',
-        }));
+        schedules.push(buildExpenseEventSchedule(evt));
       }
     }
 
@@ -1141,18 +1134,18 @@ export const US_RETIREMENT = {
       }
     }
 
-    // Healthcare — HealthcareEventHandler fires on HEALTHCARE_EXPENSE (design/26 step 16).
-    if (strategiesH.includes('HEALTHCARE')) {
-      const hcEvents = Object.values(context.schedulesById).filter(e => e?.type === 'HEALTHCARE_EXPENSE');
-      if (hcEvents.length > 0) {
-        const hcH = new HealthcareEventHandler({
+    // One-off expenses — ExpenseEventHandler fires on EXPENSE_EVENT (design 86 G8/G9).
+    if (strategiesH.includes('EXPENSE_EVENTS')) {
+      const expEvents = Object.values(context.schedulesById).filter(e => e?.type === 'EXPENSE_EVENT');
+      if (expEvents.length > 0) {
+        const expH = new ExpenseEventHandler({
           stateRegistry: sr,
           expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
           usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
           auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
         });
-        for (const evt of hcEvents) hcH.handledEvents.push(evt);
-        handlers.push(hcH);
+        for (const evt of expEvents) expH.handledEvents.push(evt);
+        handlers.push(expH);
       }
     }
 

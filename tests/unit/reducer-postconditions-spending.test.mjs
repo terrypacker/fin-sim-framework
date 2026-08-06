@@ -16,7 +16,7 @@
  * is no I3/I4/I5 here. They operate on state.expenses {essential, discretionary}
  * + state.monthlyExpenses, or on a tracking accumulator. Asserted I1 + I2
  * (determinism) + I7 (no-op) where tagged, plus I9 monotonicity for the
- * healthcare accumulator and the apply/revert round-trip for the multiplier
+ * expense-event accumulator and the apply/revert round-trip for the multiplier
  * reducers (late-life care, regime-aware).
  */
 
@@ -33,7 +33,7 @@ import { ageSpendingFactor } from '../../src/finance/spending/age-spending-facto
 import { GuardrailBaselineApplyReducer } from '../../src/finance/spending/strategies/guardrail-baseline-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from '../../src/finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailAdjustApplyReducer } from '../../src/finance/spending/strategies/guardrail-adjust-apply-reducer.js';
-import { HealthcareExpenseApplyReducer } from '../../src/finance/spending/strategies/healthcare-expense-apply-reducer.js';
+import { ExpenseEventApplyReducer } from '../../src/finance/spending/strategies/expense-event-apply-reducer.js';
 import { LateLifeCareApplyReducer } from '../../src/finance/spending/strategies/late-life-care-apply-reducer.js';
 import { RegimeAwareSpendingReducer } from '../../src/finance/spending/strategies/regime-aware-spending-reducer.js';
 
@@ -162,18 +162,21 @@ test('GuardrailAdjustApplyReducer: no expenses / null multiplier is a no-op (I7)
   assertStateUnchanged(prev, runReducer(r, structuredClone(prev), makeAction('GUARDRAIL_ADJUST_APPLY', { multiplier: null }), DATE));
 });
 
-// ─── HealthcareExpenseApplyReducer (I1/I9 monotonic accumulator) ───────────────
+// ─── ExpenseEventApplyReducer (I1/I9 monotonic accumulator) ────────────────────
 
-test('HealthcareExpenseApplyReducer: accumulates YTD + lifetime totals; monotonic (I9)', () => {
-  const r = new HealthcareExpenseApplyReducer();
-  const first = runReducer(r, { healthcareSpendingYTD: 1000, healthcareSpendingTotal: 5000 },
-    makeAction('HEALTHCARE_EXPENSE_APPLY', { amount: 2000, category: 'ACUTE' }), DATE);
-  assert.equal(first.healthcareSpendingYTD, 3000);
-  assert.equal(first.healthcareSpendingTotal, 7000);
-  // I9 — re-applying only grows the cumulative total.
-  const second = runReducer(r, first, makeAction('HEALTHCARE_EXPENSE_APPLY', { amount: 500 }), DATE);
-  assert.ok(second.healthcareSpendingTotal >= first.healthcareSpendingTotal);
-  assert.equal(second.healthcareSpendingTotal, 7500);
+test('ExpenseEventApplyReducer: accumulates per-category + lifetime totals; monotonic (I9)', () => {
+  const r = new ExpenseEventApplyReducer();
+  const first = runReducer(r, { expenseEventSpendingByCategory: { ACUTE: 1000 }, expenseEventSpendingTotal: 5000 },
+    makeAction('EXPENSE_EVENT_APPLY', { amount: 2000, category: 'ACUTE' }), DATE);
+  assert.equal(first.expenseEventSpendingByCategory.ACUTE, 3000);
+  assert.equal(first.expenseEventSpendingTotal, 7000);
+  // I9 — re-applying only grows the cumulative total, and a new category cannot
+  // disturb an existing one.
+  const second = runReducer(r, first, makeAction('EXPENSE_EVENT_APPLY', { amount: 500, category: 'ROOF' }), DATE);
+  assert.ok(second.expenseEventSpendingTotal >= first.expenseEventSpendingTotal);
+  assert.equal(second.expenseEventSpendingTotal, 7500);
+  assert.equal(second.expenseEventSpendingByCategory.ACUTE, 3000);
+  assert.equal(second.expenseEventSpendingByCategory.ROOF, 500);
 });
 
 // ─── LateLifeCareApplyReducer (I1/I7 apply+revert round-trip) ──────────────────

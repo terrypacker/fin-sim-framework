@@ -3,6 +3,12 @@
 **Status** (2026-08-05): **IMPLEMENTED**, except G3's standalone-loan half (§3 G3),
 G6's UI surface, and G7. Phase table in §5. Full suite green (4,435 + 977).
 
+**Extended** (2026-08-05) with §8: the offset reframed as a *domestic-currency
+liquidity option* rather than a return bet. That reframing is what finally gives the
+"hold the loan" recommendation something to stand on, and it opens two new gaps —
+**G8** (dated, currency-denominated one-off expense) and **G9** (fund an expense from
+a nominated account) — plus it promotes **G7** from unscheduled to load-bearing.
+
 Found while designing a study of AU mortgage **offset accounts** — whether cash is
 better parked in an offset (earning the loan rate, certain and untaxed) or invested
 (earning the market, risky and taxed). That question is decided almost entirely by the
@@ -40,6 +46,10 @@ Every gap below moves one of those two terms:
 A model can be wrong in one direction and still be useful for ranking. **Wrong in
 both directions at once, on the same lever, is not** — you can no longer sign the
 answer. That is the argument for treating this as one piece of work.
+
+G8 and G9 (added later, §3) do not fit this table, and that is the point: they corrupt
+neither term. They are the gaps that stop the *third* term — the option value of the
+facility itself — from being written down at all. See §8.
 
 ---
 
@@ -339,6 +349,95 @@ a moving USD/AUD path this is not small, and it is a **cost of holding foreign
 leverage specifically** — which makes it in-scope for the question this design serves,
 even though it is the lowest-value item here. Documented, not scheduled.
 
+**Promoted by §8.** This was the lowest-value item while every run held the exchange
+rate constant, because a §988 gain on a pinned rate is identically zero. §8 requires a
+live FX process, and the moment the rate moves this stops being a rounding error and
+becomes a term in the very comparison §8 exists to make. It is now P8.
+
+---
+
+### G8 · No dated, currency-denominated one-off expense
+
+**Now.** The engine has two one-off-expense channels and neither can express *a stated
+amount, in a stated currency, on a stated date, funded from a stated account*.
+
+- **`healthcareEvents`** (the `HEALTHCARE` spending strategy) has the right *shape*:
+  `[{ date, amount, category, personId }]`, one `OneOffEvent` per entry scheduled by
+  both retirement toolsets, a handler emitting `REPLENISH_SAVINGS` + `EXPENSE_DEBIT`,
+  and a real list editor in the scenario tab. But the amount is denominated in
+  `expensesCurrency` and converted at debit time, and the target account is chosen by
+  the **person's residency** — not by the expense's own country or currency.
+- **`RealProperty.repairModel`** gets currency and country right — amounts are in the
+  property's currency, the debit targets the property's country, and
+  `capitalizeRepairs` feeds the cost basis — but it is **stochastic only**. There is no
+  dated form.
+
+So "a known large domestic-currency expense in year *T*" is unreachable, and it is the
+event the entire §8 question is about.
+
+**Proposed: generalize `HEALTHCARE` rather than add a sibling strategy.** It is the
+same machinery two fields short; healthcare is one *category* of a general thing, not a
+kind of thing; and a parallel strategy would duplicate the handler, the reducer, the
+editor and the toolset scheduling. Measured surface before deciding: **10 source files,
+3 test files, and no authored events in any saved scenario** — so this is a rename plus
+two fields, with no data migration.
+
+- Strategy `HEALTHCARE` → `EXPENSE_EVENTS`; param `healthcareEvents` → `expenseEvents`.
+- Each entry gains **`currency`** (explicit, *not* `expensesCurrency` — this is the one
+  field that makes an FX question askable, because a domestic-currency cost has a
+  foreign-currency cost that moves with the rate), **`fundFrom`** (G9), and optional
+  `propertyKey` + `capitalize` so an improvement reaches the cost basis the way
+  `capitalizeRepairs` already does.
+- `category` stays and becomes the discriminator. `'healthcare'` becomes a value rather
+  than a strategy, which is the correct relationship between the two.
+- Accumulators go per-category. **And fix the latent defect found while scoping this:
+  `healthcareSpendingYTD` is never reset by any settle path**, so it is a second copy of
+  `healthcareSpendingTotal` under a name that claims otherwise. Decide which one it is
+  rather than carrying both forward.
+- An `expenseEvent` lever in `scripts/lib/variant.mjs`, so the same thing is reachable
+  from a spec file. §4's argument applies unchanged: unreachable from a spec means
+  unmeasurable.
+
+**Traps**, all four of which this repo has already paid for once: the two param stores
+(write via `makeSetParam`); `visibleWhen` against a **multi-select** `spendingStrategy`;
+the up-front entry clone that both existing list editors document, without which an edit
+reaches back into the active scenario; and the `_auSharedDelegated` guard, without which
+a cross-border scenario schedules every event **twice**.
+
+**Test.** A dated event in each currency debits the right account for the right
+converted magnitude; `category: 'healthcare'` reproduces the old behaviour; a
+`capitalize` fraction moves the property's cost basis and shows up in a later disposal.
+
+---
+
+### G9 · An expense cannot be funded from a nominated account
+
+**Now.** Every expense path resolves its debit target from residency or property
+country, then leans on `REPLENISH_SAVINGS` and the drawdown queue for any shortfall. An
+offset sits **deliberately outside** that queue (`drawdownPriority: null`), so it can
+never fund anything.
+
+Giving the offset a `drawdownPriority` is not the fix, and it is worse than useless — it
+has been measured to be actively misleading. A priority puts the offset ahead of the
+portfolio for *all* spending, so it empties early and the arm stops testing the strategy
+it was built to test. "Hold it" and "spend it first" are the only two behaviours
+available today, and the one that matters — **draw it when the need arrives** — is
+neither of them.
+
+**Proposed.** `fundFrom` on an expense event: a state key debited **directly**, falling
+back to the existing residency-default path when absent, or when the nominated account
+cannot cover the amount. Explicitly *not* routed through `drawdownPriority`, or the
+artefact above returns by another door.
+
+This is the smallest change that makes a targeted draw expressible, and it generalizes:
+"fund this from that account" is a missing verb everywhere in the expense machinery, not
+only for offsets.
+
+**Test.** An event with `fundFrom` set to an out-of-queue account debits it and leaves
+the drawdown order untouched; an event whose nominated account is short falls through to
+the default path for the remainder; an absent `fundFrom` reproduces current behaviour
+byte-for-byte.
+
 ---
 
 ### Out of scope, but adjacent — flag when quoting any result
@@ -383,7 +482,12 @@ the other source.
 | **P5** | G5 + G5b US §469 and the §904 partition | **done** | Promoted ahead of P4: until this landed, no unoffset arm could run at all without `FTC_LIMITATION_STRICT=off`. Reuses P3's pool pattern in the other jurisdiction.      |
 | **P4** | G3 `deductibleFraction`                 | **half** | The rental-path half is built. The standalone borrow-to-invest half is deferred — see §3 G3, it needs a §163(d) channel that must NOT reuse the §469 one P5 just built. |
 | **P6** | G6 term / IO expiry                     | open     | Depends on G2. Turns "hold leverage forever" into a testable assumption.                                                                                                |
-| —      | G7 §988                                 | open     | Documented, unscheduled.                                                                                                                                                |
+| **P7** | G8 expense events + G9 `fundFrom`       | open     | One change: G9 is a field on G8's entry. Together they are the whole of what §8 needs from the engine, and neither is useful alone.                                     |
+| **P8** | G7 §988                                 | open     | Promoted from unscheduled. §8 requires a live FX process; on a pinned rate a §988 gain is identically zero, so this was free to defer and no longer is.                 |
+
+P7 is behaviour-preserving for any scenario that authors no expense events — which,
+measured, is **every** saved scenario. P8 is not: it changes tax in any plan holding
+foreign-currency debt across a moving rate.
 
 P1, P2 and the built half of P4 are behaviour-preserving for any scenario that doesn't
 opt in. **P3 and P5 are not** — they change tax in any plan with a loss year.
@@ -427,3 +531,123 @@ Per-gap tests are listed above. Across all of them:
    redrawn funds are deployed. A scalar is right for P4; a schedule may be needed
    later, and the field should be shaped so that is an extension rather than a
    migration.
+4. **Does drawing an offset for a private purpose change the deduction?** §3 G3's
+   "error 2" and its own next paragraph on offset-vs-redraw read in opposite
+   directions, and §8 leans hard on the second. `deductibleFraction: null` preserves
+   what I take to be the correct treatment, so nothing is broken — but the reading
+   should be settled before anyone acts on §8's tax argument. See §8.3.
+
+---
+
+## 8. The AUD-liquidity option — what the offset is actually for
+
+§1 frames the whole document around a **return** comparison: a dollar against the debt
+earns `r_loan × (1 − MTR)`, a dollar invested earns `E[r_asset]` with variance. That
+framing is correct and it produced a clean answer. It also produced a result it cannot
+explain: **a fully offset loan is a balance-sheet no-op**, identical to never having
+borrowed. It costs nothing and it earns nothing.
+
+Which means the return framing can rank the *uses* of the facility but is structurally
+incapable of valuing the *facility*. Any recommendation to hold the loan rests entirely
+on option value, and nothing in §1's comparison prices an option.
+
+### 8.1 The option has a name
+
+It is a **call on domestic-currency liquidity**. For a household whose assets sit
+predominantly in one currency while its liabilities and its lumpy spending needs sit in
+another, the offset is the right to fund a large domestic expense without:
+
+1. **converting** at whatever the exchange rate happens to be on the day of the need;
+2. **liquidating** foreign assets into whatever the market happens to be on that day;
+3. **realising** a capital gain in either jurisdiction.
+
+Three legs, and they are not equally large. The **tax** leg is the most certain: an
+offset withdrawal is not a disposal in any jurisdiction, whereas selling foreign
+securities is a realisation in both. The **sequence-risk** leg is next: a forced
+liquidation lands precisely in the worlds where a plan is already failing, so its cost
+is concentrated exactly where it hurts. The **FX** leg is the smallest and the least
+certain — which is worth saying plainly, because it is the one that sounds most
+compelling.
+
+### 8.2 It is not a hedge, and the difference matters
+
+**Filling the offset is FX-*neutral*, and that is what makes it work.** A full offset is
+a domestic-currency asset exactly matched by a domestic-currency liability: net exposure
+zero. Emptying it into foreign assets does not remove a hedge — it *creates a short*
+domestic-currency position, financed at the loan rate.
+
+So the strategy is not "hedge using the offset." It is: hold a zero-cost, zero-exposure
+position that can be converted into domestic spending on demand. Calling it a hedge
+invites sizing it against currency exposure, which is the wrong axis; it should be sized
+against **plausible domestic cash needs**.
+
+That is a different sizing rule from the one a leverage framing implies. Leverage is
+sized to what you can service. An option is sized to the exposure it covers — which may
+be far less, or occasionally more, than the maximum facility available.
+
+### 8.3 Why an offset specifically, and not "borrow later"
+
+Two reasons, and both survive the model being silent on them.
+
+**Tax character.** §3 G3's statutory point cuts directly here. An offset withdrawal is
+the borrower's own money and leaves the loan's character untouched; a redraw is new
+borrowing whose character is set by what the redrawn money buys. Where the security is
+an income-producing property, drawing the offset to fund a deductible expense on that
+property restores deductible interest on the drawn amount *and* the expense itself is
+deductible. Selling foreign securities achieves neither. (Subject to open question 4.)
+
+**Serviceability.** A facility originated while wage income exists cannot be
+re-originated once it does not. "Borrow later if needed" is not a substitute for a
+facility that already exists; it is a bet on a future underwriting decision. This is the
+one part of the original premise — *take it while you can qualify* — that was always
+right, and it is right for this reason rather than for a return reason.
+
+### 8.4 None of this is currently measurable, and the reason is specific
+
+Three blockers, in order of severity:
+
+- **FX is pinned.** `fxProcessModel` defaults to `NONE`. **An option on an exchange rate
+  is worth exactly zero in a model with a constant rate.** This does not invalidate any
+  existing result — those answer the return question, which is FX-insensitive by
+  construction — but it does mean every result to date is *silent* on this one, rather
+  than negative on it.
+- **No dated, currency-denominated expense** (G8). The event the question is about
+  cannot be authored.
+- **No targeted funding** (G9). The draw itself cannot be expressed as distinct from
+  "hold forever" or "spend it first."
+
+### 8.5 The FX process, decided
+
+`MEAN_REVERTING` primary; `RANDOM_WALK` as a sensitivity; `fxVolatility` an axis in
+both. This is a decision, not a default, and picking wrongly answers a different
+question:
+
+- **Mean reversion** pins the long-run level and leaves *timing* risk — which is exactly
+  what a timing option monetises. It is the model under which the option's value is a
+  real, isolable quantity.
+- **A random walk** introduces permanent *level* risk. The offset does **not** hedge
+  level risk — it is a zero-exposure position (§8.2) — so a random-walk-only study
+  measures something the strategy never claimed to do and understates the option.
+
+### 8.6 The output that settles it
+
+Not another terminal-wealth table. A **break-even on exercise**: *how large, and how
+likely, does a domestic-currency cash need have to be before the option covers its
+carrying cost?*
+
+Same shape as the break-even-return framing that was the best idea in the return study,
+and for the same reason: a break-even is a number a person can hold an opinion about,
+and a wealth delta is not. Three paired arms on shared seeds — draw the offset, sell
+foreign assets and convert, and a no-expense control to isolate the shock's own cost —
+give the option's value per world directly as the paired delta.
+
+### 8.7 One interaction to carry into the arms
+
+With the offset full, G6's IO-expiry term is **inert**: a P&I payment at zero accrued
+interest merely moves money between two accounts on the same balance sheet.
+
+**That inertness ends at exercise.** A drawn offset re-exposes the plan to the term, and
+does so at the moment cash is tightest — the payment steps up precisely when the reason
+for drawing has not gone away. Any arm that exercises must run G6 live, and a study that
+holds G6 fixed because "it was inert last time" will silently understate the cost of
+exercising.

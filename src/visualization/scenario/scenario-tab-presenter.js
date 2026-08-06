@@ -95,7 +95,7 @@ export class ScenarioTabPresenter {
       return null;
     };
 
-    // Supply persons to person-picker param editors (e.g. HealthcareEventList).
+    // Supply persons to person-picker param editors (e.g. ExpenseEventList).
     this._view.personsProvider = () => {
       const registry = ServiceRegistry.getInstance();
       return (registry.personService?.getAll?.() ?? [])
