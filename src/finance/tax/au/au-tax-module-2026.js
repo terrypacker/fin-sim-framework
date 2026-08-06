@@ -9,8 +9,9 @@
  */
 
 import { BaseTaxModule } from '../base-tax-module.js';
-import { accumulateByOwnership, resolveAttributionAsset } from '../../ownership-utils.js';
+import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
+import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
 
 const SUPER_TAX_RATE = 0.15;
 
@@ -599,36 +600,113 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { gain, residency, ownershipType, ownerId, owners } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null;
-        const usdGain = toUSD(gain, 'AUD', state);
+
+        // ── Design 83 G7: one disposal, three differently-taxed slices ──────────
+        //
+        // The AU main-residence exemption (s118-185, already gated by s118-110(3) in
+        // the sale reducer) is an AUSTRALIAN concession and must not touch the US
+        // figure — the United States relieves an Australian dwelling only through its
+        // own §121, on its own test, over its own period. Applying the AU fraction to
+        // both would double-relieve, which is why the fraction arrives here rather
+        // than having been netted into `gain` upstream.
+        const auTaxableFraction = action.auTaxableFraction ?? 1;   // pre-G7 default: all of it
+        const auAssessableGain  = +(gain * auTaxableFraction).toFixed(2);
+
+        // The depreciation slice. Australia needs no special handling — s110-45(2)
+        // already enlarged the gain by taking Div 43 out of the cost base, and that
+        // enlargement rides the exemption and the discount like any other gain. The
+        // United States must split it out: unrecaptured §1250 gain is capped at 25%
+        // rather than taxed at the LTCG rates, and §121 can never exclude it.
+        const depGain      = Math.max(0, Math.min(action.depreciationGain ?? 0, gain));
+        const excludable   = Math.max(0, gain - depGain);
+        const s121         = us121Exclusion(
+          { mainResidenceFrom:  action.mainResidenceFrom,
+            mainResidenceUntil: action.mainResidenceUntil,
+            isPrimaryResidence: action.isPrimaryResidence },
+          { gain, depreciationGain: depGain,
+            acquisitionMs: action.acquisitionMs, saleMs: action.saleMs,
+            filingSingle:  state.usFilingSingle === true });
+        const usTaxableGain = +Math.max(0, excludable - s121.excluded).toFixed(2);
+
+        const usdGain     = toUSD(usTaxableGain, 'AUD', state);
+        const usdDepGain  = toUSD(depGain,       'AUD', state);
         let next = {
           ...state,
-          usCapitalGainsYTD:       state.usCapitalGainsYTD + usdGain,
-          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usdGain,
+          usCapitalGainsYTD:         state.usCapitalGainsYTD + usdGain,
+          // §1250 gain is US-taxable income in its own rate bucket (G7 step 3b).
+          // Written only when there IS one: a never-rented dwelling has no §1250 slice,
+          // and materialising the key at 0 would put a state diff on every gainless
+          // sale in every plan that has nothing to do with depreciation.
+          ...(usdDepGain !== 0
+            ? { usUnrecaptured1250GainYTD: (state.usUnrecaptured1250GainYTD ?? 0) + usdDepGain }
+            : {}),
+          // The §904 passive numerator takes exactly what reached the US totals —
+          // taxable gain plus the §1250 slice, and NOT the §121-excluded part. A
+          // basket numerator carrying income the denominator does not is the G5b
+          // partition failure, and excluded gain is precisely such income.
+          foreignPassiveIncomeYTD:   (state.foreignPassiveIncomeYTD ?? 0) + usdGain + usdDepGain,
         };
         if (perPerson) {
           const asset = { ownershipType, ownerId, owners };
           if (isAuResident) {
+            // Design 83 G7 step 3 — s115-115. Australian real property is TAP, so
+            // s855-45 gives it NO deemed re-acquisition at the move: it keeps its
+            // original acquisition date, and its discount testing period therefore
+            // straddles the years spent abroad. This is the case the flat 50% was
+            // wrong for, and the only asset class in the model that reaches it.
+            //
+            // The fraction is per PERSON — each owner's residency history is their own
+            // — so it is computed inside the ownership loop rather than once for the
+            // household. A couple who moved at different times get different discounts
+            // on the same house, which is correct and which a single household rate
+            // could not express.
+            let baseMap  = state.auPersonDiscountApportionedBaseYTD ?? {};
+            let reliefMap = state.auPersonDiscountAllowanceYTD ?? {};
+            for (const { personKey, fraction } of ownershipFractions(asset, state.people)) {
+              const share = auAssessableGain * fraction;
+              if (!(share > 0)) continue;
+              const d = cgtDiscountFraction({
+                acquisitionMs:    action.acquisitionMs,
+                saleMs:           action.saleMs,
+                residencySinceMs: state.people?.[personKey]?.residencySinceMs ?? null,
+                residencyAtSale:  state.people?.[personKey]?.residency ?? residency,
+              });
+              baseMap   = { ...baseMap,   [personKey]: (baseMap[personKey]   ?? 0) + share };
+              reliefMap = { ...reliefMap, [personKey]: (reliefMap[personKey] ?? 0) + share * d.fraction };
+            }
             next = {
               ...next,
-              auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
+              auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, auAssessableGain, state.people),
               // TAP real property: no per-lot 12-month tracking here, so the whole
               // gain stays discount-eligible (design 62 §4 — property holding-period
               // gating is out of Gap 1's scope; the residency gate targets brokerage).
-              auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, asset, gain, state.people),
+              auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, asset, auAssessableGain, state.people),
+              auPersonDiscountApportionedBaseYTD: baseMap,
+              auPersonDiscountAllowanceYTD:       reliefMap,
             };
           } else {
             next = {
               ...next,
               // Assessable at NR marginal rates, with no discountable slice.
-              auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
+              auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, auAssessableGain, state.people),
             };
           }
         } else {
           next = {
             ...next,
             ...(isAuResident
-              ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain, auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + gain }
-              : { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }),
+              ? { auCapitalGainsYTD:      state.auCapitalGainsYTD + auAssessableGain,
+                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auAssessableGain,
+                  // Household-scalar branch (no per-person maps): same apportionment,
+                  // measured off the first person's residency, which is the same
+                  // approximation every other household-scalar path here makes.
+                  auDiscountApportionedBaseYTD: (state.auDiscountApportionedBaseYTD ?? 0) + auAssessableGain,
+                  auDiscountAllowanceYTD: (state.auDiscountAllowanceYTD ?? 0) + auAssessableGain * cgtDiscountFraction({
+                    acquisitionMs: action.acquisitionMs, saleMs: action.saleMs,
+                    residencySinceMs: state.people?.[Object.keys(state.people ?? {})[0]]?.residencySinceMs ?? null,
+                    residencyAtSale: residency,
+                  }).fraction }
+              : { auCapitalGainsYTD:      state.auCapitalGainsYTD + auAssessableGain }),
           };
         }
         return next;

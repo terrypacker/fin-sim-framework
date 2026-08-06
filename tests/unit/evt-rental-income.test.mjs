@@ -261,10 +261,23 @@ test('EVT-RENT-8: accumulated depreciation reduces the tax basis at sale (larger
 
   const saleTax = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(saleTax.length > 0, 'AU_HOUSE_SALE_TAX should fire');
-  const cgDiff = findDiff(saleTax[0], 'usCapitalGainsYTD');
-  // gain = value - (costBasis - accumulatedDepreciation) = 200000 + accumDep
-  assert.ok(approx(cgDiff.delta, (1000000 - 800000) + accumDep, 0.5),
-    `expected ${(1000000 - 800000) + accumDep}, got ${cgDiff.delta}`);
+
+  // The basis reduction still enlarges the gain — but design 83 G7 step 3b splits
+  // WHERE that enlargement lands on the US return. Depreciation-attributable gain is
+  // unrecaptured §1250 gain, capped at 25% rather than taxed at the LTCG rates, so it
+  // travels in its own bucket. The two together are still the whole gain, which is the
+  // part that must not drift: this used to be one number and the sum is the invariant.
+  const cgDiff  = findDiff(saleTax[0], 'usCapitalGainsYTD');
+  const depDiff = findDiff(saleTax[0], 'usUnrecaptured1250GainYTD');
+  const fullGain = (1000000 - 800000) + accumDep;
+
+  assert.ok(depDiff, 'the depreciation slice must reach the §1250 bucket');
+  assert.ok(approx(depDiff.delta, accumDep, 0.5),
+    `§1250 slice should be the accumulated depreciation ${accumDep}, got ${depDiff.delta}`);
+  assert.ok(approx(cgDiff.delta, fullGain - accumDep, 0.5),
+    `LTCG slice should be the gain net of depreciation, got ${cgDiff.delta}`);
+  assert.ok(approx(cgDiff.delta + depDiff.delta, fullGain, 0.5),
+    `the two slices must still sum to the whole gain ${fullGain}`);
 });
 
 test('EVT-RENT-10: AU rental owned by a US resident still feeds the §904 passive basket', () => {

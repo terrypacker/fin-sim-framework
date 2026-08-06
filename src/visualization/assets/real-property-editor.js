@@ -26,6 +26,49 @@ import { defaultCurrencyForCountry as _countryCurrency } from '../../finance/cou
  *   onSave(data)    — user clicked Save
  *   onDelete(id)    — user clicked Delete
  */
+/**
+ * Which of design 83 §7b.2c's four histories a stored property is in.
+ *
+ * Derived rather than stored. The engine reads three fields — `isPrimaryResidence`,
+ * `mainResidenceFrom`, `mainResidenceUntil` — and adding a fourth to remember which
+ * radio was clicked would create a piece of state that can disagree with them, which is
+ * exactly the class of bug the dropdown exists to prevent. A spec-file scenario, or one
+ * saved before this UI existed, therefore shows the right option with no migration.
+ */
+export function _mainResidenceMode(node) {
+  const from  = node?.mainResidenceFrom  ?? null;
+  const until = node?.mainResidenceUntil ?? null;
+  if (from != null)  return 'moved-in';
+  if (until != null) return 'moved-out';
+  return node?.isPrimaryResidence === true ? 'throughout' : 'never';
+}
+
+/**
+ * The three stored fields implied by the current dropdown selection.
+ *
+ * Every mode writes all three, so switching away from "became one later" clears the
+ * move-in date rather than leaving it behind to contradict the new answer. `moved-out`
+ * deliberately writes NO start date: the start is the acquisition, and the engine's
+ * `mainResidenceWindow` reads that combination directly — storing a sentinel to mean
+ * "from the beginning" would put a magic constant into saved scenarios.
+ */
+export function _mainResidenceFields(el) {
+  const mode  = el.querySelector('[data-id="mainResidenceMode"]').value;
+  const from  = el.querySelector('[data-id="mainResidenceFrom"]').value  || null;
+  const until = el.querySelector('[data-id="mainResidenceUntil"]').value || null;
+  switch (mode) {
+    case 'throughout':
+      return { isPrimaryResidence: true,  mainResidenceFrom: null, mainResidenceUntil: null };
+    case 'moved-out':
+      return { isPrimaryResidence: true,  mainResidenceFrom: null, mainResidenceUntil: until };
+    case 'moved-in':
+      return { isPrimaryResidence: false, mainResidenceFrom: from, mainResidenceUntil: null };
+    case 'never':
+    default:
+      return { isPrimaryResidence: false, mainResidenceFrom: null, mainResidenceUntil: null };
+  }
+}
+
 export class RealPropertyEditor extends BaseComponent {
   /**
    * @param {{
@@ -132,7 +175,6 @@ export class RealPropertyEditor extends BaseComponent {
     });
 
     el.querySelector('[data-id="appreciationRate"]').value  = this._node?.appreciationRate  ?? 0.035;
-    el.querySelector('[data-id="isPrimaryResidence"]').checked = this._node?.isPrimaryResidence ?? false;
     el.querySelector('[data-id="mortgageBalance"]').value   = this._node?.mortgageBalance   ?? 0;
     el.querySelector('[data-id="monthlyMortgage"]').value   = this._node?.monthlyMortgage   ?? 0;
 
@@ -192,6 +234,37 @@ export class RealPropertyEditor extends BaseComponent {
 
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
     this._populateAccountSelect(el, this._accounts, this._node?.saleDestinationAccount ?? null);
+    // Purchase + main-residence history (design 83 G7 and its follow-on). Dates are
+    // rendered as yyyy-mm-dd because <input type="date"> accepts nothing else; the
+    // model stores epoch ms, an ISO string or a Date interchangeably, so the read side
+    // hands back whatever the picker produced and `toMs` normalises it downstream.
+    const asDateValue = (v) => {
+      if (v == null || v === '') return '';
+      const t = typeof v === 'number' ? v : Date.parse(v);
+      return Number.isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10);
+    };
+    el.querySelector('[data-id="purchaseYear"]').value  = this._node?.purchaseYear  ?? '';
+    el.querySelector('[data-id="purchasePrice"]').value = this._node?.purchasePrice ?? '';
+    el.querySelector('[data-id="purchasePriceIsNominal"]').checked = this._node?.purchasePriceIsNominal ?? false;
+    el.querySelector('[data-id="acquisitionDate"]').value    = asDateValue(this._node?.acquisitionDate);
+    el.querySelector('[data-id="mainResidenceFrom"]').value  = asDateValue(this._node?.mainResidenceFrom);
+    el.querySelector('[data-id="mainResidenceUntil"]').value = asDateValue(this._node?.mainResidenceUntil);
+    el.querySelector('[data-id="claimDownsizerContribution"]').checked =
+      this._node?.claimDownsizerContribution ?? false;
+    // The history dropdown is DERIVED from the stored fields, not stored itself — there
+    // is no fifth piece of state to drift out of sync with the three the engine reads,
+    // and a scenario authored from a spec file (or by an older build) still shows the
+    // right option without a migration.
+    const modeSel = el.querySelector('[data-id="mainResidenceMode"]');
+    modeSel.value = _mainResidenceMode(this._node);
+    const syncRows = () => {
+      const mode = modeSel.value;
+      el.querySelector('[data-id="mainResidenceMovedInRow"]').style.display  = mode === 'moved-in'  ? '' : 'none';
+      el.querySelector('[data-id="mainResidenceMovedOutRow"]').style.display = mode === 'moved-out' ? '' : 'none';
+    };
+    syncRows();
+    this.listen(modeSel, 'change', syncRows);
+    this._populatePurchaseFundSelect(el, this._accounts, this._node?.purchaseFundFrom ?? null);
 
     const deleteBtn = el.querySelector('[data-id="deleteBtn"]');
     deleteBtn.style.display = isEdit ? '' : 'none';
@@ -239,8 +312,10 @@ export class RealPropertyEditor extends BaseComponent {
     bindField('appreciationRate', 'appreciationRate', (raw) => Number(raw));
     bindField('plannedSaleYear',  'plannedSaleYear',
       (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)));
-    // Boolean primary-residence flag — the checkbox passes its `.checked` (design 55 §4).
-    bindField('isPrimaryResidence', 'isPrimaryResidence', (raw) => !!raw);
+    // `isPrimaryResidence` has no field of its own any more: the Main Residence History
+    // dropdown owns it (design 83 §7b.2c). A checkbox alongside that dropdown could be
+    // set to contradict it — "not a primary residence" ticked against "main residence
+    // throughout" — and the two would then disagree about the same property.
   }
 
   _readForm(el) {
@@ -261,11 +336,27 @@ export class RealPropertyEditor extends BaseComponent {
       country:              el.querySelector('[data-id="country"]').value,
       currency:             el.querySelector('[data-id="currency"]').value, // code; mapped to descriptor on save
       appreciationRate:     +el.querySelector('[data-id="appreciationRate"]').value,
-      isPrimaryResidence:   el.querySelector('[data-id="isPrimaryResidence"]').checked,
       mortgageBalance:      +el.querySelector('[data-id="mortgageBalance"]').value,
       monthlyMortgage:      +el.querySelector('[data-id="monthlyMortgage"]').value,
       plannedSaleYear:      saleYearRaw ? +saleYearRaw : null,
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
+      // Purchase (design 83 §10 follow-on). A blank year or price means "no purchase",
+      // never 0 — a year 0 purchase and a free house are both real values that differ
+      // from "unset", which is the same trap the loan term fields document.
+      purchaseYear:           nullableNum('purchaseYear', true),
+      purchasePrice:          nullableNum('purchasePrice'),
+      purchasePriceIsNominal: el.querySelector('[data-id="purchasePriceIsNominal"]').checked,
+      purchaseFundFrom:       el.querySelector('[data-id="purchaseFundFrom"]').value || null,
+      // Main-residence history (design 83 G7). Blank dates stay NULL: an absent
+      // acquisition date denies the day-count concessions rather than being filled in
+      // from the simulation start, and a blank mainResidenceFrom defers to the
+      // isPrimaryResidence checkbox above.
+      acquisitionDate:    el.querySelector('[data-id="acquisitionDate"]').value || null,
+      claimDownsizerContribution: el.querySelector('[data-id="claimDownsizerContribution"]').checked,
+      // The dropdown writes ALL THREE stored fields, so a mode change cannot leave a
+      // stale date behind from a previous choice. That is the whole point of the dropdown:
+      // "moved out before you moved in" is not merely rejected, it is unreachable.
+      ..._mainResidenceFields(el),
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,
       // Rental income (design 48)
@@ -349,6 +440,28 @@ export class RealPropertyEditor extends BaseComponent {
   _populateAccountSelect(el, accounts, selectedKey) {
     const sel = el.querySelector('[data-id="saleDestinationAccount"]');
     sel.innerHTML = '<option value="">— none —</option>';
+    for (const a of accounts) {
+      if (!a.stateKey) continue;
+      const opt = document.createElement('option');
+      opt.value       = a.stateKey;
+      opt.textContent = a.name || a.stateKey;
+      if (a.stateKey === selectedKey || a.id === selectedKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  /**
+   * Fill the purchase funding select. Same stateKey-only rule as the sale destination
+   * above, and for the same reason design 72 §2 records: runtime account state carries
+   * `stateKey` and not `id`, so an id persisted here resolves to nothing at purchase
+   * time and the debit falls back to the country cash pool — a silently different plan.
+   * Blank is a real, useful choice ("wherever the country's cash lives"), so it stays
+   * the first option rather than being forced.
+   */
+  _populatePurchaseFundSelect(el, accounts, selectedKey) {
+    const sel = el.querySelector('[data-id="purchaseFundFrom"]');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— country cash pool —</option>';
     for (const a of accounts) {
       if (!a.stateKey) continue;
       const opt = document.createElement('option');

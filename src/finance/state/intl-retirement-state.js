@@ -166,10 +166,21 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usSection988GainYTD           = 0;
     this.usSection988LossYTD           = 0;   // stored positive
     this.usSection988DisallowedLossYTD = 0;   // stored positive; reporting only
+    // Unrecaptured section 1250 gain (design 83 G7 step 3b), USD. The depreciation
+    // slice of a real-property gain: taxed at the §1(h)(1)(D) 25% ceiling rather than
+    // the LTCG rates, and never excludable under §121. Its own bucket because there is
+    // nowhere else to put a differently-rated slice.
+    this.usUnrecaptured1250GainYTD = 0;
     this.usPenaltyYTD = 0;
     this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;
     this.auDiscountableGainsYTD = 0;  // CGT 50%-discount-eligible slice (design 62 §4)
+    // s115-115 apportionment (design 83 G7 step 3), AUD. `...ApportionedBase` is the
+    // slice of the discountable gain whose real testing period was known; `...Allowance`
+    // is the relief that slice actually earned. Both 0 ⇒ every gain takes the flat 50%,
+    // which is the pre-G7 answer exactly.
+    this.auDiscountApportionedBaseYTD = 0;
+    this.auDiscountAllowanceYTD       = 0;
     this.auRealCapitalGainsYTD = 0;  // FY2027 CGT reform: post-indexation gain (design 57)
     this.auNonResidentWithholdingYTD = 0;
     this.auSuperTaxYTD = 0;

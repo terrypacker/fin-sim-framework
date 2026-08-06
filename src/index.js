@@ -15,12 +15,15 @@ import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } 
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
+import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE, toMs, isMainResidenceThroughout, mainResidenceWindow, auMainResidenceExemption, us121Exclusion, unrecaptured1250Gain, cgtDiscountFraction } from './finance/account-rules/main-residence.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
+import { PROPERTY_PURCHASE_ORDER, resolvePurchasePrice, propertyNeedsPurchase, PropertyPurchaseHandler, UsPropertyPurchaseHandler, AuPropertyPurchaseHandler, PropertyPurchaseApplyReducer } from './finance/account-rules/property-purchase.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
@@ -537,6 +540,11 @@ export const Finance = {
   SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler,
   SuperEarningsDirectHandler,
+  DOWNSIZER_MIN_AGE,
+  DOWNSIZER_CAP_AUD,
+  DOWNSIZER_MIN_OWNERSHIP_YEARS,
+  downsizerContributions,
+  SuperDownsizerContributionApplyReducer,
   BaseAccountModule,
   resolveCashKey,
   resolveDestinationCashKey,
@@ -567,10 +575,26 @@ export const Finance = {
   UsLoanPaymentHandler,
   AuLoanPaymentHandler,
   LoanPaymentApplyReducer,
+  US_PRIMARY_HOME_EXCLUSION_MFJ,
+  US_PRIMARY_HOME_EXCLUSION_SINGLE,
+  toMs,
+  isMainResidenceThroughout,
+  mainResidenceWindow,
+  auMainResidenceExemption,
+  us121Exclusion,
+  unrecaptured1250Gain,
+  cgtDiscountFraction,
   UsMortgagePaymentHandler,
   UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler,
   AuMortgagePaymentApplyReducer,
+  PROPERTY_PURCHASE_ORDER,
+  resolvePurchasePrice,
+  propertyNeedsPurchase,
+  PropertyPurchaseHandler,
+  UsPropertyPurchaseHandler,
+  AuPropertyPurchaseHandler,
+  PropertyPurchaseApplyReducer,
   computeRentalMonth,
   UsRentalIncomeHandler,
   UsRentalIncomeApplyReducer,

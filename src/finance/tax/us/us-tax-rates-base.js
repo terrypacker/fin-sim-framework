@@ -36,6 +36,16 @@ import {
 /** Flat rate on collectible gains (IRC §1(h)(4)); statutory, not inflation-indexed. */
 const COLLECTIBLES_RATE = 0.28;
 
+/**
+ * Ceiling on unrecaptured section 1250 gain — IRC §1(h)(1)(D). Statutory, not indexed.
+ * A MAXIMUM, not a flat rate: the slice is stacked on ordinary income and taxed at the
+ * ordinary marginal rates up to this cap, so a taxpayer whose marginal rate is below
+ * 25% pays their own rate. That distinction is why this is not modelled the way
+ * COLLECTIBLES_RATE is — a retired household selling a long-held rental is exactly the
+ * taxpayer for whom a flat 25% would be wrong.
+ */
+const UNRECAPTURED_1250_MAX_RATE = 0.25;
+
 export class UsTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'US'; }
 
@@ -99,6 +109,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usNegativeIncomeYTD    = 0,
       usCapitalGainsYTD      = 0,
       usCollectibleGainsYTD  = 0,
+      // Unrecaptured section 1250 gain (design 83 G7 step 3b) — the depreciation slice
+      // of a real-property gain, taxed at its own ceiling and never excludable under
+      // §121. Absent on every pre-G7 state, so it defaults to a fully inert 0.
+      usUnrecaptured1250GainYTD = 0,
       usPenaltyYTD           = 0,
       usSeEarningsYTD        = 0,
       usSsWagesYTD           = 0,
@@ -173,13 +187,32 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const ordinaryTax      = ordinarySchedule.tax - feieSchedule.tax;
     const taxableOrdinaryAfterFeie = Math.max(0, taxableOrdinary - excludedStacked);
 
+    // Step 2b: unrecaptured section 1250 gain — design 83 G7 step 3b. The slice of a
+    // real-property gain attributable to depreciation already taken. §1(h)(1)(D) taxes
+    // it at the ordinary rates but never above 25%, and §1(h) stacks it BELOW the
+    // 0/15/20 capital-gain layer — so it is computed first and the LTCG layer then
+    // stacks on ordinary + this.
+    //
+    // Modelled as a bracket differential capped at the ceiling, rather than a flat 25%,
+    // because "maximum 25%" is doing real work for a retired household: a couple with
+    // modest ordinary income pays their own marginal rate on much of the slice. A flat
+    // rate would have been simpler and the same shape as COLLECTIBLES_RATE, and it
+    // would have overstated the tax for precisely the taxpayer this models.
+    const unrecap1250     = Math.max(0, usUnrecaptured1250GainYTD);
+    const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250, brackets);
+    const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,               brackets);
+    const unrecap1250Tax  = Math.min(u1250Stacked.tax - u1250Base.tax,
+                                     unrecap1250 * UNRECAPTURED_1250_MAX_RATE);
+
     // Step 3: long-term capital gains tax — stack on top of taxable ordinary
     // income (IRC §1(h)). Capital gains sit in the brackets above the ordinary
     // income ceiling, so the tax is the bracket differential, not the bracket
-    // applied to gains alone.
+    // applied to gains alone. The §1250 layer sits between the two, so the LTCG base
+    // includes it; with no §1250 gain this is bit-identical to the pre-G7 computation.
     const cg              = Math.max(0, usCapitalGainsYTD);
-    const ltcgStacked     = applyBracketsDetailed(taxableOrdinaryAfterFeie + cg, ltcgBrackets);
-    const ltcgBase        = applyBracketsDetailed(taxableOrdinaryAfterFeie,      ltcgBrackets);
+    const ltcgFloor       = taxableOrdinaryAfterFeie + unrecap1250;
+    const ltcgStacked     = applyBracketsDetailed(ltcgFloor + cg, ltcgBrackets);
+    const ltcgBase        = applyBracketsDetailed(ltcgFloor,      ltcgBrackets);
     const capitalGainsTax = ltcgStacked.tax - ltcgBase.tax;
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
@@ -203,7 +236,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // §904 limit in exactly the years a penalty was incurred — CY2030 of the
     // reference run had a base 12× larger than the true one.
     const penaltyTax  = Math.max(0, usPenaltyYTD);
-    const regularTax  = ordinaryTax + capitalGainsTax + collectiblesTax;
+    const regularTax  = ordinaryTax + capitalGainsTax + collectiblesTax + unrecap1250Tax;
     const chapter1Tax = regularTax + penaltyTax;
 
     // Step 5b: Net Investment Income Tax (IRC §1411) — a flat 3.8% surtax on the
@@ -221,11 +254,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // limitation base and added on top of net liability — the FTC can never
     // offset it (per the design decision for cross-border years).
     const niitThreshold       = usFilingSingle ? this._niitThresholdSingle : this._niitThresholdMfj;
-    const netInvestmentIncome = Math.max(0, (state.usNetInvestmentIncomeYTD ?? 0) + cg + collectibles);
+    const netInvestmentIncome = Math.max(0, (state.usNetInvestmentIncomeYTD ?? 0) + cg + collectibles + unrecap1250);
     // MAGI = AGI + FEIE add-back (§1411(d)). This model's `agi` is ordinary-only
     // (capital/collectible gains are tracked in separate buckets and never folded
     // into it), so the gains — which are part of true AGI — are added back here.
-    const magi                = agi + cg + collectibles + feieExcluded;
+    const magi                = agi + cg + collectibles + unrecap1250 + feieExcluded;
     const niitBase            = Math.max(0, Math.min(netInvestmentIncome, magi - niitThreshold));
     const niitTax             = niitBase * this._niitRate;
 
@@ -249,7 +282,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // the §904 fractions cannot sum past 1. Apportioning the standard deduction
     // alone would leave the SE and contribution deductions unallocated and the
     // fractions could still overshoot.
-    const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles;
+    // §1250 gain joins the gross and the §904 denominator with the other gain buckets.
+    // Leaving it out of either is the G5b failure in miniature: a basket numerator that
+    // includes the whole foreign property gain, over a denominator that does not.
+    const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles + unrecap1250;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
     const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
                                   + Math.max(0, usSection988LossYTD)
@@ -272,7 +308,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // Additional Medicare surtax and the §72(t) penalty are all outside it.
     const ftc          = this._computeFtc(state, {
       grossTax: regularTax,
-      totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles,
+      totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles + unrecap1250,
       grossIncomeAllSources,
       unrelatedDeductions,
       // Per basket: gross foreign income in the category (Form 1116 line 3d) and
@@ -340,6 +376,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       ordinaryTax,
       capitalGainsTax,
       collectiblesTax,
+      unrecapturedSection1250Gain: unrecap1250,
+      unrecapturedSection1250Tax: unrecap1250Tax,
       penaltyTax,
       netInvestmentIncome,
       modifiedAgi: magi,
@@ -425,6 +463,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         { label: 'Tax on Ordinary Income',              amount:  ordinaryTax },
         { label: 'Long-Term Capital Gains Tax',         amount:  capitalGainsTax },
         { label: 'Collectibles Tax (28%)',              amount:  collectiblesTax },
+        ...(unrecap1250 > 0
+          ? [{ label: 'Unrecaptured \u00a71250 Gain (25% max)',  amount:  unrecap1250Tax }]
+          : []),
         { label: 'Early Withdrawal Penalties',          amount:  penaltyTax },
         ...(niitTax > 0
           ? [{ label: 'Net Investment Income Tax (3.8%)', amount: niitTax }]

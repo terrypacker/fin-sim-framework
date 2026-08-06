@@ -333,6 +333,13 @@ export class StateSchemaRegistry {
     this.register('usPassiveLossCarryforward',         ParameterValueType.currency('USD'));
     // design 86 G3 error 1 — §163(d) investment interest, USD. The YTD expense resets
     // at the US settle; the disallowed pool carries forward indefinitely.
+    // design 83 G7 step 3b — unrecaptured §1250 gain, USD.
+    this.register('usUnrecaptured1250GainYTD',         ParameterValueType.currency('USD'));
+    // design 83 G7 step 3 — s115-115 discount apportionment, AUD.
+    this.register('auDiscountApportionedBaseYTD',      ParameterValueType.currency('AUD'));
+    this.register('auDiscountAllowanceYTD',            ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonDiscountApportionedBaseYTD.*', ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonDiscountAllowanceYTD.*',       ParameterValueType.currency('AUD'));
     this.register('usInvestmentInterestYTD',           ParameterValueType.currency('USD'));
     this.register('usInvestmentInterestCarryforward',  ParameterValueType.currency('USD'));
     // FEIE cap accumulator (design 52 §4.2): AU-source *earned* income only

@@ -13,14 +13,13 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
 
-// IRC §121 principal-residence gain exclusion. Available ONLY for a property flagged
-// as the primary residence — a non-primary (investment / second home) sale gets no
-// exclusion — and sized by filing status: $250k Single / $500k Married Filing Jointly.
-// The 2-of-5-year ownership-and-use test is not modeled; the isPrimaryResidence flag
-// stands in for eligibility.
-const US_PRIMARY_HOME_EXCLUSION_MFJ    = 500_000;
-const US_PRIMARY_HOME_EXCLUSION_SINGLE = 250_000;
+// IRC §121 caps and the ownership/use rules now live in ../main-residence.js, shared
+// with the AU dwelling path. The note that used to sit here — "the 2-of-5-year
+// ownership-and-use test is not modeled; the isPrimaryResidence flag stands in for
+// eligibility" — is retired: design 83 G7 step 5 implements the test and the
+// §121(b)(5) nonqualified-use proration for both countries' dwellings.
 
 const YEAR_MS       = 365 * 24 * 60 * 60 * 1000;
 const SIX_YEARS_MS  = 6 * YEAR_MS;
@@ -91,13 +90,25 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const accumulatedDep = propState?.accumulatedDepreciation ?? 0;
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const rawGain     = Math.max(0, salePrice - adjustedBasis);
-    // IRC §121 exclusion applies only to a primary residence, and only up to the
-    // filing-status cap ($250k Single / $500k MFJ). A non-primary property excludes
-    // nothing, so its full gain is taxable.
-    const exclusion   = propState?.isPrimaryResidence === true
-      ? (state.usFilingSingle ? US_PRIMARY_HOME_EXCLUSION_SINGLE : US_PRIMARY_HOME_EXCLUSION_MFJ)
-      : 0;
-    const taxableGain = Math.max(0, rawGain - exclusion);
+    // IRC §121 (design 83 G7 step 5), through the shared rules module. Routed through
+    // the same helper the AU dwelling uses, because the alternative was a double
+    // standard pointing the wrong way: the AU house would face the 2-of-5 use test and
+    // the §121(b)(5) nonqualified-use proration while the US house next to it kept a
+    // flat "primary residence ⇒ full cap". Nothing about §121 is location-aware.
+    //
+    // Behaviour-preserving for every pre-G7 property: one with `isPrimaryResidence:
+    // true` and no dates is a main residence THROUGHOUT, so its nonqualified fraction
+    // is 0 and the exclusion is the whole cap, exactly as before.
+    const s1250Gain   = unrecaptured1250Gain(rawGain, accumulatedDep);
+    const s121        = us121Exclusion(propState, {
+      gain: rawGain, depreciationGain: s1250Gain,
+      acquisitionMs: toMs(propState?.acquisitionDate),
+      saleMs: state.currentPeriods?.US?.startMs ?? null,
+      filingSingle: state.usFilingSingle === true,
+    });
+    // Depreciation is never excludable and is taxed in its own §1250 bucket, so it
+    // leaves the LTCG figure entirely rather than being netted against the exclusion.
+    const taxableGain = Math.max(0, rawGain - s1250Gain - s121.excluded);
 
     // AU assessment of the foreign (US) house for an AU resident (design 62 §5):
     // an AU resident is taxable on worldwide capital gains. The AU gain is measured
@@ -143,6 +154,10 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       [{
         type:        'US_HOUSE_SALE_TAX',
         gain:        taxableGain,
+        // Unrecaptured §1250 gain rides alongside rather than inside `gain`: it is
+        // taxed at its own ceiling, so folding it into the LTCG figure is exactly the
+        // defect G7 step 3b exists to fix.
+        depreciationGain: s1250Gain,
         auGain,
         auDiscountableGain,
         residency,

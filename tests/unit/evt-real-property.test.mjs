@@ -146,7 +146,11 @@ const AU_HOUSE_JSON = {
       costBasis: 800000,
       country: "AU",
       drawdownPriority: null,
-      isPrimaryResidence: true,
+      // An INVESTMENT property. It was flagged as a primary residence until design 83
+      // G7 step 5 made §121 location-blind, at which point every gain-arithmetic test
+      // below started measuring the exclusion instead of the arithmetic. The dwelling
+      // cases have their own tests; these want a gain that is simply taxable.
+      isPrimaryResidence: false,
       monthlyMortgage: 0,
       mortgageBalance: 0,
       ownerId: "primary",
@@ -275,6 +279,28 @@ test('EVT-33: AU house sale records US capital gain (sale price - cost basis)', 
   assert.strictEqual(cgDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
 });
 
+test('EVT-33: §121 is location-blind — an AU principal residence gets the exclusion too', () => {
+  // Design 83 G7 step 5 / §7b.4 defect 1: the US exclusion applies to a principal
+  // residence wherever it sits, and the model used to grant it only to a US house. The
+  // investment-property fixture above is the control — same gain, no exclusion — so the
+  // pair pins that the relief turns on the USE HISTORY and not on the property being
+  // Australian.
+  const config = structuredClone(AU_HOUSE_JSON);
+  config.realProperties[0].isPrimaryResidence = true;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  const [tax] = sim.journal.getActions('AU_HOUSE_SALE_TAX');
+  const cgDiff = findDiff(tax, 'usCapitalGainsYTD');
+  const gain   = AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis;
+  assert.ok(!cgDiff || cgDiff.delta === 0,
+    `a ${gain} gain is under the MFJ cap and should be fully excluded, got ${cgDiff?.delta}`);
+  // And the excluded gain must NOT appear in the §904 passive basket: a numerator
+  // carrying income the denominator does not is the G5b partition failure.
+  const basket = findDiff(tax, 'foreignPassiveIncomeYTD');
+  assert.ok(!basket || basket.delta === 0, 'excluded gain must not enter a §904 basket');
+});
+
 test('EVT-33: a foreign resident\'s AU house sale is assessable at NR marginal rates', () => {
   const { sim } = loadToolsetScenario(CROSS_BORDER_HOUSE_JSON);
   //Step past planned sale year: 2027
@@ -309,7 +335,14 @@ test('EVT-33: a foreign resident\'s AU house sale is assessable at NR marginal r
 
 test('EVT-33: AU house sale generates a Foreign Tax Credit', () => {
 
-  const { sim } = loadToolsetScenario(CROSS_BORDER_HOUSE_JSON);
+  // An INVESTMENT property, deliberately: since design 83 G7 step 5 a dwelling that was
+  // the principal residence throughout is excluded by §121, and an excluded gain must
+  // not enter a §904 basket — a numerator carrying income the denominator does not is
+  // the partition failure G5b cost a study run over. So the basket is only populated
+  // when there is US-taxable gain, and this test needs one.
+  const config = structuredClone(CROSS_BORDER_HOUSE_JSON);
+  config.realProperties[0].isPrimaryResidence = false;
+  const { sim } = loadToolsetScenario(config);
   //Step past planned sale year: 2027
   assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
 

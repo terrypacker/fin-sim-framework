@@ -78,7 +78,40 @@ export class RealProperty extends Asset {
     this.monthlyMortgage         = opts.monthlyMortgage         ?? 0;
     this.appreciationRate        = opts.appreciationRate        ?? 0.035;
     this.isPrimaryResidence      = opts.isPrimaryResidence      ?? false;
+    // Main-residence HISTORY (design 83 G7 step 2). `isPrimaryResidence` is a static
+    // boolean and every rule that matters turns on *when* the dwelling was the main
+    // residence — a boolean cannot express "rented for 18 years, then we moved in",
+    // which is precisely the lever worth searching. Both null keeps the boolean's
+    // meaning exactly ("throughout" when true, "never" when false), so every saved
+    // scenario is unchanged until it opts in.
+    this.mainResidenceFrom       = opts.mainResidenceFrom       ?? null;
+    this.mainResidenceUntil      = opts.mainResidenceUntil      ?? null;
+    // When the dwelling was actually acquired — the denominator of s118-185's ownership
+    // period and of the s115-105 discount testing period, and the start of §121's
+    // nonqualified-use window. Null is NOT defaulted to the simulation start: doing so
+    // would treat a twenty-year hold as a three-year one and inflate both the exempt
+    // fraction and the discount. Absent ⇒ the day-count concessions are denied outright.
+    this.acquisitionDate         = opts.acquisitionDate         ?? null;
     this.plannedSaleYear         = opts.plannedSaleYear         ?? null;
+    // Purchase (design 83 §10 follow-on — sell one dwelling and buy another). A
+    // property with a future `purchaseYear` sits DORMANT at value 0 until then: running
+    // costs skip a zero-value property and appreciation on 0 is 0, so dormancy needs no
+    // gate of its own. At the purchase date the price is debited from
+    // `purchaseFundFrom` (or the country cash pool) and becomes both value and cost base.
+    this.purchaseYear            = opts.purchaseYear            ?? null;
+    this.purchasePrice           = opts.purchasePrice           ?? null;
+    this.purchaseFundFrom        = opts.purchaseFundFrom        ?? null;
+    // Is `purchasePrice` stated in today's money (default) or as at the purchase date?
+    // Today's money is the useful default for a downsize — "something like this house
+    // but smaller" is a statement about relative value, and holding it nominal across
+    // twenty years would silently shrink the replacement home in real terms. It is
+    // grown at the property's own `appreciationRate`, not CPI, so the downsize RATIO
+    // stays what was intended.
+    this.purchasePriceIsNominal  = opts.purchasePriceIsNominal  ?? false;
+    // ITAA97 s292-102 — claim the downsizer super contribution on this dwelling's sale.
+    // Gated on the main-residence exemption being at least partly available, so it is
+    // the SAME lever as mainResidenceFrom rather than an independent switch.
+    this.claimDownsizerContribution = opts.claimDownsizerContribution ?? false;
     this.saleDestinationAccount  = opts.saleDestinationAccount  ?? null;
     this.owners                  = opts.owners                  ?? [];
     this.balanceAtResidencyChange = opts.balanceAtResidencyChange ?? null;
