@@ -554,6 +554,11 @@ export class UsTaxModule2026 extends BaseTaxModule {
           ...state,
           usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+          // §469 (design 86 G5): rental activity is passive PER SE, so track the
+          // signed result separately — computeTax suspends a net loss rather than
+          // letting it offset wages or gains. A US property is US-source, so it does
+          // not feed the foreign companion accumulator.
+          usPassiveActivityIncomeYTD: (state.usPassiveActivityIncomeYTD ?? 0) + amount,
         };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);

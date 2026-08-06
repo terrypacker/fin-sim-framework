@@ -206,6 +206,7 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auCapitalGainsYTD   = 0,
       auSuperTaxYTD       = 0,
       auFrankingCreditYTD = 0,
+      auTaxLossPool       = 0,
     } = state;
 
     // Apply the year's CGT relief. Base = flat 50% Div 115 discount and no
@@ -213,7 +214,33 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // minTaxRate to 0.30 (design 57 §6.3).
     const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate } =
       this._cgtRelief(state, auCapitalGainsYTD);
-    const discountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
+
+    // ─── Div 36 carried-forward tax losses (design 86 G1) ────────────────────
+    //
+    // A prior year's excess loss is deducted from THIS year's total assessable
+    // income — including the net capital gain, and after the Div 115 discount, which
+    // is the order these lines already compute in. Without the pool a loss year was
+    // simply assessed at zero and the excess destroyed, so a negatively-geared
+    // property held by someone with little other income produced a deduction worth
+    // nothing at all, every year, forever.
+    //
+    // **This function is evaluated TWICE** — once on the real state and once on the
+    // US-source-removed counterfactual that sizes the FITO limit (design 52 §4.5,
+    // design 83 G8). So the deduction is computed from the pool passed IN and never
+    // written back here: the settle owns the write-back, on the real pass only.
+    // Deducting inside each pass also keeps the counterfactual honest — a pass with
+    // less income absorbs less loss, which is the true "what would be payable"
+    // figure. Hoisting the deduction outside the split would let the counterfactual
+    // claim the full deduction against reduced income and overstate the FITO limit.
+    const grossDiscountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
+    const openingLossPool       = Math.max(0, auTaxLossPool);
+    const lossDeducted          = Math.min(openingLossPool, Math.max(0, grossDiscountedIncome));
+    // A loss year adds its own excess to the pool; deduction and creation are
+    // mutually exclusive, since one needs positive income and the other negative.
+    const lossCreated           = Math.max(0, -grossDiscountedIncome);
+    const closingLossPool       = openingLossPool - lossDeducted + lossCreated;
+
+    const discountedIncome = grossDiscountedIncome - lossDeducted;
     const assessableIncome = Math.max(0, discountedIncome);
     // `.tax` is identical to the scalar applyBrackets these lines used before; the
     // bands ride along for the worksheet export (design 71 §8.4).
@@ -271,6 +298,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       netTaxableGain, cgtDiscount, minTaxRate, minTaxTopUp,
       assessableIncome, baseTax, medicareLevy, frankingOffset,
       ordinaryIncomeTax, capitalGainsTax,
+      // Div 36 pool (design 86 G1) — reported on the return and, from the REAL pass
+      // only, written back to state by the settle reducer.
+      openingLossPool, lossDeducted, closingLossPool,
       superTax: auSuperTaxYTD,
       marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
       netLiabilityPreFito,
@@ -406,6 +436,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         discountedCapitalGains:   a.netTaxableGain,
         cgtMinimumTaxTopUp:       a.minTaxTopUp,
         assessableIncome:         a.assessableIncome,
+        // Div 36 carried-forward losses (design 86 G1). `closingLossPool` is what the
+        // settle reducer persists; the other two are the return's own arithmetic.
+        openingLossPool:          a.openingLossPool,
+        lossDeducted:             a.lossDeducted,
+        closingLossPool:          a.closingLossPool,
         baseTax:                  a.baseTax,
         ordinaryIncomeTax:        a.ordinaryIncomeTax,
         capitalGainsTax:          a.capitalGainsTax,
@@ -430,6 +465,16 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           { label: 'Capital Gains (before relief)', amount:  auCapitalGainsYTD },
           { label: this._cgtReliefLabel(),          amount: -a.cgtDiscount },
           { label: 'Net Capital Gains',             amount:  a.netTaxableGain },
+          // Only shown when there is a pool to talk about, so an ordinary return is
+          // unchanged. Three lines, mirroring how the §904 FTC baskets already print
+          // (opening / used / remaining) — the two should read alike.
+          ...(a.openingLossPool > 0 || a.closingLossPool > 0
+            ? [
+                { label: 'Carried-Forward Tax Losses — opening', amount:  a.openingLossPool },
+                { label: 'Prior-Year Losses Deducted',           amount: -a.lossDeducted },
+                { label: 'Carried-Forward Tax Losses — closing', amount:  a.closingLossPool },
+              ]
+            : []),
           { label: 'Total Assessable Income',       amount:  a.assessableIncome },
           { label: 'Tax on Income',                 amount:  a.baseTax },
           { label: 'Medicare Levy',                 amount:  a.medicareLevy },

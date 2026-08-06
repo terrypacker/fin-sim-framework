@@ -69,7 +69,16 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1, l
   // payment accrual (LoanPaymentHandler), so the two never diverge; a fixed loan uses
   // its absolute rate. `resolveLoanRate` falls back to `loan.interestRate` when state /
   // Prime is absent, so a null-loan or no-Prime path is unchanged.
-  const deductibleInterest = Math.max(0, loanPrincipal * (loan ? resolveLoanRate(state, loan) : 0) / 12);
+  //
+  // Design 86 G3 — `deductibleFraction` scales the deduction by the income-producing
+  // share of the loan's PURPOSE. Deductibility follows the use the borrowed funds
+  // were put to, not the security taken over them (s8-1; Munro; TR 95/33), so a
+  // mortgage secured on a rental but partly drawn down for private use is only
+  // partly deductible. `null` (the default, and every pre-86 loan) means 1 — fully
+  // deductible while the property rents — so this is inert unless stated.
+  const accruedInterest    = Math.max(0, loanPrincipal * (loan ? resolveLoanRate(state, loan) : 0) / 12);
+  const deductibleShare    = loan?.deductibleFraction ?? 1;
+  const deductibleInterest = accruedInterest * Math.min(1, Math.max(0, deductibleShare));
 
   const buildingBasis = Math.max(0, (propState.costBasis ?? 0) * (1 - landRatio));
   const annualDep     = override != null

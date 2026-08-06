@@ -282,6 +282,10 @@ export class TaxSettleService {
         auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),
         auNrWithholdingUnfrankedDividendYTD: perPersonShare(state.auPersonNrWithholdingUnfrankedDividendYTD, state.auNrWithholdingUnfrankedDividendYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
+        // Div 36 loss pool (design 86 G1). NOT a perPersonShare: there is no household
+        // scalar to split, because a carried-forward loss belongs to one taxpayer and
+        // splitting it would let one spouse's loss shelter the other's income.
+        auTaxLossPool:               state.auPersonTaxLossPool?.[key] ?? 0,
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
         // FITO (design 52 §4.5): the US-source removal set — the slice
         // _assessResidentPreFito subtracts for the "without US-source" pass that
