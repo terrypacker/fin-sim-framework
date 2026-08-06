@@ -173,6 +173,50 @@ describe('offset lever', () => {
     assert.equal(cfg.accounts[0].holdings[0].costBasis, 80_000);
   });
 
+  // ─── fromBalance: the drawn facility ───────────────────────────────────────
+  //
+  // Studying a facility LARGER than the scenario authors raises the liability via the
+  // `loan` lever, and the proceeds have to land somewhere in every arm. Without
+  // `fromBalance` only the parking arm receives them — raising an offset with no
+  // `deployTo` credits the difference, which is right, but the deploying arm starts
+  // from the authored balance and is short the uplift for the whole horizon.
+
+  test('fromBalance seeds the facility, so park and deploy hold equal wealth', () => {
+    // Authored offset 100k; the facility under study is 250k.
+    const park = exportedCfg();
+    applyOffset(park, 'off', { fromBalance: 250_000, balance: 250_000 });
+
+    const deploy = exportedCfg();
+    applyOffset(deploy, 'off', { fromBalance: 250_000, balance: 0, deployTo: 'brk' });
+
+    assert.equal(park.accounts[0].balance, 250_000);
+    assert.equal(deploy.accounts[0].balance, 0);
+    assert.equal(deploy.accounts[1].balance, 650_000, 'the whole facility reaches the brokerage');
+    assert.equal(totalWealth(park), totalWealth(deploy),
+      'the arms must hold the same pot — this is the comparison, not a detail');
+  });
+
+  test('WITHOUT fromBalance the deploying arm is short the uplift', () => {
+    // Pins the defect the option is there to prevent, so a spec that omits it cannot
+    // be mistaken for one that does not need it.
+    const park = exportedCfg();
+    applyOffset(park, 'off', { balance: 250_000 });
+    const deploy = exportedCfg();
+    applyOffset(deploy, 'off', { balance: 0, deployTo: 'brk' });
+
+    assert.equal(totalWealth(park) - totalWealth(deploy), 150_000,
+      'the uplift reaches only the arm that parks it');
+  });
+
+  test('fromBalance alone (no balance) just draws the facility into the offset', () => {
+    const cfg = exportedCfg();
+    const before = totalWealth(cfg);
+    applyOffset(cfg, 'off', { fromBalance: 250_000 });
+    assert.equal(cfg.accounts[0].balance, 250_000);
+    assert.equal(cfg.initialState.off.balance, 250_000);
+    assert.equal(totalWealth(cfg) - before, 150_000, 'proceeds are created; the `loan` lever books the debt');
+  });
+
   test('throws on an unknown account or deployTo target', () => {
     const cfg = exportedCfg();
     assert.throws(() => applyOffset(cfg, 'nope', { balance: 0 }), /offset lever:/);
