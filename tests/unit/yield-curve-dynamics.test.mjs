@@ -35,6 +35,24 @@ import { SHOCK_LIBRARY }          from '../../src/finance/economic-shocks/shock-
 import { RATE_KEYS }              from '../../src/finance/economic-regimes/rate-keys.js';
 import { loadScenarioSim }        from '../helpers/scenario-harness.js';
 
+
+/**
+ * These tests assert on FINAL STATE only — none of them reads `sim.journal`,
+ * `sim.history`, a snapshot, the bus, or `sim.samples`. Telemetry is therefore pure
+ * overhead here, and it is not a small one: the journal and snapshot machinery, not
+ * the simulation maths, is what a full run spends its time on (design 78 §4.4 — sim
+ * maths measured at ~285ms of a 9.5s run). Turning it off makes this file ~5x faster.
+ *
+ * This matters beyond the file: `node --test` runs 300+ files 8-way parallel, so once
+ * the fast files drain, the whole suite sits on a handful of slow ones printing
+ * nothing, which reads as a hang. Shortening that tail is what keeps `npm run test`
+ * looking alive.
+ *
+ * If you add an assertion here that reads the journal or history, drop the wrapper and
+ * call `loadScenarioSim` directly — the default is full telemetry for a reason.
+ */
+const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
+
 const US = RATE_KEYS.FIXED_INCOME_US;
 const BASE = [
   { tenor: 1, spread: -0.010 }, { tenor: 5, spread: 0 },
@@ -183,15 +201,15 @@ describe('stochastic curve — e2e determinism', () => {
   const nw = (sim) => Math.round(sim.state.metrics?.netWorth ?? 0);
 
   test('stochastic OFF ⇒ two default runs are byte-identical (and match no-param)', () => {
-    const a = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const b = loadScenarioSim({ params: { yieldCurveStochastic: false }, simEnd: END, stepTo: END }).sim;
+    const a = loadSim({ simEnd: END, stepTo: END }).sim;
+    const b = loadSim({ params: { yieldCurveStochastic: false }, simEnd: END, stepTo: END }).sim;
     assert.equal(nw(a), nw(b));
   });
 
   test('stochastic ON ⇒ reproducible across identical runs, and moves the number', () => {
-    const on1 = loadScenarioSim({ params: { yieldCurveStochastic: true, yieldCurveVol: 0.02 }, simEnd: END, stepTo: END }).sim;
-    const on2 = loadScenarioSim({ params: { yieldCurveStochastic: true, yieldCurveVol: 0.02 }, simEnd: END, stepTo: END }).sim;
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const on1 = loadSim({ params: { yieldCurveStochastic: true, yieldCurveVol: 0.02 }, simEnd: END, stepTo: END }).sim;
+    const on2 = loadSim({ params: { yieldCurveStochastic: true, yieldCurveVol: 0.02 }, simEnd: END, stepTo: END }).sim;
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(on1), nw(on2), 'same seed ⇒ same result (reproducible)');
     assert.notEqual(nw(on1), nw(off), 'the stochastic level walk should perturb bond pricing');
   });

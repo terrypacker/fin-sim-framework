@@ -29,6 +29,24 @@ import { RealPropertyRepairTickHandler } from '../../src/finance/handlers/real-p
 import { HouseRepairApplyReducer }       from '../../src/finance/reducers/house-repair-apply-reducer.js';
 import { loadScenarioSim }               from '../helpers/scenario-harness.js';
 
+
+/**
+ * These tests assert on FINAL STATE only — none of them reads `sim.journal`,
+ * `sim.history`, a snapshot, the bus, or `sim.samples`. Telemetry is therefore pure
+ * overhead here, and it is not a small one: the journal and snapshot machinery, not
+ * the simulation maths, is what a full run spends its time on (design 78 §4.4 — sim
+ * maths measured at ~285ms of a 9.5s run). Turning it off makes this file ~5x faster.
+ *
+ * This matters beyond the file: `node --test` runs 300+ files 8-way parallel, so once
+ * the fast files drain, the whole suite sits on a handful of slow ones printing
+ * nothing, which reads as a hang. Shortening that tail is what keeps `npm run test`
+ * looking alive.
+ *
+ * If you add an assertion here that reads the journal or history, drop the wrapper and
+ * call `loadScenarioSim` directly — the default is full telemetry for a reason.
+ */
+const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
+
 const mkRng = (seed = 42) => {
   let s = seed;
   return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
@@ -197,16 +215,16 @@ describe('house repair — e2e', () => {
   };
 
   test('no repair model ⇒ byte-identical, no HOUSE_REPAIR scheduled', () => {
-    const a = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const b = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const a = loadSim({ simEnd: END, stepTo: END }).sim;
+    const b = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(a), nw(b));
     assert.equal(a.queue.data.some(e => e.type === 'HOUSE_REPAIR'), false);
   });
 
   test('a repair model schedules the tick, is reproducible, and lowers ending net worth', () => {
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const on1 = loadScenarioSim({ mutateCfg: withRepairs({}), simEnd: END, stepTo: END }).sim;
-    const on2 = loadScenarioSim({ mutateCfg: withRepairs({}), simEnd: END, stepTo: END }).sim;
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
+    const on1 = loadSim({ mutateCfg: withRepairs({}), simEnd: END, stepTo: END }).sim;
+    const on2 = loadSim({ mutateCfg: withRepairs({}), simEnd: END, stepTo: END }).sim;
     assert.equal(on1.queue.data.some(e => e.type === 'HOUSE_REPAIR'), true);
     assert.equal(nw(on1), nw(on2), 'same seed ⇒ reproducible');
     assert.ok(nw(on1) < nw(off), 'repairs should reduce ending net worth');
@@ -221,8 +239,8 @@ describe('house repair — e2e', () => {
         repairModel: 'CONTINUOUS', repairMedian: 20000, repairSigma: 0.15, capitalizeRepairs: capitalize,
       });
     };
-    const cap0 = loadScenarioSim({ mutateCfg: cfgFor(0),   simEnd: END, stepTo: END }).sim;
-    const cap5 = loadScenarioSim({ mutateCfg: cfgFor(0.5), simEnd: END, stepTo: END }).sim;
+    const cap0 = loadSim({ mutateCfg: cfgFor(0),   simEnd: END, stepTo: END }).sim;
+    const cap5 = loadSim({ mutateCfg: cfgFor(0.5), simEnd: END, stepTo: END }).sim;
     assert.ok(nw(cap5) > nw(cap0), 'capitalizing repairs into basis should cut CGT and raise ending NW');
   });
 });

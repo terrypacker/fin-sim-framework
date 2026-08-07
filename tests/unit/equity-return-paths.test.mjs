@@ -34,6 +34,24 @@ import { RATE_KEYS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA } from '../../src/financ
 import { gaussianFrom }            from '../../src/finance/fx/fx-process-models.js';
 import { loadScenarioSim }         from '../helpers/scenario-harness.js';
 
+
+/**
+ * These tests assert on FINAL STATE only — none of them reads `sim.journal`,
+ * `sim.history`, a snapshot, the bus, or `sim.samples`. Telemetry is therefore pure
+ * overhead here, and it is not a small one: the journal and snapshot machinery, not
+ * the simulation maths, is what a full run spends its time on (design 78 §4.4 — sim
+ * maths measured at ~285ms of a 9.5s run). Turning it off makes this file ~5x faster.
+ *
+ * This matters beyond the file: `node --test` runs 300+ files 8-way parallel, so once
+ * the fast files drain, the whole suite sits on a handful of slow ones printing
+ * nothing, which reads as a hang. Shortening that tail is what keeps `npm run test`
+ * looking alive.
+ *
+ * If you add an assertion here that reads the journal or history, drop the wrapper and
+ * call `loadScenarioSim` directly — the default is full telemetry for a reason.
+ */
+const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
+
 // A small linear-congruential uniform generator so tests can build fresh, identical
 // RNG streams on demand (mirrors the yield-curve dynamics test).
 const mkRng = (seed = 42) => {
@@ -316,22 +334,22 @@ describe('stochastic equity — e2e', () => {
 
   // §6 test 1: inertness.
   test('stochastic OFF ⇒ two default runs are byte-identical', () => {
-    const a = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const b = loadScenarioSim({ params: { equityReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
+    const a = loadSim({ simEnd: END, stepTo: END }).sim;
+    const b = loadSim({ params: { equityReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
     assert.equal(nw(a), nw(b));
   });
 
   test('OFF ⇒ no EQUITY_RETURN_TICK is scheduled', () => {
-    const { sim } = loadScenarioSim({ simEnd: END });
+    const { sim } = loadSim({ simEnd: END });
     const scheduled = (sim.events ?? []).some(e => e.type === 'EQUITY_RETURN_TICK');
     assert.equal(scheduled, false);
   });
 
   // §6 test 2: determinism.
   test('stochastic ON ⇒ reproducible across identical runs, and moves the number', () => {
-    const on1 = loadScenarioSim({ params: { equityReturnStochastic: true, equityReturnVol: 0.18 }, simEnd: END, stepTo: END }).sim;
-    const on2 = loadScenarioSim({ params: { equityReturnStochastic: true, equityReturnVol: 0.18 }, simEnd: END, stepTo: END }).sim;
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const on1 = loadSim({ params: { equityReturnStochastic: true, equityReturnVol: 0.18 }, simEnd: END, stepTo: END }).sim;
+    const on2 = loadSim({ params: { equityReturnStochastic: true, equityReturnVol: 0.18 }, simEnd: END, stepTo: END }).sim;
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(on1), nw(on2), 'same seed ⇒ same result (reproducible)');
     assert.notEqual(nw(on1), nw(off), 'a stochastic return path should perturb equity growth');
   });

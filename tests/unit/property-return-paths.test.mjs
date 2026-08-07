@@ -34,6 +34,24 @@ import { AssetAppreciationHandler }  from '../../src/finance/handlers/asset-appr
 import { RATE_KEYS, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../src/finance/economic-regimes/rate-keys.js';
 import { loadScenarioSim }           from '../helpers/scenario-harness.js';
 
+
+/**
+ * These tests assert on FINAL STATE only — none of them reads `sim.journal`,
+ * `sim.history`, a snapshot, the bus, or `sim.samples`. Telemetry is therefore pure
+ * overhead here, and it is not a small one: the journal and snapshot machinery, not
+ * the simulation maths, is what a full run spends its time on (design 78 §4.4 — sim
+ * maths measured at ~285ms of a 9.5s run). Turning it off makes this file ~5x faster.
+ *
+ * This matters beyond the file: `node --test` runs 300+ files 8-way parallel, so once
+ * the fast files drain, the whole suite sits on a handful of slow ones printing
+ * nothing, which reads as a hang. Shortening that tail is what keeps `npm run test`
+ * looking alive.
+ *
+ * If you add an assertion here that reads the journal or history, drop the wrapper and
+ * call `loadScenarioSim` directly — the default is full telemetry for a reason.
+ */
+const loadSim = (opts = {}) => loadScenarioSim({ telemetry: 'off', ...opts });
+
 const mkRng = (seed = 42) => {
   let s = seed;
   return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
@@ -223,37 +241,37 @@ describe('stochastic property — e2e', () => {
 
   // §6.1 / §7 test 1: inertness.
   test('property stochastic OFF ⇒ two default runs are byte-identical', () => {
-    const a = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
-    const b = loadScenarioSim({ params: { propertyReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
+    const a = loadSim({ simEnd: END, stepTo: END }).sim;
+    const b = loadSim({ params: { propertyReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
     assert.equal(nw(a), nw(b));
   });
 
   test('OFF ⇒ no PROPERTY_RETURN_TICK is scheduled', () => {
-    const { sim } = loadScenarioSim({ simEnd: END });
+    const { sim } = loadSim({ simEnd: END });
     const scheduled = sim.queue.data.some(e => e.type === 'PROPERTY_RETURN_TICK');
     assert.equal(scheduled, false);
   });
 
   // §7 test 2: determinism + the path actually moves net worth (house value varies).
   test('property ON ⇒ reproducible across identical runs, and moves the number', () => {
-    const on1 = loadScenarioSim({ params: { propertyReturnStochastic: true }, simEnd: END, stepTo: END }).sim;
-    const on2 = loadScenarioSim({ params: { propertyReturnStochastic: true }, simEnd: END, stepTo: END }).sim;
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const on1 = loadSim({ params: { propertyReturnStochastic: true }, simEnd: END, stepTo: END }).sim;
+    const on2 = loadSim({ params: { propertyReturnStochastic: true }, simEnd: END, stepTo: END }).sim;
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(on1), nw(on2), 'same seed ⇒ same result (reproducible)');
     assert.notEqual(nw(on1), nw(off), 'a stochastic property path should perturb house values');
   });
 
   // §7 test 2: standalone — property on, equity off — still draws its own path and moves NW.
   test('property ON with equity OFF ⇒ standalone path still moves the number', () => {
-    const on  = loadScenarioSim({ params: { propertyReturnStochastic: true, equityReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
-    const off = loadScenarioSim({ simEnd: END, stepTo: END }).sim;
+    const on  = loadSim({ params: { propertyReturnStochastic: true, equityReturnStochastic: false }, simEnd: END, stepTo: END }).sim;
+    const off = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.notEqual(nw(on), nw(off), 'standalone property path should still vary house values');
   });
 
   // §7 test 4 (e2e): with BOTH flags on, the property tick is scheduled after the equity tick
   // and the correlation seam is active (both are present, property reused the market shock).
   test('both flags ON ⇒ both ticks scheduled, property ordered AFTER equity', () => {
-    const { sim } = loadScenarioSim({ params: { equityReturnStochastic: true, propertyReturnStochastic: true }, simEnd: END });
+    const { sim } = loadSim({ params: { equityReturnStochastic: true, propertyReturnStochastic: true }, simEnd: END });
     const eq = sim.queue.data.find(e => e.type === 'EQUITY_RETURN_TICK');
     const pr = sim.queue.data.find(e => e.type === 'PROPERTY_RETURN_TICK');
     assert.ok(eq && pr, 'both ticks scheduled');
