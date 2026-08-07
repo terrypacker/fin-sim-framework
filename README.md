@@ -550,6 +550,48 @@ Known structural issues, leaky boundaries, and rework candidates: **[`design/inc
 
 ---
 
+## Primary Tax Sources (`docs/`)
+
+This project encodes a lot of statute. `docs/` holds the **primary sources** those rules
+are built from — statute, regulations, treaties, and official instructions — as
+greppable text, so a citation in a design doc or a code comment can be checked against
+the authority rather than taken on trust.
+
+```
+docs/us-tax/    USCODE-…-sec988.txt, …-sec165.txt, CFR-26-…, IRS-Pub-514/523/901,
+                IRS-Form-1116/3520/3520A instructions, Treaty-Australia-* (+ Protocol)
+```
+
+**The rule: never quote tax law we do not have on disk. Go and get it first.**
+
+Citing a provision from memory is how a plausible-but-wrong reading gets written into a
+design doc and then into code, where it is indistinguishable from a verified one. If a
+rule matters enough to cite, it matters enough to download. Working from the text also
+catches distinctions memory smooths over — §988(e)(3) ("§162 or §212") and §165(c)(2)
+("entered into for profit") are *different* tests, and that only became visible once
+§165 was on disk beside §988.
+
+**How to add one:**
+
+1. Fetch it. US Code and CFR come from govinfo in a stable form:
+   `https://www.govinfo.gov/content/pkg/USCODE-<year>-title26/html/USCODE-<year>-title26-<subtitle>-<chapter>-<subchapter>-<part>-sec<N>.htm`
+   IRS PDFs need `pdftotext -layout` (poppler); `ato.gov.au` and AustLII return 403 to
+   automated fetches, so those need a browser and a manual drop.
+2. Strip to text and keep **the source's own filename**, so the edition and the
+   subtitle/chapter/part path stay legible on the shelf.
+3. **Record the edition.** The USCODE files here are the 2011 edition — fine for
+   provisions unchanged since, but check anything a later Act touched (e.g. §165(h) is
+   pre-TCJA). Note the caveat wherever you rely on it.
+4. Cite the *subsection*, not just the section, and quote the operative words when a
+   design decision turns on them.
+
+Figures that could not be read against a primary source must be flagged as such in
+whatever you write — see `design/73-tax-export-validation-fixes.md` §6 for the caveat
+style, and `tests/unit/tax-rates-published-bases.test.mjs`, which requires bracket
+figures to be transcribed from the authority rather than re-derived from our own output.
+
+---
+
 ## License
 
 Apache 2.0. See `LICENSE`.

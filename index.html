@@ -703,7 +703,7 @@
           <div class="node-field">
             <label>Income-Producing</label>
             <input type="number" step="0.01" min="0" max="1" data-id="cashDeductibleFraction" placeholder="blank = 0 (personal)"
-                   title="§988(e)(3) share of this pool put to an income-producing use (0–1). Decides whether an exchange LOSS is deductible at all: a personal currency loss is disallowed under §165(c) while the matching gain is still taxed. Blank = fully personal, the safe default — an offset backing a rental should be set explicitly."/>
+                   title="Share of this pool put to an income-producing use (0–1). Drives two tests at once: §988(e)(3) (expenses meeting §162/§212 — whether §988 applies at all) and §165(c)(2) (a loss must be from a transaction &quot;entered into for profit&quot; to be deductible). &quot;For profit&quot; is the broader test, so one knob over-disallows rather than over-deducts. A personal currency loss is disallowed while the matching gain is still taxed. Blank = fully personal, the safe default — an offset backing a rental should be set explicitly."/>
           </div>
         </div>
         <div class="node-field" data-id="drawdownRow">
