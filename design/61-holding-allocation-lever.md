@@ -924,6 +924,70 @@ ladder, which is where this lands. The cost has **not** been sized; the counterf
 cheap (re-run with the corners smoothed and diff terminal after-tax net worth) and is the
 obvious next step.
 
+**D5 — ✅ MEASURED + PARTLY CLOSED 2026-08-07. The round-trip corners are innocent; the
+cost is in the TERMINAL anchor, which D5 never named.** The counterfactual above was run
+(`scripts/lab/glidepath-corners.mjs`, deterministic and over 12 stochastic seeds). It
+does not support the diagnosis, and it found a larger defect next door.
+
+**1. The round trips are not friction.** Smoothing each one — holding the pre-corner mix
+across the zero run — **loses** money on the reference plan: the three-year equity exit
+costs **−2.0M** median after-tax net worth (winning on 1 of 12 seeds), the bond/cash exit
+and the one-year gold/bond corner **−0.9M** and **−0.7M** (3 of 12). The corners are, if
+anything, locally good; the MPC chose them and perturbing them in either direction is
+worse.
+
+> ⚠ **The control is the whole finding.** Every arm here is an allocation edit, and
+> allocation edits move terminal wealth by millions on their own. Matched edits to
+> perfectly ordinary, non-corner rungs of the same ladder land at **−8.8M** and
+> **−0.1M** — a band that entirely contains every round-trip result. Without a control
+> arm, any corner delta reads as a corner cost when it is really the ordinary
+> sensitivity of a 40-year allocation path. The original "pure friction" claim was
+> reasoning from the shape of the anchors, not from a measurement.
+
+**2. The terminal anchor is the real defect, and it is the leading-anchor rule missing its
+mirror.** `interpolateGlidepath` **clamps above its last anchor** — `age >= last.age`
+returns the last anchor's weights (`rebalance-to-target-reducer.js:196`). The harvest's
+rule (4) exists precisely because the same clamp applies *below* the first anchor, and
+its comment says it plainly: without a leading anchor a re-run "would apply the first MPC
+epoch's mix to the entire realized past — silently rewriting years the run never decided."
+**There is no trailing counterpart.** So the mix the controller committed for **one**
+epoch — against a horizon that ended right there, where de-risking scores as free —
+becomes policy for every remaining year of the scenario.
+
+On the reference plan the last epoch committed all-bond. The measured consequence: tax
+runs flat at a fraction of a million per year, then **spikes across two years to roughly
+forty times that** as the entire equity book is liquidated into a single tax year, and
+nominal net worth *falls* while it is paid — immediately before the terminal settle
+(design 68) would have priced those same gains anyway. Holding the prior mix instead is
+**+2.2M median after-tax, winning 11 of 12 seeds** — the only edit tested that beats
+baseline robustly, and in the opposite direction from every control.
+
+**3. What shipped, and what did not.** A bake-time **warning only** (`_zeroedClassWarnings`
+in `cockpit-controller.js`, 5 tests in `mpc-harvest.test.mjs`): the terminal case is
+reported as a defect naming the classes, the shares and the clamp; round trips are
+reported as *information* explicitly labelled "has NOT measured as pure friction", so a
+reader sees the shape without being told it is a bug. Neither rewrites the bake — a
+corner is a well-formed total mix and the controller really did choose it, so only the
+reader knows whether it was intent or a flat objective.
+
+**Still open — the semantic call (owner).** The warning documents the trailing clamp; it
+does not fix it. Two candidates, both deliberately not taken as a drive-by:
+- **Stop extrapolating** — ages above the last anchor fall back to the static
+  `targetAllocation` rather than clamping. Fixes the root cause, but changes behaviour for
+  every existing glidepath and every saved scenario (golden-sensitive).
+- **Refuse to bake a terminal corner** — carry the prior epoch's mix into the final anchor
+  on the grounds that the last epoch is horizon-distorted. Confined to the MPC bake path,
+  but silently overrides a committed decision.
+
+**Corrections to the original filing, for the record.** The `moveYear` straddle bullet and
+the Monte Carlo bullet still stand — a corner does fire in every path because the
+glidepath is keyed on AGE, so design 82 §8.2's `P(EQUITY share = 0)` readout is still
+structurally 100% and still needs to exclude scheduled zeroes. But it now reads 100%
+because of a *harmless* shape plus one expensive terminal one, not because of a recurring
+tax leak. The claim that each corner "realizes CGT on an entire asset class and buys it
+straight back — pure friction" is **withdrawn** for the round trips and **upheld, and
+worse than described, for the terminal anchor**, where nothing buys it back at all.
+
 ## 12.2 Open questions arising (2026-07-29)
 
 1. **Should a zero-target holding trigger a rebalance (D2)?** ⇢ **Reframed 2026-07-29 by

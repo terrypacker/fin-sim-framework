@@ -235,6 +235,50 @@ describe('design 39 §13.6.4 — ALLOCATION_MIX bakes to GLIDEPATH anchors', () 
     assert.deepEqual(keys, ['allocationSchedule', 'behavioralStrategies']);
     assert.equal(plan.requires.find(r => r.paramKey === 'allocationSchedule').to, 'GLIDEPATH');
   });
+
+  // ── design 61 §12.1 D5 — zeroed-class diagnostics ──
+  // `allocRun` weights are raw stick-breaking inputs, so drive the mixes through
+  // synthesizeTargetAllocation semantics: EQUITY takes `e`, BOND takes `b` of the
+  // remainder, CASH the rest. e=1 ⇒ a pure-equity corner; e=0,b=1 ⇒ pure bond.
+  const warnOf = (mixes, extra = {}) => harvestDecisions(allocRun(mixes), {
+    controlsByKey: CONTROLS, birth: BIRTH, epsilon: { allocationSmooth: true }, ...extra,
+  }).warnings.join(' | ');
+
+  test('a terminal anchor that zeroes a held class is warned about (the CLAMP)', () => {
+    // ... → 60/40 equity/bond → all-bond at the last anchor. The glidepath clamps
+    // above its last anchor, so that becomes policy for every remaining year.
+    const w = warnOf([{ e: 0.6, b: 1, c: 1 }, { e: 0.6, b: 1, c: 1 }, { e: 0, b: 1, c: 1 }]);
+    assert.match(w, /FINAL anchor/);
+    assert.match(w, /CLAMPS above its last anchor/);
+    assert.match(w, /Equity \(60% → 0\)/);
+  });
+
+  test('a terminal anchor that holds every class is not warned about', () => {
+    const w = warnOf([{ e: 0.6, b: 1, c: 1 }, { e: 0.5, b: 1, c: 1 }, { e: 0.4, b: 1, c: 1 }]);
+    assert.doesNotMatch(w, /FINAL anchor/);
+  });
+
+  test('a round-trip corner is reported as INFORMATION, not as friction', () => {
+    // equity 60% → 0 → 60%: the shape D5 filed, which did not measure as a defect.
+    const w = warnOf([{ e: 0.6, b: 1, c: 1 }, { e: 0, b: 1, c: 1 }, { e: 0.6, b: 1, c: 1 }]);
+    assert.match(w, /leaves the plan entirely/);
+    assert.match(w, /Informational/);
+    assert.match(w, /NOT measured as pure friction/);
+    // A round trip returns, so it must NOT be reported as a terminal clamp.
+    assert.doesNotMatch(w, /FINAL anchor/);
+  });
+
+  test('a class below the material floor is not treated as a position', () => {
+    // 2% equity → 0 is a remnant, not a liquidation; no round-trip warning.
+    const w = warnOf([{ e: 0.02, b: 1, c: 1 }, { e: 0, b: 1, c: 1 }, { e: 0.02, b: 1, c: 1 }]);
+    assert.doesNotMatch(w, /leaves the plan entirely/);
+  });
+
+  test('a single-anchor bake warns about neither', () => {
+    const w = warnOf([{ e: 0, b: 1, c: 1 }]);
+    assert.doesNotMatch(w, /FINAL anchor/);
+    assert.doesNotMatch(w, /leaves the plan entirely/);
+  });
 });
 
 describe('design 39 §13.6.3 — POINT levers never collapse silently', () => {
