@@ -178,6 +178,15 @@ export class AccountsController {
     // them directly. null → not Prime-linked / unset (global default).
     if ('primeSpread'  in data) account.primeSpread  = data.primeSpread  == null ? null : Number(data.primeSpread);
     if ('interestRate' in data) account.interestRate = data.interestRate == null ? null : Number(data.interestRate);
+    // §988 currency basis (design 87). Stamped directly like the two above — the builder
+    // has no setter, and `deductibleFraction` is shared with the loan branch, which sets
+    // it via the builder. Guarded on presence so a non-cash type never acquires either.
+    if ('fxBasisRate' in data) {
+      account.fxBasisRate = data.fxBasisRate == null ? null : Number(data.fxBasisRate);
+    }
+    if (data.type !== 'loan' && 'deductibleFraction' in data) {
+      account.deductibleFraction = data.deductibleFraction == null ? null : Number(data.deductibleFraction);
+    }
     return this._service.createAccount(account);
   }
 
@@ -224,6 +233,12 @@ export class AccountsController {
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);
+    // §988 currency basis (design 87). Same null-vs-0 discipline: a cleared rate is
+    // `null` ("stamp at the first disposition"), and 0 would be an infinite basis.
+    // `deductibleFraction` is already covered by LOAN_NULLABLE_FIELDS below — it is one
+    // field shared by the loan and the currency pool, which is deliberate (§988(e)(3)
+    // and s8-1 ask the same question).
+    if ('fxBasisRate' in n) n.fxBasisRate = _nullableNum(n.fxBasisRate);
     // Loan (liability) terms (design 54 §2 + design 86). Same null-vs-0 discipline as
     // create(): a cleared year/fraction is `null` (unset), not 0.
     for (const f of LOAN_NUM_FIELDS)      if (f in n) n[f] = _num(n[f]);

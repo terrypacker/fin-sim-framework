@@ -157,10 +157,12 @@ function makeSvc() {
 }
 
 function auLoanState({ balance = 300_000, monthlyPayment = 5_000, rate = WEAK,
-                       interestOnly = false, bookingFxRate = BOOK, offset = 0 } = {}) {
+                       interestOnly = false, bookingFxRate = BOOK, offset = 0,
+                       residency = null } = {}) {
   return {
     effectiveExchangeRates: { USD_AUD: rate },
-    auHouseProperty: { rentalEnabled: true, stateKey: 'auHouseProperty' },
+    ...(residency ? { people: { primary: { residency } } } : {}),
+    auHouseProperty: { rentalEnabled: true, stateKey: 'auHouseProperty', ownerId: 'primary' },
     hLoan: {
       type: 'loan', kind: 'account', stateKey: 'hLoan', balance,
       monthlyPayment, interestRate: 0.06, primeSpread: null, interestOnly,
@@ -289,4 +291,65 @@ test('S988-25: a large §988 loss beside foreign income leaves the §904 partiti
   assert.doesNotThrow(() => rates.computeTax(state));
   const out = rates.computeTax(state);
   assert.ok(out.netLiability >= 0);
+});
+
+// ─── §988(a)(3) source: it follows the TAX HOME, not the passport ─────────────
+
+test('S988-26: the emitted action carries the payer\'s residency', () => {
+  const { emitted } = payOnce(auLoanState({ rate: WEAK, residency: 'US' }));
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].residency, 'US');
+});
+
+test('S988-27: after the move the SAME loan reports an Australian tax home', () => {
+  // Nothing about the debt changed — only where the taxpayer lives. §988(a)(3)(B)(i)(I)
+  // is a §911(d)(3) tax-home test, so this alone flips the source.
+  const { emitted } = payOnce(auLoanState({ rate: WEAK, residency: 'AU' }));
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].residency, 'AU');
+});
+
+test('S988-28: a US-resident gain reaches NO foreign basket', () => {
+  const fn = classify('SECTION_988_GAIN');
+  const next = fn({ usOrdinaryIncomeYTD: 100_000, foreignGeneralIncomeYTD: 4_000 },
+    { type: 'SECTION_988_GAIN', amount: 9_000, disallowedLoss: 0, residency: 'US' });
+  assert.equal(next.usOrdinaryIncomeYTD, 109_000);
+  assert.equal(next.foreignGeneralIncomeYTD, 4_000, 'untouched — US-source');
+});
+
+test('S988-29: an AU-resident gain is foreign-source general-basket income', () => {
+  const fn = classify('SECTION_988_GAIN');
+  const next = fn({ usOrdinaryIncomeYTD: 100_000, foreignGeneralIncomeYTD: 4_000 },
+    { type: 'SECTION_988_GAIN', amount: 9_000, disallowedLoss: 0, residency: 'AU' });
+  assert.equal(next.usOrdinaryIncomeYTD, 109_000, 'still gross income');
+  assert.equal(next.foreignGeneralIncomeYTD, 13_000, 'and now tagged into the §904 numerator');
+});
+
+test('S988-30: an absent residency falls back to US-source, so old saved actions are inert', () => {
+  const fn = classify('SECTION_988_GAIN');
+  const next = fn({ usOrdinaryIncomeYTD: 100_000, foreignGeneralIncomeYTD: 4_000 },
+    { type: 'SECTION_988_GAIN', amount: 9_000, disallowedLoss: 0 });
+  assert.equal(next.foreignGeneralIncomeYTD, 4_000);
+});
+
+test('S988-31: tagging the general basket does not break the §904 partition', () => {
+  // The mirror of S988-25. A basket accumulator is a SUBSET-TAG of gross income, so
+  // the gain must appear in both; if it were added to the basket alone, basket gross
+  // would exceed grossIncomeAllSources and _assertFtcInvariants would throw.
+  const fn = classify('SECTION_988_GAIN');
+  const state = fn(
+    { usOrdinaryIncomeYTD: 60_000, foreignGeneralIncomeYTD: 0,
+      foreignPassiveIncomeYTD: 55_000, ftcCurrentPassive: 12_000 },
+    { type: 'SECTION_988_GAIN', amount: 35_000, disallowedLoss: 0, residency: 'AU' });
+  const rates = new UsTaxRates2026();
+  assert.doesNotThrow(() => rates.computeTax(state));
+});
+
+test('S988-32: an AU-resident LOSS stays on the deduction route, out of the basket', () => {
+  const fn = classify('SECTION_988_GAIN');
+  const next = fn({ usOrdinaryIncomeYTD: 100_000, foreignGeneralIncomeYTD: 4_000 },
+    { type: 'SECTION_988_GAIN', amount: -9_000, disallowedLoss: 0, residency: 'AU' });
+  assert.equal(next.foreignGeneralIncomeYTD, 4_000,
+    'a deduction is apportioned pro-rata by computeTax, not subtracted from one basket');
+  assert.equal(next.usSection988LossYTD, 9_000);
 });

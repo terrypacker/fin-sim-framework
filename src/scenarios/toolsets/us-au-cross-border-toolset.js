@@ -61,6 +61,17 @@ export const US_AU_CROSS_BORDER = {
       { type: 'CHANGE_RESIDENCY_APPLY' },
       // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
       { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number() } },
+      // §988 on foreign-currency CASH (design 87 phases 1–2). Declared here as well as
+      // in the two real-property toolsets — registerActionType is idempotent, and both
+      // conversion paths (this toolset's IntlTransferApplyReducer and the inline sweep
+      // in AccountService.replenishSavings) emit it, so a scenario with cross-border
+      // banking but no real property must still have the type registered or every
+      // currency disposition is dropped on the floor.
+      { type: 'SECTION_988_GAIN', cc: null,
+        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(),
+                  currency: ValueType.text(), amount: ValueType.number(),
+                  gross: ValueType.number(), disallowedLoss: ValueType.number(),
+                  deMinimis: ValueType.number(), residency: ValueType.text() } },
       // INTL_TRANSFER_RECORD: journal-only marker for inline cross-border cash
       // sweeps in replenishSavings (design 44 Gap A / A2).
       {

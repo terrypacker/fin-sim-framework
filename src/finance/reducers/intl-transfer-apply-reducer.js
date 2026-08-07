@@ -12,6 +12,9 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { convertNetOfFee, grossUpForTarget } from '../fx/fx-conversion.js';
+import { section988Residence } from '../account-rules/loan-classes.js';
+import { realizeCurrencyDisposition, acquireCurrencyBasis }
+  from '../account-rules/currency-basis.js';
 
 /**
  * Handles the INTL_TRANSFER_APPLY action.
@@ -122,14 +125,25 @@ export class IntlTransferApplyReducer extends Reducer {
       }
       const audActual   = Math.min(audNeeded, auAcc.balance);
       const usdReceived = Math.max(0, convertNetOfFee(audActual, 'AUD', 'USD', rate, fee));
+      // Design 87 G1 — converting AUD to USD is the paradigm §988 disposition of
+      // nonfunctional currency (§988(c)(1)(C)(i)). Realized BEFORE the debit, because
+      // the disposition is measured against the basis the pool carried while it still
+      // held these units. Unlike the offset leg there is no matched opposite position
+      // here, so this is the one place §988 produces a genuinely new number.
+      const s988 = audActual > 0
+        ? realizeCurrencyDisposition(state, auKey, auAcc, audActual, section988Residence(state, auAcc))
+        : { patch: {}, actions: [] };
       if (audActual > 0) {
         this.accountService.transaction(auAcc, -audActual,   date);
         this.accountService.transaction(usAcc, +usdReceived, date);
       }
+      pendingTaxActions.push(...s988.actions);
       const usdShortfall = targetDeficit - usdReceived;
       if (usdShortfall > 0.01) {
-        return this.newState(state, {}, [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }]);
+        return this.newState(state, this._patch(auKey, auAcc, s988.patch),
+          [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }]);
       }
+      if (Object.keys(s988.patch).length) return this.newState(state, this._patch(auKey, auAcc, s988.patch), pendingTaxActions);
 
     } else {
       const usdNeeded = grossUpForTarget(targetDeficit, 'USD', 'AUD', rate, fee);
@@ -148,19 +162,38 @@ export class IntlTransferApplyReducer extends Reducer {
       }
       const usdActual   = Math.min(usdNeeded, usAcc.balance);
       const audReceived = Math.max(0, convertNetOfFee(usdActual, 'USD', 'AUD', rate, fee));
+      // Design 87 G1, mirror direction — acquiring AUD establishes basis and realizes
+      // NOTHING. The blend must see the balance BEFORE the credit, so it is captured
+      // here rather than read back off the mutated account.
+      const balanceBefore = auAcc.balance ?? 0;
       if (usdActual > 0) {
         this.accountService.transaction(usAcc, -usdActual,   date);
         this.accountService.transaction(auAcc, +audReceived, date);
       }
+      const acqPatch = audReceived > 0
+        ? acquireCurrencyBasis(state, auAcc, balanceBefore, audReceived) : {};
       const audShortfall = targetDeficit - audReceived;
       if (audShortfall > 0.01) {
-        return this.newState(state, {}, [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }]);
+        return this.newState(state, this._patch(auKey, auAcc, acqPatch),
+          [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }]);
       }
+      if (Object.keys(acqPatch).length) return this.newState(state, this._patch(auKey, auAcc, acqPatch), pendingTaxActions);
     }
 
     return pendingTaxActions.length > 0
       ? this.newState(state, {}, pendingTaxActions)
       : this.newState(state);
+  }
+
+  /**
+   * Merge a §988 basis patch onto the AU pool's state entry.
+   *
+   * `accountService.transaction` has already mutated the live account object's balance
+   * in place, so the entry is spread AFTER the mutation and the patch carries only the
+   * `fxBasisRate` field — writing a stale copy back here would undo the transfer.
+   */
+  _patch(key, account, patch) {
+    return Object.keys(patch).length ? { [key]: { ...account, ...patch } } : {};
   }
 }
 

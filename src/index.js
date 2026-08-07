@@ -18,9 +18,10 @@ import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, Supe
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
+import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
-import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
 import { US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE, toMs, isMainResidenceThroughout, mainResidenceWindow, auMainResidenceExemption, us121Exclusion, unrecaptured1250Gain, cgtDiscountFraction } from './finance/account-rules/main-residence.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { PROPERTY_PURCHASE_ORDER, resolvePurchasePrice, propertyNeedsPurchase, PropertyPurchaseHandler, UsPropertyPurchaseHandler, AuPropertyPurchaseHandler, PropertyPurchaseApplyReducer } from './finance/account-rules/property-purchase.js';
@@ -390,7 +391,7 @@ import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-sett
 import { BequestEditor } from './visualization/assets/bequest-editor.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
-import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
+import { _mainResidenceMode, _mainResidenceFields, RealPropertyEditor } from './visualization/assets/real-property-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
@@ -550,6 +551,13 @@ export const Finance = {
   resolveDestinationCashKey,
   resolveSaleDestinationKey,
   resolvePresentCash,
+  accountCurrencyCode,
+  isForeignCurrencyPool,
+  computeCurrencyDisposition,
+  blendCurrencyBasisRate,
+  currencyPoolBusinessFraction,
+  realizeCurrencyDisposition,
+  acquireCurrencyBasis,
   InheritHandler,
   InheritApplyReducer,
   InheritanceNeTaxApplyReducer,
@@ -567,6 +575,7 @@ export const Finance = {
   effectivePrincipal,
   resolveLoanRate,
   scheduledLoanPayment,
+  SECTION_988_PERSONAL_DE_MINIMIS_USD,
   section988BusinessFraction,
   computeSection988Gain,
   blendSection988BookingRate,
@@ -575,6 +584,7 @@ export const Finance = {
   UsLoanPaymentHandler,
   AuLoanPaymentHandler,
   LoanPaymentApplyReducer,
+  section988Residence,
   US_PRIMARY_HOME_EXCLUSION_MFJ,
   US_PRIMARY_HOME_EXCLUSION_SINGLE,
   toMs,
@@ -1488,6 +1498,8 @@ export const Visualization = {
   BequestEditor,
   CollectibleEditor,
   CompanyEquityEditor,
+  _mainResidenceMode,
+  _mainResidenceFields,
   RealPropertyEditor,
   ChartController,
   ChartPresenter,

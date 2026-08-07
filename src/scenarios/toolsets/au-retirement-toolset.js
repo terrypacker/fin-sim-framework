@@ -710,6 +710,15 @@ function _accountToStatePlain(account) {
   if (account.offsetsPropertyKey !== undefined) {
     plain.offsetsPropertyKey = account.offsetsPropertyKey ?? null;
   }
+  // §988 currency basis + income-producing share (design 87). Same reason as the
+  // offset link: the reducers read the runtime STATE entry, not the record, so a
+  // field left out here makes an authored basis rate invisible and the pool gets
+  // stamped at its first disposition instead. Projected only when set, so legacy
+  // accounts are byte-identical.
+  if (account.fxBasisRate != null) plain.fxBasisRate = account.fxBasisRate;
+  if (account.type !== 'loan' && account.deductibleFraction != null) {
+    plain.deductibleFraction = account.deductibleFraction;
+  }
   // LoanAccount terms (design 54 §2 + design 86). Same reason as the offset link
   // above: LoanPaymentHandler reads the runtime STATE entry, not the record, so a
   // field left out here makes an authored loan a balance with no rate and no

@@ -709,6 +709,14 @@ export class ScenarioSerializer {
     // so legacy accounts (null → global fallback) round-trip byte-for-byte. The
     // loan branch above already owns `interestRate` for its loan rate, so the
     // generic earnings interestRate is skipped for loans.
+    // §988 currency basis + income-producing share (design 87). Emitted only when set
+    // so legacy accounts round-trip byte-for-byte. Same allowlist trap as
+    // `bookingFxRate` above: omitted here, an authored basis rate is silently lost on
+    // save/load and the pool reverts to "acquired at the first disposition".
+    if (account.fxBasisRate != null) d.fxBasisRate = account.fxBasisRate;
+    if (account.type !== 'loan' && account.deductibleFraction != null) {
+      d.deductibleFraction = account.deductibleFraction;
+    }
     if (account.growthRate   != null) d.growthRate   = account.growthRate;
     if (account.dividendRate != null) d.dividendRate = account.dividendRate;
     if (account.type !== 'loan' && account.interestRate != null) d.interestRate = account.interestRate;
@@ -1169,6 +1177,11 @@ export class ScenarioSerializer {
     // OffsetAccount (cash-like, linked) opts (design 53 §3 / 54 P3).
     if (d.__type === 'OffsetAccount') {
       opts.offsetsPropertyKey = d.offsetsPropertyKey ?? null;
+    }
+    // §988 currency basis + income-producing share (design 87), the read side.
+    if (d.fxBasisRate        !== undefined) opts.fxBasisRate        = d.fxBasisRate;
+    if (d.__type !== 'LoanAccount' && d.deductibleFraction !== undefined) {
+      opts.deductibleFraction = d.deductibleFraction;
     }
     // Per-account earnings rates (design 55 §8). Skip interestRate for loans — the
     // LoanAccount branch above already set it from the loan rate.

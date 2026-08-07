@@ -169,7 +169,18 @@ export class AccountEditor extends BaseComponent {
       // The Prime baseline is country-specific, so the "= Prime + spread" hint
       // (and the absolute the entered value implies) shifts when the country does.
       this._refreshCashRateHint(el);
+      // Country drives the currency default, and currency gates the §988 fields.
+      this._applyFxBasisVisibility(el, typeSelect.value);
     });
+
+    // §988 currency basis (design 87). Populated here and re-gated whenever the
+    // currency changes — an account flipped to USD is no longer a §988 pool.
+    el.querySelector('[data-id="fxBasisRate"]').value = this._node?.fxBasisRate ?? '';
+    el.querySelector('[data-id="cashDeductibleFraction"]').value =
+      this._node?.deductibleFraction ?? '';
+    this.listen(curSelect, 'change', () => this._applyFxBasisVisibility(el, typeSelect.value));
+    this.listen(el.querySelector('[data-id="fxBasisRate"]'), 'input',
+      () => this._refreshFxBasisHint(el));
 
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
@@ -935,6 +946,25 @@ export class AccountEditor extends BaseComponent {
     if (type === 'offset') {
       data.offsetsPropertyKey = el.querySelector('[data-id="offsetsPropertyKey"]').value || null;
     }
+    // §988 currency basis (design 87). Read only for a non-USD cash pool — the same gate
+    // the fields are shown under, so flipping an account to USD clears them rather than
+    // leaving an invisible rate behind. Blank round-trips as **null** ("unset ⇒ stamp at
+    // the first disposition"), never 0, which would be an infinite basis.
+    if (AccountEditor.FX_POOL_TYPES.has(type) && data.currency && data.currency !== 'USD') {
+      const numOrNull = (dataId) => {
+        const raw = el.querySelector(`[data-id="${dataId}"]`)?.value;
+        if (raw === '' || raw == null) return null;
+        const v = Number(raw);
+        return Number.isFinite(v) ? v : null;
+      };
+      const rate = numOrNull('fxBasisRate');
+      data.fxBasisRate = rate != null && rate > 0 ? rate : null;
+      const frac = numOrNull('cashDeductibleFraction');
+      data.deductibleFraction = frac == null ? null : Math.min(1, Math.max(0, frac));
+    } else if (AccountEditor.FX_POOL_TYPES.has(type)) {
+      data.fxBasisRate        = null;
+      data.deductibleFraction = null;
+    }
     // Loan terms (design 54 §2 + design 86). A blank numeric field is `null` ("unset"),
     // never 0 — see _renderLoanFields. The rate follows the same Prime-relative storage
     // as the cash rate above, but writes the LOAN's `interestRate`, so it is read here
@@ -1014,6 +1044,48 @@ export class AccountEditor extends BaseComponent {
     hint.textContent = `= Prime (${this._fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${this._fmtPct(Math.abs(spread))}`;
   }
 
+  // ─── §988 currency basis (design 87) ────────────────────────────────────────
+
+  /**
+   * Cash-like pools that hold actual currency. Deliberately NOT `CASH_RATE_TYPES`: a
+   * brokerage's cash sleeve is currency too, but its §988 basis belongs on the sleeve
+   * rather than the account (design 87 G9 covers the per-holding case), and an account
+   * -level rate there would silently claim the equity sleeves as well.
+   */
+  static FX_POOL_TYPES = new Set(['checking', 'savings', 'offset']);
+
+  /**
+   * Show the §988 basis fields only for a NON-USD cash pool.
+   *
+   * Split out of `_applyTypeVisibility` because it depends on the CURRENCY select as
+   * well as the type — flipping an account AUD→USD must hide it, and that fires no
+   * type-change event.
+   */
+  _applyFxBasisVisibility(el, type) {
+    const fields = el.querySelector('[data-id="fxBasisFields"]');
+    if (!fields) return;
+    const ccy  = el.querySelector('[data-id="currency"]')?.value;
+    const show = AccountEditor.FX_POOL_TYPES.has(type) && ccy && ccy !== 'USD';
+    fields.style.display = show ? '' : 'none';
+    if (show) this._refreshFxBasisHint(el);
+  }
+
+  /** Restates the entered rate as what it means, and flags the understatement default. */
+  _refreshFxBasisHint(el) {
+    const hint = el.querySelector('[data-id="fxBasisHint"]');
+    if (!hint) return;
+    const ccy = el.querySelector('[data-id="currency"]')?.value ?? 'AUD';
+    const raw = el.querySelector('[data-id="fxBasisRate"]')?.value;
+    if (raw === '' || raw == null) {
+      hint.textContent = 'Blank ⇒ stamped at the first disposition, so §988 is understated.';
+      return;
+    }
+    const r = Number(raw);
+    if (!Number.isFinite(r) || r <= 0) { hint.textContent = ''; return; }
+    hint.textContent = `Acquired at ${r} ${ccy}/USD — 1 ${ccy} carries a basis of `
+                     + `$${(1 / r).toFixed(4)}.`;
+  }
+
   // ─── Visibility ─────────────────────────────────────────────────────────────
 
   _applyTypeVisibility(el, type) {
@@ -1037,6 +1109,12 @@ export class AccountEditor extends BaseComponent {
     }
     const offsetFields = el.querySelector('[data-id="offsetFields"]');
     if (offsetFields) offsetFields.style.display = type === 'offset' ? '' : 'none';
+
+    // §988 currency basis (design 87) — gated on CURRENCY, not type. The statute reaches
+    // any bank deposit denominated in nonfunctional currency, so savings/checking/offset
+    // are on the same footing and USD never qualifies (it IS the functional currency,
+    // §985(b)(1)). Re-evaluated on currency change, not only on type change.
+    this._applyFxBasisVisibility(el, type);
 
     // Loan (liability): show its terms, and hide the two rows that mean nothing on a
     // liability — the ctor forces drawdownPriority null (a loan is never a source of
