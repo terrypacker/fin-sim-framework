@@ -1,8 +1,26 @@
 # 88 — Speculative assets: model the what-if without banking it
 
-**Status** (2026-08-07): **PROPOSED.** Decisions D1–D9 locked below. Phase 1 is a
-small, mechanical change with a strong back-compat guarantee; phase 2 is reporting;
-phase 3 (a probability haircut) is argued against for now and deliberately deferred.
+**Status** (2026-08-07): **PHASE 1 BUILT.** Decisions D1–D10 locked below. Phase 2
+(disclosure UI + the control-scope default flip, §5.4) and phase 3 (a probability
+haircut, argued against in §11) remain open.
+
+Phase 1 landed as specified, with two deviations worth naming up front:
+
+- **The `company` branch in `_sumAfterTax` is added at PAR**, matching real property
+  and collectibles, rather than net of an embedded CGT — pricing illiquid-asset
+  cap-gains is design/40 Q5 and this change does not invent it. §9's control is
+  therefore "flipping the flag moves after-tax worth by exactly the stake", which
+  detects the same half-done-D5 failure without asserting a tax treatment that does
+  not exist.
+- **The flag is emitted only when TRUE** — in the serializers, in the state
+  projections, and for the `netWorthInclSpeculative` metric. Unconditional defaults
+  would have added a key to every saved scenario and every fixture, which is exactly
+  what D2 forbids. The verified result: `golden-cross-border-reference.json` is
+  untouched, byte for byte.
+
+Enforcement of D4 went further than "the loader should reject it": the guard runs in
+the `Asset` constructor AND in `AssetService#mergeChanges`, because the editor's
+update path could otherwise create the contradictory pair after construction.
 
 **The one-line finding:** the model has no way to say *"simulate this, but do not
 count it as mine."* Every asset a plan holds is recognised at full market value in
@@ -51,11 +69,17 @@ That maps cleanly onto what we need:
 
 | accounting concept | here |
 |---|---|
-| recognition | `computeNetWorth`, and everything that follows it — objectives, guardrails, terminal targets |
+| recognition | `computeNetWorth`, and the reported figures that follow it |
 | disclosure | the allocation cube, a second `…InclSpeculative` metric, the UI |
 
 The whole design is: give the planner a way to move an asset from the first column
 to the second, without moving it out of the simulation.
+
+There is a *third* scope hiding behind the first, and conflating it with recognition
+is the older and larger error: what an MPC/OPT controller is allowed to **steer**.
+Recognition asks "is this mine?"; control asks "can I reach it?" — and the honest
+answer to the second is narrower than to the first even for perfectly ordinary,
+non-speculative assets. §5 separates them.
 
 ---
 
@@ -104,7 +128,7 @@ Borrowing the reasoning is fine; borrowing the label would overclaim.
 **D2 — absent ⇒ `false` ⇒ today's behaviour, bit for bit.**
 
 Non-negotiable, and cheap: every existing scenario, every saved JSON, and the golden
-fixture must be unchanged by phase 1. This is now directly testable — see §8.
+fixture must be unchanged by phase 1. This is now directly testable — see §9.
 
 **D3 — the flag lives on `Asset`, not on `CompanyEquity`.**
 
@@ -114,10 +138,19 @@ property, an attributed-but-unauthenticated artwork, a private stake. Putting it
 the base costs nothing and avoids a second round of this design when the next kind
 needs it.
 
-Accounts are a different hierarchy (`Account`, not `Asset`) and are **out of scope
-for phase 1** — see §9 OQ2. An account is drawdown-eligible machinery with a
-`balance`; excluding one from worth while the drawdown engine spends from it would be
-incoherent, and resolving that is a bigger question than this design needs to answer.
+Accounts are **out of scope for phase 1** — see §10 OQ2. An account is
+drawdown-eligible machinery with a `balance`; excluding one from worth while the
+drawdown engine spends from it would be incoherent, and resolving that is a bigger
+question than this design needs to answer.
+
+*Correction found while building:* the draft said accounts were "a different
+hierarchy". They are not — `Account extends Asset`, so every account INHERITS the
+field whether or not it means anything. Out-of-scope therefore had to be enforced
+rather than assumed, and the enforcement is one line in `isSpeculative`, which
+answers `false` for anything balance-shaped. Without it a flag set where it has no
+effect would still be honoured by the cube, breaking a §6 invariant on a setting
+whose entire intent is to do nothing. When OQ2 is answered, that line is what
+changes.
 
 **D4 — a speculative asset is not drawdown-eligible, and this is enforced, not assumed.**
 
@@ -146,7 +179,7 @@ absurd pair "recognised at full value in net worth, valued at zero after tax."
 **D6 — the allocation cube keeps the row and gains a `speculative` column.**
 
 This is the disclosure half. Dropping the row would make the position invisible in
-the one view whose whole job is showing where the money is. See §5 for the invariant
+the one view whose whole job is showing where the money is. See §6 for the invariant
 consequences, which are the sharpest technical constraint in this design.
 
 **D7 — a second metric, `netWorthInclSpeculative`, is published alongside.**
@@ -165,7 +198,28 @@ edit. `terminalWealthTarget` likewise. `computeGuardrailPortfolioValue` needs no
 change (D4). This is a feature of the existing layering and should be stated so a
 future reader does not go looking for four more call sites.
 
-**D9 — no probability haircut in phase 1.** See §10.
+This is the *mechanism*, and it is deliberately silent about which measure a
+controller should be pointed at. That is a separate question, and D10 answers it.
+
+**D9 — no probability haircut in phase 1.** See §11.
+
+**D10 — control metrics are lever-scoped. Net liquidity is the control metric;
+net worth is a reporting metric.**
+
+You should not ask a controller to steer a quantity it has no lever for. `netWorth`
+recognises value the MPC/OPT lever set cannot reach — an unsellable house, age-locked
+super, and now speculative assets — so anchoring a control objective on it asks the
+solver to hit a number it can only partially move. §5 works through the two ways that
+goes wrong and states the rule in full.
+
+The consequence for this design is a scoping one, and it matters for how phase 1 is
+read: **`speculative` is a recognition fix, not a control fix.** The control side is
+already correct today — `computeNetLiquidity` excludes every `Asset` kind because
+none carries a `balance` (§4) — and phase 1's job there is only to write down that
+this is intentional rather than incidental. If the flag were the control fix, the
+right response to "MPC banked my lottery ticket" would be to flag more things, which
+is backwards: an *unflagged* unsellable house is the same failure and no flag
+addresses it.
 
 ---
 
@@ -178,12 +232,12 @@ value*; proceeds after a sale are an ordinary account balance and are always cou
 |---|---|---|---|
 | `computeNetWorth` | `derived-metrics/net-worth.js` | **excluded** | yes — skip when flag set |
 | `netWorthInclSpeculative` | new, same file | included | yes — new function + `deriveNetWorth` writes both |
-| `computeNetLiquidity` | `derived-metrics/net-liquidity.js` | already excluded | **none** — requires a numeric `balance`, which no `Asset` kind has |
+| `computeNetLiquidity` | `derived-metrics/net-liquidity.js` | already excluded | **none** — requires a numeric `balance`, which no `Asset` kind has. This is the **control** metric (§5); comment it as intentional |
 | `computeAfterTaxNetWorth` | `derived-metrics/after-tax.js` | **excluded by rule** | yes — add the `company` branch (§4.12), then gate it on the flag |
-| `computeAfterTaxNetLiquidity` | same | already excluded | none — `includeIlliquid: false` |
+| `computeAfterTaxNetLiquidity` | same | already excluded | none — `includeIlliquid: false`. The preferred control anchor (§5.3) |
 | allocation cube | `allocation-reporting/allocation-cube.js` | **included, flagged** | yes — carry `speculative` onto the row |
 | guardrail portfolio | `spending/guardrail-portfolio-value.js` | already excluded | **none** — needs `balance` + `drawdownPriority` (D4) |
-| optimizer terminal measures | `optimization/optimization-objectives.js` | follows `netWorth` | none — resolves through the functions above |
+| optimizer terminal measures | `optimization/optimization-objectives.js` | follows whichever scope the goal names | none in phase 1 — but the worth-scoped default is wrong for control (§5.4) |
 | MC run metrics | `monte-carlo/intl-retirement-mc-runner.js` | follows `netWorth` | none, same reason |
 | `cumulativeTaxesPaid` | tax settle path | **unaffected** | none — a realised sale is a realised sale (D2) |
 | drawdown / `replenishSavings` | `services/account-service.js` | ineligible | validation only (D4) |
@@ -192,13 +246,140 @@ Two things worth noting about this table. First, **most of it is "none"** — th
 layering already routes everything through two functions, which is why this design is
 small. Second, the three "already excluded" rows are excluded *for incidental
 reasons* (no `balance` field, `includeIlliquid: false`), and those reasons happen to
-coincide with the intent today. They should each get a one-line comment saying so,
-because a future change that gives assets a `balance`-like field would break the
-coincidence silently.
+coincide with the intent today. They should each get a one-line comment saying so —
+and for the two liquidity rows the comment is not merely defensive bookkeeping but a
+statement of the rule in §5, because a future change that gives assets a
+`balance`-like field would break the coincidence silently and would break it on the
+*control* side, where it is hardest to notice.
 
 ---
 
-## 5. The allocation cube: one invariant becomes two
+## 5. Control vs reporting: net liquidity is the control metric
+
+**Do not try to control something you have no lever for.** That is the whole rule,
+and it is the reason net liquidity exists as a separate measure at all. Net liquidity
+should mean *all the value the controller can actually reach to meet the goal* —
+no more, and no less. Net worth is the right number to report and the wrong number to
+steer, because it recognises value the lever set cannot touch.
+
+### 5.1 The lever set, concretely
+
+The MPC cockpit's controls (`mpc/cockpit-controller.js`) are `SPENDING`, `ROTH`,
+`EARLY_WITHDRAWAL`, `DRAWDOWN_XBORDER`, `DRAWDOWN_WITHINTIER`, `DRAWDOWN_WEIGHTS`,
+`DRAWDOWN_SLEEVE`, `ALLOCATION_MIX` and `BOND_LADDER`. Every one of them acts on the
+spending rate or on drawdown-eligible account balances. **None of them can sell a
+house, find a buyer for a private stake, or unlock super before preservation age.**
+The optimizer's parameter set is the same story.
+
+The codebase already knows this. `net-liquidity.js` documents `isDrawdownAccessible`
+as *"the single source of truth for 'is this account in the lever-reachable
+(drawdownable) pool right now'"*, and `optimization-objectives.js` carries the advice
+inline above the Die-With-Target family: *"Prefer the LIQUID terminal when the lever
+set can't liquidate illiquid assets (house equity, age-locked super), so the 'die with
+\$X' target is actually reachable by the controls."* What is missing is not the
+implementation but the **rule** — it currently lives as a comment and a preference,
+so nothing stops a worth-scoped target from being selected, and (see §5.4) the default
+is exactly that.
+
+### 5.2 Two distinct failure modes when a control target is worth-scoped
+
+**The kink goes out of reach — "die with target" quietly becomes "die with zero
+liquidity."** The Die-With-Target terminal term is `λ·|terminal − target|`, and its
+whole design is the *two-sided* penalty that produces an interior optimum
+(spend-early ⇄ leave-less), as `makeDieWithTarget` says in so many words. Write
+terminal worth as `U + L(policy)`, where `U` is the un-leverable component and `L` is
+the reachable pool. If `U` alone exceeds the (real, deflated) target, then
+`terminal − target > 0` for **every admissible policy** — the absolute value's kink is
+unreachable — and the penalty collapses to the linear `λ·(U + L − target)`. The
+optimizer's best response is then to push `L` toward **zero**, not toward the target:
+a strictly one-sided pressure to drain the reachable pool, bounded only by the
+solvency penalty. The planner asked to die with \$X and got a policy aiming to die
+with nothing they can spend, while the run still reports a plausible-looking terminal
+figure of `U + ε`.
+
+This is not hypothetical on the plan that prompted this design, where unsold tranches
+are more than a third of terminal net worth (§1): against a modest die-with target,
+that component clears the target on its own.
+
+**Substitution — the lottery ticket gets banked as a policy, not just a headline.**
+Below that threshold (`U < target`, so the kink is still reachable and the objective
+still behaves), the un-leverable value nonetheless *counts toward* the target, so every
+dollar of it licenses a dollar less of reachable wealth at the horizon. The controller
+spends the liquid pool down against an asset that may never convert. §1's complaint is
+that net worth reads as "what I will have"; this is the same error committed by the
+solver rather than by the reader, and it is worse, because it comes back as a spending
+recommendation.
+
+Both are amplified under MPC relative to a one-shot optimize: MPC re-solves at every
+step and re-banks the same un-leverable value each time, so the bias is applied
+repeatedly rather than once.
+
+Both are also *observable*, which matters because neither announces itself. The
+diagnostic for the first is a solved plan whose terminal **liquidity** is near zero
+while its terminal **worth** comfortably clears the target; the diagnostic for the
+second is that the gap between the two moves one-for-one with the un-leverable
+balance when you re-run with the stake removed. Worth measuring on the live plan
+before phase 2 decides the default (§5.4, OQ5) — the decision is better made with the
+magnitude in hand than from the argument alone.
+
+### 5.3 What belongs in the control metric
+
+The pool the controller can reach at the moment of measurement — which is what
+`computeNetLiquidity` already computes — **plus nothing else**. In particular:
+
+- **A planned conversion needs no special handling.** An asset with a
+  `plannedSaleYear` deposits its proceeds into `saleDestinationAccount`, where they
+  become an ordinary balance and enter the liquid pool from that instant. So a house
+  the plan sells in 2032 is un-leverable until 2032 and leverable after, which is
+  exactly right, and it falls out of the existing mechanics.
+- **`plannedSaleYear: null` means never in the pool.** A speculative stake with no
+  planned sale contributes zero to the control metric for the whole horizon, without
+  the `speculative` flag being involved at all.
+- This is D4's distinction restated on the metric side: *an explicit `plannedSaleYear`
+  is the planner stating an assumption; opportunistic liquidation by the engine is the
+  model making one up.* The control metric recognises the first and not the second.
+
+Three honest caveats:
+
+1. **Net liquidity is a *now*-scoped measure** — the age gate means super is excluded
+   before preservation age. For a terminal anchor past that age the gate is moot; for
+   running/windowed measures it is not, and that is the intended behaviour rather than
+   a wart (you cannot spend it yet).
+2. **`afterTaxLiquid` is the more honest control anchor still**, since it prices the
+   embedded liquidation tax into the number the controller is steering. It already
+   exists (`_TERMINAL_MEASURES`, design/40 §4) and costs nothing to prefer.
+3. **The rule has a real cost:** a liquidity-scoped target excludes primary-residence
+   equity, which is genuine wealth a household may eventually consume by downsizing.
+   The answer is to *model the downsizer as a planned sale* (design 83 G7 /
+   property-purchase work already supports this), not to launder it into the metric.
+   A lever the plan states is a lever; a lever the metric assumes is a fiction.
+
+### 5.4 The consequence for MPC/OPT defaults
+
+`cockpit-controller.js:1078` defaults the MPC objective to `DIE_WITH_TARGET` — the
+**worth**-scoped variant — and `resolveTerminalKey` falls back to `scope: 'worth'`.
+The liquid variants exist and are recommended in a comment, but the out-of-box
+configuration is the one §5.2 argues against.
+
+**Recommendation:** flip the default to the liquid scope (`DIE_WITH_TARGET_LIQUID`,
+and `afterTaxLiquid` where the after-tax basis is in play), keeping every worth-scoped
+variant available for reporting-style comparisons. This is deliberately **not** part
+of phase 1: it moves optimizer output on existing scenarios, so it needs its own
+before/after arms and its own regold, and bundling it with a change whose headline
+guarantee is "byte-identical goldens" (D2, §9.1) would destroy that guarantee's value.
+Phase 2 is the right home; §10 OQ5 records what has to be decided with it.
+
+Also note what does *not* need changing: `computeGuardrailPortfolioValue` requires a
+numeric `balance` and a non-null `drawdownPriority` — most of the lever-reachability
+test, in another spelling. (It omits the age gate that `isDrawdownAccessible` applies,
+so it is lever-scoped but not identical to `computeNetLiquidity`; whether that gap is
+deliberate is out of scope here.) The guardrail is already lever-scoped and has been
+all along — further evidence that the rule is the codebase's actual convention, and
+that it is the objectives layer that drifted from it.
+
+---
+
+## 6. The allocation cube: one invariant becomes two
 
 The cube's contract (design 82 §3, asserted by the *"the cube total equals
 computeNetWorth"* case in `tests/unit/allocation-cube.test.mjs`, and restated in
@@ -233,7 +414,7 @@ statement. Surface them as a separate disclosed line, not as a slice.
 
 ---
 
-## 6. Where the field will get dropped
+## 7. Where the field will get dropped
 
 The field has to survive four hops, and this codebase has lost a field at three of
 them before. Each of these is a real prior incident, listed so the implementation
@@ -267,35 +448,55 @@ does not rediscover them:
    **Recommendation:** phase 1 exposes it as an **editor checkbox only**, no param.
    It is a structural fact about the asset, not a lever anyone wants to sweep — and
    the moment it becomes a param it also becomes an MC/opt axis candidate, which
-   raises questions (§9 OQ3) phase 1 does not need to answer.
+   raises questions (§10 OQ3) phase 1 does not need to answer.
 
 ---
 
-## 7. Phases
+## 8. Phases
 
 **Phase 1 — recognition (the whole behavioural change).**
 - `speculative` on `Asset`; threaded through the three serializers and the three
-  state projections (§6).
+  state projections (§7).
 - `computeNetWorth` skips flagged entries; `computeNetWorthInclSpeculative` added;
   `deriveNetWorth` writes both onto `state.metrics`.
 - `_sumAfterTax` gains the missing `company` branch and the flag gate (D5).
 - Cube rows carry `speculative`; the totality test splits into the two invariants
-  of §5.
+  of §6.
 - Loader validation for D4 (flag set + non-null `drawdownPriority` ⇒ reject).
-- Comments on the three "excluded incidentally" call sites (§4).
+- Comments on the three "excluded incidentally" call sites (§4) — the two liquidity
+  ones citing the control rule (§5), not just the mechanism.
 
-**Phase 2 — disclosure.**
+Note what phase 1 deliberately does **not** touch: no objective, default or terminal
+scope moves. Phase 1 must be byte-identical with the flag unset (D2, §9.1), and a
+default flip cannot be.
+
+**Phase 2 — disclosure, and the control-scope default.**
 - Asset-editor checkbox with a caption that says what it does, because "speculative"
   alone will be read as a risk rating rather than an exclusion.
 - Cockpit / MC / compare panels show both figures where they show one today.
-- Allocation mix denominator decision from §5.
+- Allocation mix denominator decision from §6.
 - `configuration-list.js` badge, alongside the existing `Primary` badge for houses.
+- **Flip the MPC/OPT default terminal scope to liquid** (§5.4, OQ5): change the
+  `cockpit-controller.js:1078` default and `resolveTerminalKey`'s fallback, run
+  before/after arms on a plan with material illiquid wealth, and regold. Its own
+  change, its own diff — not bundled with the checkbox.
 
-**Phase 3 — probability haircut. Deferred; see §10.**
+**Phase 3 — probability haircut. Deferred; see §11.**
+
+**Phase 1 as built** (2026-08-07) — the files that changed, for the next reader:
+`assets/asset.js` (field + `assertSpeculativeConsistency` + `isSpeculative`),
+`services/asset-service.js` (the update-path guard), `scenario-serializer.js` (three
+serializers + three makers), the four state projections (`us-company-sale`,
+`us-collectibles`, `us-real-property`, `au-real-property` toolsets),
+`derived-metrics/net-worth.js`, `derived-metrics/after-tax.js`,
+`allocation-reporting/allocation-cube.js`, plus scope comments on
+`derived-metrics/net-liquidity.js` and `spending/guardrail-portfolio-value.js`.
+Two new goldens (`speculative-stake`, `speculative-conversion`) and
+`tests/unit/speculative-assets.test.mjs`.
 
 ---
 
-## 8. Verification, and the working-detector control
+## 9. Verification, and the working-detector control
 
 The absence tests here are the dangerous kind: "this asset does not appear in net
 worth" passes trivially if the asset was never loaded, if the projection dropped it,
@@ -313,13 +514,18 @@ work, where an absence test looked green because nothing was running at all.
    stake with `plannedSaleYear: null`. Assert, on the same run:
    - `netWorth` excludes the stake — **control:** the same scenario with
      `speculative: false` recognises it, and the two figures differ by exactly the
-     stake's converted value. Without this control, a dropped projection (§6 trap 2)
+     stake's converted value. Without this control, a dropped projection (§7 trap 2)
      passes the exclusion assertion.
    - `netWorthInclSpeculative − netWorth === ` the stake's value in base currency.
-   - both cube invariants from §5 hold.
+   - both cube invariants from §6 hold.
    - `afterTaxNetWorth` excludes it, and — the control that catches D5 being
-     half-done — a *non*-speculative company stake is present in `afterTaxNetWorth`
-     at a value strictly between zero and its market value.
+     half-done — flipping the flag moves `afterTaxNetWorth` by **exactly** the
+     stake's value. (The draft asked for "strictly between zero and market value",
+     i.e. an embedded CGT. Company equity is added at PAR like its siblings, so that
+     phrasing would have asserted a tax treatment design/40 Q5 has not built. The
+     par version detects the same failure: before D5 the delta was zero.)
+   - the pre-tax and after-tax scopes agree about WHICH assets exist — the same
+     inclusion delta on both sides, which is the §4.12 comment's own standard.
 
 3. **A conversion golden.** Same stake with a `plannedSaleYear` inside the run.
    Assert `netWorth` is flat across the sale boundary except for the proceeds and
@@ -328,22 +534,53 @@ work, where an absence test looked green because nothing was running at all.
    at that boundary; a speculative asset that sells tax-free would mean D2 was
    implemented as "skip the mechanics".
 
-4. **Round-trip.** Serialize → deserialize → re-run, flag intact and behaviour
-   identical (§6 trap 1). The existing `scenario-roundtrip.test.mjs` is the home
-   for this.
+4. **Round-trip.** Serialize → deserialize, flag intact on all three kinds, and an
+   UNflagged asset emitting no key at all (§7 trap 1).
 
 5. **Coverage gate.** No new action types, so `golden-coverage-manifest.js` should
    not move. If it does, something scheduled an event it should not have.
 
+6. **The control metric does not move** (§5). On the dedicated golden of (2),
+   `netLiquidity` and `afterTaxNetLiquidity` must be **identical** with the flag on
+   and off — the control scope never recognised the stake, so flagging it can change
+   nothing there. **Control:** the same assertion run against `netWorth` must *fail*
+   to be identical. Without that pairing, the test passes just as happily if the
+   liquidity metrics are broken, zero, or not computed at all — the exact failure the
+   offset-yield work walked into.
+
+### 9.1 Outcome (2026-08-07)
+
+All of the above are implemented in `tests/unit/speculative-assets.test.mjs` (18
+cases) and the two goldens; the full suite is green (4,661 unit + 1,017 viz).
+
+Two results worth recording rather than merely claiming:
+
+- **(1) holds exactly.** `golden-cross-border-reference.json` is untouched by phase 1
+  — not "within tolerance", unmodified. The reference plan holds a company stake and
+  publishes no after-tax metric, so even the D5 branch leaves it alone.
+- **The controls were checked by MUTATION, not by assertion.** An absence test that
+  has never been seen to fail is not evidence. Deleting the `speculative` projection
+  from the company-equity toolset (§7 trap 2, the design-76 Gap A failure shape) turns
+  8 of the 18 cases red, including the §5 control, which reports that the two arms
+  have become indistinguishable rather than silently passing. Separately, dropping the
+  flag from the CUBE only fails the recognition invariant and leaves the disclosure
+  invariant green — the exact localisation §6 predicts, confirmed rather than
+  reasoned.
+- **(5) holds:** `golden-coverage-manifest.js` did not move, even though the
+  conversion golden fires the whole `COMPANY_SALE` path.
+
 ---
 
-## 9. Open questions
+## 10. Open questions
 
 **OQ1 — should the flag suppress the asset from `cumulativeConsumption` planning
 inputs?** It does not today because nothing routes assets there, but the
 spending-plan ceiling work reads terminal wealth. Believed to be covered by D8
 (everything follows `netWorth`); worth confirming against the MPC cockpit's goal
-resolution before phase 2 rather than assuming.
+resolution before phase 2 rather than assuming. Note that under D10 the sharper
+version of this question is whether the ceiling work should be reading a *liquid*
+terminal measure at all — the published ceiling is a spending recommendation, which
+makes it a control output, not a report.
 
 **OQ2 — accounts.** A speculative *account* (an illiquid crypto position, a
 restricted stock plan modelled as a balance) is a coherent request, and D3 defers it
@@ -354,7 +591,7 @@ D4, at which point most of the machinery already works. Not scoped here.
 **OQ3 — should `speculative` be sweepable?** Turning it into an MC/opt axis would
 let the optimizer answer "how much does the plan depend on this tranche paying off?",
 which is a genuinely good question. But it is a *binary* axis over a structural
-field, which neither the CEM solver nor the MC sampler handles naturally, and §10's
+field, which neither the CEM solver nor the MC sampler handles naturally, and §11's
 haircut is a better-shaped answer to the same question. Explicitly out of scope; do
 not add it by accident when phase 2 touches the editor.
 
@@ -363,9 +600,26 @@ inherited assets. An inherited stake that may never materialise is the same prob
 with an extra layer. Untouched by phase 1; check the marker path does not need the
 field before phase 2.
 
+**OQ5 — what breaks when the default terminal scope flips to liquid (§5.4)?**
+Three things need measuring before phase 2 commits: (a) how far existing
+`terminalWealthTarget` values are off when re-read as a liquidity target — a target
+authored against worth is a *larger* number than the same intent against liquidity,
+so a naive flip tightens every plan; (b) whether any saved scenario or study spec
+pins the objective key explicitly and so is unaffected; (c) whether the flip should
+carry a target-rescaling migration or simply a release note. The default question and
+the migration question are separable and should be decided separately.
+
+**OQ6 — is there a control-scope analogue of `netWorthInclSpeculative`?** D7 publishes
+both recognition figures so the planner never loses information. The control side has
+the same shape: `netLiquidity` is what the controller can steer, but a planner may
+reasonably want "…and what if the house sold and the tranche converted?" as a
+disclosed figure. This is *not* a new metric — it is the existing worth-scoped
+measures, correctly labelled as disclosure. Phase 2's UI work should label them that
+way rather than add a fifth measure.
+
 ---
 
-## 10. Why not a probability haircut — yet
+## 11. Why not a probability haircut — yet
 
 The obvious generalisation is `realizationProbability: 0.2`, recognising 20% of the
 value, with `speculative: true` as the degenerate case at zero. It is tempting and it

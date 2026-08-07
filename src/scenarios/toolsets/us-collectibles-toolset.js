@@ -143,5 +143,10 @@ function _collectibleToStatePlain(col) {
     costBaseByCountry:   col.costBaseByCountry ?? null,
     acquisitionPriceLevel: col.acquisitionPriceLevel ?? null,
     acquisitionDateByCountry: col.acquisitionDateByCountry ?? null,
+    // Design 88: the metrics read STATE, not the config record, so a field dropped
+    // here makes the flag completely inert while the editor shows it set — exactly
+    // how design 76 Gap A lost `ownershipType`. Projected only when TRUE so an
+    // unflagged plan's state (and the golden fixture) is byte-identical (D2).
+    ...(col.speculative === true ? { speculative: true } : {}),
   };
 }

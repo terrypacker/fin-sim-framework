@@ -75,6 +75,19 @@ export function isDrawdownAccessible(account, state, date) {
  *
  * This value reaches zero at the same moment an OutOfFunds event fires.
  *
+ * THIS IS THE CONTROL METRIC (design 88 §5): the MPC/OPT lever set acts on the
+ * spending rate and on drawdown-eligible balances, and on nothing else — no control
+ * can sell a house, find a buyer for a private stake, or unlock super early. So the
+ * pool measured here is exactly the pool a controller can steer, which is why a
+ * terminal target should be liquidity-scoped rather than worth-scoped.
+ *
+ * Real property, collectibles and company equity are excluded because they carry no
+ * numeric `balance` — INCIDENTAL in mechanism, DELIBERATE in intent. A future change
+ * that gives an asset a balance-like field must not quietly re-admit it here; that
+ * would break the control scope, which is the hardest place to notice a break. The
+ * same reasoning makes design 88's `speculative` flag unnecessary on this path: a
+ * speculative asset was never in the reachable pool to begin with.
+ *
  * @param {object}    state
  * @param {Date|null} [date=null]           — current simulation date; required for age-gate checks
  * @param {string}    [baseCurrency='USD']
