@@ -43,8 +43,12 @@ export const AU_BROKERAGE = {
       { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text() } },
+      // auDiscountableGain is the CGT 50%-discount-eligible slice of auGain (design 62
+      // §4). The reducer has always read it off the dispatched action — _pickPayload
+      // filters the journal record only — so leaving it undeclared cost no tax
+      // accuracy, just visibility in the journal and the design 71 reports.
       { type: 'AU_STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(), stateKey: ValueType.text() } },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX',    fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',  fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
