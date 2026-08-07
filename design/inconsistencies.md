@@ -173,6 +173,78 @@ Current behavior (not what the note describes):
 - The `PREBUILT_SCENARIOS` array contains one entry. The plumbing (factory + class + descriptor) implies more were planned.
 - **Direction**: either commit to one canonical scenario and simplify the prebuilt path, or add the missing variants the workbench dropdown expects.
 
+### 4.10 Four "Spouse … Growth Rate" params, three of which are wired to nothing
+
+Found 2026-08-07 by perturbing each param and diffing the golden's full end state
+(`tests/helpers/golden-harness.js`). Raising a param from 0.07 to 0.20 that moves
+**zero** of 1,288 state fields is not a subtle scenario, it is a disconnected lever.
+
+- `spouseRothGrowthRate`, `spouseIraGrowthRate`, `spouseK401GrowthRate` — declared in
+  `IntlRetirementScenario.getParamSchema()` and in `INTL_RETIREMENT_DEFAULTS`, and
+  read by nothing else. `collectBaseGrowthRates` (economic-regimes-toolset) keys
+  growth off the account TYPE — `EQUITY_US_ROTH ← p.rothGrowthRate`,
+  `EQUITY_US_IRA ← p.iraGrowthRate`, `EQUITY_US_K401 ← p.k401GrowthRate` — and those
+  three param names are not in the schema at all. So there is one rate per wrapper
+  type shared by both spouses, and the per-spouse params can never reach it.
+- `spouseSuperGrowthRate` *is* live, but mislabelled: `EQUITY_AU_SUPER ←
+  p.superGrowthRate ?? p.spouseSuperGrowthRate ?? 0.07`, and `superGrowthRate` is
+  likewise absent from the schema. The param captioned "Spouse Super Growth Rate"
+  therefore sets the growth rate for **both** people's super.
+- All four are `enabled: true` Monte Carlo axes in `intl-retirement-mc-config.js`
+  with `stdDev: 0.03`, so every MC run has been spending three of its sampling
+  dimensions on parameters that cannot change the outcome. This understates the
+  true dispersion of the axes that do work.
+- Not to be confused with `primarySsClaimAge`, which is also inert but *knowingly* —
+  see the comment on `INTL_RETIREMENT_DEFAULTS.primarySsClaimAge` (TODO #292).
+
+**Direction**: expose the four type-level rates (`rothGrowthRate`, `iraGrowthRate`,
+`k401GrowthRate`, `superGrowthRate`) as the real params, retire the three dead
+spouse variants from both the schema and the MC config, and rename the fourth. If
+per-person rates are actually wanted, that is a rate-key change, not a param one.
+
+### 4.11 Two parallel brokerage-disposal paths, only one of which runs
+
+`STOCK_WITHDRAWAL_TAX` fires 5,466 times in the live research scenario while
+`STOCK_WITHDRAWAL_APPLY` fires **zero** times there, in the reference golden, or
+anywhere outside isolated reducer tests. Two implementations of the same disposal
+coexist: the service path (`AccountService.replenishSavings` → `consumeHoldings`,
+which raises the tax action directly) and the event-driven path
+(`StockWithdrawalHandler` → `StockWithdrawalApplyReducer`). Only the former runs in
+production; `account-service.js:1270` even describes itself as mirroring the basis
+handling of the reducer it has replaced. The same holds for
+`COLLECTIBLE_SALE_APPLY` (0 fires, while `COLLECTIBLE_SALE_TAX` fires 147 times).
+
+This is the shape flagged in the `*EarningsHandler` note — production-dormant
+classes kept alive by their own tests, where the test is the only caller and so
+cannot detect that the two paths have diverged.
+
+**Direction**: decide which path is canonical. If the service path is, delete the
+handler/reducer pair and its tests; if the reducer is meant to be reachable, wire a
+golden through it. Do not leave both — the isolated tests currently certify a code
+path the application never executes.
+
+### 4.12 `computeAfterTaxNetWorth` silently omits company equity
+
+`computeNetWorth` (`net-worth.js`) counts five kinds: accounts, loans (negative),
+`real-property`, `collectible`, **and `company`**. `_sumAfterTax` (`after-tax.js`),
+which backs both `computeAfterTaxNetWorth` and `computeAfterTaxNetLiquidity`,
+handles the first four and has no `company` branch — the entry falls through the
+closing `else { continue; }`. The word "company" appears nowhere in `after-tax.js`,
+`net-liquidity.js`, or `offset-capacity.js`.
+
+On the reference research plan the two metrics disagree by \$14.5M at 2070, of
+which \$14.0M is dropped company equity and only \$0.46M is genuine embedded
+liquidation tax. The comment at `after-tax.js:479` explicitly asserts the two must
+not "hold different opinions about what a dollar is". The allocation cube
+(`allocation-cube.js:221`) does have a company branch, and its Σ-rows ≡
+`computeNetWorth` invariant holds to the cent, so after-tax is the outlier.
+
+**Direction**: entangled with a modelling question rather than a pure bug — very
+high-risk equity arguably should not sit in a headline "worth" figure at all. The
+likely resolution is an explicit per-asset flag (model it, exclude it from worth)
+rather than either metric silently choosing. Until then the two numbers should not
+be quoted side by side without a footnote.
+
 ---
 
 ## 5. Smaller Annoyances
