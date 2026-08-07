@@ -1084,6 +1084,11 @@
           <label>Capitalize Frac.</label>
           <input type="number" data-id="capitalizeRepairs" value="0" step="0.05" title="Fraction of each repair treated as a capital improvement (lifts cost basis, cuts the eventual CGT). 0 = pure maintenance."/>
         </div>
+        <div class="node-field">
+          <label>Speculative</label>
+          <input type="checkbox" data-id="speculative"
+                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
+        </div>
       </div>
       <div class="node-buttons">
         <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
@@ -1152,6 +1157,11 @@
             <option value="">— none —</option>
           </select>
         </div>
+        <div class="node-field">
+          <label>Speculative</label>
+          <input type="checkbox" data-id="speculative"
+                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
+        </div>
       </div>
       <div class="node-buttons">
         <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
@@ -1218,6 +1228,11 @@
           <select data-id="ownerId">
             <option value="">— none —</option>
           </select>
+        </div>
+        <div class="node-field">
+          <label>Speculative</label>
+          <input type="checkbox" data-id="speculative"
+                 title="Simulate this asset but do NOT count it as yours: it still appreciates, still sells on its Sale Year, and still pays capital-gains tax — but until it converts it is worth ZERO in net worth and in everything that follows net worth. For a stake that may never find a buyer. Disclosed separately as &quot;incl. speculative&quot;, so nothing is lost. Incompatible with a drawdown priority (design 88)."/>
         </div>
       </div>
       <div class="node-buttons">

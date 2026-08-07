@@ -190,7 +190,13 @@ describe('Die-With-Target family', () => {
     assert.equal(resolveTerminalKey({ scope: 'liquid', basis: 'nominal'  }), 'liquid');
     assert.equal(resolveTerminalKey({ scope: 'worth',  basis: 'afterTax' }), 'afterTaxWorth');
     assert.equal(resolveTerminalKey({ scope: 'liquid', basis: 'afterTax' }), 'afterTaxLiquid');
-    assert.equal(resolveTerminalKey({}), 'worth', 'defaults to worth×nominal');
+    // Design 88 D10: the default scope is LIQUID, not worth. A controller should not
+    // be pointed at a quantity it has no lever for — measured on the reference plan,
+    // 36% of terminal net worth is un-leverable, which made every die-with target
+    // below $5.08M real unreachable and turned the anchor into a one-sided push to
+    // spend the maximum. Do not "fix" this back to 'worth'.
+    assert.equal(resolveTerminalKey({}), 'liquid', 'defaults to liquid×nominal (design 88 D10)');
+    assert.equal(resolveTerminalKey({ scope: 'nonsense' }), 'liquid', 'unknown scope falls back to liquid');
     assert.deepStrictEqual(terminalAxesFor('afterTaxLiquid'), { scope: 'liquid', basis: 'afterTax' });
     assert.deepStrictEqual(terminalAxesFor('worth'),          { scope: 'worth',  basis: 'nominal'  });
   });

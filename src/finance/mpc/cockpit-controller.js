@@ -1075,7 +1075,10 @@ export class CockpitController {
     simEnd,
     baseParams  = {},
     cfgTemplate = null,
-    objective    = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET,
+    // Design 88 D10 / §5.4: the LIQUID terminal, not the worth one. A controller
+    // should not be pointed at a quantity it has no lever for — see
+    // resolveTerminalKey for the measurement that settled it.
+    objective    = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET_LIQUID,
     control      = COCKPIT_CONTROLS.SPENDING,
     controls     = null,       // multi-lever set (design 45 Phase 4); null ⇒ [control]
     controlRange = null,       // { min, max, step } for numeric levers; null = spec default

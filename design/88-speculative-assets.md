@@ -1,8 +1,15 @@
 # 88 — Speculative assets: model the what-if without banking it
 
-**Status** (2026-08-07): **PHASE 1 BUILT.** Decisions D1–D10 locked below. Phase 2
-(disclosure UI + the control-scope default flip, §5.4) and phase 3 (a probability
-haircut, argued against in §11) remain open.
+**Status** (2026-08-07): **PHASES 1 AND 2 BUILT.** Decisions D1–D10 locked below.
+Phase 3 (a probability haircut, argued against in §11) remains deliberately deferred.
+
+Phase 2's headline is not the checkbox: it is that **the control-scope default flip
+(§5.4) was measured, and the effect is large.** On the reference plan, with the
+un-leverable component at 36% of terminal net worth and a \$5M real die-with target,
+the shipped worth-scoped default advised spending **\$12,000/mo** and left \$2.69M of
+reachable wealth; the liquid-scoped goal advised **\$4,773/mo** and landed on the
+target to within \$13k. Same plan, same lever, same target — a \$7,227/mo difference in
+the advice, from the choice of measure alone. The default is now liquid (§5.4, §9.2).
 
 Phase 1 landed as specified, with two deviations worth naming up front:
 
@@ -361,13 +368,51 @@ Three honest caveats:
 The liquid variants exist and are recommended in a comment, but the out-of-box
 configuration is the one §5.2 argues against.
 
-**Recommendation:** flip the default to the liquid scope (`DIE_WITH_TARGET_LIQUID`,
-and `afterTaxLiquid` where the after-tax basis is in play), keeping every worth-scoped
-variant available for reporting-style comparisons. This is deliberately **not** part
-of phase 1: it moves optimizer output on existing scenarios, so it needs its own
-before/after arms and its own regold, and bundling it with a change whose headline
-guarantee is "byte-identical goldens" (D2, §9.1) would destroy that guarantee's value.
-Phase 2 is the right home; §10 OQ5 records what has to be decided with it.
+**DONE in phase 2** — the default is now the liquid scope, in all three places that
+resolve it: `DIE_WITH_TARGET_AXES.scope` (whose FIRST entry is what an untouched UI
+select shows, and therefore is the default for every goal the cockpit and OPT panels
+build), `resolveTerminalKey`'s parameter default and its no-match fallback, and
+`CockpitController`'s constructor default. Every worth-scoped variant is kept — this
+is a change of default, not a removal, because "what does this look like on a
+net-worth basis?" is a legitimate *reporting* question (OQ6).
+
+### 5.4a What the measurement showed (2026-08-07)
+
+Two arms, identical but for the goal's terminal scope, on the reference plan
+(2026→2060, EXPLICIT_BANDS spending, CEM budget 60, seed 1). All figures REAL
+base-year USD:
+
+| | reachable by the lever | floor at max spend |
+|---|---|---|
+| terminal net worth | partly | **\$5.08M** |
+| terminal net liquidity | yes | **\$2.69M** |
+| difference = `U`, the un-leverable component | — | **\$2.38M** |
+
+| real target | worth scope advises | liquid scope advises | Δ |
+|---|---|---|---|
+| \$0 | \$12,000/mo | \$12,000/mo | — |
+| \$2.0M | \$12,000/mo | \$12,000/mo | — |
+| \$3.5M | \$12,000/mo | **\$9,977/mo** → lands liquidity at \$3.50M | \$2,023/mo |
+| \$5.0M | \$12,000/mo | **\$4,773/mo** → lands liquidity at \$4.99M | \$7,227/mo |
+
+Three things in that table are worth stating explicitly.
+
+**The failure is not about speculative assets at all.** The reference plan has no
+flagged asset. `U` is two houses and a collectible — perfectly ordinary illiquid
+wealth. This is why D10 insists the flag is a recognition fix: the control problem was
+already there, and no amount of flagging would have found it.
+
+**The two scopes agree below both floors.** At targets of \$0 and \$2.0M neither scope
+can reach the target, both corner at max spend, and the flip changes nothing. The
+advice diverges in exactly one band — targets a liquid anchor can serve and a worth
+anchor cannot — **and that band is precisely `U` wide.** The un-leverable component is
+not merely a bias term; it is the measure of how many plans the old default could not
+express.
+
+**The shipped default made the band unavoidable.** `terminalWealthTarget` defaults to
+**0**, i.e. "die with zero" — and \$0 is below the worth floor of \$5.08M on this plan
+by construction. So out of the box, the anchor was one-sided for every admissible
+policy. Not an edge case: the default configuration.
 
 Also note what does *not* need changing: `computeGuardrailPortfolioValue` requires a
 numeric `balance` and a non-null `drawdownPriority` — most of the lever-reachability
@@ -470,16 +515,37 @@ Note what phase 1 deliberately does **not** touch: no objective, default or term
 scope moves. Phase 1 must be byte-identical with the flag unset (D2, §9.1), and a
 default flip cannot be.
 
-**Phase 2 — disclosure, and the control-scope default.**
-- Asset-editor checkbox with a caption that says what it does, because "speculative"
-  alone will be read as a risk rating rather than an exclusion.
-- Cockpit / MC / compare panels show both figures where they show one today.
-- Allocation mix denominator decision from §6.
-- `configuration-list.js` badge, alongside the existing `Primary` badge for houses.
-- **Flip the MPC/OPT default terminal scope to liquid** (§5.4, OQ5): change the
-  `cockpit-controller.js:1078` default and `resolveTerminalKey`'s fallback, run
-  before/after arms on a plan with material illiquid wealth, and regold. Its own
-  change, its own diff — not bundled with the checkbox.
+**Phase 2 — disclosure, and the control-scope default. BUILT (2026-08-07).**
+- ✅ Asset-editor checkbox on all three kinds, with a caption that says what it does
+  (it is a recognition switch, not a risk rating) — `index.html` templates plus the
+  company-equity / collectible / real-property editors.
+- ✅ Cockpit, OPT results and scenario-compare surface the disclosure figure, each
+  **only when it differs** from the recognised one. `finalNetWorthInclSpeculative` is
+  now built by the optimizer, MC and compare runners.
+- ✅ Mix denominator follows RECOGNITION (§6): `buildAllocationSeries` gained
+  `excludeSpeculative` (default true), and the excluded amount is disclosed as a
+  provenance note — a line, not a slice.
+- ✅ `configuration-list.js` badge, alongside `Primary`.
+- ✅ **Default terminal scope flipped to liquid** (§5.4, §5.4a) after measuring it.
+- ✅ `metrics.netWorthInclSpeculative` registered with the schema registry so it
+  formats as money the moment it appears.
+- ✅ OQ4 (bequests) answered and closed — see §10.
+
+Two things phase 2 found that the plan did not anticipate:
+
+**The sampler's tie-out had to be split, not just the test.** `allocation-sampler.js`
+recorded one `delta = cubeTotal − netWorth`, which on any flagged plan would have lit
+the panel's loudest warning — *"Does not tie out. Do not quote any share here."* — on a
+plan that is behaving exactly as designed. A false alarm on that banner is worse than
+no banner. It now carries both invariants (§6) and `ties` requires both, so the panel
+can still say "ties to net worth" while disclosing what it left out.
+
+**D4 is unreachable from the editors, which is why it stays a throw.** None of the
+three asset editors exposes `drawdownPriority`, so a user cannot create the
+contradictory pair through the UI; the guard fires only on imported or programmatic
+records. That is the right place for it — but it means there is no user-facing
+validation message, and if a `drawdownPriority` field is ever added to those editors,
+one has to be added with it.
 
 **Phase 3 — probability haircut. Deferred; see §11.**
 
@@ -493,6 +559,18 @@ serializers + three makers), the four state projections (`us-company-sale`,
 `derived-metrics/net-liquidity.js` and `spending/guardrail-portfolio-value.js`.
 Two new goldens (`speculative-stake`, `speculative-conversion`) and
 `tests/unit/speculative-assets.test.mjs`.
+
+**Phase 2 as built** (2026-08-07): `index.html` (three editor templates),
+`assets/{company-equity,collectible,real-property}-editor.js`,
+`configuration/configuration-list.js`, `services/bequest-service.js` (OQ4),
+`services/state-schema-registry.js`, `optimization/optimization-problem.js`,
+`monte-carlo/intl-retirement-mc-runner.js`, `scenario-compare/scenario-compare-runner.js`
+and its presenter, `optimization/opt-results-panel.js`,
+`workbench/plugins/finance/mpc-cockpit-plugin.js`,
+`allocation-reporting/{allocation-grouping,allocation-sampler}.js`,
+`workbench/plugins/finance/allocation-plugin.js`, plus the flip in
+`optimization/optimization-objectives.js` and `mpc/cockpit-controller.js`.
+New: `tests/unit/control-scope.test.mjs`.
 
 ---
 
@@ -548,6 +626,14 @@ work, where an absence test looked green because nothing was running at all.
    liquidity metrics are broken, zero, or not computed at all — the exact failure the
    offset-yield work walked into.
 
+7. **The control-scope flip is pinned by MECHANISM, not by value** (§5.4a).
+   `tests/unit/control-scope.test.mjs` sweeps a synthetic policy set in which
+   `terminal worth = U + L(policy)` and asserts that a target below `U` corners the
+   worth-scoped goal at maximum spend while the liquid-scoped goal on the same sweep
+   lands on its target from the interior. **Control:** a third case asserts the two
+   scopes AGREE when the target is below both floors — without it, the first two would
+   pass for a sweep that simply favours one end.
+
 ### 9.1 Outcome (2026-08-07)
 
 All of the above are implemented in `tests/unit/speculative-assets.test.mjs` (18
@@ -569,18 +655,39 @@ Two results worth recording rather than merely claiming:
 - **(5) holds:** `golden-coverage-manifest.js` did not move, even though the
   conversion golden fires the whole `COMPANY_SALE` path.
 
+### 9.2 Phase 2 outcome (2026-08-07)
+
+Suite green at 4,667 unit + 1,017 viz. No fixture moved: the goldens do not run MPC,
+so the default flip is invisible to them — which is worth stating, because it means
+**the goldens are not evidence about the flip** and the §5.4a arms are.
+
+The measurement took three attempts, and the two failures are the more useful record:
+
+1. The first harness read params from `buildDefaultConfig`'s `parameters` bag, which
+   holds 37 keys and no `spendingExpenseBands` — so the SPENDING lever's path write
+   landed on nothing. Both arms returned identical advice.
+2. The second armed the band table but not `spendingStrategy: EXPLICIT_BANDS`, which
+   is what `SPENDING.appliesTo` actually gates on. Both arms returned identical advice
+   again — for a different reason.
+
+Twice, "the two scopes make no difference" was a broken harness, and both times it
+looked exactly like a finding. Only the third attempt, which asserts the lever moves
+the terminal measures BEFORE comparing the arms, produced the table in §5.4a. Any
+future re-measurement should keep that lever check as the first thing it prints.
+
 ---
 
 ## 10. Open questions
 
 **OQ1 — should the flag suppress the asset from `cumulativeConsumption` planning
-inputs?** It does not today because nothing routes assets there, but the
-spending-plan ceiling work reads terminal wealth. Believed to be covered by D8
-(everything follows `netWorth`); worth confirming against the MPC cockpit's goal
-resolution before phase 2 rather than assuming. Note that under D10 the sharper
-version of this question is whether the ceiling work should be reading a *liquid*
-terminal measure at all — the published ceiling is a spending recommendation, which
-makes it a control output, not a report.
+inputs? CONFIRMED INERT (phase 2), but the sharper question is now answered too.**
+Nothing routes assets into the consumption accumulators, so the flag has nothing to
+suppress there, and D8's inheritance covers the terminal side. The version of this
+question that mattered was the D10 one — whether a spending ceiling should be read off
+a *worth*-scoped anchor at all — and the §5.4a measurement settles it: on the
+reference plan a worth-anchored goal recommends \$12,000/mo where a liquid-anchored one
+recommends \$4,773/mo. A published ceiling is a control output. It follows the control
+scope.
 
 **OQ2 — accounts.** A speculative *account* (an illiquid crypto position, a
 restricted stock plan modelled as a balance) is a coherent request, and D3 defers it
@@ -595,27 +702,32 @@ field, which neither the CEM solver nor the MC sampler handles naturally, and §
 haircut is a better-shaped answer to the same question. Explicitly out of scope; do
 not add it by accident when phase 2 touches the editor.
 
-**OQ4 — bequests.** `bequest-service.js` synthesises zero-valued marker entries for
-inherited assets. An inherited stake that may never materialise is the same problem
-with an extra layer. Untouched by phase 1; check the marker path does not need the
-field before phase 2.
+**OQ4 — bequests. ANSWERED (phase 2): it did need the field.** `bequest-service.js`
+synthesises the zero-valued seed for an inherited asset in two hand-written
+projections (`_seedFromRecord`, `_seedPlain`), neither of which carried `speculative`
+— the §7 trap-2 shape again, and it would have made the flag inert for exactly the
+assets most likely to deserve it. Both now carry it, when true.
 
-**OQ5 — what breaks when the default terminal scope flips to liquid (§5.4)?**
-Three things need measuring before phase 2 commits: (a) how far existing
-`terminalWealthTarget` values are off when re-read as a liquidity target — a target
-authored against worth is a *larger* number than the same intent against liquidity,
-so a naive flip tightens every plan; (b) whether any saved scenario or study spec
-pins the objective key explicitly and so is unaffected; (c) whether the flip should
-carry a target-rescaling migration or simply a release note. The default question and
-the migration question are separable and should be decided separately.
+**OQ5 — what breaks when the default terminal scope flips to liquid? ANSWERED
+(phase 2); the flip is shipped.** (a) The gap between the two measures on the
+reference plan is `U` = \$2.38M real, 36% of terminal worth — see §5.4a for the full
+table. A target authored against worth is indeed the larger number, so re-reading it
+as a liquidity target does tighten the plan; the flip is therefore a **behaviour
+change to be announced, not a silent improvement.** (b) Nothing is silently
+re-pointed: every caller that names an objective explicitly (the lab scripts, the
+MPC/OPT tests) keeps what it names, and exactly ONE assertion in the suite pinned the
+old default — `objectives.test.mjs`, now updated with the reason attached so it is not
+flipped back by tidying. (c) **No migration.** A stored `terminalWealthTarget` is a
+number the planner chose; silently rescaling it by `U` would be the model inventing an
+intent. A release note plus the two visible scope selects (which now read "Net
+Liquidity" and "Net Worth (reporting scope)") is the honest treatment.
 
-**OQ6 — is there a control-scope analogue of `netWorthInclSpeculative`?** D7 publishes
-both recognition figures so the planner never loses information. The control side has
-the same shape: `netLiquidity` is what the controller can steer, but a planner may
-reasonably want "…and what if the house sold and the tranche converted?" as a
-disclosed figure. This is *not* a new metric — it is the existing worth-scoped
-measures, correctly labelled as disclosure. Phase 2's UI work should label them that
-way rather than add a fifth measure.
+**OQ6 — is there a control-scope analogue of `netWorthInclSpeculative`? ANSWERED
+(phase 2): yes, and it needed no new metric.** The worth-scoped measures ARE the
+disclosure view of the control question, so the scope axis now labels them as such —
+"Net Liquidity" versus "Net Worth (reporting scope)" — rather than presenting two
+peers and letting the reader guess which one the solver is steering. No fifth measure
+was added.
 
 ---
 

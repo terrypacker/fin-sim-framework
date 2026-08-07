@@ -12,7 +12,7 @@ import { ServiceRegistry }     from '../../services/service-registry.js';
 import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }      from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
-import { computeNetWorth }     from '../derived-metrics/net-worth.js';
+import { computeNetWorth, computeNetWorthInclSpeculative } from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
 import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, afterTaxOptionsFromParams }
   from '../derived-metrics/after-tax.js';
@@ -547,6 +547,11 @@ export class OptimizationProblem {
     return {
       finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       finalNetLiquidity: computeNetLiquidity(state, endDate),
+      // Design 88 D7: the disclosure twin, so a panel can show "and what if the
+      // speculative stakes all pay off?" beside the recognised figure without
+      // re-running anything. NOT a terminal measure — nothing optimizes against it
+      // (D10: the objective anchors on the recognised figure, or better, liquidity).
+      finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(state, 'USD'),
       finalAfterTaxNetWorth:     computeAfterTaxNetWorth(state, endDate, afterTaxOpts),
       finalAfterTaxNetLiquidity: computeAfterTaxNetLiquidity(state, endDate, afterTaxOpts),
       // Terminal price level (base-year USD deflator at the score date). The terminal

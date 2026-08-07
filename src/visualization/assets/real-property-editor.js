@@ -183,6 +183,11 @@ export class RealPropertyEditor extends BaseComponent {
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
+    // Design 88: the recognition switch — see the company-equity editor. A
+    // pre-construction lot or a dwelling with no buyer is speculative in exactly the
+    // sense a private stake is.
+    el.querySelector('[data-id="speculative"]').checked = this._node?.speculative === true;
+
     // Rental income (design 48)
     el.querySelector('[data-id="rentalEnabled"]').checked      = this._node?.rentalEnabled      ?? false;
     el.querySelector('[data-id="monthlyRent"]').value          = this._node?.monthlyRent          ?? 0;
@@ -359,6 +364,7 @@ export class RealPropertyEditor extends BaseComponent {
       ..._mainResidenceFields(el),
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,
+      speculative:          el.querySelector('[data-id="speculative"]').checked,
       // Rental income (design 48)
       rentalEnabled:        el.querySelector('[data-id="rentalEnabled"]').checked,
       monthlyRent:          +el.querySelector('[data-id="monthlyRent"]').value,

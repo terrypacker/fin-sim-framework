@@ -139,9 +139,13 @@ const _TERMINAL_MEASURES = {
 export const DIE_WITH_TARGET_AXES = {
   running:  Object.entries(_RUNNING_TERMS).map(([value, m])     => ({ value, label: m.label })),
   terminal: Object.entries(_TERMINAL_MEASURES).map(([value, m]) => ({ value, label: m.label })),
+  // LIQUID FIRST, deliberately: the first option is what an untouched select shows,
+  // so this ordering IS the default scope for every goal built through the axes
+  // (design 88 D10/§5.4). A controller can only steer the lever-reachable pool, so a
+  // worth-scoped target asks it to hit a number it cannot move.
   scope: [
-    { value: 'worth',  label: 'Net Worth' },
     { value: 'liquid', label: 'Net Liquidity' },
+    { value: 'worth',  label: 'Net Worth (reporting scope)' },
   ],
   basis: [
     { value: 'nominal',  label: 'Nominal' },
@@ -149,11 +153,21 @@ export const DIE_WITH_TARGET_AXES = {
   ],
 };
 
-/** Resolve a (scope, basis) pair to the concrete terminal-measure key. */
-export function resolveTerminalKey({ scope = 'worth', basis = 'nominal' } = {}) {
+/**
+ * Resolve a (scope, basis) pair to the concrete terminal-measure key.
+ *
+ * Defaults to the LIQUID scope (design 88 D10). Measured on the reference plan
+ * (2026-08-07): 36% of terminal net worth is un-leverable — two houses and a
+ * collectible, no speculative asset involved — so under the worth scope every
+ * die-with target below \$5.08M real was unreachable and the anchor degenerated into
+ * a one-sided push to spend the maximum. Under the liquid scope the same goal at a
+ * \$5M target landed on it to within \$13k. The un-leverable component is exactly the
+ * width of the extra band of targets the worth scope cannot serve.
+ */
+export function resolveTerminalKey({ scope = 'liquid', basis = 'nominal' } = {}) {
   const hit = Object.entries(_TERMINAL_MEASURES).find(
     ([, m]) => m.scope === scope && m.basis === basis);
-  return hit?.[0] ?? 'worth';
+  return hit?.[0] ?? 'liquid';
 }
 
 /** The (scope, basis) pair for a terminal-measure key — inverse of resolveTerminalKey. */
@@ -301,9 +315,16 @@ export const OPTIMIZATION_OBJECTIVES = {
 
   // ── "Die With Target" family (2×2 over running × terminal, design/38 §5.2,
   //    design/39). Generated from makeDieWithTarget; grouped in the UI via the
-  //    `family`/`variant` tags. Prefer the LIQUID terminal when the lever set
-  //    can't liquidate illiquid assets (house equity, age-locked super), so the
-  //    "die with $X" target is actually reachable by the controls. ────────────
+  //    `family`/`variant` tags.
+  //
+  //    THE LIQUID TERMINAL IS THE DEFAULT (design 88 D10). This used to be a
+  //    preference stated in this comment while every default resolved to `worth`,
+  //    which is the combination that does not work: the lever set cannot liquidate
+  //    house equity or age-locked super, so a worth-scoped "die with \$X" asks the
+  //    controller to hit a number it can only partly move, and when the un-leverable
+  //    part alone exceeds the target the |terminal − target| kink becomes unreachable
+  //    — the penalty goes one-sided and pushes reachable wealth toward ZERO. The
+  //    worth-scoped variants are kept for reporting-style comparisons. ───────────
   DIE_WITH_TARGET:
     makeDieWithTarget({ running: 'consumption', terminal: 'worth',
       label: 'Die With Target (max consumption, hit terminal wealth)' }),
