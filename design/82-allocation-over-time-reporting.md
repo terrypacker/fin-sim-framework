@@ -845,3 +845,4 @@ closed the way it did is what stops it being reopened by accident.
 | **81** (replayable run artifact) | an upgrade to app-side sampling, no longer a prerequisite for it (D2). |
 | **79** (real vs nominal) | owns the restatement this report declines (D1). **Renumbered from 60** — every in-code "design 60" means the cash-sleeve yield doc. |
 | **70** (account display names) | supplies `displayNameFor`; D3 is its wart, left to it. |
+| **89** (spending over time) | the **flow** sibling — this reports the stock, 89 reports what leaves. Reuses the sampler seam (§4), the palette discipline and the tie-out rule, and adds a cross-report invariant (89 §7b: opening + credits − debits === closing, read against these samples). It is also the "second chart-bearing report" §6 deferred abstracting for — and it lands as a `ReportDefinition` + chart, not as a second sibling hierarchy. |

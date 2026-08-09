@@ -225,9 +225,11 @@ table.plain th.num,table.plain td.num{text-align:right;font-variant-numeric:tabu
   counted in the <em>excluded</em> line instead. Without that, "90% house" would silently absorb
   every ruined path.</div>
   <p class="notes">Samples are taken at the year boundary — the state after the last event dated
-  in year Y — the same instant the allocation report and the workbench panel use. The annual
-  investment family hangs off the 1 January period advance, so a year's label lags the growth it
-  names; every point sits at the same place in the annual cycle, so the series is self-consistent.
+  in year Y — the same instant the allocation report and the workbench panel use. The investment
+  family is dated 31 December, so each sample carries a complete year of growth, spending and tax;
+  real-asset appreciation lands on 1 January, so every mix understates the real-asset share by
+  about one appreciation cycle. That is a level bias, not a trend one — every point sits at the
+  same place in the annual cycle, so the series is self-consistent.
   ${rm.paths
     ? `Returns are stochastic year by year (vol ${esc(rm.vol)}, drift ${esc(rm.drift)}).`
     : `<strong>Returns are a single long-run average per path</strong> — there is no

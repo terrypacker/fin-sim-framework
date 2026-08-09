@@ -41,12 +41,17 @@
  * instant is identical either way (the state after the last event dated in year Y), which
  * is why the conversion left every figure unchanged.
  *
- * One property to hold while reading any chart here: the annual investment family hangs
- * off the 1 JANUARY period advance, so a 31 December sample is taken BEFORE that year's
- * growth is credited (design 82 §5.2). Every point sits at the same place in the annual
- * cycle, so the charts are self-consistent — but a year label lags the growth it names,
- * and a terminal sample at a mid-year horizon sits on the far side of that cascade. The
- * Provenance section calls out any sample that is not a 31 December boundary.
+ * One property to hold while reading any chart here — the year boundary splits the annual
+ * cycle in two (design 82 §5.2). Dated 31 DECEMBER: the whole investment family (account
+ * earnings, dividends, coupons, RMDs) plus the year's expenses and tax settles. Dated
+ * 1 JANUARY: real-asset appreciation, and the PERIOD_ADVANCE cascade that fires the
+ * rebalance. So a 31 December sample carries a COMPLETE year of investment growth, spending
+ * and tax — but real assets carry none of that year's appreciation, so every mix here
+ * understates the real-asset share by about one appreciation cycle. That is a level bias,
+ * not a trend one: every point sits at the same place in the annual cycle. A terminal sample
+ * at a mid-year horizon is the exception — it covers a partial year AND sits on the far side
+ * of the cascade. The Provenance section calls out any sample that is not a 31 December
+ * boundary.
  *
  * ─── what it will NOT do ─────────────────────────────────────────────────────
  *
