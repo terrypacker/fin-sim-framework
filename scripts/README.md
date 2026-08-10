@@ -158,6 +158,7 @@ design/72 was found.
 | `export-tax-csv.mjs` (`npm run export:tax`) | per-year tax worksheets as CSV |
 | `crossfoot-drill-reports.mjs` (`npm run crossfoot`) | do the tax reports add up across years? |
 | `section988-ingest.mjs` (`npm run section988:ingest`) | is this real account history fit to compute §988 from? |
+| `section988-ledger.mjs` | design 87 G5 — the gain itself, once the ingest is clean |
 | `fetch-fx-rates.mjs` (`npm run fetch:rates`) | refresh the pinned published rate series in `rates/` |
 
 `crossfoot` catches report bugs that are invisible one year at a time. Run it after
@@ -190,6 +191,72 @@ without losing the other. Rules go in a JSON file (`--rules-schema` prints the f
 `specs/section988-rules.example.json` is a worked example); keep real ones in gitignored
 `scenarios/`, since descriptions carry payee names.
 
+#### classifying a few thousand rows by hand
+
+`--emit-classified <file>` writes every row back out with `Kind`/`BusinessFraction`
+pre-filled from the rules and a `Status` column saying what still needs you — `OK`,
+`DECIDE` (a rule identified the row and deferred), `UNMATCHED` (no rule describes it),
+`REJECTED` (an override was refused, with what you typed and why). Fix those in a
+spreadsheet, feed the file straight back in as `--csv`, and the columns win over the
+rules permanently. The file carries an `Account` column so one sheet holds the whole
+pool, and dates it cannot read are fatal rather than silently skipped — a spreadsheet
+rewrites the date column in the machine's locale on save.
+
+#### credit cards
+
+A card payment is one disposition of AUD whose *purpose* lives in a different file.
+`--card-statement <name>=<file>` reads the card's own export, works out which purchases
+each payment retired, and stamps the resulting business fraction onto the account row
+that paid it. The `card` block in the rules file says which categories are business and
+which credits are payments (`--card-schema`); neither is defaulted.
+
+Do **not** substitute the card's purchases for the payment row. AUD leaves the pool when
+the card is paid, not when it is used, so purchase-dated dispositions apply the wrong
+day's rate, invent turnover the pool never had, and — worst — put every slice under
+§988(e)(2)'s \$200 per-transaction exclusion that the single payment clears.
+
+#### and then the ledger
+
+`section988-ledger.mjs` is the other half: it computes tax and validates nothing, exactly
+as the ingest validates and computes no tax. Run it only once every gate is green.
+
+Both conventions `§1.988-2(a)(2)(iii)(B)(1)` leaves open are parameters, not decisions
+baked in — `--method fifo|pro-rata` (design 87 G6) and `--pooling per-account|commingled`
+(G11). `--compare` runs all four and prints the spread, which is what turns "which
+convention?" from an argument into a measurement. On the real AUD pool the method choice
+moves \$29 and the pooling choice moves up to \$7,988, so only one of them is worth
+arguing about.
+
+A row marked `BasisSource=assumed` may state what the assumption IS, via two CSV columns
+the ingest validates and round-trips: `BasisDate` (a day, or a `from..to` window whose
+published rates are averaged) and `BasisRate` (an explicit USD per AUD). They are separate
+from the transaction date on purpose — that column orders the ledger walk, drives footing
+and decides which lots FIFO consumes, so re-dating a row to reach a better rate corrupts
+three things to fix one. Anything unusable is refused rather than silently falling back to
+the default it was overriding, including a rate outside everything the series has printed.
+`--seed-sweep from:to[:step]` then re-prices every assumed row across a range and reports
+all five columns, because on a loss-making position most of the extra basis grows the
+DISALLOWED bucket rather than anything deductible.
+
+`--audit <file>` writes the per-row trail behind those totals: one line per movement of a
+pool, in ledger order, carrying every input the row's numbers were built from and the pool
+state either side of it. Its point is that a **DISPOSE has two rates** — the published rate
+for the disposal date, which prices the proceeds, and the rate the units that left were
+carrying, which is the pool's weighted average under pro-rata and the consumed lots' own
+rate under FIFO. Their difference times the units disposed of is the entire gain, and the
+sheet emits that as a residual column that must be zero, alongside one for the four-way
+ordinary/capital/excluded/disallowed split and one for basis conservation. The command
+then foots the CSV's own columns back against the ledger and says so, because a per-row
+sheet that disagrees with the totals it explains is worse than no sheet. Add `--audit-all`
+to include the rows that move nothing.
+
+Because a card revolves, the payment and the purchases it covers rarely line up: pick
+`"method": "pro-rata"` (default) or `"fifo"` and apply it consistently, as
+`§1.988-2(a)(2)(iii)(B)(1)` asks. Overpayments are carried as prepayments and refunds
+re-point the payment that funded them, so that every payment dollar ends up against a
+purchase or explicitly unspent; the report checks that identity and should reproduce the
+statement's own closing balance.
+
 ## probes/
 
 Targeted engine-fidelity probes, each tied to a design doc: `probe-residency-cgt`,
@@ -214,6 +281,8 @@ produced a wrong answer at least once.
 | `scenario-source.mjs` | loading the base cfg; the file-vs-synthetic distinction |
 | `fx-rates.mjs` | the **published** rate table; holiday carry-forward vs. not-yet-published |
 | `section988-source.mjs` | real-history ingest: footing, the two classification axes, G6 measurements |
+| `section988-card.mjs` | credit-card statements: which purchases a payment retired, and its business fraction |
+| `section988-ledger.mjs` | design 87 G5 lot ledger: lots, FIFO/pro-rata, per-account/commingled, the ordinary-vs-capital split |
 | `variant.mjs` | **the single definition of every lever** |
 | `run.mjs` | running one cfg → a comparable row; real-spending traces |
 | `parallel.mjs` + `grid-worker.mjs` | fanning jobs across worker processes |
