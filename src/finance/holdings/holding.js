@@ -29,6 +29,42 @@ function assertValidAllocation(allocation, id) {
 }
 
 /**
+ * Design 87 §11 — CASH carries no capital gain, so its basis IS its value. A unit of
+ * currency is disposed of for exactly its face; there is no price to have moved.
+ *
+ * The Holding constructor establishes this, but a holding's life is spent inside
+ * reducers that patch plain records, never re-running the constructor — so the
+ * invariant has to be RE-asserted on every write, not just at birth. Two reducer paths
+ * broke it:
+ *
+ *   - HoldingTransactReducer — the design-60 money-market stream reinvests a CASH
+ *     sleeve's interest with a `costBasisDelta`; any delta that does not match
+ *     `marketValueDelta` opens a gap.
+ *   - HoldingRevalueReducer  — a shock marks CASH down with the rest of the account
+ *     (see the shock/allocation note) and leaves basis where it was.
+ *
+ * Once open the gap is permanent: the proportional scaling in holding-utils preserves
+ * whatever basis:value ratio a lot carries, so a drifted ratio is fixed in place for the
+ * life of the plan. Downstream, `_unrealizedGainSplit` (after-tax) priced it as embedded
+ * CGT, and `basisRatio` / `unrealizedGain` (holdings-selection) read it as HIFO sort
+ * keys. The disposal paths themselves were never exposed — both already special-case
+ * CASH — so this was a metric/ordering defect, not a tax leak.
+ *
+ * This does NOT discard currency basis. A foreign-currency pool's §988 basis is a RATE,
+ * not an amount, and lives in `fxBasisRate` — that separation is the whole point of
+ * design 87. `costBasis` was never able to express it.
+ *
+ * @param {object} h - a holding record (plain or Holding)
+ * @returns {object} `h` unchanged when the invariant already holds, else a corrected copy
+ */
+export function applyCashBasisInvariant(h) {
+  if (!h || h.allocation !== ALLOCATION.CASH) return h;
+  const mv = h.marketValue ?? 0;
+  if (h.costBasis === mv) return h;
+  return { ...h, costBasis: mv };
+}
+
+/**
  * A non-null rateKey must name a real rate series. A stale or mistyped key (an
  * older scenario's `BOND_US`, say) resolves to nothing in effectiveGrowthRates /
  * effectiveInterestRates and quietly falls back to the account-level rate, so the
@@ -221,16 +257,10 @@ export class Holding {
     this.id                   = id;
     this.allocation           = allocation;
     this.marketValue          = marketValue;
-    // Design 87 §11 — CASH carries no capital gain, so its basis IS its value. A unit
-    // of currency is disposed of for exactly its face; there is no price to have moved.
-    // Enforced here rather than trusted, because a stale ratio is invisible and
-    // survives forever: the proportional scaling in holding-utils preserves whatever
-    // basis:value ratio a lot is created with, so one bad authoring or import fixes it
-    // in place for the life of the plan.
-    //
-    // This does NOT discard currency basis. A foreign-currency pool's §988 basis is a
-    // RATE, not an amount, and lives in `fxBasisRate` — that separation is the whole
-    // point of design 87. `costBasis` was never able to express it.
+    // Design 87 §11 — see applyCashBasisInvariant. Enforced here rather than trusted,
+    // because a stale ratio is invisible and survives forever: one bad authoring or
+    // import fixes it in place for the life of the plan. The reducers re-assert the
+    // same rule on every write, since they never come back through this constructor.
     this.costBasis            = allocation === ALLOCATION.CASH ? marketValue : costBasis;
     this.costBaseByCountry    = costBaseByCountry;
     this.purchaseDate         = purchaseDate;

@@ -567,6 +567,7 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
 | **2** | G3 offset acquisition rate + realization on disposition · G4 de minimis moved to this leg · UI authoring surface | **built** |
 | **2b** | G9 foreign-currency bonds, per-holding, redemption path | **built** (sale-before-maturity remaining) |
 | **—** | §11 `CASH ⇒ no capital gain` guard in `consumeHoldings` + `Holding` invariant | **built** |
+| **—** | §11a invariant re-asserted at `_patchHolding`; `_unrealizedGainSplit` skips CASH; cash-interest reinvest raises basis | **built** |
 | **—** | G10 personal share is **capital**, not ordinary §988 (§4) | **not built** — character-only, dormant on the live scenario |
 | **3** | G5 lot ledger · G7 materiality gate (FIFO-only) · G8 income-side acquisition | **specified, not scheduled** |
 | **3** | G11 per-account pools + basis carryover on transfer (§5) | **specified** — decide before G5 is written |
@@ -680,6 +681,57 @@ express it. The two were only ever confusable because both are called "basis".
 > EQUITY lot with byte-identical numbers must still realize its gain. Without it,
 > CB-28 would pass equally well against a `consumeHoldings` that realized nothing at
 > all — the same trap §7 trap 5 and §10 record.
+
+### 11a. The drift came back — the constructor is not a choke point
+
+Added 2026-08-10. Fix 2 above ends with *"alone it would be insufficient — data can
+drift again"*. It did, immediately, and for a reason the original write-up did not name:
+**a holding's life is spent inside reducers that patch plain records, and none of them
+re-enter the `Holding` constructor.** The constructor establishes the invariant at birth
+and never again. Two reducer paths reopened the gap:
+
+| path | how it drifted |
+|---|---|
+| `HoldingTransactReducer` | the design-60 money-market stream reinvested a CASH sleeve's interest with `costBasisDelta: 0` — copied from the reinvested-dividend convention, where basis *is* raised, just at the account level |
+| `HoldingRevalueReducer` | a shock marks CASH down with the rest of the account and leaves `costBasis` where it was |
+
+Measured on the default scenario at `simEnd`: the brokerage CASH sleeve had grown to
+\$28,727 against a frozen \$24,000 basis — a **\$4,727 phantom unrealized gain**, all of
+it compounded interest that had already been taxed as ordinary income when it accrued.
+
+**Where it surfaced.** Not in tax: all *five* disposal emitters are safe. `consumeHoldings`
+and the rebalancer carry the explicit guard; `stock-harvest-apply-reducer` computes
+`consume − basisShare`, which is exactly zero once the invariant holds. The damage was in
+the derived metric — `_unrealizedGainSplit` (`after-tax.js`) summed `marketValue − costBasis`
+over *all* holdings and priced the gap as embedded CGT. `computeAfterTaxNetWorth` feeds
+the optimizer and MPC objectives, so **the error sat inside a control loop**. Secondarily,
+`basisRatio` / `unrealizedGain` in `holdings-selection` read the same stale basis as HIFO
+sort keys; inert today only because CASH already sorts first, and a trap for the next
+drawdown-ordering change.
+
+**Fixed on both sides, again independently:**
+
+1. **`applyCashBasisInvariant` (holding.js), applied at `_patchHolding`** — the single
+   write choke point for Transact / Revalue / SetBasis / Retitle, plus the split
+   reducer's replacements (the one path that mints holdings without the constructor).
+   Enforcing it there rather than per-reducer means a *new* reducer cannot reopen the
+   gap, and reading the **patched** allocation means a Retitle into CASH heals the lot on
+   the way in. `holding-utils`' proportional scaling needs no change: scaling `mv` and
+   `cb` by the same factor preserves `cb === mv` once it is true.
+2. **`_unrealizedGainSplit` skips CASH** — the metric-side mirror of the guard the
+   disposal paths already carry, correct regardless of what the data says.
+3. **`computeHoldingsCashInterest` credits `costBasisDelta: interest`**, so the action
+   itself is honest rather than repaired downstream. This shelters nothing: the interest
+   is ordinary income at accrual, and there is no capital gain on cash to shelter.
+
+Three golden fixtures moved, each on exactly one field — a CASH lot's `costBasis`
+snapping to its `marketValue`. Nothing else in the whole-state diff changed.
+
+> **Regression note.** `EVT-CASH-INT-8` walks every CASH holding in every account after a
+> full run and asserts `costBasis === marketValue`. The `after-tax` test pairs the CASH
+> case with a **working-detector control**: an EQUITY lot with byte-identical numbers
+> must still be discounted, or the test passes just as well against a metric that
+> discounts nothing at all — §7 trap 5 again.
 
 ---
 

@@ -50,7 +50,11 @@ test('EVT-CASH-INT-1: computeHoldingsCashInterest pays only CASH sleeves, monthl
   assert.strictEqual(r.holdingActions.length, 1, 'one reinvest action, into the cash sleeve');
   assert.strictEqual(r.holdingActions[0].holdingId, 'c1');
   assert.strictEqual(r.holdingActions[0].marketValueDelta, 25);
-  assert.strictEqual(r.holdingActions[0].costBasisDelta, 0, 'reinvested interest does not raise basis');
+  // Design 87 §11: a CASH lot's basis IS its value, so the reinvest must raise BOTH.
+  // Crediting 0 (the pre-fix behaviour, copied from the reinvested-dividend path where
+  // basis is raised at the account level) drifted the lot's basis below its market value
+  // permanently, and `_unrealizedGainSplit` priced the gap as embedded CGT.
+  assert.strictEqual(r.holdingActions[0].costBasisDelta, 25, 'cash basis tracks value: reinvest raises both');
 });
 
 test('EVT-CASH-INT-2: rate resolution — per-account key wins, then shared key, then fallback', () => {
@@ -154,4 +158,27 @@ test('EVT-CASH-INT-7: a brokerage CASH sleeve accrues monthly interest end-to-en
   assert.ok(cash.marketValue > 100000, `cash sleeve should have grown from interest, got ${cash.marketValue}`);
   assert.ok(Math.abs(acct.balance - cash.marketValue) < 0.01, '§4.4: balance stays synced to the single sleeve');
   assert.ok((sim.state.usOrdinaryIncomeYTD ?? 0) > 0, 'brokerage cash interest is US ordinary income');
+  assert.equal(cash.costBasis, cash.marketValue,
+    'design 87 §11: a CASH lot\'s basis tracks its value — compounding interest must not open a gap');
+});
+
+test('EVT-CASH-INT-8: the CASH basis invariant survives an entire run, in every account', () => {
+  // The reducers patch plain records and never re-enter the Holding constructor, so the
+  // invariant is re-asserted on every write (_patchHolding). Before that, the design-60
+  // reinvest opened a gap that compounded for the life of the plan and surfaced as a
+  // phantom embedded CGT liability in computeAfterTaxNetWorth.
+  const sim = run({});
+  sim.stepTo(sim.simEnd);
+
+  let seen = 0;
+  for (const [key, val] of Object.entries(sim.state)) {
+    if (!val || typeof val !== 'object' || !Array.isArray(val.holdings)) continue;
+    for (const h of val.holdings) {
+      if (h?.allocation !== 'CASH') continue;
+      seen++;
+      assert.equal(h.costBasis, h.marketValue,
+        `${key}/${h.id}: CASH costBasis drifted from marketValue`);
+    }
+  }
+  assert.ok(seen > 0, 'expected the default scenario to end with at least one CASH sleeve');
 });

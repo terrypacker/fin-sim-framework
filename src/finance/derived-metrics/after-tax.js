@@ -10,7 +10,7 @@
 
 import { isDrawdownAccessible } from './net-liquidity.js';
 import { TaxSettleService }     from '../tax-settle-service.js';
-import { isCollectibleAllocation } from '../holdings/allocation.js';
+import { ALLOCATION, isCollectibleAllocation } from '../holdings/allocation.js';
 import { getResidency, primaryPersonKey } from '../residency-utils.js';
 import { toAUD }                from '../tax/tax-fx.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
@@ -268,6 +268,15 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
  * (marketValue − costBasis) per bucket; when basis is unavailable (no holdings), the
  * whole account falls back to a fraction of balance as ordinary cap-gains gain (design
  * 40 Q3) — a gold-less account is therefore byte-for-byte identical to the pre-56 metric.
+ *
+ * CASH is EXCLUDED (design 87 §11). A unit of currency is disposed of for exactly its
+ * face, so it carries no capital gain to embed — the same guard the two disposal paths
+ * already carry (`consumeHoldings` in holdings-fifo, and the `taxable && allocation !==
+ * CASH` test in rebalance-to-target-apply-reducer). Without it this metric priced a
+ * phantom CGT liability on a cash sleeve whose stored basis had drifted below its market
+ * value, and — because `computeAfterTaxNetWorth` feeds the optimizer and MPC objectives —
+ * that error sat inside a control loop. The drift itself is closed at source
+ * (`applyCashBasisInvariant`); this guard makes the metric correct regardless.
  * @returns {{ collectibleGain: number, capGainsGain: number }}
  */
 function _unrealizedGainSplit(account, assumedGainFraction) {
@@ -275,6 +284,7 @@ function _unrealizedGainSplit(account, assumedGainFraction) {
   if (Array.isArray(holdings) && holdings.length > 0) {
     let coll = 0, other = 0;
     for (const h of holdings) {
+      if (h?.allocation === ALLOCATION.CASH) continue;
       const g = (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
       if (isCollectibleAllocation(h?.allocation)) coll += g; else other += g;
     }

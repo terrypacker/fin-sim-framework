@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HOLDING_ACTION_TYPES } from './holding-actions.js';
+import { applyCashBasisInvariant } from './holding.js';
 
 /**
  * Sum holdings → balance with currency-precision rounding.
@@ -22,9 +23,17 @@ function _syncBalance(account) {
   return { ...account, balance: +sum.toFixed(2) };
 }
 
-/** Shallow-clone a holding and apply patch. */
+/**
+ * Shallow-clone a holding and apply patch.
+ *
+ * The single write choke point for HoldingTransact / Revalue / SetBasis / Retitle, so
+ * it is where the CASH basis invariant (design 87 §11 — `costBasis === marketValue`)
+ * is re-asserted. Enforcing it here rather than per-reducer means a new reducer cannot
+ * reopen the gap, and it reads the PATCHED allocation, so a Retitle into CASH heals the
+ * lot on the way in.
+ */
 function _patchHolding(holding, patch) {
-  return { ...holding, ...patch };
+  return applyCashBasisInvariant({ ...holding, ...patch });
 }
 
 /** Replace one holding by id; returns a new array. Unmatched id → original array. */
@@ -184,7 +193,10 @@ export class HoldingSplitReducer extends Reducer {
     const target = account.holdings.find(h => h?.id === holdingId);
     if (!target) return this.newState(state);
 
-    const replacements = splits.map((s, i) => ({
+    // applyCashBasisInvariant: a CASH child's basis is its value regardless of what the
+    // caller put in costBasisDelta (design 87 §11) — the split is the one path that
+    // mints holdings without the Holding constructor's guard.
+    const replacements = splits.map((s, i) => applyCashBasisInvariant({
       id:           s.id ?? `${target.id}.${i}`,
       allocation:   s.allocation ?? target.allocation,
       rateKey:      s.rateKey    ?? target.rateKey,

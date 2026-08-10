@@ -79,6 +79,32 @@ describe('computeAfterTaxValue — per-class discount', () => {
       computeAfterTaxValue(a, {}, LATE, { rateProvider: rp, assumedGainFraction: 0.5 }), 90_000);
   });
 
+  test('TAXABLE_BASIS: a CASH sleeve carries no embedded gain, whatever basis it stores', () => {
+    // Design 87 §11. A unit of currency is disposed of for exactly its face, so a CASH
+    // lot has no capital gain to embed — the guard `consumeHoldings` and the rebalancer
+    // already carry. Before the fix a cash sleeve whose stored basis had drifted below
+    // its value (the design-60 money-market reinvest credited costBasisDelta 0) was
+    // priced as if it held an unrealized gain, and computeAfterTaxNetWorth feeds the
+    // optimizer and MPC objectives — so the error sat inside a control loop.
+    const perturbed = acct('us-stock', 100_000, {
+      holdings: [
+        { allocation: 'EQUITY', marketValue: 60_000, costBasis: 60_000 },  // no gain
+        { allocation: 'CASH',   marketValue: 40_000, costBasis:  1_000 },  // 39k PHANTOM gain
+      ],
+    });
+    assert.equal(computeAfterTaxValue(perturbed, {}, LATE, { rateProvider: rp }), 100_000);
+
+    // Working detector: the identical numbers on an EQUITY lot MUST still be discounted,
+    // or this passes just as well against a metric that discounts nothing at all.
+    const equity = acct('us-stock', 100_000, {
+      holdings: [
+        { allocation: 'EQUITY', marketValue: 60_000, costBasis: 60_000 },
+        { allocation: 'EQUITY', marketValue: 40_000, costBasis:  1_000 },  // 39k REAL gain
+      ],
+    });
+    assert.equal(computeAfterTaxValue(equity, {}, LATE, { rateProvider: rp }), 100_000 - 0.20 * 39_000);
+  });
+
   test('rates clamp to [0,1]; a degenerate provider never inflates value', () => {
     const bad = { ordinaryLiquidationRate: () => 5, capGainsLiquidationRate: () => -1 };
     assert.equal(computeAfterTaxValue(acct('ira', 100), {}, LATE, { rateProvider: bad }), 0);

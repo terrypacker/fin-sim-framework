@@ -615,7 +615,13 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
  * above the nominal rate, exactly as the monthly savings-interest handlers behave.
  *
  * Returns the dividend-shaped `{ amount, holdingActions }`; `holdingActions`
- * reinvest the interest into each CASH sleeve (costBasisDelta 0) so it compounds.
+ * reinvest the interest into each CASH sleeve so it compounds. `costBasisDelta`
+ * MATCHES `marketValueDelta`: unlike a reinvested dividend (basis raised at the
+ * account level, so the holding delta is 0), a CASH sleeve's basis is its value by
+ * definition (design 87 §11) — crediting 0 here drifted the lot's stored basis below
+ * its market value forever, which `_unrealizedGainSplit` then priced as embedded CGT.
+ * The interest is taxed as ordinary income when it accrues, so raising basis with it
+ * cannot shelter anything; there is no capital gain on cash to shelter.
  *
  * @param {object} opts
  * @param {object} opts.state
@@ -642,7 +648,7 @@ export function computeHoldingsCashInterest({ state, stateKey, rateKey, fallback
     if (interest === 0) continue;
     total += interest;
     holdingActions.push(new HoldingTransactAction({
-      stateKey, holdingId: h.id, marketValueDelta: interest, costBasisDelta: 0,
+      stateKey, holdingId: h.id, marketValueDelta: interest, costBasisDelta: interest,
     }));
   }
   return { amount: +total.toFixed(2), holdingActions };

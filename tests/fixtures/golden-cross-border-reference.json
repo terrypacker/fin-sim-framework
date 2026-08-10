@@ -189,7 +189,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 2996.79335768,
+    "costBasis": 3000,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1551,7 +1551,7 @@
     "costBaseByCountry": {
      "AU": 24000
     },
-    "costBasis": 24000,
+    "costBasis": 37618.38,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
