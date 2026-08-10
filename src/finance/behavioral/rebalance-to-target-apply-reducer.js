@@ -219,12 +219,13 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
     };
   }
   // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months from
-  // the AU deemed-acquisition date, capped at auGain. Must ride on BOTH branches. Both
-  // brokerage disposal reducers stamp it (au-brokerage-classes, us-brokerage-classes),
-  // and every consumer reads `action.auDiscountableGain ?? auGain` — so OMITTING it does
-  // not mean "unknown", it means "all of it qualifies". Dropping it on the US-country
-  // branch therefore handed a rebalance the full 50% discount with no holding-period
-  // test, while a DRAWDOWN disposal from that same account was gated correctly.
+  // the AU deemed-acquisition date, capped at auGain. Must ride on BOTH branches, and on
+  // every other emitter of these two action types — every consumer reads
+  // `action.auDiscountableGain ?? auGain`, so OMITTING it does not mean "unknown", it
+  // means "all of it qualifies". Dropping it on the US-country branch therefore handed a
+  // rebalance the full 50% discount with no holding-period test, while a DRAWDOWN
+  // disposal from that same account was gated correctly. `tests/unit/disposal-tax-payload-
+  // parity.test.mjs` now holds all five emitters to one field contract.
   const auDiscountableGain = Math.min(auGain, fifo.realizedDiscountableGainByCountry?.AU ?? auGain);
   if (country === 'AU') {
     return {

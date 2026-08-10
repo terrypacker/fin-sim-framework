@@ -202,26 +202,103 @@ Found 2026-08-07 by perturbing each param and diffing the golden's full end stat
 spouse variants from both the schema and the MC config, and rename the fourth. If
 per-person rates are actually wanted, that is a rate-key change, not a param one.
 
-### 4.11 Two parallel brokerage-disposal paths, only one of which runs
+### 4.11 Five emitters of one disposal-tax payload, silently drifted apart — **RESOLVED**
 
-`STOCK_WITHDRAWAL_TAX` fires 5,466 times in the live research scenario while
-`STOCK_WITHDRAWAL_APPLY` fires **zero** times there, in the reference golden, or
-anywhere outside isolated reducer tests. Two implementations of the same disposal
-coexist: the service path (`AccountService.replenishSavings` → `consumeHoldings`,
-which raises the tax action directly) and the event-driven path
-(`StockWithdrawalHandler` → `StockWithdrawalApplyReducer`). Only the former runs in
-production; `account-service.js:1270` even describes itself as mirroring the basis
-handling of the reducer it has replaced. The same holds for
-`COLLECTIBLE_SALE_APPLY` (0 fires, while `COLLECTIBLE_SALE_TAX` fires 147 times).
+*The original entry read "two parallel brokerage-disposal paths, only one of which
+runs", and proposed deleting the dormant one. Investigation showed the premise was
+wrong on both counts and the real defect was a different, live one. Both are
+recorded below, because the mis-diagnosis is the more useful lesson.*
 
-This is the shape flagged in the `*EarningsHandler` note — production-dormant
-classes kept alive by their own tests, where the test is the only caller and so
-cannot detect that the two paths have diverged.
+#### What the zero-fire counts actually meant
 
-**Direction**: decide which path is canonical. If the service path is, delete the
-handler/reducer pair and its tests; if the reducer is meant to be reachable, wire a
-golden through it. Do not leave both — the isolated tests currently certify a code
-path the application never executes.
+`STOCK_WITHDRAWAL_APPLY` and `COLLECTIBLE_SALE_APPLY` do fire zero times on the
+reference plan, but for three unrelated reasons that a fire count cannot tell apart:
+
+- **`COLLECTIBLE_SALE_APPLY` is not a parallel implementation at all.** It is the
+  *only* implementation of selling a **standalone collectible**. The service path
+  never sells collectibles — it liquidates the **gold sleeve held inside a brokerage
+  account**, which is a different asset reached by a different disposal. Both
+  correctly raise `COLLECTIBLE_SALE_TAX`; neither duplicates the other. The reducer
+  is config-gated on the collectible's `plannedSaleYear` (a first-class param with an
+  editor and a design-32 field link), which the reference plan leaves unset, and
+  `tests/unit/evt-collectible.test.mjs` drives it end-to-end through `ScenarioLoader`
+  + `Simulation` — not as an isolated reducer call.
+- **`STOCK_WITHDRAWAL_APPLY` / `AU_STOCK_WITHDRAWAL_APPLY` have no auto-scheduled
+  emitter**, because no toolset schedules a `STOCK_WITHDRAWAL` event — drawdown is
+  demand-driven, so nothing *plans* a stock sale. They remain reachable by
+  construction: the ConfigBuilder can add a handler node and a `OneOffEvent` of that
+  type, and `scenario-serializer.js` registers both classes by name so such a
+  scenario round-trips. `PanicSellReducer`'s header also documents this pair as the
+  intended taxable branch of a panic sell, deferred at MVP.
+- **`AU_STOCK_WITHDRAWAL_TAX` is zero** simply because the plan holds no AU-domiciled
+  brokerage account.
+
+So "the isolated tests certify a code path the application never executes" was true
+of neither. Deleting the pair would have removed a user-composable path and broken
+round-trip for any scenario wiring it.
+
+#### The defect that was actually there
+
+Counting *emitters* rather than fires gives a different picture: **five** live,
+independent constructors of the same two action types, none layered on another —
+
+| emitter | `auGain` | `auIndexedGain` | `auDiscountableGain` | `isGold` |
+|---|:--:|:--:|:--:|:--:|
+| `AccountService._drawPenaltyFree` (drawdown) | ✓ | — | ✓ | — |
+| `StockWithdrawalApplyReducer` (event) | ✓ | ✓ | — | ✓ |
+| `AuStockWithdrawalApplyReducer` (event) | ✓ | ✓ | ✓ | n/a |
+| `RebalanceToTargetApplyReducer` | ✓ | ✓ | ✓ | ✓ |
+| `StockHarvestApplyReducer` | — | — | — | n/a |
+
+Every consumer reads these through `??` fallbacks —
+`auIndexedGain ?? auGain ?? gain`, `auDiscountableGain ?? auGain`,
+`isGold ? indexed : un-indexed`. **An absent field therefore does not read as
+"unknown, be careful"; it reads as a specific, wrong, silent answer:** no `auGain`
+assesses the AU gain on the *US* cost base, ignoring the s855-45 residency step-up;
+no `auDiscountableGain` grants the CGT 50% discount to 100% of the gain with no
+≥12-month test; no `isGold` demotes bullion to a true collectible and strips the
+indexation the FY2027 reform grants it.
+
+Measured on the reference plan, the emitter with the **thinnest** payload was also
+the **dominant** one: 98% of `STOCK_WITHDRAWAL_TAX` rows and 93% of
+`COLLECTIBLE_SALE_TAX` rows came from the drawdown path, while the rebalancer taxed
+the *same gold lots in the same accounts* with the full field set. The plan was
+over-paying AU CGT on nearly every disposal it made.
+
+The prior wording ("the test is the only caller and so cannot detect that the two
+paths have diverged") had the mechanism right and the location wrong. Divergence
+between a live path and a dormant one is inert. Divergence between **two live
+paths** is what costs money — and it hid here because the dormant path drew all the
+attention.
+
+#### Resolved
+
+All five emitters now stamp one field contract. Concretely: the drawdown path gained
+`auIndexedGain` (it was passing `consumeHoldings` no CPI `level`, pinning its index
+factor to 1) and the full `auGain` / `auIndexedGain` / `isGold` triple on its gold
+slice; `StockWithdrawalApplyReducer` gained `auDiscountableGain`;
+`StockHarvestApplyReducer` gained `auGain`, `auDiscountableGain` and `stateKey`.
+`auIndexedGain` stays optional for the harvester alone — it targets one named
+holding rather than FIFO-consuming the account, so it has no per-lot
+`acquisitionPriceLevel` to index against, and the fallback to un-indexed `auGain` is
+conservative rather than wrong.
+
+Every live correction pushes the same way (less AU CGT), worth **+0.23% of terminal
+net worth** on the reference plan. Two comments asserting the paths already agreed —
+`account-service.js`'s "mirrors the reducer" and the rebalancer's "both brokerage
+disposal reducers stamp it" — were false when written and are corrected.
+
+Pinned by `tests/unit/disposal-tax-payload-parity.test.mjs`, which is deliberately
+the **inverse** of `action-payload-schema.test.mjs`: that file catches a field an
+emitter carries but no toolset declared; this one catches a field no emitter sets.
+Both scan statically, for the same reason — a disposal only happens when a scenario
+sells something, so a dynamic pass passes vacuously on exactly the paths where drift
+accumulates.
+
+**Lesson for the rest of this document**: a zero fire count is evidence about the
+*scenario*, not about the code. Before calling a path dead, ask what would have to
+be true for it to fire — an unset param, an unscheduled event type, a missing
+account — and check that instead.
 
 ### 4.12 `computeAfterTaxNetWorth` silently omits company equity — **RESOLVED (design 88 phase 1)**
 

@@ -59,6 +59,23 @@ export class StockHarvestApplyReducer extends Reducer {
     // Signed gain/loss — NO Math.max(0, …) floor (the whole point vs normal withdrawal)
     const realizedGainLoss = +(consume - basisShare).toFixed(2);
 
+    // AU assessment of the same disposal (design 36 §12.2, design 62 §4). The other
+    // four STOCK_WITHDRAWAL_TAX emitters all stamp these; this one stamped none, and
+    // every consumer reads `auGain ?? gain` / `auDiscountableGain ?? auGain` — so the
+    // omission silently assessed an AU resident's harvest on the US cost base with a
+    // blanket 50% discount (design/inconsistencies §4.11). Held-period test runs from
+    // the lot's purchaseDate, matching consumeHoldings.
+    const auBasisShare = +(((source.costBaseByCountry?.AU ?? source.costBasis) ?? 0) * basisFrac).toFixed(2);
+    const auGainLoss   = +(consume - auBasisShare).toFixed(2);
+    const purchasedMs  = source.purchaseDate != null ? new Date(source.purchaseDate).getTime() : null;
+    const asOfMs       = state.currentPeriods?.AU?.startMs ?? null;
+    const held12mo     = purchasedMs != null && asOfMs != null
+      ? (asOfMs - purchasedMs) >= 365 * 24 * 60 * 60 * 1000
+      : false;
+    // A capital LOSS is never "discountable" — the discount applies to gains only, so
+    // the eligible slice floors at 0 rather than tracking a negative auGainLoss.
+    const auDiscountableGain = held12mo ? Math.max(0, auGainLoss) : 0;
+
     // Reduce/remove source holding
     const afterSell = holdings.map(h => {
       if (h.id !== sourceHoldingId) return h;
@@ -116,10 +133,14 @@ export class StockHarvestApplyReducer extends Reducer {
       [{
         type:        'STOCK_WITHDRAWAL_TAX',
         gain:        realizedGainLoss,
+        auGain:      auGainLoss,
+        auDiscountableGain,
         residency:   residency ?? 'US',
         proceeds:    consume,
         costBasis:   basisShare,
         description: `${purpose ?? 'HARVEST'} harvest on ${stateKey}`,
+        // Design 76 Gap B — attribute the gain to the harvested account's owner.
+        stateKey,
       }],
     );
   }

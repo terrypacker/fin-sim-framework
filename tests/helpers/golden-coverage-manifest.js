@@ -221,10 +221,13 @@ export const KNOWN_GAPS = [
 
   // ── Taxable brokerage disposals and AU dividends
   // STOCK_WITHDRAWAL_TAX fires heavily in the live research plan while
-  // STOCK_WITHDRAWAL_APPLY never fires anywhere: the service drawdown path
-  // (AccountService.replenishSavings -> consumeHoldings) and the event-driven reducer
-  // path are parallel implementations, and only the former runs in practice. Worth
-  // resolving before writing a golden around it — see design/inconsistencies.md.
+  // STOCK_WITHDRAWAL_APPLY never fires there. That is NOT a dead parallel path: no
+  // toolset schedules a STOCK_WITHDRAWAL event, because drawdown is demand-driven, so
+  // nothing *plans* a stock sale. The handler/reducer pair is reachable by wiring one
+  // in the ConfigBuilder (and is the deferred taxable branch of PanicSellReducer). A
+  // golden needs an authored STOCK_WITHDRAWAL event, not an engine change.
+  // AU_STOCK_WITHDRAWAL_* is absent for a third reason again: no AU-domiciled
+  // brokerage account. See design/inconsistencies.md §4.11.
   'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY',
   'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX',
   'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',

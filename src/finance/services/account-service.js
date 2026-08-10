@@ -569,6 +569,13 @@ export class AccountService extends AssetService {
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
     });
+    // AU CPI level for design-57 basis indexation. The event-driven disposal
+    // reducers read exactly this pair (cpiAccumulator.AU, falling back to
+    // inflationAccumulator.AU, then 1); the drawdown path used to pass no level at
+    // all, which silently pinned its index factor to 1 and dropped `auIndexedGain`
+    // from every STOCK_WITHDRAWAL_TAX it raised — 98% of the disposals on a real
+    // plan. See design/inconsistencies.md §4.11.
+    const auCpiLevel     = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const usdAud         = state.effectiveExchangeRates?.USD_AUD ?? 1.55; // 1 USD = usdAud AUD
     const fxFeeUsd       = state.effectiveFxFees?.USD_AUD ?? 15;          // flat per-transfer fee, USD
     const srcCcyOf       = (account) => account.currency?.code ?? account.country;
@@ -691,7 +698,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -706,7 +713,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel
         );
       }
     } else {
@@ -758,7 +765,7 @@ export class AccountService extends AssetService {
             const weight = equal ? (1 / avail.length) : (s.amt / total);
             const want = Math.min(target * weight, remaining);
             const got  = this._drawPenaltyFree(
-              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection
+              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel
             );
             remaining     -= got;
             drawnThisPass += got;
@@ -914,7 +921,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (!isDeferredTaxable(account)) continue;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel
         );
       }
     }
@@ -1260,7 +1267,7 @@ export class AccountService extends AssetService {
    * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
    * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null, auCpiLevel = 1) {
     if (want < 1e-9) return 0;
     // Gross up the source-side need by the fee so a full draw nets `want` at the
     // target after the wire cost is paid.
@@ -1274,7 +1281,12 @@ export class AccountService extends AssetService {
       if (credited <= 0) return 0;                         // draw too small to clear the fee
 
       // Brokerage CGT is realized from holdings FIFO (design 53 Phase 1) — the same
-      // basis source the event-driven STOCK_WITHDRAWAL_APPLY reducer uses. Snapshot
+      // basis source the event-driven STOCK_WITHDRAWAL_APPLY reducer uses. "Same basis
+      // source" is not the same as "same tax action": these two paths, plus the
+      // rebalancer and the harvester, are four independent constructors of the same
+      // STOCK_WITHDRAWAL_TAX / COLLECTIBLE_SALE_TAX pair, and they had silently drifted
+      // apart on the au* fields (design/inconsistencies §4.11). Keep them in step —
+      // tests/unit/disposal-tax-payload-parity.test.mjs enforces it. Snapshot
       // the FIFO consumption BEFORE the debit, because transaction() below pro-rata-
       // consumes the lots in place; we then overwrite holdings with the FIFO result so
       // the remaining lots reflect FIFO (and their per-country cost bases deplete
@@ -1282,9 +1294,12 @@ export class AccountService extends AssetService {
       // Pass the AU CGT context only for AU residents, so US-only runs keep the
       // exact prior FIFO output. The context (sale date + country) lets the FIFO
       // tally the discountable-gain split (design 62 §4) — the ≥12-month test runs
-      // from each lot's AU deemed-acquisition date. No `level` ⇒ index factor 1.
+      // from each lot's AU deemed-acquisition date — and `level` lets it CPI-index
+      // each lot's AU cost base (design 57 §6.3), exactly as the event-driven
+      // reducers do. Omitting `level` here used to pin the index factor to 1 on the
+      // path that raises 98% of a real plan's disposals.
       const auCtx = residency === 'AU'
-        ? { asOfMs: date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null), country: 'AU' }
+        ? { asOfMs: date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null), country: 'AU', level: auCpiLevel }
         : null;
       // Design 65: the allocation-aware selection policy steers *which* sleeve/lots
       // are sold; when `selection` is null this is byte-identical to the prior FIFO.
@@ -1307,6 +1322,11 @@ export class AccountService extends AssetService {
         // lot's stepped-up cost base (per-lot costBaseByCountry, stamped at the move by
         // recordResidencyChange); no step-up ⇒ falls back to realizedBasis (auGain === gain).
         const realizedAuBasis = brokerageFifo.realizedBasisByCountry?.AU ?? realizedBasis;
+        // CPI-indexed AU basis (design 57 §6.3) — the "real" cost base the FY2027 AU
+        // module assesses against. Falls back to the un-indexed stepped-up basis when
+        // no indexation context was supplied (US-resident draw), so a US-only run is
+        // byte-identical to before.
+        const realizedIndexedAuBasis = brokerageFifo.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
         // Collectible split (design 56 §7.2): GOLD lots consumed in this draw are taxed
         // at the US 28% collectibles rate (COLLECTIBLE_SALE_TAX) — and AU CGT if resident
         // — while the rest keeps ordinary brokerage CGT. Mirror the STOCK_WITHDRAWAL_APPLY
@@ -1314,23 +1334,40 @@ export class AccountService extends AssetService {
         const collProceeds = brokerageFifo.collectibleProceeds ?? 0;
         const collBasis    = brokerageFifo.collectibleBasis    ?? 0;
         const collGain     = Math.max(0, collProceeds - collBasis);
+        // Per-country AU bases for the gold slice — bullion is an ordinary AU CGT asset,
+        // so it takes both the residency step-up and CPI indexation.
+        const collAuBasis        = brokerageFifo.collectibleBasisByCountry?.AU        ?? collBasis;
+        const collIndexedAuBasis = brokerageFifo.collectibleIndexedBasisByCountry?.AU ?? collAuBasis;
+        const collAuGain         = Math.max(0, collProceeds - collAuBasis);
+        const collIndexedAuGain  = Math.max(0, collProceeds - collIndexedAuBasis);
         const equityProceeds = +(withdraw - collProceeds).toFixed(2);
         const gain   = Math.max(0, equityProceeds - (realizedBasis   - collBasis));
-        const auGain = Math.max(0, equityProceeds - (realizedAuBasis - collBasis));
+        const auGain = Math.max(0, equityProceeds - (realizedAuBasis - collAuBasis));
+        const auIndexedGain = Math.max(0, equityProceeds - (realizedIndexedAuBasis - collIndexedAuBasis));
         // CGT 50%-discount-eligible slice (design 62 §4): equity gain from lots held
         // ≥12 months from the AU deemed-acquisition date (excludes the gold sleeve,
         // which the collectible split handles), capped at auGain.
         const auDiscountableGain = Math.min(auGain, brokerageFifo.realizedDiscountableGainByCountry?.AU ?? auGain);
         account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
-          type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auDiscountableGain, residency,
+          type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
           // Design 76 Gap B: attribute the AU gain to this account's owner.
           stateKey: account.stateKey ?? key,
         });
         if (collGain > 0) {
           // Design 76 Gap B — gold sleeve inside the account ⇒ attribute by account.
-          pendingTaxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collGain, residency, stateKey: account.stateKey ?? key });
+          // `isGold` and the au* pair are NOT optional: the FY2027 AU module reads
+          // `isGold ? (auIndexedGain ?? auGain ?? gain) : (auGain ?? gain)`, so a bare
+          // {gain, residency, stateKey} does not mean "unknown" — it means "a true
+          // collectible, assessed on its US cost base, un-indexed". This path raised
+          // 93% of a real plan's collectible disposals with exactly that shape while
+          // the rebalancer taxed the SAME gold lots correctly (design/inconsistencies §4.11).
+          pendingTaxActions.push({
+            type: 'COLLECTIBLE_SALE_TAX', gain: collGain, auGain: collAuGain,
+            auIndexedGain: collIndexedAuGain, isGold: true, residency,
+            stateKey: account.stateKey ?? key,
+          });
         }
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super

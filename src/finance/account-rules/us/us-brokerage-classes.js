@@ -307,6 +307,13 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     const gain          = Math.max(0, equityProceeds - equityBasis);
     const auGain        = Math.max(0, equityProceeds - equityAuBasis);
     const auIndexedGain = Math.max(0, equityProceeds - equityIndexedAuBasis);
+    // CGT 50%-discount-eligible slice (design 62 §4): the equity gain from lots held
+    // ≥12 months from their AU deemed-acquisition date, capped at auGain. Consumers
+    // read `action.auDiscountableGain ?? auGain`, so omitting it does not mean
+    // "unknown" — it means "all of it qualifies". The AU sibling reducer and the
+    // service drawdown path have both stamped it since design 62; this one had not,
+    // which is the drift design/inconsistencies §4.11 is about.
+    const auDiscountableGain = Math.min(auGain, r.realizedDiscountableGainByCountry?.AU ?? auGain);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], salePrice, null);
 
@@ -316,7 +323,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // real gain (design 57) alongside the stepped-up auGain and the US gain.
     const taxActions = [
       // Design 76 Gap B: attribute the AU gain to the account's owner.
-      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
     ];
     if (collectibleGain > 0) {
       // isGold flags this collectible slice as bullion so the AU FY2027 classifier
