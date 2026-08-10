@@ -63,6 +63,7 @@ export class BondSleeveCouponApplyReducer extends Reducer {
       const holdings = mergeCouponReinvestLots(acct.holdings ?? [], {
         stateKey: key, buckets, prevailingRate: action._prevailingRate,
         year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
+        priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
       });
       const balance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
       // Design 84 G2 — a coupon is DERIVED income; the ledger moves with the balance.

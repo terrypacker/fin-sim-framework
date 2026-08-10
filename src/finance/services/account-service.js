@@ -455,9 +455,16 @@ export class AccountService extends AssetService {
         // acquisition, so the indexation base level is the AU price level at the
         // move. Stamp it alongside the stepped-up cost base (both gated on the
         // one-time step-up) so a later post-2027 sale indexes each cross-border
-        // (US-brokerage equity + gold) sleeve from the residency date. Only stamp
-        // when a level is supplied and none is already recorded.
-        if (priceLevel != null && h.acquisitionPriceLevel == null) {
+        // (US-brokerage equity + gold) sleeve from the residency date.
+        //
+        // This OVERWRITES any level the lot already carried, and must: a lot bought
+        // during the simulation records the CPI level at its purchase (design 62 §9.5),
+        // but the step-up replaces its AU cost base with market value at the move, so
+        // indexing that new base from the older, lower purchase level would relieve the
+        // same inflation twice. The step-up is the AU acquisition; its level governs.
+        // Re-entry is not a concern — a lot already stepped up for this country returns
+        // above, before reaching here.
+        if (priceLevel != null) {
           next.acquisitionPriceLevel = priceLevel;
         }
         // Deemed-acquisition date (design 62 §4): the ≥12-month CGT-discount /

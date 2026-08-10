@@ -453,9 +453,13 @@ export function resolvePrevailingCouponRate(state, stateKey, rateKey) {
  * @param {number|null} opts.prevailingRate - market yield for the new lots (null ⇒ keep bucket's source rate)
  * @param {number} opts.year            - calendar year of the firing (vintage key)
  * @param {number|null} [opts.purchaseMs=null] - firing timestamp for the new lot's purchaseDate
+ * @param {number|null} [opts.priceLevel=null] - AU CPI level at the firing, stamped as the new
+ *   lot's `acquisitionPriceLevel` (design 57 §6.3 / design 62 §9.5) so a lot created during the
+ *   simulation is CPI-indexed from its own acquisition rather than never indexed. The vintage
+ *   lot keeps the level of the year's FIRST firing, matching how it keeps that firing's date.
  * @returns {object[]} new holdings array
  */
-export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailingRate, year, purchaseMs = null }) {
+export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailingRate, year, purchaseMs = null, priceLevel = null }) {
   if (!Array.isArray(holdings) || !Array.isArray(buckets) || buckets.length === 0) return holdings ?? [];
   const next = holdings.slice();
   for (const b of buckets) {
@@ -486,6 +490,7 @@ export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailin
         issuingState:    b.issuingState ?? null,
         rateKey:         b.rateKey ?? null,
         purchaseDate:    purchaseMs != null ? new Date(purchaseMs) : null,
+        acquisitionPriceLevel: priceLevel,
         label:           `Reinvested coupons ${year}`,
       });
     }

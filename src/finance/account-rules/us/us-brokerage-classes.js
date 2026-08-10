@@ -189,6 +189,7 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
       ? mergeCouponReinvestLots(sa.holdings ?? [], {
           stateKey: key, buckets, prevailingRate: action._prevailingRate,
           year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
+          priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
         })
       : distributeHoldingsCredit(sa.holdings, amount);   // pre-G10b fallback
     return this.newState(

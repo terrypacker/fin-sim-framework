@@ -400,11 +400,51 @@ cumulative taxes paid fall with it, and terminal net worth rises about a fifth o
 Lot growth is negligible: peak lots in a single account rose by two, and the whole-state lot
 count at simEnd by four.
 
-### 9.5 Still open
+### 9.5 The indexation base of a lot acquired during the run (DONE)
 
-`_newSleeve` stamps `acquisitionPriceLevel: null` on every lot it establishes, so a sleeve
-bought *during* the simulation gets an indexation factor of 1 under the post-2027 reform
-(design 57 §6.3) — it is never CPI-indexed. Conservative (it overstates the AU gain rather than
-understating it) and pre-existing, but wrong: the lot was acquired at a knowable price level.
-Stamping the AU CPI accumulator at purchase is a two-line change with a real tax consequence,
-so it is deliberately left out of this gap.
+`_newSleeve` stamped `acquisitionPriceLevel: null` on every lot it established, and so did
+`materializeLadder` (design 66 G8 rungs); `mergeCouponReinvestLots` (design 66 G10b) never set
+the field at all. A null level means an indexation factor of **1** — a lot created during the
+simulation was never CPI-indexed under the post-2027 reform, however long it was held.
+
+That contradicts the model §57 Item B locked in: a lot indexes **from its own acquisition to its
+sale**, with no pre-2027 carve-out and no deemed reset. The relief was reaching only lots that
+carried a level, which in practice meant only lots the residency step-up had stamped.
+
+**The fix.** All three creation paths now record the AU CPI level at the moment the lot is
+created (`cpiAccumulator.AU`, the same series every indexation read uses — read from AU
+regardless of where the lot lives, because only AU indexes a cost base). The UI ladder builder
+has no simulation state to read, so it still passes null and authored ladders are unchanged.
+
+**Two couplings this could not be done without.**
+
+1. **The residency step-up now OVERWRITES the level** (`AccountService.recordResidencyChange`).
+   It previously stamped only when the field was null, which was safe when nothing else ever
+   wrote it. Now a lot bought before the move carries its purchase-time level, while the step-up
+   replaces its AU cost base with market value at the move — indexing that new base from the
+   older, lower level would relieve the same inflation twice. The step-up **is** the AU
+   acquisition, so its level governs. Lots already stepped up for the country return earlier in
+   the loop, so re-entry is still a no-op.
+2. **`_compactSeasonedLots` blends the level instead of matching on it.** The level is
+   per-vintage, so as a fungibility key it made every lot unique and stopped compaction dead —
+   the §9.3 bound broke the moment §9.5 landed. The blend is the **basis-weighted harmonic
+   mean**, `Σbasisᵢ / Σ(basisᵢ / levelᵢ)`, which is exact rather than approximate: the merged
+   lot's single basis and level reproduce `Σ basisᵢ × (levelₙₒw / levelᵢ)` precisely. Null-ness
+   stays in the key, so an un-indexed lot never merges into an indexed one.
+
+**Measured effect — large, and the largest single item in this design.** Indexation relief on
+AU-assessed brokerage disposals rises from about 6% of the AU gain to about 19%; the gold
+(collectible) sleeves the rebalance path creates go from 0% relieved to about 60%, gold being
+indexed rather than discounted under the reform. Lifetime taxes fall about 7% and terminal net
+worth rises about 7%. Both floors that keep this honest are in place and were re-checked: the
+per-lot factor is `max(1, levelₙₒw / levelᵢ)` so indexation can never *create* a loss, the
+realized gain is floored at zero, and across a full run exactly one disposal out of several
+hundred has its gain fully relieved — this is inflation relief working as designed, not a hole.
+
+The §9.3 bound is unaffected: peak lots in a single account over a full run is the same as
+before §9.5, once the level is blended rather than keyed.
+
+> **Not covered.** A lot the ladder reducer rebuilds inherits nothing from the lots it replaces
+> — `materializeLadder` regenerates the whole bond sleeve from its total value, discarding any
+> residency step-up those lots carried. That is pre-existing and separate from the level stamp;
+> it is the same "basis reset drift" the reducer's own comment already flags.

@@ -175,7 +175,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       // established in any account, including a US IRA/401k/Roth.
       holdings = [...holdings, _newSleeve({
         allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey,
-        traits: _inheritedTraits(matching),
+        traits: _inheritedTraits(matching), priceLevel: auLevel,
       })];
     }
 
@@ -361,7 +361,7 @@ function _inheritedTraits(matching) {
 }
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */
-function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null, traits = {} }) {
+function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null, traits = {}, priceLevel = null }) {
   // The role is safe to pass now: resolveRateKey only lets it refine WITHIN the
   // allocation's own class, so a BOND sleeve in an equity-role account still
   // resolves to the bond rate. (This used to force role=null to work around the
@@ -403,7 +403,14 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
     costBasis:     +amount.toFixed(2),
     costBaseByCountry: null,
     purchaseDate:  new Date(purchaseMs),
-    acquisitionPriceLevel: null,
+    // The AU indexation base (design 57 §6.3): the CPI level at THIS lot's acquisition,
+    // which for a lot bought here is today. Leaving it null meant a lot bought during the
+    // simulation indexed at factor 1 forever — never CPI-indexed under the post-2027
+    // reform, whose model (design 57 Item B) is "index from acquisition to sale, no
+    // pre-2027 carve-out". If the resident later moves to AU, the s855-45 step-up
+    // supersedes this level with the move's, because the step-up IS the AU acquisition
+    // (`AccountService.recordResidencyChange`).
+    acquisitionPriceLevel: priceLevel,
     acquisitionDateByCountry: null,
     rateKey,
     label:         '',
@@ -450,7 +457,8 @@ const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
  * field added to Holding later automatically *prevents* a merge rather than being
  * silently averaged away.
  */
-const MERGEABLE_FIELDS = new Set(['id', 'marketValue', 'costBasis', 'purchaseDate', 'couponRate', 'duration']);
+const MERGEABLE_FIELDS = new Set(['id', 'marketValue', 'costBasis', 'purchaseDate', 'couponRate',
+                                  'duration', 'acquisitionPriceLevel']);
 
 /**
  * Collapse this reducer's own seasoned lots so the holdings array stays bounded over a
@@ -465,9 +473,17 @@ const MERGEABLE_FIELDS = new Set(['id', 'marketValue', 'costBasis', 'purchaseDat
  *
  * `couponRate` and `duration` are blended by market value (the convention
  * `mergeCouponReinvestLots` already uses): mv × rate and mv × duration are what the
- * coupon and price-sensitivity paths consume, so the blend is exact at merge time. Their
- * NULL-ness is part of the key — a lot whose coupon floats never merges with one that
- * locked a rate.
+ * coupon and price-sensitivity paths consume, so the blend is exact at merge time.
+ *
+ * `acquisitionPriceLevel` is blended as the **basis-weighted harmonic mean**, which is
+ * exact rather than approximate. The AU indexed cost base is `Σ basisᵢ × (levelₙₒw /
+ * levelᵢ)`; setting the merged level to `Σbasisᵢ / Σ(basisᵢ / levelᵢ)` reproduces that
+ * sum precisely from the merged lot's single basis and level. Blending it arithmetically
+ * — or leaving it in the fungibility key, where a per-vintage CPI level would make every
+ * lot unique and stop compaction dead — would not.
+ *
+ * The NULL-ness of all three is part of the key: a lot whose coupon floats never merges
+ * with one that locked a rate, and an un-indexed lot never merges with an indexed one.
  *
  * The survivor keeps the earliest `purchaseDate` and that lot's id, so FIFO order across
  * the boundary is unchanged and replay stays deterministic.
@@ -492,13 +508,14 @@ export function _compactSeasonedLots(holdings, asOfMs) {
     for (const i of idxs) {
       if (_purchaseTs(holdings[i]) < _purchaseTs(holdings[keep])) keep = i;
     }
-    let mv = 0, basis = 0, couponMv = 0, durationMv = 0;
+    let mv = 0, basis = 0, couponMv = 0, durationMv = 0, basisOverLevel = 0;
     for (const i of idxs) {
       const h = holdings[i];
       mv         += h.marketValue ?? 0;
       basis      += h.costBasis   ?? 0;
       couponMv   += (h.couponRate ?? 0) * (h.marketValue ?? 0);
       durationMv += (h.duration   ?? 0) * (h.marketValue ?? 0);
+      if (h.acquisitionPriceLevel > 0) basisOverLevel += (h.costBasis ?? 0) / h.acquisitionPriceLevel;
       if (i !== keep) absorbed.add(i);
     }
     const base = holdings[keep];
@@ -508,6 +525,11 @@ export function _compactSeasonedLots(holdings, asOfMs) {
       costBasis:   +basis.toFixed(2),
       couponRate:  base.couponRate == null || mv <= 0 ? base.couponRate : +(couponMv / mv).toFixed(6),
       duration:    base.duration   == null || mv <= 0 ? base.duration   : +(durationMv / mv).toFixed(4),
+      // Basis-weighted harmonic mean — see the doc above. Falls back to the survivor's
+      // own level when there is no basis to weight by (nothing to index either way).
+      acquisitionPriceLevel: base.acquisitionPriceLevel == null || basisOverLevel <= 0
+        ? base.acquisitionPriceLevel
+        : +(basis / basisOverLevel).toFixed(11),
     });
   }
   if (absorbed.size === 0) return holdings;

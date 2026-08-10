@@ -673,6 +673,7 @@
     "zeroCoupon": false
    },
    {
+    "acquisitionPriceLevel": 1,
     "allocation": "BOND",
     "costBasis": 4848,
     "couponFrequency": 2,
@@ -686,6 +687,7 @@
     "taxExemption": "none"
    },
    {
+    "acquisitionPriceLevel": 1.03,
     "allocation": "BOND",
     "costBasis": 5043.86,
     "couponFrequency": 2,
@@ -699,6 +701,7 @@
     "taxExemption": "none"
    },
    {
+    "acquisitionPriceLevel": 1.0609,
     "allocation": "BOND",
     "costBasis": 5247.64,
     "couponFrequency": 2,
@@ -712,6 +715,7 @@
     "taxExemption": "none"
    },
    {
+    "acquisitionPriceLevel": 1.092727,
     "allocation": "BOND",
     "costBasis": 5459.64,
     "couponFrequency": 2,
@@ -725,6 +729,7 @@
     "taxExemption": "none"
    },
    {
+    "acquisitionPriceLevel": 1.12550881,
     "allocation": "BOND",
     "costBasis": 5680.2,
     "couponFrequency": 2,
@@ -738,6 +743,7 @@
     "taxExemption": "none"
    },
    {
+    "acquisitionPriceLevel": 1.1592740743,
     "allocation": "BOND",
     "costBasis": 5909.67,
     "couponFrequency": 2,

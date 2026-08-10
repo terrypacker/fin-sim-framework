@@ -20,10 +20,13 @@
  * bought. On a semiannual cadence, money bought at one rebalance and sold at the next
  * was six months old and got the 50% discount anyway.
  *
- * These pin the three things the fix has to be true for at once:
+ * These pin the four things the fix has to be true for at once:
  *   1. the six-month lot is NOT discount-eligible (and the seasoned one still is);
  *   2. a buy inherits the sleeve's TRAITS but none of its dates or bases;
- *   3. the lot count stays bounded over a 44-year run.
+ *   3. the lot count stays bounded over a 44-year run;
+ *   4. §9.5 — the new lot records the AU CPI level at its own purchase (so it is
+ *      CPI-indexed under the post-2027 reform), and a later residency step-up
+ *      supersedes that level, because the step-up IS the AU acquisition.
  */
 
 import { test } from 'node:test';
@@ -35,6 +38,11 @@ import { RebalanceToTargetApplyReducer, _compactSeasonedLots }
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 import { ALLOCATION }    from '../../src/finance/holdings/allocation.js';
 import { RATE_KEYS }     from '../../src/finance/economic-regimes/rate-keys.js';
+import { consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
+import { AccountService } from '../../src/finance/services/account-service.js';
+import { ACCOUNT_TYPE }   from '../../src/finance/assets/account.js';
+import { Graph }          from '../../src/graph/graph.js';
+import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 
 const APPLY = new RebalanceToTargetApplyReducer();
 
@@ -319,4 +327,108 @@ test('RLV-9: the holdings array stays bounded over a 44-year semiannual cadence'
   // months' buys, per class. Anything beyond that means compaction stopped working.
   assert.ok(peak <= 8, `holdings peaked at ${peak} lots over 88 rebalances (expected ≤ 8)`);
   assert.equal(acct.balance, gross(acct), 'balance still tracks Σ marketValue');
+});
+
+// ── 4. The indexation base of a lot acquired during the run (design 62 §9.5) ─────
+
+test('RLV-10: a lot bought at a rebalance records the AU CPI level at its purchase', () => {
+  // A null `acquisitionPriceLevel` means an indexation factor of 1 forever — the lot is
+  // never CPI-indexed under the post-2027 reform, whose model (design 57 Item B) is
+  // "index from acquisition to sale, no pre-2027 carve-out".
+  const start = account([
+    { id: 'h-EQUITY', allocation: ALLOCATION.EQUITY, marketValue: 100_000, costBasis: 100_000,
+      rateKey: RATE_KEYS.EQUITY_US, purchaseDate: new Date(Date.UTC(2026, 0, 1)),
+      acquisitionPriceLevel: 1.0 },
+  ], ACCOUNT_ROLES.IRA);
+
+  const state = {
+    activeRegimes: [], regimeActions: {}, people: { p1: { residency: 'AU' } },
+    cpiAccumulator: { AU: 1.34 },
+    currentPeriods: { US: { startMs: Date.UTC(2036, 0, 1) }, AU: { startMs: Date.UTC(2036, 0, 1) } },
+    acct: start,
+  };
+  const reducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'acct', role: start.role }],
+    targetAllocation: { EQUITY: 0.5, BOND: 0.5 },
+    driftBandTaxable: 0.10, driftBandSheltered: 0.02,
+  });
+  let applied = state;
+  for (const a of (reducer.reduce(state, { type: 'US_PERIOD_ADVANCE' }).next ?? [])) {
+    applied = APPLY.reduce(applied, a);
+  }
+  const bond = applied.acct.holdings.find(h => h.allocation === ALLOCATION.BOND);
+  assert.equal(bond.acquisitionPriceLevel, 1.34, 'stamped with the AU CPI level at purchase');
+});
+
+test('RLV-11: indexing the freshly bought lot relieves only inflation since ITS purchase', () => {
+  // The seasoned lot indexes from 1.00, the lot bought later from 1.34 — the whole point
+  // of a per-lot level. Sold at 1.50.
+  const holdings = [
+    { id: 'h-EQUITY', allocation: ALLOCATION.EQUITY, marketValue: 10_000, costBasis: 10_000,
+      costBaseByCountry: { AU: 10_000 }, acquisitionPriceLevel: 1.0,
+      purchaseDate: new Date(Date.UTC(2026, 0, 1)) },
+    { id: 'reb-EQUITY-1', allocation: ALLOCATION.EQUITY, marketValue: 10_000, costBasis: 10_000,
+      costBaseByCountry: { AU: 10_000 }, acquisitionPriceLevel: 1.34,
+      purchaseDate: new Date(Date.UTC(2036, 0, 1)) },
+  ];
+  const r = consumeHoldingsFifo(holdings, 20_000,
+    { level: 1.50, asOfMs: Date.UTC(2040, 0, 1), country: 'AU' });
+  // 10,000 × 1.50/1.00 = 15,000  +  10,000 × 1.50/1.34 = 11,194.03
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 26_194.03);
+
+  // With the level left null — the pre-fix shape — the second lot indexes at factor 1
+  // and its inflation is taxed as if it were real gain.
+  const unstamped = consumeHoldingsFifo(
+    holdings.map(h => h.id === 'reb-EQUITY-1' ? { ...h, acquisitionPriceLevel: null } : h),
+    20_000, { level: 1.50, asOfMs: Date.UTC(2040, 0, 1), country: 'AU' });
+  assert.equal(unstamped.realizedIndexedBasisByCountry.AU, 25_000);
+});
+
+test('RLV-12: the residency step-up supersedes a purchase-time level', () => {
+  // Both must move together: the step-up replaces the AU cost base with market value at
+  // the move, so indexing that new base from the older purchase level would relieve the
+  // same inflation twice.
+  const svc = new AccountService(new Graph(), new EventBus());
+  const acct = {
+    type: ACCOUNT_TYPE.BROKERAGE, balance: 50_000, balanceAtResidencyChange: null,
+    holdings: [
+      { id: 'reb-EQUITY-1', marketValue: 50_000, costBasis: 30_000,
+        costBaseByCountry: null, acquisitionPriceLevel: 1.10 },
+    ],
+  };
+  svc.recordResidencyChange(acct, { country: 'AU', stepUp: true, priceLevel: 1.40, asOfMs: Date.UTC(2031, 6, 1) });
+
+  assert.equal(acct.holdings[0].costBaseByCountry.AU, 50_000, 'AU base = market value at the move');
+  assert.equal(acct.holdings[0].acquisitionPriceLevel, 1.40,
+    'the AU acquisition is the move, so the move\'s level governs');
+  assert.equal(acct.holdings[0].acquisitionDateByCountry.AU, Date.UTC(2031, 6, 1));
+});
+
+test('RLV-13: compaction blends acquisitionPriceLevel so the indexed AU basis is unchanged', () => {
+  // The level is per-vintage, so leaving it in the fungibility key would make every lot
+  // unique and stop compaction dead. Blending it must be EXACT, not approximate: the
+  // merged lot has to index to the same AU cost base the separate lots would have.
+  const now  = Date.UTC(2050, 0, 1);
+  const lots = [
+    // Both null — the shape a rebalance buy actually produces. A lot the residency
+    // step-up has stamped carries its own AU base, which is in the fungibility key and
+    // so never blends across lots.
+    { id: 'reb-EQUITY-1', allocation: ALLOCATION.EQUITY, marketValue: 30_000, costBasis: 10_000,
+      costBaseByCountry: null, acquisitionPriceLevel: 1.0,
+      purchaseDate: new Date(Date.UTC(2030, 0, 1)) },
+    { id: 'reb-EQUITY-2', allocation: ALLOCATION.EQUITY, marketValue: 20_000, costBasis: 12_000,
+      costBaseByCountry: null, acquisitionPriceLevel: 1.5,
+      purchaseDate: new Date(Date.UTC(2040, 0, 1)) },
+  ];
+  const sale = { level: 2.0, asOfMs: now, country: 'AU' };
+
+  const before = consumeHoldingsFifo(lots, 50_000, sale);
+  const after  = consumeHoldingsFifo(_compactSeasonedLots(lots, now), 50_000, sale);
+
+  assert.equal(_compactSeasonedLots(lots, now).length, 1, 'the two vintages compact');
+  // 10,000 × 2.0/1.0 + 12,000 × 2.0/1.5 = 20,000 + 16,000 = 36,000
+  assert.equal(before.realizedIndexedBasisByCountry.AU, 36_000);
+  assert.equal(after.realizedIndexedBasisByCountry.AU, before.realizedIndexedBasisByCountry.AU,
+    'the merged lot indexes to exactly the same AU cost base');
+  assert.equal(after.realizedBasis, before.realizedBasis, 'un-indexed basis unchanged too');
 });

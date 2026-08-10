@@ -97,6 +97,9 @@ export class BondLadderReducer extends Reducer {
       // design 67 — price each rung along the yield curve at ITS OWN tenor, so a
       // freshly built ladder earns the term premium (flat curve ⇒ every rung == anchor).
       couponForTenor: (tenorYears) => resolveYield(state, { rateKey, tenorYears }),
+      // The AU CPI level is the indexation base wherever the ladder lives — only AU
+      // indexes a cost base, so the level is read from AU regardless of this.country.
+      priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
     });
 
     const nonBond     = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
@@ -118,7 +121,7 @@ export class BondLadderReducer extends Reducer {
 export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
                                     roll = true, taxExemption = 'state',
                                     stateKey = 'ladder', rateKey = null, couponRate = null,
-                                    couponForTenor = null }) {
+                                    couponForTenor = null, priceLevel = null }) {
   const n        = Math.max(1, Math.round(rungs));
   const spacing  = spacingYears > 0 ? spacingYears : 1;
   const ladderTermYears = +(n * spacing).toFixed(4);
@@ -142,7 +145,10 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
       costBasis:      face,
       costBaseByCountry: null,
       purchaseDate:   now,
-      acquisitionPriceLevel: null,
+      // AU indexation base at THIS rung's acquisition (design 57 §6.3 / design 62 §9.5).
+      // Null on the UI builder path, which has no simulation state to read a CPI level
+      // from — that keeps the pre-existing "never indexed" behavior for authored ladders.
+      acquisitionPriceLevel: priceLevel,
       acquisitionDateByCountry: null,
       rateKey,
       label:          `Ladder ${k + 1}/${n}`,
