@@ -65,7 +65,10 @@ function step(acct, target, bands = {}) {
 
 const gross = a => +a.holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0).toFixed(2);
 const basis = a => +a.holdings.reduce((s, h) => s + (h.costBasis   ?? 0), 0).toFixed(2);
-const classes = a => a.holdings.map(h => h.allocation).sort();
+// Distinct asset classes present. A buy establishes its own dated lot (design 62 §9), so
+// an account can legitimately hold several lots of one class — what matters here is that
+// the liquidated CLASS is gone, not how many lots the survivors are spread over.
+const classes = a => [...new Set(a.holdings.map(h => h.allocation))].sort();
 
 // A target whose GOLD weight rounds to a sub-cent of the account: enough to make the
 // sell leg stop one cent short, while EQUITY's 20-point drift fires the band.

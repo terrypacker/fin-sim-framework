@@ -69,7 +69,7 @@ import { DownturnRothConversionReducer } from './finance/behavioral/downturn-rot
 import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportunistic-rebalance-apply-reducer.js';
 import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
-import { RebalanceToTargetApplyReducer, _sweepDust } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
+import { RebalanceToTargetApplyReducer, _sweepDust, _compactSeasonedLots } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
 import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
@@ -783,6 +783,7 @@ export const Finance = {
   PanicSellReducer,
   RebalanceToTargetApplyReducer,
   _sweepDust,
+  _compactSeasonedLots,
   ALLOCATION_LOCATION,
   TAX_ADVANTAGED_ROLES,
   TAXABLE_ROLES,

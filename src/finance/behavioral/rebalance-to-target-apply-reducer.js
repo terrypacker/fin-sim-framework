@@ -28,16 +28,56 @@ import { realiseDerivedGain } from '../assets/investment-account.js';
  *     a rebalance redeploys the proceeds *within* the account.
  *   - **Sheltered sell** (K401/IRA/Roth/Super) and **CASH** sells: free pro-rata
  *     reduce, no tax.
- *   - **Buy**: add to an existing sleeve of the target allocation, or ESTABLISH a new
- *     sleeve when none exists (the design-61 §6 buy primitive) — stamping allocation,
- *     marketValue, costBasis (= amount, fresh basis), purchaseDate, rateKey (via
- *     resolveRateKey) and BOND defaults. A GOLD sleeve may be established in ANY
- *     account, including a US IRA/401k/Roth — the bullion guard was reversed (design 61
- *     §12 OQ4a, 2026-07-29) because a gold ETF is holdable there and taxed the same.
+ *   - **Buy**: ESTABLISH a new lot of the target allocation (the design-61 §6 buy
+ *     primitive) — stamping allocation, marketValue, costBasis (= amount, fresh basis),
+ *     purchaseDate, rateKey (via resolveRateKey) and BOND defaults. A GOLD sleeve may be
+ *     established in ANY account, including a US IRA/401k/Roth — the bullion guard was
+ *     reversed (design 61 §12 OQ4a, 2026-07-29) because a gold ETF is holdable there and
+ *     taxed the same.
  *
  * Legs sum to zero (Σ delta = 0), so gross account value is conserved; the realized
  * CGT is the only (deferred) cost. Balance is re-synced to Σ marketValue. Holdings are
  * rebuilt copy-on-write (never mutated in place) so JOURNAL_STRICT purity holds (G2).
+ *
+ * ─── why a buy SPLITS a lot instead of merging into the sleeve (design 62 §9) ──
+ *
+ * A buy used to be spread pro-rata across the existing lots of the target allocation:
+ * `marketValue` and `costBasis` moved, `purchaseDate` did not. Freshly bought units
+ * therefore inherited the sleeve's original acquisition date and read as held ≥12 months
+ * from the instant they were bought. Every holding-period rule keys off that date —
+ * `consumeHoldings`' AU Division 115 discount gate and the post-2027 indexation clock
+ * today, the residency deemed-acquisition clock (design 62 §4) and anything added later
+ * (US short/long-term CGT, wash sales) tomorrow — so on a semiannual cadence, money
+ * bought at one rebalance and sold at the next was six months old and discounted anyway.
+ * The pro-rata add also raised `costBasis` while leaving `costBaseByCountry` alone, so
+ * new money added to a stepped-up lot silently overstated the AU gain by its full amount.
+ *
+ * A buy is now what it actually is: a purchase made TODAY, in its own lot, with its own
+ * `purchaseDate`, fresh basis and no per-country step-up history. It inherits the traits
+ * the existing lots UNANIMOUSLY agree on (`_inheritedTraits`) — you are buying more of
+ * the same thing, so an AU-share sleeve keeps buying AU shares and a treasury sleeve
+ * keeps its state-tax exemption — but never their dates or bases.
+ *
+ * CASH is the one exception: a currency unit realizes no capital gain (design 87 §11)
+ * and so has no holding period to preserve. Cash buys still merge pro-rata, which keeps
+ * a cash sleeve one lot.
+ *
+ * ─── keeping the lot count bounded ──────────────────────────────────────────
+ *
+ * One new lot per rebalance per allocation would grow without limit over a 44-year run,
+ * and every lot costs a per-holding growth / dividend / coupon action every period.
+ * `_compactSeasonedLots` bounds it: lots THIS reducer created, of the same allocation
+ * and otherwise identical, that are ALL already past the 12-month mark, collapse into
+ * one. Once a lot is seasoned it stays seasoned, so no holding-period rule can tell the
+ * merged lots apart — and the survivor keeps the EARLIEST `purchaseDate`, so the
+ * compacted block still sorts ahead of the young lots under FIFO. Steady state is one
+ * seasoned lot plus however many rebalances fall in the trailing 12 months.
+ *
+ * What that does cost: FIFO ordering *within* the seasoned block is averaged, so a
+ * partial sale realizes the block's blended basis rather than its oldest lot's. That is
+ * the same pro-rata convention `_reduceProRata` and `mergeCouponReinvestLots` already
+ * use, and it is confined to lots this reducer created — authored scenario lots are
+ * never merged into.
  *
  * ─── why the dust sweep exists ───────────────────────────────────────────────
  *
@@ -118,22 +158,29 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       }
     }
 
-    // ── Buy legs (delta > 0) — add to a sleeve, or establish a new one ───────────
+    // ── Buy legs (delta > 0) — each establishes a fresh lot dated today ──────────
     for (const { allocation, delta } of legs) {
       if (delta <= 0.01) continue;
       const buyAmt   = +delta.toFixed(2);
       const matching = holdings.filter(h => h.allocation === allocation);
-      if (matching.length > 0) {
+      // CASH realizes no capital gain and so has no holding period worth splitting a
+      // lot for (design 87 §11) — merge it and keep the sleeve one lot.
+      if (allocation === ALLOCATION.CASH && matching.length > 0) {
         holdings = _addProRata(holdings, allocation, buyAmt);
-      } else {
-        // Establish a new sleeve. The gold backstop that used to sit here is gone with
-        // the bullion guard (design 61 §12 OQ4a, reversed 2026-07-29) — a GOLD sleeve
-        // may now be established in any account, including a US IRA/401k/Roth.
-        holdings = [...holdings, _newSleeve({ allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey })];
+        continue;
       }
+      // Establish a new lot, inheriting only what the existing lots unanimously agree
+      // on. The gold backstop that used to sit here is gone with the bullion guard
+      // (design 61 §12 OQ4a, reversed 2026-07-29) — a GOLD sleeve may now be
+      // established in any account, including a US IRA/401k/Roth.
+      holdings = [...holdings, _newSleeve({
+        allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey,
+        traits: _inheritedTraits(matching),
+      })];
     }
 
     holdings = _sweepDust(holdings);
+    holdings = _compactSeasonedLots(holdings, purchaseMs);
 
     const newBalance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     return this.newState(
@@ -260,7 +307,13 @@ function _reduceProRata(holdings, allocation, amount) {
   }).filter(Boolean);
 }
 
-/** Pro-rata add `amount` to the given allocation's holdings (buying: basis tracks market). */
+/**
+ * Pro-rata add `amount` to the given allocation's holdings (buying: basis tracks market).
+ *
+ * CASH ONLY. Every other allocation buys its own lot, because this merge cannot stamp a
+ * purchase date on the units it adds — see the class doc. It is retained for cash because
+ * a currency unit has no capital gain and therefore no holding period to preserve.
+ */
 function _addProRata(holdings, allocation, amount) {
   const matching = holdings.filter(h => h.allocation === allocation);
   const totalMv  = matching.reduce((s, h) => s + (h.marketValue ?? 0), 0);
@@ -275,16 +328,57 @@ function _addProRata(holdings, allocation, amount) {
   });
 }
 
+/**
+ * The traits a freshly bought lot inherits from the lots it sits beside — but ONLY when
+ * every one of them agrees. A rebalance buy is "more of the same thing", so an EQUITY
+ * sleeve authored as AU shares keeps buying AU shares, a treasury BOND sleeve keeps its
+ * state-tax exemption, and a lot carrying an explicit dividend yield keeps paying it
+ * rather than silently dropping to the account-level fallback.
+ *
+ * A field the lots DISAGREE on returns `undefined`, which `_newSleeve` reads as "use the
+ * default" — a mixed sleeve gets the plain, resolved defaults rather than an arbitrary
+ * lot's traits.
+ *
+ * Deliberately excluded: `couponRate` (design 66 G1 — a bond bought today locks TODAY's
+ * market yield, which is the whole point of the lock), and everything date- or
+ * basis-shaped (`purchaseDate`, `costBaseByCountry`, `acquisitionDateByCountry`,
+ * `acquisitionPriceLevel`) — inheriting those is the defect this split exists to fix.
+ */
+function _inheritedTraits(matching) {
+  const lots = (matching ?? []).filter(Boolean);
+  const unanimous = (field) => {
+    if (lots.length === 0) return undefined;
+    const first = lots[0][field] ?? null;
+    return lots.every(h => (h[field] ?? null) === first) ? first : undefined;
+  };
+  return {
+    rateKey:       unanimous('rateKey'),
+    taxExemption:  unanimous('taxExemption'),
+    issuingState:  unanimous('issuingState'),
+    dividendYield: unanimous('dividendYield'),
+    duration:      unanimous('duration'),
+  };
+}
+
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */
-function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null }) {
+function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null, traits = {} }) {
   // The role is safe to pass now: resolveRateKey only lets it refine WITHIN the
   // allocation's own class, so a BOND sleeve in an equity-role account still
   // resolves to the bond rate. (This used to force role=null to work around the
   // resolver returning the wrapper's equity key for any non-CASH/GOLD sleeve.)
-  const rateKey  = resolveRateKey(country, allocation, role);
-  const duration = allocation === ALLOCATION.BOND
-    ? (RATE_KEY_META[rateKey]?.defaultDuration ?? null)
+  // Called unconditionally even when a rateKey is inherited, so an unknown allocation
+  // still throws here rather than surviving as an unresolvable lot.
+  const resolvedKey = resolveRateKey(country, allocation, role);
+  const rateKey     = traits.rateKey !== undefined ? traits.rateKey : resolvedKey;
+  const defaultDuration = allocation === ALLOCATION.BOND
+    ? (RATE_KEY_META[resolvedKey]?.defaultDuration ?? null)
     : null;
+  // Duration is a property of the instrument being bought, so it follows the sleeve when
+  // the sleeve agrees on one; the coupon below does NOT, because that is the price paid
+  // today (design 66 G1).
+  const duration = allocation === ALLOCATION.BOND && traits.duration !== undefined
+    ? traits.duration
+    : defaultDuration;
   // G1 (design 66) — yield lock-in: a newly established BOND sleeve fixes its coupon
   // at the prevailing market yield at purchase, read from state.effectiveInterestRates
   // for the sleeve's fixed-income rate key (per-account `<rateKey>::<stateKey>` override
@@ -313,13 +407,15 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
     acquisitionDateByCountry: null,
     rateKey,
     label:         '',
-    dividendYield: null,
+    dividendYield: traits.dividendYield ?? null,
     couponRate,                   // G1: locked to the market yield at purchase (null ⇒ floats)
     appreciationSchedule: null,
     duration,
     taxLossPartner: null,
-    taxExemption:  'none',        // an established sleeve is a generic taxable bond (design 66 §G2)
-    issuingState:  null,
+    // An established sleeve is a generic taxable bond (design 66 §G2) unless the sleeve
+    // it joins is unanimously something else — buying more treasuries stays exempt.
+    taxExemption:  traits.taxExemption ?? 'none',
+    issuingState:  traits.issuingState ?? null,
   };
 }
 
@@ -339,12 +435,121 @@ function _stampCouponRate(state, stateKey, rateKey) {
 }
 
 /**
+ * The id prefix every lot this reducer establishes carries. Compaction keys off it so
+ * the reducer only ever merges lots it created itself — an authored scenario lot, a bond
+ * ladder rung or a coupon-reinvestment lot is left exactly where it is.
+ */
+const REB_LOT_PREFIX = 'reb-';
+
+const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Fields that do NOT have to match for two lots to be merged: identity, the two amounts
+ * that are summed, the date that is taken from the older lot, and the two quantities
+ * blended by market value below. Everything else is part of the fungibility key, so a
+ * field added to Holding later automatically *prevents* a merge rather than being
+ * silently averaged away.
+ */
+const MERGEABLE_FIELDS = new Set(['id', 'marketValue', 'costBasis', 'purchaseDate', 'couponRate', 'duration']);
+
+/**
+ * Collapse this reducer's own seasoned lots so the holdings array stays bounded over a
+ * long run (see the class doc). Two lots merge only when ALL of:
+ *
+ *   - both were established by this reducer (`reb-` id) and hold value;
+ *   - both are already ≥12 months old at `asOfMs`, so no holding-period rule — the AU
+ *     Division 115 gate, the post-2027 indexation clock, a future US short/long-term
+ *     split — can distinguish them, now or ever after;
+ *   - every other field matches exactly, including `costBaseByCountry` and
+ *     `acquisitionDateByCountry`, so a residency step-up is never blended across lots.
+ *
+ * `couponRate` and `duration` are blended by market value (the convention
+ * `mergeCouponReinvestLots` already uses): mv × rate and mv × duration are what the
+ * coupon and price-sensitivity paths consume, so the blend is exact at merge time. Their
+ * NULL-ness is part of the key — a lot whose coupon floats never merges with one that
+ * locked a rate.
+ *
+ * The survivor keeps the earliest `purchaseDate` and that lot's id, so FIFO order across
+ * the boundary is unchanged and replay stays deterministic.
+ *
+ * Exported for direct testing.
+ */
+export function _compactSeasonedLots(holdings, asOfMs) {
+  const groups = new Map();
+  holdings.forEach((h, i) => {
+    const key = _fungibleKey(h, asOfMs);
+    if (key == null) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  });
+
+  const survivors = new Map();   // index → merged lot
+  const absorbed  = new Set();   // indices folded away
+  for (const idxs of groups.values()) {
+    if (idxs.length < 2) continue;
+    // Earliest purchaseDate wins; index order breaks a tie so the choice is deterministic.
+    let keep = idxs[0];
+    for (const i of idxs) {
+      if (_purchaseTs(holdings[i]) < _purchaseTs(holdings[keep])) keep = i;
+    }
+    let mv = 0, basis = 0, couponMv = 0, durationMv = 0;
+    for (const i of idxs) {
+      const h = holdings[i];
+      mv         += h.marketValue ?? 0;
+      basis      += h.costBasis   ?? 0;
+      couponMv   += (h.couponRate ?? 0) * (h.marketValue ?? 0);
+      durationMv += (h.duration   ?? 0) * (h.marketValue ?? 0);
+      if (i !== keep) absorbed.add(i);
+    }
+    const base = holdings[keep];
+    survivors.set(keep, {
+      ...base,
+      marketValue: +mv.toFixed(2),
+      costBasis:   +basis.toFixed(2),
+      couponRate:  base.couponRate == null || mv <= 0 ? base.couponRate : +(couponMv / mv).toFixed(6),
+      duration:    base.duration   == null || mv <= 0 ? base.duration   : +(durationMv / mv).toFixed(4),
+    });
+  }
+  if (absorbed.size === 0) return holdings;
+
+  const out = [];
+  holdings.forEach((h, i) => {
+    if (absorbed.has(i)) return;
+    out.push(survivors.get(i) ?? h);
+  });
+  return out;
+}
+
+/**
+ * The merge key for `_compactSeasonedLots`, or null when the lot may not be merged at
+ * all (not ours, worthless, or not yet seasoned).
+ */
+function _fungibleKey(h, asOfMs) {
+  if (!h || typeof h.id !== 'string' || !h.id.startsWith(REB_LOT_PREFIX)) return null;
+  if ((h.marketValue ?? 0) <= 0) return null;
+  if (asOfMs - _purchaseTs(h) < TWELVE_MONTHS_MS) return null;
+  const fields = Object.keys(h).filter(k => !MERGEABLE_FIELDS.has(k)).sort();
+  return JSON.stringify([
+    ...fields.map(k => [k, h[k]]),
+    ['couponRate:null', h.couponRate == null],
+    ['duration:null',   h.duration   == null],
+  ]);
+}
+
+/** Milliseconds of a lot's purchaseDate; 0 (oldest) when it carries none. */
+function _purchaseTs(h) {
+  if (!h?.purchaseDate) return 0;
+  const t = h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/**
  * A deterministic holding id unique within `holdings` — `reb-<alloc>-<purchaseMs>`,
  * with a numeric suffix only if that base already exists (e.g. a sleeve re-established
  * in the same period after being fully consumed). Deterministic ⇒ snapshot/replay-safe.
  */
 function _freshHoldingId(holdings, allocation, purchaseMs) {
-  const base = `reb-${allocation}-${purchaseMs}`;
+  const base = `${REB_LOT_PREFIX}${allocation}-${purchaseMs}`;
   const existing = new Set((holdings ?? []).map(h => h?.id).filter(Boolean));
   if (!existing.has(base)) return base;
   let i = 2;

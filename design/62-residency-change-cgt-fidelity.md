@@ -66,6 +66,7 @@ implemented faithfully.
 | **2** | No ceasing-residency deemed disposal (CGT event I1) + disregard/defer election | Latent (needs bidirectional moves) | §6 — documented only |
 | **4** | TAP decided by asset *type*, not a TAP test (no indirect-AU-real-property interests) | No | §6 — documented only |
 | **5** | Pre-CGT (pre-20-Sep-1985) assets not modeled | No | §6 — documented only |
+| **6** | A rebalance BUY inherited the sleeve's `purchaseDate` (and left `costBaseByCountry` stale), so no holding-period rule could bind on money bought through it | Yes (any rebalanced account) | **§9 — DONE** |
 
 ### Probe evidence (Gap 1)
 
@@ -310,3 +311,100 @@ indexation-clock fix). `npm run test:unit` + `npm run test:viz` + `npm run build
    lot, most accurate), consistent with design 57 Option A. **Confirmed.**
 3. **New field naming:** `Holding.acquisitionDateByCountry` (parallels `costBaseByCountry`), a
    per-country map for consistency + future multi-jurisdiction moves. **Confirmed.**
+
+---
+
+## 9. Gap 6 — a rebalance BUY inherited the sleeve's acquisition date (DONE)
+
+### 9.1 Root cause
+
+`RebalanceToTargetApplyReducer._addProRata` spread a buy leg across the existing lots of the
+target allocation, pro-rata by market value:
+
+```js
+return { ...h,
+  marketValue: +(h.marketValue + amount * fraction).toFixed(2),
+  costBasis:   +((h.costBasis ?? 0) + amount * fraction).toFixed(2) };
+```
+
+`marketValue` and `costBasis` moved. `purchaseDate` did not. Freshly bought units therefore
+inherited the sleeve's original acquisition date and read as held ≥12 months from the instant
+they were bought — so §4's whole apparatus (the Division 115 discount gate, the post-2027
+indexation clock, and the deemed-acquisition date this design added) could never bind on
+anything acquired through the rebalance buy path. On a semiannual cadence, money bought at one
+rebalance and sold at the next had been held six months and was discounted anyway.
+
+**A second defect rode along.** The same merge raised `costBasis` while leaving
+`costBaseByCountry` untouched. Adding new money to a lot the resident's move had stepped up
+therefore raised its market value with no matching rise in its AU base, and the whole of the
+added amount later showed up as AU capital gain. That one has a *price*, unlike the holding-
+period defect, which is why it is what actually moved the reference scenario (§9.4).
+
+### 9.2 Design — a buy is a purchase made TODAY
+
+The buy leg now establishes its **own lot**, stamped with the current period's date, fresh
+basis, and no per-country step-up history (`costBaseByCountry` / `acquisitionDateByCountry`
+both null — the units were not present for the move). `_newSleeve` already built exactly that
+shape for the establish-from-zero case; the add-to-existing case now goes through it too.
+
+**Trait inheritance.** A rebalance buy is "more of the same thing", so the new lot inherits the
+traits the existing lots **unanimously** agree on — `rateKey`, `taxExemption`, `issuingState`,
+`dividendYield`, `duration`. An AU-share sleeve keeps buying AU shares; a treasury sleeve keeps
+its state-tax exemption (design 59); a lot carrying an explicit dividend yield keeps paying it
+instead of silently dropping to the account-level fallback. A sleeve whose lots **disagree**
+gets the plain resolved defaults rather than an arbitrary lot's traits. `couponRate` is
+deliberately excluded: a bond bought today locks *today's* market yield (design 66 G1).
+
+**CASH is exempt** and still merges pro-rata. A currency unit realizes no capital gain
+(design 87 §11), so it has no holding period a split lot would preserve, and merging keeps a
+cash sleeve one lot.
+
+### 9.3 Bounding the lot count
+
+One lot per buy per allocation would grow without limit over a 44-year run, and every lot costs
+a per-holding growth / dividend / coupon action every period. `_compactSeasonedLots` collapses
+lots **this reducer created** (`reb-` id prefix) that are of the same allocation, otherwise
+field-for-field identical, and **all already ≥12 months old**. Once a lot is seasoned it stays
+seasoned, so no holding-period rule can distinguish the merged lots — now or ever after. The
+survivor keeps the **earliest** `purchaseDate` and that lot's id, so FIFO order across the
+boundary is unchanged and replay stays deterministic. `couponRate` and `duration` are blended
+by market value (the convention `mergeCouponReinvestLots` already uses); their null-ness is part
+of the fungibility key, so a floating-coupon lot never merges into one that locked a rate.
+
+Steady state per class is one compacted seasoned lot plus however many rebalances fall in the
+trailing twelve months.
+
+> **What this costs.** FIFO ordering *within* the compacted block is averaged: a partial sale
+> realizes the block's blended basis rather than its oldest lot's. That is the same pro-rata
+> convention `_reduceProRata` already uses, and it is confined to lots the reducer created —
+> authored scenario lots, ladder rungs and coupon-reinvestment lots are never merged into.
+> Every field not explicitly listed as mergeable is part of the key, so a field added to
+> `Holding` later *prevents* a merge rather than being silently averaged away.
+
+### 9.4 Measured effect — and a correction to the original diagnosis
+
+The bug report attributed the reference scenario's "the 12-month gate binds on only 1 of N
+rebalance disposals" to this inheritance. **It does not.** Re-measured before and after, the
+binding count is *unchanged*: FIFO consumes the oldest lots first, so a rebalance sell almost
+never reaches money bought within the last twelve months, whatever date that money carries. The
+gate rarely binding is FIFO ordering doing its job, not the defect.
+
+The defect is nonetheless real, and provable in isolation: a lot bought at one rebalance and
+sold six months later at the next reported its **entire** gain as discount-eligible before the
+fix and only the seasoned lot's gain after (`tests/unit/evt-rebalance-lot-vintage.test.mjs`,
+RLV-1, with RLV-2 as the ≥12-month control).
+
+What actually moved the reference scenario is §9.1's second defect — the stale
+`costBaseByCountry`. Total AU gain across rebalance disposals falls by well under a percent,
+cumulative taxes paid fall with it, and terminal net worth rises about a fifth of a percent.
+Lot growth is negligible: peak lots in a single account rose by two, and the whole-state lot
+count at simEnd by four.
+
+### 9.5 Still open
+
+`_newSleeve` stamps `acquisitionPriceLevel: null` on every lot it establishes, so a sleeve
+bought *during* the simulation gets an indexation factor of 1 under the post-2027 reform
+(design 57 §6.3) — it is never CPI-indexed. Conservative (it overstates the AU gain rather than
+understating it) and pre-existing, but wrong: the lot was acquired at a knowable price level.
+Stamping the AU CPI accumulator at purchase is a two-line change with a real tax consequence,
+so it is deliberately left out of this gap.
