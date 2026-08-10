@@ -16,6 +16,7 @@
 
 import { QueryApi }      from '../query/query-api.js';
 import { taxYearLabel }  from './tax/tax-year-label.js';
+import { JournalFxRates, normalizeAggregateCurrency, USD_AUD_PATH } from './journal-reporting/report-currency.js';
 
 /**
  * JournalQueryApi — extends QueryApi with domain-aware helpers for journal queries.
@@ -39,6 +40,7 @@ export class JournalQueryApi extends QueryApi {
     this._typeRegistry  = typeRegistry  ?? null;
     this._periodService = periodService ?? null;
     this._schemaRegistry = schemaRegistry ?? null;
+    this._fxRates       = null;  // lazy — built from the journal on first use
   }
 
   /**
@@ -334,16 +336,22 @@ export class JournalQueryApi extends QueryApi {
    * @param {string|object} opts.query         - DSL or pre-built AST
    * @param {string}   opts.periodType         - 'YEAR_US' | 'YEAR_AU'
    * @param {Record<string,{fn:string,field?:string}>} opts.aggregates
+   * @param {string}   [opts.currency]         - normalise money fields to this code
    * @returns {Promise<{groups: Array, grandTotal: number|null}>}
    */
-  async aggregateByYear({ query, periodType, aggregates }) {
+  async aggregateByYear(opts) {
+    const { query, periodType } = opts;
     if (!this._periodService) {
-      return this.aggregate({ query, groupBy: ['year'], aggregates });
+      return this.aggregate({ ...opts, groupBy: ['year'] });
     }
 
     const where     = typeof query === 'string' ? this._parse(query) : query;
     const predicate = this._buildPredicate(where);
-    const rows      = this._dataSource.getAll().filter(predicate);
+    const prepared  = this._prepareAggregation(
+      this._dataSource.getAll().filter(predicate), opts.aggregates ?? {}, opts,
+    );
+    const rows       = prepared.rows;
+    const aggregates = prepared.aggregates;
 
     const yearPeriods = this._periodService.getAllPeriods()
       .filter(p => p.type === periodType)
@@ -380,6 +388,45 @@ export class JournalQueryApi extends QueryApi {
       : null;
 
     return { groups, grandTotal };
+  }
+
+  // ─── Currency normalisation ────────────────────────────────────────────────
+
+  /**
+   * Convert every currency-typed aggregate field into `opts.currency` before it
+   * is folded, so a report spanning both countries sums one unit instead of
+   * adding AUD onto USD (see report-currency.js). Inert unless the caller asks
+   * for a currency — `runReport` passes the one the ReportDefinition declares.
+   *
+   * @override
+   */
+  _prepareAggregation(rows, aggregates, opts) {
+    if (!opts?.currency) return { rows, aggregates };
+    return normalizeAggregateCurrency({
+      rows,
+      aggregates,
+      targetCurrency: opts.currency,
+      typeRegistry:   this._typeRegistry,
+      schemaRegistry: this._schemaRegistry,
+      fx:             this.fxRates(),
+    });
+  }
+
+  /**
+   * The run's USD/AUD rate history, recovered from the journal (memoised).
+   * Falls back to the rate the schema registry's live state carries when the
+   * journal itself records none.
+   *
+   * @returns {JournalFxRates}
+   */
+  fxRates() {
+    if (!this._fxRates) {
+      const reg = this._schemaRegistry;
+      this._fxRates = new JournalFxRates(this._dataSource._journal, {
+        fallbackRate: () => reg?.currentStateValue?.(USD_AUD_PATH) ?? null,
+      });
+    }
+    return this._fxRates;
   }
 
   // ─── Index optimisation ────────────────────────────────────────────────────

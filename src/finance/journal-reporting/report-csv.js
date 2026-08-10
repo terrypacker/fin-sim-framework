@@ -40,14 +40,18 @@ const _esc = v => {
  * @param {object}  [opts]
  * @param {'entries'|'groups'} [opts.detail='entries']
  * @param {object}  [opts.lead]  - columns prepended to every row (e.g. taxYear)
+ * @param {string}  [opts.currency] - the currency the group totals were folded
+ *   in (ReportDefinition.reportCurrency). Entry rows then carry the converted
+ *   twin of each money field alongside the native figure, so a file whose totals
+ *   are USD never shows only its AUD detail lines.
  * @returns {Array<object>}
  */
-export function buildReportRows(groups, def, { detail = 'entries', lead = null } = {}) {
+export function buildReportRows(groups, def, { detail = 'entries', lead = null, currency = null } = {}) {
   if (!groups?.length) return [];
   const groupByFields = def?.defaultGroupBy ?? ['actionType'];
   return detail === 'groups'
     ? _groupRows(groups, def, groupByFields, lead)
-    : _entryRows(groups, groupByFields, lead);
+    : _entryRows(groups, groupByFields, lead, currency);
 }
 
 /**
@@ -77,8 +81,11 @@ function _groupRows(groups, def, groupByFields, lead) {
   });
 }
 
+/** Money columns that get a converted twin when the report declares a currency. */
+const _MONEY_COLS = ['amount', 'proceeds', 'gain', 'stateDelta'];
+
 /** One row per child journal entry, in chronological order within each group. */
-function _entryRows(groups, groupByFields, lead) {
+function _entryRows(groups, groupByFields, lead, currency = null) {
   const rows = [];
   for (const g of groups) {
     const keyObj = g.key ?? {};
@@ -97,6 +104,15 @@ function _entryRows(groups, groupByFields, lead) {
         row.gain        = item.gain        ?? null;
         row.stateKey    = item.stateKey    ?? null;
         row.stateDelta  = item.stateDelta  ?? null;
+        // The normalised twin the group total was folded from (report-currency.js).
+        // Present only on the fields this report actually converted, so an
+        // untouched report keeps its exact column set.
+        if (currency) {
+          for (const col of _MONEY_COLS) {
+            const derived = `${col}In${currency}`;
+            if (derived in item) row[derived] = item[derived] ?? null;
+          }
+        }
         rows.push(row);
       }
     } else {

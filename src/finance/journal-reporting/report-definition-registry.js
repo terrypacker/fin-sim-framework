@@ -47,6 +47,27 @@ export class ReportDefinition {
   get defaultSort() { return [{ field: 'total', dir: 'desc' }]; }
 
   /**
+   * The currency this report's money aggregates are expressed in, or null when
+   * the report declares none.
+   *
+   * Declaring one makes the aggregation layer convert every currency-typed
+   * field into it, per row, at the run's own recorded USD/AUD rate for that
+   * row's date (see report-currency.js). A report MUST declare one when its
+   * rows can span currencies — a total that adds AUD onto USD is a number in no
+   * currency, and both the panel and the CSV present it as if it were dollars.
+   *
+   * Returning null leaves the fold exactly as the rows were projected. That is
+   * right for the reports whose rows are single-currency by construction: the
+   * cc-faceted income and capital-gain drills read jurisdiction-fixed
+   * accumulators (AU buckets are AUD, US buckets USD), and the tax documents
+   * cross-foot against them in that native currency.
+   *
+   * @param {object} _params - resolved facet values for this invocation
+   * @returns {string|null}  - e.g. 'USD'
+   */
+  reportCurrency(_params) { return null; }
+
+  /**
    * Return the PeriodService period type ('YEAR_US' | 'YEAR_AU') to use for
    * period-based aggregation, or null to use the generic groupBy path.
    * Override in reports that group by year and have a fixed or facet-driven cc.
@@ -138,6 +159,20 @@ function _labelAccountGroups(groups, api) {
   }
   return groups;
 }
+
+/**
+ * The currency the account- and action-scoped money reports state their totals
+ * in. These have no country facet: one run's rows cover US accounts (USD) and
+ * AU accounts (AUD) at once, so every one of them can mix currencies — within a
+ * group when it buckets by action type, and in the grand total always. USD is
+ * the base currency the rest of the app already reports household money in
+ * (computeNetWorth, cumulativeTaxesPaid), and the panel's own formatter has
+ * always labelled these totals `$` — this makes that label true.
+ *
+ * A single-country run converts USD→USD, i.e. not at all, so nothing moves
+ * there.
+ */
+const ACCOUNT_REPORT_CURRENCY = 'USD';
 
 // ─── Shared facet → predicate helpers ────────────────────────────────────────
 
@@ -482,6 +517,9 @@ class CashFlowByAccountDef extends ReportDefinition {
   get description() { return 'Net balance changes per account across journal entries.'; }
   get perDiff()     { return true; }
 
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
+
   get facets() {
     return [
       { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
@@ -523,6 +561,9 @@ class WithdrawalsByAccountDef extends ReportDefinition {
   get title()       { return 'Withdrawals by Account'; }
   get description() { return 'Money leaving each account via withdrawal-class actions (IRA/401k/Roth/brokerage/super/savings).'; }
   get perDiff()     { return true; }
+
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
 
   get facets() {
     return [
@@ -566,6 +607,9 @@ class CreditsToAccountDef extends ReportDefinition {
   get description() { return 'All positive balance changes per account — replenishments, contributions, earnings, and transfers in.'; }
   get perDiff()     { return true; }
 
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
+
   get facets() {
     return [
       { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
@@ -603,6 +647,9 @@ class DebitsFromAccountDef extends ReportDefinition {
   get description() { return 'All negative balance changes per account — expenses, taxes, transfers out, and withdrawals.'; }
   get perDiff()     { return true; }
 
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
+
   get facets() {
     return [
       { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
@@ -637,7 +684,13 @@ class DebitsFromAccountDef extends ReportDefinition {
 class TaxPaidByYearDef extends ReportDefinition {
   get id()          { return 'tax-paid-by-year'; }
   get title()       { return 'Tax Paid by Year'; }
-  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries, excluding cross-border escalated re-issues). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down.'; }
+  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries, excluding cross-border escalated re-issues). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down. With Country left blank, AU payments are converted to USD at the run\'s recorded rate on the payment date, so the all-countries total is a single currency.'; }
+
+  // Each country's own currency when a country is picked — an AU return's
+  // figures belong in AUD. Blank cc mixes the two families, so it must name one:
+  // USD, matching state.cumulativeTaxesPaid (which the reconciliation and every
+  // lifetime-tax objective read).
+  reportCurrency(params) { return params?.cc === 'AU' ? 'AUD' : 'USD'; }
 
   get facets() {
     return [
@@ -815,6 +868,9 @@ class RealPropertyCashFlowDef extends ReportDefinition {
   get description() { return 'Cash movements driven by real-property events: house sales (proceeds) and mortgage payments (debits).'; }
   get perDiff()     { return true; }
 
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
+
   get facets() {
     return [
       { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
@@ -902,6 +958,9 @@ class MoneyMovedByActionDef extends ReportDefinition {
          + 'do not cancel); `net` is the signed sum; `out`/`in` are the largest single debit/credit.';
   }
   get perDiff()     { return true; }
+
+  /** Mixed-currency by construction: see ACCOUNT_REPORT_CURRENCY. */
+  reportCurrency(_params) { return ACCOUNT_REPORT_CURRENCY; }
 
   get facets() {
     return [

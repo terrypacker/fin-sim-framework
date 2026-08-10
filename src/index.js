@@ -159,6 +159,7 @@ import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { exportDrillReports } from './finance/journal-reporting/drill-report-export.js';
 import { buildReportRows, rowsToCsv, generateReportCsv } from './finance/journal-reporting/report-csv.js';
+import { USD_AUD_PATH, JournalFxRates, normalizeAggregateCurrency } from './finance/journal-reporting/report-currency.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
@@ -997,6 +998,9 @@ export const Finance = {
   buildReportRows,
   rowsToCsv,
   generateReportCsv,
+  USD_AUD_PATH,
+  JournalFxRates,
+  normalizeAggregateCurrency,
   ReportDefinition,
   ReportDefinitionRegistry,
   createReportApis,

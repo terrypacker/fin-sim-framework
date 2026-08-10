@@ -220,10 +220,16 @@ export class QueryApi {
    *   Supported fn: 'sum', 'count', 'min', 'max', 'avg'. field is required for all except 'count'.
    * @param {Array<{field:string,dir?:'asc'|'desc'}>} [opts.sort]  - sort groups
    *
+   * Subclasses may accept extra options: the whole `opts` object is handed to
+   * `_prepareAggregation()` untouched, so a domain subclass can honour a flag
+   * this generic layer knows nothing about (JournalQueryApi reads `currency`).
+   *
    * @returns {Promise<{ groups: Array<{key:object, items:object[], ...aggregates}>, grandTotal: number|null }>}
    *   grandTotal is the 'total' aggregate's sum across all groups, or null when not defined.
    */
-  async aggregate({ query = '', groupBy = [], aggregates = {}, sort = [], dedupeBy = null }) {
+  async aggregate(opts = {}) {
+    const { query = '', groupBy = [], sort = [], dedupeBy = null } = opts;
+    let aggregates = opts.aggregates ?? {};
     if (this.rebuildIndexes) this._buildIndexes();
 
     const where = typeof query === 'string'
@@ -232,7 +238,9 @@ export class QueryApi {
 
     const predicate = this._buildPredicate(where);
     const allItems  = this._dataSource.getAll();
-    const filtered  = allItems.filter(predicate);
+    const prepared  = this._prepareAggregation(allItems.filter(predicate), aggregates, opts);
+    const filtered  = prepared.rows;
+    aggregates      = prepared.aggregates;
 
     // Bucket by composite group key
     const buckets = new Map(); // key-string → { key: {}, items: [] }
@@ -271,6 +279,25 @@ export class QueryApi {
       : null;
 
     return { groups, grandTotal };
+  }
+
+  /**
+   * Hook: rewrite the filtered rows and/or the aggregate specs immediately
+   * before folding. The default is the identity — this layer folds whatever the
+   * caller asked for, on the rows as projected.
+   *
+   * Subclasses override it to fold something the raw rows cannot express on
+   * their own. JournalQueryApi uses it to normalise currency-typed fields to a
+   * single currency before they are summed, by writing a converted value onto a
+   * derived field and pointing the aggregate spec at that field instead.
+   *
+   * @param {object[]} rows                    filtered rows, in source order
+   * @param {Record<string,{fn:string,field?:string}>} aggregates
+   * @param {object}   _opts                   the full aggregate() options
+   * @returns {{rows: object[], aggregates: Record<string,{fn:string,field?:string}>}}
+   */
+  _prepareAggregation(rows, aggregates, _opts) {
+    return { rows, aggregates };
   }
 
   // =========================================================

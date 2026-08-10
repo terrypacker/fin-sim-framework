@@ -145,6 +145,25 @@ export class TypeRegistry {
     return this.byFamily(family, { cc }).map(e => e.type);
   }
 
+  /**
+   * The currency code declared for one payload field of one action type, e.g.
+   * `fieldCurrency('AU_TAX_PAYMENT_DEBIT', 'amount')` → `'AUD'`.
+   *
+   * Toolsets declare money fields as `ValueType.currency(code)`; without a
+   * reader that declaration is inert, which is how a report came to add AUD
+   * onto USD (see report-currency.js). Returns null when the type is
+   * unregistered, the field undeclared, or the field is not a currency — the
+   * caller decides what an unknown unit means.
+   *
+   * @param {string} actionType
+   * @param {string} field
+   * @returns {string|null}
+   */
+  fieldCurrency(actionType, field) {
+    const vt = this._actionTypes.get(actionType)?.fields?.[field];
+    return vt?.kind === 'currency' ? (vt.opts?.code ?? null) : null;
+  }
+
   // ── Picker ──────────────────────────────────────────────────────────────────
 
   /**

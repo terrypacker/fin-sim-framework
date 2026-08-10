@@ -27,7 +27,8 @@ const _fmtN      = (n) => n == null ? '—' : _fmt.format(n);
 const _fmtSigned = (n) => n == null ? '—' : (n > 0 ? '+' : '') + _fmt.format(n);
 const _signCls   = (n) => n == null ? '' : n >= 0 ? 'jr-amount--pos' : 'jr-amount--neg';
 
-// Report amounts are denominated in the active country's currency (the `cc` facet).
+// Fallback unit for a report that declares no currency of its own: the active
+// country's (the `cc` facet). See ReportDefinition.reportCurrency.
 const JR_CC_TO_CUR = { US: 'USD', AU: 'AUD' };
 
 /**
@@ -61,6 +62,9 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._facetValues    = {};
     this._groups         = [];
     this._grandTotal     = null;
+    // Currency the active report's money aggregates are stated in (design:
+    // report-currency.js). Null until a report has run.
+    this._currency       = null;
     this._expandedKeys   = new Set();
     this._sortState      = null;   // { field: string, dir: 'asc'|'desc' } | null
     // Cache of period option descriptors built per render. Indexed by `value`,
@@ -85,13 +89,18 @@ export class JournalReportPlugin extends WorkbenchComponent {
   }
 
   /**
-   * Format a signed report amount in the active report currency (per the `cc`
-   * facet), converted to the active display currency (design 10 §Phase 4).
-   * Keeps the +/- sign prefix of the original module formatter.
+   * Format a signed report amount in the report's currency, converted to the
+   * active display currency (design 10 §Phase 4). Keeps the +/- sign prefix of
+   * the original module formatter.
+   *
+   * The report's own declared currency wins: it is the unit the aggregation
+   * converted the rows INTO, so it describes the number in hand. The `cc` facet
+   * is only the fallback for a report that declares none (single-currency by
+   * construction, so its facet does say what unit the rows are in).
    */
   _fmtMoney(n) {
     if (n == null) return '—';
-    const code = JR_CC_TO_CUR[this._facetValues?.cc] ?? 'USD';
+    const code = this._currency ?? JR_CC_TO_CUR[this._facetValues?.cc] ?? 'USD';
     const reg  = this._services()?.schemaRegistry;
     const abs  = reg?.formatAmount?.(Math.abs(n), code) ?? _fmt.format(Math.abs(n));
     return (n > 0 ? '+' : n < 0 ? '-' : '') + abs;
@@ -230,6 +239,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._personApi = this._apis?.person ?? null;
     this._groups    = [];
     this._grandTotal = null;
+    this._currency  = null;
     this._expandedKeys.clear();
     // Period entry IDs are journal-specific; drop the stale selection so
     // _renderFacets() can re-default for the new scenario.
@@ -260,6 +270,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
     if (!this._activeReportId || !this._api) {
       this._groups     = [];
       this._grandTotal = null;
+      this._currency   = null;
       if (this._mounted) this._renderResults();
       return;
     }
@@ -271,6 +282,10 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
     this._groups     = result.groups;
     this._grandTotal = result.grandTotal;
+    // The unit the aggregation actually folded — the definition's declared
+    // report currency. Keeps the money formatter from guessing (design: a blank
+    // `cc` used to be labelled USD while the total mixed AUD and USD).
+    this._currency   = result.currency ?? null;
 
     if (this._mounted) this._renderResults();
   }
@@ -670,7 +685,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
   _downloadCsv() {
     const def = this._activeReportId ? this._registry.get(this._activeReportId) : null;
-    const csv = generateReportCsv(this._sortedGroups(), def, { detail: 'entries' });
+    const csv = generateReportCsv(this._sortedGroups(), def, { detail: 'entries', currency: this._currency });
     if (!csv) return;
 
     const reportTitle = def?.title ?? 'journal-report';

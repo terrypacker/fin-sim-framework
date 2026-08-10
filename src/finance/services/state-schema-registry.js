@@ -672,6 +672,21 @@ export class StateSchemaRegistry {
   displayCurrencyCode() { return this._displaySettings?.displayCurrency ?? null; }
 
   /**
+   * Read a dotted path off the injected rate state — the same snapshot
+   * `_toDisplayCurrency` converts against. Lets a non-display consumer (the
+   * report currency normaliser) reach the run's recorded FX rate without
+   * wiring a second provider. Returns null when no state is injected.
+   *
+   * @param {string} path  e.g. 'effectiveExchangeRates.USD_AUD'
+   * @returns {*|null}
+   */
+  currentStateValue(path) {
+    const state = this._rateStateProvider?.() ?? null;
+    if (!state || !path) return null;
+    return path.split('.').reduce((o, k) => (o == null ? null : o[k]), state) ?? null;
+  }
+
+  /**
    * Convert a raw amount from its native code to the active display currency,
    * returning the pieces for callers that do their own (e.g. compact "$1.5M")
    * formatting rather than full Intl currency output.

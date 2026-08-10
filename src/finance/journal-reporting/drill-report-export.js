@@ -107,18 +107,23 @@ async function _runWholeSimulation(def, apis, requestedCcs, detail) {
 
   for (const cc of ccs) {
     const params = { period: WHOLE_SIMULATION, ...(cc ? { cc } : {}) };
-    const { groups } = await runReport(def, params, apis);
+    const { groups, currency } = await runReport(def, params, apis);
     // The period rollup keys an AU fiscal year by its END year; the AU return —
     // and so the worksheet CSV these files are cross-referenced against — is
     // filed under the START year. Restate it so the two artifacts agree.
     const yearCc  = cc ?? def.yearCc;
     const auYears = yearCc === 'AU';
-    for (const row of buildReportRows(groups, def, { detail })) {
+    for (const row of buildReportRows(groups, def, { detail, currency })) {
       const { year, ...rest } = row;
       const taxYear = year == null ? null : (auYears ? year - 1 : year);
       // Same pairing as the worksheet CSV: numeric key for joining, label so an
-      // AU `2025` is not misread as the calendar year.
-      rows.push({ taxYear, taxYearLabel: taxYearLabel(yearCc, taxYear), ...(cc ? { cc } : {}), ...rest });
+      // AU `2025` is not misread as the calendar year. `currency` names the unit
+      // the totals were folded in — omitted entirely for a report that declares
+      // none, so the existing single-currency exports keep their column set.
+      rows.push({
+        taxYear, taxYearLabel: taxYearLabel(yearCc, taxYear),
+        ...(cc ? { cc } : {}), ...(currency ? { currency } : {}), ...rest,
+      });
     }
   }
   return { mode: 'year-grouped', ccs: ccs.map(c => c ?? '—'), rows };
@@ -145,15 +150,17 @@ async function _runPerPeriod(def, apis, ccs, detail) {
         period: { fromEntryId: p.fromEntryId, toEntryId: p.toEntryId },
         ...(hasCcFacet ? { cc } : {}),
       };
-      const { groups } = await runReport(def, params, apis);
+      const { groups, currency } = await runReport(def, params, apis);
       const taxYear = _taxYearOf(cc, p.toEntryDate);
       const lead = {
         taxYear,
         taxYearLabel: taxYearLabel(cc, taxYear),
         periodLabel:  p.label,
         cc,
+        // Present only for reports that declare a currency — see _runWholeSimulation.
+        ...(currency ? { currency } : {}),
       };
-      rows.push(...buildReportRows(groups, def, { detail, lead }));
+      rows.push(...buildReportRows(groups, def, { detail, lead, currency }));
     }
   }
   return { mode: 'per-period', ccs: runCcs, rows };

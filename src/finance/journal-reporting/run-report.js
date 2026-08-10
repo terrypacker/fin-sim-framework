@@ -73,25 +73,39 @@ export function apiFor(apis, def) {
  * @param {import('./report-definition-registry.js').ReportDefinition} def
  * @param {object} params - resolved facet values (cc, period, personKeys, …)
  * @param {{entry: JournalQueryApi, diff: JournalQueryApi, person: JournalQueryApi}} apis
- * @returns {Promise<{groups: Array<object>, grandTotal: number|null}>}
+ * @returns {Promise<{groups: Array<object>, grandTotal: number|null, currency: string|null}>}
+ *   `currency` is the code the money aggregates are expressed in (null when the
+ *   definition declares none), so callers label totals with the unit that was
+ *   actually folded rather than guessing from the facets.
  */
 export async function runReport(def, params, apis) {
   const api        = apiFor(apis, def);
   const ast        = def.buildQuery(params, api);
   const periodType = def.periodTypeFor?.(params) ?? null;
+  // The currency the report states its money in. Passed into the aggregation so
+  // currency-typed fields are converted before they are folded (a report whose
+  // rows span both countries would otherwise add AUD onto USD); null for the
+  // single-currency reports, which then fold exactly as projected.
+  const currency   = def.reportCurrency?.(params) ?? null;
 
   const result = periodType && api._periodService
     ? await api.aggregateByYear({
         query:      ast,
         periodType,
         aggregates: def.defaultAggregates,
+        currency,
       })
     : await api.aggregate({
         query:      ast,
         groupBy:    def.defaultGroupBy,
         aggregates: def.defaultAggregates,
         dedupeBy:   def.dedupeBy,
+        currency,
       });
 
-  return { groups: def.decorate(result.groups, api), grandTotal: result.grandTotal };
+  return {
+    groups:     def.decorate(result.groups, api),
+    grandTotal: result.grandTotal,
+    currency,
+  };
 }
