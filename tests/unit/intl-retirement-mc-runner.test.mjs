@@ -318,12 +318,13 @@ test('summarizeProvenance: a hand-typed center is still an override', async () =
 });
 
 test('summarizeProvenance: a key the scenario lacks falls back to the schema default, not a synthetic center', async () => {
-  // spouse* growth rates live in the param schema but not in buildDefaultConfig's
-  // bag. The schema default is what ScenarioLoader materializes and the sim runs at,
-  // so it — not the MC template's own mean — must supply the center.
+  // `equityReturnVol` lives in the param schema but not in buildDefaultConfig's bag.
+  // The schema default is what ScenarioLoader materializes and the sim runs at, so
+  // it — not the MC template's own mean — must supply the center. (The spouse*
+  // growth rates used to be the exemplar here; they are retired, §4.10.)
   const { summary } = await makeRunner().run();
   const p = summary.provenance;
-  assert.ok(p.centersBySource.schema.includes('spouseRothGrowthRate'),
+  assert.ok(p.centersBySource.schema.includes('equityReturnVol'),
     `expected a schema-sourced center, got ${JSON.stringify(p.centersBySource.schema)}`);
   assert.deepStrictEqual(p.syntheticCenters, [],
     'nothing should be sampling around an unanchored framework default');

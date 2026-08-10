@@ -562,13 +562,15 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // holding grows at this rate, decoupled from equity returns and Prime.
   goldGrowthRate:   0.05,
 
-  // Spouse retirement accounts (US)
-  spouseRothBalance:  40_000,  spouseRothBasis:  30_000,  spouseRothGrowthRate:  0.07,
-  spouseIraBalance:  100_000,  spouseIraBasis:   75_000,  spouseIraGrowthRate:   0.07,
-  spouseK401Balance: 150_000,  spouseK401Basis: 100_000,  spouseK401GrowthRate:  0.07,
+  // Spouse retirement accounts (US). No per-spouse growth rates: growth is keyed by
+  // account TYPE (EQUITY_US_ROTH/_IRA/_K401), so the rates above cover both people —
+  // see the retired spouse*GrowthRate aliases below (design/inconsistencies §4.10).
+  spouseRothBalance:  40_000,  spouseRothBasis:  30_000,
+  spouseIraBalance:  100_000,  spouseIraBasis:   75_000,
+  spouseK401Balance: 150_000,  spouseK401Basis: 100_000,
 
-  // Spouse retirement account (AU)
-  spouseSuperBalance: 125_000,  spouseSuperBasis: 90_000,  spouseSuperGrowthRate: 0.07,
+  // Spouse retirement account (AU) — growth comes from `superGrowthRate` below
+  spouseSuperBalance: 125_000,  spouseSuperBasis: 90_000,
 
   // AU accounts
   auSavingsBalance:     50_000,
@@ -577,6 +579,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   auPrimeRate:          0.0435,
   auFixedIncomeBalance:  1_000,  auFixedIncomeInterestRate: 0.04,
   superBalance:        250_000,  superBasis:           180_000,
+  // Superannuation growth (EQUITY_AU_SUPER) — one rate for BOTH people's super,
+  // like every other rate here; it is keyed by account type, not by owner.
+  superGrowthRate:     0.07,
   auStockBalance:       60_000,  auStockBasis:          40_000,
   auStockGrowthRate:   0.06,
   auStockDividendRate: 0.04,
@@ -705,30 +710,16 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // account records (design 55). Their growth rates remain global params below.
 
   // ── Spouse Account Rates ───────────────────────────────────────────────────
-  {
-    key: 'spouseRothGrowthRate', label: 'Spouse Roth IRA Growth Rate',
-    type: 'Number', group: 'Spouse Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothGrowthRate,
-    description: 'Annual growth rate for spouse Roth IRA',
-  },
-  {
-    key: 'spouseIraGrowthRate', label: 'Spouse Traditional IRA Growth Rate',
-    type: 'Number', group: 'Spouse Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraGrowthRate,
-    description: 'Annual growth rate for spouse Traditional IRA',
-  },
-  {
-    key: 'spouseK401GrowthRate', label: 'Spouse 401(k) Growth Rate',
-    type: 'Number', group: 'Spouse Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401GrowthRate,
-    description: 'Annual growth rate for spouse 401(k)',
-  },
-  {
-    key: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate',
-    type: 'Number', group: 'Spouse Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperGrowthRate,
-    description: 'Annual growth rate for spouse superannuation',
-  },
+  // RETIRED (design/inconsistencies §4.10). There were four `spouse*GrowthRate`
+  // params here and none of them could work: growth is keyed by account TYPE
+  // (`collectBaseGrowthRates` → EQUITY_US_ROTH ← `rothGrowthRate`, … ,
+  // EQUITY_AU_SUPER ← `superGrowthRate`), so one rate per wrapper already covers
+  // both people and a per-owner param has nowhere to land. The type-level keys are
+  // contributed by the US_RETIREMENT / AU_RETIREMENT toolset schemas and are the
+  // real levers. The retired keys map onto them (or drop) via
+  // INTL_RETIREMENT_PARAM_ALIASES. A genuinely per-person rate is a rate-KEY change
+  // (a new EQUITY_US_ROTH_SPOUSE member, or a per-account `growthRate` override),
+  // not a param one.
 
   // ── US Retirement ─────────────────────────────────────────────────────────
   {
@@ -977,6 +968,10 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
  * …) keep working after the static entries were removed above. The generated key's
  * `node` is byte-identical to the old one, so the param→record cascade is unchanged.
  * Aliases can be dropped after a deprecation window.
+ *
+ * A `null` target means RETIRED rather than renamed: the key had no successor (it
+ * was read by nothing), so the loader deletes it instead of leaving an orphan entry
+ * in a saved scenario's params list — see §4.10.
  */
 export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   // People
@@ -1012,6 +1007,19 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   // Cash floors (design 55 §7/§13) — now per-account on the canonical savings accounts
   usSavingsMinBalance:   'acct.usSavingsAccount.minimumBalance',
   auSavingsMinBalance:   'acct.auSavingsAccount.minimumBalance',
+  // Spouse growth rates (design/inconsistencies §4.10). `spouseSuperGrowthRate` was
+  // the only one the compiler ever read (it fed the type-level `superGrowthRate`),
+  // so it RENAMES and a saved value keeps its effect. The other three were read by
+  // nothing; a `null` target RETIRES a key — the loader deletes it instead of
+  // carrying a dead entry forward into the params UI forever. They are deliberately
+  // NOT aliased onto `rothGrowthRate`/`iraGrowthRate`/`k401GrowthRate`: those are
+  // already live levers with their own saved values, and promoting a rate that has
+  // never done anything into one that drives the whole wrapper would silently change
+  // a saved plan's results.
+  spouseSuperGrowthRate: 'superGrowthRate',
+  spouseRothGrowthRate:  null,
+  spouseIraGrowthRate:   null,
+  spouseK401GrowthRate:  null,
 });
 
 /**
@@ -1033,7 +1041,7 @@ export function resolveBalanceCenters(cfg) {
   const centers = {};
   const accounts = Array.isArray(cfg?.accounts) ? cfg.accounts : [];
   for (const [legacy, target] of Object.entries(INTL_RETIREMENT_PARAM_ALIASES)) {
-    const m = /^acct\.(.+)\.balanceTarget$/.exec(target);
+    const m = target ? /^acct\.(.+)\.balanceTarget$/.exec(target) : null;
     if (!m) continue;
     const acct = accounts.find(a => a?.stateKey === m[1]);
     if (acct && acct.balance != null) centers[legacy] = acct.balance;
@@ -1180,8 +1188,11 @@ export class IntlRetirementScenario extends BaseScenario {
       // AU_BANKING
       auSavingsInterestRate:    p.auSavingsInterestRate,
       auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,
-      // AU_RETIREMENT
-      superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
+      // AU_RETIREMENT — one super growth rate for both people (§4.10). Before the
+      // retirement of `spouseSuperGrowthRate` this read that key, which both
+      // mislabelled the lever and shadowed an explicit `superGrowthRate` override
+      // (the passthrough below skips keys the enumerated block already owns).
+      superGrowthRate:          p.superGrowthRate,
       auStockGrowthRate:        p.auStockGrowthRate,
       auStockDividendRate:      p.auStockDividendRate,
       // Mortality — per-person lifespan seed for MC actuarial draws (design/27 Step 15).

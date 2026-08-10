@@ -173,34 +173,94 @@ Current behavior (not what the note describes):
 - The `PREBUILT_SCENARIOS` array contains one entry. The plumbing (factory + class + descriptor) implies more were planned.
 - **Direction**: either commit to one canonical scenario and simplify the prebuilt path, or add the missing variants the workbench dropdown expects.
 
-### 4.10 Four "Spouse … Growth Rate" params, three of which are wired to nothing
+### 4.10 Four "Spouse … Growth Rate" params, three of which are wired to nothing — **RESOLVED**
 
 Found 2026-08-07 by perturbing each param and diffing the golden's full end state
 (`tests/helpers/golden-harness.js`). Raising a param from 0.07 to 0.20 that moves
-**zero** of 1,288 state fields is not a subtle scenario, it is a disconnected lever.
+**zero** state fields is not a subtle scenario, it is a disconnected lever.
 
 - `spouseRothGrowthRate`, `spouseIraGrowthRate`, `spouseK401GrowthRate` — declared in
   `IntlRetirementScenario.getParamSchema()` and in `INTL_RETIREMENT_DEFAULTS`, and
   read by nothing else. `collectBaseGrowthRates` (economic-regimes-toolset) keys
   growth off the account TYPE — `EQUITY_US_ROTH ← p.rothGrowthRate`,
-  `EQUITY_US_IRA ← p.iraGrowthRate`, `EQUITY_US_K401 ← p.k401GrowthRate` — and those
-  three param names are not in the schema at all. So there is one rate per wrapper
-  type shared by both spouses, and the per-spouse params can never reach it.
-- `spouseSuperGrowthRate` *is* live, but mislabelled: `EQUITY_AU_SUPER ←
-  p.superGrowthRate ?? p.spouseSuperGrowthRate ?? 0.07`, and `superGrowthRate` is
-  likewise absent from the schema. The param captioned "Spouse Super Growth Rate"
-  therefore sets the growth rate for **both** people's super.
-- All four are `enabled: true` Monte Carlo axes in `intl-retirement-mc-config.js`
-  with `stdDev: 0.03`, so every MC run has been spending three of its sampling
-  dimensions on parameters that cannot change the outcome. This understates the
-  true dispersion of the axes that do work.
+  `EQUITY_US_IRA ← p.iraGrowthRate`, `EQUITY_US_K401 ← p.k401GrowthRate`. So there is
+  one rate per wrapper type shared by both spouses, and a per-spouse param has
+  nowhere to land.
+- `spouseSuperGrowthRate` fed `EQUITY_AU_SUPER ← p.superGrowthRate ??
+  p.spouseSuperGrowthRate ?? 0.07`. The param captioned "Spouse Super Growth Rate"
+  therefore set the growth rate for **both** people's super.
+- All four were `enabled: true` Monte Carlo axes in `intl-retirement-mc-config.js`
+  with `stdDev: 0.03`.
 - Not to be confused with `primarySsClaimAge`, which is also inert but *knowingly* —
   see the comment on `INTL_RETIREMENT_DEFAULTS.primarySsClaimAge` (TODO #292).
 
-**Direction**: expose the four type-level rates (`rothGrowthRate`, `iraGrowthRate`,
-`k401GrowthRate`, `superGrowthRate`) as the real params, retire the three dead
-spouse variants from both the schema and the MC config, and rename the fourth. If
-per-person rates are actually wanted, that is a rate-key change, not a param one.
+#### The count was three at one layer and four at the other
+
+The original entry called `spouseSuperGrowthRate` "live but mislabelled". That was
+measured at the `buildDefaultConfig(params)` layer. Measuring again at
+`cfg.parameters` — *where `IntlRetirementMcRunner` actually merges a sample* — inverts
+the result exactly:
+
+| perturbed key | via `buildDefaultConfig(params)` | via `cfg.parameters` (MC/Opt) |
+|---|:--:|:--:|
+| `spouseSuperGrowthRate` | 20 fields moved | **0** |
+| `superGrowthRate` | **0** | 20 fields moved |
+
+Both names existed, each was live at one layer and dead at the other, and the MC
+runner only ever wrote to the layer where the *spouse* name was dead. So super growth
+had **no working MC axis at all** — the dead-axis count was four, not three, and
+`superGrowthRate` (an `opt: true` toolset param) was equally inert for any headless
+caller passing it to `buildDefaultConfig`.
+
+The mechanism is one line in `buildDefaultConfig`: its enumerated block set
+`superGrowthRate: p.spouseSuperGrowthRate`, and the passthrough that forwards
+toolset-contributed params skips any key `if (key in parameters)`. An explicit
+`superGrowthRate` was therefore consumed by the enumerated block's own output. This
+is the two-param-stores trap in a new place: a name that is authoritative in one
+store (`cfg.params` / `cfg.parameters`, and now the `params` argument as a third) and
+ignored in the other.
+
+#### Resolved
+
+There is now one key per wrapper type and no per-owner rate anywhere:
+`rothGrowthRate`, `iraGrowthRate`, `k401GrowthRate`, `superGrowthRate`, all
+contributed by the US_RETIREMENT / AU_RETIREMENT toolset schemas, all reachable from
+both layers. `superGrowthRate` gains a default in `INTL_RETIREMENT_DEFAULTS` and
+replaces the spouse entry as the enabled MC axis (`AU Account Rates`); the "Spouse
+Account Rates" group is gone. Measured on the reference plan, all four move the end
+state (20–24 fields each) and the golden fixtures are byte-identical — the defaults
+were all 0.07, so this is a wiring change with no result change.
+
+Migration runs through the design 55 §11 alias map, which gained a third case:
+`spouseSuperGrowthRate → superGrowthRate` is a rename (a saved value keeps its
+effect), while a `null` target now means **retired** — `_applyParamAliases` deletes
+the key instead of leaving it in `cfg.params`, where `_mergeParamSchema` would
+otherwise leave an orphan entry sitting in the editor under its old group, editable
+and inert, forever. The three dead keys are deliberately *not* aliased onto
+`rothGrowthRate`/`iraGrowthRate`/`k401GrowthRate`: promoting a value that has never
+done anything into one that drives a whole wrapper would silently rewrite a saved
+plan's results on upgrade.
+
+Pinned by `tests/unit/mc-axis-liveness.test.mjs`, which generalises the detection
+recipe into a gate: for every `enabled` MC axis, perturb it at the `cfg.parameters`
+layer and require that at least one state field moves. It runs the reference plan
+over a short window, so all 14 axes cost about a second. Verified against a control
+(re-adding a dead axis fails it). The layer matters and the test says so — a gate
+measured through `buildDefaultConfig` would have certified the wrong name here.
+Disabled axes are out of scope rather than waived: `equityReturnVol`,
+`propertyReturnIdioScale`, `repairSeverityScale` and `repairFreqScale` move nothing
+because they are volatility knobs on a stochastic process the reference plan leaves
+at NONE, which is an absence test with no working-detector control. Migration is
+covered by D55-14/15 in `tests/unit/design-55-config-driven-params.test.mjs`.
+
+If per-person rates are actually wanted, that remains a rate-KEY change (a new
+`EQUITY_US_ROTH_SPOUSE` class member, or a per-account `growthRate` override), not a
+param one.
+
+**Lesson**: "is this lever wired up?" has no answer until you say *from where*. A
+param can be read by the compiler and still be unreachable from the UI, the MC
+runner, or a headless caller, because each writes into a different store and one
+store's enumerated block can shadow the other's passthrough.
 
 ### 4.11 Five emitters of one disposal-tax payload, silently drifted apart — **RESOLVED**
 

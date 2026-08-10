@@ -84,26 +84,18 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'AU Account Rates',         enabled: true,
   },
 
-  // ── Spouse equity growth rates ────────────────────────────────────────────
+  // ── Superannuation growth ─────────────────────────────────────────────────
+  // Was four `spouse*GrowthRate` axes under a "Spouse Account Rates" group, three of
+  // which could not move a single state field: growth is keyed by account TYPE, so
+  // `rothGrowthRate`/`iraGrowthRate`/`k401GrowthRate` above already cover the spouse's
+  // wrappers too and the per-owner keys were read by nothing. Every MC run was
+  // spending three sampling dimensions on levers that did nothing, which understates
+  // the dispersion of the axes that work (design/inconsistencies §4.10). The fourth
+  // was the ONLY super lever and is renamed to the key the compiler reads.
   {
-    paramKey: 'spouseRothGrowthRate',  label: 'Spouse Roth IRA Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.spouseRothGrowthRate, stdDev: 0.03,
-    group: 'Spouse Account Rates',     enabled: true,
-  },
-  {
-    paramKey: 'spouseIraGrowthRate',   label: 'Spouse Traditional IRA Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.spouseIraGrowthRate, stdDev: 0.03,
-    group: 'Spouse Account Rates',     enabled: true,
-  },
-  {
-    paramKey: 'spouseK401GrowthRate',  label: 'Spouse 401(k) Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.spouseK401GrowthRate, stdDev: 0.03,
-    group: 'Spouse Account Rates',     enabled: true,
-  },
-  {
-    paramKey: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.spouseSuperGrowthRate, stdDev: 0.03,
-    group: 'Spouse Account Rates',     enabled: true,
+    paramKey: 'superGrowthRate',       label: 'Super Growth Rate',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.superGrowthRate, stdDev: 0.03,
+    group: 'AU Account Rates',         enabled: true,
   },
 
   // ── Central-bank Prime rates — THE systemic rate sweep (design 56 Decision 6 / §3.1) ──
@@ -585,14 +577,22 @@ export class IntlRetirementMcConfig {
    *   usStockGrowthRate → brokerageGrowthRate
    *   stockDividendRate → brokerageDividendRate
    *   usInflationRate   → inflationRate
+   *
+   * And the retired spouse growth rate (§4.10):
+   *   spouseSuperGrowthRate → superGrowthRate
+   *
+   * The other three spouse rates need no entry: `applyOverride` only stores settings
+   * for a paramKey, and a stored setting for a key no contributor emits is never
+   * resolved into a variable — so a saved config's dead axes simply disappear.
    */
   static fromVariableConfigs(variableConfigs) {
     const ALIASES = {
-      shockSeverity:     'shocks[0].severity',
-      shockStartDate:    'shocks[0].startDate',
-      usStockGrowthRate: 'brokerageGrowthRate',
-      stockDividendRate: 'brokerageDividendRate',
-      usInflationRate:   'inflationRate',
+      shockSeverity:        'shocks[0].severity',
+      shockStartDate:       'shocks[0].startDate',
+      usStockGrowthRate:    'brokerageGrowthRate',
+      stockDividendRate:    'brokerageDividendRate',
+      usInflationRate:      'inflationRate',
+      spouseSuperGrowthRate: 'superGrowthRate',
     };
     const config = new IntlRetirementMcConfig();
     for (const v of variableConfigs) {

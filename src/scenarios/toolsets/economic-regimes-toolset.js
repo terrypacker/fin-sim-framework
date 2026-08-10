@@ -96,7 +96,7 @@ function collectBaseGrowthRates(p) {
     [RATE_KEYS.EQUITY_US_K401]:      p.k401GrowthRate      ?? 0.07,
     [RATE_KEYS.EQUITY_US_BROKERAGE]: p.brokerageGrowthRate ?? 0.05,
     [RATE_KEYS.EQUITY_AU_STOCK]:     p.auStockGrowthRate   ?? 0.06,
-    [RATE_KEYS.EQUITY_AU_SUPER]:     p.superGrowthRate     ?? p.spouseSuperGrowthRate ?? 0.07,
+    [RATE_KEYS.EQUITY_AU_SUPER]:     p.superGrowthRate     ?? 0.07,
     // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
     // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
     // computeHoldingsGrowth; regime shocks may target GOLD directly (it is not a

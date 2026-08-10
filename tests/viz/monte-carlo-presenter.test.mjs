@@ -69,16 +69,17 @@ describe('MonteCarloPresenter — variable centers follow the live scenario', ()
   });
 
   test('tags each variable with the layer its center came from', () => {
-    // `brokerageGrowthRate` is on the cfg; `spouseRothGrowthRate` is a schema key the
+    // `brokerageGrowthRate` is on the cfg; `equityReturnVol` is a schema key the
     // cfg doesn't carry, so its center is the schema default — the value the sim will
     // run at, which is why it must resolve rather than fall through to the MC
-    // template's own mean.
+    // template's own mean. (`spouseRothGrowthRate` was the exemplar until it was
+    // retired — design/inconsistencies §4.10.)
     setActiveCfg({ params: [{ name: 'brokerageGrowthRate', value: 0.11 }], accounts: [] });
     const presenter = makePresenter({ params: {} });
 
     const bySource = new Map(presenter._resolveVariables().map(v => [v.paramKey, v.centerSource]));
     expect(bySource.get('brokerageGrowthRate')).toBe('scenario');
-    expect(bySource.get('spouseRothGrowthRate')).toBe('schema');
+    expect(bySource.get('equityReturnVol')).toBe('schema');
     // A balance lever's value lives on the ACCOUNT, and this cfg has none — so its
     // center really is a framework default and says so.
     expect(bySource.get('stockBalance')).toBe('default');

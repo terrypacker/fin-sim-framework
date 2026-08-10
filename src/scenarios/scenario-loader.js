@@ -602,6 +602,10 @@ export class ScenarioLoader {
    * is scenario-class-owned; when cfg.scenarioClass is unresolved (user scenarios)
    * we union the maps of all registered classes, mirroring the schemaNode fallback.
    *
+   * A `null` target marks a RETIRED key — one whose value nothing reads any more, so
+   * there is no successor to carry it onto and the entry is simply dropped (see
+   * design/inconsistencies §4.10). Everything else is a rename.
+   *
    * A legacy key's value is carried onto the generated key. Because a renamed
    * persisted param keeps its old `node` — which is byte-identical to the generated
    * node — the param→record cascade is unaffected. Runs before the params→parameters
@@ -615,6 +619,9 @@ export class ScenarioLoader {
       const map = cls?.getParamAliases?.() ?? null;
       if (!map) continue;
       for (const [legacy, target] of Object.entries(map)) {
+        // `target === null` is a RETIRED key (no successor) — kept in the map so the
+        // entry is deleted rather than lingering as an orphan param. Distinguish
+        // "absent" from "present with a null target" via has(), not truthiness.
         if (!aliases.has(legacy)) aliases.set(legacy, target);
       }
     }
@@ -627,8 +634,9 @@ export class ScenarioLoader {
       const names = new Set(cfg.params.map(p => p.name));
       const kept = [];
       for (const p of cfg.params) {
+        if (!aliases.has(p.name)) { kept.push(p); continue; }
         const target = aliases.get(p.name);
-        if (!target) { kept.push(p); continue; }
+        if (target === null) continue;     // retired key → drop it
         if (names.has(target)) continue;   // generated entry already present → drop legacy dup
         p.name = target;
         names.add(target);
@@ -642,7 +650,7 @@ export class ScenarioLoader {
     if (cfg.parameters && typeof cfg.parameters === 'object') {
       for (const [legacy, target] of aliases) {
         if (!(legacy in cfg.parameters)) continue;
-        if (!(target in cfg.parameters)) cfg.parameters[target] = cfg.parameters[legacy];
+        if (target !== null && !(target in cfg.parameters)) cfg.parameters[target] = cfg.parameters[legacy];
         delete cfg.parameters[legacy];
       }
     }

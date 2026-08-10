@@ -248,3 +248,55 @@ test('D55-8: deleting a default account (tombstoned) prunes its generated params
     assert.strictEqual(cfg.parameters[key], undefined, `${key} pruned from cfg.parameters`);
   }
 });
+
+// ── Retirement of a key with no successor (§11 alias map, `null` target) ────────
+//
+// design/inconsistencies §4.10. The alias map's job had been renames; retiring a key
+// needs the same map, because a saved scenario's params array carries whatever it was
+// saved with and _mergeParamSchema leaves an entry it cannot find in the schema
+// alone. Without a `null` entry, a dropped param does not disappear — it lingers in
+// the editor under its old group, editable, doing nothing.
+
+test('D55-14: a retired spouse growth rate renames onto the type-level key it fed', () => {
+  // `spouseSuperGrowthRate` was the only one of the four the compiler ever read: it
+  // supplied `superGrowthRate`, i.e. BOTH people's super, which is what made its
+  // "Spouse …" caption wrong. A saved value must keep its effect under the new name.
+  const cfg = freshCfg();
+  cfg.params = [
+    { name: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate', type: 'Number',
+      group: 'Spouse Account Rates', value: 0.123 },
+  ];
+  delete cfg.parameters.superGrowthRate;
+  const { sim } = loadCfg(cfg);
+
+  assert.strictEqual(paramNamed(cfg, 'spouseSuperGrowthRate'), undefined, 'legacy entry renamed away');
+  assert.strictEqual(cfg.parameters.spouseSuperGrowthRate, undefined, 'legacy flat key removed');
+  assert.strictEqual(cfg.parameters.superGrowthRate, 0.123, 'value carried onto the live key');
+  assert.strictEqual(sim.state.effectiveGrowthRates.EQUITY_AU_SUPER, 0.123,
+    'and reaches the rate the super accounts actually grow at');
+});
+
+test('D55-15: the three dead spouse growth rates are dropped, not carried forward', () => {
+  const cfg = freshCfg();
+  cfg.params = [
+    { name: 'spouseRothGrowthRate', label: 'Spouse Roth IRA Growth Rate', type: 'Number',
+      group: 'Spouse Account Rates', value: 0.19 },
+    { name: 'spouseIraGrowthRate',  label: 'Spouse Traditional IRA Growth Rate', type: 'Number',
+      group: 'Spouse Account Rates', value: 0.19 },
+    { name: 'spouseK401GrowthRate', label: 'Spouse 401(k) Growth Rate', type: 'Number',
+      group: 'Spouse Account Rates', value: 0.19 },
+  ];
+  const { sim } = loadCfg(cfg);
+
+  for (const key of ['spouseRothGrowthRate', 'spouseIraGrowthRate', 'spouseK401GrowthRate']) {
+    assert.strictEqual(paramNamed(cfg, key), undefined, `${key} dropped from cfg.params`);
+    assert.strictEqual(cfg.parameters[key], undefined, `${key} dropped from cfg.parameters`);
+  }
+  // A retired key must not be quietly promoted onto the live lever it resembles: the
+  // saved 0.19 was never doing anything, and turning it into the whole household's
+  // Roth/IRA/401(k) growth rate on upgrade would silently rewrite the plan's result.
+  for (const rateKey of ['EQUITY_US_ROTH', 'EQUITY_US_IRA', 'EQUITY_US_K401']) {
+    assert.strictEqual(sim.state.effectiveGrowthRates[rateKey], INTL_RETIREMENT_DEFAULTS.rothGrowthRate,
+      `${rateKey} keeps its own rate — a retired key is dropped, not promoted`);
+  }
+});
