@@ -77,10 +77,21 @@ test('EVT-PAG-3: base rates seed per-account member keys, not the collapsed clas
   const state = runScenario({ rothGrowthRate: 0.07, iraGrowthRate: 0.08, k401GrowthRate: 0.09, brokerageGrowthRate: 0.05 });
   const eff = state.effectiveGrowthRates ?? {};
 
-  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US_ROTH] ?? NaN) - 0.07) < 1e-9, 'EQUITY_US_ROTH = rothGrowthRate');
-  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US_IRA]  ?? NaN) - 0.08) < 1e-9, 'EQUITY_US_IRA = iraGrowthRate');
-  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US_K401] ?? NaN) - 0.09) < 1e-9, 'EQUITY_US_K401 = k401GrowthRate');
-  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US_BROKERAGE] ?? NaN) - 0.05) < 1e-9, 'EQUITY_US_BROKERAGE = brokerageGrowthRate');
-  // The collapsed class key is no longer a growth rate in state.
-  assert.strictEqual(eff[RATE_KEYS.EQUITY_US], undefined, 'no collapsed EQUITY_US growth rate');
+  // Design 90 §7.2 — each wrapper's rate now lands on its own PER-ACCOUNT key beneath
+  // the shared market sleeve, rather than on an account-type key of its own. The four
+  // rates are still four independent levers; what changed is where they are written.
+  const at = (k) => eff[`${RATE_KEYS.EQUITY_US}::${k}`] ?? NaN;
+  assert.ok(Math.abs(at('rothAccount')    - 0.07) < 1e-9, 'rothAccount = rothGrowthRate');
+  assert.ok(Math.abs(at('iraAccount')     - 0.08) < 1e-9, 'iraAccount = iraGrowthRate');
+  assert.ok(Math.abs(at('k401Account')    - 0.09) < 1e-9, 'k401Account = k401GrowthRate');
+  assert.ok(Math.abs(at('usStockAccount') - 0.05) < 1e-9, 'usStockAccount = brokerageGrowthRate');
+
+  // The shared market key exists and is DISTINCT from every override — it is the rate a
+  // holding gets when its account has none, not a collapse of the four above. (The
+  // pre-90 assertion here was that no `EQUITY_US` growth rate existed at all; the market
+  // axis makes it exist by design, so the meaningful check is that it did not swallow
+  // the per-account values.)
+  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US] ?? NaN) - 0.07) < 1e-9,
+    'EQUITY_US is the market rate (usEquityGrowthRate default), not a wrapper rate');
+  assert.notStrictEqual(at('iraAccount'), eff[RATE_KEYS.EQUITY_US]);
 });

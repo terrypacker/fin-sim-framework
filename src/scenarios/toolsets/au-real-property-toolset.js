@@ -75,7 +75,7 @@ export const AU_REAL_PROPERTY = {
       // apportioned gain with no way to explain it. The ownership trio (design 76
       // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { gain: ValueType.number(), depreciationGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(),
+        fields: { usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), gain: ValueType.number(), depreciationGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
                   acquisitionMs: ValueType.number(), saleMs: ValueType.number(),

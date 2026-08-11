@@ -59,7 +59,7 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-23 | Super | Earnings | + earnings | N | Super (15%, always) | N | ✅ |
 | EVT-24 | 401K | Contribution | + contribution | Negative Income (pre-tax) | N | N | ✅ |
 | EVT-25 | 401K | Earnings / Withdrawal | + earnings | Ordinary Income | N | N | ✅ |
-| EVT-26 | AU Brokerage | Stocks – Div Franked as Resident | + contribution (basis) | Ordinary Income | Franking Credit | Y | ✅ |
+| EVT-26 | AU Brokerage | Stocks – Div Franked as Resident | + contribution (basis) | Ordinary Income | Ordinary Income (cash + gross-up) + Franking Credit offset | Y | ✅ |
 | EVT-27 | AU Brokerage | Stocks – Div Franked as Non-Resident | + contribution (basis) | Ordinary Income | N | N | ✅ |
 | EVT-28 | AU Brokerage | Stocks – Div Unfranked as Resident | + contribution (basis) | Ordinary Income | Ordinary Income | Y | ✅ |
 | EVT-29 | AU Brokerage | Stocks – Div Unfranked as Non-Resident | + contribution (basis) | Ordinary Income | Non-Resident Withholding | Y | ✅ |

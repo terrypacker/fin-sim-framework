@@ -57,8 +57,8 @@ describe('holdings editor — Rate Key dropdown', () => {
   test('per-account-type member keys are offered (full set, not just class keys)', () => {
     const root = editorForHolding({ rateKey: '' })._rootEl;
     const values = [...rateKeyCell(root).querySelectorAll('option')].map(o => o.value);
-    expect(values).toContain('EQUITY_US_ROTH');
-    expect(values).toContain('EQUITY_AU_SUPER');
+    expect(values).toContain('EQUITY_US');
+    expect(values).toContain('EQUITY_AU');
     expect(values).toContain('COLLECTIBLE');
   });
 

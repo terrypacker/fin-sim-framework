@@ -291,6 +291,10 @@ export class TaxSettleService {
         // scalar to split, because a carried-forward loss belongs to one taxpayer and
         // splitting it would let one spouse's loss shelter the other's income.
         auTaxLossPool:               state.auPersonTaxLossPool?.[key] ?? 0,
+        // s102-5 net capital losses (design 90 §5). NOT a perPersonShare, for exactly the
+        // reason stated above, and a DIFFERENT pool from the Div 36 one: s102-10(2)
+        // forbids a net capital loss from reducing assessable income at all.
+        auCapitalLossPool:           state.auPersonCapitalLossPool?.[key] ?? 0,
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
         // FITO (design 52 §4.5): the US-source removal set — the slice
         // _assessResidentPreFito subtracts for the "without US-source" pass that

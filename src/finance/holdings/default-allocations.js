@@ -98,7 +98,12 @@ export function resolveDefaultAllocation(account) {
  * to EQUITY_US and take equity shocks and equity duration handling.
  */
 const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
-  [ALLOCATION.EQUITY]: Object.freeze(new Set([RATE_KEYS.EQUITY_US,       RATE_KEYS.EQUITY_AU])),
+  // Design 90 §7.2 — all four MARKET keys live inside the EQUITY class, so a holding
+  // may track any market while `resolveRateKey`'s containment rule keeps doing its
+  // real job: stopping a BOND sleeve in a `us-stock` brokerage from resolving to an
+  // equity series and taking equity shocks.
+  [ALLOCATION.EQUITY]: Object.freeze(new Set([RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU,
+                                              RATE_KEYS.EQUITY_INTL_EX_US, RATE_KEYS.EQUITY_INTL_EX_AU])),
   [ALLOCATION.BOND]:   Object.freeze(new Set([RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU])),
   [ALLOCATION.CASH]:   Object.freeze(new Set([RATE_KEYS.SAVINGS_US,      RATE_KEYS.SAVINGS_AU])),
 });
@@ -127,6 +132,61 @@ const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
  * @returns {string|null} a RATE_KEYS value, or null when the country is unknown
  * @throws when the allocation is not a known ALLOCATION
  */
+/**
+ * The MARKET keys an equity holding may track, per country of domicile (design 90 §7.3).
+ * A US-domiciled account's "international" is ex-US; an AU-domiciled account's is ex-AU.
+ * They are different baskets — ex-US contains Australia and ex-AU contains the US — which
+ * is why one shared "international" key would be wrong for both.
+ */
+export const EQUITY_MARKETS_BY_COUNTRY = Object.freeze({
+  US: Object.freeze({ domestic: RATE_KEYS.EQUITY_US, international: RATE_KEYS.EQUITY_INTL_EX_US }),
+  AU: Object.freeze({ domestic: RATE_KEYS.EQUITY_AU, international: RATE_KEYS.EQUITY_INTL_EX_AU }),
+});
+
+/**
+ * Resolve an account's equity market MIX — the sub-axis under `ALLOCATION.EQUITY`
+ * (design 90 §7.3).
+ *
+ * This is the second, smaller lever the design promised: `ALLOCATION` stays the closed
+ * four-value enum that the rebalancer, glidepath, drawdown selection and the reporting
+ * cube are all built on, and the market split lives one level down inside EQUITY. Nothing
+ * above has to learn a new class.
+ *
+ * It is also what lets a Super balance stop being a beta fudge. §7.1's complaint was that
+ * a diversified fund with a large international allocation could only be expressed as "AU
+ * equity at beta 0.7"; with a mix it is expressed as what it is — some AU, some ex-AU —
+ * and the return follows from the markets rather than from a scaling constant.
+ *
+ * **Returns a single-market mix by default, which is what keeps this inert.** With no
+ * authored mix and no international share, an equity account resolves to
+ * `{ <its domestic market>: 1 }` — exactly the one sleeve `resolveRateKey` produced
+ * before, so bootstrapping is byte-identical until somebody asks for a split.
+ *
+ * @param {object} account         - needs `country`, and optionally `equityMarketMix`
+ * @param {string} [allocation]    - only EQUITY has markets; anything else ⇒ null
+ * @returns {Object<string,number>|null} rateKey → weight (summing to 1), or null when
+ *   the allocation has no market axis.
+ */
+export function resolveEquityMarketMix(account, allocation = ALLOCATION.EQUITY) {
+  if (allocation !== ALLOCATION.EQUITY) return null;
+  const markets = EQUITY_MARKETS_BY_COUNTRY[account?.country];
+  if (!markets) return null;
+
+  // An authored mix wins outright. Filtered to keys inside the EQUITY class and to
+  // positive weights, then renormalised — an authored mix that does not sum to 1 is a
+  // statement of proportions, not of totals, and silently rescaling it beats either
+  // throwing or quietly leaving part of the balance unallocated.
+  const authored = account?.equityMarketMix;
+  if (authored && typeof authored === 'object') {
+    const valid = Object.entries(authored)
+      .filter(([k, w]) => CLASS_KEYS_BY_ALLOCATION[ALLOCATION.EQUITY].has(k) && w > 0);
+    const total = valid.reduce((s, [, w]) => s + w, 0);
+    if (total > 0) return Object.fromEntries(valid.map(([k, w]) => [k, w / total]));
+  }
+
+  return { [markets.domestic]: 1 };
+}
+
 export function resolveRateKey(country, allocation, role = null) {
   if (allocation === ALLOCATION.GOLD) return RATE_KEYS.GOLD;
 

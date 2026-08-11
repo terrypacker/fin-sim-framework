@@ -79,8 +79,8 @@ test('EVT-PAIR-1: two same-type accounts with different growthRate diverge', () 
 
   // Each account seeded its own per-account rate key.
   const eff = state.effectiveGrowthRates ?? {};
-  assert.ok(Math.abs((eff['EQUITY_US_ROTH::rothAccount']  ?? NaN) - 0.02) < 1e-9);
-  assert.ok(Math.abs((eff['EQUITY_US_ROTH::rothAccount2'] ?? NaN) - 0.20) < 1e-9);
+  assert.ok(Math.abs((eff['EQUITY_US::rothAccount']  ?? NaN) - 0.02) < 1e-9);
+  assert.ok(Math.abs((eff['EQUITY_US::rothAccount2'] ?? NaN) - 0.20) < 1e-9);
 });
 
 test('EVT-PAIR-2: a class-level shock fans onto BOTH per-account keys', () => {

@@ -10,7 +10,8 @@
 
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
-import { consumeHoldingsFifo }  from '../holdings/holdings-fifo.js';
+import { consumeHoldings }      from '../holdings/holdings-fifo.js';
+import { disposalTermFields }   from '../holdings/holding-period.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
@@ -141,7 +142,14 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       // A taxable, non-CASH sell realizes CGT; CASH has no gain, and sheltered
       // accounts rebalance for free.
       if (taxable && allocation !== ALLOCATION.CASH) {
-        const r = consumeHoldingsFifo(matching, take, { level: auLevel, asOfMs: auAsOfMs, country: 'AU' });
+        // Design 90 §9 step 2 — switched from the `consumeHoldingsFifo` wrapper to the
+        // full entry point so the signed, §1222-charactered split can be requested.
+        // Selection stays null, which is exactly what the wrapper passed, so lot
+        // choice (and therefore every realized figure) is unchanged.
+        const r = consumeHoldings(matching, take, {
+          indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU' },
+          terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
+        });
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
         taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
       } else {
@@ -211,11 +219,17 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
     // collectible-specific AU bases when present (bullion is an ordinary AU CGT asset).
     const collAuBasis    = fifo.collectibleBasisByCountry?.AU        ?? realizedAuBasis;
     const collIndexedAu  = fifo.collectibleIndexedBasisByCountry?.AU ?? collAuBasis;
+    // Design 90 §9 step 2 — every consumed lot is GOLD on this branch, so the signed
+    // split comes from the COLLECTIBLE tally, not the ordinary one. Reading the wrong
+    // tally here would report zero for the whole leg.
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      disposalTermFields(fifo.collectibleGainByCountryAndTerm);
     return {
       type: 'COLLECTIBLE_SALE_TAX', isGold: true, residency, stateKey,
       gain,
       auGain:        Math.max(0, +(proceeds - collAuBasis).toFixed(2)),
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),
+      usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
     };
   }
   // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months from
@@ -227,15 +241,22 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
   // disposal from that same account was gated correctly. `tests/unit/disposal-tax-payload-
   // parity.test.mjs` now holds all five emitters to one field contract.
   const auDiscountableGain = Math.min(auGain, fifo.realizedDiscountableGainByCountry?.AU ?? auGain);
+  // Design 90 §9 step 2 — the signed, §1222-charactered split. Like `auDiscountableGain`
+  // above it must ride on BOTH branches; the comment there explains what a missing field
+  // costs, and these four carry the same hazard once step 3 starts reading them.
+  const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+    disposalTermFields(fifo.realizedGainByCountryAndTerm);
   if (country === 'AU') {
     return {
       type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
+      usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
       // Design 76 Gap C — attribute the gain to the account that was rebalanced.
       residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
     };
   }
   return {
     type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain,
+    usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
     residency, proceeds, costBasis: realizedBasis, description: 'rebalance', stateKey,
   };
 }

@@ -62,7 +62,7 @@ test('buildAllocationCube: emits one row per (allocation, rateKey) bucket', () =
     brokerage: acct({
       stateKey: 'brokerage',
       holdings: [
-        H(ALLOCATION.EQUITY, 600, 400, RATE_KEYS.EQUITY_US_BROKERAGE),
+        H(ALLOCATION.EQUITY, 600, 400, RATE_KEYS.EQUITY_US),
         H(ALLOCATION.BOND,   300, 300, RATE_KEYS.FIXED_INCOME_US),
         H(ALLOCATION.CASH,   100, 100, RATE_KEYS.SAVINGS_US),
       ],
@@ -97,8 +97,8 @@ test('buildAllocationCube: same allocation on DIFFERENT rate keys stays split', 
     brokerage: acct({
       stateKey: 'brokerage',
       holdings: [
-        H(ALLOCATION.EQUITY, 700, 700, RATE_KEYS.EQUITY_US_BROKERAGE),
-        H(ALLOCATION.EQUITY, 300, 300, RATE_KEYS.EQUITY_AU_STOCK),
+        H(ALLOCATION.EQUITY, 700, 700, RATE_KEYS.EQUITY_US),
+        H(ALLOCATION.EQUITY, 300, 300, RATE_KEYS.EQUITY_AU),
       ],
     }),
   });
@@ -114,7 +114,7 @@ test('buildAllocationCube: a foreign sleeve in a domestic wrapper splits the cou
     brokerage: acct({
       stateKey: 'brokerage',
       country:  'US',
-      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_AU_STOCK)],
+      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_AU)],
     }),
   });
 
@@ -204,7 +204,7 @@ test('buildAllocationCube: holdings/balance drift is emitted as a reconciliation
     brokerage: acct({
       stateKey: 'brokerage',
       balance:  1000,
-      holdings: [H(ALLOCATION.EQUITY, 600, 600, RATE_KEYS.EQUITY_US_BROKERAGE)],
+      holdings: [H(ALLOCATION.EQUITY, 600, 600, RATE_KEYS.EQUITY_US)],
     }),
   });
 
@@ -222,7 +222,7 @@ test('buildAllocationCube: sub-tolerance drift is treated as rounding', () => {
     brokerage: acct({
       stateKey: 'brokerage',
       balance:  1000.4,
-      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_US_BROKERAGE)],
+      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_US)],
     }),
   });
   assert.equal(rows.length, 1);
@@ -233,7 +233,7 @@ test('buildAllocationCube: reconcileToBalance:false leaves the residual out', ()
   const rows = buildAllocationCube({
     brokerage: acct({
       stateKey: 'brokerage', balance: 1000,
-      holdings: [H(ALLOCATION.EQUITY, 600, 600, RATE_KEYS.EQUITY_US_BROKERAGE)],
+      holdings: [H(ALLOCATION.EQUITY, 600, 600, RATE_KEYS.EQUITY_US)],
     }),
   }, { reconcileToBalance: false });
 
@@ -248,7 +248,7 @@ test('buildAllocationCube: converts to base currency on the net-worth convention
     effectiveExchangeRates: { USD_AUD: 1.5 },
     super_: acct({
       stateKey: 'super_', country: 'AU', currency: { code: 'AUD' },
-      holdings: [H(ALLOCATION.EQUITY, 150_000, 150_000, RATE_KEYS.EQUITY_AU_SUPER)],
+      holdings: [H(ALLOCATION.EQUITY, 150_000, 150_000, RATE_KEYS.EQUITY_AU)],
     }),
   }, { baseCurrency: 'USD' });
 
@@ -263,7 +263,7 @@ test('buildAllocationCube: a missing FX rate degrades to 1:1 rather than NaN', (
   const rows = buildAllocationCube({
     super_: acct({
       stateKey: 'super_', country: 'AU', currency: { code: 'AUD' },
-      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_AU_SUPER)],
+      holdings: [H(ALLOCATION.EQUITY, 1000, 1000, RATE_KEYS.EQUITY_AU)],
     }),
   });
   assert.equal(rows[0].marketValue, 1000);
@@ -314,7 +314,7 @@ test('buildAllocationCube: non-holding assets get report-only classes', () => {
 test('buildAllocationCube: includeNonHoldingAssets:false gives the investable-only view', () => {
   const state = {
     house:     { kind: 'real-property', value: 900_000, country: 'US', currency: { code: 'USD' } },
-    brokerage: acct({ stateKey: 'brokerage', holdings: [H(ALLOCATION.EQUITY, 100_000, 100_000, RATE_KEYS.EQUITY_US_BROKERAGE)] }),
+    brokerage: acct({ stateKey: 'brokerage', holdings: [H(ALLOCATION.EQUITY, 100_000, 100_000, RATE_KEYS.EQUITY_US)] }),
   };
 
   assert.equal(total(buildAllocationCube(state)), 1_000_000);
@@ -364,13 +364,13 @@ test('buildAllocationCube: the cube total equals computeNetWorth', () => {
     brokerage: acct({
       stateKey: 'brokerage',
       holdings: [
-        H(ALLOCATION.EQUITY, 400_000, 250_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+        H(ALLOCATION.EQUITY, 400_000, 250_000, RATE_KEYS.EQUITY_US),
         H(ALLOCATION.BOND,   100_000, 100_000, RATE_KEYS.FIXED_INCOME_US),
       ],
     }),
     superFund: acct({
       stateKey: 'superFund', country: 'AU', currency: { code: 'AUD' }, role: 'super', type: 'super',
-      holdings: [H(ALLOCATION.EQUITY, 700_000, 500_000, RATE_KEYS.EQUITY_AU_SUPER)],
+      holdings: [H(ALLOCATION.EQUITY, 700_000, 500_000, RATE_KEYS.EQUITY_AU)],
     }),
     legacySavings: { stateKey: 'legacySavings', balance: 30_000, type: 'savings', role: 'us-savings', country: 'US', currency: { code: 'USD' } },
     usHouseProperty:     { kind: 'real-property', value: 900_000, country: 'US', currency: { code: 'USD' } },
@@ -402,7 +402,7 @@ test('buildAllocationCube: a loan is counted even when it is not a registered ac
 test('buildAllocationCube: row order is stable regardless of state key order', () => {
   const holdings = [
     H(ALLOCATION.BOND,   1, 1, RATE_KEYS.FIXED_INCOME_US),
-    H(ALLOCATION.EQUITY, 1, 1, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 1, 1, RATE_KEYS.EQUITY_US),
   ];
   const a = buildAllocationCube({ zed: acct({ stateKey: 'zed', holdings }), abe: acct({ stateKey: 'abe', holdings }) });
   const b = buildAllocationCube({ abe: acct({ stateKey: 'abe', holdings }), zed: acct({ stateKey: 'zed', holdings }) });

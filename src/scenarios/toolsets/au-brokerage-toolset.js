@@ -48,7 +48,7 @@ export const AU_BROKERAGE = {
       // filters the journal record only — so leaving it undeclared cost no tax
       // accuracy, just visibility in the journal and the design 71 reports.
       { type: 'AU_STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(), stateKey: ValueType.text() } },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX',    fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',  fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },

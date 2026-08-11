@@ -723,6 +723,7 @@ export class ScenarioSerializer {
     // Prime-relative spread (design 56) — emitted only when set so non-Prime-linked
     // accounts (null) round-trip byte-for-byte.
     if (account.primeSpread != null) d.primeSpread = account.primeSpread;
+    if (account.equityMarketMix != null) d.equityMarketMix = account.equityMarketMix;
     // Transaction-account flag (design 55 §7) — emitted only when true so legacy
     // accounts (default false) round-trip byte-for-byte.
     if (account.isTransactionAccount) d.isTransactionAccount = true;
@@ -1203,6 +1204,7 @@ export class ScenarioSerializer {
     if (d.__type !== 'LoanAccount' && d.interestRate !== undefined) opts.interestRate = d.interestRate;
     // Prime-relative spread (design 56) — absent on legacy saves → null (not linked).
     if (d.primeSpread !== undefined) opts.primeSpread = d.primeSpread;
+    if (d.equityMarketMix !== undefined) opts.equityMarketMix = d.equityMarketMix;
     // Transaction-account flag (design 55 §7) — absent on legacy saves → false.
     if (d.isTransactionAccount !== undefined) opts.isTransactionAccount = d.isTransactionAccount;
     let account;

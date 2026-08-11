@@ -87,7 +87,7 @@ test('GOLD-2: effectiveGrowthRates.GOLD tracks goldGrowthRate, independent of eq
   const hot = run(cfg => { cfg.parameters.goldGrowthRate = 0.11; });
   assert.ok(Math.abs(growth(hot, RATE_KEYS.GOLD) - 0.11) < 1e-9,
     `raising goldGrowthRate must lift the GOLD series, got ${growth(hot, RATE_KEYS.GOLD)}`);
-  assert.ok(Math.abs(growth(hot, 'EQUITY_US_BROKERAGE::usStockAccount') - growth(base, 'EQUITY_US_BROKERAGE::usStockAccount')) < 1e-9,
+  assert.ok(Math.abs(growth(hot, 'EQUITY_US::usStockAccount') - growth(base, 'EQUITY_US::usStockAccount')) < 1e-9,
     'a gold move must NOT touch the brokerage equity growth rate');
   assert.ok(Math.abs((hot.effectiveInterestRates?.PRIME_US ?? 0) - (base.effectiveInterestRates?.PRIME_US ?? 0)) < 1e-9,
     'a gold move must NOT touch central-bank Prime');
@@ -97,17 +97,17 @@ test('GOLD-2: effectiveGrowthRates.GOLD tracks goldGrowthRate, independent of eq
 
 test('GOLD-3: computeHoldingsGrowth grows a gold sleeve at the GOLD rate, equity at its own', () => {
   const state = {
-    effectiveGrowthRates: { GOLD: 0.10, 'EQUITY_US_BROKERAGE::acct': 0.05 },
+    effectiveGrowthRates: { GOLD: 0.10, 'EQUITY_US::acct': 0.05 },
     acct: {
       stateKey: 'acct',
       holdings: [
         { id: 'g', allocation: ALLOCATION.GOLD,   rateKey: RATE_KEYS.GOLD,        marketValue: 1000, costBasis: 400 },
-        { id: 'e', allocation: ALLOCATION.EQUITY, rateKey: 'EQUITY_US_BROKERAGE', marketValue: 1000, costBasis: 600 },
+        { id: 'e', allocation: ALLOCATION.EQUITY, rateKey: 'EQUITY_US', marketValue: 1000, costBasis: 600 },
       ],
     },
   };
   const { amount, holdingActions } = computeHoldingsGrowth({
-    state, stateKey: 'acct', fallbackRate: 0.05, fallbackRateKey: 'EQUITY_US_BROKERAGE',
+    state, stateKey: 'acct', fallbackRate: 0.05, fallbackRateKey: 'EQUITY_US',
   });
   // gold: 1000 × 0.10 = 100 ; equity: 1000 × 0.05 = 50 → total 150
   assert.equal(amount, 150);

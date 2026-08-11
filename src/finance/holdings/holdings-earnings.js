@@ -163,8 +163,21 @@ export function computeHoldingsGrowth({
     // On the interest path (useCoupon) these rateKeys resolve, so nothing is skipped.
     if (!useCoupon && (h.allocation === 'BOND' || h.allocation === 'CASH')) continue;
     const mv      = h.marketValue ?? 0;
+    // Per-account rate key for THIS holding's series (design 55 §8, extended by design
+    // 90 §7.2). The account-level `perAcctKey` above already did this for `fbRate`; the
+    // per-holding branch did not, so a holding carrying an explicit `rateKey` ignored
+    // per-account seeding entirely and took the shared series.
+    //
+    // That was invisible while no equity series was seeded at the bare key — every
+    // equity holding missed `ratesMap[h.rateKey]` and fell through to `fbRate`, which
+    // IS the per-account rate. The market axis seeds `EQUITY_US` as a real shared rate,
+    // at which point the bare-key hit starts winning and silently overrides every
+    // account's own growth rate with the market's. Same precedence as the account
+    // level: per-account first, shared series second.
+    const hPerAcctKey = (h.rateKey != null && stateKey != null) ? `${h.rateKey}::${stateKey}` : null;
     const baseRate = rateOverride
       ?? (useCoupon ? (h.couponRate ?? undefined) : undefined)
+      ?? (hPerAcctKey != null ? ratesMap[hPerAcctKey] : undefined)
       ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined)
       ?? fbRate;
     const hRate   = (currentDate && h.appreciationSchedule)

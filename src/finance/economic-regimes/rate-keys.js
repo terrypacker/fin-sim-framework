@@ -19,23 +19,29 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * FX uses currency pairs:                'USD_AUD'.
  */
 export const RATE_KEYS = Object.freeze({
-  // Equity (forward returns).
-  // EQUITY_US / EQUITY_AU are the asset-CLASS keys — used by shocks (which author
-  // class-level effects), dividends, and revaluation grouping (ROLE_TO_RATE_KEY).
-  // Each equity account TYPE also has its own member key below so it can carry an
-  // independent base growth rate; RegimeApplyReducer fans a class-level return
-  // shock out to all member keys (RATE_KEY_CLASS_MEMBERS), so a US-equity crash
-  // still hits every US-equity account on top of its own baseline.
-  EQUITY_US:       'EQUITY_US',       // class: Roth, IRA, 401k, US stock
-  EQUITY_AU:       'EQUITY_AU',       // class: AU stock, Super
-
-  // Per-account-type equity growth keys (members of the classes above).
-  EQUITY_US_ROTH:      'EQUITY_US_ROTH',
-  EQUITY_US_IRA:       'EQUITY_US_IRA',
-  EQUITY_US_K401:      'EQUITY_US_K401',
-  EQUITY_US_BROKERAGE: 'EQUITY_US_BROKERAGE',
-  EQUITY_AU_STOCK:     'EQUITY_AU_STOCK',
-  EQUITY_AU_SUPER:     'EQUITY_AU_SUPER',
+  // Equity (forward returns) — the MARKET axis (design 90 §7).
+  //
+  // These four keys name the market a holding tracks, and nothing else. That is a
+  // change of axis, not an addition: until design 90 the only equity granularity was
+  // the account WRAPPER (EQUITY_US_ROTH, EQUITY_US_BROKERAGE, EQUITY_AU_SUPER, …), so
+  // a Roth holding a US total-market fund and a Roth holding an international fund were
+  // the same sleeve, and a Super balance — in reality a diversified fund with a large
+  // international allocation — could only be expressed as "AU equity at beta 0.7".
+  // The account you keep something in does not determine what market it tracks.
+  //
+  // Per-ACCOUNT growth rates did not go away with the wrapper keys: every account is
+  // still seeded as `<marketKey>::<stateKey>` (design 55 §8), which is where a
+  // wrapper-specific rate now lives. It is a per-account override of a market rate
+  // rather than an asset class of its own, which is what it always actually was.
+  //
+  // Two international sleeves, not one, because ex-US and ex-AU overlap heavily but are
+  // not the same basket: ex-US contains Australia and ex-AU contains the United States,
+  // roughly 60% of global market capitalisation. Collapsing them would make a US
+  // investor's "international" allocation identical to an AU investor's.
+  EQUITY_US:        'EQUITY_US',          // US market
+  EQUITY_AU:        'EQUITY_AU',          // Australian market
+  EQUITY_INTL_EX_US:'EQUITY_INTL_EX_US',  // developed + emerging ex-US
+  EQUITY_INTL_EX_AU:'EQUITY_INTL_EX_AU',  // developed + emerging ex-Australia
 
   // Fixed income
   FIXED_INCOME_US: 'FIXED_INCOME_US', // FixedIncomeInterestHandler (US)
@@ -78,54 +84,64 @@ export const RATE_KEY_META = Object.freeze({
 });
 
 /**
- * Asset-class → member growth keys. RegimeApplyReducer uses this to fan a
- * class-level return adjustment (e.g. a shock's `{ EQUITY_US: -0.30 }`) out to
- * every member key in state.effectiveGrowthRates, so the class shock applies to
- * each account type on top of its own seeded base rate. Classes not listed here
- * (FIXED_INCOME_*, SAVINGS_*, …) have a single account type and need no fan-out.
+ * Asset-class → sub-member growth keys, for `RegimeApplyReducer`'s shock fan-out.
+ *
+ * **Design 90 §7.2 — EMPTY, and deliberately kept rather than deleted.**
+ *
+ * This table existed to fan a class-level shock (`{ EQUITY_US: -0.30 }`) out to the
+ * per-account-type member keys beneath it. With the market axis those member keys are
+ * gone: a shock's key IS the sleeve, so `_addScaledExpandingClasses` falls through to
+ * `[k]` and its `<leaf>::<stateKey>` sweep still reaches every seeded account. Shock
+ * coverage is therefore unchanged — verified by the regime tests.
+ *
+ * It stays as an extension point because the fan-out logic reads it unconditionally,
+ * and a future axis with genuine sub-members (sectors, factor tilts) would need exactly
+ * this shape back. An empty object is a cheaper statement of "no sub-members today"
+ * than deleting the mechanism and rebuilding it.
  */
-export const RATE_KEY_CLASS_MEMBERS = Object.freeze({
-  [RATE_KEYS.EQUITY_US]: [
-    RATE_KEYS.EQUITY_US_ROTH, RATE_KEYS.EQUITY_US_IRA,
-    RATE_KEYS.EQUITY_US_K401, RATE_KEYS.EQUITY_US_BROKERAGE,
-  ],
-  [RATE_KEYS.EQUITY_AU]: [
-    RATE_KEYS.EQUITY_AU_STOCK, RATE_KEYS.EQUITY_AU_SUPER,
-  ],
-});
+export const RATE_KEY_CLASS_MEMBERS = Object.freeze({});
 
 /**
- * Equity SLEEVES for stochastic return paths (design 74 §4). The per-account-type
- * *member* keys (not the `EQUITY_US/AU` class keys) are the granularity a market
- * factor is folded onto — each sleeve carries its own base growth rate and its own
- * beta on the shared market shock. Frozen in a **stable, sorted** order: the
- * EquityReturnTickHandler iterates this list to draw optional idiosyncratic terms,
- * so the order must never change or the RNG cursor (hence every subsequent draw)
- * would shift (design 74 §4 ⚠️).
+ * Equity SLEEVES for stochastic return paths (design 74 §4) — one per MARKET since
+ * design 90 §7.2. Each carries its own base growth rate and its own beta on the shared
+ * market shock.
+ *
+ * ⚠️ **RNG-cursor ordering, restated because design 90 §1.4 found the received version
+ * of this warning to be conditional.** `EquityReturnTickHandler` iterates this list, but
+ * the market draw happens BEFORE the loop and the loop draws only when
+ * `idioVol[sleeve] > 0` — skipping entirely, not drawing-and-multiplying-by-zero. So
+ * while every sleeve's idio vol is 0 (the default) this list's membership and order are
+ * RNG-irrelevant, which is what made re-shaping it safe. The moment any sleeve takes a
+ * non-zero idio vol the warning becomes real again and order matters absolutely.
+ * `equity-sleeve-rng-neutrality.test.mjs` pins the property this relies on.
  */
 export const EQUITY_SLEEVES = Object.freeze([
-  RATE_KEYS.EQUITY_AU_STOCK,
-  RATE_KEYS.EQUITY_AU_SUPER,
-  RATE_KEYS.EQUITY_US_BROKERAGE,
-  RATE_KEYS.EQUITY_US_IRA,
-  RATE_KEYS.EQUITY_US_K401,
-  RATE_KEYS.EQUITY_US_ROTH,
+  RATE_KEYS.EQUITY_AU,
+  RATE_KEYS.EQUITY_INTL_EX_AU,
+  RATE_KEYS.EQUITY_INTL_EX_US,
+  RATE_KEYS.EQUITY_US,
 ]);
 
 /**
- * Default per-sleeve beta on the shared market factor (design 74 §4, Option B).
- * US large-cap sleeves ride the factor 1:1; a diversified AU balance and (more so)
- * a super balance are less volatile, so they load below 1 out of the box — giving
- * per-sleeve behaviour without any config (design 74 §8 Q1). Overridable via the
- * `equityReturnBeta` param; a sleeve absent here defaults to 1.0.
+ * Default per-MARKET beta on the shared market factor (design 74 §4 Option B, re-based
+ * onto the market axis by design 90 §7.2). Overridable via the `equityReturnBeta` param;
+ * a sleeve absent here defaults to 1.0.
  */
 export const DEFAULT_EQUITY_BETA = Object.freeze({
-  [RATE_KEYS.EQUITY_US_ROTH]:      1.0,
-  [RATE_KEYS.EQUITY_US_IRA]:       1.0,
-  [RATE_KEYS.EQUITY_US_K401]:      1.0,
-  [RATE_KEYS.EQUITY_US_BROKERAGE]: 1.0,
-  [RATE_KEYS.EQUITY_AU_STOCK]:     0.9,
-  [RATE_KEYS.EQUITY_AU_SUPER]:     0.7,
+  // The market factor is defined as the US market's, so EQUITY_US rides it 1:1 by
+  // construction. The other three load below 1 in USD terms: a broad ex-US basket is
+  // more diversified across economies than the US alone, and the Australian market is
+  // narrower but far less correlated with US mega-cap technology than its own size
+  // suggests. These are the same shape as the betas they replace, re-expressed on the
+  // axis that actually generates the correlation.
+  //
+  // ⚠️ These are the CO-MOVEMENT parameter, not the dispersion one. With `idioVol` at
+  // its default of 0 every sleeve is still a deterministic multiple of one draw, so
+  // sleeves cannot cross — design 90 §7.4. Betas alone do not make losses possible.
+  [RATE_KEYS.EQUITY_US]:         1.0,
+  [RATE_KEYS.EQUITY_INTL_EX_US]: 0.85,
+  [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.95,
+  [RATE_KEYS.EQUITY_AU]:         0.8,
 });
 
 /**
@@ -170,6 +186,9 @@ export const DEFAULT_RE_IDIO = Object.freeze({
  * from the scenario's registered accounts.
  */
 export const ROLE_TO_RATE_KEY = Object.freeze({
+  // Design 90 §7.2 — a role's DEFAULT market. It is only a default: a holding may name
+  // any market in the EQUITY class, and after the sub-axis lands (§7.3) that is how a
+  // Super balance expresses its international allocation instead of inheriting AU.
   [ACCOUNT_ROLES.ROTH]:           RATE_KEYS.EQUITY_US,
   [ACCOUNT_ROLES.IRA]:            RATE_KEYS.EQUITY_US,
   [ACCOUNT_ROLES.K401]:           RATE_KEYS.EQUITY_US,
@@ -193,12 +212,16 @@ export const ROLE_TO_RATE_KEY = Object.freeze({
  * `computeHoldingsGrowth` lookup agree.
  */
 export const MEMBER_RATE_KEY_BY_ROLE = Object.freeze({
-  [ACCOUNT_ROLES.ROTH]:            RATE_KEYS.EQUITY_US_ROTH,
-  [ACCOUNT_ROLES.IRA]:             RATE_KEYS.EQUITY_US_IRA,
-  [ACCOUNT_ROLES.K401]:            RATE_KEYS.EQUITY_US_K401,
-  [ACCOUNT_ROLES.US_STOCK]:        RATE_KEYS.EQUITY_US_BROKERAGE,
-  [ACCOUNT_ROLES.AU_STOCK]:        RATE_KEYS.EQUITY_AU_STOCK,
-  [ACCOUNT_ROLES.SUPER]:           RATE_KEYS.EQUITY_AU_SUPER,
+  // Design 90 §7.2 — equity roles now resolve to their MARKET key, and the two maps
+  // above and below have converged for equity as a result. The wrapper-specific growth
+  // rate survives as the per-account `<marketKey>::<stateKey>` seed, which is what
+  // `seedPerAccountRates` writes for every account.
+  [ACCOUNT_ROLES.ROTH]:            RATE_KEYS.EQUITY_US,
+  [ACCOUNT_ROLES.IRA]:             RATE_KEYS.EQUITY_US,
+  [ACCOUNT_ROLES.K401]:            RATE_KEYS.EQUITY_US,
+  [ACCOUNT_ROLES.US_STOCK]:        RATE_KEYS.EQUITY_US,
+  [ACCOUNT_ROLES.AU_STOCK]:        RATE_KEYS.EQUITY_AU,
+  [ACCOUNT_ROLES.SUPER]:           RATE_KEYS.EQUITY_AU,
   [ACCOUNT_ROLES.FIXED_INCOME]:    RATE_KEYS.FIXED_INCOME_US,
   [ACCOUNT_ROLES.AU_FIXED_INCOME]: RATE_KEYS.FIXED_INCOME_AU,
   [ACCOUNT_ROLES.US_SAVINGS]:      RATE_KEYS.SAVINGS_US,

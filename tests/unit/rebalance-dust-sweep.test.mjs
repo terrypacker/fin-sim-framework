@@ -76,7 +76,7 @@ const SUBCENT_GOLD = { EQUITY: 0.60, BOND: 0.40 - 1e-8, GOLD: 1e-8 };
 
 test('dust sweep: a liquidated sleeve leaves no remnant', () => {
   const before = account([
-    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   195_000, 195_000, RATE_KEYS.FIXED_INCOME_US),
     H(ALLOCATION.GOLD,     5_000,   4_000, RATE_KEYS.GOLD),
   ]);
@@ -89,7 +89,7 @@ test('dust sweep: a liquidated sleeve leaves no remnant', () => {
 
 test('dust sweep: gross value is conserved through the rebalance', () => {
   const before = account([
-    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   195_000, 195_000, RATE_KEYS.FIXED_INCOME_US),
     H(ALLOCATION.GOLD,     5_000,   4_000, RATE_KEYS.GOLD),
   ]);
@@ -108,7 +108,7 @@ test('_sweepDust: folds a remnant\'s market value AND basis into the largest sur
   // Carrying only the market value would mint a cent of unrealized gain from nothing,
   // which a later year would then tax.
   const swept = _sweepDust([
-    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   399_999.99, 399_999.99, RATE_KEYS.FIXED_INCOME_US),
     H(ALLOCATION.GOLD,        0.01,       0.008, RATE_KEYS.GOLD),
   ]);
@@ -122,7 +122,7 @@ test('_sweepDust: folds a remnant\'s market value AND basis into the largest sur
 
 test('_sweepDust: is a no-op when nothing is dust', () => {
   const holdings = [
-    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   400_000, 400_000, RATE_KEYS.FIXED_INCOME_US),
   ];
   assert.equal(_sweepDust(holdings), holdings, 'same reference — no copy-on-write churn');
@@ -130,7 +130,7 @@ test('_sweepDust: is a no-op when nothing is dust', () => {
 
 test('_sweepDust: leaves a wiped-out position (real basis) alone', () => {
   const holdings = [
-    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 600_000, 400_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.GOLD,        0.01,  9_000, RATE_KEYS.GOLD),
   ];
   assert.equal(_sweepDust(holdings), holdings, 'a total unrealized loss is not dust');
@@ -138,7 +138,7 @@ test('_sweepDust: leaves a wiped-out position (real basis) alone', () => {
 
 test('dust sweep: the swept account is stable — no perpetual re-rebalancing', () => {
   let acct = account([
-    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   195_000, 195_000, RATE_KEYS.FIXED_INCOME_US),
     H(ALLOCATION.GOLD,     5_000,   4_000, RATE_KEYS.GOLD),
   ]);
@@ -158,7 +158,7 @@ test('dust sweep: a sleeve worth a cent but carrying REAL basis is left alone', 
   // dust. Folding its basis into another sleeve would move the loss onto the wrong
   // lot and mis-state a later disposal, so the sweep must not touch it.
   const before = account([
-    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 800_000, 500_000, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.BOND,   199_999.99, 195_000, RATE_KEYS.FIXED_INCOME_US),
     H(ALLOCATION.GOLD,        0.01,   9_000, RATE_KEYS.GOLD),
   ]);
@@ -173,7 +173,7 @@ test('dust sweep: a sleeve worth a cent but carrying REAL basis is left alone', 
 test('dust sweep: an all-dust account is left untouched rather than vanished', () => {
   // Degenerate, but folding with nothing to fold into would destroy the value.
   const before = account([
-    H(ALLOCATION.EQUITY, 0.01, 0.01, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 0.01, 0.01, RATE_KEYS.EQUITY_US),
     H(ALLOCATION.GOLD,   0.01, 0.01, RATE_KEYS.GOLD),
   ]);
   const { acct } = step(before, { EQUITY: 1.0 });
@@ -184,7 +184,7 @@ test('dust sweep: a freshly established sleeve is never mistaken for dust', () =
   // A buy leg only runs above the same 0.01 threshold, so a new sleeve always lands
   // above DUST. Pin it, because lowering that guard would silently delete new sleeves.
   const before = account([
-    H(ALLOCATION.EQUITY, 1_000_000, 700_000, RATE_KEYS.EQUITY_US_BROKERAGE),
+    H(ALLOCATION.EQUITY, 1_000_000, 700_000, RATE_KEYS.EQUITY_US),
   ]);
   const { acct } = step(before, { EQUITY: 0.60, BOND: 0.40 });
 

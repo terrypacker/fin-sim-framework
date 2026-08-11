@@ -11,6 +11,8 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain } from '../capital-gain-character.js';
+import { frankingCreditOn } from './franking.js';
 import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
 
 const SUPER_TAX_RATE = 0.15;
@@ -434,14 +436,46 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // dividend the US recognises (the AU franking gross-up is not US income), so
         // it matches `usd`. The FTC cannot offset NIIT.
         const usd = toUSD(action.amount, 'AUD', state);
+
+        // Design 90 §8 / design 76 §8.2 — gaps 1 and 2, fixed TOGETHER because either
+        // alone points the wrong way. s207-20(1) includes the franking credit in
+        // assessable income *in addition to* the cash dividend, and s207-20(2) gives an
+        // offset equal to that credit; s202-60(2) sizes the credit at `cash × r/(1−r)`,
+        // not at 100% of the cash.
+        //
+        // Before this the model booked NO AU assessable income and a credit equal to the
+        // whole dividend — a franked dividend was a pure tax SHIELD that sheltered other
+        // income, roughly 2.33× overstated. Shrinking the credit without adding the
+        // income would have made franked dividends look worse than reality: a wrong
+        // answer reached by a correct edit, which is why design 76 §8.7 sequences them
+        // as one change.
+        const credit = frankingCreditOn(action.amount, {
+          corporateTaxRate: action.corporateTaxRate,
+          frankedPercent:   action.frankedPercent,
+        });
+        // Assessable = cash + gross-up. The OFFSET is booked separately below and is
+        // what makes this roughly neutral at a 30% marginal rate rather than taxed twice.
+        const assessable = +(action.amount + credit).toFixed(2);
+        // The US side is unchanged and must be: the gross-up is an Australian construct
+        // with no US analogue, so `usd` stays the cash dividend. Grossing up the US
+        // figure would invent income the IRS never sees.
         return {
           ...state,
           usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
           usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + usd,
           foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
-            ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, account, action.amount, state.people) }
-            : { auFrankingCreditYTD: state.auFrankingCreditYTD + action.amount }),
+            ? {
+                auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, account, assessable, state.people),
+                auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, account, credit, state.people),
+              }
+            : {
+                // `?? 0` because this branch is reachable from synthetic states that
+                // carry only the accumulators they care about; `undefined + x` is NaN,
+                // and a NaN in assessable income poisons the whole return silently.
+                auOrdinaryIncomeYTD:  (state.auOrdinaryIncomeYTD ?? 0) + assessable,
+                auFrankingCreditYTD:  (state.auFrankingCreditYTD ?? 0) + credit,
+              }),
         };
       }],
 
@@ -540,22 +574,39 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // lots held ≥12 months from the AU deemed-acquisition date. Defaults to the
         // full auGain when absent (old actions ⇒ current full-discount behavior).
         const auDiscountableGain = action.auDiscountableGain ?? auGain;
+        // Design 90 §5 — signed AU split, in AUD (this account's currency).
+        const auChar = characterizeAuCapitalGain(action, auGain);
         const isAuResident = residency === 'AU';
         // Design 76 Gap C — attribute to the AU brokerage account that paid it.
         const account = resolveAttributionAsset(state, action, 'auStockAccount');
         const perPerson = state.people != null && account != null;
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
+        // Design 90 §4 — the SIGNED §1222 split. `gain` is in AUD here (the account's
+        // currency), so the split is converted the same way the floored figure was.
+        const char = characterizeCapitalGain(action, gain);
+        let next = {
+          ...state,
+          usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(char.long, 'AUD', state),
+          // Written only when non-zero, following the usUnrecaptured1250GainYTD precedent:
+          // creating this key at 0 puts a state diff on every gainless disposal, and a
+          // buy-and-hold plan makes short-term character rare (12 rows in 5,646 measured).
+          ...(char.short !== 0
+            ? { usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + toUSD(char.short, 'AUD', state) }
+            : {}),
+        };
         if (isAuResident) {
           next = {
             ...next,
+            // Design 90 §5 — SIGNED, so an AU capital LOSS survives to be netted under
+            // s102-5 Step 1. `auChar.long` is the Div 115 discount-eligible slice and
+            // `.short` the rest; their sum is the gross gain these lines used to book.
             ...(perPerson
               ? {
-                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, account, auGain, state.people),
-                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, account, auDiscountableGain, state.people),
+                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, account, auChar.short + auChar.long, state.people),
+                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, account, auChar.long, state.people),
                 }
               : {
-                  auCapitalGainsYTD:      state.auCapitalGainsYTD + auGain,
-                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auDiscountableGain,
+                  auCapitalGainsYTD:      state.auCapitalGainsYTD + auChar.short + auChar.long,
+                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auChar.long,
                 }),
             foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auGain, 'AUD', state),
           };
@@ -610,7 +661,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // both would double-relieve, which is why the fraction arrives here rather
         // than having been netted into `gain` upstream.
         const auTaxableFraction = action.auTaxableFraction ?? 1;   // pre-G7 default: all of it
-        const auAssessableGain  = +(gain * auTaxableFraction).toFixed(2);
+        // Design 90 §5 — SIGNED. `gain` is floored, so a dwelling sold below its cost
+        // base gave an assessable gain of 0 and the loss disappeared. The signed AU
+        // total takes the SAME s118-185 fraction: the main-residence concession
+        // disregards a loss on the exempt portion exactly as it disregards a gain, so
+        // a partly-exempt dwelling surrenders the same share of both.
+        const auSignedGain      = (action.auShortTermGain ?? null) != null || (action.auLongTermGain ?? null) != null
+          ? (action.auShortTermGain ?? 0) + (action.auLongTermGain ?? 0)
+          : gain;
+        const auAssessableGain  = +(Math.min(gain, auSignedGain) * auTaxableFraction).toFixed(2);
 
         // The depreciation slice. Australia needs no special handling — s110-45(2)
         // already enlarged the gain by taking Div 43 out of the cost base, and that
@@ -630,9 +689,25 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
         const usdGain     = toUSD(usTaxableGain, 'AUD', state);
         const usdDepGain  = toUSD(depGain,       'AUD', state);
+        // Design 90 §4 — signed. `usTaxableGain` is already net of §121, so the helper
+        // preserves it on the gain side and falls through to the signed loss only when
+        // there is no gain for §121 to exclude.
+        //
+        // Characterized in AUD and converted after, NOT the reverse: the action's signed
+        // fields are stamped in the property's own currency (AUD) by the AU sale reducer,
+        // while `usdGain` has already crossed the FX line. Handing the helper a USD
+        // taxable gain and AUD signed fields would compare two different currencies and
+        // silently mis-split any disposal whose FX rate is not 1.
+        const houseChar = characterizeCapitalGain(action, usTaxableGain);
         let next = {
           ...state,
-          usCapitalGainsYTD:         state.usCapitalGainsYTD + usdGain,
+          usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(houseChar.long, 'AUD', state),
+          // Written only when non-zero, following the usUnrecaptured1250GainYTD precedent:
+          // creating this key at 0 puts a state diff on every gainless disposal, and a
+          // buy-and-hold plan makes short-term character rare (12 rows in 5,646 measured).
+          ...(houseChar.short !== 0
+            ? { usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + toUSD(houseChar.short, 'AUD', state) }
+            : {}),
           // §1250 gain is US-taxable income in its own rate bucket (G7 step 3b).
           // Written only when there IS one: a never-rented dwelling has no §1250 slice,
           // and materialising the key at 0 would put a state diff on every gainless

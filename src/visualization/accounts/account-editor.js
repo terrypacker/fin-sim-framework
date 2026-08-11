@@ -35,14 +35,15 @@ const ALLOCATIONS      = [...ALLOCATION_VALUES];
 // Rate Key choices for the holdings editor, grouped by asset category. A holding's
 // rateKey selects which market-return series drives its growth (state.effective*
 // Rates[rateKey]) and is the handle shocks/regimes author effects on. The class
-// keys (EQUITY_US/AU) and their per-account-type members are all valid override
+// keys (the four MARKET keys — design 90 §7.2) are all valid override
 // targets (see rate-keys.js). Blank = leave unset (the account resolves a default
 // at creation). A free-text typo silently fell back to a generic rate — this list
 // makes the valid set discoverable and prevents that.
 const RATE_KEY_GROUPS = [
-  { label: 'Equity — class',         keys: [RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU] },
-  { label: 'Equity — US by account', keys: [RATE_KEYS.EQUITY_US_ROTH, RATE_KEYS.EQUITY_US_IRA, RATE_KEYS.EQUITY_US_K401, RATE_KEYS.EQUITY_US_BROKERAGE] },
-  { label: 'Equity — AU by account', keys: [RATE_KEYS.EQUITY_AU_STOCK, RATE_KEYS.EQUITY_AU_SUPER] },
+  { label: 'Equity — domestic',      keys: [RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU] },
+  // Design 90 §7.2 — grouped by MARKET, not by account wrapper. A wrapper-specific rate
+  // is now a per-account override (`<marketKey>::<stateKey>`) rather than a key of its own.
+  { label: 'Equity — international', keys: [RATE_KEYS.EQUITY_INTL_EX_US, RATE_KEYS.EQUITY_INTL_EX_AU] },
   { label: 'Fixed income',           keys: [RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU] },
   { label: 'Savings',                keys: [RATE_KEYS.SAVINGS_US, RATE_KEYS.SAVINGS_AU] },
   { label: 'Gold',                   keys: [RATE_KEYS.GOLD] },

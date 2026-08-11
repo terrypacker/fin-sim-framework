@@ -121,6 +121,104 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
   };
 
   /**
+   * ITAA 1997 s102-5 Steps 1–2 — capital losses, applied BEFORE the Div 115 discount
+   * (design 90 §5). Pure; the settle owns the pool write-back.
+   *
+   * **The ordering is the whole point, and it is the Act's.** The s102-5(1) method
+   * statement reduces gross capital gains by the year's capital losses (Step 1) and
+   * then by carried-forward net capital losses (Step 2), and only reaches the discount
+   * percentage at Step 5. Discounting first and netting after would halve the gain and
+   * then let the loss eat the halved figure, wasting half of every loss.
+   *
+   * **s102-10(2): "You cannot deduct from your assessable income a net capital loss for
+   * any income year."** So an unused loss goes to a pool that only ever meets future
+   * capital gains — never wages, never rent. That is the one hard difference from the
+   * US §1211(b) allowance, and it is why this pool must stay distinct from the Div 36
+   * `auTaxLossPool` sitting a few lines below in `_assessResidentPreFito`: merging them
+   * would let a capital loss shelter ordinary income, which this subsection forbids in
+   * as many words.
+   *
+   * **Which gains the losses eat first is a CHOICE the Act grants**, and design 90 §5.3
+   * records it: s102-5(1) Step 1 Note 3 lets the taxpayer "choose the order in which you
+   * reduce them", so losses are applied to NON-discountable gains first. A dollar of
+   * loss spent on a non-discount gain saves a full dollar of assessable income; spent on
+   * a discount gain it saves fifty cents, because the discount would have halved that
+   * dollar anyway. The alternative models a taxpayer who volunteers to waste half of
+   * every loss.
+   *
+   * Runs on the PER-PERSON state `computeAuTaxPerPerson` builds, so `auCapitalLossPool`
+   * here is one taxpayer's pool — see design 90 §5.1 for why it is never a household
+   * scalar.
+   *
+   * @param {object} state  a single taxpayer's slice
+   * @returns {{ total:number, discountable:number, real:number, apportionedBase:number,
+   *   apportionedAllowance:number, opening:number, applied:number, closing:number }}
+   *   The first five are post-netting inputs for `_cgtRelief`; `closing` is the pool.
+   */
+  _applyCapitalLosses(state) {
+    const opening = Math.max(0, state?.auCapitalLossPool ?? 0);
+    const total   = state?.auCapitalGainsYTD ?? 0;
+    // ABSENT means "all of it qualifies", not "none of it" — the same old-save rule
+    // `_cgtRelief` applies, and it has to be applied HERE too now that this function
+    // hands `_cgtRelief` a state with the key always materialized. Defaulting to 0
+    // instead silently withdrew the Division 115 discount from every synthetic state
+    // and every pre-design-62 save.
+    const discountable = (state != null && 'auDiscountableGainsYTD' in state)
+      ? (state.auDiscountableGainsYTD ?? 0)
+      : total;
+
+    // The two halves of the year's gross result, each signed.
+    const dGainRaw = discountable;
+    const nGainRaw = total - discountable;
+
+    let loss   = Math.max(0, -dGainRaw) + Math.max(0, -nGainRaw) + opening;
+    let dGain  = Math.max(0, dGainRaw);
+    let nGain  = Math.max(0, nGainRaw);
+
+    // §5.3: non-discountable first.
+    const takeN = Math.min(loss, nGain); loss -= takeN; nGain -= takeN;
+    const takeD = Math.min(loss, dGain); loss -= takeD; dGain -= takeD;
+
+    // The s115-115 apportionment (design 83 G7) is sized against the PRE-loss
+    // discountable base, so it has to shrink with it. Leaving it alone would grant
+    // apportioned relief computed on a gain the losses had already removed — relief
+    // exceeding the gain it relieves.
+    const dScale = dGainRaw > 0 ? dGain / dGainRaw : 0;
+    const nettedTotal = dGain + nGain;
+    const applied     = takeN + takeD;
+
+    // FY2027+ replaces the discount with CPI indexation, so the reform module assesses
+    // a REAL gain rather than the nominal one. The loss comes off it as an ABSOLUTE
+    // amount, not as a ratio of the nominal reduction.
+    //
+    // That distinction is load-bearing and was got wrong first time. Scaling the real
+    // bucket by `netted / gross` couples it to *every* reduction in the nominal figure,
+    // including ones that have nothing to do with capital losses — most importantly the
+    // FITO counterfactual, which strips US-source gain from the nominal bucket and
+    // relies on a SEPARATE signal (`usSourceRealCapGainsAudYTD`) to strip the real one.
+    // Under a ratio, the real bucket would shrink on its own and silently paper over a
+    // missing signal, which is precisely the design 57 Part 2 D defect
+    // `tax-cross-border-relief.test.mjs` FITO-D exists to detect. Subtracting the
+    // applied loss keeps the two reductions independent.
+    //
+    // A capital loss carries no indexation of its own — it is a nominal figure, and the
+    // Act gives it none — so applying it at face value against the real gain is also
+    // the straightforward reading.
+    const rawReal = Math.max(0, state?.auRealCapitalGainsYTD ?? 0);
+
+    return {
+      total:        +nettedTotal.toFixed(2),
+      discountable: +dGain.toFixed(2),
+      real:         +Math.max(0, rawReal - applied).toFixed(2),
+      apportionedBase:      +(Math.max(0, state?.auDiscountApportionedBaseYTD ?? 0) * dScale).toFixed(2),
+      apportionedAllowance: +(Math.max(0, state?.auDiscountAllowanceYTD ?? 0) * dScale).toFixed(2),
+      opening,
+      applied: +applied.toFixed(2),
+      closing: +loss.toFixed(2),
+    };
+  }
+
+  /**
    * Year-specific CGT relief for resident net capital gains.
    *
    * Base implementation: a flat Division 115 discount at `_cgtDiscountRate`.
@@ -222,11 +320,29 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auTaxLossPool       = 0,
     } = state;
 
+    // s102-5 Steps 1–2 FIRST (design 90 §5): capital losses come off the GROSS gain,
+    // before the discount at Step 5. `_cgtRelief` is then handed a state whose gain
+    // figures are already net, so neither rate module — the flat-discount one here nor
+    // the FY2027 indexation override — needs to know capital losses exist. That is
+    // deliberate: `_cgtRelief` is an override point about RELIEF, and threading loss
+    // netting through both implementations would have duplicated the ordering rule in
+    // the one place a future rate module is most likely to get it wrong.
+    const capLoss = this._applyCapitalLosses(state);
+    const nettedGains = capLoss.total;
+    const cgtState = {
+      ...state,
+      auCapitalGainsYTD:            nettedGains,
+      auDiscountableGainsYTD:       capLoss.discountable,
+      auDiscountApportionedBaseYTD: capLoss.apportionedBase,
+      auDiscountAllowanceYTD:       capLoss.apportionedAllowance,
+      ...('auRealCapitalGainsYTD' in state ? { auRealCapitalGainsYTD: capLoss.real } : {}),
+    };
+
     // Apply the year's CGT relief. Base = flat 50% Div 115 discount and no
     // minimum-tax floor (minTaxRate 0). FY2027+ removes the discount and sets
     // minTaxRate to 0.30 (design 57 §6.3).
     const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate } =
-      this._cgtRelief(state, auCapitalGainsYTD);
+      this._cgtRelief(cgtState, nettedGains);
 
     // ─── Div 36 carried-forward tax losses (design 86 G1) ────────────────────
     //
@@ -261,7 +377,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const baseTax          = assessableSchedule.tax;
     const medicare         = this._medicareLevyDetail(discountedIncome);
     const medicareLevy     = medicare.tax;
-    const frankingOffset   = Math.min(auFrankingCreditYTD, baseTax);
+    // Design 90 §8 / design 76 §8.2 Gap 3 — ITAA 1997 s67-25(1): Division 207 offsets
+    // "are subject to the refundable tax offset rules" for everyone outside its listed
+    // carve-outs (non-complying super funds, certain trustees, corporate tax entities).
+    // An individual is not in any of them, so the offset is REFUNDABLE: it is not capped
+    // at base tax, it applies against the whole liability including the Medicare levy,
+    // and any excess is paid out.
+    //
+    // The old `Math.min(…, baseTax)` forfeited that excess. It ran AGAINST the household
+    // and hit exactly one taxpayer — the low-income retiree whose base tax is too small
+    // to absorb the credit, which is the same person design 84 G10 landed on for the
+    // same structural reason. It was also the smallest of design 76 §8.2's three gaps
+    // and pointed the other way from the two above, so it never cancelled them.
+    const frankingOffset   = Math.max(0, auFrankingCreditYTD);
 
     // Div 115C minimum tax (FY2027+): floor the tax *attributable to the net
     // capital gain* at minTaxRate × that gain — an incremental floor on the gain's
@@ -294,7 +422,13 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // return already presented it this way — the top-up sits inside Gross Tax with
     // the Credits section beneath it — so this brings the arithmetic into line with
     // the document the model has been printing all along.
-    const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy + minTaxTopUp - frankingOffset);
+    // A refundable offset can drive this NEGATIVE — that is a refund owed, not a
+    // violation, and clamping it at 0 is precisely how the excess used to be destroyed.
+    // The FITO limit below reads this figure, so it is clamped THERE (a refund creates
+    // no room for a foreign tax offset) rather than here, keeping the two distinct:
+    // "the Commissioner owes you" and "there is no liability left to relieve" are
+    // different states that a single Math.max conflated.
+    const netLiabilityPreFito = baseTax + medicareLevy + minTaxTopUp - frankingOffset;
 
     // Split baseTax into its ordinary-income and capital-gain components for
     // display (design 57 report breakdown). AU has no separate CGT schedule of
@@ -314,6 +448,10 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // Div 36 pool (design 86 G1) — reported on the return and, from the REAL pass
       // only, written back to state by the settle reducer.
       openingLossPool, lossDeducted, closingLossPool,
+      // s102-5 / s102-15 net capital losses (design 90 §5). A SEPARATE pool from the
+      // Div 36 trio above — s102-10(2) bars a net capital loss from ever reducing
+      // assessable income, so the two must never be summed.
+      capitalLoss: capLoss,
       superTax: auSuperTaxYTD,
       marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
       netLiabilityPreFito,
@@ -389,14 +527,25 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         // which is what the Credits line states and what the "excess forfeited"
         // worksheet row subtracts — so a wasted de-minimis offset now shows up as
         // forfeited instead of vanishing silently.
-        fito = Math.min(fito, a.netLiabilityPreFito);
+        // Clamp at 0 as well as at the liability: `netLiabilityPreFito` can now be
+        // NEGATIVE (a refundable franking offset exceeding the whole liability), and a
+        // negative cap would turn the FITO into a charge. A refund owed leaves nothing
+        // for a foreign tax offset to relieve, so the right answer is zero FITO.
+        fito = Math.min(fito, Math.max(0, a.netLiabilityPreFito));
       }
 
       // Design 77 §5.3 — super fund tax excluded (see _assessResidentPreFito).
-      // No clamp: `frankingOffset` is capped at `baseTax` and `fito` at the
-      // pre-FITO liability, so this cannot go negative. Stating it as a plain
-      // subtraction is what makes "Gross Tax + credits = Net Tax Liability" hold
-      // by construction rather than by luck (design 71 §6).
+      //
+      // Still no clamp, but the reason has changed (design 90 §8). It used to be that
+      // `frankingOffset` was capped at `baseTax`, so this could not go negative. Under
+      // s67-25 the franking offset is REFUNDABLE and uncapped, so this genuinely can —
+      // and must be allowed to. A negative Net Tax Liability is a REFUND OWED; clamping
+      // it at zero would destroy the excess credit all over again, one line further
+      // down. `fito` is separately floored at 0 above, so it can only ever reduce.
+      //
+      // The plain subtraction is what keeps "Gross Tax + credits = Net Tax Liability"
+      // exact (design 71 §6) — the footing identity holds whether the result is
+      // positive or negative, which is the whole reason it is stated as a subtraction.
       const netLiability = a.baseTax + a.medicareLevy + a.minTaxTopUp
                          - a.frankingOffset - fito;
 
@@ -454,6 +603,10 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         openingLossPool:          a.openingLossPool,
         lossDeducted:             a.lossDeducted,
         closingLossPool:          a.closingLossPool,
+        // design 90 §5 — `closingCapitalLossPool` is what the AU settle persists.
+        openingCapitalLossPool:   a.capitalLoss?.opening ?? 0,
+        capitalLossApplied:       a.capitalLoss?.applied ?? 0,
+        closingCapitalLossPool:   a.capitalLoss?.closing ?? 0,
         baseTax:                  a.baseTax,
         ordinaryIncomeTax:        a.ordinaryIncomeTax,
         capitalGainsTax:          a.capitalGainsTax,

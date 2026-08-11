@@ -132,6 +132,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const pal = _computePassiveLossLimitation(state);
     const usOrdinaryIncomeYTD = _usOrdinaryIncomeRaw + pal.adjustment;
 
+    // Step 0a2: §1211/§1212 capital-loss netting (design 90 §4). Runs before anything
+    // reads a gain figure, because it decides what each rate group's gain IS: the four
+    // `*Gain` outputs below REPLACE the raw YTD accumulators everywhere downstream.
+    // Reading `usCapitalGainsYTD` directly past this point is a bug — it is the
+    // pre-netting figure and may be negative.
+    const capLoss = _computeCapitalLossLimitation(state);
+
     // Step 0b: §163(d) investment interest (design 86 G3 error 1). Computed after the
     // §469 pass because its own limit reads `usPassiveActivityIncomeYTD` to carve
     // passive rents out of net investment income, and taken as a deduction below
@@ -163,7 +170,16 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
     // Step 1: AGI and taxable ordinary income (AGI reduced by the ½ SE-tax
     // deduction — the surtax is not deductible).
-    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD - seDeduction - usSection988LossYTD
+    // Short-term capital gain is ORDINARY income for rate purposes — §1(h) reserves the
+    // preferential rates for "net capital gain", which §1222(11) defines as the excess of
+    // net LONG-term gain over net short-term loss. So it joins AGI here rather than
+    // stacking in the LTCG brackets below. The §1211(b) allowance leaves AGI on the same
+    // line, alongside the two deductions that already enter this way (design 90 §4.2
+    // step 4): `usNegativeIncomeYTD` and `usSection988LossYTD` are the documented pair
+    // whose above-the-line treatment keeps the Form 1116 identity exact, and a capital
+    // loss deduction belongs in the same place (§62(a)(3)).
+    const agi             = usOrdinaryIncomeYTD + capLoss.shortTermGain - capLoss.allowance
+                            - usNegativeIncomeYTD - seDeduction - usSection988LossYTD
                             - invInt.allowed;
     const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
@@ -198,7 +214,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // modest ordinary income pays their own marginal rate on much of the slice. A flat
     // rate would have been simpler and the same shape as COLLECTIBLES_RATE, and it
     // would have overstated the tax for precisely the taxpayer this models.
-    const unrecap1250     = Math.max(0, usUnrecaptured1250GainYTD);
+    // Post-§1211 netting (design 90 §4): a capital loss walks the long-term rate groups
+    // highest-rate-first, so each of these three may have been reduced before it is taxed.
+    const unrecap1250     = capLoss.unrecaptured1250Gain;
     const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250, brackets);
     const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,               brackets);
     const unrecap1250Tax  = Math.min(u1250Stacked.tax - u1250Base.tax,
@@ -209,14 +227,14 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // income ceiling, so the tax is the bracket differential, not the bracket
     // applied to gains alone. The §1250 layer sits between the two, so the LTCG base
     // includes it; with no §1250 gain this is bit-identical to the pre-G7 computation.
-    const cg              = Math.max(0, usCapitalGainsYTD);
+    const cg              = capLoss.longTermGain;
     const ltcgFloor       = taxableOrdinaryAfterFeie + unrecap1250;
     const ltcgStacked     = applyBracketsDetailed(ltcgFloor + cg, ltcgBrackets);
     const ltcgBase        = applyBracketsDetailed(ltcgFloor,      ltcgBrackets);
     const capitalGainsTax = ltcgStacked.tax - ltcgBase.tax;
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
-    const collectibles    = Math.max(0, usCollectibleGainsYTD);
+    const collectibles    = capLoss.collectibleGain;
     const collectiblesTax = collectibles * COLLECTIBLES_RATE;
 
     // Step 5: the Chapter-1 income tax, split in two because only one half is the
@@ -254,7 +272,16 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // limitation base and added on top of net liability — the FTC can never
     // offset it (per the design decision for cross-border years).
     const niitThreshold       = usFilingSingle ? this._niitThresholdSingle : this._niitThresholdMfj;
-    const netInvestmentIncome = Math.max(0, (state.usNetInvestmentIncomeYTD ?? 0) + cg + collectibles + unrecap1250);
+    // Design 90 §4.4 — `26 CFR 1.1411-4` gives TWO rules where this line had one.
+    // (d)(2): "The calculation of net gain may not be less than zero" — satisfied by
+    // construction, since every gain figure here is post-§1211 netting and floored.
+    // (f)(4)(i): the §1211(b) allowance is a DEDUCTION against other net investment
+    // income, "the amount of losses that were allowable under chapter 1 in excess of the
+    // amounts taken into account in computing net gain" — all of it, since net gain has
+    // already floored. Without it a loss year overstated NII by up to the allowance.
+    // Short-term gain is net gain too (§1411(c)(1)(A)(iii) does not distinguish character).
+    const netGainForNii       = cg + collectibles + unrecap1250 + capLoss.shortTermGain;
+    const netInvestmentIncome = Math.max(0, (state.usNetInvestmentIncomeYTD ?? 0) + netGainForNii - capLoss.allowance);
     // MAGI = AGI + FEIE add-back (§1411(d)). This model's `agi` is ordinary-only
     // (capital/collectible gains are tracked in separate buckets and never folded
     // into it), so the gains — which are part of true AGI — are added back here.
@@ -285,7 +312,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // §1250 gain joins the gross and the §904 denominator with the other gain buckets.
     // Leaving it out of either is the G5b failure in miniature: a basket numerator that
     // includes the whole foreign property gain, over a denominator that does not.
-    const totalGrossIncome      = usOrdinaryIncomeYTD + cg + collectibles + unrecap1250;
+    // Short-term gain joins gross income (it is in AGI); the §1211(b) allowance joins the
+    // unrelated deductions below. Both are required to keep the Form 1116 identity
+    // `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE` exact — the same
+    // pairing usNegativeIncomeYTD and the §988 loss already use.
+    const totalGrossIncome      = usOrdinaryIncomeYTD + capLoss.shortTermGain + cg + collectibles + unrecap1250;
     const grossIncomeAllSources = Math.max(0, totalGrossIncome);
     const unrelatedDeductions   = stdDeduction + seDeduction + Math.max(0, usNegativeIncomeYTD)
                                   + Math.max(0, usSection988LossYTD)
@@ -297,7 +328,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
                                   // above exact, and both errors point the same way
                                   // (slightly less foreign taxable income in every
                                   // basket, so slightly less credit, never more).
-                                  + Math.max(0, invInt.allowed);
+                                  + Math.max(0, invInt.allowed)
+                                  + Math.max(0, capLoss.allowance);
 
     // Step 6: Foreign Tax Credit — per §904 basket (design 52 §4.3). Replaces the
     // pre-52 `min(ftcYTD, grossTax)` income-credit hack: credit the *actual* AU
@@ -358,6 +390,9 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       inputs: {
         grossOrdinaryIncome: usOrdinaryIncomeYTD,
         adjustments:         usNegativeIncomeYTD,
+        // PRE-netting, deliberately: this block reports what came IN, and after design
+        // 90 that figure can be negative. Anything wanting the taxed amount must read
+        // `capitalLoss.longTermGain` / `.collectibleGain` below, not these.
         capitalGains:        usCapitalGainsYTD,
         collectibleGains:    usCollectibleGainsYTD,
         penalties:           usPenaltyYTD,
@@ -366,6 +401,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       },
       adjustedGrossIncome: agi,
       taxableIncome:       taxableOrdinary,
+      // §1211/§1212 (design 90 §4). `closingShort`/`closingLong` are what
+      // UsTaxSettleApplyReducer persists; everything else is for the worksheet and for
+      // tests that need to see the netting without re-deriving it.
+      capitalLoss:            capLoss,
+      shortTermCapitalGain:   capLoss.shortTermGain,
+      capitalLossDeduction:   capLoss.allowance,
       feieExcluded,
       // The exclusion ACTUALLY applied — `feieExcluded` capped at taxable ordinary
       // income by the stacking rule. The two differ when the qualifying exclusion
@@ -453,6 +494,24 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         ...(invInt.closing > 0
           ? [{ label: 'Disallowed Investment Interest — carried forward (limited to net investment income)',
                amount: invInt.closing }]
+          : []),
+        // §1211/§1212 (design 90 §4). Three lines because three different things can
+        // happen to a capital loss and a reader must be able to tell them apart:
+        // short-term gain is taxed HERE at ordinary rates (not in the §1(h) stack
+        // below), the allowance is the deduction, and the pools are the part that got
+        // nothing this year. Without the pool lines a return showing a \$3,000 deduction
+        // against a \$40,000 loss looks like an arithmetic error.
+        ...(capLoss.shortTermGain > 0
+          ? [{ label: 'Short-Term Capital Gain (taxed at ordinary rates, §1(h))', amount: capLoss.shortTermGain }]
+          : []),
+        ...(capLoss.allowance > 0
+          ? [{ label: 'Capital Loss Deduction (§1211(b), capped at \$3,000)', amount: -capLoss.allowance }]
+          : []),
+        ...(capLoss.closingShort > 0
+          ? [{ label: 'Short-Term Capital Loss — carried forward (§1212(b)(1)(A))', amount: capLoss.closingShort }]
+          : []),
+        ...(capLoss.closingLong > 0
+          ? [{ label: 'Long-Term Capital Loss — carried forward (§1212(b)(1)(B))', amount: capLoss.closingLong }]
           : []),
         { label: 'Adjusted Gross Income',               amount:  agi },
         { label: 'Standard Deduction',                  amount: -stdDeduction },
@@ -853,6 +912,129 @@ export function _computeInvestmentInterestLimitation(state) {
   const allowed   = Math.min(available, nii);
   const closing   = available - allowed;
   return { opening, expense, nii, allowed, closing };
+}
+
+/**
+ * IRC §1211(b) — the annual allowance against ordinary income. \$3,000, or \$1,500 for
+ * a married individual filing separately.
+ *
+ * **Not inflation-indexed, and that is not an oversight in this model.** The figure has
+ * stood at \$3,000 since 1978; the amendment history in
+ * `docs/us-tax/USCODE-2024-…-sec1211.txt` ends in 1986. It must therefore be excluded
+ * from the bracket-inflation wrapper — over a 44-year horizon its real value decays to
+ * near-nothing, which is the correct behaviour and the whole reason the relief matters
+ * less each year. Inflating it would invent relief Congress has not granted.
+ *
+ * MFS is not modelled (`usFilingSingle` distinguishes Single from MFJ, both of which
+ * take the \$3,000), so the \$1,500 branch has no reachable caller and is noted rather
+ * than coded.
+ */
+export const ORDINARY_CAPITAL_LOSS_CAP = 3_000;
+
+/**
+ * IRC §1211(b) + §1212(b) — capital-loss netting, the ordinary-income allowance, and the
+ * two carryforward pools (design 90 §4).
+ *
+ * Pure, and for the same reason its two siblings below are: `computeTax` is re-run on the
+ * US-source-removed counterfactual that sizes the FITO limit (design 52 §4.5, design 83
+ * G8), so this must never draw down the pools it was handed. It REPORTS `closingShort` /
+ * `closingLong` and `UsTaxSettleApplyReducer._extraStatePatches` owns the write-back, on
+ * the real pass only.
+ *
+ * ## Netting order, and why the groups are walked highest-rate-first
+ *
+ * §1222(5)–(8) nets within each character, then §1211(b) allows the excess against
+ * ordinary income. Where the model has more than one long-term rate group — collectibles
+ * at 28% (§1(h)(4)), unrecaptured §1250 at its 25% ceiling (§1(h)(1)(D)), and the
+ * 0/15/20 layer — a loss is applied to the HIGHEST-taxed group first. That is the §1(h)
+ * netting rule, and it is also the only ordering that does not silently under-value a
+ * loss: spending it against the 0/15/20 layer while 28% gain stands would waste up to
+ * 13 points of relief.
+ *
+ * ## What is deliberately not modelled
+ *
+ * - **§1091 wash sales.** Design 90 §11. Nothing here re-tests a substitute purchase, so
+ *   a harvested loss is always allowed. This over-values harvesting and is the single
+ *   most important thing to fix before the harvest lever is tuned.
+ * - **§1212(b)(2)'s "adjusted taxable income" limit.** The allowance is capped at the
+ *   lesser of \$3,000 and the loss, but §1212(b)(2)(B) further limits how much counts as
+ *   absorbed when taxable income is itself negative. Ignoring it means a household with
+ *   no income to shelter still burns \$3,000 of pool. Conservative in the wrong
+ *   direction, but only by up to \$3,000 in a year that by construction pays no tax.
+ *
+ * @param {object} state
+ * @returns {{ openingShort:number, openingLong:number, shortTermGain:number,
+ *   longTermGain:number, collectibleGain:number, unrecaptured1250Gain:number,
+ *   allowance:number, closingShort:number, closingLong:number, netLoss:number }}
+ *   The four `*Gain` figures are post-netting and floored at zero — what the rate
+ *   schedules should tax. `allowance` is the §1211(b) ordinary deduction.
+ */
+export function _computeCapitalLossLimitation(state) {
+  const openingShort = Math.max(0, state?.usShortTermCapitalLossCarryforward ?? 0);
+  const openingLong  = Math.max(0, state?.usLongTermCapitalLossCarryforward  ?? 0);
+
+  const rawShort       = state?.usShortTermCapitalGainsYTD ?? 0;
+  const rawLong        = state?.usCapitalGainsYTD          ?? 0;
+  const rawCollectible = state?.usCollectibleGainsYTD      ?? 0;
+
+  // The long-term rate groups, highest rate first. §1250 gain is structurally
+  // non-negative (depreciation already taken cannot be un-taken), so it never
+  // contributes to the loss side.
+  let coll28 = Math.max(0, rawCollectible);
+  let g25    = Math.max(0, state?.usUnrecaptured1250GainYTD ?? 0);
+  let g20    = Math.max(0, rawLong);
+
+  // Long-term losses from every source: this year's 0/15/20 loss, this year's
+  // collectible loss (a collectible loss is an ordinary capital loss — the 28% rate
+  // attaches to net collectible GAIN only), and the pool §1212(b)(1)(B) carried in.
+  let ltLoss = Math.max(0, -rawLong) + Math.max(0, -rawCollectible) + openingLong;
+  let stGain = Math.max(0, rawShort);
+  let stLoss = Math.max(0, -rawShort) + openingShort;
+
+  /** Spend `loss` against `gain`; returns the pair after absorption. */
+  const absorb = (loss, gain) => {
+    const used = Math.min(loss, gain);
+    return [loss - used, gain - used];
+  };
+
+  // §1222: within character first. A long-term loss walks the long groups
+  // highest-rate-first; a short-term loss meets short-term gain.
+  [ltLoss, coll28] = absorb(ltLoss, coll28);
+  [ltLoss, g25]    = absorb(ltLoss, g25);
+  [ltLoss, g20]    = absorb(ltLoss, g20);
+  [stLoss, stGain] = absorb(stLoss, stGain);
+
+  // §1211(b): then across character, in the same highest-rate-first order.
+  [stLoss, coll28] = absorb(stLoss, coll28);
+  [stLoss, g25]    = absorb(stLoss, g25);
+  [stLoss, g20]    = absorb(stLoss, g20);
+  [ltLoss, stGain] = absorb(ltLoss, stGain);
+
+  // What survives on both sides is the net capital loss for the year.
+  const netLoss   = stLoss + ltLoss;
+  const allowance = Math.min(ORDINARY_CAPITAL_LOSS_CAP, netLoss);
+
+  // §1212(b)(2): the amount allowed under §1211(b) is "treated as a short-term capital
+  // gain" when sizing the carryover, so it consumes the SHORT-term loss first. That
+  // ordering is worth money in the taxpayer's favour and is easy to get backwards:
+  // short-term loss is the more valuable pool (it can shelter ordinary-rate gain), so
+  // spending the cheap \$3,000 allowance on it first is exactly wrong intuitively and
+  // exactly right statutorily.
+  let remaining = allowance;
+  const fromShort = Math.min(stLoss, remaining); remaining -= fromShort;
+  const fromLong  = Math.min(ltLoss, remaining);
+
+  return {
+    openingShort, openingLong,
+    shortTermGain:        +stGain.toFixed(2),
+    longTermGain:         +g20.toFixed(2),
+    collectibleGain:      +coll28.toFixed(2),
+    unrecaptured1250Gain: +g25.toFixed(2),
+    allowance:            +allowance.toFixed(2),
+    closingShort:         +(stLoss - fromShort).toFixed(2),
+    closingLong:          +(ltLoss - fromLong).toFixed(2),
+    netLoss:              +netLoss.toFixed(2),
+  };
 }
 
 export function _computePassiveLossLimitation(state) {

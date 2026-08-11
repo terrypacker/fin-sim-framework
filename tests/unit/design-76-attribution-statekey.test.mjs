@@ -163,7 +163,13 @@ describe('design 76 P1 — AU brokerage income follows the account', () => {
   test('franked dividend credit attributes to the stamped account owner', () => {
     const next = run('AU_DIVIDEND_FRANKED_RESIDENT_TAX',
       { amount: 3000, stateKey: 'spouseAuStockAccount' });
-    assert.deepEqual(rounded(next.auPersonFrankingCreditYTD), { spouse: 3000 });
+    // Design 90 §8 — the credit is the s202-60(2) gross-up (`cash × 30/70`), not the
+    // cash. What this test is about is the ATTRIBUTION (it lands on `spouse`), so the
+    // amount is derived rather than hard-coded to keep the two concerns separate.
+    assert.deepEqual(rounded(next.auPersonFrankingCreditYTD), { spouse: +(3000 * (0.30 / 0.70)).toFixed(2) });
+    // And the assessable half now attributes to the same owner (s207-20(1)).
+    assert.deepEqual(rounded(next.auPersonOrdinaryIncomeYTD),
+      { spouse: +(3000 + 3000 * (0.30 / 0.70)).toFixed(2) });
   });
 
   test('unfranked dividend attributes to the stamped account owner', () => {

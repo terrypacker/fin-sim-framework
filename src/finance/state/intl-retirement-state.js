@@ -149,6 +149,15 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // deliberately outside the settle reset, because surviving the year boundary is
     // the point. Released against later passive income.
     this.usPassiveLossCarryforward         = 0;
+    // §1211/§1212 capital losses (design 90 §4). Three fields, and the split is the
+    // statute's, not a convenience: `usCapitalGainsYTD` above is now the SIGNED
+    // long-term result and this is its short-term twin (both reset at the US settle),
+    // while the two POOLS must survive it — §1212(b)(1)(A) and (B) carry short and
+    // long forward SEPARATELY, each netted against the other character's gain first,
+    // so one merged pool cannot express the carryover. Stored positive.
+    this.usShortTermCapitalGainsYTD        = 0;
+    this.usShortTermCapitalLossCarryforward = 0;
+    this.usLongTermCapitalLossCarryforward  = 0;
     // §163(d) investment interest (design 86 G3 error 1), USD, stored POSITIVE.
     // The year's deductible interest on standalone (non-rental) borrowing, and the
     // disallowed excess carried forward indefinitely under §163(d)(2). Two fields for
@@ -250,6 +259,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // assessment — one spouse's loss cannot shelter the other's income, and design 76
     // exists precisely because splitting a household scalar by headcount mis-attributes.
     this.auPersonTaxLossPool                = _zeroes();
+    // s102-5 / s102-15 net capital losses, per person (design 90 §5.1). A SEPARATE
+    // pool from auPersonTaxLossPool above: s102-10(2) bars a net capital loss from ever
+    // reducing assessable income, so a merged pool would let a capital loss shelter
+    // wages. Per-person for the same reason the Div 36 pool is — a carried-forward loss
+    // belongs to ONE taxpayer, and splitting it would let one spouse's loss shelter the
+    // other's gains. Outside PER_PERSON_AU_FIELDS, so the settle reset leaves it alone.
+    this.auPersonCapitalLossPool            = _zeroes();
     // AU-source *earned* income (wages/SE) per person — backs the per-person
     // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.
     this.auPersonEarnedIncomeYTD            = _zeroes();

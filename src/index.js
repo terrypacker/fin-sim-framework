@@ -146,9 +146,10 @@ import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-i
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
-import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
+import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingActivity } from './finance/holdings/holding-activity.js';
+import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
@@ -265,11 +266,13 @@ import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from './finance/tax/au/au-tax-rates-2027.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
+import { CORPORATE_TAX_RATE, DEFAULT_CORPORATE_TAX_RATE, frankingCreditOn } from './finance/tax/au/franking.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from './finance/tax/au/super-tax-rate.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBands, flatRateBand } from './finance/tax/bracket-schedule.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain } from './finance/tax/capital-gain-character.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
@@ -307,7 +310,7 @@ import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
-import { UsTaxRatesBase, _computeInvestmentInterestLimitation, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
+import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -939,6 +942,8 @@ export const Finance = {
   DEFAULT_ALLOCATION_BY_ROLE,
   DEFAULT_ALLOCATION_BY_TYPE,
   resolveDefaultAllocation,
+  EQUITY_MARKETS_BY_COUNTRY,
+  resolveEquityMarketMix,
   resolveRateKey,
   HOLDING_ACTION_TYPES,
   HOLDING_ACTION_ENTRIES,
@@ -953,6 +958,11 @@ export const Finance = {
   snapshotHoldings,
   totalSnapshot,
   buildHoldingActivity,
+  YEAR_MS,
+  LONG_TERM_TEST,
+  isLongTerm,
+  disposalTermFields,
+  singleAssetTermFields,
   HoldingTransactReducer,
   HoldingRevalueReducer,
   HoldingSetBasisReducer,
@@ -1210,6 +1220,9 @@ export const Finance = {
   AuTaxRates2026,
   AuTaxRates2027,
   AuTaxRatesBase,
+  CORPORATE_TAX_RATE,
+  DEFAULT_CORPORATE_TAX_RATE,
+  frankingCreditOn,
   SUPER_TAX_RATE,
   superEarningsTaxRate,
   BaseTaxDocumentModule,
@@ -1220,6 +1233,8 @@ export const Finance = {
   marginalBracketRate,
   subtractBands,
   flatRateBand,
+  characterizeCapitalGain,
+  characterizeAuCapitalGain,
   DynamicTaxReducer,
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
@@ -1291,6 +1306,8 @@ export const Finance = {
   UsTaxRates2026,
   UsTaxRatesBase,
   _computeInvestmentInterestLimitation,
+  ORDINARY_CAPITAL_LOSS_CAP,
+  _computeCapitalLossLimitation,
   _computePassiveLossLimitation,
   _drawDownBasket,
   TaxService,

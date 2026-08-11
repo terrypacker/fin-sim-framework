@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldings } from '../../holdings/holdings-fifo.js';
+import { disposalTermFields } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
@@ -275,7 +276,10 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
     }), sa);
-    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection });
+    // Design 90 §9 step 2 — the signed, §1222-charactered split rides alongside the
+    // AU indexation context. Unlike `indexation` it is not AU-specific: the US
+    // short/long test applies to every disposal a US person makes.
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] } });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): the realized AU basis sums each lot's
@@ -321,17 +325,28 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis
     // above is the authoritative CGT source. auIndexedGain carries the AU CGT-reform
     // real gain (design 57) alongside the stepped-up auGain and the US gain.
+    // Design 90 §9 step 2 — signed and charactered, alongside the floored figures above.
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      disposalTermFields(r.realizedGainByCountryAndTerm);
+    const collTerms  = disposalTermFields(r.collectibleGainByCountryAndTerm);
+    const collSigned = collTerms.usShortTermGain + collTerms.usLongTermGain;
+
     const taxActions = [
       // Design 76 Gap B: attribute the AU gain to the account's owner.
-      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
     ];
-    if (collectibleGain > 0) {
+    // Widened from `collectibleGain > 0` for the reason the sibling drawdown path
+    // documents: a gold sleeve sold below basis emitted NO action at all, so the loss
+    // was not merely floored, the disposal vanished.
+    if (collectibleGain > 0 || collSigned !== 0) {
       // isGold flags this collectible slice as bullion so the AU FY2027 classifier
       // indexes it (ordinary AU CGT), unlike true collectibles (design 57 §6.4/§7.2).
       // Design 76 Gap B: the gold sleeve lives INSIDE this brokerage account, so the
       // gain is attributed to the account's owner via stateKey — not to a standalone
       // collectible's ownership, which this slice does not have.
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, stateKey: key });
+      const { usShortTermGain: cUsShort, usLongTermGain: cUsLong,
+              auShortTermGain: cAuShort, auLongTermGain: cAuLong } = collTerms;
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, stateKey: key });
     }
     return this.newState(
       state,

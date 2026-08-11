@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { singleAssetTermFields } from '../../holdings/holding-period.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -205,9 +206,29 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
       auIndexedGain = Math.max(0, salePrice - indexedBasis);
     }
 
+    // Design 90 §9 step 2 — the signed, §1222-charactered split. A vested company stake
+    // is a capital asset held for profit, so §165(c)(2) allows a loss on it; there is no
+    // personal-use carve-out of the kind the residence disposal has to apply.
+    const saleMs = state.currentPeriods?.US?.startMs ?? null;
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      singleAssetTermFields({
+        proceeds: salePrice, usBasis: costBasis, auBasis,
+        // CompanyEquity carries no US acquisition date — a vested stake is granted and
+        // held for years, and the model has never needed the date. Null ⇒ long-term,
+        // which is both the right answer here and the safe default (the alternative,
+        // short-term, would tax it at ordinary rates on a missing field).
+        acquisitionMs:   null,
+        // AU DOES have a date: the s855-45 deemed acquisition stamped at the move
+        // (design 72 §3). A stake sold within 12 months of arriving is AU short-term
+        // even though it is US long-term, which is exactly the split this carries.
+        auAcquisitionMs: eq?.acquisitionDateByCountry?.AU ?? null,
+        saleMs,
+      });
+
     // Design 76 Gap B: carry the equity's ownership so the AU gain is attributed to
     // its holder rather than halved across the household (mirrors AU_HOUSE_SALE_TAX).
     return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
+      usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
       // Sale detail for Schedule D / Form 8949 (mirrors US_HOUSE_SALE_TAX). `gain`
       // alone identifies the tax, not the disposal — a return has to show what was
       // sold, for how much, and against what basis.

@@ -456,13 +456,26 @@ test('TE-6: franking credit offsets AU ordinary income tax', () => {
   assert.strictEqual(netLiability, 12788);
 });
 
-test('TE-6: franking credit is capped at base tax (cannot reduce Medicare levy)', () => {
-  // $30k income: baseTax = [18200, 30000] @ 16% = 1888
-  // Medicare phase-in: (30000 - 26000) * 0.10 = 400
-  // Oversized franking credit: min(100000, 2242) = 2242 offsets all base tax
-  // Net = (2242 - 2242) + 400 = 400
+test('TE-6: an excess franking credit is REFUNDED, not forfeited (s67-25)', () => {
+  // Design 90 §8 / design 76 §8.2 Gap 3. This test used to assert the opposite — that
+  // the credit was capped at base tax and could not reach the Medicare levy — which was
+  // the model forfeiting the excess. ITAA 1997 s67-25(1) puts Division 207 offsets under
+  // the refundable rules for everyone outside its carve-outs (non-complying super funds,
+  // certain trustees, corporate tax entities); an individual is in none of them.
+  //
+  // $30k income: baseTax = [18200, 30000] @ 16% = 1888; Medicare phase-in
+  // (30000 − 26000) × 0.10 = 400. A A$100,000 credit swamps both, so the net is
+  // NEGATIVE — a refund owed, which is the state the old Math.max(0, …) destroyed.
   const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 30000, auFrankingCreditYTD: 100000 }));
-  assert.strictEqual(netLiability, 400);
+  assert.strictEqual(netLiability, 1888 + 400 - 100000);
+  assert.ok(netLiability < 0, 'a refundable offset may drive the return negative');
+});
+
+test('TE-6: a franking credit smaller than the tax still just reduces it', () => {
+  // The control: refundability must not change the ordinary case, where the offset is
+  // fully absorbed and the net stays positive.
+  const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 30000, auFrankingCreditYTD: 500 }));
+  assert.strictEqual(netLiability, 1888 + 400 - 500);
 });
 
 test('TE-6: franking credit classifier populates auFrankingCreditYTD', () => {
@@ -470,8 +483,13 @@ test('TE-6: franking credit classifier populates auFrankingCreditYTD', () => {
   const fn = getFn(auModule, 'AU_DIVIDEND_FRANKED_RESIDENT_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auFrankingCreditYTD: 0, ftcYTD: 0 };
   const s1 = fn(s0, { amount: 5000 });
-  assert.strictEqual(s1.auFrankingCreditYTD, 5000);
-  assert.strictEqual(s1.usOrdinaryIncomeYTD, 5000); // also US ordinary income
+  // Design 90 §8 — s202-60(2) sizes the credit at `cash × r/(1−r)` = 5000 × 30/70.
+  assert.ok(Math.abs(s1.auFrankingCreditYTD - 5000 * (0.30 / 0.70)) < 1e-9);
+  // s207-20(1): assessable income is the cash dividend PLUS the gross-up.
+  assert.ok(Math.abs(s1.auOrdinaryIncomeYTD - (5000 + 5000 * (0.30 / 0.70))) < 0.01);
+  // The US figure stays the CASH dividend — the gross-up is an Australian construct
+  // with no US analogue, and grossing it up would invent income the IRS never sees.
+  assert.strictEqual(s1.usOrdinaryIncomeYTD, 5000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

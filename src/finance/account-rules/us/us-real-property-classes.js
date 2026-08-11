@@ -14,6 +14,7 @@ import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
+import { singleAssetTermFields } from '../../holdings/holding-period.js';
 
 // IRC §121 caps and the ownership/use rules now live in ../main-residence.js, shared
 // with the AU dwelling path. The note that used to sit here — "the 2-of-5-year
@@ -132,6 +133,29 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       auDiscountableGain = held12mo ? auGain : 0;
     }
 
+    // Design 90 §9 step 2 — the signed, §1222-charactered split, and the ONE disposal
+    // in the model where the existing `Math.max(0, …)` floor is not a defect.
+    //
+    // IRC §165(c) limits an individual's loss deduction to (1) a trade or business,
+    // (2) a transaction entered into for profit, and (3) casualty or theft. A home sold
+    // below basis is none of the three, so the loss is simply **not deductible** — the
+    // floor on `rawGain` above is the correct answer for a residence and the wrong one
+    // for a rental. `deductibleLoss` is what splits them, and it keys off the same
+    // `isPrimaryResidence` flag the §121 exclusion already gates on, so a property
+    // cannot claim the exclusion on the way up and the loss on the way down.
+    //
+    // Depreciation is the tell: a property that has taken depreciation was held for the
+    // production of income, which is §165(c)(2) territory whatever the flag says.
+    const saleMs = state.currentPeriods?.US?.startMs ?? null;
+    const deductibleLoss = propState?.isPrimaryResidence !== true || accumulatedDep > 0;
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      singleAssetTermFields({
+        proceeds: salePrice, usBasis: adjustedBasis, auBasis: auBasis ?? adjustedBasis,
+        acquisitionMs:   toMs(propState?.acquisitionDate),
+        auAcquisitionMs: propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
+        saleMs, deductibleLoss,
+      });
+
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
@@ -160,6 +184,11 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         depreciationGain: s1250Gain,
         auGain,
         auDiscountableGain,
+        // Design 90 §9 step 2. Note these measure from the SAME adjusted basis as
+        // `gain`, but before the §121 exclusion and before the §1250 carve-out: those
+        // two shrink the taxable gain and neither can create a loss, so applying them
+        // here would understate a loss that §165(c) does allow on a rental.
+        usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         residency,
         proceeds:    salePrice,
         costBasis:   adjustedBasis,

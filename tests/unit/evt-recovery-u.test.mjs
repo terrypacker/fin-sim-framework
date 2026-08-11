@@ -118,7 +118,11 @@ test('EVT-RECOVERY-U-5: U-curve keeps effectiveGrowthRates fully depressed for f
 
   // Just after shock, still in stagnation half: factor = 1, effective rate = base + adjustment
   sim.stepTo(new Date('2026-04-01'));
-  const rateStagnation = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  // Design 90 §7.2 — read the Roth's PER-ACCOUNT key. `rothGrowthRate` is a wrapper
+  // rate and now lands on `EQUITY_US::rothAccount`; the bare `EQUITY_US` key carries the
+  // MARKET rate (0.07 by default), which is not the baseline these assertions are
+  // written against.
+  const rateStagnation = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     Math.abs(rateStagnation - (baseRate + adjustment)) < 0.001,
     `Stagnation-phase rate should be ${baseRate + adjustment}, got ${rateStagnation}`
@@ -126,7 +130,7 @@ test('EVT-RECOVERY-U-5: U-curve keeps effectiveGrowthRates fully depressed for f
 
   // Past the stagnation midpoint (t ~ 9 months): should be partially recovered
   sim.stepTo(new Date('2026-11-01'));
-  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  const rateMid = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     rateMid > rateStagnation,
     `Mid-recovery rate (${rateMid}) should be > stagnation rate (${rateStagnation})`
@@ -134,7 +138,7 @@ test('EVT-RECOVERY-U-5: U-curve keeps effectiveGrowthRates fully depressed for f
 
   // After recovery complete: rate returns to base
   sim.stepTo(new Date('2027-04-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     Math.abs(rateAfter - baseRate) < 0.001,
     `Post-recovery rate should return to base ${baseRate}, got ${rateAfter}`
