@@ -291,7 +291,15 @@ function runDefaultIntlRetirement() {
 // plan-specific: on the full reference plan the same change moved lifetime tax the
 // other way (+US$103k), because there the displaced AU tax had been fully usable as
 // US foreign tax credit and here it is not.
-const EXPECTED_LIFETIME_TAX = 682_015;
+// Design 90 §8 raised this from 682,015 (+5.2%) and the direction is the point: AU
+// franked dividends stopped being a pure tax SHIELD. Before, a franked distribution
+// booked NO Australian assessable income and a credit equal to 100% of the cash, so it
+// sheltered tax on unrelated income. ITAA 1997 s207-20(1) makes cash + gross-up
+// assessable and s202-60(2) sizes the credit at cash × 30/70 — the shelter is gone and
+// the dividend is roughly neutral at a 30% marginal rate. Refundability (s67-25) pushes
+// the other way but is far smaller here, since this household's base tax always absorbs
+// the credit. See design 76 §8.2 for the ranked gaps and why they do not cancel.
+const EXPECTED_LIFETIME_TAX = 717_687;
 const EXPECTED_NET_WORTH     = 12_183_627;
 const TOL = 0.01;
 

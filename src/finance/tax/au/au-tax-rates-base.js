@@ -377,7 +377,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const baseTax          = assessableSchedule.tax;
     const medicare         = this._medicareLevyDetail(discountedIncome);
     const medicareLevy     = medicare.tax;
-    const frankingOffset   = Math.min(auFrankingCreditYTD, baseTax);
+    // Design 90 §8 / design 76 §8.2 Gap 3 — ITAA 1997 s67-25(1): Division 207 offsets
+    // "are subject to the refundable tax offset rules" for everyone outside its listed
+    // carve-outs (non-complying super funds, certain trustees, corporate tax entities).
+    // An individual is not in any of them, so the offset is REFUNDABLE: it is not capped
+    // at base tax, it applies against the whole liability including the Medicare levy,
+    // and any excess is paid out.
+    //
+    // The old `Math.min(…, baseTax)` forfeited that excess. It ran AGAINST the household
+    // and hit exactly one taxpayer — the low-income retiree whose base tax is too small
+    // to absorb the credit, which is the same person design 84 G10 landed on for the
+    // same structural reason. It was also the smallest of design 76 §8.2's three gaps
+    // and pointed the other way from the two above, so it never cancelled them.
+    const frankingOffset   = Math.max(0, auFrankingCreditYTD);
 
     // Div 115C minimum tax (FY2027+): floor the tax *attributable to the net
     // capital gain* at minTaxRate × that gain — an incremental floor on the gain's
@@ -410,7 +422,13 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // return already presented it this way — the top-up sits inside Gross Tax with
     // the Credits section beneath it — so this brings the arithmetic into line with
     // the document the model has been printing all along.
-    const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy + minTaxTopUp - frankingOffset);
+    // A refundable offset can drive this NEGATIVE — that is a refund owed, not a
+    // violation, and clamping it at 0 is precisely how the excess used to be destroyed.
+    // The FITO limit below reads this figure, so it is clamped THERE (a refund creates
+    // no room for a foreign tax offset) rather than here, keeping the two distinct:
+    // "the Commissioner owes you" and "there is no liability left to relieve" are
+    // different states that a single Math.max conflated.
+    const netLiabilityPreFito = baseTax + medicareLevy + minTaxTopUp - frankingOffset;
 
     // Split baseTax into its ordinary-income and capital-gain components for
     // display (design 57 report breakdown). AU has no separate CGT schedule of
@@ -509,14 +527,25 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         // which is what the Credits line states and what the "excess forfeited"
         // worksheet row subtracts — so a wasted de-minimis offset now shows up as
         // forfeited instead of vanishing silently.
-        fito = Math.min(fito, a.netLiabilityPreFito);
+        // Clamp at 0 as well as at the liability: `netLiabilityPreFito` can now be
+        // NEGATIVE (a refundable franking offset exceeding the whole liability), and a
+        // negative cap would turn the FITO into a charge. A refund owed leaves nothing
+        // for a foreign tax offset to relieve, so the right answer is zero FITO.
+        fito = Math.min(fito, Math.max(0, a.netLiabilityPreFito));
       }
 
       // Design 77 §5.3 — super fund tax excluded (see _assessResidentPreFito).
-      // No clamp: `frankingOffset` is capped at `baseTax` and `fito` at the
-      // pre-FITO liability, so this cannot go negative. Stating it as a plain
-      // subtraction is what makes "Gross Tax + credits = Net Tax Liability" hold
-      // by construction rather than by luck (design 71 §6).
+      //
+      // Still no clamp, but the reason has changed (design 90 §8). It used to be that
+      // `frankingOffset` was capped at `baseTax`, so this could not go negative. Under
+      // s67-25 the franking offset is REFUNDABLE and uncapped, so this genuinely can —
+      // and must be allowed to. A negative Net Tax Liability is a REFUND OWED; clamping
+      // it at zero would destroy the excess credit all over again, one line further
+      // down. `fito` is separately floored at 0 above, so it can only ever reduce.
+      //
+      // The plain subtraction is what keeps "Gross Tax + credits = Net Tax Liability"
+      // exact (design 71 §6) — the footing identity holds whether the result is
+      // positive or negative, which is the whole reason it is stated as a subtraction.
       const netLiability = a.baseTax + a.medicareLevy + a.minTaxTopUp
                          - a.frankingOffset - fito;
 

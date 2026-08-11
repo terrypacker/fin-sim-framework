@@ -198,12 +198,26 @@ needed.
 | s207-20 — General rule: gross-up and tax offset | `ITAA-1997/C2026C00324VOL05.txt` | 5390 |
 | s207-70 — Gross-up and tax offset under s207-20 | `ITAA-1997/C2026C00324VOL05.txt` | 6273 |
 | s67-25 — Refundable tax offsets: franked distributions | `ITAA-1997/C2026C00324VOL02.txt` | 23947 |
-| "qualified person" — the 45-day rule's operative test | `ITAA-1997/C2026C00324VOL05.txt` | 7455, 7573, 11785 |
-| "qualified person" — the ITAA 1936 definition it leans on | `ITAA-1936/C2026C00333VOL02.txt` | 753, 1335 |
+| s202-55 / s202-60 — the maximum franking credit and its formula | `ITAA-1997/C2026C00324VOL05.txt` | 2170 |
+| "corporate tax gross-up rate" — Dictionary definition | `ITAA-1997/C2026C00324VOL10.txt` | 10872 |
 
-Design 76 §8's small-shareholder threshold — "believed A\$5,000 — **verify against the
-authority**" — is still unverified. It must be read out of the sections above before §8 quotes
-it, per `never-quote-tax-law-not-on-disk`. Everything needed to do so is local.
+Read and verified against the text: s207-20(1) puts the franking credit into assessable
+income "**in addition to** any other amount included … in relation to the distribution",
+and s207-20(2) gives a tax offset "**equal to** the franking credit" — design 76 §8.2
+Gap 1 exactly. s202-60(2) caps the credit at `distribution × 1 ÷ gross-up rate`, and the
+Dictionary defines the corporate tax gross-up rate as `(100% − r) ÷ r`, so the credit is
+`cash × r/(1−r)` — 30/70 at a 30% rate, which is Gap 2. s67-25(1) makes Division 207
+offsets refundable for anyone outside its listed carve-outs (non-complying super funds,
+certain trustees, corporate tax entities), so an individual's excess is refunded — Gap 3.
+
+**The 45-day rule is NOT on disk, and an earlier draft of this table wrongly said it
+was.** The "qualified person" at `ITAA-1936/…VOL02:753` is a *company auditor* under
+s82L — share valuation, an unrelated concept that merely shares the phrase. The 45-day
+holding-period test lives in the former Division 1A of Part IIIAA ITAA 1936, which these
+volumes do not contain. Design 76 §8's small-shareholder threshold ("believed A\$5,000 —
+**verify against the authority**") therefore stays **unverified and unquoted**, per
+`never-quote-tax-law-not-on-disk`. Not a blocker: design 76 §8 recommends
+note-don't-build for a buy-and-hold model where every holding clears 45 days anyway.
 
 ---
 
@@ -648,7 +662,39 @@ should land as its own commit with its own re-gold so it is not confused with th
 
 ---
 
-## 8. AU franked dividends
+## 8. AU franked dividends  ✅ BUILT (step 7 — gaps 1–3; §8.4 super franking still open)
+
+**Implementation record.** `src/finance/tax/au/franking.js` holds the s202-60(2)
+arithmetic and the company-rate table; `AU_DIVIDEND_FRANKED_RESIDENT_TAX` books
+`cash + gross-up` to assessable income and the gross-up to the offset;
+`AuTaxRatesBase` makes the offset refundable. `design/requirements.md` EVT-26 amended
+first, per design 76 §8.6. Tests: `tests/unit/au-franked-dividends.test.mjs` (11).
+
+**The measured effect: lifetime tax +5.2%** on the reference plan (682,015 → 717,687),
+with terminal net worth down by almost exactly the extra tax. That is gaps 1+2 removing a
+pure tax shield, and the direction is the point — a franked dividend used to *reduce* tax
+on unrelated income.
+
+**The golden diff confirms the formula exactly.** `auPersonFrankingCreditYTD` fell
+22,595.03 → 9,683.58, a ratio of **0.42857 = 30/70** — the s202-60(2) factor landing on
+the nose rather than approximately. Assessable income rose by the cash plus the gross-up,
+and the AU tax increase flowed through to a larger `ftcPoolPassive`, which is the
+cross-border coupling working: more AU tax paid means more US foreign tax credit.
+
+**Gap 3 changed the footing shape, as design 76 §8.7 warned.** A refundable offset can
+drive Net Tax Liability negative, so `netLiabilityPreFito` lost its `Math.max(0, …)`. The
+clamp did not simply move — it was *split*, which is the part worth remembering: the FITO
+limit is now floored at 0 separately, because "the Commissioner owes you a refund" and
+"there is no liability left to relieve" are different states that one `Math.max`
+conflated. The design 71 §6 identity still holds by construction, positive or negative.
+
+**Not built, and why.** §8.4 (franking credits inside super) stays open — a 15% fund rate
+against a 30% credit is a systematic refund, and in pension phase the whole credit is
+refundable, but the reference plan holds no AU shares in super so it is unmeasurable
+today. The 45-day qualified-person rule stays a documented non-model per §2.3: its text is
+not on disk, and a buy-and-hold plan clears 45 days on every holding anyway.
+
+
 
 Fully specified already in **design 76 §8**, which is not superseded — this section records why
 it is being pulled forward and what it is blocked on.

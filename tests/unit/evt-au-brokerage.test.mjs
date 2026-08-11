@@ -120,8 +120,18 @@ test('EVT-26: Franked dividend (resident) generates AU franking credit', () => {
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
-  assert.strictEqual(sim.state.auPersonFrankingCreditYTD?.['primary'], 1000);
+  // Design 90 §8 — s202-60(2): the credit is `cash × r/(1−r)`, so a fully franked
+  // A$1,000 dividend at the 30% company rate carries A$428.57, NOT A$1,000. The old
+  // expectation here encoded design 76 §8.2 Gap 2, which overstated it ≈2.33×.
+  const credit = 1000 * (0.30 / 0.70);
+  assert.ok(Math.abs(sim.state.auPersonFrankingCreditYTD?.['primary'] - credit) < 1e-6,
+    `franking credit should be 30/70 of the cash, got ${sim.state.auPersonFrankingCreditYTD?.['primary']}`);
+
+  // Gap 1 — and the half no test covered: s207-20(1) makes cash + gross-up ASSESSABLE.
+  // Without this the dividend was AU-income-tax-free at the margin and the credit was a
+  // pure shield against other income.
+  assert.ok(Math.abs(sim.state.auPersonOrdinaryIncomeYTD?.['primary'] - (1000 + credit)) < 0.01,
+    'assessable income is cash + gross-up (s207-20(1))');
   assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'FTC should be recorded');
 });
 
