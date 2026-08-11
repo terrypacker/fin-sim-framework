@@ -129,12 +129,16 @@ test('EVT-RECOVERY-W-4: W-curve shows double-dip impact pattern over full durati
 
   // At t~0: W factor = 1, effective rate = base + adj = 0 (full shock)
   sim.stepTo(new Date('2026-02-15'));
-  const rateStart = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  // Design 90 §7.2 — read the Roth's PER-ACCOUNT key. `rothGrowthRate` is a wrapper
+  // rate and now lands on `EQUITY_US::rothAccount`; the bare `EQUITY_US` key carries the
+  // MARKET rate (0.07 by default), which is not the baseline these assertions are
+  // written against.
+  const rateStart = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(rateStart < 0.02, `Near-start W rate should be near 0, got ${rateStart}`);
 
   // At t~3 months (quarter, phase=π/2): W factor ≈ 0.5, rate partially recovers
   sim.stepTo(new Date('2026-05-01'));
-  const rateQuarter = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  const rateQuarter = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     rateQuarter > rateStart,
     `Quarter-point rate (${rateQuarter}) should be > start rate (${rateStart})`
@@ -142,7 +146,7 @@ test('EVT-RECOVERY-W-4: W-curve shows double-dip impact pattern over full durati
 
   // At t~6 months (half, phase=π): W factor ≈ 0 (temporary peak), rate near base
   sim.stepTo(new Date('2026-08-01'));
-  const rateHalf = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  const rateHalf = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     rateHalf > rateQuarter,
     `Half-point rate (${rateHalf}) should be > quarter-point rate (${rateQuarter}) — brief recovery peak`
@@ -150,7 +154,7 @@ test('EVT-RECOVERY-W-4: W-curve shows double-dip impact pattern over full durati
 
   // After full duration: rate returns to base, regime dropped
   sim.stepTo(new Date('2027-04-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
   assert.ok(
     Math.abs(rateAfter - baseRate) < 0.001,
     `Post-recovery rate should return to base ${baseRate}, got ${rateAfter}`

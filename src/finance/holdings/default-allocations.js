@@ -98,7 +98,12 @@ export function resolveDefaultAllocation(account) {
  * to EQUITY_US and take equity shocks and equity duration handling.
  */
 const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
-  [ALLOCATION.EQUITY]: Object.freeze(new Set([RATE_KEYS.EQUITY_US,       RATE_KEYS.EQUITY_AU])),
+  // Design 90 §7.2 — all four MARKET keys live inside the EQUITY class, so a holding
+  // may track any market while `resolveRateKey`'s containment rule keeps doing its
+  // real job: stopping a BOND sleeve in a `us-stock` brokerage from resolving to an
+  // equity series and taking equity shocks.
+  [ALLOCATION.EQUITY]: Object.freeze(new Set([RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU,
+                                              RATE_KEYS.EQUITY_INTL_EX_US, RATE_KEYS.EQUITY_INTL_EX_AU])),
   [ALLOCATION.BOND]:   Object.freeze(new Set([RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU])),
   [ALLOCATION.CASH]:   Object.freeze(new Set([RATE_KEYS.SAVINGS_US,      RATE_KEYS.SAVINGS_AU])),
 });

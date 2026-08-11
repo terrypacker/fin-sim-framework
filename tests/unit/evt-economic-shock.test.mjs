@@ -141,19 +141,32 @@ test('EVT-SHOCK-4: effectiveGrowthRates reflects regime returnAdjustment', () =>
 
   sim.stepTo(new Date('2026-03-01'));
 
-  // A class-level EQUITY_US shock fans out to each per-account member key
-  // (design: per-account growth). effectiveGrowthRates.EQUITY_US_ROTH =
-  // base rothGrowthRate + returnAdjustment = 0.07 - 0.04 = 0.03.
-  const rothRate = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH;
-  assert.ok(rothRate !== undefined, 'effectiveGrowthRates.EQUITY_US_ROTH must exist');
-  assert.ok(
-    Math.abs(rothRate - 0.03) < 0.001,
-    `Expected EQUITY_US_ROTH ~0.03, got ${rothRate}`
-  );
-  // Fan-out: the same class shock hits the 401k member too. Here k401GrowthRate
-  // is 0 (BASE_CFG), so EQUITY_US_K401 = base 0 + returnAdjustment −0.04 = −0.04.
-  assert.ok(
-    Math.abs((sim.state.effectiveGrowthRates?.EQUITY_US_K401 ?? NaN) - (-0.04)) < 0.001,
-    'class shock should fan out to EQUITY_US_K401',
-  );
+  // Design 90 §7.2 — the fan-out target moved from per-account-type MEMBER keys
+  // (EQUITY_US_ROTH, EQUITY_US_K401) to per-ACCOUNT keys under the market sleeve
+  // (`EQUITY_US::<stateKey>`). `_addScaledExpandingClasses` reaches them through its
+  // `<leaf>::` sweep, so coverage is unchanged — but the assertion has to name the
+  // account, because the whole point is that each one keeps its OWN baseline under a
+  // shared shock. Asserting the bare `EQUITY_US` key twice, as a mechanical rename of
+  // this test did, cannot distinguish the two accounts at all.
+  const eff = sim.state.effectiveGrowthRates ?? {};
+
+  // The Roth: base rothGrowthRate 0.07 + returnAdjustment −0.04 = 0.03.
+  const rothRate = eff['EQUITY_US::rothAccount'];
+  assert.ok(rothRate !== undefined, 'EQUITY_US::rothAccount must exist');
+  assert.ok(Math.abs(rothRate - 0.03) < 0.001, `Expected Roth ~0.03, got ${rothRate}`);
+
+  // The shared market key takes the shock too, for any holding with no per-account
+  // override. Both are asserted because they are separately reachable: the sweep writes
+  // `EQUITY_US` directly and `EQUITY_US::*` through the prefix scan, and a fan-out that
+  // did only one of the two would still satisfy the other assertion alone.
+  assert.ok(Math.abs((eff.EQUITY_US ?? NaN) - (0.07 - 0.04)) < 0.001,
+    `Expected the EQUITY_US market rate ~0.03, got ${eff.EQUITY_US}`);
+
+  // No 401k assertion: BASE_CFG has no 401k account. Before design 90 there was a
+  // shared `EQUITY_US_K401` key seeded from `k401GrowthRate` whether or not any 401k
+  // existed, so the original test could assert on it — a per-ACCOUNT key has no such
+  // phantom, which is an improvement rather than lost coverage. `evt-per-account-
+  // growth.test.mjs` covers multi-account fan-out against a scenario that has them.
+  assert.equal(eff['EQUITY_US::k401Account'], undefined,
+    'no phantom per-account key for an account this scenario does not have');
 });

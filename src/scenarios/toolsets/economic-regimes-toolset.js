@@ -13,6 +13,7 @@ import { EventSeries }                   from '../../simulation-framework/events
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from '../../finance/economic-regimes/rate-keys.js';
+import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { PrimeRelinkReducer }             from '../../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
@@ -87,21 +88,49 @@ function buildRateKeyToStateKeys(realProperties = [], collectibles = []) {
  */
 function collectBaseGrowthRates(p) {
   return {
-    // Per-account-type base growth (members of EQUITY_US / EQUITY_AU). Each
-    // account keeps its own baseline; RegimeApplyReducer fans a class-level
-    // return shock out to all members, so a US-equity crash still hits every
-    // US-equity account on top of its own rate.
-    [RATE_KEYS.EQUITY_US_ROTH]:      p.rothGrowthRate      ?? 0.07,
-    [RATE_KEYS.EQUITY_US_IRA]:       p.iraGrowthRate       ?? 0.07,
-    [RATE_KEYS.EQUITY_US_K401]:      p.k401GrowthRate      ?? 0.07,
-    [RATE_KEYS.EQUITY_US_BROKERAGE]: p.brokerageGrowthRate ?? 0.05,
-    [RATE_KEYS.EQUITY_AU_STOCK]:     p.auStockGrowthRate   ?? 0.06,
-    [RATE_KEYS.EQUITY_AU_SUPER]:     p.superGrowthRate     ?? 0.07,
+    // Per-MARKET base growth (design 90 §7.2). These are the rate a holding gets from
+    // the market it tracks; the per-WRAPPER rates below still exist and still win, but
+    // they are now seeded as per-account overrides (`<marketKey>::<stateKey>`) rather
+    // than as asset classes of their own. A regime shock on a market key reaches every
+    // one of those overrides through `_addScaledExpandingClasses`'s `::` sweep, exactly
+    // as the old class→member fan-out did.
+    [RATE_KEYS.EQUITY_US]:         p.usEquityGrowthRate      ?? 0.07,
+    [RATE_KEYS.EQUITY_AU]:         p.auEquityGrowthRate      ?? 0.06,
+    [RATE_KEYS.EQUITY_INTL_EX_US]: p.intlExUsEquityGrowthRate ?? 0.07,
+    [RATE_KEYS.EQUITY_INTL_EX_AU]: p.intlExAuEquityGrowthRate ?? 0.07,
     // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
     // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
     // computeHoldingsGrowth; regime shocks may target GOLD directly (it is not a
     // member of any equity class, so an equity crash does not touch it).
     [RATE_KEYS.GOLD]:                p.goldGrowthRate      ?? 0.05,
+  };
+}
+
+/**
+ * Per-ROLE equity growth rates — the wrapper-specific rates that used to be the base
+ * rate of an account-type member key (design 90 §7.2).
+ *
+ * They did not become less useful when the sleeve axis moved to markets, they became
+ * more honestly placed: `brokerageGrowthRate` at 5% against `rothGrowthRate` at 7% was
+ * never a statement about two asset classes, it was a statement about two accounts
+ * holding different mixes. `seedPerAccountRates` writes each as
+ * `<marketKey>::<stateKey>`, so every account keeps exactly the rate it had.
+ *
+ * The defaults are the ones the retired member keys carried, verbatim — that is what
+ * makes this step behaviour-preserving rather than a re-basing of every scenario.
+ *
+ * Once the §7.3 sub-axis lands, a mix of market sleeves expresses the same thing
+ * directly and these can start to retire; until then removing one silently re-rates the
+ * account to its market.
+ */
+function collectRoleGrowthRates(p) {
+  return {
+    [ACCOUNT_ROLES.ROTH]:      p.rothGrowthRate      ?? 0.07,
+    [ACCOUNT_ROLES.IRA]:       p.iraGrowthRate       ?? 0.07,
+    [ACCOUNT_ROLES.K401]:      p.k401GrowthRate      ?? 0.07,
+    [ACCOUNT_ROLES.US_STOCK]:  p.brokerageGrowthRate ?? 0.05,
+    [ACCOUNT_ROLES.AU_STOCK]:  p.auStockGrowthRate   ?? 0.06,
+    [ACCOUNT_ROLES.SUPER]:     p.superGrowthRate     ?? 0.07,
   };
 }
 
@@ -171,7 +200,7 @@ const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
  *
  * Mutates `baseGrowthRates` / `baseInterestRates` in place.
  */
-function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
+function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleGrowthRates = {}) {
   const primeLinks = [];
   for (const acct of accounts ?? []) {
     const stateKey  = acct?.stateKey;
@@ -192,7 +221,13 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
         primeLinks.push({ stateKey, savKey: memberKey, primeKey, spread: acct.primeSpread });
       } else {
         const ownRate = isInterest ? acct.interestRate : acct.growthRate;
-        perVal = ownRate ?? baseMap[memberKey];
+        // Design 90 §7.2 — the per-WRAPPER growth rate (rothGrowthRate,
+        // brokerageGrowthRate, superGrowthRate, …) lands HERE now, as this account's
+        // override of its market's rate. Before the market axis it was the member key's
+        // own base rate, which made a wrapper look like an asset class. Precedence is
+        // unchanged and so is every resulting number: the account's own `growthRate`
+        // still wins, then its role's rate, then the market's.
+        perVal = ownRate ?? roleGrowthRates[acct?.role] ?? baseMap[memberKey];
       }
       if (perVal != null) baseMap[`${memberKey}::${stateKey}`] = perVal;
     }
@@ -613,7 +648,7 @@ export const ECONOMIC_REGIMES = {
         mc:           false,
         opt:          false,
         defaultValue: null,
-        description:  'Optional per-sleeve override of each equity sleeve\'s loading on the market factor, keyed by rate key (EQUITY_US_ROTH, EQUITY_AU_SUPER, …). Absent keys fall back to the defaults (US 1.0 / AU stock 0.9 / super 0.7). Only used when Stochastic Equity Returns is on.',
+        description:  'Optional per-sleeve override of each equity sleeve\'s loading on the market factor, keyed by MARKET rate key (EQUITY_US, EQUITY_AU, EQUITY_INTL_EX_US, EQUITY_INTL_EX_AU — design 90 §7.2). Absent keys fall back to the defaults (US 1.0 / intl ex-US 0.85 / intl ex-AU 0.95 / AU 0.8). Only used when Stochastic Equity Returns is on.',
       },
       {
         key:          'equityReturnIdioVol',
@@ -728,7 +763,8 @@ export const ECONOMIC_REGIMES = {
     // `<memberKey>::<stateKey>` entries derived from each account's own rate. The
     // returned Prime links let PrimeRelinkReducer re-derive linked cash keys when
     // Prime moves at runtime (design 56 §5, Phase 2b).
-    const primeLinks = seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates);
+    const primeLinks = seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates,
+                                           collectRoleGrowthRates(p));
     const baseInflationRates = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,

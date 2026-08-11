@@ -272,7 +272,9 @@ test('D55-14: a retired spouse growth rate renames onto the type-level key it fe
   assert.strictEqual(paramNamed(cfg, 'spouseSuperGrowthRate'), undefined, 'legacy entry renamed away');
   assert.strictEqual(cfg.parameters.spouseSuperGrowthRate, undefined, 'legacy flat key removed');
   assert.strictEqual(cfg.parameters.superGrowthRate, 0.123, 'value carried onto the live key');
-  assert.strictEqual(sim.state.effectiveGrowthRates.EQUITY_AU_SUPER, 0.123,
+  // Design 90 §7.2 — `superGrowthRate` is a WRAPPER rate, so it lands on each super
+  // account's own key beneath the shared AU market sleeve, not on the sleeve itself.
+  assert.strictEqual(sim.state.effectiveGrowthRates['EQUITY_AU::superAccount'], 0.123,
     'and reaches the rate the super accounts actually grow at');
 });
 
@@ -295,7 +297,7 @@ test('D55-15: the three dead spouse growth rates are dropped, not carried forwar
   // A retired key must not be quietly promoted onto the live lever it resembles: the
   // saved 0.19 was never doing anything, and turning it into the whole household's
   // Roth/IRA/401(k) growth rate on upgrade would silently rewrite the plan's result.
-  for (const rateKey of ['EQUITY_US_ROTH', 'EQUITY_US_IRA', 'EQUITY_US_K401']) {
+  for (const rateKey of ['EQUITY_US', 'EQUITY_US', 'EQUITY_US']) {
     assert.strictEqual(sim.state.effectiveGrowthRates[rateKey], INTL_RETIREMENT_DEFAULTS.rothGrowthRate,
       `${rateKey} keeps its own rate — a retired key is dropped, not promoted`);
   }

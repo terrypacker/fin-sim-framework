@@ -59,8 +59,10 @@ const mkRng = (seed = 42) => {
   return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
 };
 
-const ROTH = RATE_KEYS.EQUITY_US_ROTH;
-const SUPER = RATE_KEYS.EQUITY_AU_SUPER;
+// Design 90 §7.2 — named by MARKET now. The old aliases (US_MKT/AU_MKT) named account
+// wrappers, which are no longer sleeves.
+const US_MKT = RATE_KEYS.EQUITY_US;
+const AU_MKT = RATE_KEYS.EQUITY_AU;
 
 // ─── EquityReturnTickHandler ─────────────────────────────────────────────────────
 
@@ -83,9 +85,11 @@ describe('EquityReturnTickHandler', () => {
       const expected = DEFAULT_EQUITY_BETA[sleeve] * marketDev;
       assert.ok(Math.abs(deviation[sleeve] - expected) < 1e-12, `${sleeve} not beta×market`);
     }
-    // Default betas: US 1.0 rides the factor 1:1; super 0.7 loads below it.
-    assert.ok(Math.abs(deviation[ROTH] - marketDev) < 1e-12);
-    assert.ok(Math.abs(deviation[SUPER] - 0.7 * marketDev) < 1e-12);
+    // Design 90 §7.2 — the market factor IS the US market's, so EQUITY_US rides it 1:1
+    // by construction; the AU market loads below it. Spot-checked by name as well as by
+    // the loop above, so a table edited to all-1.0 betas cannot pass vacuously.
+    assert.ok(Math.abs(deviation[RATE_KEYS.EQUITY_US] - marketDev) < 1e-12);
+    assert.ok(Math.abs(deviation[RATE_KEYS.EQUITY_AU] - 0.8 * marketDev) < 1e-12);
   });
 
   test('same rng sequence ⇒ identical output (reproducible)', () => {
@@ -117,7 +121,7 @@ describe('EquityReturnTickHandler', () => {
     const rngA = mkRng(7);
     const rngB = mkRng(7);
     const a = new EquityReturnTickHandler({ idioVol: {} }).call({ sim: { rng: rngA }, state: {} })[0];
-    const b = new EquityReturnTickHandler({ idioVol: { [ROTH]: 0 } }).call({ sim: { rng: rngB }, state: {} })[0];
+    const b = new EquityReturnTickHandler({ idioVol: { [US_MKT]: 0 } }).call({ sim: { rng: rngB }, state: {} })[0];
     assert.deepEqual(a, b);
     assert.equal(rngA(), rngB(), 'a zero-vol sleeve must not advance the RNG cursor');
   });
@@ -127,25 +131,25 @@ describe('EquityReturnTickHandler', () => {
     // Turning it on for the last-iterated sleeve (by sorted key) must not disturb the
     // market draw shared by all, so every other sleeve is unchanged.
     const market = new EquityReturnTickHandler({ idioVol: {} }).call({ sim: { rng: mkRng(11) }, state: {} })[0];
-    const withIdio = new EquityReturnTickHandler({ idioVol: { [SUPER]: 0.1 } })
+    const withIdio = new EquityReturnTickHandler({ idioVol: { [AU_MKT]: 0.1 } })
       .call({ sim: { rng: mkRng(11) }, state: {} })[0];
     assert.ok(Math.abs(withIdio.marketDev - market.marketDev) < 1e-12, 'market factor shifted');
     for (const sleeve of EQUITY_SLEEVES) {
-      if (sleeve === SUPER) continue;
+      if (sleeve === AU_MKT) continue;
       assert.ok(Math.abs(withIdio.deviation[sleeve] - market.deviation[sleeve]) < 1e-12,
         `${sleeve} disturbed by another sleeve’s idio draw`);
     }
-    assert.notEqual(withIdio.deviation[SUPER], market.deviation[SUPER], 'the idio sleeve should move');
+    assert.notEqual(withIdio.deviation[AU_MKT], market.deviation[AU_MKT], 'the idio sleeve should move');
   });
 
   test('per-sleeve beta override replaces the default loading', () => {
-    const h = new EquityReturnTickHandler({ beta: { [SUPER]: 1.5 } });
+    const h = new EquityReturnTickHandler({ beta: { [AU_MKT]: 1.5 } });
     const { marketDev, deviation } = h.call({ sim: { rng: () => 0.5 }, state: {} })[0];
-    assert.ok(Math.abs(deviation[SUPER] - 1.5 * marketDev) < 1e-12);
+    assert.ok(Math.abs(deviation[AU_MKT] - 1.5 * marketDev) < 1e-12);
   });
 
   test('round-trips through toJSON/fromJSON', () => {
-    const h = new EquityReturnTickHandler({ vol: 0.2, model: 'MEAN_REVERTING', beta: { [ROTH]: 1.1 }, idioVol: { [SUPER]: 0.05 } });
+    const h = new EquityReturnTickHandler({ vol: 0.2, model: 'MEAN_REVERTING', beta: { [US_MKT]: 1.1 }, idioVol: { [AU_MKT]: 0.05 } });
     const clone = EquityReturnTickHandler.fromJSON(h.toJSON());
     assert.deepEqual(
       clone.call({ sim: { rng: mkRng() }, state: {} }),
@@ -195,14 +199,14 @@ describe('EquityReturnStepReducer', () => {
   beforeEach(() => { reducer = new EquityReturnStepReducer(); });
 
   test('stores the per-sleeve deviation and market factor', () => {
-    const action = { type: 'EQUITY_RETURN_STEP_APPLY', marketDev: 0.03, deviation: { [ROTH]: 0.03, [SUPER]: 0.021 } };
+    const action = { type: 'EQUITY_RETURN_STEP_APPLY', marketDev: 0.03, deviation: { [US_MKT]: 0.03, [AU_MKT]: 0.021 } };
     const next = reducer.reduce({}, action);
-    assert.deepEqual(next.equityReturnDev, { [ROTH]: 0.03, [SUPER]: 0.021 });
+    assert.deepEqual(next.equityReturnDev, { [US_MKT]: 0.03, [AU_MKT]: 0.021 });
     assert.equal(next.equityReturnMarketDev, 0.03);
   });
 
   test('a malformed action (no deviation) is a no-op', () => {
-    const st = { equityReturnDev: { [ROTH]: 0.01 } };
+    const st = { equityReturnDev: { [US_MKT]: 0.01 } };
     const next = reducer.reduce(st, { type: 'EQUITY_RETURN_STEP_APPLY' });
     assert.equal(next.equityReturnDev, st.equityReturnDev);
   });
@@ -215,7 +219,7 @@ describe('EquityReturnReducer', () => {
   beforeEach(() => { reducer = new EquityReturnReducer(); });
 
   const baseState = () => ({
-    effectiveGrowthRates: { [ROTH]: 0.10, [SUPER]: 0.09, [`${ROTH}::acctA`]: 0.11 },
+    effectiveGrowthRates: { [US_MKT]: 0.10, [AU_MKT]: 0.09, [`${US_MKT}::acctA`]: 0.11 },
     equityReturnDev: {},
   });
 
@@ -234,35 +238,35 @@ describe('EquityReturnReducer', () => {
 
   test('folds the sleeve deviation onto the member key AND its per-account variants', () => {
     const st = baseState();
-    st.equityReturnDev = { [ROTH]: -0.05, [SUPER]: 0.02 };
+    st.equityReturnDev = { [US_MKT]: -0.05, [AU_MKT]: 0.02 };
     const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
-    assert.ok(Math.abs(next.effectiveGrowthRates[ROTH] - 0.05) < 1e-12);          // 0.10 - 0.05
-    assert.ok(Math.abs(next.effectiveGrowthRates[`${ROTH}::acctA`] - 0.06) < 1e-12); // 0.11 - 0.05
-    assert.ok(Math.abs(next.effectiveGrowthRates[SUPER] - 0.11) < 1e-12);         // 0.09 + 0.02
+    assert.ok(Math.abs(next.effectiveGrowthRates[US_MKT] - 0.05) < 1e-12);          // 0.10 - 0.05
+    assert.ok(Math.abs(next.effectiveGrowthRates[`${US_MKT}::acctA`] - 0.06) < 1e-12); // 0.11 - 0.05
+    assert.ok(Math.abs(next.effectiveGrowthRates[AU_MKT] - 0.11) < 1e-12);         // 0.09 + 0.02
   });
 
   test('a sleeve absent from effectiveGrowthRates is skipped (no phantom key)', () => {
-    const st = { effectiveGrowthRates: { [ROTH]: 0.10 }, equityReturnDev: { [SUPER]: 0.02 } };
+    const st = { effectiveGrowthRates: { [US_MKT]: 0.10 }, equityReturnDev: { [AU_MKT]: 0.02 } };
     const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
-    assert.ok(!(SUPER in next.effectiveGrowthRates), 'created a growth rate for an absent sleeve');
-    assert.equal(next.effectiveGrowthRates[ROTH], 0.10);
+    assert.ok(!(AU_MKT in next.effectiveGrowthRates), 'created a growth rate for an absent sleeve');
+    assert.equal(next.effectiveGrowthRates[US_MKT], 0.10);
   });
 });
 
 // ─── §5.3 / §6 test 6: drift compensation (Phase 3) ──────────────────────────────
 
 describe('drift compensation', () => {
-  const ROTH_BETA = DEFAULT_EQUITY_BETA[ROTH];  // 1.0
+  const ROTH_BETA = DEFAULT_EQUITY_BETA[US_MKT];  // 1.0
 
   test('GEOMETRIC (default) emits driftComp = ((β·σ)² + σ_idio²)/2 per sleeve', () => {
     const vol = 0.18;
-    const h = new EquityReturnTickHandler({ vol, idioVol: { [SUPER]: 0.1 } });
+    const h = new EquityReturnTickHandler({ vol, idioVol: { [AU_MKT]: 0.1 } });
     const { driftComp } = h.call({ sim: { rng: mkRng() }, state: {} })[0];
-    // ROTH: β 1.0, no idio ⇒ (1.0·0.18)²/2 = 0.0162.
-    assert.ok(Math.abs(driftComp[ROTH] - (Math.pow(ROTH_BETA * vol, 2)) / 2) < 1e-12);
-    // SUPER: β 0.7, idio 0.1 ⇒ ((0.7·0.18)² + 0.1²)/2.
-    const expSuper = (Math.pow(DEFAULT_EQUITY_BETA[SUPER] * vol, 2) + 0.1 * 0.1) / 2;
-    assert.ok(Math.abs(driftComp[SUPER] - expSuper) < 1e-12);
+    // US_MKT: β 1.0, no idio ⇒ (1.0·0.18)²/2 = 0.0162.
+    assert.ok(Math.abs(driftComp[US_MKT] - (Math.pow(ROTH_BETA * vol, 2)) / 2) < 1e-12);
+    // AU_MKT: β 0.7, idio 0.1 ⇒ ((0.7·0.18)² + 0.1²)/2.
+    const expSuper = (Math.pow(DEFAULT_EQUITY_BETA[AU_MKT] * vol, 2) + 0.1 * 0.1) / 2;
+    assert.ok(Math.abs(driftComp[AU_MKT] - expSuper) < 1e-12);
   });
 
   test('NONE emits zero driftComp for every sleeve', () => {
@@ -282,24 +286,24 @@ describe('drift compensation', () => {
   test('the fold applies deviation + driftComp together', () => {
     const reducer = new EquityReturnReducer();
     const st = {
-      effectiveGrowthRates: { [ROTH]: 0.10 },
-      equityReturnDev:       { [ROTH]: -0.05 },
-      equityReturnDriftComp: { [ROTH]: 0.0162 },
+      effectiveGrowthRates: { [US_MKT]: 0.10 },
+      equityReturnDev:       { [US_MKT]: -0.05 },
+      equityReturnDriftComp: { [US_MKT]: 0.0162 },
     };
     const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
     // 0.10 + (−0.05 + 0.0162) = 0.0662.
-    assert.ok(Math.abs(next.effectiveGrowthRates[ROTH] - 0.0662) < 1e-12);
+    assert.ok(Math.abs(next.effectiveGrowthRates[US_MKT] - 0.0662) < 1e-12);
   });
 
   test('driftComp alone (dev all-zero) still folds — a nonzero comp is not a no-op', () => {
     const reducer = new EquityReturnReducer();
     const st = {
-      effectiveGrowthRates: { [ROTH]: 0.10 },
-      equityReturnDev:       { [ROTH]: 0 },
-      equityReturnDriftComp: { [ROTH]: 0.0162 },
+      effectiveGrowthRates: { [US_MKT]: 0.10 },
+      equityReturnDev:       { [US_MKT]: 0 },
+      equityReturnDriftComp: { [US_MKT]: 0.0162 },
     };
     const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
-    assert.ok(Math.abs(next.effectiveGrowthRates[ROTH] - 0.1162) < 1e-12);
+    assert.ok(Math.abs(next.effectiveGrowthRates[US_MKT] - 0.1162) < 1e-12);
   });
 
   // §6 test 6: the realized geometric mean over a long horizon.
@@ -310,8 +314,8 @@ describe('drift compensation', () => {
       const rng = mkRng(2026);
       let sumLog = 0;
       for (let i = 0; i < N; i++) {
-        const o = h.call({ sim: { rng }, state: {} })[0];               // ROTH: β 1.0, idio 0
-        const r = anchor + o.deviation[ROTH] + o.driftComp[ROTH];
+        const o = h.call({ sim: { rng }, state: {} })[0];               // US_MKT: β 1.0, idio 0
+        const r = anchor + o.deviation[US_MKT] + o.driftComp[US_MKT];
         sumLog += Math.log(1 + r);
       }
       return Math.exp(sumLog / N) - 1;

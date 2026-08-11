@@ -492,7 +492,57 @@ later.
 
 ---
 
-## 7. Market equity sleeves
+## 7. Market equity sleeves  ✅ BUILT (step 5 — keys and wiring; §7.4 still open)
+
+**Implementation record.** The four market keys replace the six account-wrapper keys in
+`rate-keys.js`; `MEMBER_RATE_KEY_BY_ROLE` and every earnings handler's `static rateKey`
+point at markets; `RATE_KEY_CLASS_MEMBERS` is empty; betas and `EQUITY_SLEEVES` are
+re-based. Guard: `tests/unit/equity-sleeve-rng-neutrality.test.mjs`.
+
+**Behaviour is preserved exactly, and the golden proves it precisely.** 60 fields moved
+and **every one of them is a rate-key rename inside `baseGrowthRates` /
+`effectiveGrowthRates`** — no balance, no tax figure, no net worth. Each account kept its
+own rate to the digit (`EQUITY_US_BROKERAGE::usStockAccount` 0.05 →
+`EQUITY_US::usStockAccount` 0.05; `EQUITY_AU_SUPER::superAccount` 0.07 →
+`EQUITY_AU::superAccount` 0.07).
+
+### 7.5 The sequencing in §9 was wrong, and the code said so
+
+§9 called step 5 "structural only". It is not, and could not have been, for a reason
+worth recording: `collectBaseGrowthRates` seeded **genuinely different rates per account
+wrapper** — brokerage 5%, AU stock 6%, Roth/IRA/401k/super 7%. A naive collapse onto one
+`EQUITY_US` rate would have re-rated every US account in every scenario.
+
+Those per-wrapper rates *are* the account-type proxy for asset mix that §7.1 says market
+sleeves exist to replace — but they cannot retire until the §7.3 sub-axis can express the
+same thing as a mix. So the migration route is not "replace", it is **"re-home"**: each
+wrapper rate now seeds a per-ACCOUNT override (`<marketKey>::<stateKey>`) via
+`collectRoleGrowthRates`, which is what it always was in substance. Precedence is
+unchanged — account's own `growthRate`, then its role's rate, then the market's.
+
+**Two latent defects this surfaced.**
+
+- **The per-holding rate lookup ignored per-account seeding.** `computeHoldingsGrowth`
+  resolved `ratesMap[h.rateKey]` before falling back to the account-level rate, so a
+  holding carrying an explicit `rateKey` took the shared series. That was invisible while
+  no equity series was seeded at the bare key — every equity holding missed and fell
+  through to the per-account rate. The market axis seeds `EQUITY_US` as a real shared
+  rate, at which point the bare-key hit starts winning and silently overrides every
+  account's own growth rate with the market's. Now `<rateKey>::<stateKey>` first, matching
+  the account-level precedence.
+- **A phantom per-account-type key existed for accounts that did not exist.**
+  `EQUITY_US_K401` was seeded from `k401GrowthRate` whether or not any 401k was in the
+  scenario, and a test asserted against it. Per-ACCOUNT keys cannot do that.
+
+### 7.6 What step 5 did NOT do
+
+`idioVol` is still 0 everywhere, so the four sleeves remain a deterministic multiple of
+one draw and **cannot cross**. Everything §1.2 says still holds: losses stay
+structurally near-impossible, and the harvest lever stays unmeasurable. §7.4 — the
+correlation structure — is the step that changes that, and it is the one that re-bases
+every stochastic run.
+
+
 
 ### 7.1 The defect
 

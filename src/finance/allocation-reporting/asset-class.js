@@ -91,21 +91,25 @@ export function assetClassForAllocation(allocation) {
  */
 const EXPOSURE_COUNTRY_BY_RATE_KEY = Object.freeze({
   [RATE_KEYS.EQUITY_US]:           'US',
-  [RATE_KEYS.EQUITY_US_ROTH]:      'US',
-  [RATE_KEYS.EQUITY_US_IRA]:       'US',
-  [RATE_KEYS.EQUITY_US_K401]:      'US',
-  [RATE_KEYS.EQUITY_US_BROKERAGE]: 'US',
   [RATE_KEYS.FIXED_INCOME_US]:     'US',
   [RATE_KEYS.SAVINGS_US]:          'US',
   [RATE_KEYS.PRIME_US]:            'US',
   [RATE_KEYS.REAL_ESTATE_US]:      'US',
   [RATE_KEYS.EQUITY_AU]:           'AU',
-  [RATE_KEYS.EQUITY_AU_STOCK]:     'AU',
-  [RATE_KEYS.EQUITY_AU_SUPER]:     'AU',
   [RATE_KEYS.FIXED_INCOME_AU]:     'AU',
   [RATE_KEYS.SAVINGS_AU]:          'AU',
   [RATE_KEYS.PRIME_AU]:            'AU',
   [RATE_KEYS.REAL_ESTATE_AU]:      'AU',
+  // Design 90 §7.2 — the international sleeves are multi-country BY CONSTRUCTION, so
+  // null is the honest answer rather than a missing entry: an ex-US basket has no single
+  // exposure country, and forcing one would put Japan and Germany under a flag. The cube
+  // reads null as "no exposure country", the same treatment gold already gets.
+  //
+  // This is the point at which the exposure-country axis stops being able to express
+  // what the market axis knows. When the cube needs to say "40% international" it should
+  // read the rate key directly rather than have a country invented for it here.
+  [RATE_KEYS.EQUITY_INTL_EX_US]:   null,
+  [RATE_KEYS.EQUITY_INTL_EX_AU]:   null,
   [RATE_KEYS.GOLD]:                null,
   [RATE_KEYS.COLLECTIBLE]:         null,
 });
