@@ -19,6 +19,7 @@ import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-al
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
+import { disposalTermFields } from '../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
@@ -1298,16 +1299,23 @@ export class AccountService extends AssetService {
       // each lot's AU cost base (design 57 §6.3), exactly as the event-driven
       // reducers do. Omitting `level` here used to pin the index factor to 1 on the
       // path that raises 98% of a real plan's disposals.
+      const saleMs = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
       const auCtx = residency === 'AU'
-        ? { asOfMs: date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null), country: 'AU', level: auCpiLevel }
+        ? { asOfMs: saleMs, country: 'AU', level: auCpiLevel }
         : null;
+      // Signed, charactered gain (design 90 §9 step 2). Note this is NOT gated on
+      // residency the way `auCtx` above is: the US §1222 short/long split applies to
+      // every disposal this household makes, wherever they live, because they are US
+      // citizens taxed on worldwide gains. Gating it would have left the US character
+      // unknown on exactly the years an AU-resident run cares about.
+      const termCtx = saleMs != null ? { asOfMs: saleMs, countries: ['US', 'AU'] } : null;
       // Design 65: the allocation-aware selection policy steers *which* sleeve/lots
       // are sold; when `selection` is null this is byte-identical to the prior FIFO.
       // Lever C (design 65 §4-C): if rebalance coupling is on and this account carries
       // a stamped design-61 target, bias the sleeve order toward its over-weight class.
       const acctSelection = withRebalanceCoupling(selection, account);
       const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
-        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection })
+        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection, terms: termCtx })
         : null;
 
       this.transaction(targetAccount, +credited, date);
@@ -1348,14 +1356,29 @@ export class AccountService extends AssetService {
         // ≥12 months from the AU deemed-acquisition date (excludes the gold sleeve,
         // which the collectible split handles), capped at auGain.
         const auDiscountableGain = Math.min(auGain, brokerageFifo.realizedDiscountableGainByCountry?.AU ?? auGain);
+        // Design 90 §9 step 2 — the SIGNED, §1222-charactered gain, riding alongside the
+        // floored `gain`/`auGain` above rather than replacing them. Nothing consumes
+        // these until step 3, which is what makes this commit behaviour-preserving.
+        // Written as explicit keys (not a spread) so the parity test's static AST scan
+        // can see them; see `disposalTermFields`.
+        const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+          disposalTermFields(brokerageFifo.realizedGainByCountryAndTerm);
         account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency,
+          usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
           // Design 76 Gap B: attribute the AU gain to this account's owner.
           stateKey: account.stateKey ?? key,
         });
-        if (collGain > 0) {
+        const collTerms = disposalTermFields(brokerageFifo.collectibleGainByCountryAndTerm);
+        const collSigned = collTerms.usShortTermGain + collTerms.usLongTermGain;
+        // `collGain > 0` alone would have made a gold sleeve sold BELOW basis emit no
+        // action at all — the loss did not merely floor to zero, the disposal became
+        // invisible. Widened to fire on a signed loss too. Behaviour is unchanged for
+        // the tax modules, which read the still-floored `gain`; what changes is that a
+        // collectible loss now exists to be netted in step 3.
+        if (collGain > 0 || collSigned !== 0) {
           // Design 76 Gap B — gold sleeve inside the account ⇒ attribute by account.
           // `isGold` and the au* pair are NOT optional: the FY2027 AU module reads
           // `isGold ? (auIndexedGain ?? auGain ?? gain) : (auGain ?? gain)`, so a bare
@@ -1363,9 +1386,11 @@ export class AccountService extends AssetService {
           // collectible, assessed on its US cost base, un-indexed". This path raised
           // 93% of a real plan's collectible disposals with exactly that shape while
           // the rebalancer taxed the SAME gold lots correctly (design/inconsistencies §4.11).
+          const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } = collTerms;
           pendingTaxActions.push({
             type: 'COLLECTIBLE_SALE_TAX', gain: collGain, auGain: collAuGain,
             auIndexedGain: collIndexedAuGain, isGold: true, residency,
+            usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
             stateKey: account.stateKey ?? key,
           });
         }

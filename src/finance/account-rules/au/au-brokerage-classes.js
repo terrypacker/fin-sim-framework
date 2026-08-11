@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldings } from '../../holdings/holdings-fifo.js';
+import { disposalTermFields } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { resolveCashKey } from '../cash-routing.js';
 
@@ -233,7 +234,10 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
     }), sa);
-    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection });
+    // Design 90 §9 step 2 — the signed, §1222-charactered split. Requested for BOTH
+    // countries even though this is an AU account: a US person is taxed on worldwide
+    // gains, so the US character of an AU disposal is not optional.
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] } });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): realized AU basis from each lot's
@@ -247,6 +251,10 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     // from the AU deemed-acquisition date, capped at auGain. Read by the pre-2027
     // rates module so the discount applies only to the eligible portion.
     const auDiscountableGain = Math.min(auGain, r.realizedDiscountableGainByCountry?.AU ?? auGain);
+    // Design 90 §9 step 2 — signed and charactered, alongside the floored figures above.
+    // An AU brokerage holds no gold sleeve, so there is no collectible slice to split.
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      disposalTermFields(r.realizedGainByCountryAndTerm);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], salePrice, null);
 
@@ -262,7 +270,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key }]
     );
   }
 }

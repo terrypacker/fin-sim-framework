@@ -30,6 +30,24 @@ zero booked a negative gain** — in a run that includes a −40% equity shock.
 The floor at the disposal sites explains why no loss was *recorded*. It does not explain why
 this would change once the floor is removed. That answer is in the return model.
 
+**Re-measured after step 2 landed** (the floors are gone; nothing nets them yet), on a 44-year
+reference plan carrying 5,646 disposals:
+
+| | count | share |
+|---|---:|---:|
+| Disposals booking a net **gain** | 1,788 | 31.7% |
+| Disposals booking a net **loss** | **264** | 4.7% |
+| Disposals carrying **short-term** character | 12 | 0.2% |
+
+So losses now exist — 264 of them where there were none. But their aggregate is **0.006% of
+gross realized gains**: three and a half orders of magnitude too small to move a tax bill.
+
+That is §1.2 measured rather than argued. The floor was never the binding constraint; the
+return model is. It also sizes the ST/LT split honestly for a buy-and-hold plan — 12 rows in
+5,646 — which is not a reason to skip it (§1212(b) is inexpressible without it, and harvesting
+is what makes short-term character common) but is a reason not to expect step 3 to move
+anything on its own.
+
 ### 1.2 Equity sleeves cannot diverge, by construction
 
 `EquityReturnTickHandler.call` (`equity-return-tick-handler.js:84`) draws **one** market factor

@@ -51,7 +51,7 @@ export const US_COLLECTIBLES = {
       // disposal. All three are emitted by the gold sleeve inside a brokerage
       // account as well as by a standalone collectible.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), isGold: ValueType.boolean(), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), isGold: ValueType.boolean(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', fields: { amount: ValueType.number() } },
     ],
   },

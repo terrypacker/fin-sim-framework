@@ -58,15 +58,29 @@ const ROOT    = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const SRC_DIR = path.join(ROOT, 'src');
 
 /**
+ * The design 90 §9 step 2 signed, §1222-charactered gain. Held to the same contract as
+ * the au* trio, and for a sharper version of the same reason: once step 3 nets these,
+ * an emitter that omits them does not report "no loss" — it reports **no disposal**,
+ * silently deleting a gain from the year's netting and understating the tax.
+ *
+ * These are the reason `disposalTermFields` / `singleAssetTermFields` exist rather than
+ * four inline subtractions per site. The helpers return an object, but every emitter
+ * DESTRUCTURES and writes the keys explicitly, because the scan below is static: a
+ * `...spread` would satisfy the runtime and be invisible here, which is exactly the
+ * failure mode this file was written to stop.
+ */
+const TERM_FIELDS = ['usShortTermGain', 'usLongTermGain', 'auShortTermGain', 'auLongTermGain'];
+
+/**
  * Fields every emitter of these action types must set explicitly, because the
  * consumer's `??` fallback for a missing one is a wrong answer rather than a safe
  * one. `gain` and `residency` are included as the floor: `residency` gates the
  * whole AU branch, so an emitter that forgets it books no AU tax at all.
  */
 const REQUIRED = {
-  STOCK_WITHDRAWAL_TAX:    ['gain', 'auGain', 'auDiscountableGain', 'residency'],
-  AU_STOCK_WITHDRAWAL_TAX: ['gain', 'auGain', 'auDiscountableGain', 'residency'],
-  COLLECTIBLE_SALE_TAX:    ['gain', 'auGain', 'isGold', 'residency'],
+  STOCK_WITHDRAWAL_TAX:    ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS],
+  AU_STOCK_WITHDRAWAL_TAX: ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS],
+  COLLECTIBLE_SALE_TAX:    ['gain', 'auGain', 'isGold', 'residency', ...TERM_FIELDS],
 };
 
 /**

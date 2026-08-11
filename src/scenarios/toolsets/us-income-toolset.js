@@ -49,7 +49,7 @@ export const US_INCOME = {
       // them the sale reached Form 1040 line 6 (which reads the YTD accumulator) but
       // was invisible on the schedules, since pickPayload keeps ONLY declared fields.
       { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
     ],
   },

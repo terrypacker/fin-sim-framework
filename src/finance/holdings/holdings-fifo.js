@@ -10,6 +10,7 @@
 
 import { ALLOCATION, isCollectibleAllocation } from './allocation.js';
 import { buildHoldingsComparator } from './holdings-selection.js';
+import { isLongTerm, YEAR_MS }     from './holding-period.js';
 
 /**
  * Consume an account's holdings to satisfy a sale of `amount` dollars at
@@ -103,25 +104,7 @@ import { buildHoldingsComparator } from './holdings-selection.js';
  * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, realizedGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
-const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
-
-/**
- * Per-country long-term holding-period test (design 90 §6). The two jurisdictions
- * differ at the boundary and the difference is in the statutes, not a rounding choice:
- *
- *   AU — Div 115 grants the discount to an asset acquired "at least 12 months" before
- *        the CGT event, so the test is inclusive.
- *   US — IRC §1222(3) defines long-term as "held for **more than** 1 year", and
- *        §1222(1) defines short-term as "not more than 1 year". Exclusive.
- *
- * A country with no entry defaults to the inclusive test, matching the AU behaviour
- * this file has always had. Only the exact-boundary lot is affected either way, but
- * the boundary is the one case a reader will check against the Act.
- */
-const LONG_TERM_TEST = Object.freeze({
-  AU: (heldMs) => heldMs >= TWELVE_MONTHS_MS,
-  US: (heldMs) => heldMs >  TWELVE_MONTHS_MS,
-});
+const TWELVE_MONTHS_MS = YEAR_MS;
 
 /** `{ short: 0, long: 0 }` for each requested country. */
 function _emptyTermTally(countries) {
@@ -257,8 +240,7 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
         // (`residency-cost-base-policy.js`), so the US arm of this reads the true
         // acquisition date today — and stays correct if another country ever does.
         const acqTs    = h.acquisitionDateByCountry?.[c] ?? _purchaseTs(h);
-        const isLong   = (LONG_TERM_TEST[c] ?? LONG_TERM_TEST.AU)(termAsOfMs - acqTs);
-        bucket[c][isLong ? 'long' : 'short'] += take - cbShare;
+        bucket[c][isLongTerm(c, termAsOfMs - acqTs) ? 'long' : 'short'] += take - cbShare;
       }
     }
     consumed      += take;

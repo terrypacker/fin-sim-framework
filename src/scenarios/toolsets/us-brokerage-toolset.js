@@ -55,7 +55,7 @@ export const US_BROKERAGE = {
       // AccountService.replenishSavings, the rebalancer), which between them cover
       // all three fields.
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , stateKey: ValueType.text()} },
+        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'FIXED_INCOME_EARNINGS_TAX',
         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
     ],

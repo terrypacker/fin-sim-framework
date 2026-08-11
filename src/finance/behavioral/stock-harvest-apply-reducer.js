@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { singleAssetTermFields } from '../holdings/holding-period.js';
 
 /**
  * StockHarvestApplyReducer — dedicated sell+rebuy path for tax-loss and tax-gain
@@ -76,6 +77,22 @@ export class StockHarvestApplyReducer extends Reducer {
     // the eligible slice floors at 0 rather than tracking a negative auGainLoss.
     const auDiscountableGain = held12mo ? Math.max(0, auGainLoss) : 0;
 
+    // Design 90 §9 step 2 — the signed, §1222-charactered split. This reducer has
+    // always emitted a signed `gain`; what it could not say was WHICH CHARACTER that
+    // gain or loss carried, and §1212(b)(1)(A)/(B) carries the two forward separately.
+    // Routed through the shared builder rather than reusing `held12mo` above: that
+    // test is the AU inclusive one, and reusing it would silently classify a
+    // harvest of a lot held exactly one year as US long-term when §1222(3) says short.
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      singleAssetTermFields({
+        proceeds: consume, usBasis: basisShare, auBasis: auBasisShare,
+        acquisitionMs:   purchasedMs,
+        // The AU clock restarts at the residency deemed acquisition where one was
+        // stamped (design 62 §4); falls back to the purchase date like every other path.
+        auAcquisitionMs: source.acquisitionDateByCountry?.AU ?? purchasedMs,
+        saleMs: asOfMs,
+      });
+
     // Reduce/remove source holding
     const afterSell = holdings.map(h => {
       if (h.id !== sourceHoldingId) return h;
@@ -135,6 +152,7 @@ export class StockHarvestApplyReducer extends Reducer {
         gain:        realizedGainLoss,
         auGain:      auGainLoss,
         auDiscountableGain,
+        usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         residency:   residency ?? 'US',
         proceeds:    consume,
         costBasis:   basisShare,

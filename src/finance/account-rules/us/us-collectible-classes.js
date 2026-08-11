@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { singleAssetTermFields } from '../../holdings/holding-period.js';
 
 /** Default US cash pool key when no saleDestinationAccount is provided. */
 const defaultUsCashKey = (state) =>
@@ -74,11 +75,28 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
       auIndexedGain = Math.max(0, salePrice - indexedBasis);
     }
 
+    // Design 90 §9 step 2 — the signed, §1222-charactered split. A collectible is held
+    // for investment, so §165(c)(2) allows a loss on it; unlike a residence there is no
+    // personal-use bar. (Whether the loss is deductible is a separate question from the
+    // 28% rate its GAIN attracts under §1(h)(4) — the rate applies to net collectible
+    // gain, while a collectible loss is an ordinary capital loss in the §1211 netting.)
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      singleAssetTermFields({
+        proceeds: salePrice, usBasis: costBasis, auBasis,
+        // Collectible carries no US acquisition date (only the per-country deemed one),
+        // so the US arm defaults to long-term — right for a held collectible, and the
+        // safe default besides. Same shape as the CompanyEquity disposal.
+        acquisitionMs:   null,
+        auAcquisitionMs: col?.acquisitionDateByCountry?.AU ?? null,
+        saleMs: state.currentPeriods?.US?.startMs ?? null,
+      });
+
     return this.newState(
       state,
       stateUpdate,
       // Design 76 Gap B: attribute the AU gain to the collectible's owner(s).
       [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
+        usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]
     );
   }
