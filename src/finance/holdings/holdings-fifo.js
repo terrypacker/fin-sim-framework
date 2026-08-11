@@ -74,18 +74,65 @@ import { buildHoldingsComparator } from './holdings-selection.js';
  * here: a caller that only needs the discount split (not indexation) may pass
  * `{ asOfMs, country }` with no `level` — the index factor then stays 1.
  *
+ * Signed holding-period split (design 90 §3): when `terms = { asOfMs, countries }` is
+ * supplied, `realizedGainByCountryAndTerm[country]` tallies the **signed** realized gain
+ * of the consumed non-collectible lots into `{ short, long }`, and
+ * `collectibleGainByCountryAndTerm` does the same for the GOLD slice. Both are `{}` when
+ * `terms` is absent, so every existing caller is byte-identical.
+ *
+ * This is deliberately NOT the same thing as `realizedDiscountableGainByCountry`, which
+ * stays exactly as it was:
+ *
+ *   - `realizedDiscountableGainByCountry` answers "how much of this gain earns the AU
+ *     Div 115 discount" — floored at zero, non-collectible only, gated on `indexation`.
+ *   - `realizedGainByCountryAndTerm` answers "what did this disposal realize, by
+ *     jurisdiction and by §1222 character" — signed, so a sale below basis is a LOSS
+ *     rather than a zero, and split short/long because §1212(b)(1)(A)/(B) carries the
+ *     two characters forward as separate pools.
+ *
+ * The long-term test is per country (`LONG_TERM_TEST`): AU's Div 115 "at least 12 months"
+ * is inclusive, the US §1222(3) "more than 1 year" is exclusive. Each country measures
+ * from its own deemed-acquisition date where one was stamped, else `purchaseDate`.
+ *
  * @param {Object}  [opts={}]
  * @param {{ level?: number, asOfMs: number, country: string }|null} [opts.indexation=null]
  * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, sleeveScore?: Function, lotStrategy?: string }|null} [opts.selection=null]
  *   The design-65 selection policy; null ⇒ FIFO (identical to the historic behavior).
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
+ * @param {{ asOfMs: number, countries: string[] }|null} [opts.terms=null]
+ *   Disposal date + the countries to characterize for; absent ⇒ no term tally.
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, realizedGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
-export function consumeHoldings(holdings, amount, { indexation = null, selection = null } = {}) {
+/**
+ * Per-country long-term holding-period test (design 90 §6). The two jurisdictions
+ * differ at the boundary and the difference is in the statutes, not a rounding choice:
+ *
+ *   AU — Div 115 grants the discount to an asset acquired "at least 12 months" before
+ *        the CGT event, so the test is inclusive.
+ *   US — IRC §1222(3) defines long-term as "held for **more than** 1 year", and
+ *        §1222(1) defines short-term as "not more than 1 year". Exclusive.
+ *
+ * A country with no entry defaults to the inclusive test, matching the AU behaviour
+ * this file has always had. Only the exact-boundary lot is affected either way, but
+ * the boundary is the one case a reader will check against the Act.
+ */
+const LONG_TERM_TEST = Object.freeze({
+  AU: (heldMs) => heldMs >= TWELVE_MONTHS_MS,
+  US: (heldMs) => heldMs >  TWELVE_MONTHS_MS,
+});
+
+/** `{ short: 0, long: 0 }` for each requested country. */
+function _emptyTermTally(countries) {
+  const out = {};
+  for (const c of countries) out[c] = { short: 0, long: 0 };
+  return out;
+}
+
+export function consumeHoldings(holdings, amount, { indexation = null, selection = null, terms = null } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, realizedGainByCountryAndTerm: {}, collectibleGainByCountryAndTerm: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -112,6 +159,20 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   // Collectible (gold) slice tallies for the reform country — un-indexed and indexed.
   const collectibleBasisByCountry        = idxCountry ? { [idxCountry]: 0 } : {};
   const collectibleIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
+  // SIGNED realized gain split by holding period, per country (design 90 §3). Distinct
+  // from `realizedDiscountableGainByCountry` above in three ways that all matter:
+  //   - it is SIGNED, so a disposal below basis produces a recorded loss instead of a
+  //     zero (the whole point — every consumer upstream floored at Math.max(0, …));
+  //   - it is split short/long rather than eligible/not, because §1212(b)(1)(A)/(B)
+  //     carries the two characters forward as SEPARATE pools;
+  //   - it is not gated on an indexation context, so a caller that wants a holding
+  //     period and no CPI indexation can ask for one.
+  // Opt-in via `terms`; absent ⇒ `{}` and this path costs nothing.
+  const termCountries = terms?.countries ?? [];
+  const termAsOfMs    = terms?.asOfMs ?? null;
+  const termsOn       = termCountries.length > 0 && termAsOfMs != null;
+  const realizedGainByCountryAndTerm    = termsOn ? _emptyTermTally(termCountries) : {};
+  const collectibleGainByCountryAndTerm = termsOn ? _emptyTermTally(termCountries) : {};
   const newHoldings = [];
 
   for (const h of sorted) {
@@ -174,6 +235,32 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
         collectibleIndexedBasisByCountry[idxCountry] += idxBasisShare * factor;
       }
     }
+    // Signed, per-country, per-character gain (design 90 §3.1). Independent of the
+    // indexation block above — same per-country basis, no CPI factor, no floor.
+    //
+    // Per-LOT signing is load-bearing rather than incidental: character is a property
+    // of the lot, not of the disposal. A draw that consumes one lot held 8 months at a
+    // loss and one held 8 years at a gain is a short-term loss AND a long-term gain,
+    // and §1212(b)(1) cannot be computed from their sum. Net later, never here.
+    //
+    // CASH contributes exactly 0 by construction — its basis share IS its proceeds
+    // (design 87 §11) — so it needs no special case, only this note explaining why the
+    // zero is correct rather than a missing branch.
+    if (termsOn) {
+      const isColl = isCollectibleAllocation(h.allocation);
+      const bucket = isColl ? collectibleGainByCountryAndTerm : realizedGainByCountryAndTerm;
+      for (const c of termCountries) {
+        const cb       = h.costBaseByCountry?.[c] ?? (h.costBasis ?? 0);
+        const cbShare  = isCash ? take : cb * fraction;
+        // The country's own acquisition date: the deemed one where a residency step-up
+        // stamped it (AU, s855-45), else the real purchase date. Only AU steps up
+        // (`residency-cost-base-policy.js`), so the US arm of this reads the true
+        // acquisition date today — and stays correct if another country ever does.
+        const acqTs    = h.acquisitionDateByCountry?.[c] ?? _purchaseTs(h);
+        const isLong   = (LONG_TERM_TEST[c] ?? LONG_TERM_TEST.AU)(termAsOfMs - acqTs);
+        bucket[c][isLong ? 'long' : 'short'] += take - cbShare;
+      }
+    }
     consumed      += take;
     remaining     -= take;
     const remainingMv = mv - take;
@@ -204,11 +291,19 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     collectibleBasisByCountry[idxCountry]        = +collectibleBasisByCountry[idxCountry].toFixed(2);
     collectibleIndexedBasisByCountry[idxCountry] = +collectibleIndexedBasisByCountry[idxCountry].toFixed(2);
   }
+  for (const c of termCountries) {
+    for (const term of ['short', 'long']) {
+      realizedGainByCountryAndTerm[c][term]    = +realizedGainByCountryAndTerm[c][term].toFixed(2);
+      collectibleGainByCountryAndTerm[c][term] = +collectibleGainByCountryAndTerm[c][term].toFixed(2);
+    }
+  }
   return {
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
     realizedIndexedBasisByCountry,
     realizedDiscountableGainByCountry,
+    realizedGainByCountryAndTerm,
+    collectibleGainByCountryAndTerm,
     collectibleProceeds: +collectibleProceeds.toFixed(2),
     collectibleBasis:    +collectibleBasis.toFixed(2),
     collectibleBasisByCountry,
