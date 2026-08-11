@@ -1,0 +1,295 @@
+CGT SUMMARY WORKSHEET FOR TAX RETURNS 2025
+All entities complete tables 1 to 8 of this worksheet. Where a step doesn’t apply to you, enter zero in the cells.
+
+PART 1         TOTAL 2024 –25 CAPITAL GAINS AND LOSSES
+
+TABLE 1                                          NON-ACTIVE ASSETS                                         ACTIVE ASSETS
+                                      Capital gains:   Capital gains:   Capital gains:    Capital gains:    Capital gains:   Capital gains:   Capital gains    Capital losses
+                                      indexation       discount         ‘other’           indexation        discount         ‘other’          total (add up
+                                      method           method           method            method            method           method           each row)
+  1     Shares in companies listed                                                                                                            1A               1K
+        on an Australian securities
+        exchange
+  2     Other shares                                                                                                                          1B               1L
+  3     Units in unit trusts listed                                                                                                           1C               1M
+        on an Australian securities
+        exchange
+  4     Other units                                                                                                                           1D               1N
+  5     Real estate situated in                                                                                                               1E               1O
+        Australia
+  6     Other real estate                                                                                                                     1F               1P
+  7     Amount of capital gains                                                                                                               1G
+        from a trust
+  8     Collectables                                                                                                                          1H               1Q
+        (see note below)
+  9     Other CGT assets and                                                                                                                  1I               1R
+        any other CGT events
+        (below in Part 2)
+ 10 Amount of capital gain                                                                                                                    1S
+        previously deferred under
+        transitional CGT relief for
+        superannuation funds
+ 11 Total 2024 –25 capital            A                B                C                 D                 E                F                1J               2A
+        gains and total 2024 –25
+                                                                                                                                              (Add 1A to 1S)   (Add 1K to 1R)
+        capital losses
+Note: If you have total capital losses from collectables (including prior income year losses) greater than your 2024 –25 capital gains from collectables,
+you need to complete table 9 of this worksheet.
+
+  n Add up each row to obtain the amounts at 1A to 1S. Add up each column to obtain the amounts at A to F and 1J and 2A.
+  n Transcribe the amounts at A to 1J in table 1 (above in Part 1) to the corresponding A to 1J in table 2 (below in Part 2).
+  n If you need to complete a CGT schedule, transcribe the amounts at 1A to 1I and 1S for capital gains and from 1K to 1R for
+      capital losses to the corresponding cells in item 1 of the schedule. For example, transcribe the figure from 1A in table 1 of this
+      worksheet to A Shares in companies listed on an Australian securities exchange in item 1 of the CGT schedule.
+PART 2        APPLYING CAPITAL LOSSES AGAINST 2024 –25 CAPITAL GAINS
+If you don’t have any 2024 –25 capital losses, record zero in all cells in row 2.
+When applying capital losses against capital gains from the 3 different methods, you can apply them in the order that gives you the best result.
+
+Part 2A       Applying 2024 –25 capital losses
+TABLE 2                                      NON-ACTIVE ASSETS                                          ACTIVE ASSETS
+                                  Capital gains:   Capital gains:   Capital gains:     Capital gains:    Capital gains:   Capital gains:   Total
+                                  indexation       discount         ‘other’            indexation        discount         ‘other’          (add up
+                                  method           method           method             method            method           method           each row)
+Calculating the net 2024 –25 capital gains after subtracting 2024 –25 capital losses
+  1     Total 2024 –25            A                B                C                  D                 E                F                1J
+        capital gains
+                                  less             less             less               less              less             less             less
+
+  2     Total 2024 –25                                                                                                                     2B
+        capital losses applied
+                                  =                =                =                  =                 =                =                =
+  3     2024 –25 capital gains    G                H                I                  J                 K                L                M
+        less the 2024 –25
+        capital losses applied
+
+
+  n Write in row 2 your entity’s 2024 –25 capital losses applied in the order you have chosen
+      (calculated using your 2024 –25 capital losses from 2A in table 1).
+  n In applying 2024 –25 capital losses, the amounts in row 2 can’t exceed the amounts
+    in row 1 and the amount at 2B can’t exceed the amount at 2A in table 1. If you have
+    total 2024 –25 capital losses (2A of table 1) greater than total 2024 –25 capital gains
+    (1J of table 1), the unapplied losses are carried forward to 2025 –26.
+  n If you have capital losses from collectables you can only apply those to your capital
+    gains from collectables. If your 2024 –25 capital losses from collectables (1Q of table 1)
+    are greater than your 2024 –25 capital gains from collectables (1H of table 1) you need to
+    reduce them to the amount of the gain when calculating the amounts in row 2. Unapplied
+    losses from collectables are carried forward to 2025 –26. Make a note of this amount at Q
+    in table 9.
+  n Transfer the total amount of unapplied 2024 –25 capital losses (other than losses from
+    collectables) to K in table 5.
+  n Calculate and transfer the amounts at G to M in table 2 and transcribe to row 1 of table 3.
+  n If you need to complete a CGT schedule, transcribe the amount at 2B to the corresponding
+    cell in item 2 of the CGT schedule.
+Part 2B      Applying prior year net capital losses
+If you don’t have any have prior year net capital losses record zero in all cells in row 2.
+When applying capital losses against capital gains from the 3 different methods, you can apply them in the order that gives you the best result.
+
+TABLE 3A
+Prior year net capital losses
+Less any adjustment for commercial debts forgiven
+Prior year net capital losses after adjustment       Z1
+
+
+TABLE 3                                          NON-ACTIVE ASSETS                                      ACTIVE ASSETS
+                                    Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                    indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                    method           method           method           method            method           method           each row)
+  1   Total 2024 –25 capital        G                H                I                J                 K                L                M
+      gains less total 2024 –25
+      capital losses                less             less             less             less              less             less             less
+
+  2   Total prior year net                                                                                                                 2C
+      capital losses
+                                    =                =                =                =                 =                =                =
+  3   Net 2024 –25 capital gains N                   O                P                Q                 R                S                T
+      after subtracting total
+      2024 –25 capital losses
+      and total prior income
+      year net capital losses
+
+
+  n Write in row 2 your entity’s prior year net capital losses applied in the order you have chosen (calculated
+    using your Prior year net capital losses after adjustment from Z1 in table 3A).
+  n In applying prior year net capital losses, the amounts in row 2 can’t exceed the amounts in row 1 and the
+    amount at 2C can’t exceed the amount at Z1 of table 3A. If you have prior year net capital losses (Z1)
+    greater than 2024 –25 capital gains remaining after applying 2024 –25 capital losses (M), the unapplied
+    losses are carried forward to 2025 –26 at L in table 5.
+  n If you have prior year capital losses from collectables you can only apply those to your capital gains
+    from collectables. If your prior year capital losses from collectables are greater than your 2024 –25 capital
+    gains from collectables remaining after applying 2024 –25 capital losses from collectables, you need to
+    reduce them to the amount of the gain when calculating the amounts in row 2. Any unapplied prior year
+    net capital losses from collectables are carried forward to 2025 –26. Record this amount at R in table 9.
+  n Transcribe any unapplied prior year net capital losses (other than losses from collectables) to L in table 5.
+  n Calculate the amounts at N to T and transcribe to row 1 of table 4.
+  n If you need to complete a CGT schedule, transfer the amount at 2C to the corresponding cell in item 2
+    of the schedule.
+Part 2C	Apply net capital losses transferred (only for transfers from or to a foreign bank branch or permanent establishment
+         of a foreign financial entity)
+Transfer of net capital losses is for companies only. All other entities record zero in all cells in row 2.
+
+TABLE 4                                         NON-ACTIVE ASSETS                                         ACTIVE ASSETS
+                                     Capital gains:   Capital gains:   Capital gains:    Capital gains:       Capital gains:   Capital gains:   Total
+                                     indexation       discount         ‘other’           indexation           discount         ‘other’          (add up
+                                     method           method           method            method               method           method           each row)
+  1     Total 2024 –25 capital       N                O                P                 Q                    R                S                T
+        gains after applying total
+        2024 –25 capital losses
+        and total prior year net
+        capital losses               less             less             less              less                 less             less             less
+  2     Net 2024 –25 capital                                                                                                                    2D
+        losses transferred
+        in applied                   =                =                =                 =                    =                =                =
+
+  3     Total 2024 –25 capital       U                V                W                 X                    Y                Z                A
+        gains after applying total
+        2024 –25 capital losses,
+        total prior year net capital
+        losses and total net capital
+        losses transferred in.
+
+
+  n Write the amount of net capital losses transferred in your entity chooses to apply against
+      capital gains in row 2.
+  n In applying net capital losses transferred in, the amount at 2D can’t exceed the amount
+    at T.
+  n Calculate the amounts at U to A and transcribe from table 4 to row 1 in table 6.
+  n If you need to complete a CGT schedule, transfer the amount at 2D to the corresponding
+    cell in item 2 of the schedule.
+PART 3        CALCULATING UNAPPLIED NET CAPITAL LOSSES CARRIED FORWARD
+If you don’t have any capital losses to carry forward, go to Part 4.
+For the purposes of calculating unapplied losses carried forward the 3 methods of calculating capital gains are irrelevant.
+Only the total unapplied losses are needed.
+
+TABLE 5                                     NON-ACTIVE ASSETS                                        ACTIVE ASSETS
+                                 Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                 indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                 method           method           method           method            method           method           each row)
+  1     Unapplied 2024 –25                                                                                                              K
+        capital losses
+                                                                                                                                        plus
+
+  2     Unapplied prior year                                                                                                            L
+        capital losses
+                                                                                                                                        =
+  3     Other net capital                                                                                                               3B
+        losses carried forward
+        to 2025 –26
+
+
+  n Write the sum of K and L at 3B.
+  n If you need to complete a CGT schedule, transcribe the amount at 3B to B in item 3
+      of the schedule.
+PART 4         CGT DISCOUNT ON CAPITAL GAINS
+To be completed by individuals, trusts and funds only. Companies, go to Part 5.
+Calculate the CGT discount applying the discount percentage – 50% for individuals and trusts (up to 60% for eligible individuals only who disposed of real estate
+situated in Australia after 30 December 2020 that was an investment in affordable housing), and 33 1/3 % for complying superannuation entities (fund tax return) –
+to the capital gains at V and Y. Write the amount of the discount in row 2, then deduct the discount amounts from V and Y to calculate the amounts at C and F.
+
+TABLE 6                                           NON-ACTIVE ASSETS                                        ACTIVE ASSETS
+                                       Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                       indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                       method           method           method           method            method           method           each row)
+  1     Total 2024 –25 capital       U                  V                W                X                 Y                Z                A
+        gains after applying total
+        2024 –25 capital losses
+        total prior year net capital
+        losses and total net capital
+        losses transferred in.                          less                                                less                              less
+  2     Total CGT discount                                                                                                                    4A
+        applied
+                                                        =                                                   =                                 =
+  3     2024 –25 capital gains         B                C                D                E                 F                G                H
+        after applying total capital
+        losses and CGT discount
+
+
+  n Calculate the CGT discount in row 2 that applies to the capital gains at V and Y.
+  n Write the amount of the CGT discount in row 2.
+  n Calculate the amounts at B to H and transcribe to row 1 in table 8.
+  n If you need to complete a CGT schedule, transcribe the amount at 4A to A in item 4
+      of the schedule.
+PART 5        CGT SMALL BUSINESS CONCESSIONS
+This part doesn’t include the small business 15-year exemption which you show separately at part 8 of the CGT schedule (if a schedule is required).
+This part should be completed by individuals, companies, trusts and funds (where appropriate).
+Apply one or more of the concessions to which you’re entitled.
+
+TABLE 7                                        NON-ACTIVE ASSETS                                        ACTIVE ASSETS
+                                    Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                    indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                    method           method           method           method            method           method           each row)
+  1     Small business active                                                                                                              5A
+        asset reduction
+  2     Small business retirement                                                                                                          5B
+        exemption
+  3     Small business rollover                                                                                                            5C
+  4     Total small business                                                           I                 J                K                L
+        CGT concessions
+
+
+  n Write the amount of your entity’s small business 50% active asset reduction in row 1.
+  n Write the amount of your entity’s small business retirement exemption in row 2.
+  n Write the amount of your entity’s small business rollover in row 3.
+  n Write the total amount of the small business CGT concessions your entity is claiming at
+      I to L and transcribe those amounts to I to L in table 8.
+  n If you need to complete a CGT schedule, transcribe the amounts 5A, 5B and 5C to the
+      corresponding cells in item 5 of the schedule.
+PART 6         NET CAPITAL GAIN CALCULATION
+
+TABLE 8                                           NON-ACTIVE ASSETS                                        ACTIVE ASSETS
+                                       Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                       indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                       method           method           method           method            method           method           each row)
+  1     2024 –25 capital gains         B                C                D                E                 F                G                H
+        after applying total capital
+        losses and CGT discount                                                           less              less             less             less
+
+  2     Total small business CGT                                                          I                 J                K                L
+        concessions
+                                                                                          less              less             less             less
+                                                                                          =                 =                =                =
+  3     Net capital gain                                                                                                                      6A
+
+
+  n Calculate the amount of your entity’s net capital gain by taking the amounts in row 2
+      away from the amounts in row 1.
+  n Sum the amounts in row 3 to calculate your entity’s net capital gain at 6A.
+  n If you need to complete a CGT schedule, transcribe the amount at 6A to A at item 6
+      of the schedule.
+
+
+PART 7         EARNOUT ARRANGEMENTS
+You don’t have to do anything at part 7 of the CGT summary worksheet. For instructions on how to complete item 7 of the CGT schedule,
+see Step 4 – Capital gains tax schedule and instructions 2025.
+
+PART 8         OTHER CGT INFORMATION REQUIRED (IF APPLICABLE)
+You don’t have to do anything at part 8 of the CGT summary worksheet. For instructions on how to complete item 8 of the CGT schedule,
+see Step 4 – Capital gains tax schedule and instructions 2025.
+PART 9         CALCULATING NET CAPITAL LOSSES FROM COLLECTABLES
+               CARRIED FORWARD TO 2025 –26
+For the purposes of calculating unapplied losses carried forward the 3 methods of calculating capital gains are irrelevant.
+Only the total unapplied losses are needed.
+Complete this part only if you have unapplied capital losses from collectables from part 2.
+
+TABLE 9                                       NON-ACTIVE ASSETS                                        ACTIVE ASSETS
+                                   Capital gains:   Capital gains:   Capital gains:   Capital gains:    Capital gains:   Capital gains:   Total
+                                   indexation       discount         ‘other’          indexation        discount         ‘other’          (add up
+                                   method           method           method           method            method           method           each row)
+  1     Unapplied 2024 –25                                                                                                                Q
+        capital losses from
+        collectables                                                                                                                      plus
+
+  2     Unapplied prior year                                                                                                              R
+        net capital losses from
+        collectables                                                                                                                      =
+
+  3     Net capital losses                                                                                                                3A
+        from collectables
+        carried forward to
+        2025 –26
+
+
+  n Using the amounts in Q and R transcribed from parts 2A and 2B, calculate the amount
+      in 3A.
+  n If you need to complete a CGT schedule, transcribe the amount at 3A to the corresponding
+      cell in item 3 of the schedule.
+

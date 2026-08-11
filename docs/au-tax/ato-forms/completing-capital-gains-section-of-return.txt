@@ -1,0 +1,988 @@
+Introduction                                               96   Step 6      Applying net capital losses
+Step 1       Types of CGT assets and CGT events            96               from earlier years                             98
+
+Step 2       Calculating your current year                      Step 7      Applying the CGT discount                      99
+             capital gain or capital loss for                   Step 8      Applying the small business
+             each CGT asset or CGT event                   96               CGT concessions                                99
+Step 3       Total current year capital gains              97   Step 9      Working out your net capital gain              99
+Step 4       Capital losses                                97   Step 10     Capital losses carried forward to later
+Step 5       Applying current year capital losses          97               income years                                   99
+
+
+
+
+COMPLETING THE CAPITAL
+GAINS SECTION OF YOUR
+TAX RETURN
+
+
+
+
+                                                                                       B
+– item 17 of the tax return for
+  individuals (supplementary section)
+– item 9 of the tax return for retirees
+
+
+
+
+Read this ﬁrst
+Are you an individual?                                          Is your entity a company, trust or fund?
+If you are completing a tax return on behalf of an individual   If the tax return is for a company, trust or fund, go to
+(rather than an entity), read this part of the guide.           part C of this guide.
+If you need help completing the:
+■ capital gain or capital loss worksheet – go to step 1
+   of part C (ignore the word ‘entity’)
+■ CGT summary worksheet – go to steps 2 and 3 of
+   part C.
+INTRODUCTION                                                          You need to separate the records of your CGT events into
+Read part B if you are an individual and a capital gains              the following three categories:
+tax (CGT) event has happened to you in 2005–06 or you                 ■ those relating to collectables (for example, jewellery)
+received a distribution from a trust (including a managed             ■ those relating to personal use assets (for example, a boat
+fund) that included a net capital gain.                                 you use for recreation)
+                                                                      ■ other CGT assets or CGT events, including distributions
+If you have sold only a few shares or units, or have a
+                                                                        of capital gains from managed funds.
+managed fund distribution, you may find it easier to use
+the Personal investors guide to capital gains tax 2006.
+                                                                      STEP 2
+The steps that follow explain how to calculate your net               Calculating your current year capital gain or
+capital gain or net capital loss for 2005–06 and complete
+                                                                      capital loss for each CGT asset or CGT event
+item 17 Capital gains on your Tax return for individuals
+(supplementary section) 2006 – or item 9 if you use the               Calculate whether you have made a capital gain or capital
+Tax return for retirees 2006. Note: You cannot use the tax            loss for each CGT event that has happened during the
+return for retirees if you had a distribution from a managed          year. The Capital gain or capital loss worksheet at
+fund during the year.                                                 the back of this guide can help you work this out. Do
+                                                                      not include capital gains that are disregarded, deferred
+Individuals, including individual partners in a partnership,          or reduced, or capital losses that are disregarded – see
+who lodge using a paper tax return are not required to                Exemptions and rollovers on page 18. If you are a
+complete a CGT schedule.                                              small business owner and qualify for one or more of the
+Chapter 2 in part A explains how to calculate a capital               following small business CGT concessions: the 50% active
+gain or capital loss for each CGT event or asset using the            asset reduction, small business rollover relief or the small
+Capital gain or capital loss worksheet that you can tear              business retirement exemption – you include the relevant
+out from the back of this guide. For most individuals, this           capital gains at this step. You apply the concessions to the
+worksheet is all you will need to work out what needs to              amount of any relevant capital gains remaining after step 7.
+be included at item 17 on your tax return (supplementary              In calculating your capital gain, you will use one of the
+section) – or item 9 if you use the tax return for retirees.          following three methods for each asset:
+Make copies of the worksheet if you need more than one. If            ■ indexation method
+you need help completing the Capital gain or capital loss             ■ discount method, or
+worksheet, read step 1 in part C (ignore the word ‘entity’).          ■ ‘other’ method.
+If you have a number of the Capital gain or capital loss              See chapter 2 in part A for a full explanation of these
+worksheets because several CGT events happened to                     methods and how to use them to calculate your capital
+you, you may wish to use the CGT summary worksheet                    gain or capital loss for each CGT event.
+(also at the back of this guide) to help you calculate your
+net capital gain or net capital loss. Read steps 2 and 3 in           For a CGT event that happens after 11.45am (by legal time
+part C of this guide (ignoring the word ‘entity’) to find out         in the ACT) on 21 September 1999 to a CGT asset that
+how to complete the summary worksheet. Then complete                  you acquired at or before that time, you can choose to use
+item 17 on your tax return (supplementary section) – or               either the indexation or the discount method to calculate
+                                                                      your capital gain if you have owned the asset for at least
+item 9 if you use the tax return for retirees.
+                                                                      12 months. If you bought and sold your asset within
+                                                                      12 months, you must use the ‘other’ method to calculate
+          NEW TERMS                                                   your capital gain.
+     We may use some terms that are new to you. These                 If you use the discount method, do not apply the discount
+     words are printed in red the first time they are used            percentage until you have applied current year capital
+     and explained in Definitions on page 132. Generally              losses and unapplied net capital losses from earlier years.
+     they are also explained in detail in the section where
+                                                                      You also need to work out the amount of any capital gains
+     they first appear.
+                                                                      that you are taken to have made as part of a distribution
+                                                                      from a trust. You must use the same method the trustee
+                                                                      used in calculating the amount of the capital gain. For more
+STEP 1
+                                                                      information, see chapter 4 in part A.
+Types of CGT assets and CGT events
+Certain capital gains and capital losses (that is, those from
+collectables and personal use assets) are treated differently                  CONCESSIONS THAT MAY APPLY
+when calculating your net capital gain or net capital loss.              There are special rules if a trust’s net capital gain was
+See chapter 1 in part A for explanations of these assets.                reduced by the CGT discount or by applying the small
+In particular you should note that you disregard capital                 business 50% active asset reduction, or both. The trust
+losses from personal use assets and do not take them into                should advise you if it has claimed either (or both) of
+account when working out your net capital gain. You can                  these concessions as you will need to adjust the amount
+only use capital losses from collectables to reduce capital              of the net capital gain to be included in your total capital
+gains from collectables.                                                 gains (see chapter 4 in part A for more information).
+
+
+96                                                            www.ato.gov.au                                GUIDE TO CAPITAL GAINS TAX 2006
+STEP 3
+Total current year capital gains                                     EXAMPLE: Sale of shares and collectables
+If you do not have any capital gains from collectables, add
+up all your capital gains from step 2 and show this amount              Kathleen sold some assets during the year and has the
+                                                                        following capital gains and capital losses for 2005–06:
+at H Total current year capital gains.
+If you have a capital gain from collectables, deduct any                Capital gain on the sale of 1000 shares for $6
+capital losses from collectables (including unapplied net               each on 17 December 2005
+capital losses from earlier years from collectables). Do not            Kathleen bought these shares on 17 November 1998
+deduct capital losses from other capital gains at this stage.           and each has a cost base of $3 (including incidental
+Any capital gain remaining is added to all your other capital           costs of acquisition and disposal).
+gains from step 2. Show the total amount at H item 17 on                 Capital gain = $6,000 – $3,000 = $3,000
+your tax return (supplementary section) – or at item 9 if you
+                                                                        Kathleen chooses to calculate her capital gain using the
+use the tax return for retirees.
+                                                                        discount method.
+If you received (or are entitled to receive) a distribution
+from a trust that includes a net capital gain, you also need            Capital gain on the sale of 130 shares for $8
+to include this amount here in your total capital gains. Do             each on 27 February 2006
+not include this amount as a distribution from the trust                Kathleen bought these shares on 10 October 2005 and
+at item 12 Partnerships and trusts on your tax return                   each has a cost base of $4 (including incidental costs of
+(supplementary section).                                                acquisition and disposal). As the asset was bought and
+If your capital gains from collectables were reduced to zero            sold within 12 months, Kathleen must use the ‘other’
+when you applied your losses from collectables – and you                method to calculate her capital gain from these shares:
+still have capital losses from collectables remaining – make             130 ✕ $8 = $1,040 – (130 ✕ $4) = $520
+a note of this amount.
+                                                                        Capital loss on the sale of jewellery for $1,000
+This capital loss can be carried forward to future years and            on 1 April 2006
+will be recorded at V Net capital losses carried forward
+to later income years (see step 9).                                     Kathleen bought this jewellery for $1,500 and sold it six
+                                                                        months later for $1,000.
+STEP 4                                                                  She calculates her capital loss as follows:
+Capital losses                                                           $1,000 – $1,500 = $500 capital loss
+If you have no current year capital losses or unapplied net             Kathleen takes the following steps to complete item 17
+capital losses from earlier years, go to step 7. Otherwise,             on her tax return (supplementary section) – or item 9 if
+read on.                                                                she uses the tax return for retirees.
+From your Capital gain or capital loss worksheets, add                  Firstly, Kathleen shows her total current year capital
+up all your capital losses for 2005–06 and make a note of               gains of $3,520 ($3,000 + $520) from her shares at H .
+this amount. Remember that you do not include:                          Her total current year capital gains is the amount before
+■ capital losses from personal use assets                               deducting any capital losses or applying the CGT
+■ capital losses from collectables, or                                  discount. If Kathleen had made a net capital gain on
+■ capital losses that are disregarded (for example, those               her collectables (her jewellery), she would also have
+  from assets acquired before 20 September 1985) – see                  included it here.
+  Exemptions on page 18.                                                Next, Kathleen notes her capital loss from collectables
+If you have a current year capital loss, go to step 5.                  on her Capital gain or capital loss worksheet or on
+                                                                        a separate piece of paper. Although she made a capital
+If you have only unapplied net capital losses from earlier
+                                                                        loss from collectables, she cannot reduce her other
+years and no current year capital gains, go to step 6.
+                                                                        capital gains by this amount. However, she can carry
+                                                                        this amount over so that if she makes a capital gain
+STEP 5                                                                  from collectables in the future, she can deduct this
+Applying current year capital losses                                    capital loss from her capital gain on a later tax return.
+You must apply your current year capital losses from step 4             If Kathleen has no other capital losses from the current
+against (that is, deducted from) any capital gains you made             year or earlier years, she will now show the amount of
+during the year to determine your net capital gain or net               $500 at V Net capital losses carried forward to later
+capital loss.                                                           income years.
+                                                                        Kathleen still has to complete A Net capital gain.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                              www.ato.gov.au                                                         97
+                                                                    Apply your current year capital losses against your current
+EXAMPLE: Capital loss on the sale of shares                         year capital gains and make a note of any capital gains
+                                                                    remaining. If you have current year capital losses that can
+     Using the facts from the previous example, we will also        be applied this year they must be applied here. You cannot
+     assume that Kathleen has the following to consider:            choose to defer to a later year any amount that can be
+     Capital loss on the sale of 600 shares for $3 each             applied this year.
+     on 25 June 2006                                                If your total capital losses for the year are more than your
+     Kathleen had bought these shares on 10 October 2005            total capital gains, you will need to keep a record of the
+     and each has a reduced cost base of $4 (including              difference. This amount – your net capital loss – is carried
+     incidental costs of acquisition and disposal).                 over and used to reduce your future capital gains. There is
+                                                                    no time limit on how long you can carry forward your net
+     Reduced cost base              600 ✕ $4 =      $2,400          capital loss. If you have reduced your capital gains to zero,
+     Capital proceeds               600 ✕ $3 =      $1,800          do not put anything at A Net capital gain.
+     Capital loss                                     $600
+                                                                    STEP 6
+                                                                    Applying net capital losses from earlier years
+     Kathleen now has a $600 loss she can use to deduct             If you do not have any unapplied net capital losses from
+     from her capital gains. From the earlier example, we           earlier years, go to step 7. Otherwise, read on.
+     know Kathleen has a $3,000 capital gain calculated
+     using the discount method.                                     You can further reduce your current year capital gains by
+                                                                    your unapplied net capital losses from earlier years.
+     She has another capital gain of $520 that she calculated
+     using the ‘other’ method. Kathleen chooses to deduct           You must apply unapplied net capital losses from earlier
+     the first $520 of her capital loss from the capital gain       years against capital gains in the order you made them
+     calculated using the ‘other’ method and to deduct the          (for example, use net capital losses from 1998–99 before
+     remaining $80 from the capital gain calculated using           you use any net capital losses from 1999–2000). You can
+     the discount method. Working this way gives her the            then apply these capital losses against your capital gains in
+     best result:                                                   the manner that gives you the best result. Again, for most
+                                                                    people the order that usually gives the greatest benefit and
+     ‘Other’ method capital gain                     $520           the smallest net capital gain is to apply the capital losses
+     Capital loss of                                 $520           against capital gains calculated using the:
+                                                        $0          1 ‘other’ method
+                                                                    2 indexation method
+     Discount method capital gain                   $3,000
+                                                                    3 discount method.
+     less capital loss of ($600 – $520)                $80
+                                                                    Reduce your remaining current year capital gains by any
+                                                    $2,920          unapplied net capital losses from earlier years and make a
+     Kathleen makes a note that she has capital gains of            note of any capital gains remaining. If you have unapplied
+     $2,920 calculated using the discount method.                   net capital losses from earlier years that can be applied this
+                                                                    year, they must be applied here. You cannot choose to defer
+When applying your current year capital losses, you                 to a later year any amount that can be applied this year.
+can choose the method that gives you the best result to             You will need to keep a record of any unapplied net capital
+reduce your current year capital gains. While you will need         losses from earlier years. You can continue to carry over
+to consider your own situation, for most people the order           these amounts and use them to reduce your future capital
+that usually gives the greatest benefit and the smallest net        gains. There is no time limit on how long you can carry over
+capital gain is to apply the capital losses against capital         your net capital losses. You record these at V Net capital
+gains calculated using the:                                         losses carried forward to later income years (see step
+1 ‘other’ method                                                    9). If you have reduced your capital gains to zero, do not
+2 indexation method                                                 put anything at A Net capital gain.
+3 discount method.
+
+
+
+
+98                                                          www.ato.gov.au                              GUIDE TO CAPITAL GAINS TAX 2006
+                                                                   STEP 8
+EXAMPLE: Unapplied net capital losses                              Applying the small business CGT concessions
+from earlier years
+                                                                   If you are a small business owner, you may qualify for one
+                                                                   or more of the following small business CGT concessions:
+  Following on from our earlier example, let us also now           the 50% active asset reduction, small business rollover relief
+  assume that Kathleen has the following to consider:              or the small business retirement exemption. You can apply
+  Kathleen has unapplied net capital losses from earlier           these concessions now to the amount of any relevant capital
+  years of $400 that are not from collectables or personal         gains remaining after step 7. You may apply the concessions
+  use assets.                                                      to capital gains calculated using any of the three methods.
+  In our example so far, Kathleen applied her current year              For more information, see the Guide to capital gains
+  capital loss and had $2,920 of capital gains calculated          tax concessions for small business.
+  using the discount method remaining.
+  Taking this example further, Kathleen would now also             STEP 9
+  deduct the unapplied net capital losses of $400 from             Working out your net capital gain
+  earlier years from her capital gain of $2,920 calculated         The amount of your remaining capital gains becomes your
+  using the discount method:                                       net capital gain, which you show at A .
+   $2,920 – $400 = $2,520                                          It represents the amount you have shown at H reduced in
+  This leaves $2,520 of capital gains calculated using the         accordance with:
+  discount method.                                                 ■ step 5 – current year capital losses
+                                                                   ■ step 6 – unapplied net capital losses from earlier years
+  Kathleen must use all current year capital losses and all
+                                                                   ■ step 7 – CGT discount, and/or
+  the unapplied net capital losses from earlier years before
+  applying the CGT discount of 50%. In this example,               ■ step 8 – small business CGT concessions.
+  the amount at V is still $500 because this is what she           If you have capital losses that have reduced your capital
+  will carry forward as losses from collectables to future         gains to zero, do not put anything at A . If you have any
+  income years.                                                    capital losses remaining after reducing your capital gains,
+                                                                   you can carry these forward to future income years (see
+                                                                   step 10). Again do not include losses from:
+STEP 7                                                             ■ assets you acquired before 20 September 1985
+Applying the CGT discount
+                                                                   ■ personal use assets
+You can now reduce any remaining current year capital              ■ collectables, or
+gains calculated using the discount method by the
+                                                                   ■ other losses that are disregarded.
+discount percentage (50% for individuals).
+You cannot apply the discount to capital gains calculated
+using the indexation method or the ‘other’ method.                 EXAMPLE: Net capital gain – A
+
+
+EXAMPLE: Total capital gains calculated                               Kathleen shows $1,260 at A Net capital gain item 17
+using the discount method                                             on her tax return (supplementary section) – or item 9 if
+                                                                      she uses the tax return for retirees.
+  From our earlier example, we know Kathleen had
+  capital gains of $2,520 calculated using the discount            STEP 10
+  method after applying relevant capital losses. She works         Capital losses carried forward to later
+  out her total capital gains by multiplying her capital gain      income years
+  by the CGT discount of 50%:
+                                                                   Your net capital losses amount to be carried forward is
+   $2,520 ✕ 50% = $1,260                                           the total of:
+                                                                   ■ any unapplied current year net capital loss from step 5
+                                                                   ■ any unapplied net capital losses from earlier years from
+                                                                     step 6 and
+                                                                   ■ any capital losses from collectables to be applied in
+                                                                     future income years from step 3. You will need to keep
+                                                                     a separate record of unapplied net capital losses from
+                                                                     collectables because you can only use these to reduce
+                                                                     capital gains from collectables in later income years.
+                                                                     There is no time limit on how long you can carry over
+                                                                     the net capital losses.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                            www.ato.gov.au                                                        99
+Show this amount (if any) at V item 17 on your tax return
+(supplementary section) – or item 9 if you are using the tax
+return for retirees. Remember to deduct these losses from
+any capital gains in future income years.
+
+EXAMPLE: Net capital losses to be
+carried forward – V
+
+  Kathleen has deducted all her current year capital
+  losses (except those from collectables) and her net
+  capital losses from earlier years from her capital gains
+  in the order that gave her the best result. This means
+  she will only have capital losses from collectables to
+  carry forward to a later income year. Kathleen shows
+  $500 at V item 17 on her tax return (supplementary
+  section) – or item 9 if she uses the tax return for retirees.
+  Kathleen must make a note of this capital loss for
+  next year, as she did with the unapplied net capital
+  losses from earlier years that she used this year. She
+  must also note that her capital losses this year are
+  capital losses from collectables, as she will only be able
+  to deduct them against capital gains from collectables
+  in a future year.
+
+
+
+
+100                                                         www.ato.gov.au   GUIDE TO CAPITAL GAINS TAX 2006
+Introduction                                             102
+Steps you need to take                                   102
+Step 1   How to complete the capital gain or
+         capital loss worksheet for each CGT event 103
+Step 2   How to complete the CGT
+         summary worksheet                               103
+Step 3   How to complete the capital gains
+         item on your entity’s tax return                109
+Step 4   How to complete the CGT schedule                109
+
+
+
+
+INSTRUCTIONS FOR
+COMPANIES, TRUSTS
+AND FUNDS (ENTITIES)
+
+
+
+
+                                                                                  C
+Individuals: if you use the worksheets and
+need help completing them, read steps 1,
+2 and 3 in this part (ignore the word ‘entity’)
+
+
+
+
+Read this ﬁrst
+Are you an individual?                                         Do you expect your entity’s total capital
+If you are completing a tax return on behalf of an             gains or total capital losses for the 2005–06
+individual (rather than an entity), read part B.               income year to be $10,000 or less?
+If you need help completing the:                               YES Work through steps 1 to 3.
+■ capital gain or capital loss worksheet – read step 1
+                                                               NO Work through steps 1 to 4. Step 4 will show
+   of this part (ignoring the word ‘entity’)                       you how to complete the Capital gains tax
+                                                                   (CGT) schedule 2006.
+■ CGT summary worksheet – read steps 2 and 3
+   in this part.
+
+Is your entity a company, trust or fund?
+Read this part.
+INTRODUCTION                                                       CGT schedule
+The instructions in this part are designed to help                 Your entity must complete this schedule for the 2005–06
+companies, trusts and funds (your entity) to calculate a           income year if the:
+capital gain or capital loss and to complete the capital           ■ total current year capital gains are greater than $10,000,
+gains items on the relevant tax return:                              or
+■ Company tax return 2006 – item 7                                 ■ total current year capital losses are greater than $10,000.
+■ Trust tax return 2006 – item 18, or
+                                                                   If your entity is required to complete a CGT schedule, you
+■ Fund income tax and regulatory return 2006 – item 9a.
+                                                                   must attach it to your entity’s 2006 tax return.
+Funds include superannuation funds, approved deposit
+funds and pooled superannuation trusts.
+                                                                            CONSOLIDATED GROUPS
+The labels to complete at these items are:                            If a group consolidates during the income year, the
+G Did you have a CGT event during the year?                           head company must lodge a CGT schedule if the total
+A Net capital gain                                                    capital gains or total capital losses that it makes – as
+                                                                      head company of the consolidated group and while
+You will also need to complete V Net capital losses                   not a member of a consolidated group – are greater
+carried forward to later income years at the Losses                   than $10,000.
+information item on your entity’s tax return.
+                                                                      An entity that has joined a consolidated group or
+The relevant item number will be:                                     groups during the year of income as a subsidiary
+■ Company tax return 2006 – item 10                                   member must lodge a CGT schedule covering any
+■ Trust tax return 2006 – item 24                                     periods of non-membership if the entity satisfies the
+■ Fund income tax and regulatory return 2006 – item 10.
+                                                                      requirements for lodgment of that schedule.
+                                                                      Detailed information on the operation of consolidation
+                                                                      is available on our website or phone the Tax Reform
+       NEW TERMS                                                      Infoline on 13 24 78.
+  We may use some terms that are new to you. These
+  words are printed in red the first time they are used
+  and explained in Definitions on page 132. Generally              STEPS YOU NEED TO TAKE
+  they are also explained in detail in the section where
+                                                                   The completion of the CGT labels on your entity’s 2006 tax
+  they first appear.
+                                                                   return involves a three-step process (for entities with capital
+       ENTITY                                                      gains or capital losses under the $10,000 threshold) or a
+  The term ‘entity’ is used to describe a company                  four-step process (for entities with capital gains or capital
+  (including a head company of a consolidated group),              losses over the $10,000 threshold):
+  a trust and a fund in this part of the guide.                    STEP 1 Calculate the capital gain or capital loss for each
+                                                                   CGT event that happens during the 2005–06 income year
+                                                                   using the Capital gain or capital loss worksheet.
+Worksheets
+The worksheets provided at the back of this guide are the:         STEP 2 Calculate the net capital gain for the 2005–06
+                                                                   income year or net capital losses carried forward to later
+■ capital gain or capital loss worksheet (to calculate the
+                                                                   income years using the CGT summary worksheet.
+  capital gain or capital loss from each CGT event)
+■ CGT summary worksheet (to calculate the net capital              STEP 3 Complete the capital gains item on your entity’s
+  gain for the 2005–06 income year or net capital losses           tax return.
+  carried forward to later income years and to complete            STEP 4 If required, complete a CGT schedule.
+  the CGT labels on the 2006 tax return).
+You can tear out the worksheets and complete them as
+you work through this part.
+The worksheets are optional and your entity may prefer to
+use a different worksheet or a computer-based alternative.
+We have used these worksheets throughout this part of the
+guide as examples to help you complete the capital gains
+item on your entity’s tax return, and a Capital gains tax
+(CGT) schedule 2006 if this is required.
+
+
+
+
+102                                                        www.ato.gov.au                               GUIDE TO CAPITAL GAINS TAX 2006
+STEP 1                                                              STEP 2
+How to complete the capital gain or                                 How to complete the CGT summary worksheet
+capital loss worksheet for each CGT event                           You use the CGT summary worksheet to calculate your
+The Capital gain or capital loss worksheet calculates               entity’s net capital gain for the 2005–06 income year or net
+a capital gain or capital loss for each separate CGT event.         capital losses carried forward to later income years. It also
+Do not attach completed worksheets to your entity’s 2006            provides the information you need to complete the capital
+tax return – these are your working papers and should be            gains item on your entity’s tax return and, if required, the
+kept with your entity’s tax records.                                CGT schedule.
+There are a few things to remember when you are using               You should include on this worksheet any capital gain your
+the worksheet.                                                      entity is entitled to as a distribution from a trust.
+Firstly, you show the type of CGT asset or CGT event that           The CGT summary worksheet is designed for entities
+resulted in the capital gain or capital loss.                       that make capital gains or capital losses during the income
+Organise each of these under one of the following                   year. However, you may also find it useful if you are an
+four categories:                                                    individual (including a partner in a partnership) who has
+■ shares and units in unit trusts
+                                                                    more complex CGT affairs.
+■ real estate                                                       The CGT summary worksheet differentiates between
+■ other CGT assets (including personal use assets)                  capital gains from active assets and non-active assets.
+  and any other CGT events                                          Generally, an active asset is a business asset the entity
+■ collectables.                                                     owns – for example, goodwill of a business.
+Secondly, there are special rules that apply when working           A share and an interest in a trust can also be active
+out a capital gain or capital loss for a depreciating asset. A      assets if certain conditions are met.
+capital gain or capital loss will only arise to the extent that     There are four small business CGT concessions that
+a depreciating asset is used for a non-taxable purpose
+                                                                    may apply to capital gains from active assets:
+(for example, used privately). You calculate the capital gain
+                                                                    ■ The small business 15-year exemption: this exemption,
+or capital loss according to concepts used in the uniform
+capital allowance provisions. Those provisions also treat             subject to certain conditions being satisfied, means a
+as income or allow as a deduction any gain or loss from               capital gain is totally disregarded if your small business
+a depreciating asset to the extent that it was used for a             entity has continuously owned the CGT asset for at least
+taxable purpose.                                                      15 years, and:
+                                                                      – you are 55 years old or over and retiring, or
+Thirdly, if a capital gain was made, you calculate it using:
+                                                                      – you are permanently incapacitated.
+■ the indexation method (see note 2 of the worksheet)
+                                                                    ■ The small business 50% active asset reduction: this
+  for capital gains made on CGT assets acquired before
+  11.45am (by legal time in the ACT) on 21 September                  concession provides a 50% reduction of a capital gain
+  1999 and owned for at least 12 months, or                           for an active asset.
+                                                                    ■ The small business retirement exemption: this allows
+■ the discount method (see note 3 of the worksheet)
+  for assets owned for at least 12 months and for which               you to disregard capital gains for active assets (up
+  you are not using the indexation method, or                         to a lifetime limit of $500,000) if the conditions are
+■ the ‘other’ method (if neither the indexation method
+                                                                      satisfied. If you are under 55 years old and are eligible
+  nor the discount method applies).                                   for this exemption, you must pay the amount into a
+                                                                      superannuation (or similar) fund.
+These three methods of calculating a capital gain are
+explained in full in part A chapter 2 and are also listed in        ■ The small business rollover: this enables you to defer
+
+Definitions on page 132.                                              a capital gain if you acquire a replacement asset and
+                                                                      satisfy other conditions.
+When choosing between the indexation and discount
+methods, the amounts at (a) and (b) at the bottom of the                To find out if your business is eligible for the small
+worksheet do not yet reflect any capital losses or CGT              business CGT concessions, see the Guide to capital
+discount you may be able to apply. This affects your                gains tax concessions for small business.
+choice of the amount to transfer to the CGT summary
+worksheet, which you can use to calculate your net capital
+gain or net capital loss.
+     Transfer the capital gain or capital loss calculated on
+each Capital gain or capital loss worksheet to the CGT
+summary worksheet. Transfer a capital gain according to
+the method you used to calculate it and the type of asset
+that gave rise to it.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                             www.ato.gov.au                                                       103
+                                                                  At A to I and M to U on this worksheet, show the current
+       ACTIVE ASSETS                                              year capital gains (other than from collectables) transferred
+  Remember that at Active assets in the CGT summary               from the Capital gain or capital loss worksheets.
+  worksheet (and the CGT schedule), you should only
+  include a capital gain from an active asset that qualifies      Trust capital gains
+  for one or more of the following three small business           You must also include at G to I and S to U on this
+  CGT concessions:                                                worksheet any distribution from a trust of a net capital gain
+  ■ small business 50% active asset reduction                     from a CGT event (other than one involving a collectable)
+  ■ small business retirement exemption                           that your entity is entitled to.
+  ■ small business rollover.                                      You must use the same method as the method used
+  If the asset does not qualify for one or more of these          by the trustee to calculate your entity’s capital gain from
+  three concessions, include the capital gain at Non-             the trust. For example, if the trustee used the discount
+  active assets.                                                  method to calculate a capital gain, you must use the
+                                                                  discount method. In some cases your entity must gross
+       LIMIT ON VALUE OF ASSETS                                   up the amount of the trust capital gain. If this applies,
+  The small business CGT concessions are not                      you include the grossed-up amount at H, S, T and U,
+  available if the net value of the assets of your entity         as explained below.
+  and related entities just before the CGT event exceeds          If the trustee used the discount method to calculate
+  $5 million. If your entity is not entitled to the small         a capital gain, you need to gross it up by multiplying
+  business concessions, include the capital gain at               the distribution amount by two. Include the result at H.
+  Non-active assets.                                              Grossing up ensures that any capital losses your entity
+       LIFE INSURANCE COMPANIES                                   has made are deducted from your entity’s grossed-up
+                                                                  capital gain before the CGT discount is applied.
+  Life insurance companies, including friendly societies
+  that conduct life insurance business, need to complete          If the trust’s capital gain was reduced by the small business
+  two CGT summary worksheets – one for each class of              50% active asset reduction, again it needs to be grossed-
+  income they derived (superannuation class and ordinary          up by multiplying the distribution amount by two. Include
+  class income). You can only apply capital losses from           the result at S or U.
+  one class of income against capital gains from that class
+                                                                  If the trust’s capital gain was reduced by the CGT discount
+  of income. Combine the details from both summary
+                                                                  and by the small business 50% active asset reduction,
+  worksheets onto one CGT schedule, if it is required.
+                                                                  multiply the distribution amount by four and include the
+                                                                  result at T.
+The parts in this step relate to the parts of the CGT
+summary worksheet. Work through each relevant part                Amount of capital gain
+to complete your worksheet.                                       Show the full amount of all capital gains in part A1.
+                                                                  Do not show the amount remaining after applying:
+Part A: Total current year capital gains                          ■ capital losses (which are applied on page 4 of the
+In part A you show your entity’s total current year                 worksheet at part D)
+capital gains.                                                    ■ the CGT discount (which is applied on page 6 of
+                                                                    the worksheet at part F), or
+Part A1: Current year capital gains (other
+                                                                  ■ the small business CGT concessions (which are
+than capital gains from collectables)
+                                                                    applied on page 7 of the worksheet at part G).
+                                                                  Transfer the amounts at A1 to A6 to the corresponding
+       WHAT TO INCLUDE AND EXCLUDE
+                                                                  A1 to A6 in part A3 of the CGT summary worksheet.
+  You generally do not include any capital gain to which
+  an exemption (for example, the small business15-year            Part A2: Capital gains and
+  exemption) or exception applies.                                capital losses from collectables
+  However, you must include in the Active assets                       Did your entity make a capital gain or a capital loss
+  columns capital gains for which your entity may be              from a collectable during the income year? Or did the entity
+  exempt because it is entitled to one or more of the             receive a distribution from a trust during the income year
+  following:                                                      that includes a net capital gain from a collectable?
+  ■ small business 50% active asset reduction
+  ■ small business retirement exemption
+                                                                             YES                            NO
+  ■ small business rollover.
+                                                                           Read on.                   Go to part A3.
+  If a capital gain does not qualify for one or more of these
+  three concessions, include it at Non-active assets.
+
+
+
+104                                                       www.ato.gov.au                               GUIDE TO CAPITAL GAINS TAX 2006
+Transfer any capital gains from collectables from the Capital        Show the amounts deducted from capital gains from
+gain or capital loss worksheets to C1, C2 or C3 on your              your collectables at 1A to 1C, depending on the choice
+CGT summary worksheet. Transfer any capital losses from              made about how to deduct the losses. Show the total
+collectables to C4 on your CGT summary worksheet.                    losses from collectables deducted from gains from
+                                                                     collectables at 1D.
+If your entity was entitled to a distribution of a net capital
+gain from a trust resulting from a collectable, show this            Show any remaining capital gains from collectables at
+amount at C5 to C7. You must use the same method as                  1E to 1G.
+the trustee to calculate your entity’s capital gain from the
+                                                                     If your entity has net capital losses from collectables (C4
+trust. For example, if the trustee used the discount method
+                                                                     minus 1D), you can carry this forward to reduce the capital
+to calculate a capital gain, you need to do the same and
+                                                                     gains from collectables in later income years. There is no
+show the grossed up amount at C6.
+                                                                     time limit on how long you can carry forward this loss.
+If the trustee used the discount method to calculate                 Transfer the amount of net capital losses from collectables
+a capital gain, gross it up by multiplying the distribution          to H UNCL from collectables in part I.
+amount by two. Grossing up ensures that any capital losses
+                                                                     Step A2.2: Apply any prior year net capital
+your entity has made are deducted from your grossed-up
+                                                                     losses (PYNCL) from collectables
+capital gain before the CGT discount is applied.
+                                                                     Prior year net capital losses are the unapplied net capital
+Show the totals of all of your entity’s capital gains from           losses carried forward from earlier years.
+collectables at C8 to C10.
+                                                                     If your entity has prior year net capital losses that can be
+Step A2.1: Deduct any current year capital                           deducted, deduct them here. You cannot choose to defer
+losses (CYCL) from collectables from current                         to a later year any amount that can be deducted this year.
+year capital gains (CYCG) from collectables
+If your entity has any current year capital losses                       Does your entity have any remaining current year
+from collectables, deduct these from any current year                capital gains from collectables?
+capital gains from collectables. This reduces your CGT                              YES                         NO
+obligation. If your entity has current year capital losses
+from collectables that can be deducted they must be                      Does your entity have       If your entity has PYNCL,
+deducted here. You cannot choose to defer to a later                       a PYNCL from a            complete 2A, 2B and 2C,
+year any amount that can be deducted this year.                              collectable?             and transfer the amount
+                                                                                                       at 2C to H in part I. Go
+    Does your entity have any current year capital gains
+                                                                                                             to part A3.
+from collectables?
+              YES                           NO                                YES         NO           Transfer the amounts
+                                                                                                        at 1E, 1F and 1G in
+                                  Transfer the amount at                                             step A2.1 to J, K and L
+  Does your entity have a
+                                   C4 to H in part I and                                             in part A3 and continue
+ CYCL from a collectable?
+                                    then go to part A3.                 Read on.                           from part A3.
+
+     YES               NO         Transfer the amounts at            At 2C, show the available prior year net capital losses
+                                  C8, C9 and C10 to 1E,              from collectables after you have made any necessary
+                                    1F and 1G and then               adjustments for commercial debts forgiven shown at 2B.
+  Read on.                           go to step A2.2.                For more information on commercial debts forgiven, see
+                                                                     page 15 and refer to your entity’s tax return instructions.
+Deduct any current year capital losses from collectables             Again, you can deduct PYNCL from collectables from any
+(shown at C4) from your current year capital gains from              remaining capital gains from collectables in the manner
+collectables (shown at C8 to C10).                                   that produces the best result. You must, however, deduct
+You can do this in the order that gives the best result,             them in the order in which they were made – for example,
+which would usually be to apply the losses against                   you should deduct a 1995–96 year capital loss before a
+capital gains calculated using the:                                  1998–99 year capital loss.
+1 ‘other’ method                                                     At 2D to 2F, show the amounts of prior year net capital
+2 indexation method                                                  losses from collectables in the order you have chosen.
+3 discount method.                                                   At 2G, show the total amount of prior year net capital
+                                                                     losses from collectables that you have deducted from
+                                                                     the current year capital gains from collectables.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                              www.ato.gov.au                                                       105
+At J, K and L in step A2.2, show the capital gains from            Part D: Applying capital losses
+collectables after you have applied the current year capital       against current year capital gains
+losses and prior year net capital losses from collectables.        In part D, show your entity’s current year capital gains
+You can carry forward any unapplied net capital losses             reduced by:
+from collectables (2C minus 2G) but in later income years          ■ current year capital losses, other than from collectables
+you can only use them to reduce any capital gains from               (step D1)
+collectables (not from other CGT assets). There is no time         ■ prior year net capital losses, other than from collectables
+limit on how long you can carry forward these losses.                (step D2) and
+When you have completed step A2.2, transfer:                       ■ capital losses transferred in (for companies only –
+
+■ the amounts at J, K and L to the corresponding labels
+                                                                     step D3).
+  in part A3, and
+                                                                   Step D1: Apply current year capital losses,
+■ the amount of unapplied prior year net capital losses
+                                                                   other than capital losses from collectables
+  from collectables (referred to above) to H UNCL from
+  collectables in part I (together with any net capital            If your entity has current year capital losses (other than
+  losses from collectables at step A2.1).                          capital losses from collectables) that can be deducted,
+                                                                   you must deduct them here. You cannot choose to defer to
+Part A3: Total current year capital gains (CYCG)                   a later year any amount that can be deducted this year.
+At A3, show the total of your entity’s capital gains, including         Have you shown current year capital gains for your
+any net capital gain from collectables.                            entity at A7 to A12 in part D?
+      Your entity may not have any of the following losses:                 YES                               NO
+■ current year capital losses
+■ prior year net capital losses, or                                    Does your entity have          Transfer D in part B
+■ capital losses transferred in.                                     CYCLs or PYNCLs, other            to I in part I of the
+                                                                      than from a collectable,        worksheet, then go
+In this case, transfer the amounts at A7 to A12 in part A3               or capital losses                 to step D2.
+to A to F in part E and continue from part F.                             transferred in?
+If your entity has one or more of these losses, read on.
+                                                                            YES               NO
+Part B: Current year capital losses
+(CYCL), other than from collectables                                                                 Transfer the amounts
+                                                                       If your entity has           at A7 to A12 in part D
+In part B, show any current year capital losses your entity
+                                                                       CYCL, read on. If            to A to F in part E and
+has made from:
+                                                                     your entity has only            continue from part F.
+■ shares and units (in unit trusts) at A
+                                                                        PYNCL, transfer
+■ real estate at B, and
+                                                                      the amounts at A7
+■ other CGT assets and any other CGT events at C.                    to A12 in part D to
+Show the total at D.                                                 3G to 3L in step D1
+                                                                     and then go to step
+You can transfer these from your Capital gain or                     D2. If your entity has
+capital loss worksheets.                                              only capital losses
+If your entity does not have any current year capital                  transferred in, go
+losses (other than from collectables), go to part D.                       to step D3.
+
+Do not include any capital loss made from personal
+                                                                   You can choose the order in which you deduct your entity’s
+use assets at C Other CGT assets and any other
+                                                                   current year capital losses (at D in part B) from the current
+CGT events. You disregard capital losses from personal
+                                                                   year capital gains (at A7 to A12).
+use assets and cannot apply them to reduce capital gains.
+                                                                   Generally, if your entity is entitled to the small business
+Do not show capital losses made from collectables in
+                                                                   CGT concessions, it is better to reduce the non-active
+part B – they should have been shown in part A2.
+                                                                   asset capital gains first. Within the non-active and active
+     Now go straight to part D – there is no part C in             categories you usually get the greatest benefit by reducing:
+this worksheet.                                                    1 capital gains calculated using the ‘other’ method, then
+                                                                   2 capital gains calculated using the indexation method,
+                                                                      then
+                                                                   3 capital gains calculated using the discount method.
+
+
+
+
+106                                                        www.ato.gov.au                              GUIDE TO CAPITAL GAINS TAX 2006
+At 3A to 3F, show the amounts of current year capital                  When you have completed step D2, transfer the amount
+losses deducted in the order you have chosen with                      of unapplied prior year net capital losses (4C minus L) to I
+the total at H. At 3G to 3L, show the capital gains after              UNCL from other CGT assets in part I (together with any
+applying (deducting) the current year capital losses.                  net capital losses at step D1).
+You can carry forward net capital losses other than from                    If your entity is a company with capital losses
+collectables (D in part B minus H) to reduce capital gains             transferred in, go to step D3.
+in later income years.
+                                                                       Otherwise, transfer the remaining capital gain amounts
+When you have completed step D1, transfer the amount                   at 4J to 4O to A to F in part E.
+of net capital losses (D minus H) to I UNCL from other
+CGT assets in part I.                                                  Step D3: Apply any capital losses transferred in
+Step D2: Apply any prior year net capital                              Only follow this step if your entity is a company with capital
+losses, other than PYNCL from collectables                             losses transferred in.
+Prior year net capital losses are the unapplied net capital            You need to apply the capital losses transferred in to your
+losses carried forward from earlier years.                             entity in the order they were received. Your entity must
+If your entity has prior year net capital losses (other than           have enough capital gains to absorb the capital losses
+prior year net capital losses from collectables) that can              transferred in.
+be deducted, they must be deducted here.                               When you have completed step D3, transfer the amount of
+You cannot choose to defer to a later year any amount                  CYCG remaining after applying CYCL, PYNCL (4J to 4O in
+that can be deducted this year.                                        step D2) and capital losses transferred in to A to F in part E.
+
+    Does your entity have any current year capital
+gain remaining?
+                                                                       Part E: Current year capital gains
+                                                                       after applying capital losses
+              YES                            NO                        In part E, show your entity’s current year capital gains
+                                                                       reduced by current year capital losses, prior year net
+   Does your entity have          If your entity has PYNCL,            capital losses and capital losses transferred in.
+  any PYNCL, other than              complete 4A, 4B and
+       collectables?                  4C and transfer the
+                                      amount at 4C to I in             Part F: CGT discount on capital gains
+                                      part I. Go to part E.            In part F, apply the CGT discount.
+                                                                            Does your entity have a capital gain at Capital gains
+     YES               NO               If your entity is a            – discount method (B or E) in part E?
+                                     company with capital
+                                   losses transferred in, go                      YES                           NO
+                                    to step D3. Otherwise,
+                                  transfer 3G to 3L in step                      Read on.                   Go to part G.
+  Read on.                           D1 to A to F in part E
+                                  and continue from part F.
+                                                                                CGT DISCOUNT
+Reduce the prior year net capital losses at 4A by any                     Companies are not eligible for the CGT discount unless
+adjustment for commercial debts forgiven at 4B. For more                  they are life insurance companies or friendly societies
+information on commercial debts forgiven, see page 15                     that carry on life insurance business. These companies
+and refer to your entity’s tax return instructions.                       may be entitled to the CGT discount for their complying
+Again, you can deduct prior year net capital losses from                  superannuation business.
+any remaining capital gains in the way that produces the
+best result. See discussion for step D1 on the previous                Next, calculate the CGT discount that applies to the
+page. However, you must deduct them in the order in                    capital gains at B and E in part E. The CGT discount
+which they were made – for example, you must deduct a                  percentage is:
+1995–96 year capital loss before a 1998–99 year capital
+                                                                       ■ 331/3% for complying superannuation entities, or
+loss.
+                                                                       ■ 50% for individuals and trusts.
+At 4D to 4I, show the amounts of prior year net capital
+losses in the order you have chosen and the total at L. At             Show the amount of the CGT discount at J and K in part F.
+4J to 4O, show the capital gains after you have applied the            Show the amount of your remaining capital gains at 6A to
+current year capital losses and prior year net capital losses.         6F in part F.
+You can carry forward any unapplied prior year net capital
+losses (4C minus L) to reduce the capital gains in later
+income years. There is no time limit on how long you can
+carry forward these losses.
+
+GUIDE TO CAPITAL GAINS TAX 2006                                www.ato.gov.au                                                      107
+Part G: Small business CGT concessions (other                         Part I: Unapplied net capital losses
+than the small business 15-year exemption)                            carried forward to later income years
+In part G, apply the small business CGT concessions                   In part I, show any unapplied net capital losses your entity
+your entity is claiming. For more information about the               is carrying forward. These losses will be available to reduce
+small business CGT concessions, see the Guide to                      any capital gains in later income years.
+capital gains tax concessions for small business.                              Does your entity have any unapplied net capital losses?
+    Is your entity eligible for the small business CGT
+concessions?
+                                                                                     YES                          NO
+
+           YES                           NO                                                                   You have
+                                                                                   Read on.                 completed the
+         Read on.                   Go to part H.                                                            worksheet.
+
+Show:                                                                 At H and I, show details of any capital losses that are
+■ the amount of your entity’s small business 50% active               unapplied (that is, that have not been used).
+  asset reduction (SBAAR) at L to N                                   At H, show the unapplied capital losses from collectables
+■ the amount of your entity’s small business retirement               only. This is the sum of:
+  exemption (SBRE) at O to Q, and                                     ■ any current year capital losses from collectables
+■ the amount of your entity’s small business rollover                   that you have not used to reduce capital gains from
+  (SBRO) at R to T.                                                     collectables this income year (that is, deduct 1D in
+Show the total amount of the small business CGT                         step A2.1 from C4 in part A2), and
+concessions your entity is claiming at 7A to 7D of part G.            ■ any prior year net capital losses from collectables
+                                                                        that you have not used to reduce capital gains from
+                                                                        collectables this income year (that is, deduct 2G in
+Part H: Net capital gain calculation                                    step A2.1 from 2C in step A2.2).
+In part H, show the amount of your entity’s net capital gain.
+                                                                      At I, show all of the other capital losses – that is, the
+Your entity’s net capital gain is the amount remaining                sum of:
+after applying any current year capital losses, net capital           ■ the current year capital losses that you have not used to
+losses from prior years, capital losses transferred in, the             reduce capital gains (that is, deduct H in step D1 from D
+CGT discount and any applicable CGT small business                      in part B), and
+concessions.                                                          ■ the prior year net capital losses that you have not used
+                                                                        to reduce capital gains (that is, deduct L in step D2 from
+Include a net capital gain as assessable income on your
+                                                                        4C in step D2).
+entity’s tax return at the relevant item. See step 3 on the
+next page.                                                            At V, show the total of the amounts at H and I.
+                                                                      The amounts at H and I are the unapplied net capital
+                                                                      losses available to be carried forward and used to reduce
+                                                                      your capital gains in later income years.
+                                                                      You can only use unapplied net capital losses from
+                                                                      collectables to reduce capital gains from collectables in
+                                                                      later income years.
+
+
+
+
+108                                                           www.ato.gov.au                                 GUIDE TO CAPITAL GAINS TAX 2006
+STEP 3                                                              STEP 4
+How to complete the capital gains                                   How to complete the CGT schedule
+item on your entity’s tax return                                    Your entity must complete a CGT schedule for the
+In the earlier steps, you calculated your capital gain or           2005–06 income year if:
+capital loss for each CGT event, then worked out your               ■ the total current year capital gains are greater than
+net capital gain or net capital loss.                                 $10,000, or
+                                                                    ■ the total current year capital losses are greater than
+If your entity made a capital gain or capital loss during
+the income year:                                                      $10,000.
+■ print Y (for yes) at G Did you have a capital gains
+   tax event during the year? at the capital gains item                      CONSOLIDATED GROUPS
+   on your entity’s tax return                                         If a group consolidates during the income year, the
+■ transfer the amount at G in part H of your entity’s CGT              head company must lodge a CGT schedule if the total
+   summary worksheet to A Net capital gain on your                     capital gains or total capital losses that it makes – as
+   entity’s tax return, and                                            head company of the consolidated group and while
+■ add the amounts, if any, at H and I in part I of your                not a member of a consolidated group – are greater
+   entity’s CGT summary worksheet and show the total                   than $10,000.
+   amount at Losses information, V Net capital losses                  An entity that has joined a consolidated group or
+   carried forward to later income years on your entity’s              groups during the year of income as a subsidiary
+   tax return.                                                         member must lodge a CGT schedule covering any
+If you are an individual completing your Tax return for                periods of non-membership if the entity satisfies the
+individuals (supplementary section) 2006 or a registered               requirements for lodgment of that schedule.
+tax agent completing a tax return on behalf of an individual:
+■ print Y (for yes) at G Did you have a capital gains tax           If your entity is required to complete a CGT schedule,
+   event during the year? item 17 Capital gains on your             attach it to your entity’s 2006 tax return. You should lodge
+   tax return (supplementary section)                               only one CGT schedule with your entity’s tax return.
+■ transfer the amount at Total CYCG, part A3 of your
+                                                                    If you are lodging a paper tax return and CGT schedule,
+   CGT summary worksheet to H Total current year
+                                                                    please use the preprinted Capital gains tax (CGT) schedule
+   capital gains item 17 Capital gains on your tax return
+                                                                    2006 provided at the back of this guide. To get extra
+   (supplementary section)
+                                                                    copies of the preprinted schedule, phone our Publications
+■ transfer the amount at G, part H of your CGT summary              Distribution Service on 1300 720 092.
+   worksheet to A Net capital gain item 17 Capital gains
+   on your tax return (supplementary section), and                  You need to follow these instructions carefully to make
+■ add the amounts, if any, at H and I in part I of your             sure you complete your entity’s CGT schedule correctly.
+   CGT summary worksheet and show the total at V                    You must complete all relevant parts of the CGT schedule,
+   Net capital losses carried forward to later income               including parts J to N.
+   years item 17 Capital gains on your tax return                   Print your entity’s TFN, name and Australian business
+   (supplementary section).                                         number in the boxes provided. The CGT schedule must be
+                                                                    signed in the same way that the 2006 tax return is signed.
+                                                                    Take the following steps to transfer the relevant information
+                                                                    from your CGT summary worksheet.
+
+                                                                    Part A
+                                                                    1 Transfer the amounts from A to I and from M to U on
+                                                                      your CGT summary worksheet to the corresponding
+                                                                      labels in part A of the CGT schedule.
+                                                                    2 Transfer the amounts at J, K and L on your CGT
+                                                                      summary worksheet (after step A2.2) to the
+                                                                      corresponding labels in part A of the CGT schedule.
+
+                                                                    Part B
+                                                                    Transfer the amounts at A, B, C and D on your CGT
+                                                                    summary worksheet to the corresponding labels in
+                                                                    part B of the CGT schedule.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                             www.ato.gov.au                                                        109
+Part C                                                           Part H
+There is no part C in the CGT schedule.                          Transfer the amount at G of the CGT summary worksheet
+                                                                 to G in part H of the CGT schedule.
+Part D
+From step D1 on page 4 of the CGT summary worksheet:             Part I
+1 Add the amounts at columns 3A and 3D and transfer              Transfer the amounts at H and I of the CGT summary
+   the total to E in part D of the CGT schedule.                 worksheet to the corresponding labels in part I of the
+2 Add the amounts at columns 3B and 3E and transfer              CGT schedule.
+   the total to F in part D of the CGT schedule.
+3 Add the amounts at columns 3C and 3F and transfer              Part J
+   the total to G in part D of the CGT schedule.                 Write the total amount of any capital gains disregarded
+4 Transfer the Total CYCL applied amount at H to H               by the small business 15-year exemption (do not apply
+   in part D of the CGT schedule.                                the CGT discount) at J in part J of the CGT schedule.
+From step D2 on page 5 of the CGT summary worksheet:             Print in the box at K the code from the list below that
+1 Add the amounts at columns 4D and 4G and transfer              best describes the CGT asset or CGT event from which
+   the total to I in part D of the CGT schedule.                 your entity made the capital gain. If your entity made
+2 Add the amounts at columns 4E and 4H and transfer              capital gains from more than one CGT asset or CGT
+   the total to J in part D of the CGT schedule.                 event, select the code which best describes the type
+3 Add the amounts at columns 4F and 4I and transfer              of CGT asset or CGT event that produced the largest
+   the total to K in part D of the CGT schedule.                 amount of capital gain.
+4 Transfer the Total PYNCL applied amount at L to L              CGT asset or CGT event code
+   in part D of the CGT schedule.
+                                                                 S shares
+From step D3 on page 5 of the CGT summary worksheet:             U units in unit trusts
+1 Add the amounts at columns 5A and 5D and transfer              R real estate
+   the total to M in part D of the CGT schedule.
+                                                                 G goodwill
+2 Add the amounts at columns 5B and 5E and transfer
+   the total to N in part D of the CGT schedule.                 O other CGT assets or CGT events not listed above
+3 Add the amounts at columns 5C and 5F and transfer
+   the total to O in part D of the CGT schedule.                 Part K
+4 Transfer the Total capital losses transferred in               During the income year, did your entity choose scrip-for-
+   amount at P to P in part D of the CGT schedule.               scrip rollover when an arrangement was made to exchange
+                                                                 original interests for replacement interests?
+Part E                                                           Original interests are shares or units or other interests (or
+Transfer the amounts at A, B, C, D, E and F of the               an option, right or similar interest in a company or trust),
+CGT summary worksheet to the corresponding labels                while replacement interests are similar interests in another
+in part E of the CGT schedule.                                   company or trust.
+                                                                 Print Y for yes or N for no at A .
+Part F
+                                                                 If you printed Y for yes:
+Transfer the amounts at J and K of the CGT summary
+worksheet to the corresponding labels in part F of the CGT       Write at B the amount of the cost base for all of the
+schedule.                                                        original interests exchanged (regardless of whether or
+                                                                 not full rollover was available).
+Part G                                                           Write at C the total of the market value of the replacement
+Transfer the amounts at rows L to N, O to Q and R to T           interests acquired.
+of the CGT summary worksheet to the corresponding
+                                                                 Write at D the total of the amount of cash and other
+labels in part G of the CGT schedule.
+                                                                 considerations received. Do not include any amount
+                                                                 already included at C .
+
+
+
+
+110                                                      www.ato.gov.au                               GUIDE TO CAPITAL GAINS TAX 2006
+Part L (for companies and trusts only)                              Part M (for companies only)
+Was the company or trust an ‘acquiring entity’ during               Did the company have an employee share scheme in
+the income year under an arrangement for which original             place at any time during the year?
+interest holders qualified for scrip-for-scrip rollover?
+                                                                    Print Y for yes or N for no at N .
+Print Y for yes or N for no at E .
+If you printed Y for yes, provide the information requested         Part N (for companies only)
+below for the arrangement. If interests were acquired in            Was there no change in the majority underlying interests of
+more than one original entity, write at F the number of             any assets to which Division 149 applies?
+original entities subject to such arrangements and provide
+the information requested below for the arrangement                 Declare whether or not there was a change in the majority
+involving the greatest cost base for the interests acquired.        underlying ownership in any assets the company acquired
+                                                                    before 20 September 1985. If there was a change, answer
+Show at G the TFN for the original entity.                          no. In this case, the cost base of the relevant asset(s) is
+Show at H the number of shares, units or other interests            reset under Division 149.
+issued in exchange for the shares or units or other interests       If there was no change, answer yes.
+acquired in the original entity.
+                                                                    Print Y for yes or N for no at O .
+Show at I the number of options, rights or similar
+interests issued in exchange for the options, rights or             After following all these steps, you have completed your
+similar interests acquired in the other entity.                     entity’s CGT schedule.
+
+Show at J the amount of other considerations (including             Remember to lodge the CGT schedule with your entity’s
+cash) given to acquire the shares, units or other interests,        tax return.
+options, rights or similar interests in the original entity.        Do not lodge your worksheets – keep these with your
+Show at K the total of the first element of the cost bases          own records.
+of the shares, units or other interests, options, rights or
+similar interests acquired in the original entity as a result
+of the arrangement.
+Did the company that issued replacement interests or the
+trustee of the trust, jointly with a significant or common
+stakeholder, choose to receive a rollover?
+Print Y for yes or N for no at L .
+If the answer at L is yes, show at M the total of the
+first element of the cost bases of the shares, or units or
+other interests, or options, rights or similar interests in
+the original entity (original interests) acquired directly from
+significant and common stakeholders for the arrangement,
+or issued by the original entity to the company or trust and
+attributable to original interests of significant and common
+stakeholders that were cancelled under the arrangement.
+
+
+
+
+GUIDE TO CAPITAL GAINS TAX 2006                             www.ato.gov.au                                                     111
+

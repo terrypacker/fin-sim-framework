@@ -440,3 +440,55 @@ function csvEscape(value) {
   const s = String(value ?? '');
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
+
+/**
+ * The text of a table cell, resolving the `{ stateKey, text }` form.
+ *
+ * A table cell that names an account carries its stateKey alongside the fallback
+ * text, because the display name can only be resolved where a `StateSchemaRegistry`
+ * is in scope — the modal — and NOT where the document is built. Everywhere else
+ * reads through here and gets the fallback, which is what the cell used to be.
+ *
+ * @param {string|number|{stateKey?:string,text?:string}|null} cell
+ * @returns {string}
+ */
+export function cellText(cell) {
+  if (cell == null) return '';
+  if (typeof cell === 'object') return cell.text ?? cell.stateKey ?? '';
+  return String(cell);
+}
+
+/**
+ * CSV for a TABLE-shaped document — Form 8949, the AU CGT worksheet — in its own
+ * columns rather than the §5.1 worksheet ones.
+ *
+ * These are disposal registers. Their columns (capital proceeds, cost base, gain by
+ * method, date of the CGT event) have no home in the worksheet column set, and
+ * forcing them in would mean overloading `bracketIncome` / `bracketTax` with unrelated
+ * meanings — which is exactly why `flattenDocument` returns nothing for them. So they
+ * export as themselves: the document's own header row, its own rows, and its totals.
+ *
+ * The provenance columns that DO carry over are prefixed, so a pivot over several
+ * exported forms can still tell whose worksheet a row came from and for which year —
+ * the property that made the per-person split worth doing in the first place.
+ *
+ * @param {object} doc
+ * @returns {string} CSV text, or '' when the document has no table
+ */
+export function tableDocumentToCsv(doc) {
+  if (!doc?.table) return '';
+  const { columns, rows, totals } = doc.table;
+  const base = [doc.taxYear ?? '', doc.country ?? '', formNameOf(doc), doc.personName ?? doc.personKey ?? ''];
+  const out  = [['Tax Year', 'Country', 'Form', 'Person', ...columns].map(csvEscape).join(',')];
+
+  const cell = (v) => typeof v === 'number' ? v.toFixed(MONEY_DP) : cellText(v);
+  for (const row of rows ?? []) out.push([...base, ...row.map(cell)].map(csvEscape).join(','));
+  if (totals) out.push([...base, ...totals.map(cell)].map(csvEscape).join(','));
+
+  // Document-level notes ride along as trailing comment rows: they state limits of the
+  // figures above (which cost base, why no acquisition date, what was excluded), and a
+  // reader who exports the table and loses them is reading numbers without their terms.
+  for (const note of doc.notes ?? []) out.push(csvEscape(`# ${note}`));
+
+  return out.join('\n');
+}

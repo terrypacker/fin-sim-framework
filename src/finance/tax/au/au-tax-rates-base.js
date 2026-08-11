@@ -152,8 +152,10 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
    *
    * @param {object} state  a single taxpayer's slice
    * @returns {{ total:number, discountable:number, real:number, apportionedBase:number,
-   *   apportionedAllowance:number, opening:number, applied:number, closing:number }}
-   *   The first five are post-netting inputs for `_cgtRelief`; `closing` is the pool.
+   *   apportionedAllowance:number, opening:number, applied:number, closing:number,
+   *   steps:object }}
+   *   The first five are post-netting inputs for `_cgtRelief`; `closing` is the pool;
+   *   `steps` is the per-s102-5-step working the CGT summary worksheet reports.
    */
   _applyCapitalLosses(state) {
     const opening = Math.max(0, state?.auCapitalLossPool ?? 0);
@@ -171,13 +173,34 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const dGainRaw = discountable;
     const nGainRaw = total - discountable;
 
-    let loss   = Math.max(0, -dGainRaw) + Math.max(0, -nGainRaw) + opening;
+    const currentYearLosses = Math.max(0, -dGainRaw) + Math.max(0, -nGainRaw);
     let dGain  = Math.max(0, dGainRaw);
     let nGain  = Math.max(0, nGainRaw);
 
-    // §5.3: non-discountable first.
-    const takeN = Math.min(loss, nGain); loss -= takeN; nGain -= takeN;
-    const takeD = Math.min(loss, dGain); loss -= takeD; dGain -= takeD;
+    // s102-5 Step 1 THEN Step 2, tracked separately rather than as one pooled figure.
+    //
+    // The arithmetic is unchanged — min(CYL, g) + min(PY, g − min(CYL, g)) is exactly
+    // min(CYL + PY, g), so every total below is bit-identical to the single-pass version
+    // this replaced. What the split buys is the ability to SAY which step consumed what,
+    // and that is not cosmetic: the ATO CGT summary worksheet gives current-year losses
+    // and prior-year net capital losses their own tables (2 and 3), each broken down by
+    // method column, and a reader checking our net capital gain against the worksheet
+    // cannot get past table 2 without those two numbers apart.
+    //
+    // §5.3: within each step, non-discountable first. A dollar of loss spent on a
+    // non-discount gain saves a full dollar of assessable income; spent on a discount
+    // gain it saves fifty cents.
+    let cy = currentYearLosses;
+    const cyN = Math.min(cy, nGain); cy -= cyN; nGain -= cyN;
+    const cyD = Math.min(cy, dGain); cy -= cyD; dGain -= cyD;
+
+    let py = opening;
+    const pyN = Math.min(py, nGain); py -= pyN; nGain -= pyN;
+    const pyD = Math.min(py, dGain); py -= pyD; dGain -= pyD;
+
+    const takeN = cyN + pyN;
+    const takeD = cyD + pyD;
+    const loss  = cy + py;
 
     // The s115-115 apportionment (design 83 G7) is sized against the PRE-loss
     // discountable base, so it has to shrink with it. Leaving it alone would grant
@@ -215,6 +238,34 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       opening,
       applied: +applied.toFixed(2),
       closing: +loss.toFixed(2),
+      // The worksheet's own working, one entry per s102-5 step. `grossDiscountable`
+      // and `grossOther` are the row-1 figures each step starts from, so a reader can
+      // foot table 2 and table 3 downwards without re-deriving them.
+      //
+      // NOTE on `losses`: this is the loss visible at BUCKET level — a bucket whose
+      // signed total came out negative. It is not the year's gross capital losses,
+      // because the accumulators are signed (design 90 §4): a bucket with +1,000 of
+      // gains and −400 of losses reaches here as +600, and the 400 is unrecoverable.
+      // So this understates worksheet cell 2A whenever gains and losses landed in the
+      // same bucket. Splitting them needs gross accumulators at the booking sites.
+      steps: {
+        grossDiscountable: +Math.max(0, dGainRaw).toFixed(2),
+        grossOther:        +Math.max(0, nGainRaw).toFixed(2),
+        currentYear: {
+          losses:        +currentYearLosses.toFixed(2),
+          appliedOther:  +cyN.toFixed(2),
+          appliedDiscountable: +cyD.toFixed(2),
+          applied:       +(cyN + cyD).toFixed(2),
+          unapplied:     +cy.toFixed(2),
+        },
+        priorYear: {
+          opening,
+          appliedOther:  +pyN.toFixed(2),
+          appliedDiscountable: +pyD.toFixed(2),
+          applied:       +(pyN + pyD).toFixed(2),
+          unapplied:     +py.toFixed(2),
+        },
+      },
     };
   }
 
@@ -607,6 +658,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         openingCapitalLossPool:   a.capitalLoss?.opening ?? 0,
         capitalLossApplied:       a.capitalLoss?.applied ?? 0,
         closingCapitalLossPool:   a.capitalLoss?.closing ?? 0,
+        // The s102-5 method statement's own working — gains by method column, and what
+        // each of Steps 1 and 2 consumed. Carried on the return because the AU CGT
+        // summary worksheet is footed from it (`AuTaxDocument2026._generateCgtSummary`),
+        // and none of it can be reconstructed from the three scalars above: they state
+        // the pool's opening, movement and close, not which gains the movement ate.
+        capitalLossSteps:         a.capitalLoss?.steps ?? null,
+        // The two gain figures the worksheet's Part 4 needs, both AFTER the s102-5
+        // loss steps and BEFORE relief. Which one is the relief base is a year
+        // question, not a presentational one: Division 115 discounts only the
+        // ≥12-month slice, while the FY2027 reform indexes the whole gain — so the
+        // return carries both and each year's document module names the one it used.
+        nettedCapitalGains:       a.capitalLoss?.total ?? 0,
+        discountableGainsNetted:  a.capitalLoss?.discountable ?? 0,
         baseTax:                  a.baseTax,
         ordinaryIncomeTax:        a.ordinaryIncomeTax,
         capitalGainsTax:          a.capitalGainsTax,

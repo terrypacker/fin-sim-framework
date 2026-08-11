@@ -1,0 +1,1122 @@
+
+===== p-01 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+, kes, 4 Australian Government
+>Re “Australian Taxation Office
+
+18 Capital gains 2026
+Complete question 18 to report capital gains tax events, capital gains
+(income) and capital losses.
+Last updated 30 May 2026
+
+On this page
+
+Things you need to know
+
+What you need to answer this question
+
+Foreign resident capital gains withholding payments
+
+Look-through earnout rights and amending your earlier tax assessment
+
+Completing your supplementary tax return
+
+Where to go next
+Things you need to know
+Declare at this question CGT events that happened in 2025-26.
+If foreign tax is paid on a foreign gain of a capital nature, read Part H in question
+20 Foreign source income and foreign assets or property 2026 (/forms-and-
+instructions/individual-supplementary-tax-return-2026-instructions/income-questions-
+13-24-supplementary-tax-return-2026/20-foreign-source-income-and-foreign-assets-
+or-property-2026) to work out the amount of foreign income tax offset you can claim.
+Show the foreign income tax offset at question 20 - label O.
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-ca... 1/30
+
+===== p-02 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Don't show at this question a ‘listed investment company capital gain amount’ from a
+dividend paid by a listed investment company. For more information, see question
+D8 Dividend deductions 2026 (/forms-and-instructions/individual-tax-return-2026-
+instructions/deduction-questions-d1-d10-individual-tax-return-2026/d8-dividend-
+deductions-2026).
+You may have made a capital gain, or capital loss, if a CGT event happened in 2025-26.
+For most CGT events, you make a:
+e capital gain if the amount of money and property you received, or were entitled to
+receive, from the CGT event is more than the cost base of your asset; you may
+then have to pay tax on your capital gain
+e capital loss if the amount of money and property you received, or were entitled to
+receive, from the CGT event is less than the reduced cost base of your asset.
+If you're a Norfolk Island resident (/individuals-and-families/investments-and-
+assets/capital-gains-tax/list-of-cgt-assets-and-exemptions#Norfolklslandresidents),
+CGT may apply to assets acquired after 23 October 2015. CGT remains payable on
+Australian mainland assets.
+If you were entitled to one or more distributions from trusts, you must complete and
+attach a Trust income schedule (/forms-and-instructions/trust-income-schedule-2026-
+instructions) to your tax return.
+Keeping records from the start
+You must keep records (/calculators-and-tools/capital-gains-tax-record-keeping-tool) of
+every act, transaction, event or circumstance that may be relevant to working out your
+capital gain or capital loss. This is regardless of whether the CGT event has already
+happened, is about to happen or may happen in the future.
+You must keep these records for 5 years from the time when no CGT event or further CGT
+event can happen. The records for these CGT events may be relevant to working out
+whether you made a capital gain or capital loss from the CGT event.
+Types of CGT events
+There are a wide range of CGT events (/individuals-and-families/investments-and-
+assets/capital-gains-tax/cgt-events) that can happen. The most common CGT event
+happens when you sell a CGT asset, such as:
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-ca... 2/30
+
+===== p-03 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+e real estate, including your family home, holiday home, investment property, hobby
+farm or vacant block of land
+
+e shares
+
+e units in a unit trust or managed investment fund
+
+e forestry managed investment scheme interests (as a subsequent participant)
+
+e crypto assets
+
+e collectables — for example, jewellery
+
+e personal use assets.
+
+Other CGT events that happen include events, such as:
+
+e an asset you owned was lost or destroyed
+
+e you received an amount for entering into an agreement — for example, you agreed
+not to work in a particular industry for a set period of time
+
+e you entered into a conservation covenant over land that you owned
+
+* you received a non-assessable payment from a trust or company
+
+e when you stopped being an Australian resident for tax purposes.
+
+You may also have made a capital gain if both:
+
+e you were a beneficiary of, or have money invested in, a trust (including a managed
+investment fund)
+
+e the trust made a capital gain.
+
+If you're not sure whether a CGT event happened in 2025-26, see Appendix 1: Summary
+
+of CGT events in Guide to capital gains tax 2026 (/forms-and-instructions/capital-gains-
+
+tax-guide-2026).
+
+Types of capital gains and capital losses
+
+You can't deduct a capital loss from your assessable income, but in most cases, it can be
+
+used to reduce a capital gain you make in 2025-26. If you made no capital gain in 2025-
+
+26, defer the capital loss until you make a capital gain, see Step 3
+
+(#Step3Calculatingyourcurrentyearcapitalga).
+
+Generally, you disregard a capital gain or capital loss on:
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-ca... 3/30
+
+===== p-04 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+e disposal of your main residence, if you were an Australian resident for tax purposes
+when you sign the sale contract
+e assets you acquired before 20 September 1985
+e cars, motorcycles and similar vehicles
+e personal use assets such as boats, furniture, electrical goods and household items
+you used or kept mainly for personal use or enjoyment which you acquired for
+$10,000 or less — if you acquired it for
+more than $10,000, you disregard only capital losses
+$10,000 or less, you disregard both capital gains and capital losses
+e collectables — for example, an antique or jewellery, which you acquired for $500 or
+less
+e compensation you received for personal injury
+e the exchange of shares or units you owned in a company or trust under a takeover,
+if certain conditions were met
+e shares in a company, or interests in a trust, where there was a demerger and
+certain conditions were met
+e disposal of shares in a pooled development fund
+e shares in a qualifying early stage innovation company (ESIC) held for less than
+10 years and, in the case of capital gains, the shares were also held for at least
+12 months, see Tax incentives for early stage investors (/businesses-and-
+organisations/income-deductions-and-concessions/incentives-and-
+concessions/tax-incentives-for-innovation/tax-incentives-for-early-stage-
+investors)
+e disposal of certain investments by
+a venture capital limited partnership
+an early stage venture capital limited partnership
+an Australian venture capital fund of funds
+e disposal of an asset to which the small business 15-year exemption applied
+e transfer of an asset where the small business restructure roll-over was available
+(gains or losses are deferred until the asset is disposed of).
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-ca... 4/30
+
+===== p-05 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+If you're a foreign resident beneficiary of a trust, and if 'managed-investment trust
+
+withholding tax' is payable on an amount that you received from that trust (other than in
+
+the capacity of a trustee), don't include any part of that amount in your tax return.
+
+Did a capital gains tax event happen in 2025-26?
+
+e No-Print X in the No box at question 18 — label G if you didn't have a capital gain
+or your capital gains and losses were deferred.
+Go to Step 4 (#Step4 Totalcurrentyearcapitalgains).
+
+e Yes — Print X in the Yes box at question 18 — label G if you had a capital gain or a
+capital loss that wasn't deferred.
+
+Disposal of shares, stapled securities or rights
+
+You may reduce the amount of your capital gain if you acquire shares, stapled securities
+
+or rights under an employee share scheme (/businesses-and-organisations/corporate-
+
+tax-measures-and-assurance/employee-share-schemes/employees).
+
+Share of income of a trust or managed fund
+
+Managed funds (unit trusts) include:
+
+e exchange traded funds (ETFs) (/individuals-and-families/investments-and-
+assets/shares-funds-and-trusts/exchange-traded-funds)
+
+e property trusts
+
+e share trusts
+
+e equity trusts
+
+e growth trusts
+
+e imputation trusts
+
+e balanced trusts.
+
+Other trusts include:
+
+e discretionary trusts
+
+e family trusts
+
+e hybrid trusts
+
+e business trusts.
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-ca... 5/30
+
+===== p-06 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Distributions from trusts and managed funds can include 2 components that have CGT
+consequences:
+e distributions of trust income where the trust's net income for tax purposes includes
+a net capital gain
+e distributions of non-assessable amounts.
+You need to know whether your distribution includes these 2 amounts. To find out, check
+the statement (distribution statement, year-end or annual statement) from the trust. The
+statement should also show which method the trust uses to calculate the capital gains in
+the trust's net capital gain. There are 3 methods of calculating capital gains:
+e indexation
+e discount
+e ‘other’.
+You must use the same method as the trust to calculate your own net capital gain.
+Trustees and fund managers may use different terms to describe the calculation methods
+they used, and they may refer to capital gains they calculate using the indexation and
+‘other' methods as 'non-discount gains’. If you're in doubt, check with your trust or fund
+manager.
+Your distribution statement may include amounts of:
+e NCMI (Non-concessional managed investment trust income) capital gains
+e Excluded from NCMI capital gains.
+Include both these amounts in the calculation of the net capital gain at question 18 -
+label A.
+Capital gain or capital loss on shares
+You may make a capital gain or capital loss by selling or giving away your shares,
+including by selling them to the company under a share buy-back arrangement. Even if
+you didn't pay for your shares, for example, you received them under a demutualisation,
+you may make a capital gain or capital loss when you sell or give them away.
+If you used dividends to acquire additional shares in a company (for example, through a
+dividend reinvestment plan) the additional shares are subject to CGT if you sell them or
+give them away.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-ca... 6/30
+
+===== p-07 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+There are other ways of making a capital gain or capital loss on shares, such as:
+e lf you held shares in a company and during 2025-26, a liquidator or administrator
+declared the shares worthless, you may claim a capital loss equal to the reduced
+cost base of the shares (otherwise you may have to wait until the company is
+dissolved to claim the capital loss).
+e If you received a return of capital amount (a non-assessable payment) you may
+have to reduce the cost base and reduced cost base of your shares. If the amount
+of the non-assessable payment is more than the cost base of the shares, the
+difference is a capital gain.
+Capital gain or capital loss on crypto assets
+A CGT event occurs when you dispose of your crypto assets (/individuals-and-
+families/investments-and-assets/crypto-asset-investments). You may have made a
+capital gain or a capital loss if one of the following occurred:
+e you sold, traded, gifted, exchanged or swapped your crypto assets
+e you used it to obtain goods or services
+e you acquired crypto assets as an investment and have disposed of it.
+If your disposal of the crypto asset was part of a business you carry on, or part of a
+commercial transaction that you entered into with an intention of making a profit or gain,
+the profits you made on the disposal will generally be assessable as ordinary income and
+not as a capital gain.
+Property you inherited
+Capital gains tax applies when you dispose of a CGT asset that you inherited. However, if
+you inherited real estate, you may not have to pay CGT if you sold it within 2 years of the
+person's death. For example, if the property is the deceased person's main residence just
+before they die and they weren't:
+e renting out any of the property
+e using any of the property for business purposes
+e a foreign resident.
+If you inherited an Australian residential property from a deceased person who had been
+a foreign resident for 6 years or less at the time of their death, the main residence
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-ca.... 7/30
+
+===== p-08 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+exemption that the deceased accrued for the dwelling is available to you as the
+beneficiary. The main residence exemption means you may not pay CGT on any capital
+gain made after you sell or dispose of the property, depending on the use of the property
+by both you and the deceased.
+If you inherit an Australian residential property from a deceased person who had been a
+foreign resident for more than 6 years at the time of their death, any main residence
+exemption that the deceased person may have accrued for that dwelling isn't available to
+you. This means you may have to pay CGT when you sell or dispose of the property.
+If you inherited an Australian residential property and you have been a foreign resident for
+more than 6 years when you sell or dispose of the property, you can't claim the main
+residence exemption for your ownership period.
+Your home may be subject to capital gains tax
+Under the 'main residence exemption’, you generally don't have to pay CGT on the
+disposal of your main residence if you're an Australian resident for tax purposes at the
+time of the disposal. However, you may have to pay tax on some of your capital gain if:
+e the property wasn't your main residence for the whole period you owned it
+e you used the property, or part of it, to produce assessable income (for example,
+you rented it out)
+e the land area was greater than 2 hectares.
+The creation, variation or termination of a granny flat arrangement from 1 July 2021
+shouldn't affect the main residence exemption.
+Asset transfer on marriage or relationship breakdown
+If you transfer an asset to your spouse as a result of a marriage or relationship
+breakdown (/individuals-and-families/investments-and-assets/capital-gains-
+tax/relationship-breakdown-and-capital-gains-tax/when-the-relationship-breakdown-
+rollover-applies), in certain cases, there are no immediate CGT consequences. In these
+cases, there is automatic rollover (you can't choose whether or not it applies).
+However, the person who receives the asset (the transferee spouse) will usually make a
+capital gain or capital loss when they dispose of the asset. If you were the transferee
+spouse and the rollover applies, you may need to get cost base information from your
+former spouse or their tax adviser.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-ca... 8/30
+
+===== p-09 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Your spouse includes another person who:
+e you were in a relationship with that was registered under a prescribed state or
+territory law
+e although not legally married to you, lived with you on a genuine domestic basis in a
+relationship as a couple.
+Tax incentives for investments in affordable housing
+Australian resident individuals who provide affordable rental housing to people earning
+low to moderate income are allowed an additional affordable housing capital gains
+discount (/individuals-and-families/investments-and-assets/capital-gains-tax/property-
+and-capital-gains-tax/cgt-discount-for-affordable-housing) of up to 10%. To qualify for
+this additional discount, you must have provided qualifying affordable rental housing
+through a registered community housing provider:
+e onor after 1 January 2018 for a period, or periods, totalling at least 3 years
+(1,095 days), which may be aggregate usage over different periods
+¢ either directly, or through an interposed entity from a trust or managed investment
+trust - the interposed entity or trust may be a trust or partnership, other than a
+public unit trust or super fund.
+The number of days you may have provided affordable housing before 1 January 2018
+won't be counted.
+This additional capital gains discount is relevant for CGT events occurring on or after
+30 December 2020 as this is the first date that you were able to satisfy the 3-year period
+to qualify for the additional discount.
+The overall effect of this additional affordable housing capital gains discount is that the
+total capital gains discount is now increased from a maximum of 50% to a maximum of
+60% for some qualifying investors.
+If you invested directly in affordable housing, you should have received an annual
+affordable housing certificate from your community housing provider showing the number
+of days your investment property was used to provide affordable housing. If you invested
+in affordable housing through a trust or managed investment trust, you may need to
+contact the trustee to get the number of affordable housing days in order to work out
+your additional affordable housing capital gains discount percentage.
+Granny flat arrangements
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-ca..._ 9/30
+
+===== p-10 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+From 1 July 2021, no CGT event arises to eligible individuals on certain granny flat
+
+arrangements (/individuals-and-families/investments-and-assets/capital-gains-
+
+tax/property-and-capital-gains-tax/granny-flat-arrangements-and-cgt) if the
+
+arrangement satisfies the requirements of the provisions. A granny flat arrangement is a
+
+written agreement that gives an eligible person the right to occupy a property for life.
+
+The CGT exemption will apply to the creation, variation or termination of a granny flat
+
+arrangement.
+
+An arrangement is a granny flat arrangement if:
+
+e the owner or owners of the property are individuals
+
+e one or more eligible people have an eligible granny flat interest (/individuals-and-
+families/investments-and-assets/capital-gains-tax/property-and-capital-gains-
+tax/granny-flat-arrangements-and-cgt) in the property
+
+e the owners and the people with the granny flat interest enter into a written and
+binding granny flat arrangement (/individuals-and-families/investments-and-
+assets/capital-gains-tax/property-and-capital-gains-tax/granny-flat-
+arrangements-and-cgt) (this arrangement mustn't be commercial in nature
+(/individuals-and-families/investments-and-assets/capital-gains-tax/property-
+and-capital-gains-tax/granny-flat-arrangements-and-
+cgt#Commercialarrangements)).
+
+A granny flat interest is where an individual has a right to occupy a property for life under
+
+a granny flat arrangement. A granny flat interest can be held in any type of property,
+
+provided it's a dwelling. This includes the owner's main residence or a separate property.
+
+It isn't restricted to what is commonly referred to as a ‘granny flat’. The interest may be in
+
+part or all of the property.
+
+A granny flat arrangement can be entered into between the property owner or owners
+
+and any eligible party (meaning family or friends). At the time the eligible party entered
+
+into the arrangement they must either:
+
+e have reached age pension age
+(https://www.servicesaustralia.gov.au/individuals/services/centrelink/age-
+pension/who-can-get-it)
+
+e required assistance for day-to-day activities because of a disability and be likely to
+require assistance for at least 12 months after that time.
+
+Foreign residents
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 10/30
+
+===== p-11 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+Foreign residents who are individuals are subject to CGT on:
+
+e direct interests in real estate located in Australia
+
+e aninterest in an entity where they and their associates hold 10% or more of the
+entity and the value of their interest is principally attributable to Australian real
+estate
+
+e an asset they have used in carrying on a business through a permanent
+establishment in Australia
+
+e an option or right to acquire one of the above.
+
+If you were a foreign resident at the time you disposed of your property in Australia,
+
+you're not entitled to the CGT main residence exemption (regardless of the period the
+
+property was your main residence in Australia and the 6-year absence rule).
+
+If you acquired the property at or after 7:30 pm (AEST) on 9 May 2017, you're entitled to
+
+the CGT main residence exemption if certain life events occur within a continuous period
+
+of 6 years of you becoming a foreign resident for tax purposes.
+
+For more information, see Main residence exemption for foreign residents (/individuals-
+
+and-families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-
+
+gains-tax/main-residence-exemption-for-foreign-residents).
+
+Foreign resident capital gains withholding (FRCGW)
+
+Under the FRCGW rules, foreign residents that dispose of certain Australian assets may
+
+have an amount withheld from the sale proceeds they receive.
+
+Similarly, Australian resident vendors could have amounts withheld from their sale
+
+proceeds if they either dispose of:
+
+e Australian real property, without providing the purchaser with an ATO-issued
+clearance certificate (/individuals-and-families/investments-and-assets/capital-
+gains-tax/foreign-residents-and-capital-gains-tax/foreign-resident-capital-gains-
+withholding/australian-residents-and-clearance-certificates)
+
+e anindirect Australian real property interest without providing the purchaser with a
+valid vendor declaration (resident).
+
+If you had amounts withheld from you during the income year, you're entitled to claim a
+
+credit for those amounts paid to the Commissioner by the withholder.
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 11/30
+
+===== p-12 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+For more information, see Foreign resident capital gains withholding (/individuals-and-
+families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-gains-
+tax/foreign-resident-capital-gains-withholding).
+Temporary residents
+Temporary residents are subject to CGT in the same way as foreign residents.
+For the definition of a temporary resident and details of the exemption, see Tax-free
+income for temporary residents in Amounts that you don't pay tax on 2026 (/forms-and-
+instructions/individual-tax-return-2026-instructions/supporting-information-individual-
+tax-return-2026/amounts-that-you-dont-pay-tax-on-2026).
+There are special rules for shares and rights acquired under an employee share scheme.
+What you need to answer this question
+You'll need:
+e Details of the amount of any unapplied net capital losses from earlier years (this is
+the amount at label V at the capital gains question in your last year's tax return).
+e Documents showing the date you acquired any asset to which a CGT event
+happened, the date of the CGT event, and the date and amounts of any
+expenditure you incurred that form part of the cost base and reduced cost base of
+the asset or are taken into account in working out your capital gain or capital loss.
+e Year-end, annual or distribution statements from trusts with net capital gains from
+which you received or were entitled to receive
+distributions of income
+distributions of non-assessable amounts.
+You may also need one or more of the following publications to complete this question.
+They explain the 3 methods available to calculate a capital gain.
+e Capital gains tax (/individuals-and-families/investments-and-assets/capital-
+gains-tax) explains what a capital gain is, how it applies, what assets to include,
+the exceptions and exemptions.
+¢ Guide to capital gains tax 2026 (/forms-and-instructions/capital-gains-tax-guide-
+2026) explains how CGT works and will help you to calculate your net capital gain
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 12/30
+
+===== p-13 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+or net capital loss. It covers CGT issues such as the sale of a rental property,
+vacant land, a holiday home, collectables (for example, jewellery), personal use
+assets (for example, a boat you use for recreation), and real estate, shares and
+units you inherited or got from the breakdown of your marriage or relationship.
+
+e« CGT concessions eligibility overview (/businesses-and-organisations/income-
+deductions-and-concessions/incentives-and-concessions/small-business-cgt-
+concessions/small-business-cgt-concessions-eligibility-conditions/cgt-
+concessions-eligibility-overview) explains what concessions are available to small
+businesses.
+
+e Personal investors guide to capital gains tax 2026 (/forms-and-
+instructions/capital-gains-tax-personal-investors-guide-2026) is shorter and
+simpler than Guide to capital gains tax 2026, it covers
+
+the sale, gift or other disposal of shares and units
+distribution of capital gains from managed funds
+non-assessable payments from companies and managed funds.
+
+The Personal investors guide to capital gains tax 2026 doesn't cover other CGT events, or
+
+the CGT consequences for bonus shares, shares acquired under an employee share
+
+scheme, bonus units, rights and options, and shares and units where a takeover or
+demerger has occurred, see Guide to capital gains tax 2026 (/forms-and-
+instructions/capital-gains-tax-guide-2026).
+
+CGT worksheets
+
+Use the worksheets and follow the steps to help you complete question 18.
+
+For most individuals, the Capital gain or capital loss worksheet 2026 (/forms-and-
+
+instructions/capital-gain-or-capital-loss-worksheet-2026) is all you'll need to work out
+
+what to include at question 18. Make copies of the worksheet if you need more than one.
+
+If you need help completing the Capital gain or capital loss worksheet, see Step 1 in
+
+Capital gains tax schedule and instructions 2026 (/forms-and-instructions/capital-
+
+gains-tax-schedule-2026-instructions) (ignore the word ‘entity’).
+
+How to work out your capital gain or capital loss (/forms-and-instructions/capital-gains-
+
+tax-guide-2026/about-capital-gains-tax/how-to-work-out-your-capital-gain-or-capital-
+
+loss) explains how to calculate a capital gain or capital loss for each CGT event or asset
+
+using examples and the Capital gain or capital loss worksheet 2026.
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 13/30
+
+===== p-14 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+If you have a number of the Capital gain or capital loss worksheets because several CGT
+events happened, you may wish to use the CGT summary worksheet for tax returns 2026
+(/forms-and-instructions/capital-gains-tax-summary-worksheet-2026) to help you
+calculate your net capital gain or net capital loss. Read Steps 2 and 3 in Capital gains tax
+schedule and instructions 2026 (/forms-and-instructions/capital-gains-tax-schedule-
+2026-instructions) (ignoring the word ‘entity’) to find out how to complete the summary
+worksheet. Then complete question 18 in your supplementary tax return.
+Step 1 Types of CGT assets and CGT events
+Certain capital gains and capital losses (that is, those from collectables and personal use
+assets) are treated differently when calculating your net capital gain or net capital loss.
+For explanations of these assets, see Does capital gains tax apply to you? (/forms-and-
+instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/does-capital-gains-
+tax-apply-to-you) Disregard capital losses from personal use assets and don't take them
+into account when working out your net capital gain. You can only use capital losses from
+collectables to reduce capital gains from collectables.
+You need to separate the records of your CGT events into the following 3 categories:
+e those relating to collectables (for example, jewellery)
+e those relating to personal use assets (for example, a boat you use for recreation)
+e other CGT assets or CGT events, including distributions of capital gains from
+managed funds.
+Step 2 Exemptions, rollovers and the additional affordable housing discount
+There are exemptions and rollovers (/forms-and-instructions/capital-gains-tax-guide-
+2026/about-capital-gains-tax/does-capital-gains-tax-apply-to-
+you#Exemptionsandrollovers) that may allow you to reduce, defer or disregard your
+capital gain or capital loss. There is also an additional discount on capital gains for
+resident individuals who invest in affordable housing (/forms-and-instructions/capital-
+gains-tax-guide-2026/about-capital-gains-tax/real-estate-and-main-residence#ato-
+Investinginaffordablehousing).
+If you applied an exemption or rollover to disregard, defer a capital gain or capital loss or
+you qualified for and applied the additional affordable housing discount to reduce a
+capital gain, write X in the Yes box at question 18 Capital gains — label M in your
+supplementary tax return. Write X in the No box if you didn't.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 14/30
+
+===== p-15 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Write in the code box at label M the code from the following list that represents the CGT
+exemption, rollover or additional discount that produced the largest amount of capital
+gain or capital loss deferred or disregarded.
+CGT exemption and rollover codes:
+Code CGT exemption or roll-over
+A Small business active asset reduction (Subdivision 152-C)
+B Small business retirement exemption (Subdivision 152-D)
+c Small business rollover (Subdivision 152-E)
+D Small business 15-year exemption (Subdivision 152-B)
+E Foreign resident CGT exemption (Division 855)
+F Scrip for scrip rollover (Subdivision 124-M)
+I Main residence exemption (Subdivision 118-B)
+J Capital gains disregarded as a result of the sale of a pre-CGT asset
+K Disposal or creation of assets in a wholly-owned company (Division 122)
+L Replacement asset rollovers (Division 124)
+M Exchange of shares or units (Subdivision 124-E)
+N Exchange of rights or options (Subdivision 124-F)
+[e) Exchange of shares in one company for shares in another company (Division 615)
+P Exchange of units in a unit trust for shares in a company (Division 615)
+R Demerger rollover (Subdivision 125-B)
+Ss Same asset rollovers (Division 126)
+T Small business restructure rollover (Subdivision 328-G)
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- | 3-24-supplementary-tax-return-2026/18-c.... 15/30
+
+===== p-16 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+U Early stage investor (Subdivision 360-A)
+
+Vv Venture capital investment (Subdivision 118-F)
+
+WwW Affordable housing discount
+
+Xx Other exemptions and rollovers
+Step 3 Calculating your current year capital gain or loss for each CGT asset or
+event
+Calculate whether you have made a capital gain or capital loss for each CGT event that
+has happened during 2025-26. The Capital gain or capital loss worksheet 2026 (/forms-
+and-instructions/capital-gain-or-capital-loss-worksheet-2026) can help you work this
+out. Don't include capital gains that are disregarded, deferred or reduced, or capital
+losses that are disregarded; see Exemptions and rollovers (/forms-and-
+instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/does-capital-gains-
+tax-apply-to-you#Exemptionsandrollovers).
+Include the relevant capital gains at this step if you're a small business entity and qualify
+for one or more of the following small business CGT concessions:
+e 50% active asset reduction
+e small business rollover
+e small business retirement exemption.
+Don't include capital gains to which the small business 15-year exemption applies, only
+include these in question 8 of the CGT schedule.
+You apply the concessions to the amount of any relevant capital gains remaining after
+step 8.
+In calculating your capital gain, you will use one of the following 3 methods for each
+asset:
+e indexation method
+e discount method
+e ‘other’ method.
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 16/30
+
+===== p-17 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+For a full explanation of these methods and how to use them to calculate your capital gain
+or capital loss for each CGT event, see How to work out your capital gain or capital loss
+(/forms-and-instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/how-
+to-work-out-your-capital-gain-or-capital-loss).
+For a CGT event that happens after 11:45 am AEST on 21 September 1999 to a CGT asset
+that you acquired at or before that time, you can choose to use either the indexation or
+the discount method to calculate your capital gain if you have owned the asset for at
+least 12 months. If you bought and sold your asset within 12 months, you must use the
+‘other’ method to calculate your capital gain.
+If you use the discount method, don't apply the discount percentage until you have
+applied current year capital losses and unapplied net capital losses from earlier years.
+You also need to work out the amount of any capital gains that you're taken to have made
+as part of a distribution from a trust. You must use the same method the trustee used in
+calculating the amount of the capital gain. For more information, see Trust distributions
+and your CGT position (/forms-and-instructions/capital-gains-tax-guide-2026/about-
+capital-gains-tax/trust-distributions-and-your-cgt-position).
+Concessions that may apply
+There are special rules if a trust’s net capital gain was reduced by the CGT discount or by
+applying the small business 50% active asset reduction, or both. The trust should advise
+you if it has claimed either (or both) of these concessions as you will need to adjust the
+amount of the net capital gain to include in your total capital gains. As the beneficiary of
+the capital gain distribution, you do this by grossing up the net capital gain by the amount
+that relates to the discount applied, for example, if the trust's net capital gain was
+reduced by the CGT discount (50%), you adjust the amount of the net capital gain by
+multiplying it by 2. You include this grossed up amount in your total capital gains.
+For more information, see Trust distributions and your CGT position (/forms-and-
+instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/trust-distributions-
+and-your-cgt-position).
+Step 4 Total current year capital gains
+If you don't have any capital gains from collectables, add up all your capital gains from
+step 3 and write this amount at question 18 — label H Total current year capital gains in
+your supplementary tax return.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 17/30
+
+===== p-18 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+If you have a capital gain from collectables, deduct any capital losses from collectables
+(including unapplied net capital losses from earlier years from collectables). Don't deduct
+capital losses from other capital gains at this stage.
+Any capital gain remaining is added to all your other capital gains from step 3. Write the
+total amount at question 18 — label H in your supplementary tax return.
+If you received (or were entitled to receive) a distribution from a trust that includes a net
+capital gain, you also need to include this amount here in your total capital gains. Ensure
+that you gross up the net capital gain amount by the amount that relates to the CGT
+discount applied by the trust. Don't include this amount as a distribution from the trust at
+question 13 Partnerships and trusts in your supplementary tax return.
+If your capital gains from collectables were reduced to zero when you applied your losses
+from collectables, and you still have capital losses from collectables remaining, then make
+a note of this amount.
+This capital loss can be carried forward to future years, see Step 11
+(#Step11Capitallossescarriedforwardtolater), and will be recorded at question 18 —
+label V Net capital losses carried forward to later income years in your supplementary
+tax return.
+Step 5 Capital losses
+If you have no current year capital losses or unapplied net capital losses from earlier
+years, go to Step 8 (#Step8ApplyingtheCGTdiscount). Otherwise, read on.
+From your Capital gain or capital loss worksheet, add up all your capital losses for 2025-
+26 and make a note of this amount. Remember that you don't include capital losses:
+e from personal use assets
+e from collectables
+e that are disregarded (for example, those from assets acquired before
+20 September 1985), see Exemptions and rollovers (/forms-and-
+instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/does-capital-
+gains-tax-apply-to-you#Exemptionsandrollovers).
+If you have a current year capital loss, go to Step 6
+(#Step6Applyingcurrentyearcapitallosses).
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 18/30
+
+===== p-19 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+If you have only unapplied net capital losses from earlier years and no current year capital
+losses, go to Step 7 (#Step7Applyingnetcapitallossesfromearlier).
+Step 6 Applying current year capital losses
+You must apply your current year capital losses from step 5 against (that is, deducted
+from) any capital gains you made during the year to determine your net capital gain or net
+capital loss.
+Example 1: sale of shares and collectables
+Kathleen sold some assets during the year and has the following capital gains and
+capital losses for 2025-26:
+Capital gain on the sale of 1,000 shares for $6 each on 17 December 2025
+Kathleen bought these shares on 17 November 2000 and each has a cost base of $3
+(including incidental costs of acquisition and disposal).
+Capital gain = $6,000 - $3,000 = $3,000
+Kathleen calculates her capital gain using the discount method.
+Capital gain on the sale of 130 shares for $8 each on 27 February 2026
+Kathleen bought these shares on 10 October 2025 and each has a cost base of $4
+(including incidental costs of acquisition and disposal). As the asset was bought and
+sold within 12 months, Kathleen must use the ‘other' method to calculate her capital
+gain from these shares:
+(130 x $8) - (130 x $4) = $520
+Capital loss on the sale of jewellery for $1,000 on 1 April 2026
+Kathleen bought this jewellery for $1,500 and sold it 6 months later for $1,000.
+She calculates her capital loss as follows:
+$1,000 - $1,500 = $500 capital loss
+Kathleen takes the following steps to complete question 18 in her supplementary tax
+return.
+First, Kathleen writes her total current year capital gains of $3,520 ($3,000 + $520)
+from her shares at label H Total current year capital gains. This is the amount before
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 19/30
+
+===== p-20 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+deducting any capital losses or applying the CGT discount. If Kathleen had made a net
+capital gain on her collectables (her jewellery), she would also include it here.
+Next, Kathleen notes her capital loss from collectables on her Capital gain or capital
+loss worksheet 2026 (/forms-and-instructions/capital-gain-or-capital-loss-
+worksheet-2026) or on a separate piece of paper. Although she made a capital loss
+from collectables, she can't reduce her other capital gains by this amount. However,
+she can carry this amount over so that if she makes a capital gain from collectables in
+the future, she can deduct this capital loss from her capital gain on a later tax return. If
+Kathleen has no other capital losses from the current year or earlier income years, she
+will now write the amount of $500 at question 18 — label V Net capital losses carried
+forward to later income years in her supplementary tax return.
+Kathleen still has to complete label A Net capital gain.
+Example 2: capital loss on the sale of shares
+Using the facts from example 1, we will also assume that Kathleen has the following to
+consider:
+Capital loss on the sale of 600 shares for $3 each on 25 June 2026
+Kathleen had bought these shares on 10 October 2025 and each has a reduced cost
+base of $4 (including incidental costs of acquisition and disposal).
+Reduced cost base
+e 600 x $4 = $2,400
+Capital proceeds
+¢ 600 x $3 = $1,800
+Capital loss
+e Reduced cost base - capital proceeds = capital loss
+« $2,400 - $1,800 = $600
+Kathleen now has a $600 loss she can use to deduct from her capital gains. From the
+earlier example, we know Kathleen has a $3,000 capital gain calculated using the
+discount method.
+She has another capital gain of $520 that she calculated using the 'other' method.
+Kathleen chooses to deduct the first $520 of her capital loss from the capital gain
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c..._ 20/30
+
+===== p-21 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+calculated using the ‘other' method and to deduct the remaining $80 from the capital
+gain calculated using the discount method. Working this way gives her the best result:
+¢ ‘other’ method capital gain - $520
+¢ subtract capital loss of $520
+e equals $0 (zero)
+e discount method capital gain of $3,000
+¢ subtract capital loss of $80 ($600 - $520)
+e totals $2,920.
+Kathleen makes a note that she has capital gains of $2,920 calculated using the
+discount method.
+When applying your current year capital losses, you can choose the method that gives
+you the best result to reduce your current year capital gains. While you will need to
+consider your own situation, for most people the order that usually gives the greatest
+benefit and the smallest net capital gain is to apply the capital losses against capital gains
+calculated using the:
+e ‘other’ method
+e indexation method
+e discount method.
+Apply your current year capital losses against your current year capital gains and make a
+note of any capital gains remaining. If you have current year capital losses that can be
+applied to 2025-26 they must be applied here. You can't choose to defer to a later year
+any amount that can be applied this year.
+If your total capital losses for the year are more than your total capital gains, you will need
+to keep a record of the difference. This amount (your net capital loss) is carried over and
+used to reduce your future capital gains. There is no time limit on how long you can carry
+forward your net capital loss. If you have reduced your capital gains to zero, don't put
+anything at label A Net capital gain.
+Step 7 Applying net capital losses from earlier years
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c.... 21/30
+
+===== p-22 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+If you don't have any unapplied net capital losses from earlier years, go to Step 8
+(#Step8ApplyingtheCGTdiscount). Otherwise, read on.
+You can further reduce your current year capital gains by your unapplied net capital
+losses from earlier years.
+You must apply unapplied net capital losses from earlier years against capital gains in the
+order you made them. For example, use net capital losses from 1998-99 before you use
+any net capital losses from 1999-2000. You can then apply these capital losses against
+your capital gains in the manner that gives you the best result. Again, for most people the
+order that usually gives the greatest benefit and the smallest net capital gain is to apply
+the capital losses against capital gains calculated using the:
+e ‘other’ method
+e indexation method
+e discount method.
+Reduce your remaining current year capital gains by any unapplied net capital losses from
+earlier years and make a note of any capital gains remaining. If you have unapplied net
+capital losses from earlier years that can be applied to 2025-26, they must be applied
+here. You can't choose to defer to a later income year any amount that can be applied to
+2025-26.
+You need to keep a record of any unapplied net capital losses from earlier years. You can
+continue to carry forward these amounts and use them to reduce your future capital
+gains. There is no time limit on how long you can carry forward your net capital losses.
+You record these at label V Net capital losses carried forward to later income years, see
+Step 11 (#Step11Capitallossescarriedforwardtolater). If you have reduced your capital
+gains to zero, don't put anything at label A Net capital gain.
+Example 3: unapplied net capital losses from earlier years
+Let us also now assume that Kathleen has the following to consider:
+Kathleen has unapplied net capital losses from earlier years of $400 that aren't from
+collectables or personal use assets.
+In our example so far, Kathleen applied her current year capital loss and had $2,920 of
+capital gains calculated using the discount method remaining.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c... 22/30
+
+===== p-23 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Taking this example further, Kathleen would now also deduct the unapplied net capital
+losses of $400 from earlier income years from her capital gain of $2,920 calculated
+using the discount method:
+$2,920 - $400 = $2,520
+This leaves $2,520 of capital gains calculated using the discount method.
+Kathleen must use all current year capital losses and all the unapplied net capital
+losses from earlier years before applying the CGT discount of 50%. In this example,
+the amount at label V is still $500 because this is what she will carry forward as losses
+from collectables to future income years.
+Step 8 Applying the CGT discount
+You can now reduce any remaining current year capital gains calculated using the
+discount method by the discount percentage (50% for individuals plus any additional
+affordable housing capital gain discount for eligible investors).
+You can't apply the discount to capital gains calculated using the indexation method or
+the ‘other’ method.
+Example 4: total capital gains calculated using the discount method
+From our earlier information, we know Kathleen had capital gains of $2,520 calculated
+using the discount method after applying relevant capital losses. She works out her
+total capital gains by multiplying her capital gain by the CGT discount of 50%:
+$2,520 x 50% = $1,260
+Step 9 Applying the small business CGT concessions
+If you're a small business entity, you may qualify for one or more of the following small
+business CGT concessions:
+e 50% active asset reduction
+e small business rollover
+e small business retirement exemption.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c... 23/30
+
+===== p-24 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+You can apply these concessions now to the amount of any relevant capital gains
+remaining after step 8. You may apply the concessions to capital gains calculated using
+any of the 3 methods. The small business 15-year exemption isn't applied at this step as
+the capital gain to which this exemption applies is excluded under step 3.
+For more information, see Small business CGT concessions (/businesses-and-
+organisations/income-deductions-and-concessions/incentives-and-concessions/small-
+business-cgt-concessions/small-business-cgt-concessions-eligibility-conditions/cgt-
+concessions-eligibility-overview).
+Step 10 Working out your net capital gain
+The amount of your remaining capital gains becomes your net capital gain, which you
+write at question 18 — label A Net capital gain in your supplementary tax return.
+It represents the amount you have written at label H Total current year capital gains
+reduced in accordance with:
+e Step 6 Applying current year capital losses
+(#Step6Applyingcurrentyearcapitallosses)
+e Step 7 Applying net capital losses from earlier years
+(#Step7Applyingnetcapitallossesfromearlier)
+e Step 8 Applying the CGT discount (#Step8ApplyingtheCGTdiscount) (including
+any additional affordable housing capital gain discount)
+e Step 9 Applying the small business CGT concessions
+(#Step9ApplyingthesmallbusinessCGTconcessi)
+If you have capital losses that have reduced your capital gains to zero, don't put anything
+at label A Net capital gain. If you have any capital losses remaining after reducing your
+capital gains, you can carry these forward to future income years, see Step 11
+(#Step11Capitallossescarriedforwardtolater). Again, don't include losses from:
+e assets you acquired before 20 September 1985
+e personal use assets
+e other losses that are disregarded.
+Example 5: question 18 - label A Net capital gain
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c... 24/30
+
+===== p-25 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Because no other CGT concessions apply to Kathleen, she writes $1,260 at
+question 18 — label A Net capital gain in her supplementary tax return.
+Step 11 Capital losses carried forward to later income years
+Your net capital losses amount to be carried forward is the total of any:
+e unapplied current year net capital loss from step 6
+e unapplied net capital losses from earlier years from step 7
+e capital losses from collectables to be applied in future income years from step 4.
+You will need to keep a separate record of unapplied net capital losses from collectables
+because you can only use these to reduce capital gains from collectables in later income
+years. There is no time limit on how long you can carry forward the net capital losses.
+Write this amount (if any) at question 18 — label V in your supplementary tax return.
+Remember to deduct these losses from any capital gains in future income years.
+Example 6: question 18 - label V Net capital losses to be carried forward to later
+income years
+Kathleen has deducted all her current year capital losses (except those from
+collectables) and her net capital losses from earlier years from her capital gains in the
+order that gave her the best result. This means she will only have capital losses from
+collectables to carry forward to a later income year. Kathleen writes $500 at
+question 18 — label V in her supplementary tax return.
+Kathleen must make a note of this capital loss for next year, as she did with the
+unapplied net capital losses from earlier years that she used this year. She must also
+note that her capital losses this year are capital losses from collectables, as she will
+only be able to deduct them against capital gains from collectables in a future year.
+Foreign resident capital gains withholding payments
+Foreign resident capital gains withholding applies to certain transactions entered into on
+or after 1 July 2016. If an amount has been withheld from you and paid to the ATO, we will
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c.... 25/30
+
+===== p-26 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+advise you of the receipt of the withholding amount. You can claim a credit for the
+withholding amount at question 18 — label X in your supplementary tax return.
+Look-through earnout rights and amending your earlier tax
+assessment
+If you received or provided a financial benefit under a look-through earnout right created
+on or after 24 April 2015, you may need to seek an amendment to your tax assessment
+for the year in which the relevant CGT event occurred. You may be able to request such
+amendment via the CGT Schedule (if you satisfy the relevant conditions) when you lodge
+your current year income tax return. Detailed instructions are provided in item 7 Earnouts
+arrangements in Capital gains tax schedule and instructions 2026 (/forms-and-
+instructions/capital-gains-tax-schedule-2026-instructions).
+Completing your supplementary tax return
+To complete this question, follow the steps.
+Step 1
+Read the capital gains tax publication that is relevant to your circumstances and work out
+the amount of your:
+e capital gain or capital loss for each CGT event that happened
+e capital gains from a trust (including a managed fund) for 2025-26.
+Step 2
+Add up all your capital gains for 2025-26 (except those that are disregarded) to work out
+your total current year capital gains.
+Don't apply capital losses, any CGT discounts or the small business concessions (other
+than the 15-year exemption) to these capital gains.
+Write this amount at question 18 — label H.
+Step 3
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c... 26/30
+
+===== p-27 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Work out your net capital gain or net capital loss. This is the amount remaining after
+applying to your 2025-26 capital gains whichever of the following items are relevant to
+you (in the order in the following list):
+e 2025-26 capital losses
+e unapplied net capital losses from earlier years
+e any CGT discounts (including any additional affordable housing discount)
+e the small business 50% active asset reduction
+e the small business retirement exemption or rollover.
+If you have capital losses to apply, you'll find it to your advantage to apply them first to
+capital gains that don't qualify for the CGT discount.
+If you're an individual (including a beneficiary of a trust) and you have a discount capital
+gain, then you may not be entitled to the maximum CGT discount percentage of 50%, if
+you're:
+e a foreign or temporary resident
+e an Australian resident with a period of non-residency after 8 May 2012.
+For more information, see CGT discount for foreign residents (/individuals-and-
+families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-gains-
+tax/cgt-discount-for-foreign-residents).
+If the total amount remaining is positive or zero, write it at question 18 — label A.
+If you have a negative amount, don't put anything at label A. You have net capital losses
+to carry forward to later income years. Write the amount at question 18 — label V.
+You can only use capital losses from collectables to reduce capital gains from
+collectables. You must disregard capital losses from personal use assets.
+Step 4
+Did you apply any exemption, rollover or additional discount?
+e No-Go to Step 5 (#Step5A).
+e Yes — Print X in the Yes box at question 18 — label M.
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c.... 27/30
+
+===== p-28 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+Using the table, choose the exemption, rollover or additional discount code that best
+describes your circumstances. If more than one code applies, choose the code that
+applies to the largest amount of capital gain.
+CGT exemption, roll-over or additional discount type codes
+Code CGT exemption or roll-over
+A Small business active asset reduction (Subdivision 152-C)
+B Small business retirement exemption (Subdivision 152-D)
+c Small business rollover (Subdivision 152-E)
+D Small business 15-year exemption (Subdivision 152-B)
+E Foreign resident CGT exemption (Division 855)
+F Scrip for scrip rollover (Subdivision 124-M)
+I Main residence exemption (Subdivision 118-B)
+J Capital gains disregarded as a result of the sale of a pre-CGT asset
+K Disposal or creation of assets in a wholly-owned company (Division 122)
+L Replacement asset rollovers (Division 124)
+M Exchange of shares or units (Subdivision 124-E)
+N Exchange of rights or options (Subdivision 124-F)
+(e) Exchange of shares in one company for shares in another company (Division 615)
+P Exchange of units in a unit trust for shares in a company (Division 615)
+R Demerger rollover (Subdivision 125-B)
+s Same asset rollovers (Division 126)
+T Small business restructure rollover (Subdivision 328-G)
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- | 3-24-supplementary-tax-return-2026/18-c... 28/30
+
+===== p-29 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+U Early stage investor (Subdivision 360-A)
+Vv Venture capital investment (Subdivision 118-F)
+WwW Affordable housing discount
+Xx Other exemptions and rollovers
+Write the code in the CODE box at question 18 — label M.
+Use code T if you either received or disposed of an asset under the small business
+restructure rollover (/businesses-and-organisations/income-deductions-and-
+concessions/income-and-deductions-for-business/concessions-offsets-and-
+rebates/small-business-restructure-roll-over) provisions.
+Step 5
+Do you have any unapplied net capital losses from earlier years?
+e No-Go to Step 6 (#Step6A).
+e Yes — Read on.
+You can use the net capital losses you have from earlier years, and that you haven't yet
+used, to reduce a capital gain in later years.
+Write the amount of your net capital losses at question 18 — label V in your supplementary
+tax return.
+Step 6
+Are you claiming a credit for amounts withheld under the foreign resident capital gains
+withholding rules?
+e No-Go to Where to go next (#Wheretogonext14)
+e Yes — Read on.
+Write the amount of credit you're claiming at question 18 — label X.
+Where to go next
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions- 13-24-supplementary-tax-return-2026/18-c... 29/30
+
+===== p-30 =====
+8/11/26, 5:41 AM 18 Capital gains 2026 | Australian Taxation Office
+
+e Go to question 19 Foreign entities 2026 (/forms-and-instructions/individual-
+supplementary-tax-return-2026-instructions/income-questions-13-24-
+supplementary-tax-return-2026/19-foreign-entities-2026).
+
+e Return to main menu Individual supplementary tax return instructions 2026
+(/forms-and-instructions/individual-supplementary-tax-return-2026-
+instructions).
+
+¢ Go back to question 17 Net farm management deposits or repayments 2026
+(/forms-and-instructions/individual-supplementary-tax-return-2026-
+instructions/income-questions-13-24-supplementary-tax-return-2026/17-net-
+farm-management-deposits-or-repayments-2026).
+
+QC 106842
+
+Our commitment to you
+
+We are committed to providing you with accurate, consistent and clear information to help
+
+you understand your rights and entitlements and meet your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is misleading and you make
+
+a mistake as a result, we will take that into account when determining what action, if any,
+
+we should take.
+
+Some of the information on this website applies to a specific financial year. This is clearly
+
+marked. Make sure you have the information for the right year before making decisions
+
+based on that information.
+
+If you feel that our information does not fully cover your circumstances, or you are unsure
+
+how it applies to you, contact us or seek professional advice.
+
+Copyright notice
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+You are free to copy, adapt, modify, transmit and distribute this material as you wish (but
+
+not in any way that suggests the ATO or the Commonwealth endorses you or any of your
+
+services or products).
+
+https://www.ato.gov.au/forms-and-instructions/individual-supplementary-tax-return-2026-instructions/income-questions-13-24-supplementary-tax-return-2026/18-c... 30/30

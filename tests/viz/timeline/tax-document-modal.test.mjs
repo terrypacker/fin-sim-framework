@@ -109,15 +109,26 @@ test('CSV button is rendered for a sections-shaped return', () => {
   assert.ok(html.includes('data-doc-idx="0"'));
 });
 
-test('CSV button is omitted for a table-shaped form that flattens to nothing', () => {
-  // Form 8949 is a disposal register — no home in the worksheet columns (§5.4), so
-  // a button here would download an empty file.
+test('CSV button IS rendered for a table-shaped disposal register', () => {
+  // It used to be suppressed: a disposal register has no home in the §5.1 worksheet
+  // columns, so `flattenDocument` yields nothing for it and the button was hidden —
+  // which is why the AU CGT tab had no download. Registers now export in their own
+  // columns instead of being denied an export.
   const modal = new TaxDocumentModal();
   const html  = openHtml(modal, {
     title: 'Form 8949 — 2030', country: 'US', filingStatus: 'Part II',
     table: { heading: 'Sales', columns: ['A'], rows: [['x']], totals: ['Totals'] },
   });
-  assert.ok(!html.includes('tax-doc-csv-btn'));
+  assert.ok(html.includes('tax-doc-csv-btn'));
+});
+
+test('CSV button is omitted for a document with nothing to export', () => {
+  const modal = new TaxDocumentModal();
+  const html  = openHtml(modal, {
+    title: 'Empty — 2030', country: 'US', filingStatus: 'N/A', sections: [],
+  });
+  assert.ok(!html.includes('tax-doc-csv-btn'),
+    'a button that downloads an empty file is worse than no button');
 });
 
 test('clicking CSV downloads a worksheet named after the document', () => {
@@ -158,4 +169,82 @@ test('each tab of a per-person filing exports its own document', () => {
   const hits = captureDownload(() => btns[1].click());
   overlay.remove();
   assert.equal(hits[0].download, 'form-1040-2030-homer.csv', 'the second tab exports Homer');
+});
+
+// ─── Account display names on table rows (design 70) ─────────────────────────
+
+const disposalDoc = () => ({
+  title: 'CGT Worksheet — FY 2031–32', country: 'AU', taxYear: 2031,
+  filingStatus: 'Capital Gain or Capital Loss Worksheet',
+  table: {
+    heading: 'Disposals',
+    columns: ['CGT Asset or Event', 'Capital Proceeds'],
+    rows: [
+      [{ stateKey: 'usStockAccount', text: 'usStockAccount' }, 1000],
+      [{ stateKey: 'neverRegistered', text: 'neverRegistered' }, 500],
+      ['A plain string cell', 250],
+    ],
+    totals: ['Totals', 1750],
+  },
+});
+
+function namedRegistry(names) {
+  const reg = wiredRegistry('AUD');
+  reg.registerDisplayRecord = () => {};
+  reg.displayNameFor = (k) => names[k] ?? null;
+  return reg;
+}
+
+test('table rows resolve a stateKey cell to the account display name', () => {
+  const m = new TaxDocumentModal();
+  m.schemaRegistry = namedRegistry({ usStockAccount: 'US Brokerage (Terry)' });
+  const html = openHtml(m, disposalDoc());
+  assert.ok(html.includes('US Brokerage (Terry)'), 'the name replaces the key');
+  assert.ok(!html.includes('>usStockAccount<'), 'the raw key is gone from the row');
+});
+
+test('an unregistered key keeps its fallback text, and plain cells are untouched', () => {
+  // design 70 contract: `displayNameFor(k) ?? <fallback>`. A key the registry never
+  // saw must render exactly as it did before, not as blank or "[object Object]".
+  const m = new TaxDocumentModal();
+  m.schemaRegistry = namedRegistry({ usStockAccount: 'US Brokerage (Terry)' });
+  const html = openHtml(m, disposalDoc());
+  assert.ok(html.includes('neverRegistered'));
+  assert.ok(html.includes('A plain string cell'));
+  assert.ok(!html.includes('[object Object]'));
+});
+
+test('with no registry at all the rows still read', () => {
+  const m = new TaxDocumentModal();                 // no schemaRegistry
+  const html = openHtml(m, disposalDoc());
+  assert.ok(html.includes('usStockAccount'));
+  assert.ok(!html.includes('[object Object]'));
+});
+
+test('the CSV export shows the same names as the table', () => {
+  // Resolving per-render instead of at open would leave the download showing raw
+  // stateKeys beside a table showing names.
+  const m = new TaxDocumentModal();
+  m.schemaRegistry = namedRegistry({ usStockAccount: 'US Brokerage (Terry)' });
+  m.open(disposalDoc());
+  const overlay = document.getElementById('tax-doc-modal-overlay');
+  const blobs = [];
+  const realBlob = global.Blob;
+  const realURL  = global.URL;
+  global.Blob = class { constructor(parts) { blobs.push(parts.join('')); } };
+  global.URL  = { createObjectURL: () => 'blob:stub', revokeObjectURL: () => {} };
+  try { overlay.querySelector('.tax-doc-csv-btn').click(); }
+  finally { global.Blob = realBlob; global.URL = realURL; overlay.remove(); }
+
+  assert.ok(blobs[0].includes('US Brokerage (Terry)'), 'the CSV carries the name too');
+  assert.ok(!blobs[0].includes('[object Object]'));
+});
+
+test('resolving names does not mutate the caller\'s document', () => {
+  const m = new TaxDocumentModal();
+  m.schemaRegistry = namedRegistry({ usStockAccount: 'US Brokerage (Terry)' });
+  const doc = disposalDoc();
+  openHtml(m, doc);
+  assert.deepEqual(doc.table.rows[0][0], { stateKey: 'usStockAccount', text: 'usStockAccount' },
+    'the document handed in must be unchanged — it may be shared or re-rendered');
 });

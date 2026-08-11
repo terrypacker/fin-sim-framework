@@ -9,7 +9,7 @@
  */
 
 import { WB_EVENTS } from '../workbench/workbench-runtime.js';
-import { worksheetRowsFromDocuments, toCsv } from '../../finance/tax/tax-worksheet-export.js';
+import { worksheetRowsFromDocuments, toCsv, tableDocumentToCsv, cellText } from '../../finance/tax/tax-worksheet-export.js';
 import { withBom } from '../../utils/csv.js';
 
 /**
@@ -63,7 +63,7 @@ export class TaxDocumentModal {
 
   /** @param {TaxDocument|TaxDocument[]} docOrDocs */
   open(docOrDocs) {
-    const docs = Array.isArray(docOrDocs) ? docOrDocs : [docOrDocs];
+    const docs = (Array.isArray(docOrDocs) ? docOrDocs : [docOrDocs]).map(d => this._withNames(d));
     // Retained so the CSV button can export the document it sits under (design 71
     // §11.1). Indexed by the `data-doc-idx` stamped on each panel's button.
     this._docs = docs;
@@ -125,6 +125,7 @@ export class TaxDocumentModal {
       </div>
       <div class="tax-doc-body">
         ${body}
+        ${_renderNotes(doc)}
       </div>
       <div class="tax-doc-footer">
         ${this._csvButton(doc, idx)}
@@ -132,24 +133,56 @@ export class TaxDocumentModal {
   }
 
   /**
-   * CSV export for the document on screen (design 71 §11.1). Emitted only when the
-   * document actually flattens to worksheet rows — table-shaped forms (Form 8949,
-   * the AU CGT Schedule) are disposal registers with no home in the worksheet column
-   * set (§5.4), and offering a button that downloads an empty file would be worse
-   * than offering none.
+   * CSV export for the document on screen (design 71 §11.1).
+   *
+   * Two shapes, two exports. A section-shaped return flattens to the §5.1 worksheet
+   * columns; a table-shaped disposal register (Form 8949, the AU CGT worksheet) has
+   * columns with no home in that set and exports as itself via `tableDocumentToCsv`.
+   * The button used to be suppressed for the second kind entirely, which is why the
+   * CGT tab had no download.
    */
   _csvButton(doc, idx) {
-    if (!worksheetRowsFromDocuments(doc).length) return '';
+    if (!this._csvFor(doc)) return '';
     return `<button class="tax-doc-csv-btn" data-doc-idx="${idx}" title="Download this return as CSV">&#11015; CSV</button>`;
+  }
+
+  /**
+   * Resolve any `{ stateKey, text }` cells to the account's display name.
+   *
+   * Done ONCE here, at open, rather than inside the renderer — so the table on screen,
+   * the CSV the button downloads and the filename all show the same thing. Resolving
+   * per render would leave the export showing raw stateKeys next to a table showing
+   * names, which is the state this fixes.
+   *
+   * It happens in the modal because this is the only layer that has a
+   * `StateSchemaRegistry`: `TaxDocumentRegistry` builds documents from a journal
+   * entry and nothing else. Copy-on-write — the caller's document is never mutated,
+   * and an unresolvable key keeps the fallback text (design 70's stated contract:
+   * `displayNameFor(k) ?? <fallback>`), so a document opened without a registry, or
+   * one naming an account the registry never saw, reads exactly as it did before.
+   */
+  _withNames(doc) {
+    if (!doc?.table?.rows?.some(r => r.some(c => c && typeof c === 'object'))) return doc;
+    const resolve = (cell) => (cell && typeof cell === 'object')
+      ? (this._schemaRegistry?.displayNameFor?.(cell.stateKey) ?? cellText(cell))
+      : cell;
+    return { ...doc, table: { ...doc.table, rows: doc.table.rows.map(r => r.map(resolve)) } };
+  }
+
+  /** CSV text for a document, or '' when it has nothing exportable. */
+  _csvFor(doc) {
+    if (doc?.table) return tableDocumentToCsv(doc);
+    const rows = worksheetRowsFromDocuments(doc);
+    return rows.length ? toCsv(rows) : '';
   }
 
   /** Flatten the clicked panel's document and hand the browser a CSV download. */
   _downloadCsv(idx) {
     const doc  = this._docs?.[idx];
-    const rows = worksheetRowsFromDocuments(doc);
-    if (!rows.length) return;
+    const text = this._csvFor(doc);
+    if (!text) return;
 
-    const csv  = withBom(toCsv(rows));
+    const csv  = withBom(text);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -291,6 +324,21 @@ function _renderFxNote(doc) {
   const [from, to] = String(doc.fxPair ?? 'USD_AUD').split('_');
   return `<div class="tax-doc-fx-note" title="Rate in force at settlement; the cross-border figures on this return were converted through it">`
     + `FX at settlement: 1 ${from} = ${doc.fxRate.toFixed(6)} ${to}</div>`;
+}
+
+/**
+ * Document-level qualifications, printed under the figures they qualify.
+ *
+ * A disposal register states which cost base it used, why its rows carry no
+ * acquisition date, and what it had to exclude. Those are not decoration: a reader
+ * comparing our cost base against a broker statement will find it different, and the
+ * reason (the s855-45 residency step-up) has to be on the document rather than in a
+ * source file. They travel into the CSV export too.
+ */
+function _renderNotes(doc) {
+  if (!doc?.notes?.length) return '';
+  const items = doc.notes.map(n => `<li class="tax-doc-note">${n}</li>`).join('');
+  return `<ul class="tax-doc-notes">${items}</ul>`;
 }
 
 /**

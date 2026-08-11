@@ -34,8 +34,6 @@ import { taxYearLabel }          from '../tax-year-label.js';
  * so it must stay out of every footing sum. `memo` is the flag that says so; the
  * section-reconciliation tests filter on it exactly as they do on `sub`.
  */
-const CGT_SCHEDULE_THRESHOLD = 10_000;
-
 export class AuTaxDocument2026 extends BaseTaxDocumentModule {
   get countryCode() { return 'AU'; }
   get year()        { return 2026; }
@@ -43,17 +41,47 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
   /**
    * @param {object}   taxDetail
    * @param {number}   taxYear
-   * @param {object[]} [saleRecords]  - Capital gain transactions from journal mining.
-   * @returns {object|object[]}  Single ITR, or [ITR, CGT Schedule] array when schedule rules apply.
+   * @param {object|object[]} [saleRecords]  Per-disposal rows from journal mining —
+   *   either a bare array or `{ rows, unattributed }` from `_worksheetRowsFor`.
+   * @param {object}   [period]
+   * @returns {object|object[]}  The ITR alone, or the ITR followed by its supplementary
+   *   forms: the CGT summary worksheet, then the per-disposal worksheet.
    */
   generate(taxDetail, taxYear, saleRecords = [], period = null) {
-    const itr = this._generateItr(taxDetail, taxYear, period);
-    const needsSchedule = taxDetail.isResident
-      && saleRecords.length > 0
-      && Math.abs(taxDetail.inputs.capitalGains) > CGT_SCHEDULE_THRESHOLD;
-    return needsSchedule
-      ? [itr, this._generateCgtSchedule(saleRecords, taxYear)]
-      : itr;
+    const itr  = this._generateItr(taxDetail, taxYear, period);
+    const docs = [itr];
+
+    // The CGT summary worksheet — the ATO's own footing form for item 18 (§ below).
+    // Emitted for any resident with CGT activity, including a pure loss year, because
+    // a year that produces only a carried-forward loss still has a label V to state.
+    if (this._needsCgtSummary(taxDetail)) {
+      docs.push(this._generateCgtSummary(taxDetail, taxYear));
+    }
+
+    if (taxDetail.isResident && (saleRecords.rows ?? saleRecords).length > 0) {
+      docs.push(this._generateCgtWorksheet(saleRecords, taxYear));
+    }
+
+    return docs.length === 1 ? itr : docs;
+  }
+
+  /**
+   * Whether this return has anything for a CGT summary worksheet to say.
+   *
+   * Deliberately NOT the A$10,000 test that gates the CGT schedule above: that
+   * threshold is the *entity* lodgment trigger for a company/trust/fund, and it does
+   * not govern this worksheet at all. The worksheet is working paper — the ATO's
+   * guidance is that individuals with more complex CGT affairs "may also find it
+   * useful" — so the only sensible gate is "was there CGT activity".
+   *
+   * A zero-gain year with a live loss pool still qualifies: it carries the pool
+   * forward, and that movement is exactly what a reader needs to see stated.
+   */
+  _needsCgtSummary(taxDetail) {
+    if (!taxDetail.isResident) return false;
+    return (taxDetail.inputs?.capitalGains ?? 0) !== 0
+      || (taxDetail.openingCapitalLossPool ?? 0) > 0
+      || (taxDetail.closingCapitalLossPool ?? 0) > 0;
   }
 
   _generateItr(taxDetail, taxYear, period = null) {
@@ -271,28 +299,293 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
     return [{ heading: 'Worksheet — Foreign Relief', lineItems }];
   }
 
-  _generateCgtSchedule(saleRecords, taxYear) {
-    const fyLabel        = taxYearLabel('AU', taxYear);
-    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
-    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
-    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+  /**
+   * Column labels for the three ways ITAA 1997 lets a capital gain be measured, as
+   * the ATO CGT summary worksheet names them. FY2027+ overrides `discount`: the
+   * reform replaces the Division 115 discount with cost-base indexation, so the
+   * same ≥12-month slice is still a distinct column but is no longer a discount one.
+   */
+  _cgtMethodLabels() {
+    return { discount: 'Discount Method', other: "'Other' Method" };
+  }
+
+  /** Part 4's heading and relief line. FY2027+ overrides both. */
+  _cgtPart4Heading()       { return 'Part 4 — CGT Discount on Capital Gains'; }
+  _cgtSummaryReliefLabel() { return 'CGT Discount Applied (4A)'; }
+
+  /**
+   * The gain the year's relief is computed ON — stated so the relief line below it
+   * has a visible base rather than appearing from nowhere.
+   *
+   * Division 115 discounts the ≥12-month slice ALONE, so that slice is the base here.
+   * FY2027+ overrides this: the reform indexes the whole gain, and reporting the
+   * ≥12-month slice as its base would invite a reader to check 385.85 against 1,426.99
+   * and conclude the arithmetic is broken when the relief never looked at that figure.
+   */
+  _cgtReliefBase(taxDetail) {
     return {
-      title:        `CGT Schedule — ${fyLabel}`,
+      label:  `Capital Gains eligible for relief (${this._cgtMethodLabels().discount})`,
+      amount: taxDetail.discountableGainsNetted ?? 0,
+    };
+  }
+
+  /**
+   * CGT summary worksheet — the ATO's footing form for item 18 of the individual
+   * supplementary return (`docs/au-tax/ato-forms/cgt-summary-worksheet-2025-form.txt`).
+   *
+   * **Why this exists at all.** The return's Income section states the gain, the
+   * relief and the net gain — H, the discount, and A. It does not state either loss
+   * step or the carried-forward balance, so its capital-gains figure cannot be
+   * checked: a reader given "capital gains 10,107" and "net capital gains 5,054" has
+   * no way to tell a clean year from one where a loss pool absorbed half the gain.
+   * The ATO's answer to exactly that problem is this worksheet, and its shape here is
+   * the ATO's, cell references included, so a figure can be tied straight across.
+   *
+   * **The parts we do not emit.** Part 2C (net capital losses transferred in) is
+   * companies only. Part 5 (small business concessions) and Part 7 (earnout
+   * arrangements) are unmodelled. Part 9 (collectables losses carried forward) is
+   * unmodelled and NOT merely absent — see the note on the loss sections below.
+   *
+   * **The method columns.** ITAA 1997 measures a gain three ways — indexation,
+   * discount, and 'other' — and the worksheet is a grid because *which column a loss
+   * lands on changes the tax*. We carry two of the three: `auDiscountableGainsYTD`
+   * is the discount column and the remainder is 'other'. That is the same split
+   * `_applyCapitalLosses` applies losses across, so the grid here is a view of the
+   * engine's own working rather than a reconstruction of it.
+   */
+  _generateCgtSummary(taxDetail, taxYear) {
+    const fyLabel = taxYearLabel('AU', taxYear);
+    const steps   = taxDetail.capitalLossSteps ?? null;
+    const m       = this._cgtMethodLabels();
+
+    return {
+      title:        `CGT Summary Worksheet — ${fyLabel}`,
       country:      'AU',
       taxYear,
-      filingStatus: 'Capital Gains Tax Schedule',
+      filingStatus: 'CGT Summary Worksheet',
+      sections: [
+        this._cgtPart1(taxDetail, steps, m),
+        ...this._cgtLossParts(taxDetail, steps, m),
+        this._cgtPart4(taxDetail, steps),
+        this._cgtPart6(taxDetail),
+        this._cgtReturnLabels(taxDetail),
+      ],
+    };
+  }
+
+  /**
+   * Part 1 / Table 1 — the year's gains and losses by method column.
+   *
+   * The ATO's table 1 is a grid of asset CATEGORY (listed shares, other shares, real
+   * estate in Australia, other real estate, collectables, …) × method, and only its
+   * bottom row is a pure column total. We emit that bottom row: the category
+   * breakdown lives one level down, in the per-disposal capital gain or capital loss
+   * worksheet, and cannot be built from a `TaxComputationResult` — which is a
+   * per-person aggregate with no disposals left in it.
+   */
+  _cgtPart1(taxDetail, steps, m) {
+    const gross = taxDetail.inputs?.capitalGains ?? 0;
+    const lineItems = [];
+
+    if (steps) {
+      lineItems.push(
+        { label: `Capital Gains: ${m.discount}`, amount: steps.grossDiscountable, sub: true },
+        { label: `Capital Gains: ${m.other}`,    amount: steps.grossOther,        sub: true },
+      );
+    }
+    lineItems.push({ label: 'Total Current Year Capital Gains (1J)', amount: Math.max(0, gross) });
+    if (steps) {
+      lineItems.push({ label: 'Total Current Year Capital Losses (2A)', amount: steps.currentYear.losses });
+    }
+    return { heading: 'Part 1 — Total Current Year Capital Gains and Losses', lineItems };
+  }
+
+  /**
+   * Parts 2A, 2B and 3 — the two s102-5 loss steps and what they leave behind.
+   *
+   * **Ordering is the Act's, not a presentational choice.** s102-5(1) reduces gains by
+   * the year's own capital losses at Step 1, by carried-forward net capital losses at
+   * Step 2, and only reaches the discount percentage at Step 5. Discounting first
+   * would halve the gain and then let the loss eat the halved figure, wasting half of
+   * every loss — which is why Part 4 below comes after these and not before.
+   *
+   * Per-column sub-rows appear only when a step actually consumed something, so a
+   * clean year prints three short lines instead of nine zeros. The step TOTALS are
+   * always printed even at zero, because those are the cells a reader ties across.
+   *
+   * **Collectables are not separated, and that is a real gap, not a simplification.**
+   * s108-10(1) quarantines a collectables loss to collectables gains, which is what
+   * the worksheet's Part 9 and its separate carried-forward balance exist to enforce.
+   * `COLLECTIBLE_SALE_TAX` books into the same `auCapitalGainsYTD` as everything else,
+   * so a bullion loss here would shelter ordinary capital gains. Narrow — it needs a
+   * collectable sold below its cost base — but stated rather than silently footed.
+   */
+  _cgtLossParts(taxDetail, steps, m) {
+    if (!steps) return [];
+    const { currentYear, priorYear } = steps;
+    const afterCurrent = steps.grossDiscountable + steps.grossOther - currentYear.applied;
+    const afterPrior   = afterCurrent - priorYear.applied;
+
+    // A per-column breakdown is worth its rows only when the two columns disagree;
+    // when a step took everything from one column it says nothing the total does not.
+    const columns = (step) => (step.appliedOther > 0 && step.appliedDiscountable > 0)
+      ? [
+          { label: `Applied against ${m.other}`,    amount: -step.appliedOther,        sub: true },
+          { label: `Applied against ${m.discount}`, amount: -step.appliedDiscountable, sub: true },
+        ]
+      : [];
+
+    const parts = [
+      {
+        heading: 'Part 2A — Applying Current Year Capital Losses',
+        lineItems: [
+          ...columns(currentYear),
+          { label: 'Current Year Capital Losses Applied (2B)', amount: -currentYear.applied },
+          { label: 'Capital Gains after Current Year Losses',  amount:  afterCurrent },
+        ],
+      },
+      {
+        heading: 'Part 2B — Applying Prior Year Net Capital Losses',
+        lineItems: [
+          { label: 'Prior Year Net Capital Losses Available (Z1)', amount: priorYear.opening },
+          ...columns(priorYear),
+          { label: 'Prior Year Net Capital Losses Applied (2C)',   amount: -priorYear.applied },
+          { label: 'Net Capital Gains after All Capital Losses',   amount:  afterPrior },
+        ],
+      },
+    ];
+
+    // Part 3 states the pool the settle will persist. Shown only when there IS a pool
+    // — on the common year it is zero in all three cells and says nothing.
+    if (currentYear.unapplied > 0 || priorYear.unapplied > 0) {
+      parts.push({
+        heading: 'Part 3 — Unapplied Net Capital Losses Carried Forward',
+        lineItems: [
+          { label: 'Unapplied Current Year Capital Losses (K)',   amount: currentYear.unapplied, sub: true },
+          { label: 'Unapplied Prior Year Net Capital Losses (L)', amount: priorYear.unapplied,   sub: true },
+          { label: 'Net Capital Losses Carried Forward (3B)',     amount: taxDetail.closingCapitalLossPool ?? 0 },
+        ],
+      });
+    }
+    return parts;
+  }
+
+  /**
+   * Part 4 / Table 6 — the Division 115 discount, applied to the discount column only.
+   *
+   * `cgtDiscount` is the relief the return actually took, so this line is the return's
+   * own figure rather than a re-derived 50%: the s115-115 apportionment (design 83 G7)
+   * can make the effective reduction less than half, and recomputing it here would
+   * quietly disagree with the Income section a tab away.
+   */
+  _cgtPart4(taxDetail, steps) {
+    const base = this._cgtReliefBase(taxDetail);
+    return {
+      heading: this._cgtPart4Heading(),
+      lineItems: [
+        ...(steps ? [{ ...base, sub: true }] : []),
+        { label: this._cgtSummaryReliefLabel(), amount: -(taxDetail.cgtDiscount ?? 0) },
+        { label: 'Capital Gains after Relief',  amount: taxDetail.discountedCapitalGains ?? 0 },
+      ],
+    };
+  }
+
+  /** Part 6 / Table 8 — the net capital gain, cell 6A. */
+  _cgtPart6(taxDetail) {
+    return {
+      heading: 'Part 6 — Net Capital Gain Calculation',
+      lineItems: [
+        { label: 'Net Capital Gain (6A)', amount: taxDetail.discountedCapitalGains ?? 0 },
+      ],
+    };
+  }
+
+  /**
+   * Where the worksheet lands on the return. These three labels are the whole point
+   * of the form, and V in particular has no other home: the Income section states the
+   * gain and the relief, but a year whose losses exceeded its gains reports nothing at
+   * A and everything at V, and until now the return showed neither.
+   */
+  _cgtReturnLabels(taxDetail) {
+    return {
+      heading: 'Tax Return — Item 18 Capital Gains',
+      lineItems: [
+        { label: 'H — Total Current Year Capital Gains',            amount: Math.max(0, taxDetail.inputs?.capitalGains ?? 0) },
+        { label: 'A — Net Capital Gain',                            amount: taxDetail.discountedCapitalGains ?? 0 },
+        { label: 'V — Net Capital Losses Carried Forward',          amount: taxDetail.closingCapitalLossPool ?? 0 },
+      ],
+    };
+  }
+
+  /**
+   * Capital gain or capital loss worksheet — NAT 4151, one row per CGT event
+   * (`docs/au-tax/ato-forms/capital-gain-or-loss-worksheet-2026-NAT4151.txt`).
+   *
+   * **This replaced a "CGT Schedule" that was the wrong form three times over.** The
+   * CGT schedule is a company/trust/fund lodgment — *"Individuals, including individual
+   * partners in a partnership, who lodge using a paper tax return are not required to
+   * complete a CGT schedule"* — and the A$10,000 test that gated it is the entity
+   * threshold, which also fires on total LOSSES, a leg the gate never had. Beyond
+   * being the wrong form it stated the wrong figures: every household disposal under
+   * one taxpayer's name, the US gain rather than the s855-45 AU gain, and USD amounts
+   * on a document the modal formats as AUD.
+   *
+   * Everything below is per person, AU-measure and AUD, so the gain columns total to
+   * the same figure the CGT summary worksheet reports at 1J and the return reports at
+   * label H.
+   *
+   * **Columns.** NAT 4151 computes a gain three ways and a loss a fourth, and the
+   * split is not presentational — the ATO's summary worksheet applies losses per
+   * method column because which column a loss lands on changes the tax. Date acquired
+   * is deliberately absent: holdings are consumed FIFO from a pool, so there is no
+   * single acquisition date to state and printing "Various" on every row would be a
+   * column of noise.
+   */
+  _generateCgtWorksheet(saleRecords, taxYear) {
+    const fyLabel = taxYearLabel('AU', taxYear);
+    const rows    = saleRecords.rows ?? saleRecords;
+    const unattr  = saleRecords.unattributed ?? null;
+    const m       = this._cgtMethodLabels();
+    const sum     = (f) => rows.reduce((s, r) => s + (r[f] ?? 0), 0);
+
+    return {
+      title:        `CGT Worksheet — ${fyLabel}`,
+      country:      'AU',
+      taxYear,
+      filingStatus: 'Capital Gain or Capital Loss Worksheet',
+      // Stated on the document rather than left for the reader to wonder about: both
+      // are real limits of what the journal records, and both change how a row reads.
+      notes: [
+        'Cost base is the AU cost base (ITAA 1997 s855-45 step-up where the asset was held before AU residency), not the US basis.',
+        'Assets are consumed FIFO from a pooled holding, so no single acquisition date applies to a row.',
+        ...(unattr?.count > 0
+          ? [`${unattr.count} disposal(s) totalling ${unattr.proceeds.toFixed(2)} in proceeds produced no AU gain and could not be attributed to an owner; they are excluded above and contribute nothing to any gain column.`]
+          : []),
+      ],
       table: {
-        heading: 'Disposal of Capital Assets',
-        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain / (Loss)'],
-        rows: saleRecords.map(r => [
-          r.description,
-          r.dateAcquired,
+        heading: 'Capital Gain or Capital Loss for Each CGT Event',
+        columns: [
+          'CGT Asset or Event', 'Category', 'Date of CGT Event',
+          'Capital Proceeds', 'Cost Base',
+          `Gain: ${m.discount}`, `Gain: ${m.other}`, 'Capital Loss',
+        ],
+        rows: rows.map(r => [
+          // Keyed cell: the modal resolves it to the account's display name, and
+          // falls back to this text wherever no registry is in scope (design 70).
+          r.stateKey ? { stateKey: r.stateKey, text: r.description } : r.description,
+          r.category,
           _fmtDate(r.dateSold),
           r.proceeds,
-          r.costBasis,
-          r.gain,
+          r.costBase,
+          r.discountGain,
+          r.otherGain,
+          r.loss,
         ]),
-        totals: ['Totals', '', '', totalProceeds, totalCostBasis, totalGain],
+        totals: [
+          'Totals', '', '',
+          sum('proceeds'), sum('costBase'),
+          sum('discountGain'), sum('otherGain'), sum('loss'),
+        ],
       },
     };
   }

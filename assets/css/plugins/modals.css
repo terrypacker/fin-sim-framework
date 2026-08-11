@@ -68,6 +68,11 @@
 /* FX rate behind the return's converted figures — supporting detail, so lighter
    than the filing status it sits under. */
 .tax-doc-fx-note { color: var(--text-muted); font-size: 10px; margin-top: 2px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+/* Document-level qualifications under a disposal register — the cost-base basis, the
+   absent acquisition date, anything excluded. Muted, but not so faint they read as
+   decoration: they change how the numbers above them should be read. */
+.tax-doc-notes { margin: 10px 0 0; padding-left: 16px; list-style: disc; }
+.tax-doc-note  { color: var(--text-muted); font-size: 10px; line-height: 1.5; margin-top: 3px; }
 .tax-doc-close-x {
   background: none;
   border: none;

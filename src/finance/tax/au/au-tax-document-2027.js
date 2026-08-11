@@ -46,6 +46,33 @@ export class AuTaxDocument2027 extends AuTaxDocument2026 {
     };
   }
 
+  /**
+   * Under the reform the ≥12-month slice no longer names a relief METHOD — indexation
+   * applies to the whole gain — so the columns are labelled by the holding-period test
+   * that actually still divides them. That division stays live because it is what
+   * `_applyCapitalLosses` orders losses by (design 90 §5.3), not because it earns the
+   * two halves different relief; calling either column "Indexation Method" would imply
+   * the other one misses out on indexation, which is the opposite of the reform.
+   */
+  _cgtMethodLabels() {
+    return { discount: 'Held ≥ 12 Months', other: 'Held < 12 Months' };
+  }
+
+  _cgtPart4Heading()       { return 'Part 4 — Cost-Base Indexation on Capital Gains'; }
+  _cgtSummaryReliefLabel() { return 'Cost-Base Indexation Relief (4A)'; }
+
+  /**
+   * The reform indexes the WHOLE net capital gain, so the base is the post-loss
+   * nominal total — not the ≥12-month slice the FY2026 Division 115 discount uses.
+   * `cgtDiscount` here is `nominal − real`, and this is the nominal it came from.
+   */
+  _cgtReliefBase(taxDetail) {
+    return {
+      label:  'Net Capital Gains before indexation',
+      amount: taxDetail.nettedCapitalGains ?? 0,
+    };
+  }
+
   _residentTaxComputationSection(taxDetail) {
     const { inputs } = taxDetail;
     const topUp = taxDetail.cgtMinimumTaxTopUp ?? 0;

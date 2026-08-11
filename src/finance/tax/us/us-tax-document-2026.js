@@ -296,7 +296,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis',
                   'Code', 'Adjustment', 'Gain / (Loss)'],
         rows: saleRecords.map(r => [
-          r.description,
+          // Keyed cell (design 70): the modal resolves the account's display name,
+          // falling back to this text where no registry is in scope. Without it a
+          // disposal reads `usStockAccount` whenever the account carries no explicit
+          // name, which is the common case — the emitter's `account.name || stateKey`
+          // has nothing better to fall back to.
+          r.stateKey ? { stateKey: r.stateKey, text: r.description } : r.description,
           r.dateAcquired,
           _fmtDate(r.dateSold),
           r.proceeds,

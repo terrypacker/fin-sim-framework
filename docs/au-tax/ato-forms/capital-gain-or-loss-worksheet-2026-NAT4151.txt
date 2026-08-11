@@ -1,0 +1,133 @@
+CAPITAL GAIN OR CAPITAL LOSS WORKSHEET
+This worksheet helps you calculate a capital gain for each CGT asset or any other CGT event1 using the indexation method2, the discount method3
+and the ‘other’ method. It also helps you calculate a capital loss.
+CGT asset type or CGT event                           Shares in companies listed on an                       Other shares5                                 Units in unit trusts listed on an Australian
+                                                      Australian securities exchange4                                                                      securities exchange6
+                                                      Other units7                                           Real estate situated in Australia8            Other real estate9
+
+                                                      Amount of capital gains from a trust10                 Collectables11                                Other CGT assets and any other CGT events12
+
+Description of CGT asset or CGT event
+Date of                             Date of
+acquisition                         CGT event                                         1                  2                    3                   4                5                 6                    7
+
+ELEMENTS OF THE COST BASE                                                         Amount           Amounts to              Cost base        Amounts to       Reduced             Indexation        Cost base
+OR REDUCED COST BASE                                                                               be deducted              (1 – 2)         be deducted      cost base             factor17         indexed
+                                                                                                  for cost base16                           for reduced       (1 – 4)                                (3 6)
+                                                                                                                                             cost base16
+Acquisition or purchase cost of the CGT asset 13
+
+Incidental costs to acquire the CGT asset
+
+Incidental costs that relate to the CGT event14
+
+Costs of owning the CGT asset15
+
+Capital expenditure to increase or preserve the
+asset’s value or to install or move it
+Capital costs to establish, preserve or defend title to,
+or a right over, the CGT asset
+                                                                              Cost base unindexed                     $
+                                                                                                                      Reduced cost base16                  $
+                                                                                                                                                           Cost base indexed                      $
+
+CAPITAL GAIN CALCULATION                                                                                                                                        CAPITAL LOSS CALCULATION
+Indexation method                                 Discount method                                       ‘Other’ method                                          Capital loss
+                                                                                                        (CGT asset held less than 12 months)
+
+Capital proceeds18          $                    Capital proceeds18             $                     Capital proceeds18             $                       Reduced cost base             $
+less:                       $                    less:                          $                     less:                          $                       less:                         $
+cost base indexed                                 cost base unindexed                                   cost base unindexed                                     capital proceeds18
+
+Capital gain (a)            $                    Capital gain (b)*              $                     Capital gain                   $                       Capital loss19                $
+* In choosing between capital gain (a) or (b), remember that the CGT discount will not apply to (a)     Group all of your worksheets according to the CGT asset or CGT event selected and transfer
+  but it will reduce the amount of capital gain remaining after capital losses are deducted from (b).   the capital gain and capital loss to part 1 of the CGT summary worksheet (if required).
+1 CGT event                                       5 Other shares                                     12 Other CGT assets and any other                   or is a cost of owning. Indexation doesn’t
+You make a capital gain or capital loss if        Other shares are any shares that aren’t listed         CGT events                                       apply to the reduced cost base.
+certain events or transactions (called            on an Australian securities exchange, such as:     This covers any capital gain or capital loss that    17 Indexation factor
+CGT events) happen. Most commonly,                n privately held shares, or                        you have made that doesn’t fit into any of the
+CGT events happen to a CGT asset                                                                     categories listed in item 1 of the CGT schedule:     Indexation isn’t relevant to:
+                                                  n shares listed on a foreign securities
+(for example, the disposal of a CGT asset)          exchange and not on an Australian                for example, disposal of your forestry interests     n expenditure incurred after 11.45am AEST
+but some CGT events can happen without              securities exchange. For example, shares         in a forestry managed investment scheme.                on 21 September 1999 relating to a CGT
+involving a CGT asset. For more information         listed on the New York Stock Exchange.           There are special rules that apply when                 asset acquired before that time, or
+about CGT events, see the Guide to capital                                                           working out a capital gain or capital loss for       n expenditure relating to a CGT asset
+gains tax 2026.                                   6 Units in unit trusts listed on an               a depreciating asset. A capital gain or capital
+                                                     Australian securities exchange                                                                          acquired after that time.
+                                                                                                     loss will only arise to the extent that you use
+2 Indexation method*                              Units in unit trusts listed on an Australian                                                            The cost base includes indexation, frozen
+                                                                                                     a depreciating asset for a non-taxable purpose
+For CGT assets acquired at or before              securities exchange refer to any units in unit                                                          at 30 September 1999, only if you acquired
+                                                                                                     (for example, used privately). You calculate the
+11.45am AEST on 21 September 1999,                trusts that are publicly traded on Australian                                                           the CGT asset at or before 11.45am AEST
+                                                                                                     gain or loss having regard to concepts used in
+the indexation of the cost base of an asset       securities exchange. It doesn’t include units                                                           on 21 September 1999. There are some
+                                                                                                     the uniform capital allowance provisions. Those
+is frozen at 30 September 1999. Individuals,      in a private trust, whereby the trust is created                                                        exceptions, for example, rollovers and assets
+                                                                                                     provisions also treat as income or allow as a
+trusts and superannuation entities can            for the benefit of one or more ascertainable                                                            inherited from a deceased estate. Indexation
+                                                                                                     deduction any gain or loss from a depreciating
+choose to use either the cost base indexed,       beneficiaries, and not for the promotion of                                                             isn’t available for costs of owning the asset
+                                                                                                     asset to the extent that you use it for a
+frozen at 30 September 1999, or the               the welfare of the general public or for the                                                            and it isn’t relevant to the reduced cost base.
+                                                                                                     taxable purpose.
+CGT discount.                                     advancement of a cause. Units in a private                                                              The indexation factor is an amount equal to the
+                                                  trust should be included in Other units.           13 Acquisition or purchase cost                      consumer price index (CPI) for the quarter of
+3 Discount method*                                                                                   This is money you paid or property you gave,         the year in which the CGT event happened to
+                                                  7 Other units                                                                                           the asset, divided by the CPI for the quarter of
+If a CGT event happened to a CGT asset                                                               or are required to pay or give, to acquire a CGT
+                                                  Other units are any units in a unit trust that     asset. Modifications and special rules may apply     the year in which you incurred the expenditure
+after 11.45am AEST on 21 September 1999           aren’t listed on an Australian securities          to this element of the cost base, for example,       included in any of the cost base elements
+and you acquired the asset at least 12 months     exchange, such as:                                 the market value substitution rule. If the market    (except the third element: costs of owning).
+before the CGT event, you may be entitled
+                                                  n privately held units or                          value substitution rule applies, the market value    The indexation factor is taken to three decimal
+to discount the capital gain after applying
+                                                  n units listed on a foreign securities exchange    of any property you gave, or are required to give,   places, rounding up if the fourth decimal place
+capital losses. The discount percentage for
+                                                    and not on an Australian securities              is worked out at the time of acquisition.            is 5 or more. A list of CPI is at appendix 2.
+an individual or trust is 50% and for a
+complying superannuation entity it is 331/3%.       exchange. For example, units listed on                                                                18 Capital proceeds
+                                                    the New York Stock Exchange.                     14 Incidental costs that relate
+Eligible individuals are also entitled to an                                                             to a CGT event                                   This is money and the market value of any
+additional capital gains discount of up to        8 Real estate situated in Australia                This includes the incidental costs of disposal of    property that you have received (or are
+10% for an ownership interest in a dwelling       Any real property including land and               a CGT asset or, if there is no disposal of a CGT     entitled to receive), in respect of the CGT event
+that was residential premises situated in         buildings that are situated in Australia.          asset, those incidental costs that relate to the     happening. Modifications and special rules
+Australia, was used to provide affordable
+                                                  9 Other real estate                                CGT event.                                           may apply to change the capital proceeds for
+housing for a period, or intermittent periods,
+                                                                                                                                                          certain CGT events. If the capital proceeds are
+totalling at least three years after 1 January    Any real property including land and               15 Costs of owning the asset                         greater than the cost base, you make a capital
+2018, and was disposed of on or after 30          buildings that are situated outside Australia.     ‘Costs of owning the asset’ include interest on      gain. If the capital proceeds are less than the
+December 2020. Companies can’t claim the                                                             borrowed money, rates and land tax, and the
+CGT discount (other than those life insurance     10 Amount of capital gains from                                                                        reduced cost base, you make a capital loss.
+                                                      a trust (including a managed fund)             costs of repairing or maintaining the CGT asset.     If the capital proceeds are between the cost
+companies and friendly societies which carry                                                         You include those costs in the cost base for
+                                                  Distributions from trusts can include different                                                         base or, if applicable, the indexed cost base
+on life insurance business that are entitled to                                                      CGT assets you acquired after 20 August 1991.
+                                                  amounts but only the following types of                                                                 and the reduced cost base, you make neither
+the CGT discount in respect of their complying                                                       These costs can’t be indexed nor used to work
+                                                  amounts are relevant for CGT purposes:                                                                  a capital gain nor a capital loss.
+superannuation business). You apply 2025 –26                                                         out a capital loss. You don’t include non-capital
+capital losses and then unapplied net capital     n distributions of all or a part of the trust’s    costs of owning the asset in the cost base of        19 Capital losses
+losses from earlier years against 2025 –26           income where the trust’s net income for         collectables or personal use assets.
+                                                     tax purposes includes a net capital gain,                                                            You can use capital losses from collectables
+capital gains before applying the CGT discount.
+                                                                                                     16 Cost base and reduced cost base                   only to offset capital gains from collectables
+If any capital gains qualify for the CGT small    n distributions or other entitlements
+                                                                                                                                                          You disregard capital losses from personal use
+business concessions, you then apply those           described as being referable to a               For the cost base, exclude all expenditure           assets. You can’t deduct net capital losses
+concessions to each capital gain.                    specific capital gain or gains                  recouped or that has been deducted or can be         from your assessable income. If you became a
+                                                  n distributions of non-assessable amounts.         deducted on assets acquired after 7.30pm AEST        bankrupt during the income year, you disregard
+4 Shares in companies listed on an                                                                  on 13 May 1997. For assets acquired before that
+   Australian securities exchange                 For more information on trusts, see                                                                     unapplied net capital losses from earlier
+                                                  Trust distributions.                               time, or in respect of incidental costs and costs    income years.
+Shares in companies listed on an Australian                                                          of owning, exclude all expenditure recouped that
+securities exchange refer to any shares of        11 Collectables                                    have been claimed or can be claimed as a tax
+                                                                                                                                                          For CGT assets acquired at or before 11.45am
+companies that are publicly traded on an          If you acquired a collectable (for example,        deduction. In some cases, cost base reductions       AEST on 21 September 1999, you have the option
+Australian securities exchange. It doesn’t        jewellery or an antique) for $500 or less, you     are made before indexing (for example, recouped      of choosing the CGT discount or calculating the
+include shares in privately owned companies       disregard any capital gain or capital loss. You    expenditure) and in others, after indexing           capital gain using indexation frozen at 30 September
+whereby those shares aren’t publicly traded.      can only use capital losses from collectables      (for example, capital works deductions). For the     1999. Calculate your capital gain under each
+Shares in a privately owned company               to offset capital gains from collectables. This    reduced cost base, exclude any expenditure that      option to determine the best result in your
+should be included in ‘Other Shares’.             is done in part 2A and 2C of the worksheet.        has been recouped, deducted, can be deducted         circumstances.
+

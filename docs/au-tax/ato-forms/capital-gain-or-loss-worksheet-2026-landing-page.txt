@@ -1,0 +1,401 @@
+
+===== p-01 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+
+, kes, 4 Australian Government
+> eae Australian Taxation Office
+
+Capital gain or capital loss worksheet 2026
+
+Use the capital gain or capital loss worksheet 2026 to work out your
+
+capital gain or capital loss for your tax return.
+
+Last updated 30 May 2026
+
+Get the capital gain or capital loss worksheet
+
+Download: Capital gain or capital loss worksheet 2026 (PDF, 344KB)
+
+(https://www.ato.gov.au/api/public/content/90382d08c5174c7896f2d4bfbd86b3de?
+
+v=bc44abe5).
+
+About the capital gain or capital loss worksheet
+
+This worksheet will help you to calculate a capital gain or capital loss for each separate
+
+CGT asset or CGT event using either the:
+
+e indexation method (/individuals-and-families/investments-and-assets/capital-
+gains-tax/calculating-your-cgt/indexing-the-cost-base)
+
+e discount method (/individuals-and-families/investments-and-assets/capital-
+gains-tax/cgt-discount)
+
+e ‘other' method (/individuals-and-families/investments-and-assets/capital-gains-
+tax/calculating-your-cgt)
+
+If you bought and sold an asset within 12 months, you must use the '‘other' method to
+
+calculate your capital gain.
+
+If you owned the asset for 12 months or more, you can use either the discount method or
+
+the indexation method (if it applies), whichever gives you the better result.
+
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 1/12
+
+===== p-02 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+
+Using the capital gain or capital loss worksheet
+The following information will help you when completing the worksheet:
+¢ Splitting parcels of shares (#Splittingparcelsofshares)
+e Choosing the indexation or discount methods
+
+(#Choosingtheindexationordiscountmethods)
+e Using multiple methods (#Usingmultiplemethods)
+Splitting parcels of shares
+Each share in a parcel of shares is a separate capital gains tax (CGT) asset. This means
+you can use different methods to work out the amount of any capital gain for shares
+within a parcel. This may be to your advantage if you have capital losses to apply. See,
+Example: capital gains on shares where you also have capital losses
+(#Examplecapitalgainsonshareswhereyoualsoh).
+Choosing the indexation or discount methods
+For assets you acquired before 11:45 am (by legal time in the ACT) on 21 September 1999
+and held for 12 months or more, you can choose to use the indexation method or the
+discount method to calculate your capital gain.
+There is no one factor you use as a basis to select the better option, it depends on:
+e the type of asset you own
+e how long you own it
+e the dates you own it
+e past rates of inflation.
+You need to apply capital losses to your capital gains before you can apply the CGT
+discount, so the amount of capital losses available can affect which method gives you a
+better outcome.
+Note: For the indexation method, you don't take into account inflation after 21 September
+1999.
+
+Example: choose the indexation or discount method
+
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 2/12
+
+===== p-03 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+Justin sold some land and makes a $10,000 capital gain under the discount method
+(before applying the CGT discount) or a $7,000 capital gain under the indexation
+method. If Justin has no capital losses the discount method will produce the smaller
+capital gain (that is, $5,000).
+However, if Justin also makes a capital loss of $5,000 on the sale of some shares. He'll
+be better off using the indexation method to work out the capital gain from the sale of
+his land.
+Using the indexation method his net capital gain is:
+$2,000 ($7,000 - $5,000 = $2,000)
+If he uses the discount method, his net capital gain is:
+$2,500 [($10,000 - $5,000) x 50% = $2,500).
+The example below shows that applying one method to work out your capital gains on a
+whole parcel of shares you acquire before 21 September 1999 may not be to your
+advantage if you have capital losses or net capital losses to apply.
+In this situation, you'll get a better result if you apply the indexation method to sufficient
+shares to absorb the capital loss (or as much of the capital loss as you can) and apply the
+discount method to any remaining shares.
+Example: capital gains on shares where you also have capital losses
+Clare sold a parcel of 500 shares in March 2026 for $12,500, a price of $25 each. She
+acquired the shares in March 1995 for $7,500, at a price of $15 each, including stamp
+duty and brokerage costs. There were no brokerage costs on the sale of her shares.
+Clare had no other capital gains or capital losses in 2025-26, although she has $3,500
+net capital losses carried forward from previous income years.
+As Clare owned the shares for more than 12 months, she can use the discount method
+or the indexation method to work out her capital gains — whichever gives her a better
+result. Clare decides to work out her net capital gain by applying both the discount
+method and the indexation method to the whole parcel of shares:
+Shares calculated using CGT discount method or indexation method
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 3/12
+
+===== p-04 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+Steps Using CGT discount Using indexation method
+method
+Capital proceeds $12,500 $12,500
+subtract Cost base $7,500 $8,077 (see note 1
+(#Note1))
+Capital gain $5,000 $4,423
+subtract capital $3,500 $3,500
+losses
+Subtotal $1,500 $923
+50% discount $750 Nil
+Net capital gain $750 $923
+Note 1: $7,500 x (68.7 = 63.8 = 1.077)
+However, because each share is a separate asset, Clare can use different methods to
+work out her capital gains for shares within the parcel. The lowest net capital gain
+would result from her applying the indexation method to the sale of 395 (see note 2
+(#Note2)) shares and the discount method to the remaining 105. She works out her
+net capital gain as follows:
+Indexation method (395 shares)
+Steps Using indexation method
+Capital proceeds ($25 each) $9,875
+Cost base (395 x $15 x 1.077) $6,381
+Capital gain $3,494
+subtract capital losses $3,500
+Capital gain/(loss) $6
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 4/12
+
+===== p-05 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+CGT discount method (105 shares)
+Steps Using discount method
+Capital proceeds ($25 each) $2,625
+Cost base (105 x $15) $1,575
+Capital gain $1,050
+subtract any remaining capital losses 6
+Subtotal $1,044
+50% discount $522
+Net capital gain $522
+Note 2: To calculate this, Clare works out the capital gain made on each share using
+the indexation method ($4,423 + 500 = 8.85) and divides the capital loss by this
+amount ($3,500 + 8.85 = 395).
+It's best to calculate your capital gain using both methods to find out which gives you the
+better result. This is shown below in the worked example for Val.
+Example: choosing the indexation or discount method
+Val bought a property for $150,000 under a contract dated 24 June 1991. The contract
+provided for the payment of a deposit of $15,000 on that date, with the balance of
+$135,000 to be paid on settlement on 5 August 1991.
+She paid stamp duty of $5,000 on 20 July 1991. On 5 August 1991, she received an
+account for solicitor’s fees of $2,000, which she paid as part of the settlement
+process.
+She sold the property on 15 October 2026 (the day the contracts were exchanged) for
+$350,000. She incurred costs of $1,500 in solicitor's fees and $4,000 in agent's
+commission.
+Val's capital gain calculated using the indexation method
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 5/12
+
+===== p-06 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+
+Steps Amount
+Deposit x indexation factor $17,460
+$15,000 x (68.7 + 59.0 = 1.164)
+Balance x indexation factor $157,140
+$135,000 x (68.7 + 59.0 = 1.164)
+Stamp duty x indexation factor $5,795
+$5,000 x (68.7 + 59.3 = 1.159)
+Solicitors’ fees for purchase of property x indexation factor $2,318
+$2,000 x (68.7 + 59.3 = 1.159)
+Solicitor’s fees for sale of property $1,500
+(indexation doesn't apply)
+Agent’s commission (indexation doesn't apply) $4,000
+Cost base (total) $188,213
+
+Val works out her capital gain as follows:
+
+¢ Capital proceeds - $350,000
+
+¢ Subtract cost base - $188,213
+
+¢ Capital gain - $161,787.
+
+(Val's total current year capital gain using this method)
+
+Assuming Val hasn't made any other capital losses or capital gains in the 2025-
+
+26 income year and doesn't have any unapplied net capital losses from earlier years,
+
+her net capital gain using the indexation method is $161,787.
+
+Val's capital gain calculated using the discount method
+Steps Amount
+Deposit $15,000
+Balance $135,000
+
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 6/12
+
+===== p-07 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+
+Stamp duty $5,000
+
+Solicitor’s fees for purchase of property $2,000
+
+Solicitor’s fees for sale of property $1,500
+
+Agent's commission $4,000
+
+Cost base (total) $162,500
+Val works out her capital gain as follows:
+
+Val's net capital gain
+
+Steps Amount
+
+Capital proceeds $350,000
+
+Subtract Cost base $162,500
+
+Discount capital gain $187,500
+
+(Val's total current year capital gain using this method)
+
+Subtract 50% discount $93,750
+
+(as Val has no capital losses)
+
+Net capital gain - $93,750. $93,750
+As the discount method provides Val with the better result, she shows the amount
+worked out using the discount method on her tax return rather than the amount
+worked out using the indexation method.
+
+The completed worksheet example shows how Val might complete the Capital gain or
+
+capital loss worksheet (PDF, 103KB)
+
+(https://www.ato.gov.au/api/public/content/882efabaddb24db69c4ca7e503206188?
+
+v=2b0f4d94) using both methods.
+
+Example: shares purchased and given away more than 12 months later
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 TA2
+
+===== p-08 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+In May 1999, Andrew bought 1,200 units in Share Trust for $1,275. This amount
+included brokerage fees. He gave the units to his brother in August 2021. A CGT event
+happens when Andrew makes the gift. At the time of this CGT event, the units were
+worth $1,595. As the market value of the units is greater than their cost base, Andrew
+has made a capital gain.
+As Andrew bought the units before 21 September 1999 and he owned them for more
+than 12 months, he can use the indexation or discount method to calculate his capital
+gain, whichever gives him the better result.
+Indexation method
+If Andrew calculates his capital gain using the indexation method, he indexes the cost
+of his units and the incidental costs of buying them as follows:
+The indexation factor is:
+CPI for September 1999 quarter + CPI for June 1999 quarter
+68.7 + 68.1 = 1.009
+His indexed cost base is:
+His cost ($1,275) x The indexation factor (1.009) = $1,286.48
+Andrew's capital gain
+Steps Amount
+Capital proceeds $1,595.00
+Subtract Indexed cost base $1,286.48
+Capital gain $308.52
+Rounded down $308.00
+Discount method
+If Andrew uses the discount method, his capital gain is calculated as:
+Andrew's capital gain using the discount method
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 8/12
+
+===== p-09 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+Steps Amount
+Capital proceeds $1,595
+subtract Cost base $1,275
+Capital gain $320
+subtract Discount (see note 3 (#Note3)) $160
+Capital gain $160
+Note 3: Andrew doesn't have any capital losses. If he did, he would deduct any capital
+losses before applying the discount.
+Andrew chooses the discount method because it gives him a smaller capital gain.
+If, during the period of owning the units, Andrew received a non-assessable payment
+(/forms-and-instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/trust-
+distributions-and-your-cgt-position) from the fund, his cost base may be reduced and
+the capital gain may be greater.
+Using multiple methods
+In the examples following, Tony uses the indexation method, the discount method, and
+the 'other' method to calculate his capital gain so he can decide which method gives him
+the best result. This example shows you how to complete the capital gain or capital loss
+worksheet to calculate your capital gain when you acquire or dispose of shares.
+Remember that if you bought and sold your shares within 12 months, you must use the
+‘other’ method to calculate your capital gain. If you owned your shares for 12 months or
+more, you may be able to use either the discount method or the indexation method,
+whichever gives you the better result.
+As each share in a parcel of shares is a separate CGT asset, you can use different
+methods to work out the amount of any capital gain for shares within a parcel. This may
+be to your advantage if you have capital losses to apply. See the example of Clare.
+Example: using all 3 methods to calculate a capital gain
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 9/12
+
+===== p-10 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+On 1 July 1994, Tony bought 10,000 shares in Kimbin Ltd for $2 each. He paid a
+stockbroker's fee of $250 and stamp duty of $50.
+On 1 July 2021, Kimbin Ltd offered each of its shareholders one right for each 4 shares
+owned to acquire shares in the company for $1.80 each. The market value of the
+shares at the time was $2.50.
+On 1 August 2026, Tony exercised all rights and paid $1.80 per share.
+On 1 December 2026, Tony sold all his shares in Kimbin Ltd for $3.00 each. He
+incurred a stockbroker’s fee of $500 and stamp duty of $50.
+Note: Separate records
+Tony has 2 parcels of shares — those he acquired on 1 July 1994 and those he acquired
+at the time he exercised all rights, 1 August 2021. He needs to keep separate records
+for each parcel and apportion the stockbroker’s fee of $500 and stamp duty of $50.
+The completed worksheet example shows how Tony might complete the Capital gain
+or capital loss worksheet using (PDF, 98KB)
+(https://www.ato.gov.au/api/public/content/7f41869cb9a949fc97df472f64987591?
+v=bcc2c7ce) to evaluate which method gives him the best result.
+He uses the ‘other' method for the 2,500 shares he owned for less than 12 months, as
+he has no choice.
+Tony using the 'other' method
+Steps Amount
+Capital proceeds $7,500
+less Cost base $4,610
+Capital gain $2,890
+For the 10,000 shares he has owned for 12 months or more, his capital gain using the
+indexation method would be:
+Tony using indexation method
+Steps Amount
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 10/12
+
+===== p-11 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+Capital proceeds $30,000
+less Cost base $22,831
+Capital gain $7,169
+This means his net capital gain would be:
+‘other' method + indexation method = net capital gain
+$2,890 + $7,169 = $10,059
+If Tony uses the discount method instead (assuming he has no capital losses), his
+capital gain would be:
+Tony using discount method
+Steps Amount
+Capital proceeds $30,000
+less Cost base $20,740
+Capital gain $9,260
+He applies the CGT discount of 50%:
+$9,260 x 50% = $4,630
+This means Tony’s net capital gain would be:
+‘Other' method + discount method = net capital gain
+$2,890 + $4,630 = $7,520
+In this case, Tony chooses the discount method, rather than the indexation method, as
+it gives him the better result — that is, a lower net capital gain.
+Help completing the capital gain or capital loss worksheet
+For help to complete the worksheet, see How to work out your capital gain or capital loss
+(/forms-and-instructions/capital-gains-tax-guide-2026/about-capital-gains-tax/how-
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 11/12
+
+===== p-12 =====
+8/11/26, 5:41 AM Capital gain or capital loss worksheet 2026 | Australian Taxation Office
+to-work-out-your-capital-gain-or-capital-loss).
+What else you can do
+For more information about CGT, including how to calculate your CGT and what triggers a
+CGT event, see Capital gains tax (/individuals-and-families/investments-and-
+assets/capital-gains-tax).
+QC 106447
+Our commitment to you
+We are committed to providing you with accurate, consistent and clear information to help
+you understand your rights and entitlements and meet your obligations.
+If you follow our information and it turns out to be incorrect, or it is misleading and you make
+a mistake as a result, we will take that into account when determining what action, if any,
+we should take.
+Some of the information on this website applies to a specific financial year. This is clearly
+marked. Make sure you have the information for the right year before making decisions
+based on that information.
+If you feel that our information does not fully cover your circumstances, or you are unsure
+how it applies to you, contact us or seek professional advice.
+Copyright notice
+© Australian Taxation Office for the Commonwealth of Australia
+You are free to copy, adapt, modify, transmit and distribute this material as you wish (but
+not in any way that suggests the ATO or the Commonwealth endorses you or any of your
+services or products).
+
+https://www.ato.gov.au/forms-and-instructions/capital-gain-or-capital-loss-worksheet-2026 12/12
