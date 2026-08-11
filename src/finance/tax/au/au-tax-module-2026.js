@@ -11,6 +11,7 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
+import { characterizeCapitalGain } from '../capital-gain-character.js';
 import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
 
 const SUPER_TAX_RATE = 0.15;
@@ -544,7 +545,19 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // Design 76 Gap C — attribute to the AU brokerage account that paid it.
         const account = resolveAttributionAsset(state, action, 'auStockAccount');
         const perPerson = state.people != null && account != null;
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
+        // Design 90 §4 — the SIGNED §1222 split. `gain` is in AUD here (the account's
+        // currency), so the split is converted the same way the floored figure was.
+        const char = characterizeCapitalGain(action, gain);
+        let next = {
+          ...state,
+          usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(char.long, 'AUD', state),
+          // Written only when non-zero, following the usUnrecaptured1250GainYTD precedent:
+          // creating this key at 0 puts a state diff on every gainless disposal, and a
+          // buy-and-hold plan makes short-term character rare (12 rows in 5,646 measured).
+          ...(char.short !== 0
+            ? { usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + toUSD(char.short, 'AUD', state) }
+            : {}),
+        };
         if (isAuResident) {
           next = {
             ...next,
@@ -630,9 +643,25 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
         const usdGain     = toUSD(usTaxableGain, 'AUD', state);
         const usdDepGain  = toUSD(depGain,       'AUD', state);
+        // Design 90 §4 — signed. `usTaxableGain` is already net of §121, so the helper
+        // preserves it on the gain side and falls through to the signed loss only when
+        // there is no gain for §121 to exclude.
+        //
+        // Characterized in AUD and converted after, NOT the reverse: the action's signed
+        // fields are stamped in the property's own currency (AUD) by the AU sale reducer,
+        // while `usdGain` has already crossed the FX line. Handing the helper a USD
+        // taxable gain and AUD signed fields would compare two different currencies and
+        // silently mis-split any disposal whose FX rate is not 1.
+        const houseChar = characterizeCapitalGain(action, usTaxableGain);
         let next = {
           ...state,
-          usCapitalGainsYTD:         state.usCapitalGainsYTD + usdGain,
+          usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(houseChar.long, 'AUD', state),
+          // Written only when non-zero, following the usUnrecaptured1250GainYTD precedent:
+          // creating this key at 0 puts a state diff on every gainless disposal, and a
+          // buy-and-hold plan makes short-term character rare (12 rows in 5,646 measured).
+          ...(houseChar.short !== 0
+            ? { usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + toUSD(houseChar.short, 'AUD', state) }
+            : {}),
           // §1250 gain is US-taxable income in its own rate bucket (G7 step 3b).
           // Written only when there IS one: a never-rented dwelling has no §1250 slice,
           // and materialising the key at 0 would put a state diff on every gainless

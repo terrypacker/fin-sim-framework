@@ -272,7 +272,26 @@ so the two ledgers do not diverge the way the five disposal emitters did.
 
 ---
 
-## 4. Capital losses — United States
+## 4. Capital losses — United States  ✅ BUILT (step 3)
+
+**Implementation record.** `_computeCapitalLossLimitation` (`us-tax-rates-base.js`), the
+two pools on `IntlRetirementState`, `characterizeCapitalGain`
+(`tax/capital-gain-character.js`) at six classifier sites, the settle write-back, and the
+four worksheet lines. Tests: `tests/unit/capital-loss-netting-us.test.mjs` (21).
+
+**What it moved: nothing measurable, as predicted.** The golden re-gold diff is two new
+fields at `0` and not one other value — no balance, no tax, no net worth. On the 44-year
+reference plan both pools end **empty**, because every year's losses are fully absorbed by
+that same year's gains and a net capital loss never forms. §1.1 sized this in advance:
+losses are 0.006% of gross gains, so there is nothing for §1211(b) or §1212(b) to bite on
+until §7 lands.
+
+That is why `capital-loss-netting-us.test.mjs` is written as the **working-detector
+control** §10 demands, with losses constructed large enough that a pool written-but-never-read
+cannot pass. Judging this step by its golden diff would be judging it by a measurement that
+was always going to read zero.
+
+
 
 ### 4.1 State
 

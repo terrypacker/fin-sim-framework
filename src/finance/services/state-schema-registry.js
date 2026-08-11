@@ -335,6 +335,11 @@ export class StateSchemaRegistry {
     this.register('usPassiveActivityIncomeYTD',        ParameterValueType.currency('USD'));
     this.register('usForeignPassiveActivityIncomeYTD', ParameterValueType.currency('USD'));
     this.register('usPassiveLossCarryforward',         ParameterValueType.currency('USD'));
+    // design 90 §4 — §1211/§1212 capital losses, USD. The YTD short-term bucket resets
+    // at the US settle; the two carryforward pools do not (see YTD_FIELDS.US).
+    this.register('usShortTermCapitalGainsYTD',        ParameterValueType.currency('USD'));
+    this.register('usShortTermCapitalLossCarryforward', ParameterValueType.currency('USD'));
+    this.register('usLongTermCapitalLossCarryforward',  ParameterValueType.currency('USD'));
     // design 86 G3 error 1 — §163(d) investment interest, USD. The YTD expense resets
     // at the US settle; the disallowed pool carries forward indefinitely.
     // design 83 G7 step 3b — unrecaptured §1250 gain, USD.

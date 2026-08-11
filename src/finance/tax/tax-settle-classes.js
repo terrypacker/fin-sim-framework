@@ -29,7 +29,12 @@ function _sumMap(map) {
 // >10y at the US settle), and usTaxPaidOnUsSourceAud is overwritten each US settle
 // and consumed (excess lost) at the next AU settle.
 const YTD_FIELDS = {
-  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usNetInvestmentIncomeYTD', 'usPenaltyYTD',
+  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD',
+       // design 90 §4.3 — the year's short-term result. Its POOL
+       // (usShortTermCapitalLossCarryforward) and the long-term pool are deliberately
+       // NOT here: §1212(b) carries an unused capital loss forward indefinitely, and
+       // resetting either would destroy the carryover this design exists to create.
+       'usShortTermCapitalGainsYTD', 'usNetInvestmentIncomeYTD', 'usPenaltyYTD',
        // design 83 G7 step 3b — the §1250 depreciation slice; per-year like every gain bucket
        'usUnrecaptured1250GainYTD',
        // design 86 G5 — the SIGNED per-year passive results. The suspended-loss POOL
@@ -427,6 +432,14 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     // down inside computeTax.
     const invInt = action.taxDetail?.investmentInterest;
     if (invInt?.closing != null) patches.usInvestmentInterestCarryforward = +invInt.closing.toFixed(2);
+    // §1211/§1212 capital-loss pools (design 90 §4.3). Same contract as the two above,
+    // and the same reason: `computeTax` is PURE and is re-run on the FITO
+    // counterfactual, so it reports closing balances rather than drawing the pools down
+    // in place. Drawing down inside computeTax would let the counterfactual pass spend
+    // the pool and hand the real pass an already-emptied balance.
+    const capLoss = action.taxDetail?.capitalLoss;
+    if (capLoss?.closingShort != null) patches.usShortTermCapitalLossCarryforward = +capLoss.closingShort.toFixed(2);
+    if (capLoss?.closingLong  != null) patches.usLongTermCapitalLossCarryforward  = +capLoss.closingLong.toFixed(2);
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }

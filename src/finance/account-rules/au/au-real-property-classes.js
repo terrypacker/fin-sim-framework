@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
+import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 import { auMainResidenceExemption, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { downsizerContributions } from './downsizer-contribution.js';
@@ -99,6 +100,22 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
       personKey: c.personKey, amount: c.amount, reason: downsizer.reason,
     }));
 
+    // Design 90 §9 step 2 — the signed, §1222-charactered split. Same §165(c) gate as
+    // the US dwelling: a loss on a personal residence is not deductible, and a
+    // depreciation history is the tell that the property was held to produce income.
+    // The AU side has no equivalent bar — s102-10 lets a capital loss offset capital
+    // gains whatever the asset — but the main-residence EXEMPTION does the analogous
+    // job, and a wholly-exempt dwelling's loss is disregarded with its gain.
+    const deductibleLoss = propState?.isPrimaryResidence !== true || accumulatedDep > 0;
+    const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
+      singleAssetTermFields({
+        proceeds: salePrice, usBasis: adjustedBasis,
+        auBasis: propState?.costBaseByCountry?.AU ?? adjustedBasis,
+        acquisitionMs:   toMs(propState?.acquisitionDate),
+        auAcquisitionMs: propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
+        saleMs, deductibleLoss,
+      });
+
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'AU', state, destinationKey);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
@@ -119,6 +136,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
       updates,
       [...downsizerActions,
        { type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners,
+         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
          proceeds: salePrice, costBasis: adjustedBasis, description,
          // G7: the AU-assessable slice after s118-185, and the §1250 slice the US
          // taxes at its own rate. Both default to the pre-G7 answer — taxableFraction

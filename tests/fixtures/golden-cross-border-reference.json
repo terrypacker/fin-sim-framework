@@ -1408,6 +1408,7 @@
   "value": 2563304.16
  },
  "usInvestmentInterestCarryforward": 0,
+ "usLongTermCapitalLossCarryforward": 0,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 0,
  "usOrdinaryIncomeYTD": 0,
@@ -1459,6 +1460,7 @@
   "type": "savings"
  },
  "usSeEarningsYTD": 0,
+ "usShortTermCapitalLossCarryforward": 0,
  "usSourceCapGainsAudYTD": 0,
  "usSourceCapGainsUsdYTD": 0,
  "usSourceDividendsUsdYTD": 0,
