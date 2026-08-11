@@ -11,7 +11,7 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
-import { characterizeCapitalGain } from '../capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain } from '../capital-gain-character.js';
 import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
 
 const SUPER_TAX_RATE = 0.15;
@@ -541,6 +541,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // lots held ≥12 months from the AU deemed-acquisition date. Defaults to the
         // full auGain when absent (old actions ⇒ current full-discount behavior).
         const auDiscountableGain = action.auDiscountableGain ?? auGain;
+        // Design 90 §5 — signed AU split, in AUD (this account's currency).
+        const auChar = characterizeAuCapitalGain(action, auGain);
         const isAuResident = residency === 'AU';
         // Design 76 Gap C — attribute to the AU brokerage account that paid it.
         const account = resolveAttributionAsset(state, action, 'auStockAccount');
@@ -561,14 +563,17 @@ export class AuTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
+            // Design 90 §5 — SIGNED, so an AU capital LOSS survives to be netted under
+            // s102-5 Step 1. `auChar.long` is the Div 115 discount-eligible slice and
+            // `.short` the rest; their sum is the gross gain these lines used to book.
             ...(perPerson
               ? {
-                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, account, auGain, state.people),
-                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, account, auDiscountableGain, state.people),
+                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, account, auChar.short + auChar.long, state.people),
+                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, account, auChar.long, state.people),
                 }
               : {
-                  auCapitalGainsYTD:      state.auCapitalGainsYTD + auGain,
-                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auDiscountableGain,
+                  auCapitalGainsYTD:      state.auCapitalGainsYTD + auChar.short + auChar.long,
+                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auChar.long,
                 }),
             foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auGain, 'AUD', state),
           };
@@ -623,7 +628,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // both would double-relieve, which is why the fraction arrives here rather
         // than having been netted into `gain` upstream.
         const auTaxableFraction = action.auTaxableFraction ?? 1;   // pre-G7 default: all of it
-        const auAssessableGain  = +(gain * auTaxableFraction).toFixed(2);
+        // Design 90 §5 — SIGNED. `gain` is floored, so a dwelling sold below its cost
+        // base gave an assessable gain of 0 and the loss disappeared. The signed AU
+        // total takes the SAME s118-185 fraction: the main-residence concession
+        // disregards a loss on the exempt portion exactly as it disregards a gain, so
+        // a partly-exempt dwelling surrenders the same share of both.
+        const auSignedGain      = (action.auShortTermGain ?? null) != null || (action.auLongTermGain ?? null) != null
+          ? (action.auShortTermGain ?? 0) + (action.auLongTermGain ?? 0)
+          : gain;
+        const auAssessableGain  = +(Math.min(gain, auSignedGain) * auTaxableFraction).toFixed(2);
 
         // The depreciation slice. Australia needs no special handling — s110-45(2)
         // already enlarged the gain by taking Div 43 out of the cost base, and that

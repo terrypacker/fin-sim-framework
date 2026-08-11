@@ -330,6 +330,8 @@ export class StateSchemaRegistry {
     // design 86 G1 — Div 36 carried-forward tax losses, per person. Not a YTD field:
     // it deliberately survives the settle reset.
     this.registerPattern('auPersonTaxLossPool.*',               ParameterValueType.currency('AUD'));
+    // design 90 §5 — s102-5 net capital loss pool, per person, AUD. Survives the settle.
+    this.registerPattern('auPersonCapitalLossPool.*',           ParameterValueType.currency('AUD'));
     // design 86 G5 — §469 passive activity accounting, USD. The two YTD figures are
     // signed net rental results; the carryforward survives the settle reset.
     this.register('usPassiveActivityIncomeYTD',        ParameterValueType.currency('USD'));

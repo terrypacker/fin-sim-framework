@@ -11,7 +11,7 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
-import { characterizeCapitalGain } from '../capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain } from '../capital-gain-character.js';
 
 /**
  * Per-person AU accumulator for each household scalar this module books while the
@@ -495,6 +495,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           const audGain = toAUD(auGain, 'USD', state);
           const audDiscountableGain = toAUD(auDiscountableGain, 'USD', state);
+          // Design 90 §5 — signed AU split (USD here; converted at the booking below).
+          const auChar = characterizeAuCapitalGain(action, auGain);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
           // not US-source, whatever the account's domicile. It therefore books as
@@ -512,9 +514,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // Design 76 Gap B — the gain belongs to the owner(s) of the account that
           // held the lots; the discountable slice must follow the same split so the
           // CGT discount is applied against the right person's gain.
+          // Design 90 §5 — SIGNED, so an AU capital LOSS survives to be netted under
+          // s102-5 Step 1. `auChar.long` is the Div 115 discount-eligible slice and
+          // `.short` the rest; their sum is the gross gain this line used to book.
           next = bookAuResident(state, next, action, 'usStockAccount', {
-            auCapitalGainsYTD:      audGain,
-            auDiscountableGainsYTD: audDiscountableGain,
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
+            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
@@ -557,19 +562,31 @@ export class UsTaxModule2026 extends BaseTaxModule {
             ? { usUnrecaptured1250GainYTD: (state.usUnrecaptured1250GainYTD ?? 0) + depGain }
             : {}),
         };
-        if (action.residency === 'AU' && (action.auGain ?? 0) > 0) {
-          const audGain         = toAUD(action.auGain, 'USD', state);
-          const audDiscountable = toAUD(action.auDiscountableGain ?? action.auGain, 'USD', state);
+        // Design 90 §5 — widened from `auGain > 0`. A house sold below its s855-45
+        // stepped-up base is an AU capital LOSS for a resident, and the old gate made
+        // the whole AU branch skip: not a floored zero, an absent disposal.
+        const auSigned = (action.auShortTermGain ?? 0) + (action.auLongTermGain ?? 0);
+        if (action.residency === 'AU' && ((action.auGain ?? 0) > 0 || auSigned < 0)) {
+          // `?? 0` rather than a bare read: the widened gate above now admits a LOSS,
+          // where `action.auGain` is 0 or absent, and toAUD(undefined) is NaN.
+          const auGainUsd       = action.auGain ?? 0;
+          const audGain         = toAUD(auGainUsd, 'USD', state);
+          const audDiscountable = toAUD(action.auDiscountableGain ?? auGainUsd, 'USD', state);
+          // Design 90 §5 — signed AU split (USD here; converted at the booking below).
+          const auChar = characterizeAuCapitalGain(action, auGainUsd);
           next = {
             ...next,
-            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + action.auGain,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + auGainUsd,
             usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + action.gain,
           };
           // Design 76 Gap B — attributed to the property's owner(s), stamped inline
           // by the sale reducer (mirrors AU_HOUSE_SALE_TAX, which already did this).
+          // Design 90 §5 — SIGNED, so an AU capital LOSS survives to be netted under
+          // s102-5 Step 1. `auChar.long` is the Div 115 discount-eligible slice and
+          // `.short` the rest; their sum is the gross gain this line used to book.
           next = bookAuResident(state, next, action, null, {
-            auCapitalGainsYTD:      audGain,
-            auDiscountableGainsYTD: audDiscountable,
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
+            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
             usSourceCapGainsAudYTD: audGain,
           });
         }
@@ -877,6 +894,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // original basis. Falls back to `gain` when no step-up was stamped.
           const auGainUsd = action.auGain ?? gain;
           const audGain = toAUD(auGainUsd, 'USD', state);
+          // Design 90 §5 — signed AU split (USD; converted at the booking below).
+          const auChar = characterizeAuCapitalGain(action, auGainUsd);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
           // not US-source, whatever the account's domicile. It therefore books as
@@ -893,13 +912,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
                 usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
           // Design 76 Gap B — attributed to the equity holder, stamped inline by the
           // sale reducer (company equity has no account state key).
+          // Design 90 §5 — SIGNED. The whole gain stays discount-eligible here (no per-lot
+          // 12-month tracking), so the split is degenerate, but the SIGN is not: a loss
+          // must reach s102-5 Step 1 rather than being floored away.
           next = bookAuResident(state, next, action, null, {
-            auCapitalGainsYTD:      audGain,
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
             // Company shares carry no per-lot 12-month tracking here, so the whole
             // gain stays discount-eligible (design 62 §4 — the residency holding-
             // period gate targets brokerage lots; company/collectible/property
             // holding-period gating is out of Gap 1's scope).
-            auDiscountableGainsYTD: audGain,
+            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }
@@ -933,6 +955,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
         };
         if (isAuResident) {
           const audGain = toAUD(gain, 'USD', state);
+          // Design 90 §5 — signed AU split (USD; converted at the booking below).
+          const auChar = characterizeAuCapitalGain(action, gain);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
           // not US-source, whatever the account's domicile. It therefore books as
@@ -949,10 +973,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
                 usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
           // Design 76 Gap B — attributed to the collectible's owner(s), stamped
           // inline by the sale reducer (a collectible has no account state key).
+          // Design 90 §5 — SIGNED. The whole gain stays discount-eligible here (no per-lot
+          // 12-month tracking), so the split is degenerate, but the SIGN is not: a loss
+          // must reach s102-5 Step 1 rather than being floored away.
           next = bookAuResident(state, next, action, null, {
-            auCapitalGainsYTD:      audGain,
+            auCapitalGainsYTD:      toAUD(auChar.short + auChar.long, 'USD', state),
             // Collectibles carry no per-lot 12-month tracking here (design 62 §4).
-            auDiscountableGainsYTD: audGain,
+            auDiscountableGainsYTD: toAUD(auChar.long, 'USD', state),
             ...(foreignSource ? {} : { usSourceCapGainsAudYTD: audGain }),
           });
         }

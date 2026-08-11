@@ -1,7 +1,7 @@
 {
  "activeRegimes": [],
  "auCapitalGainsYTD": 0,
- "auCgtEffectiveRate": 0.379674408805,
+ "auCgtEffectiveRate": 0.379674404737,
  "auDiscountAllowanceYTD": 0,
  "auDiscountApportionedBaseYTD": 0,
  "auDiscountableGainsYTD": 0,
@@ -109,6 +109,10 @@
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
  "auPersonCapitalGainsYTD": {
+  "primary": 0,
+  "spouse": 0
+ },
+ "auPersonCapitalLossPool": {
   "primary": 0,
   "spouse": 0
  },

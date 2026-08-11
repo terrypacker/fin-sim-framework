@@ -368,7 +368,37 @@ already-spent balance.
 
 ---
 
-## 5. Capital losses — Australia
+## 5. Capital losses — Australia  ✅ BUILT (step 4)
+
+**Implementation record.** `AuTaxRatesBase._applyCapitalLosses` runs s102-5 Steps 1–2 and
+hands `_cgtRelief` a state whose gain figures are already net — so neither rate module
+(the flat-discount one or the FY2027 indexation override) has to know capital losses
+exist. `characterizeAuCapitalGain` signs six classifier sites;
+`auPersonCapitalLossPool` is written beside the Div 36 pool in `_auLossPoolPatch` and
+sliced per person in `tax-settle-service`. Tests:
+`tests/unit/capital-loss-netting-au.test.mjs` (15).
+
+**Two things this got wrong first and are worth not repeating.**
+
+- **Materializing `auDiscountableGainsYTD` for `_cgtRelief` destroyed its old-save
+  fallback.** That method has always read an ABSENT key as "all of it qualifies";
+  once `_applyCapitalLosses` always supplied the key, a default of 0 silently withdrew
+  the Division 115 discount from every synthetic state. The rule now lives in both
+  places. Four rate tests caught it, which is the only reason it is a paragraph here
+  rather than a defect.
+- **Scaling the FY2027 real gain by the nominal reduction ratio masked a different
+  design's invariant.** A ratio couples the real bucket to *every* reduction in the
+  nominal figure — including the FITO counterfactual, which strips US-source gain from
+  the nominal bucket and relies on the separate `usSourceRealCapGainsAudYTD` signal to
+  strip the real one. Under a ratio the real bucket shrinks on its own and papers over a
+  missing signal, which is the design 57 Part 2 D defect `FITO-D` exists to detect. The
+  loss is now subtracted as an absolute amount, keeping the two reductions independent.
+
+**Golden movement:** the two new pool fields at `0`, plus `auCgtEffectiveRate` in its
+12th significant figure — cent-quantization from routing the gain through the netting,
+which is the granularity a tax return uses anyway. No balance moved.
+
+
 
 ### 5.1 State
 

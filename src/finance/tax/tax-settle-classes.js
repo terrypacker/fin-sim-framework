@@ -545,13 +545,29 @@ function _auLossPoolPatch(state, action) {
   const details = action.personTaxDetails;
   if (!details?.length) return {};
   const next = { ...(state.auPersonTaxLossPool ?? {}) };
+  // s102-5 net capital losses (design 90 §5). Written HERE, beside the Div 36 pool, for
+  // every reason the header above gives — but into its own map. The two pools are
+  // maintained side by side and must never be summed: s102-10(2) lets a net capital
+  // loss meet future capital gains only, while a Div 36 loss reduces total assessable
+  // income including wages.
+  const nextCapital = { ...(state.auPersonCapitalLossPool ?? {}) };
   let touched = false;
+  let touchedCapital = false;
   for (const { personKey, taxDetail } of details) {
-    if (personKey == null || taxDetail?.closingLossPool == null) continue;
-    next[personKey] = +taxDetail.closingLossPool.toFixed(2);
-    touched = true;
+    if (personKey == null) continue;
+    if (taxDetail?.closingLossPool != null) {
+      next[personKey] = +taxDetail.closingLossPool.toFixed(2);
+      touched = true;
+    }
+    if (taxDetail?.closingCapitalLossPool != null) {
+      nextCapital[personKey] = +taxDetail.closingCapitalLossPool.toFixed(2);
+      touchedCapital = true;
+    }
   }
-  return touched ? { auPersonTaxLossPool: next } : {};
+  return {
+    ...(touched        ? { auPersonTaxLossPool: next }            : {}),
+    ...(touchedCapital ? { auPersonCapitalLossPool: nextCapital } : {}),
+  };
 }
 
 /**

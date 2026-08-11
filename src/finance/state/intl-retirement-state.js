@@ -259,6 +259,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // assessment — one spouse's loss cannot shelter the other's income, and design 76
     // exists precisely because splitting a household scalar by headcount mis-attributes.
     this.auPersonTaxLossPool                = _zeroes();
+    // s102-5 / s102-15 net capital losses, per person (design 90 §5.1). A SEPARATE
+    // pool from auPersonTaxLossPool above: s102-10(2) bars a net capital loss from ever
+    // reducing assessable income, so a merged pool would let a capital loss shelter
+    // wages. Per-person for the same reason the Div 36 pool is — a carried-forward loss
+    // belongs to ONE taxpayer, and splitting it would let one spouse's loss shelter the
+    // other's gains. Outside PER_PERSON_AU_FIELDS, so the settle reset leaves it alone.
+    this.auPersonCapitalLossPool            = _zeroes();
     // AU-source *earned* income (wages/SE) per person — backs the per-person
     // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.
     this.auPersonEarnedIncomeYTD            = _zeroes();
