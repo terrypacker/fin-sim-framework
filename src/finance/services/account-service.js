@@ -15,7 +15,7 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
 import { computeConversionRecapture } from '../account-rules/us/roth-conversion-lots.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
-import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
+import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
@@ -179,12 +179,50 @@ export class AccountService extends AssetService {
     if (account.type === ACCOUNT_TYPE.LOAN) return;
     const allocation = resolveDefaultAllocation(account);
     const rateKey    = resolveRateKey(account.country, allocation, account.role);
+    const balance    = account.balance ?? 0;
+
+    // Equity market sub-axis (design 90 §7.3). An account carrying an `equityMarketMix`
+    // bootstraps one sleeve PER MARKET rather than a single sleeve on its domestic one —
+    // which is how a Super balance says "60% AU, 40% ex-AU" instead of inheriting AU
+    // wholesale and having the difference papered over by a beta.
+    //
+    // `resolveEquityMarketMix` returns a single-market mix when nothing is authored, so
+    // the common path still produces exactly one holding and the §4.4 invariant
+    // (balance === Σ marketValue) holds either way — the split below is value-exact
+    // because the LAST sleeve absorbs the rounding remainder rather than each sleeve
+    // rounding independently.
+    const mix     = resolveEquityMarketMix(account, allocation);
+    const markets = mix ? Object.entries(mix).filter(([, w]) => w > 0) : [];
+    if (markets.length > 1) {
+      const holdings = [];
+      let allocated = 0;
+      markets.forEach(([mk, weight], i) => {
+        const value = (i === markets.length - 1)
+          ? +(balance - allocated).toFixed(2)
+          : +(balance * weight).toFixed(2);
+        allocated = +(allocated + value).toFixed(2);
+        holdings.push(new Holding({
+          id:           this._generateHoldingId(),
+          allocation,
+          marketValue:  value,
+          costBasis:    value,
+          rateKey:      mk,
+          purchaseDate: null,
+          label:        '',
+        }));
+      });
+      account.holdings = holdings;
+      return;
+    }
+
     const holding    = new Holding({
       id:           this._generateHoldingId(),
       allocation,
-      marketValue:  account.balance ?? 0,
-      costBasis:    account.balance ?? 0,
-      rateKey,
+      // A single-entry mix still names the market explicitly; `rateKey` is the fallback
+      // for allocations that have no market axis at all (BOND, CASH, GOLD).
+      marketValue:  balance,
+      costBasis:    balance,
+      rateKey:      markets.length === 1 ? markets[0][0] : rateKey,
       purchaseDate: null,
       label:        '',
     });

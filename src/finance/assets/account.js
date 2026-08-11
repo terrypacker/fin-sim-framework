@@ -143,6 +143,12 @@ export class Account extends Asset {
     // payment handler for loans, Phase 3), overriding the absolute `interestRate`.
     // null → not Prime-linked → the absolute `interestRate` path applies (back-compat).
     this.primeSpread    = opts.primeSpread    ?? null;
+    // Equity market MIX (design 90 §7.3) — the sub-axis under ALLOCATION.EQUITY:
+    // `{ EQUITY_US: 0.6, EQUITY_INTL_EX_US: 0.4 }`. null ⇒ the account's domestic market
+    // alone, which is exactly what `resolveRateKey` produced before the axis existed, so
+    // an un-authored account bootstraps byte-identically. Weights are proportions and are
+    // renormalised on read (`resolveEquityMarketMix`); only EQUITY-class keys are honoured.
+    this.equityMarketMix = opts.equityMarketMix ?? null;
     // §988 currency basis (design 87). The rate at which this pool's foreign currency
     // was acquired, in foreign units per USD. Applies to ANY non-USD cash account —
     // §988(c)(1)(C)(ii) reaches every bank deposit denominated in nonfunctional

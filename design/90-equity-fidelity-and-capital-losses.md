@@ -506,6 +506,40 @@ own rate to the digit (`EQUITY_US_BROKERAGE::usStockAccount` 0.05 →
 `EQUITY_US::usStockAccount` 0.05; `EQUITY_AU_SUPER::superAccount` 0.07 →
 `EQUITY_AU::superAccount` 0.07).
 
+### 7.3a Implementation record — the sub-axis  ✅ BUILT (step 6)
+
+`Account.equityMarketMix` (serialized), `resolveEquityMarketMix` beside `resolveRateKey`,
+a splitting `_bootstrapDefaultHolding`, and the `usEquityIntlShare` / `auEquityIntlShare`
+levers stamped by `withEquityMarketMix`. Tests:
+`tests/unit/equity-market-sub-axis.test.mjs` (11).
+
+**The reference scenario has been holding a fictional international sleeve.** It authors
+a brokerage holding labelled *"US Equity (International)"*, sized by `stockSplitRatio` —
+and pointing at `EQUITY_US`. There was no other key to give it: before the market axis,
+`EQUITY_US` was the only US-domiciled equity series, so the split produced two sleeves
+with identical returns and identical shock behaviour. §7.1's defect was not hypothetical;
+it was sitting in the reference plan with a label that said so. That sleeve now tracks
+`EQUITY_INTL_EX_US`, and it is the one number step 6 changes.
+
+**An account's own rate governs every market it holds.** Seeding the per-account override
+only on the domestic key left an international sleeve in the same account falling through
+to the market rate — which silently re-rated the reference brokerage from its authored 5%
+to a 5/7 blend (measured ×1.0582/yr against ×1.0500, about +1% on terminal net worth).
+`brokerageGrowthRate` is a statement about that brokerage, not about the US market, so
+`seedPerAccountRates` now seeds the account's rate onto both its markets. What the axis
+buys at this stage is a distinct beta, a distinct shock target and distinct reporting —
+**not** a distinct drift. Drift dispersion is §7.4's job and must not arrive early by
+accident.
+
+**Golden movement:** ten new per-account international rate keys (each equal to its
+account's own rate) plus the repointed sleeve's `rateKey` and label. No balance, no tax,
+no net worth.
+
+**Known limit:** the mix drives the *bootstrap*. An account with authored holdings keeps
+them — deliberately, since silently re-splitting authored lots would move cost basis
+between them. To put a mix on such an account, author the sleeves (as the reference
+brokerage does) or set the holding's `rateKey` directly.
+
 ### 7.5 The sequencing in §9 was wrong, and the code said so
 
 §9 called step 5 "structural only". It is not, and could not have been, for a reason

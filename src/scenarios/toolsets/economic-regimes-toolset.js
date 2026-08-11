@@ -14,6 +14,7 @@ import { DateUtils }                      from '../../simulation-framework/date-
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
+import { EQUITY_MARKETS_BY_COUNTRY } from '../../finance/holdings/default-allocations.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { PrimeRelinkReducer }             from '../../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
@@ -230,6 +231,25 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleG
         perVal = ownRate ?? roleGrowthRates[acct?.role] ?? baseMap[memberKey];
       }
       if (perVal != null) baseMap[`${memberKey}::${stateKey}`] = perVal;
+
+      // Design 90 §7.3 — an account's own rate governs EVERY equity market it holds,
+      // not just its domestic one.
+      //
+      // `brokerageGrowthRate` is a per-ACCOUNT override and the account is one account:
+      // 5% is a statement about that brokerage, not about the US market. Seeding only
+      // the domestic key left any international sleeve in the same account falling
+      // through to the market rate, so introducing the market axis silently re-rated the
+      // brokerage from 5% to a 5/7 blend — measured at ×1.0582/yr against an authored
+      // ×1.0500, and about +1% on terminal net worth. That is a re-rating the sub-axis
+      // was explicitly not supposed to cause (§7.6); dispersion belongs to §7.4.
+      //
+      // The market keys therefore SHARE the account's rate until someone gives a market
+      // its own. What the axis buys at this stage is a distinct beta, a distinct shock
+      // target and distinct reporting — not a distinct drift.
+      const eqMarkets = EQUITY_MARKETS_BY_COUNTRY[acct?.country];
+      if (perVal != null && eqMarkets && memberKey === eqMarkets.domestic) {
+        baseMap[`${eqMarkets.international}::${stateKey}`] = perVal;
+      }
     }
 
     // 2. Cash-sleeve rate for a NON-cash account carrying a `primeSpread` (design 56 §6):

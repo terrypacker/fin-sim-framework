@@ -40,7 +40,8 @@ import { ALLOCATION, totalizeMix } from '../finance/holdings/allocation.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES,
          SLEEVE_WEIGHT_MODE, sleeveWeightKey } from '../finance/holdings/holdings-selection.js';
 import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
-import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, ROLE_TO_RATE_KEY } from '../finance/economic-regimes/rate-keys.js';
+import { EQUITY_MARKETS_BY_COUNTRY }  from '../finance/holdings/default-allocations.js';
 import { US_STATE_CODES }      from '../finance/tax/state/us-states.js';
 
 /**
@@ -562,6 +563,20 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // holding grows at this rate, decoupled from equity returns and Prime.
   goldGrowthRate:   0.05,
 
+  // Equity market MIX (design 90 §7.3) — the international share of every equity
+  // account of that domicile, as a fraction. This is the sub-axis under
+  // ALLOCATION.EQUITY: the four-value allocation enum is untouched, and this splits
+  // whatever lands in EQUITY between the domestic market and the matching
+  // international basket (ex-US for a US account, ex-AU for an AU one).
+  //
+  // **0 is the byte-identical default**, not a modelling claim: it reproduces the
+  // single domestic sleeve every account bootstrapped before the axis existed. It is
+  // deliberately NOT set to a realistic 30-40% here, because doing so would re-rate
+  // every scenario in the same commit that introduced the mechanism and make the two
+  // effects impossible to separate.
+  usEquityIntlShare: 0,
+  auEquityIntlShare: 0,
+
   // Spouse retirement accounts (US). No per-spouse growth rates: growth is keyed by
   // account TYPE (EQUITY_US_ROTH/_IRA/_K401), so the rates above cover both people —
   // see the retired spouse*GrowthRate aliases below (design/inconsistencies §4.10).
@@ -1057,6 +1072,52 @@ export function resolveBalanceCenters(cfg) {
  * getToolsets() declares all 11 toolsets; buildDefaultConfig() produces the
  * serialized persons/accounts/realProperties/collectibles for a fresh load.
  */
+/**
+ * Stamp `equityMarketMix` onto every equity account from the two international-share
+ * params (design 90 §7.3).
+ *
+ * A post-pass over the finished account list rather than a field on each of the dozen
+ * account literals above: the mix is a property of an account's DOMICILE and role, not
+ * of any individual account, and threading it through every literal would be a dozen
+ * chances to miss one — which is exactly how `auDiscountableGain` drifted across six
+ * disposal emitters (design/inconsistencies §4.11).
+ *
+ * **A share of 0 stamps nothing at all.** That is what keeps the whole sub-axis inert
+ * by default: no `equityMarketMix` on the account means `resolveEquityMarketMix` returns
+ * the single domestic market, and `_bootstrapDefaultHolding` builds the one sleeve it
+ * always built. Introducing the mechanism and re-rating every scenario in one commit
+ * would make the two effects impossible to tell apart in the golden diff.
+ *
+ * Which accounts: those whose role has a default equity rate key. Cash, fixed-income and
+ * loan accounts have no market axis and must not be given one — a `SAVINGS_US` sleeve
+ * carrying an equity mix would resolve a market rate for money that earns interest.
+ *
+ * @param {object} cfg         the built config (mutated and returned)
+ * @param {object} parameters  the resolved param bag
+ */
+function withEquityMarketMix(cfg, parameters) {
+  const share = {
+    US: parameters?.usEquityIntlShare ?? 0,
+    AU: parameters?.auEquityIntlShare ?? 0,
+  };
+  if (!(share.US > 0) && !(share.AU > 0)) return cfg;
+
+  for (const acct of cfg.accounts ?? []) {
+    const markets = EQUITY_MARKETS_BY_COUNTRY[acct?.country];
+    if (!markets) continue;
+    // Only accounts that actually hold equity. ROLE_TO_RATE_KEY is the same table
+    // `resolveRateKey` consults, so this cannot drift from what the holdings resolve to.
+    if (ROLE_TO_RATE_KEY[acct.role] !== markets.domestic) continue;
+    const intl = share[acct.country];
+    if (!(intl > 0)) continue;
+    acct.equityMarketMix = {
+      [markets.domestic]:      1 - intl,
+      [markets.international]: intl,
+    };
+  }
+  return cfg;
+}
+
 export class IntlRetirementScenario extends BaseScenario {
   static scenarioId()   { return 'intl-retirement'; }
   static scenarioName() { return 'International Retirement'; }
@@ -1174,6 +1235,10 @@ export class IntlRetirementScenario extends BaseScenario {
       k401GrowthRate:           p.k401GrowthRate,
       brokerageGrowthRate:      p.usStockGrowthRate,
       goldGrowthRate:           p.goldGrowthRate,
+      // Design 90 §7.3 — the equity market sub-axis lever. 0 ⇒ no mix is stamped and
+      // every equity account bootstraps its single domestic sleeve, as before.
+      usEquityIntlShare:        p.usEquityIntlShare,
+      auEquityIntlShare:        p.auEquityIntlShare,
       brokerageDividendRate:    p.stockDividendRate,
       dividendReinvest:         p.stockDividendReinvest,
       fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
@@ -1239,7 +1304,7 @@ export class IntlRetirementScenario extends BaseScenario {
       parameters[key] = params[key];
     }
 
-    return {
+    return withEquityMarketMix({
       toolsets: IntlRetirementScenario.getToolsets(),
       simStart:       ScenarioSerializer.toDateStr(simStart ?? new Date(Date.UTC(2026, 0, 1))),
       simEnd:         ScenarioSerializer.toDateStr(simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
@@ -1448,7 +1513,7 @@ export class IntlRetirementScenario extends BaseScenario {
           ],
         },
       ],
-    };
+    }, parameters);
   }
 
   /**
@@ -1604,9 +1669,18 @@ function _stockHoldings(p) {
     }),
     new Holding({
       id:          'h-intl-equity',
-      label:       'US Equity (International)',
+      label:       'International Equity (ex-US)',
       allocation:  ALLOCATION.EQUITY,
-      rateKey:     RATE_KEYS.EQUITY_US,
+      // Design 90 §7.3 — this sleeve has been called "International" since it was
+      // authored, and tracked `EQUITY_US` the whole time. There was no other key to give
+      // it: before the market axis, EQUITY_US was the only US-domiciled equity series,
+      // so `stockSplitRatio` split the brokerage into two sleeves with identical
+      // returns. It was §7.1's defect in miniature, sitting in the reference scenario
+      // with a label that said so.
+      //
+      // This is the one place step 6 changes a number rather than adding a capability:
+      // the ex-US sleeve now earns the ex-US rate and takes the ex-US beta.
+      rateKey:     RATE_KEYS.EQUITY_INTL_EX_US,
       marketValue: intlMv,
       costBasis:   p.stockBasisIntl ?? 25_000,
     }),
