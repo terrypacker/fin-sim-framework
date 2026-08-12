@@ -111,6 +111,49 @@ test('G10b-6: empty buckets or empty holdings are safe no-ops', () => {
   assert.deepEqual(mergeCouponReinvestLots([], { stateKey: 'a', buckets: [bucket()], prevailingRate: 0.05, year: 2030 }).length, 1, 'empty holdings still gains the lot');
 });
 
+// ── Per-country cost base on the merge (design 62 §9.7) ──────────────────────
+
+test('RCB-1: reinvesting into a lot the residency move stepped up raises EVERY cost base', () => {
+  // The AU move lands mid-2030 and steps the year's vintage lot up to market; the rest
+  // of 2030's coupons then merge into that same lot. Raising costBasis alone would leave
+  // the AU base behind and report the post-move reinvestment as pure AU capital gain.
+  const jun = mergeCouponReinvestLots([], {
+    stateKey: 'acct', buckets: [bucket({ amount: 1000 })], prevailingRate: 0.05,
+    year: 2030, purchaseMs: Date.UTC(2030, 0, 1), priceLevel: 1.0,
+  });
+  const stepped = jun.map(h => ({ ...h, costBaseByCountry: { AU: h.marketValue }, acquisitionPriceLevel: 1.3 }));
+
+  const dec = mergeCouponReinvestLots(stepped, {
+    stateKey: 'acct', buckets: [bucket({ amount: 1000 })], prevailingRate: 0.05,
+    year: 2030, purchaseMs: Date.UTC(2030, 6, 1), priceLevel: 1.35,
+  });
+
+  assert.equal(dec.length, 1, 'still the single 2030 vintage lot');
+  assert.equal(dec[0].marketValue, 2000);
+  assert.equal(dec[0].costBasis, 2000, 'universal base rises with the new money');
+  assert.equal(dec[0].costBaseByCountry.AU, 2000,
+    'the AU stepped-up base rises with it — the reinvestment is a purchase, not a gain');
+  assert.equal(dec[0].acquisitionPriceLevel, 1.3,
+    'the vintage lot keeps the level it carries (unchanged by the merge)');
+});
+
+test('RCB-2: a lot with no per-country base is left alone; an explicit null keeps deferring to costBasis', () => {
+  const plain = mergeCouponReinvestLots([], {
+    stateKey: 'acct', buckets: [bucket({ amount: 500 })], prevailingRate: 0.05, year: 2030, purchaseMs: 0,
+  });
+  const again = mergeCouponReinvestLots(plain, {
+    stateKey: 'acct', buckets: [bucket({ amount: 500 })], prevailingRate: 0.05, year: 2030, purchaseMs: 0,
+  });
+  assert.equal(again[0].costBaseByCountry ?? null, null, 'no per-country base invented out of nothing');
+
+  const withNull = plain.map(h => ({ ...h, costBaseByCountry: { AU: null } }));
+  const merged = mergeCouponReinvestLots(withNull, {
+    stateKey: 'acct', buckets: [bucket({ amount: 500 })], prevailingRate: 0.05, year: 2030, purchaseMs: 0,
+  });
+  assert.equal(merged[0].costBaseByCountry.AU, null, 'an explicit null still defers to the (raised) costBasis');
+  assert.equal(merged[0].costBasis, 1000);
+});
+
 // ── End-to-end: the lever bites when prevailing ≠ source coupon ───────────────
 
 function run(params, mutateCfg) {

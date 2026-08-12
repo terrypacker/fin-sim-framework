@@ -219,4 +219,40 @@ describe('BondMaturityReducer — ladder roll-to-tail (§G8)', () => {
     assert.equal(rolled.couponRate, 0.045, 'rolled rung re-locks the current yield');
     assert.equal(next.acct.balance, 100_000, 'gross value conserved across the roll');
   });
+
+  // The rolled bond used to be re-based at par unconditionally, which was harmless while
+  // every bond reaching here WAS a par bond. A ladder rebuild now carries the replaced
+  // sleeve's basis onto its rungs (design 62 §9.5 follow-up), so a rung can mature with
+  // basis below par — and re-basing at par would erase that gain untaxed, re-opening the
+  // hole one maturity at a time.
+  test('a roll CARRIES a non-par cost basis instead of stepping it up to par', () => {
+    const rung = bond({
+      marketValue: 20_000, faceValue: 20_000, costBasis: 12_000,
+      costBaseByCountry: { AU: 15_000 }, acquisitionPriceLevel: 1.2,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      couponRate: 0.03, rollAtMaturity: true, rollTermYears: 8,
+    });
+    const rolled = reducer
+      .reduce(stateWith(rung, { asOfY: 2030 }), { type: 'US_PERIOD_ADVANCE' })
+      .acct.holdings[0];
+    assert.equal(rolled.marketValue, 20_000, 'par proceeds redeployed');
+    assert.equal(rolled.costBasis, 12_000, 'basis carried — the discount is deferred, not erased');
+    assert.deepEqual(rolled.costBaseByCountry, { AU: 15_000 }, 'per-country base carried with it');
+    assert.equal(rolled.acquisitionPriceLevel, 1.2, 'indexation base carried with it');
+    assert.equal(rolled.purchaseDate.getTime(), ms(2030),
+      'the holding-period clock still restarts — the rolled bond is a new instrument');
+  });
+
+  test('a bond that carries no basis at all still redeploys at par (unchanged)', () => {
+    const rung = bond({
+      marketValue: 20_000, faceValue: 20_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      rollAtMaturity: true, rollTermYears: 5,
+    });
+    rung.costBasis = undefined;
+    const rolled = reducer
+      .reduce(stateWith(rung, { asOfY: 2030 }), { type: 'US_PERIOD_ADVANCE' })
+      .acct.holdings[0];
+    assert.equal(rolled.costBasis, 20_000, 'falls back to par when there is no basis to carry');
+  });
 });

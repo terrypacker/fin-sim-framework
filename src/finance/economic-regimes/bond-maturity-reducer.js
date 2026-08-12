@@ -50,10 +50,27 @@ const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
  *    `rollAtMaturity` + `rollTermYears` are preserved on the rolled bond so it keeps
  *    rolling every term.
  *
- * costBasis is set to faceValue on redemption/roll (par). `state` accounts are
- * scanned generically, so a matured bond in ANY account (brokerage / 401k / IRA /
- * Roth / super / au-stock) is handled with zero per-account wiring — mirroring
- * BondPriceAdjustReducer.
+ * **A ROLL CARRIES ITS COST BASIS.** The par-bond assumption above ("faceValue ==
+ * acquisition basis") no longer holds for every bond that reaches here: a ladder rebuild
+ * carries the replaced sleeve's basis onto its rungs (design 62 §9.5 follow-up,
+ * `ladderCarryover`), so a rung can arrive at maturity with `costBasis != faceValue`.
+ * Setting the rolled bond's basis to par would erase that difference — a silent step-up
+ * with no disposal, exactly the defect the carryover closed. The roll therefore keeps
+ * the maturing bond's basis (and, via the spread, its per-country base and indexation
+ * level), which DEFERS the discount/premium to the eventual sale instead of erasing it.
+ * The holding-period clock still restarts at the roll, because the rolled bond really is
+ * a new instrument. Exact treatment — market discount recognized AT maturity — is design
+ * 66 §G9, still out of scope.
+ *
+ * The redeem-to-cash branch cannot do the same: CASH must carry `costBasis ==
+ * marketValue` (design 87 §11), so a below-par basis has nowhere to live and redemption
+ * still steps it to par untaxed. Closing that needs an actual disposal event, which is
+ * again §G9. A rolling ladder — the only path that can produce a non-par basis today —
+ * never reaches it.
+ *
+ * `state` accounts are scanned generically, so a matured bond in ANY account (brokerage
+ * / 401k / IRA / Roth / super / au-stock) is handled with zero per-account wiring —
+ * mirroring BondPriceAdjustReducer.
  */
 export class BondMaturityReducer extends Reducer {
   static type        = 'BondMaturityReducer';
@@ -200,7 +217,9 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}) {
     return {
       ...h,
       marketValue:  par,
-      costBasis:    par,
+      // Carried, not re-based at par — see the class doc. `?? par` keeps the original
+      // behavior for a bond that never carried a basis at all.
+      costBasis:    h.costBasis ?? par,
       couponRate:   newCoupon,           // lock in the current yield at re-issue (G1)
       purchaseDate: new Date(matMs),     // the roll date is the new acquisition date
       maturityDate: new Date(matMs + termMs),

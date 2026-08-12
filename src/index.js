@@ -62,7 +62,7 @@ import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationP
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
-import { BondLadderReducer, materializeLadder } from './finance/behavioral/bond-ladder-reducer.js';
+import { BondLadderReducer, materializeLadder, ladderCarryover } from './finance/behavioral/bond-ladder-reducer.js';
 import { CashBucketDrawdownReducer } from './finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from './finance/behavioral/contribution-suspension-toggle-reducer.js';
 import { DownturnRothConversionReducer } from './finance/behavioral/downturn-roth-conversion-reducer.js';
@@ -299,7 +299,7 @@ import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
 import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
-import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv } from './finance/tax/tax-worksheet-export.js';
+import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
@@ -779,6 +779,7 @@ export const Finance = {
   BEHAVIORAL_STRATEGY_REGISTRY,
   BondLadderReducer,
   materializeLadder,
+  ladderCarryover,
   CashBucketDrawdownReducer,
   ContributionSuspensionToggleReducer,
   DownturnRothConversionReducer,
@@ -1293,6 +1294,8 @@ export const Finance = {
   worksheetRowsFromDocuments,
   verifyWorksheetRows,
   toCsv,
+  cellText,
+  tableDocumentToCsv,
   taxYearLabel,
   auFyLabel,
   UsTaxDocument2024,

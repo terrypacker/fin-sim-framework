@@ -448,3 +448,99 @@ before §9.5, once the level is blended rather than keyed.
 > — `materializeLadder` regenerates the whole bond sleeve from its total value, discarding any
 > residency step-up those lots carried. That is pre-existing and separate from the level stamp;
 > it is the same "basis reset drift" the reducer's own comment already flags.
+>
+> **Now covered — see §9.6.**
+
+### 9.6 The ladder rebuild is carryover-basis (DONE)
+
+`materializeLadder` rebuilt the bond sleeve from its total **market value** alone, so every
+rebuild re-based the whole ladder at market. Three things were lost at once, and the residency
+step-up §9.5 flagged is only the visible one:
+
+1. **Unrealized gain or loss vanished** with no disposal and no tax. A sleeve marked to 40k on a
+   25k base came back as 40k of base.
+2. **An AU s855-45 step-up was overwritten** — not dropped, *replaced* by a second, later
+   step-up at the rebuild's market value.
+3. **The post-2027 indexation clock restarted** at the rebuild, discarding the level §9.5 had
+   just made load-bearing.
+
+Two of the three favor the taxpayer, and none of them is an event that happened. A rebuild fires
+at bootstrap and once per `bondLadderRungs` change, so an MPC run that tunes ladder length online
+re-based the sleeve **every year it moved the lever** — and the default ladder account is the
+taxable US brokerage, the one account the AU move steps up.
+
+**The fix.** `ladderCarryover` reads the aggregate tax identity of the sleeve about to be
+replaced and `materializeLadder` splits it across the rungs by face, the remainder landing on the
+last rung exactly as `faceValue` does. `costBasis` and `costBaseByCountry` are summed with the
+FIFO path's own reading (`h.costBaseByCountry?.[c] ?? h.costBasis ?? 0`), so the rebuild conserves
+precisely what a disposal of that sleeve would have measured. `acquisitionPriceLevel` is blended
+as the basis-weighted harmonic mean §9.5 already established — exact, so indexation relief is
+neither gained nor lost; a lot carrying no level enters at today's level, which is the factor-1
+it already had. The acquisition dates take the **newest** vintage among the replaced lots: the
+rungs are one lot per maturity, so a single date must stand for the sleeve, and the newest never
+credits a ≥12-month holding period to money bought later. For a steady-state ladder every lot is
+already seasoned and newest/oldest are indistinguishable to every holding-period rule.
+
+**A coupled path had to move with it.** `BondMaturityReducer` set a rolled bond's basis to par on
+the stated ground that "Phase-3 bonds are par bonds (faceValue == acquisition basis)". Carryover
+breaks that premise — a rung can now mature with basis below par — and re-basing at par would have
+re-opened the hole one maturity at a time, converging the sleeve back to a full step-up over a
+ladder-length's worth of years. A **roll now carries its basis** (deferring the discount to the
+eventual sale) while still restarting the holding-period clock, because the rolled bond really is
+a new instrument.
+
+**Measured.** The reference arm with `BOND_LADDER` selected is **unchanged to the cent** — its
+bond sleeve is authored at par and never diverges, so there was nothing to erase. The defect is
+priced by what it erased: seeding the brokerage bond sleeve with an embedded gain (basis at 50% of
+market) and re-tuning the rung count annually the way the MPC cockpit does, the old code arrived
+at simEnd with the entire gain gone (basis == market, 60k on 60k), the new code with the basis
+conserved exactly (30k) through 14 rebuilds and ~14 years of rolls. Terminal net worth and
+lifetime tax are identical in that run because the sleeve is never sold — the difference is
+carried as unrealized gain, which is exactly what an after-tax terminal metric prices.
+
+> **Still not covered.** (a) A real re-ladder is a *partial* disposal and would realize CGT on
+> the traded fraction; carryover defers that gain rather than realizing it. Modeling it as a full
+> sale would be worse — a rebuild also fires at bootstrap, where turning an authored bond sleeve
+> into rungs is a change of representation, not a trade the plan made. (b) FIFO ordering *within*
+> the replaced sleeve is averaged, the same pro-rata convention §9.3 accepted, and for the same
+> reason: carrying vintages through un-blended would multiply the lot count at every rebuild
+> without bound. (c) The **redeem-to-cash** branch still steps a below-par basis up to par
+> untaxed — CASH must carry `costBasis == marketValue` (design 87 §11), so closing it needs a real
+> disposal event, which is design 66 §G9 (market discount at maturity). A rolling ladder, the only
+> path that can produce a non-par basis today, never reaches that branch.
+
+### 9.7 Coupon reinvestment into a stepped-up vintage lot (DONE)
+
+Found while checking whether §9.6's defect had a sibling on the other two lot-creation paths
+§9.5 names. `_newSleeve` (the rebalance/equity path) is clean — §9.2 made a buy establish its own
+lot, taxable sells go through `consumeHoldings`, and `_sweepDust` is gated on basis ≤ \$0.01 and
+carries basis across. `mergeCouponReinvestLots` was not.
+
+That path consolidates a year's reinvested coupons into **one vintage lot per (bucket × year)**,
+keyed `reinvest-<stateKey>-<bucket>-<year>`. When a residency move lands mid-year, the step-up
+stamps that lot's `costBaseByCountry` at its market value at the move — and the rest of the
+year's coupons then merge into the same lot, raising `marketValue` and `costBasis` while leaving
+the AU base where it was. The whole of the post-move reinvestment later reads as AU capital gain.
+
+This is **§9.1's second defect exactly**, on a different path: new money added to a stepped-up
+lot without touching its per-country base. That is the one that moved the reference scenario when
+§9.2 fixed it on the rebalance side, which is why it is worth closing here even though the
+exposure is narrower.
+
+```
+before:  after step-up   mv 1000  basis 1000  AU 1000
+         after 2nd merge mv 2000  basis 2000  AU 1000   ← AU base left behind
+after:   after 2nd merge mv 2000  basis 2000  AU 2000
+```
+
+**The fix.** The merge raises every per-country base by the same amount it adds to `costBasis` —
+buying more of a thing adds its cost to the cost base in every jurisdiction. A lot carrying no
+per-country base is untouched (no base is invented), and a country whose entry is explicitly null
+stays null so it keeps deferring to the raised `costBasis`. Tests `RCB-1`/`RCB-2` in
+`tests/unit/evt-bond-coupon-reinvest.test.mjs`.
+
+**Exposure.** Narrow by construction: it needs a taxable brokerage, a move landing mid-year, and
+reinvested coupons on both sides of it, and it is bounded by that year's post-move coupons. The
+reference scenario is unchanged. `acquisitionPriceLevel` and `acquisitionDateByCountry` are
+deliberately left alone — the vintage lot keeps the year's first firing for both, the same
+approximation §G10b already documents for `purchaseDate`.
