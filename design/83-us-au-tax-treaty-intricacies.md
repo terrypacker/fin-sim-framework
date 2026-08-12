@@ -1149,6 +1149,23 @@ This one is worth dwelling on. It is not a §904 defect at all — it is an accu
 had been wrong since design 52 — and **nothing in the model could see it** until the
 partition became an asserted invariant. It surfaced on the first run after G1 landed.
 
+**And it has now happened a third time, in the same shape — see design 90 §4.5.** Design 90
+made the US capital-gain accumulators signed but left the §904 basket booking on the floored
+`gain`, and gave the §1212 carryforward pools no source at all. G9's own diagnosis, written
+for rent, describes it exactly: *the positive months were summed into the basket and the
+negative ones discarded*. Substitute "disposals" for "months".
+
+So the generalisation is worth stating once, here, where the invariant lives: **any quantity
+that reaches `usOrdinaryIncomeYTD` or the gain buckets signed must reach its basket signed,
+and any pool that defers such a quantity across a year boundary must carry its basket with
+it.** Three instances (rent, capital losses within a year, capital losses across years) and
+the first two are the same line of code written in two places.
+
+The invariant caught all three. What it did **not** do is catch the third one *early*: the
+assertion can only fire on a path where the quantity is non-zero, and the deterministic
+reference plan never forms a capital-loss pool. §12.2's probe sweeps years, not worlds — the
+missing control is a sweep over stochastic seeds, which design 90 §10 now specifies.
+
 ### 12.2 Measured on the reference plan
 
 `scripts/probes/probe-904-limitation.mjs` (new — it prints the limitation for every year of

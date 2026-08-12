@@ -47,6 +47,10 @@ const YTD_FIELDS = {
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
+       // design 90 §4.5 — the capital-gain component of each basket. Per-year like the
+       // baskets they slice; the §1212(b) POOLS above are the things that survive.
+       'foreignGeneralCapGainsYTD', 'foreignPassiveCapGainsYTD',
+       'usSourceGeneralCapGainsUsdYTD', 'usSourcePassiveCapGainsUsdYTD',
        // design 83 G3 — re-sourced income, split by §904 category
        'usSourceGeneralUsdYTD', 'usSourcePassiveUsdYTD',
        // design 83 G10 part 2 — treaty-rate-capped subsets of usSourceOrdinaryUsdYTD
@@ -124,6 +128,13 @@ export function withoutUsSourceIncome(state, { keepTreatyCapped = false } = {}) 
     usSourceCapGainsUsdYTD:  0,
     usSourceGeneralUsdYTD:   0,
     usSourcePassiveUsdYTD:   capped,
+    // Design 90 §4.5 — the capital slices go with the buckets they slice. `capped` is
+    // dividends and interest, both ordinary, so the capital component of what survives
+    // is zero rather than `capped`. Leaving these behind would let the counterfactual
+    // compute Pub 514's adjustment against foreign-source capital gain it no longer
+    // contains — the same shape of error G8 records for the buckets themselves.
+    usSourceGeneralCapGainsUsdYTD: 0,
+    usSourcePassiveCapGainsUsdYTD: 0,
     usSourceDividendsUsdYTD: keepTreatyCapped ? (state.usSourceDividendsUsdYTD ?? 0) : 0,
     usSourceInterestUsdYTD:  keepTreatyCapped ? (state.usSourceInterestUsdYTD  ?? 0) : 0,
     // Pre-G3 saved states only; `_computeFtc` folds these into general, so the

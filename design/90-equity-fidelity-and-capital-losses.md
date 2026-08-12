@@ -1,6 +1,12 @@
 # 90 — Equity fidelity and capital losses
 
-**Status** (2026-08-10): **PROPOSED.** No code written.
+**Status** (2026-08-12): **steps 1–8 BUILT.** Per-section status is on each heading; §9 has
+the ordered list. Open: §7.4 (correlation structure), §8.4 (franking inside super), and the
+out-of-scope list in §11.
+
+*(This line read "PROPOSED. No code written." until 2026-08-12, through five landed steps.
+A stale status header on a doc whose sections each carry their own is worse than none — it
+is the first thing a reader trusts and the last thing anyone updates.)*
 
 Two asks arrived separately and turn out to be one piece of work:
 
@@ -286,7 +292,7 @@ so the two ledgers do not diverge the way the five disposal emitters did.
 
 ---
 
-## 4. Capital losses — United States  ✅ BUILT (step 3)
+## 4. Capital losses — United States  ✅ BUILT (step 3) — except §4.5, the §904 interaction
 
 **Implementation record.** `_computeCapitalLossLimitation` (`us-tax-rates-base.js`), the
 two pools on `IntlRetirementState`, `characterizeCapitalGain`
@@ -373,12 +379,196 @@ already-spent balance.
   Note the floor is applied **to the gain component**, not to the sum. Flooring `cg` alone (as
   today) and flooring the whole base are the same only while `nii ≥ 0`; keep the two floors
   distinct so a future negative NII component cannot be silently rescued by a gain.
-- **§904 numerators.** A loss on foreign-source personal property reduces the foreign passive
-  basket numerator and therefore the FTC limit. The gain currently books to
-  `foreignPassiveIncomeYTD` or `usSourceCapGainsUsdYTD` depending on the §865(g)(2) test
-  (design 83 G10). Letting a signed figure flow through unchanged is *probably* right and is
-  certainly better than flooring, but it interacts with the design 83 partition invariants.
-  Build it, then run those invariants — they caught a partition violation once already.
+- **§904 numerators. ⚠ NOT BUILT — and step 3 shipped without it.** This bullet used to read
+  "letting a signed figure flow through unchanged is *probably* right … build it, then run
+  those invariants — they caught a partition violation once already." That was the right
+  instinct and the right instruction, and neither half happened: the signed figure does **not**
+  flow through, and the invariants were never run on a path that could see it. They now fail.
+  **See §4.5**, which replaces this bullet with the rule, the evidence and the build plan.
+
+---
+
+### 4.5 Capital losses and the §904 limitation  ✅ BUILT (step 8)
+
+**Implementation record.** `_computeCapitalLossBasketAdjustment` (`us-tax-rates-base.js`,
+beside the netting that defines its inputs), applied to `generalGross` / `passiveGross` in
+`computeTax`; `basketCapGainPatch` (`capital-gain-character.js`) and signed basket bookings
+at all six disposal classifiers, four in the US module and two in the AU one; four new
+per-basket capital-gain accumulators on `IntlRetirementState`, the schema registry and the
+`YTD_FIELDS.US` reset allowlist; the two `usSource*CapGains*` slices dropped by
+`withoutUsSourceIncome`. Tests: `tests/unit/capital-loss-904-sourcing.test.mjs` (16).
+
+**Golden movement: one new field at `0`, and nothing else** — no balance, no tax, no net
+worth. §9 predicted exactly that and said it was not the test; it holds because the
+deterministic path never forms a pool.
+
+**Two things the build changed about the plan above.**
+
+- **The carryforward's source is NOT traced, and does not need to be.** §4.5 as written
+  called for source-tagged pools. Pub 514's mechanism turns out not to ask: the adjustment
+  is computed from the year's *net* figures, so a carryover lands inside "worldwide capital
+  gain" and enlarges the adjustment without ever being assigned a basket. The two readings
+  coincide whenever the gains are all foreign-source, which is what §865(a) produces for
+  this taxpayer. Six state fields became four, and no new pool machinery was needed. The
+  divergent case — a US-source capital gain meeting a foreign-source carryover in one year —
+  is recorded as accepted in the function's header.
+- **`foreignGeneralCapGainsYTD` is structurally zero today.** Every disposal classifier
+  books to passive; the only foreign *general* item of a capital flavour is §988 gain, which
+  is ordinary. The field and the general half of the apportionment exist so that a future
+  general-basket gain cannot reintroduce the failure by being untracked, and Pub 514's own
+  two-category example is what exercises that path in test.
+
+**On the acceptance test — §10's seed sweep did not work, and the honest answer is in the
+test file.** A stochastic sweep was built and it does *not* fail with the fix stubbed out:
+the partition only breaks when the foreign baskets are a large share of gross income, and
+the default plan's are not. Several configurations were tried (raised expenses to force
+drawdown, vol to 0.35, a dated crash, AU residency) and the reproduction remains the private
+live plan. So the sweep ships as a **smoke test with a vacuity guard** — it asserts that
+capital-loss pools actually form before asserting nothing throws — and the real regression
+pin is a **mutation-verified `computeTax` test**: stub `capBasket` back to zeros and exactly
+two tests go red. That is the working-detector control §10 demands, obtained at the level
+where the invariant actually lives.
+
+---
+
+#### The specification, kept for the reasoning and the evidence
+
+Written before the build; the two corrections above are the only places it was wrong.
+
+Step 3 made the US capital-gain accumulators signed. It did **not** make the §904 basket
+accumulators signed, and it did not give the carryforward pools a source. Until step 8 the
+design 83 partition invariant was reachable from the application: flipping only the two
+user-facing params `equityReturnStochastic` and `randomSeed`, through `BaseScenario` and
+`ScenarioLoader` with no lab tooling at all, threw on **4 of 25 seeds** of the live plan.
+
+#### What is actually broken
+
+Two distinct defects. They have the same cause — a capital loss reduces total gross income
+by a route the baskets cannot see — and they need different fixes.
+
+1. **Same-year losses never reach the basket.** At each disposal classifier
+   (`us-tax-module-2026.js`, six sites) the US totals take the signed figure
+   — `usCapitalGainsYTD + char.long`, `usShortTermCapitalGainsYTD + char.short` — while the
+   §904 booking two lines below still adds the raw `action.gain`, which
+   `capital-gain-character.js` documents as "floored at zero (so a loss vanished)". In any
+   year containing a realised loss the baskets therefore over-count by exactly the losses.
+
+2. **Carryforward losses have no source.** `usShortTermCapitalLossCarryforward` /
+   `usLongTermCapitalLossCarryforward` are untagged household scalars.
+   `_computeCapitalLossLimitation` draws them down at settle, lowering `cg` and hence
+   `grossIncomeAllSources`, long after the baskets were accumulated during the year. Nothing
+   reduces the baskets to match, and nothing *could* — the pool does not record which basket
+   its loss arose in.
+
+**Defect 2 is the one that fires in practice.** Measured on the reference plan, the shortfall
+`Σ basket gross − grossIncomeAllSources` equals the opening carryforward balance to the
+cent. Fixing defect 1 alone would not restore the invariant. (Figures in
+`scenarios/offset-rate/RUNBOOK.md`, which is gitignored — this document stays free of plan
+values.)
+
+#### Why the golden path cannot see it, and what that says about the verification
+
+§1.1 measured that losses are 0.006% of gross gains on the reference plan, and §4's own
+implementation record states that both pools end **empty** there — "there is nothing for
+§1211(b) or §1212(b) to bite on **until §7 lands**". §7 has since landed. Market sleeves with
+real dispersion are precisely what forms a carryforward, so the interaction became reachable
+at step 5 and nothing re-ran the invariants afterwards.
+
+This is the same trap §4's own record warns about from the other side: judging step 3 by its
+golden diff would have been "judging it by a measurement that was always going to read zero".
+The same is true here, and more sharply — **the deterministic golden path can never fail this
+invariant, at any effort level, because it never forms a pool.** So the acceptance test for
+step 8 is not a re-gold. It is a *seed sweep with stochastic sleeves on*, which is the only
+configuration where the quantity under test is non-zero.
+
+That sweep should exist as a standing test regardless of this design, because the invariant is
+currently asserted only where someone happens to run it.
+
+#### The rule — IRS Pub 514 (2025) p.28, on disk
+
+`docs/us-tax/IRS-Pub-514-Foreign-Tax-Credit-2025.txt`, *Adjustments to Foreign Source Capital
+Gains and Losses*. The mechanism is a **U.S. capital loss adjustment**, and it is a pro-rata
+apportionment across categories — which means the model does not need to reconstruct which
+individual lot funded which basket, only each basket's net capital gain:
+
+> Your **U.S. capital loss adjustment** is the amount of your foreign source capital gain in
+> excess of your worldwide capital gain. … you must reduce your foreign source capital gains by
+> the amount of the U.S. capital loss adjustment.
+>
+> **Step 1.** You must apportion the U.S. capital loss adjustment among your separate
+> categories that have a net capital gain. … You must apportion the U.S. capital loss
+> adjustment **pro rata based on the amount of net capital gain in each separate category**.
+
+with
+
+- *foreign source capital gain* = foreign-source capital gains − foreign-source capital losses
+- *worldwide capital gain* = worldwide gains − worldwide losses, floored at zero
+
+The publication's own worked example (Alfie), which doubles as the fixture for step 8 because
+every number in it is public:
+
+| quantity | amount |
+|---|---|
+| foreign passive gain | \$300 |
+| foreign general gain | \$1,000 |
+| foreign general loss | \$400 |
+| US-source capital loss | \$150 |
+| foreign source capital gain | \$900 = (1,000 + 300) − 400 |
+| worldwide capital gain | \$750 = (1,000 + 300) − (400 + 150) |
+| **U.S. capital loss adjustment** | **\$150** = 900 − 750 |
+| apportioned to passive | \$50 = 150 × 300/900 → line 1a **\$250** |
+| apportioned to general | \$100 = 150 × 600/900 → line 1a **\$500** |
+
+Note what the example settles: losses net **within** their own category first (the \$400
+general loss reduces the \$1,000 general gain before any apportionment), and only the
+*US-source* loss spills across categories, pro rata by each category's **net capital gain** —
+not by its total income, which is what a naive apportionment would use.
+
+#### What this requires
+
+- **Per-basket signed capital-gain accumulators.** The existing `foreignPassiveIncomeYTD` /
+  `foreignGeneralIncomeYTD` / `usSourceCapGainsUsdYTD` mix ordinary income and gains, and the
+  adjustment needs the gain component alone. The classifiers already know the source at
+  booking time (`isPersonalPropertyGainForeignSource`, design 83 G10), so this is recording a
+  figure they already compute, not a new sourcing decision.
+- **Signed booking at the six sites** — `char.short + char.long` rather than the floored
+  `gain`. Safe at the real-property site too: `characterizeCapitalGain` is explicitly built to
+  preserve the §121/§1250-adjusted figure in the positive branch and to fall through to the
+  raw signed figure only where `gain` is a floored zero carrying no information.
+- **Source-tagged carryforward pools.** §1212(b) treats a carryover as a capital loss *of the
+  succeeding year*, so it must enter that year's netting on one side or the other of the
+  foreign/US split. The tag is fixed at formation, from the same test the gain used.
+
+  This is the fourth carryforward pool in the codebase to need a tag it did not start with —
+  after `usPassiveLossCarryforward` (§469), `usInvestmentInterestCarryforward` (§163(d)) and
+  `auPersonTaxLossPool` (Div 36). **The recurring lesson is worth naming: a quantity that
+  survives a year boundary must carry every attribute that will be asked of it later, and
+  "later" includes provisions that were not built when the pool was.** Design 87 G11 states
+  the same rule for currency basis pools and calls it basis carryover.
+
+- **`computeTax` must stay pure.** Follow the §469 precedent §4.3 already documents: report
+  the closing pools, let `_extraStatePatches` write back on the real pass only. The FITO
+  counterfactual re-runs this computation with US-source income removed, and it must be able
+  to remove the capital-gain component from the baskets too — which is a second, independent
+  reason the per-basket gain figures have to exist rather than being derived on the fly.
+
+#### Out of scope for step 8, deliberately
+
+- **§904(b)(2) capital gain rate differential adjustment.** Pub 514's other adjustment,
+  keyed to the 0/15/20/25/28% rate groups. Independent of the partition invariant: it rescales
+  gains already in the right basket, so it cannot make the baskets exceed gross income. Worth
+  a separate step; note it interacts with §6's short/long split rather than with this.
+- **§904(f) overall foreign loss / §904(g) overall domestic loss recapture.** A whole regime,
+  triggered by a *net* foreign loss year rather than by capital losses as such.
+
+#### Relationship to design 87
+
+None, mechanically — and this is worth stating because the two look adjacent. Design 87
+Phase 3 is §988 **basis** lots on nonfunctional-currency accounts; this is §904 **source**
+tagging of §1212 carryovers. Different provisions, different state, no shared code surface,
+and §988 gain is ordinary general-basket income that never touches the capital-loss pools.
+They are the same *pattern* — a carried-forward quantity keeping its tag — and neither blocks
+the other. **Do not sequence step 8 behind Phase 3.**
 
 ---
 
@@ -747,6 +937,17 @@ Ordered so each step is independently reviewable and the re-gold diffs stay attr
 | 5 | Market sleeves, idio vol at 0 (§7.2–7.3) | Structural only |
 | 6 | Correlation structure — betas and non-zero idio vol (§7.4) | **Yes**, and re-bases every stochastic result |
 | 7 | Franked dividends (§8) | **Yes** |
+| 8 | §904 basket sourcing of capital losses (§4.5) ✅ | **No** — one new field at `0`, as predicted |
+
+**Step 8 was implicit in step 3 and is not.** §4.4 named the interaction, step 3 shipped
+without it, and steps 5–6 made it reachable by giving the sleeves enough dispersion to form a
+carryforward. It is its own step because it turned out to be a separate piece of work with a
+separate acceptance test.
+
+Its "re-golds? No" was a **prediction, and the point is that it was not the test**. The
+deterministic golden path never forms a capital-loss pool (§4's record: both pools end empty),
+so the clean re-gold says only that nothing unrelated moved — which is worth having, and is
+not evidence the step works. What is: the mutation-verified `computeTax` pin in §4.5.
 
 Steps 1–2 are behaviour-preserving and land the plumbing where it can be reviewed on its own.
 Steps 3 and 4 are separate commits because US and AU netting are genuinely different rules and a
@@ -773,7 +974,36 @@ touches the RNG.
   passes every test.
 - **Golden fixtures** — `REGOLD=1`, then read the diff. Three independent sources of movement
   (loss recognition, character, sleeve re-basing), which is why §9 re-golds at step boundaries.
-- **Design 83 §904 partition invariants** — re-run after step 3 (§4.4).
+- **Design 83 §904 partition invariants — and "re-run" is not enough, which is the lesson of
+  §4.5.** This line previously said "re-run after step 3". It was followed, and it passed,
+  because on the deterministic golden path the quantity under test is identically zero: no
+  capital-loss pool ever forms (§4's implementation record), so no basket can disagree with
+  gross income. **A check that cannot fail is not a check.**
+
+  The invariant needs a configuration where losses are material, which is exactly what §7's
+  sleeves produce and nothing else in the suite does. Step 8's acceptance test is therefore a
+  **seed sweep**: flip `equityReturnStochastic` on, run N seeds of a cross-border scenario to
+  simEnd, and assert every settle computes without an invariant failure. Before step 8 that
+  sweep fails on a meaningful fraction of seeds; after it, on none.
+
+  Make it a standing test rather than a one-off. The invariant currently fires only when
+  someone happens to run a stochastic path by hand, which is why an unbuilt §4.4 item survived
+  three subsequent steps.
+
+  **⚠ Built, and it does NOT catch §4.5 — read this before trusting it.** The sweep passes
+  with the fix stubbed out. The partition only breaks when the foreign baskets are a large
+  share of gross income, and the default plan's are not; raised expenses, vol to 0.35, a dated
+  crash and AU residency were all tried and none reproduced it. It ships as a smoke test with
+  a **vacuity guard** — it asserts capital-loss pools actually form before asserting nothing
+  throws, so it fails loudly rather than going quietly hollow the way §10's original
+  instruction did.
+
+  **The working-detector control that does work is at `computeTax`**, not at the scenario
+  level: `capital-loss-904-sourcing.test.mjs` constructs the failing state directly, and
+  stubbing `capBasket` back to zeros turns exactly two tests red. The general lesson is worth
+  more than the sweep: **when an invariant is a property of state, test it on state.** Driving
+  a whole scenario to reach a state you can write down in ten lines adds only the risk that
+  you never reach it.
 - **An RNG-neutrality test for §7** — assert the sleeve loop draws zero uniforms when every idio
   vol is 0, so the property §1.4 relies on cannot be lost silently.
 

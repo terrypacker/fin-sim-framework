@@ -201,6 +201,15 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // carryforward pools ({ [vintageCY]: remainingUSD }).
     this.foreignGeneralIncomeYTD = 0;
     this.foreignPassiveIncomeYTD = 0;
+    // Design 90 §4.5 — the CAPITAL-GAIN component of each basket above, signed and
+    // tracked separately because Pub 514's U.S. capital loss adjustment applies to
+    // capital gain alone and must not touch the ordinary income sitting in the same
+    // accumulator. `general` is structurally zero today: every disposal classifier
+    // books to passive, and §988 gain — the only foreign general item of a capital
+    // flavour — is ordinary. It exists so that a future general-basket gain cannot
+    // reintroduce the partition failure by being untracked.
+    this.foreignGeneralCapGainsYTD = 0;
+    this.foreignPassiveCapGainsYTD = 0;
     this.ftcCurrentGeneral = 0;
     this.ftcCurrentPassive = 0;
     // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).
@@ -226,6 +235,12 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usSourceInterestUsdYTD = 0;
     this.usSourceGeneralUsdYTD = 0;
     this.usSourcePassiveUsdYTD = 0;
+    // Design 90 §4.5 — the capital-gain component of the two re-sourced buckets above,
+    // for the same reason and with the same "general is structurally zero" note. Kept
+    // apart from foreign*CapGainsYTD so `withoutUsSourceIncome` can remove them, exactly
+    // as it removes the buckets they slice.
+    this.usSourceGeneralCapGainsUsdYTD = 0;
+    this.usSourcePassiveCapGainsUsdYTD = 0;
     this.usSourceOrdinaryAudYTD = 0;   // AUD, funds the §4.5 FITO limit
     this.usSourceCapGainsAudYTD = 0;
     // US-source *real* (indexed) AU cap gain (AUD) — funds the FY2027 FITO

@@ -26,7 +26,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildVariant, applyLoan, applyOffset, makeSetParam } from '../../scripts/lib/variant.mjs';
+import { buildVariant, applyLoan, applyOffset, applyFacility, makeSetParam } from '../../scripts/lib/variant.mjs';
 
 /** A cfg shaped like a workbench export: property record + persisted loan + offset. */
 const exportedCfg = () => ({
@@ -246,6 +246,128 @@ describe('offset lever', () => {
     cfg.accounts[1].currency = { code: 'USD' };
     assert.throws(() => applyOffset(cfg, 'off', { balance: 0, deployTo: 'brk' }),
       /exchangeRateUsdToAud/);
+  });
+});
+
+// ─── facility lever ───────────────────────────────────────────────────────────
+//
+// The property under test is that the three modes are wealth-matched at t0 WITHOUT
+// the caller reconciling anything. That is the check the hand-written arms of design
+// 86 §8.6 skipped, and it hid a A$136k head start that compounded for 44 years.
+
+describe('facility lever', () => {
+  /** Assets − liabilities at t0, in AUD, over the accounts a facility touches. */
+  const netAt0 = (cfg) => totalWealth(cfg) - (cfg.initialState.hPropertyLoan?.balance ?? 0);
+
+  test('hold, deploy and none hold the SAME t0 balance sheet', () => {
+    const base = { loan: 'hPropertyLoan', size: 500_000, deployTo: 'brk' };
+    const hold   = buildVariant(exportedCfg(), { facility: { off: { ...base, mode: 'hold'   } } });
+    const deploy = buildVariant(exportedCfg(), { facility: { off: { ...base, mode: 'deploy' } } });
+    const none   = buildVariant(exportedCfg(), { facility: { off: { ...base, mode: 'none'   } } });
+
+    assert.equal(netAt0(hold), netAt0(deploy), 'park vs deploy');
+    assert.equal(netAt0(hold), netAt0(none),   'facility vs no facility');
+  });
+
+  test('hold parks the facility in the offset and books the matching debt', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'hold' } },
+    });
+    assert.equal(cfg.accounts[0].balance, 500_000, 'offset holds the facility');
+    assert.equal(cfg.initialState.hPropertyLoan.balance, 500_000);
+    assert.equal(cfg.realProperties[0].mortgageBalance, 500_000, 'the record the toolset synthesizes from');
+    assert.equal(cfg.accounts[1].balance, 400_000, 'the brokerage is untouched');
+  });
+
+  test('deploy moves the proceeds out and leaves the debt behind', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'deploy', deployTo: 'brk' } },
+    });
+    assert.equal(cfg.accounts[0].balance, 0);
+    assert.equal(cfg.accounts[1].balance, 900_000, 'the WHOLE facility lands, not just the uplift');
+    assert.equal(cfg.initialState.hPropertyLoan.balance, 500_000);
+  });
+
+  test('none discharges the loan and empties the offset, ignoring size', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'none' } },
+    });
+    assert.equal(cfg.initialState.hPropertyLoan.balance, 0);
+    assert.equal(cfg.accounts[0].balance, 0);
+    assert.equal(cfg.accounts[1].balance, 400_000, 'the baseline arm invests nothing extra');
+  });
+
+  test('size is an axis the placement axis cannot come apart from', () => {
+    // The point of the lever: `size` and `mode` are separate dotted paths, so a grid
+    // sweeps them independently and the liability still tracks the proceeds.
+    for (const size of [250_000, 750_000, 1_000_000]) {
+      const hold   = buildVariant(exportedCfg(), { facility: { off: { loan: 'hPropertyLoan', size, mode: 'hold' } } });
+      const deploy = buildVariant(exportedCfg(), { facility: { off: { loan: 'hPropertyLoan', size, mode: 'deploy', deployTo: 'brk' } } });
+      assert.equal(hold.accounts[0].balance, size);
+      assert.equal(hold.initialState.hPropertyLoan.balance, size);
+      assert.equal(netAt0(hold), netAt0(deploy), `wealth-matched at ${size}`);
+    }
+  });
+
+  test('the offset is excluded from drawdown unless the spec says otherwise', () => {
+    // `null` is the expression of "it stays in the offset" — see applyOffset. A
+    // facility arm that quietly carried a priority would spend the option instead of
+    // holding it.
+    const dflt = buildVariant(exportedCfg(), { facility: { off: { loan: 'hPropertyLoan', size: 1, mode: 'hold' } } });
+    assert.equal(dflt.accounts[0].drawdownPriority, null);
+    const spent = buildVariant(exportedCfg(), {
+      facility: { off: { loan: 'hPropertyLoan', size: 1, mode: 'hold', drawdownPriority: 3 } },
+    });
+    assert.equal(spent.accounts[0].drawdownPriority, 3);
+  });
+
+  test('the base `loan` lever still supplies rate and term; facility supplies only size', () => {
+    const cfg = buildVariant(exportedCfg(), {
+      loan:     { hPropertyLoan: { primeSpread: 0.045, interestOnly: true, maturityYear: 2056 } },
+      facility: { off: { loan: 'hPropertyLoan', size: 800_000, mode: 'hold' } },
+    });
+    const loan = cfg.initialState.hPropertyLoan;
+    assert.equal(loan.balance, 800_000, 'facility wins on balance');
+    assert.equal(loan.primeSpread, 0.045, 'and does not clobber the rate');
+    assert.equal(loan.interestOnly, true);
+    assert.equal(cfg.realProperties[0].mortgageMaturityYear, 2056);
+  });
+
+  test('re-books the §988 rate at today\'s spot, so a bigger facility is not a bigger phantom gain', () => {
+    // The authored loan was incurred at 1.35; the facility under study is drawn today
+    // at 1.55. Keeping 1.35 would measure the repayment of dollars borrowed at 1.55
+    // against a rate that never applied to them — and the error grows with the size,
+    // which on a size sweep looks exactly like a real cost of borrowing more.
+    const base = exportedCfg();
+    base.params.push({ name: 'exchangeRateUsdToAud', value: 1.55 });
+    base.parameters.exchangeRateUsdToAud = 1.55;
+    base.realProperties[0].mortgageBookingFxRate = 1.35;
+    base.initialState.hPropertyLoan.bookingFxRate = 1.35;
+
+    const cfg = buildVariant(base, {
+      facility: { off: { loan: 'hPropertyLoan', size: 1_000_000, mode: 'hold' } },
+    });
+    assert.equal(cfg.initialState.hPropertyLoan.bookingFxRate, 1.55);
+    assert.equal(cfg.realProperties[0].mortgageBookingFxRate, 1.55, 'the record the toolset synthesizes from');
+  });
+
+  test('an explicit bookingFxRate wins over the spot default', () => {
+    const base = exportedCfg();
+    base.params.push({ name: 'exchangeRateUsdToAud', value: 1.55 });
+    base.parameters.exchangeRateUsdToAud = 1.55;
+    const cfg = buildVariant(base, {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'hold', bookingFxRate: 1.2 } },
+    });
+    assert.equal(cfg.initialState.hPropertyLoan.bookingFxRate, 1.2);
+  });
+
+  test('fails loud on a missing loan, an unknown mode, or a deploy with nowhere to go', () => {
+    const cfg = exportedCfg();
+    const set = makeSetParam(cfg);
+    assert.throws(() => applyFacility(cfg, set, 'off', { size: 1 }), /needs a "loan"/);
+    assert.throws(() => applyFacility(cfg, set, 'off', { loan: 'hPropertyLoan', mode: 'park' }), /hold, deploy, none/);
+    assert.throws(() => applyFacility(cfg, set, 'off', { loan: 'hPropertyLoan', mode: 'deploy' }), /needs a deployTo/);
+    assert.throws(() => applyFacility(cfg, set, 'off', { loan: 'hPropertyLoan', size: -1 }), /non-negative/);
   });
 });
 

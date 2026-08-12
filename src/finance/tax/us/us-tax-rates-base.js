@@ -139,6 +139,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // pre-netting figure and may be negative.
     const capLoss = _computeCapitalLossLimitation(state);
 
+    // Step 0a2: the §904 half of the same netting (design 90 §4.5). Derived here, beside
+    // `capLoss`, because it consumes exactly those post-netting figures as Pub 514's
+    // "worldwide capital gain" — computing it near its use site in `_computeFtc` would
+    // separate it from the thing that defines it.
+    const capBasket = _computeCapitalLossBasketAdjustment(state, capLoss);
+
     // Step 0b: §163(d) investment interest (design 86 G3 error 1). Computed after the
     // §469 pass because its own limit reads `usPassiveActivityIncomeYTD` to carve
     // passive rents out of net investment income, and taken as a deduction below
@@ -359,7 +365,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // return would keep claiming limitation room for income it no longer contains
       // — which is how design 83 G8 went wrong the first time, and the §904
       // invariants catch it immediately.
-      generalGross:    Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) + (state.usSourceGeneralUsdYTD ?? 0)),
+      // Design 90 §4.5 — less the U.S. capital loss adjustment. A capital loss reaches
+      // `grossIncomeAllSources` through the netting but cannot reach an accumulator that
+      // was summed during the year, so without this the baskets keep the gross gain and
+      // the partition breaks by the absorbed loss. Same failure as the §469 line below,
+      // and as design 83 G9's rent; see `_computeCapitalLossBasketAdjustment`.
+      generalGross:    Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) + (state.usSourceGeneralUsdYTD ?? 0)
+                                   - capBasket.general),
       generalExcluded: Math.max(0, feieExcluded),
       // The §469 adjustment must reach the basket too, or the partition breaks.
       // A suspended loss is removed from `usOrdinaryIncomeYTD` (hence from
@@ -369,7 +381,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // invariant violation design 86 G5b records; suspending the loss in both places
       // is what restores `Σ basket gross ≤ grossIncomeAllSources`.
       passiveGross:    Math.max(0, (state.foreignPassiveIncomeYTD ?? 0) + (state.usSourcePassiveUsdYTD ?? 0)
-                                   + pal.foreignAdjustment),
+                                   + pal.foreignAdjustment - capBasket.passive),
     });
     const credits      = ftc.credit;
     // Total gross tax includes NIIT; net liability credits the FTC against the
@@ -1034,6 +1046,76 @@ export function _computeCapitalLossLimitation(state) {
     closingShort:         +(stLoss - fromShort).toFixed(2),
     closingLong:          +(ltLoss - fromLong).toFixed(2),
     netLoss:              +netLoss.toFixed(2),
+  };
+}
+
+/**
+ * The **U.S. capital loss adjustment** — IRS Pub 514 (2025) p.28, *Adjustments to Foreign
+ * Source Capital Gains and Losses* (design 90 §4.5).
+ *
+ * A capital loss reduces total gross income through `_computeCapitalLossLimitation`, which
+ * nets it against the year's gains and can draw down a §1212(b) carryforward besides. The
+ * §904 basket accumulators are built during the year and know nothing about either. Without
+ * this, the baskets keep the gross gain while `grossIncomeAllSources` keeps the net one, and
+ * the partition breaks by exactly the absorbed loss — which is the failure design 83 §12.1
+ * has now recorded three times, after rent (G9) and the §469 suspended loss (design 86 G5b).
+ *
+ * The publication's mechanic, verbatim in structure:
+ *
+ *   foreign source capital gain = foreign-source capital gains − foreign-source capital losses
+ *   worldwide capital gain      = worldwide gains − worldwide losses, floored at zero
+ *   U.S. capital loss adjustment = foreign source capital gain − worldwide capital gain
+ *
+ * then *"apportion the U.S. capital loss adjustment among your separate categories that have
+ * a net capital gain … **pro rata based on the amount of net capital gain in each separate
+ * category**"*. Note what that settles: losses net WITHIN a category first — which the signed
+ * per-basket accumulators do for free — and only the residue apportions across categories,
+ * weighted by each category's NET capital gain rather than by its total income. Weighting by
+ * total income is the obvious wrong answer and would move relief between baskets.
+ *
+ * **This makes `Σ basket gross ≤ grossIncomeAllSources` hold by construction**, because the
+ * capital component of the baskets is capped at exactly the capital component of gross
+ * income. The ordinary components already partitioned it.
+ *
+ * ## Why the carryforward's own source is not traced
+ *
+ * §1212(b) treats a carryover as a capital loss *of the succeeding year*, so it lands inside
+ * `worldwideCapGain` above and enlarges the adjustment. It is NOT separately assigned to the
+ * basket it arose in. That is the publication's own treatment — its adjustment is computed
+ * from the year's net figures and never asks where a carryover came from — and the two
+ * readings coincide whenever the gains are all foreign-source, which is the case §865(a)
+ * produces for a US citizen resident abroad. They diverge only when a US-source capital gain
+ * and a foreign-source carryover meet in one year; design 90 §4.5 records that as accepted.
+ *
+ * @param {object} state
+ * @param {{shortTermGain:number, longTermGain:number, collectibleGain:number,
+ *          unrecaptured1250Gain:number}} capLoss  the post-netting figures from
+ *          {@link _computeCapitalLossLimitation} — i.e. the "worldwide capital gain".
+ * @returns {{general:number, passive:number, adjustment:number,
+ *            foreignSourceCapGain:number, worldwideCapGain:number}} amounts to SUBTRACT
+ *          from each basket's gross, in USD.
+ */
+export function _computeCapitalLossBasketAdjustment(state, capLoss) {
+  // Net capital gain per separate category. Signed accumulators, so a foreign-source loss
+  // has already reduced its own basket; the floor is Pub 514's "categories that have a net
+  // capital gain", which are the only ones the adjustment is apportioned among.
+  const general = Math.max(0, (state?.foreignGeneralCapGainsYTD ?? 0)
+                            + (state?.usSourceGeneralCapGainsUsdYTD ?? 0));
+  const passive = Math.max(0, (state?.foreignPassiveCapGainsYTD ?? 0)
+                            + (state?.usSourcePassiveCapGainsUsdYTD ?? 0));
+
+  const foreignSourceCapGain = general + passive;
+  const worldwideCapGain = Math.max(0, (capLoss?.shortTermGain ?? 0) + (capLoss?.longTermGain ?? 0)
+                                     + (capLoss?.collectibleGain ?? 0) + (capLoss?.unrecaptured1250Gain ?? 0));
+  const adjustment = Math.max(0, foreignSourceCapGain - worldwideCapGain);
+
+  const zero = { general: 0, passive: 0, adjustment: 0, foreignSourceCapGain, worldwideCapGain };
+  if (!(adjustment > 0) || !(foreignSourceCapGain > 0)) return zero;
+
+  return {
+    general: adjustment * (general / foreignSourceCapGain),
+    passive: adjustment * (passive / foreignSourceCapGain),
+    adjustment, foreignSourceCapGain, worldwideCapGain,
   };
 }
 

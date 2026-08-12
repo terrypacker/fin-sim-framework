@@ -87,3 +87,28 @@ export function characterizeAuCapitalGain(action, auTaxableGain) {
     ? { short, long: +(auTaxableGain - short).toFixed(2) }
     : { short, long };
 }
+
+/**
+ * Design 90 §4.5 — accumulate a capital gain into one of the §904 basket capital-gain
+ * slices, returning a patch fragment to spread.
+ *
+ * Exists so the six disposal classifiers express this identically. They already share the
+ * shape above; the slice has to be written at exactly the same places and with exactly the
+ * same signed amount that reached the basket itself, or Pub 514's U.S. capital loss
+ * adjustment is computed against a figure that is not the basket's capital component.
+ *
+ * **Writes only when non-zero**, following the `usUnrecaptured1250GainYTD` precedent the
+ * classifiers already cite: creating the key at 0 puts a state diff on every gainless
+ * disposal, which is both noise in the journal and a golden-fixture churn. A gainless
+ * disposal contributes nothing to the adjustment, so the absent key and the zero key mean
+ * the same thing to every reader (`?? 0`).
+ *
+ * @param {object} state   the state being read from
+ * @param {string} key     `foreign{General,Passive}CapGainsYTD` or
+ *                         `usSource{General,Passive}CapGainsUsdYTD`
+ * @param {number} amount  the SIGNED amount that reached the basket, in the basket's currency (USD)
+ * @returns {object} `{ [key]: newTotal }`, or `{}` when there is nothing to add
+ */
+export function basketCapGainPatch(state, key, amount) {
+  return amount !== 0 ? { [key]: (state?.[key] ?? 0) + amount } : {};
+}

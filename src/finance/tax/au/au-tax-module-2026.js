@@ -11,7 +11,7 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
 import { toUSD } from '../tax-fx.js';
-import { characterizeCapitalGain, characterizeAuCapitalGain } from '../capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from '../capital-gain-character.js';
 import { frankingCreditOn } from './franking.js';
 import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
 
@@ -608,7 +608,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
                   auCapitalGainsYTD:      state.auCapitalGainsYTD + auChar.short + auChar.long,
                   auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auChar.long,
                 }),
-            foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auGain, 'AUD', state),
+            // Design 90 §4.5 — SIGNED, and the capital slice recorded beside it. `auGain`
+            // is floored, so an AU capital LOSS added nothing to the basket while the
+            // signed split above subtracted from `usCapitalGainsYTD`: the basket then
+            // carried gain the §904 denominator did not. The basket keeps taking the
+            // AU-measured figure, as it always has — that asymmetry with the US-measured
+            // `char` is design 62's s855-45 step-up and is not this design's to change.
+            foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auChar.short + auChar.long, 'AUD', state),
+            ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD', toUSD(auChar.short + auChar.long, 'AUD', state)),
           };
         }
         return next;
@@ -719,7 +726,15 @@ export class AuTaxModule2026 extends BaseTaxModule {
           // taxable gain plus the §1250 slice, and NOT the §121-excluded part. A
           // basket numerator carrying income the denominator does not is the G5b
           // partition failure, and excluded gain is precisely such income.
-          foreignPassiveIncomeYTD:   (state.foreignPassiveIncomeYTD ?? 0) + usdGain + usdDepGain,
+          //
+          // Design 90 §4.5 — and "exactly what reached the US totals" now includes the
+          // SIGN. `usdGain` derives from `usTaxableGain`, which is floored at zero, so a
+          // dwelling sold at a loss added only the §1250 slice here while the signed
+          // `houseChar` reduced `usCapitalGainsYTD` above.
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0)
+                                   + toUSD(houseChar.short + houseChar.long, 'AUD', state) + usdDepGain,
+          ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD',
+            toUSD(houseChar.short + houseChar.long, 'AUD', state) + usdDepGain),
         };
         if (perPerson) {
           const asset = { ownershipType, ownerId, owners };

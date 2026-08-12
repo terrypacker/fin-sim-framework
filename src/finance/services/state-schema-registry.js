@@ -260,6 +260,10 @@ export class StateSchemaRegistry {
     // §904 foreign-source numerators (post-FEIE), per basket.
     this.register('foreignGeneralIncomeYTD',     ParameterValueType.currency('USD'));
     this.register('foreignPassiveIncomeYTD',     ParameterValueType.currency('USD'));
+    // Design 90 §4.5 — the signed capital-gain component of each basket, for Pub 514's
+    // U.S. capital loss adjustment. `general` is structurally zero today (see the state).
+    this.register('foreignGeneralCapGainsYTD',   ParameterValueType.currency('USD'));
+    this.register('foreignPassiveCapGainsYTD',   ParameterValueType.currency('USD'));
     // Current-year AU foreign tax available to credit this US settle, per basket
     // (funded at the AU settle §4.4, consumed + banked at the US settle §4.3).
     this.register('ftcCurrentGeneral',           ParameterValueType.currency('USD'));
@@ -288,6 +292,9 @@ export class StateSchemaRegistry {
     this.register('usSourceGeneralUsdYTD',       ParameterValueType.currency('USD'));
     this.register('usSourcePassiveUsdYTD',       ParameterValueType.currency('USD'));
     this.register('usSourceCapGainsUsdYTD',      ParameterValueType.currency('USD'));
+    // Design 90 §4.5 — capital-gain component of the two re-sourced buckets.
+    this.register('usSourceGeneralCapGainsUsdYTD', ParameterValueType.currency('USD'));
+    this.register('usSourcePassiveCapGainsUsdYTD', ParameterValueType.currency('USD'));
 
     // Cross-border relief — AU side, canonical AUD (design 52).
     this.register('usSourceOrdinaryAudYTD',      ParameterValueType.currency('AUD'));

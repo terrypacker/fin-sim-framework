@@ -38,6 +38,10 @@
  *                                       mortgage or a standalone LoanAccount
  *   offset            {offsetKey: {...}} offset balance, the drawn facility, and where
  *                                      the freed cash goes
+ *   facility          {offsetKey: {...}} the whole drawn facility as ONE lever —
+ *                                      liability + proceeds + where they sit, so
+ *                                      facility SIZE and park/deploy/none are
+ *                                      separately sweepable axes
  *   expenseEvents     [{...}]          dated one-off expenses in a chosen currency,
  *                                      optionally funded from a nominated account
  *                                      (design 86 G8/G9); APPENDS and auto-enables
@@ -93,6 +97,11 @@ export function buildVariant(cfg, levers = {}) {
   // offset against its loan (the common case) needs the loan's final balance.
   if (levers.loan) {
     for (const [loanKey, o] of Object.entries(levers.loan)) applyLoan(out, set, loanKey, o);
+  }
+  // After `loan` (so the base lever supplies rate and term and this supplies the SIZE)
+  // and before `offset` (so an explicit offset lever can still override the placement).
+  if (levers.facility) {
+    for (const [offsetKey, o] of Object.entries(levers.facility)) applyFacility(out, set, offsetKey, o);
   }
   if (levers.expenseEvents) applyExpenseEvents(out, set, levers.expenseEvents);
   if (levers.offset) {
@@ -416,6 +425,12 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     // design 86 G6 — absolute calendar years, not durations.
     interestOnlyUntilYear: ['mortgageInterestOnlyUntilYear', 'interestOnlyUntilYear'],
     maturityYear:          ['mortgageMaturityYear',          'maturityYear'],
+    // design 86 G7/P8 — foreign units per USD when the debt was INCURRED. §988 gain on
+    // every principal repayment is measured from it, so a lever that moves `balance`
+    // and leaves this alone prices newly-borrowed dollars against a rate that never
+    // applied to them. See applyFacility, which re-books rather than making the caller
+    // remember.
+    bookingFxRate: ['mortgageBookingFxRate', 'bookingFxRate'],
   };
 
   for (const [field, [propField, loanField]] of Object.entries(MAP)) {
@@ -522,6 +537,83 @@ export function applyOffset(cfg, stateKey, o = {}) {
     const rate = fxFactor(cfg, target.currency(), dest.currency());
     dest.setBalance(dest.balance() + delta * rate);
   }
+}
+
+/**
+ * `facility` lever — the whole drawn facility as ONE lever, keyed by the OFFSET's
+ * state key.
+ *
+ *   loan     stateKey       the loan the offset stands against (required)
+ *   size     number         facility size F: writes `loan.balance = F` AND credits the
+ *                           offset with F before anything is moved out of it
+ *   mode     'hold' | 'deploy' | 'none'
+ *   deployTo stateKey       destination for `mode: "deploy"` (required there)
+ *   drawdownPriority number|null  passed to the offset; default null, see applyOffset
+ *   bookingFxRate number|null  §988 booking rate for the drawn facility. Defaults to
+ *                           the scenario's spot rate — the facility is drawn TODAY.
+ *                           Pass an explicit value to keep the authored one.
+ *
+ * **Why this exists rather than "just write `loan` and `offset` yourself".** Sizing a
+ * facility has to move the liability and the proceeds in LOCKSTEP, and a `variant-grid`
+ * axis writes exactly one dotted path — so a size sweep had to be one grid per size,
+ * with the two halves matched only by whoever wrote the spec files. Here `size` and
+ * `mode` are separate sub-keys of one object, so a grid can put facility size on one
+ * axis and the placement decision on another and the arms cannot come apart.
+ *
+ * **`mode: "none"` is the no-facility arm**, and it is a different question from
+ * `"deploy"`. `deploy` vs `hold` asks *given that I borrowed, park it or invest it*;
+ * `none` vs `hold` asks *should I take the facility at all* — which is the only pairing
+ * in which the loan's RATE is the quantity under study, because a fully offset loan
+ * accrues no interest and its rate is inert until the offset is drawn. `none` ignores
+ * `size` and discharges the loan.
+ *
+ * **All three modes are wealth-matched at t0 by construction**, which is the property
+ * the hand-written arms got wrong (design 86 §8.6, `fromBalance`): `hold` is +F cash
+ * −F debt, `deploy` is +F elsewhere −F debt, `none` is neither. Any arm set built from
+ * this lever nets to the same t0 balance sheet without the caller checking.
+ *
+ * **It also re-books the §988 rate, and that is not a detail.** A foreign-currency
+ * mortgage realizes exchange gain on every principal repayment, measured from the rate
+ * at which the debt was INCURRED. A scenario's authored `bookingFxRate` is the rate of
+ * the loan the household actually has; a study that raises the balance to a facility
+ * size under consideration is positing a draw made TODAY, so today's spot is the rate
+ * that applies to it. Leaving the authored rate in place manufactures §988 gain out of
+ * an accounting choice — and it manufactures MORE of it the larger the facility, which
+ * on a size sweep is indistinguishable from a real diseconomy of scale. Pass an
+ * explicit `bookingFxRate` to opt out.
+ */
+export function applyFacility(cfg, set, offsetKey, o = {}) {
+  const { loan: loanKey, mode = 'hold', deployTo = null } = o;
+  if (!loanKey) throw new Error(`facility lever: "${offsetKey}" needs a "loan" state key`);
+  if (!['hold', 'deploy', 'none'].includes(mode)) {
+    throw new Error(`facility lever: mode "${mode}" is not one of hold, deploy, none`);
+  }
+  if (mode === 'deploy' && !deployTo) {
+    throw new Error('facility lever: mode "deploy" needs a deployTo account');
+  }
+
+  // `none` discharges the facility outright, so its size is not a thing that can be
+  // asked. Reading `size` there would let a size axis silently move the baseline.
+  const size = mode === 'none' ? 0 : Number(o.size ?? 0);
+  if (!Number.isFinite(size) || size < 0) {
+    throw new Error(`facility lever: size ${JSON.stringify(o.size)} is not a non-negative number`);
+  }
+
+  // `bookingFxRate` in the LOAN's own convention (foreign units per USD), which is the
+  // convention `exchangeRateUsdToAud` already uses. An unknown rate stays unstated: the
+  // handler then books at the first payment's spot, which understates §988 rather than
+  // inventing it (loan-classes.js).
+  const booking = 'bookingFxRate' in o
+    ? o.bookingFxRate
+    : (numericParams(cfg).get('exchangeRateUsdToAud') ?? null);
+
+  applyLoan(cfg, set, loanKey, { balance: size, ...(booking != null ? { bookingFxRate: booking } : {}) });
+  applyOffset(cfg, offsetKey, {
+    fromBalance: size,
+    balance: mode === 'hold' ? size : 0,
+    ...(mode === 'deploy' ? { deployTo } : {}),
+    drawdownPriority: 'drawdownPriority' in o ? o.drawdownPriority : null,
+  });
 }
 
 /**

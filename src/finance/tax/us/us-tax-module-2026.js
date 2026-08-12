@@ -11,7 +11,7 @@
 import { BaseTaxModule } from '../base-tax-module.js';
 import { resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
-import { characterizeCapitalGain, characterizeAuCapitalGain } from '../capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from '../capital-gain-character.js';
 
 /**
  * Per-person AU accumulator for each household scalar this module books while the
@@ -506,11 +506,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
           // US-source and is re-sourced by Art. 27(1)(c) like any other item.
           const foreignSource = isPersonalPropertyGainForeignSource(state);
+          // Design 90 §4.5 — SIGNED into the basket, and the capital slice recorded
+          // beside it. `gain` is floored (capital-gain-character.js), so a loss year used
+          // to add nothing here while subtracting from `usCapitalGainsYTD` two lines up:
+          // the basket then carried gain the §904 denominator did not.
+          const basketGain = char.short + char.long;
           next = foreignSource
-            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            ? { ...next,
+                foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD', basketGain) }
             : { ...next,
-                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + basketGain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'usSourcePassiveCapGainsUsdYTD', basketGain) };
           // Design 76 Gap B — the gain belongs to the owner(s) of the account that
           // held the lots; the discountable slice must follow the same split so the
           // CGT discount is applied against the right person's gain.
@@ -574,10 +582,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           const audDiscountable = toAUD(action.auDiscountableGain ?? auGainUsd, 'USD', state);
           // Design 90 §5 — signed AU split (USD here; converted at the booking below).
           const auChar = characterizeAuCapitalGain(action, auGainUsd);
+          // Design 90 §4.5 — the basket takes the SIGNED §121/§1250-aware figure, and the
+          // capital slice is recorded beside it. Note the two amounts differ and always
+          // have: `usSourceCapGainsUsdYTD` is the AU-measured gain (the Art. 22(2) removal
+          // set), while the basket takes the US-measured one.
+          const houseBasketGain = houseChar.short + houseChar.long;
           next = {
             ...next,
             usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + auGainUsd,
-            usSourcePassiveUsdYTD: (state.usSourcePassiveUsdYTD ?? 0) + action.gain,
+            usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + houseBasketGain,
+            ...basketCapGainPatch(state, 'usSourcePassiveCapGainsUsdYTD', houseBasketGain),
           };
           // Design 76 Gap B — attributed to the property's owner(s), stamped inline
           // by the sale reducer (mirrors AU_HOUSE_SALE_TAX, which already did this).
@@ -905,11 +919,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
           // US-source and is re-sourced by Art. 27(1)(c) like any other item.
           const foreignSource = isPersonalPropertyGainForeignSource(state);
+          // Design 90 §4.5 — SIGNED into the basket, capital slice recorded beside it.
+          const basketGain = char.short + char.long;
           next = foreignSource
-            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            ? { ...next,
+                foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD', basketGain) }
             : { ...next,
-                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + basketGain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'usSourcePassiveCapGainsUsdYTD', basketGain) };
           // Design 76 Gap B — attributed to the equity holder, stamped inline by the
           // sale reducer (company equity has no account state key).
           // Design 90 §5 — SIGNED. The whole gain stays discount-eligible here (no per-lot
@@ -966,11 +985,16 @@ export class UsTaxModule2026 extends BaseTaxModule {
           // US-source). When the §865(g)(2) 10% test fails, the gain reverts to
           // US-source and is re-sourced by Art. 27(1)(c) like any other item.
           const foreignSource = isPersonalPropertyGainForeignSource(state);
+          // Design 90 §4.5 — SIGNED into the basket, capital slice recorded beside it.
+          const basketGain = char.short + char.long;
           next = foreignSource
-            ? { ...next, foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + gain }
+            ? { ...next,
+                foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'foreignPassiveCapGainsYTD', basketGain) }
             : { ...next,
-                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
-                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + gain };
+                usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + basketGain,
+                usSourcePassiveUsdYTD:  (state.usSourcePassiveUsdYTD  ?? 0) + basketGain,
+                ...basketCapGainPatch(state, 'usSourcePassiveCapGainsUsdYTD', basketGain) };
           // Design 76 Gap B — attributed to the collectible's owner(s), stamped
           // inline by the sale reducer (a collectible has no account state key).
           // Design 90 §5 — SIGNED. The whole gain stays discount-eligible here (no per-lot

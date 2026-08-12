@@ -272,7 +272,7 @@ import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBands, flatRateBand } from './finance/tax/bracket-schedule.js';
-import { characterizeCapitalGain, characterizeAuCapitalGain } from './finance/tax/capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from './finance/tax/capital-gain-character.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
@@ -310,7 +310,7 @@ import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
-import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
+import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -1236,6 +1236,7 @@ export const Finance = {
   flatRateBand,
   characterizeCapitalGain,
   characterizeAuCapitalGain,
+  basketCapGainPatch,
   DynamicTaxReducer,
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
@@ -1311,6 +1312,7 @@ export const Finance = {
   _computeInvestmentInterestLimitation,
   ORDINARY_CAPITAL_LOSS_CAP,
   _computeCapitalLossLimitation,
+  _computeCapitalLossBasketAdjustment,
   _computePassiveLossLimitation,
   _drawDownBasket,
   TaxService,

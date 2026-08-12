@@ -553,6 +553,7 @@
   "type": "brokerage"
  },
  "foreignGeneralIncomeYTD": 0,
+ "foreignPassiveCapGainsYTD": 0,
  "foreignPassiveIncomeYTD": 0,
  "ftcCurrentGeneral": 0,
  "ftcCurrentPassive": 0,

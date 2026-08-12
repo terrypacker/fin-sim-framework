@@ -576,6 +576,14 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
 | **—** | ingest + validation of real history (`scripts/tax/section988-ingest.mjs`) | **built** — §12; computes no tax by design |
 | **—** | §13 observed-data replay overlay | **sketch only**, successor design |
 
+**Not a dependency, and not a dependent: design 90 §4.5** (§904 basket sourcing of capital
+losses). It was considered as a candidate to fold into Phase 3, because both are about a
+carried-forward quantity keeping a tag, and G11 states that rule for basis. They share no code
+surface: Phase 3 is §988 **basis** on nonfunctional currency, §4.5 is §904 **source** on §1212
+carryovers, and §988 gain is ordinary general-basket income that never reaches the capital-loss
+pools. **Neither blocks the other; do not sequence them together.** Recorded here because the
+question is a natural one to ask twice.
+
 ---
 
 ## 10. Verification — and the working-detector control
