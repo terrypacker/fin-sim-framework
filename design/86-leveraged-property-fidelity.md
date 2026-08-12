@@ -817,6 +817,13 @@ Per-gap tests are listed above. Across all of them:
    two-legged position, and only one leg is built.** §8 should not quote P8's number as
    a carrying cost of the AUD-liquidity option until the deposit leg exists — see §8.
 
+   **⚠ "only one leg is built" EXPIRED with design 87 Phase 2 (G3) and is now false.**
+   Both legs are built, and measured 2026-08-12 they cancel to the dollar on a fully
+   offset facility whose two rates share an endpoint. The sentence is left standing
+   because it was true when written and because it is the one people quote — but quote
+   design 87 §3 instead, which carries the measurement and the trap that replaced it
+   (stamping the debt leg alone is worse than stamping neither).
+
    **SUPERSEDED, and promoted out of this document: see `design/87-foreign-currency-
    basis-pools.md`.** The question generalises past the offset. §988(c)(1)(C)(ii) makes
    *any* foreign-currency bank deposit nonfunctional currency, so every AUD cash account

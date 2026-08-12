@@ -148,8 +148,15 @@ that mortgage is serviced **from a same-currency offset** — which is the whole
 an offset, and what `resolveLoanCashKey` already makes the model do — each payment is
 simultaneously:
 
-1. a repayment of AUD principal (the debt leg, **built**), and
-2. a disposition of AUD out of the deposit (the currency leg, **not built**).
+1. a repayment of AUD principal (the debt leg, **built** — design 86 P8), and
+2. a disposition of AUD out of the deposit (the currency leg, **built** — Phase 2 G3;
+   `LoanPaymentApplyReducer` calls `realizeCurrencyDisposition` on the cash it pays from).
+
+*(This line said the currency leg was "not built" until 2026-08-12, long after Phase 2
+landed. §9's phase table was right and this paragraph was stale — and it was the stale
+half that got believed, because it is the one that reads like an argument rather than a
+status table. When a doc states a build status in prose AND in a table, the prose is the
+one that rots.)*
 
 With `P` of principal repaid from `D = P` of deposit:
 
@@ -159,14 +166,28 @@ If the facility was opened and the offset funded at the same time and rate
 (`r_book = r_acq`), these are **exactly equal and opposite at every payment date**, and
 the intervening FX path is irrelevant — only endpoints matter and the endpoints cancel.
 A fully-offset facility is economically FX-neutral, which design 86 §8.2 already said;
-what is new is that it is *also* §988-neutral, and the model currently shows only one
-side of that.
+what is new is that it is *also* §988-neutral.
 
-**Consequence to state plainly: building phase 2 will mostly delete a number rather
-than add one.** On an income-producing property, where both legs are recognized (see
-§4), the P8 figure is largely an artifact of modelling one leg. That is a good reason to
-build it, not a reason to skip it — an artifact that large sitting in ordinary income
-distorts every downstream marginal-rate decision.
+**MEASURED, 2026-08-12, and it is exact.** On a 44-year plan with a fully offset
+AUD facility, a live `MEAN_REVERTING` FX path and both rates stamped at the same spot:
+over three hundred payment events the debt leg and the deposit leg netted to **zero to
+the dollar**. The prediction above is not approximately right, it is an identity.
+
+**Consequence, as predicted: phase 2 deleted a number rather than adding one.** On an
+income-producing property, where both legs are recognized (see §4), the P8 figure was
+entirely an artifact of modelling one leg.
+
+**⚠ The trap this leaves, and it bit a real study.** A pool with no authored
+`fxBasisRate` is stamped at the spot of its **first disposition**, not at the date the
+currency arrived (`currency-basis.js`: *"Author the real rate to fix that"*). For an
+offset, the first disposition is the first loan payment — which an interest-only period
+defers by years. So **stamping the debt leg alone is worse than stamping neither**: it
+guarantees `r_book ≠ r_acq` and manufactures the very artifact phase 2 removed. Design 86
+§8.9's facility lever did exactly this and recognized a five-figure USD §988 gain on a
+position that should have recognized nothing, with the DEPOSIT leg the larger of the two.
+Any tool positing a facility drawn at a given date must stamp **both** legs at that
+date's rate; `scripts/lib/variant.mjs`'s `facility` lever now does, and
+`tests/unit/variant-loan-offset.test.mjs` pins the equality.
 
 The cancellation breaks in three cases, and they are the ones worth modelling:
 

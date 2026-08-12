@@ -516,6 +516,11 @@ function loanKeys(cfg) {
 export function applyOffset(cfg, stateKey, o = {}) {
   const target = resolveAccountPair(cfg, stateKey, 'offset lever');
   if ('drawdownPriority' in o) target.setField('drawdownPriority', o.drawdownPriority);
+  // §988 acquisition rate for the AUD sitting in the offset (design 87 G3). An unstamped
+  // pool is stamped at the spot of its FIRST DISPOSITION, which for an offset is the first
+  // loan payment — potentially years after the money arrived. See applyFacility for why
+  // that is not a detail.
+  if ('fxBasisRate' in o) target.setField('fxBasisRate', o.fxBasisRate);
   // `fromBalance` credits the DRAWN FACILITY to the offset before anything is moved
   // out of it, and it is what makes a facility-size axis wealth-matched. Drawing a
   // loan is two entries: the `loan` lever writes the liability, this writes the cash.
@@ -549,9 +554,11 @@ export function applyOffset(cfg, stateKey, o = {}) {
  *   mode     'hold' | 'deploy' | 'none'
  *   deployTo stateKey       destination for `mode: "deploy"` (required there)
  *   drawdownPriority number|null  passed to the offset; default null, see applyOffset
- *   bookingFxRate number|null  §988 booking rate for the drawn facility. Defaults to
- *                           the scenario's spot rate — the facility is drawn TODAY.
- *                           Pass an explicit value to keep the authored one.
+ *   bookingFxRate number|null  §988 booking rate for the DEBT leg. Defaults to the
+ *                           scenario's spot rate — the facility is drawn TODAY.
+ *   fxBasisRate   number|null  §988 acquisition rate for the DEPOSIT leg (the offset's
+ *                           own AUD). Defaults to the same spot, which is what makes the
+ *                           two legs cancel. Setting one without the other is a bug.
  *
  * **Why this exists rather than "just write `loan` and `offset` yourself".** Sizing a
  * facility has to move the liability and the proceeds in LOCKSTEP, and a `variant-grid`
@@ -572,15 +579,29 @@ export function applyOffset(cfg, stateKey, o = {}) {
  * −F debt, `deploy` is +F elsewhere −F debt, `none` is neither. Any arm set built from
  * this lever nets to the same t0 balance sheet without the caller checking.
  *
- * **It also re-books the §988 rate, and that is not a detail.** A foreign-currency
- * mortgage realizes exchange gain on every principal repayment, measured from the rate
- * at which the debt was INCURRED. A scenario's authored `bookingFxRate` is the rate of
- * the loan the household actually has; a study that raises the balance to a facility
- * size under consideration is positing a draw made TODAY, so today's spot is the rate
- * that applies to it. Leaving the authored rate in place manufactures §988 gain out of
- * an accounting choice — and it manufactures MORE of it the larger the facility, which
- * on a size sweep is indistinguishable from a real diseconomy of scale. Pass an
- * explicit `bookingFxRate` to opt out.
+ * **It also re-books the §988 rate on BOTH LEGS, and that is not a detail.** An offset
+ * facility is a two-legged §988 position (design 87 §3): the AUD debt realizes exchange
+ * gain on every principal repayment, measured from the rate at which the debt was
+ * INCURRED, and the AUD deposit realizes the mirror image on every disposition, measured
+ * from the rate at which the currency was ACQUIRED. Both legs are built.
+ *
+ * They cancel exactly — at every payment date, whatever the FX path does in between —
+ * **if and only if the two rates are the same**:
+ *
+ *     gain(debt)    = P × (1/r_book − 1/r_pay)
+ *     gain(deposit) = P × (1/r_pay  − 1/r_acq)
+ *
+ * which is design 87 §3's whole point: a fully offset facility is §988-neutral because it
+ * is economically FX-neutral. So a lever positing a facility drawn TODAY has to stamp
+ * today's spot on *both* legs. Setting only the debt's `bookingFxRate` is worse than
+ * setting neither: the deposit is then stamped at the spot of its FIRST DISPOSITION —
+ * for an offset, the first loan payment, which an interest-only period can defer by
+ * years — and the legs are de-synchronised by construction.
+ *
+ * Measured on the study this was written for: booking the debt at 1.55 while the deposit
+ * self-stamped at 1.78 five years later left US\$41k of recognized §988 on a facility that
+ * should have recognized approximately nothing, and the DEPOSIT leg was the larger of the
+ * two. Both `bookingFxRate` and `fxBasisRate` accept an explicit value to opt out.
  */
 export function applyFacility(cfg, set, offsetKey, o = {}) {
   const { loan: loanKey, mode = 'hold', deployTo = null } = o;
@@ -603,9 +624,9 @@ export function applyFacility(cfg, set, offsetKey, o = {}) {
   // convention `exchangeRateUsdToAud` already uses. An unknown rate stays unstated: the
   // handler then books at the first payment's spot, which understates §988 rather than
   // inventing it (loan-classes.js).
-  const booking = 'bookingFxRate' in o
-    ? o.bookingFxRate
-    : (numericParams(cfg).get('exchangeRateUsdToAud') ?? null);
+  const spot    = numericParams(cfg).get('exchangeRateUsdToAud') ?? null;
+  const booking = 'bookingFxRate' in o ? o.bookingFxRate : spot;
+  const basis   = 'fxBasisRate'   in o ? o.fxBasisRate   : spot;
 
   applyLoan(cfg, set, loanKey, { balance: size, ...(booking != null ? { bookingFxRate: booking } : {}) });
   applyOffset(cfg, offsetKey, {
@@ -613,6 +634,8 @@ export function applyFacility(cfg, set, offsetKey, o = {}) {
     balance: mode === 'hold' ? size : 0,
     ...(mode === 'deploy' ? { deployTo } : {}),
     drawdownPriority: 'drawdownPriority' in o ? o.drawdownPriority : null,
+    // The deposit leg, stamped at the same rate as the debt leg — see the header.
+    ...(basis != null ? { fxBasisRate: basis } : {}),
   });
 }
 

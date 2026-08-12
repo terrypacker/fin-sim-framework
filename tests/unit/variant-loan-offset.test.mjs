@@ -351,6 +351,43 @@ describe('facility lever', () => {
     assert.equal(cfg.realProperties[0].mortgageBookingFxRate, 1.55, 'the record the toolset synthesizes from');
   });
 
+  test('stamps BOTH §988 legs at the same rate, which is what makes them cancel', () => {
+    // Design 87 §3: an offset facility is a two-legged §988 position and both legs are
+    // built. They cancel exactly at every payment date — whatever FX does in between —
+    // if and only if the debt's booking rate equals the deposit's acquisition rate.
+    //
+    // Stamping only the debt is WORSE than stamping neither: an unstamped pool takes the
+    // spot of its first disposition, which for an offset is the first loan payment, and
+    // an interest-only period can defer that by years. Measured on the study this was
+    // written for, that left US$41k of recognized §988 on a facility that should have
+    // recognized nothing — and the DEPOSIT leg was the larger of the two.
+    const base = exportedCfg();
+    base.params.push({ name: 'exchangeRateUsdToAud', value: 1.55 });
+    base.parameters.exchangeRateUsdToAud = 1.55;
+    base.realProperties[0].mortgageBookingFxRate = 1.35;
+    base.initialState.hPropertyLoan.bookingFxRate = 1.35;
+
+    const cfg = buildVariant(base, {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'hold' } },
+    });
+    assert.equal(cfg.initialState.hPropertyLoan.bookingFxRate, 1.55, 'debt leg');
+    assert.equal(cfg.initialState.off.fxBasisRate, 1.55, 'deposit leg');
+    assert.equal(cfg.accounts[0].fxBasisRate, 1.55, 'and on the authored record too');
+    assert.equal(cfg.initialState.hPropertyLoan.bookingFxRate, cfg.initialState.off.fxBasisRate,
+      'the two rates must be EQUAL — that equality is the whole mechanism');
+  });
+
+  test('an explicit fxBasisRate opts the deposit leg out independently', () => {
+    const base = exportedCfg();
+    base.params.push({ name: 'exchangeRateUsdToAud', value: 1.55 });
+    base.parameters.exchangeRateUsdToAud = 1.55;
+    const cfg = buildVariant(base, {
+      facility: { off: { loan: 'hPropertyLoan', size: 500_000, mode: 'hold', fxBasisRate: 1.2 } },
+    });
+    assert.equal(cfg.initialState.off.fxBasisRate, 1.2);
+    assert.equal(cfg.initialState.hPropertyLoan.bookingFxRate, 1.55, 'the debt leg is unaffected');
+  });
+
   test('an explicit bookingFxRate wins over the spot default', () => {
     const base = exportedCfg();
     base.params.push({ name: 'exchangeRateUsdToAud', value: 1.55 });
