@@ -47,46 +47,107 @@ export class ScenarioService {
   }
 
   /**
-   * Create a new user scenario based on fromScenario (copies dates and scenarioId).
-   * If the parent prebuilt scenario exposes a param schema, the new scenario's
-   * params array is pre-populated with schema defaults so they are immediately
-   * available for editing, saving, and MonteCarlo use.
+   * Create a new user scenario that is a faithful duplicate of `fromScenario` —
+   * every config field deep-copied, only the record's identity (id, name, order,
+   * prebuilt, active) replaced.
+   *
+   * ### Why this copies generically instead of naming fields
+   *
+   * This used to enumerate the collections to clone (persons / accounts /
+   * realProperties / collectibles / graph / params). Every design that added a
+   * new collection to the scenario record had to remember to extend that list,
+   * and three did not: `companyEquities` (design 61/72), `bequests` (design 63),
+   * and `deletedDefaults` (design 55 follow-up) — plus the `parameters` bag,
+   * whose toolset-facing keys (`inflationRate`, `people`, the equity mix shares)
+   * are NOT derivable from the `params` array's key names.
+   *
+   * The failure was silent and financially large, because the omissions are not
+   * simply "missing" in the copy — the loader's drift-merge fills the gap with
+   * *defaults*:
+   *   - an edited company equity reverted to its default value / sale year,
+   *   - an armed bequest vanished entirely (bequests aren't even drift-merged),
+   *   - a deliberately deleted default account came back to life.
+   * On the reference scenario that moved terminal net liquidity by 15–32%.
+   *
+   * So the rule is inverted: everything on the record is config and gets copied;
+   * only {@link ScenarioService.RECORD_IDENTITY_FIELDS} is withheld. A new
+   * collection is carried by construction, with no edit here.
+   *
+   * `scenarioClass` is shared by reference on purpose — it is a class, not data.
+   *
+   * When `fromScenario` has no `params` array (a bare prebuilt descriptor that
+   * has never been loaded), it is seeded from the class's param schema so the
+   * copy is immediately editable / MC-runnable.
    */
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
-    const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
-    // Prefer the pre-populated params array from fromScenario (set by ScenarioLoader after
-    // compilation) over recomputing from schema defaults, so edits are preserved.
-    const params = Array.isArray(fromScenario?.params)
-      ? structuredClone(fromScenario.params)
-      : schema.map(s => {
-          const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
-          if (s.node) entry.node = s.node;
-          return entry;
-        });
-    const scenario = {
-      id:             newId,
-      name:           'New Scenario',
-      order:          100,
-      prebuilt:       false,
-      scenarioId:     fromScenario?.scenarioId ?? fromScenario?.id ?? null,
-      simStart:       ScenarioSerializer.toDateStr(fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1))),
-      simEnd:         ScenarioSerializer.toDateStr(fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
-      events:         structuredClone(fromScenario?.events         ?? []),
-      handlers:       structuredClone(fromScenario?.handlers       ?? []),
-      actions:        structuredClone(fromScenario?.actions        ?? []),
-      reducers:       structuredClone(fromScenario?.reducers       ?? []),
-      initialState:   structuredClone(fromScenario?.initialState   ?? {}),
-      toolsets:       structuredClone(fromScenario?.toolsets        ?? []),
-      scenarioClass:  fromScenario?.scenarioClass ?? null,
-      persons:        structuredClone(fromScenario?.persons         ?? []),
-      accounts:       structuredClone(fromScenario?.accounts        ?? []),
-      realProperties: structuredClone(fromScenario?.realProperties  ?? []),
-      collectibles:   structuredClone(fromScenario?.collectibles    ?? []),
-      params,
-    };
+    const scenario = ScenarioService._cloneConfigFields(fromScenario);
+
+    if (!Array.isArray(scenario.params)) {
+      const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
+      scenario.params = schema.map(s => {
+        const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+        if (s.node) entry.node = s.node;
+        return entry;
+      });
+    }
+
+    scenario.id            = newId;
+    scenario.name          = 'New Scenario';
+    scenario.order         = 100;
+    scenario.prebuilt      = false;
+    scenario.scenarioId    = fromScenario?.scenarioId ?? fromScenario?.id ?? null;
+    scenario.simStart      = ScenarioSerializer.toDateStr(fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1)));
+    scenario.simEnd        = ScenarioSerializer.toDateStr(fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1)));
+    scenario.scenarioClass = fromScenario?.scenarioClass ?? null;
+
     this._registry.save(scenario, true);
     return scenario;
+  }
+
+  /**
+   * Fields that identify a scenario RECORD rather than describe its configuration.
+   * A duplicate gets its own; everything else on the record is copied verbatim.
+   */
+  static RECORD_IDENTITY_FIELDS = Object.freeze([
+    'id', 'name', 'order', 'active', 'prebuilt', 'layer',
+  ]);
+
+  /**
+   * Deep-copy every config-bearing own field of a scenario record.
+   * Identity fields are skipped; functions (i.e. `scenarioClass`) are shared by
+   * reference since they are code, not state.
+   * @private
+   */
+  static _cloneConfigFields(fromScenario) {
+    const out = {};
+    if (!fromScenario || typeof fromScenario !== 'object') return out;
+    const skip = new Set(ScenarioService.RECORD_IDENTITY_FIELDS);
+    for (const [key, value] of Object.entries(fromScenario)) {
+      if (skip.has(key)) continue;
+      out[key] = ScenarioService._deepCopyValue(value);
+    }
+    return out;
+  }
+
+  /**
+   * structuredClone with a JSON fallback. The fallback covers records that hold
+   * something structuredClone rejects (a live class instance harvested from a
+   * service, say); JSON demotes Dates to ISO strings, which every deserializer
+   * on the load path already accepts.
+   * @private
+   */
+  static _deepCopyValue(value) {
+    if (typeof value === 'function' || value == null) return value;
+    try {
+      return structuredClone(value);
+    } catch {
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch {
+        return value;
+      }
+    }
   }
 
   /**

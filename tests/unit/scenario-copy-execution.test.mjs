@@ -81,10 +81,13 @@ import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, Tr
 import { RealProperty }  from '../../src/finance/assets/real-property.js';
 import { Collectible }   from '../../src/finance/assets/collectible.js';
 import { Person } from '../../src/finance/person.js';
+import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+import { computeNetWorth }     from '../../src/finance/derived-metrics/net-worth.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET = new Date(Date.UTC(2028, 0, 1));
+const TARGET  = new Date(Date.UTC(2028, 0, 1));
+const SIM_END = new Date(Date.UTC(2041, 0, 1));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -501,4 +504,108 @@ test('changing spouseRothAccount contributionBasis param cascades to state via s
     33_333,
     `state.spouseRothAccount.contributionBasis should be 33333 after param change, got ${sim.state.spouseRothAccount?.contributionBasis}`,
   );
+});
+
+// ─── Copy fidelity when the ORIGINAL carries user edits ──────────────────────
+//
+// The tests above copy an untouched reference scenario, where every collection
+// the copy might drop happens to be re-supplied by the loader's drift-merge with
+// its DEFAULT value — so an incomplete copy still scores identically and the
+// defect hides. These run the same copy → rebuild → run cycle on an original
+// whose records have been EDITED, which is the only place the loss shows up.
+//
+// Historical failures (before newScenario() copied the record generically):
+//   companyEquities dropped  → drift-merge restored the DEFAULT equity  (−32% net liquidity)
+//   bequests dropped         → the inheritance vanished; nothing re-adds it (−15%)
+//   deletedDefaults dropped  → a deliberately deleted default came back  (+1.9% net worth)
+
+/** Run a cfg to SIM_END in a fresh registry and return its terminal metrics. */
+function runToEnd(cfg) {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  services.scenarioRegistry.loadPrebuilt(makePrebuiltArray());
+  services.scenarioRegistry.save(cfg, true);
+
+  const scenario = services.scenarioService.createActiveScenario();
+  scenario.buildSim();
+  new ScenarioLoader().load(cfg, services);
+
+  const sim = services.simulationRegistry.getPrimary();
+  sim.stepTo(SIM_END);
+  return {
+    services,
+    netLiquidity: computeNetLiquidity(sim.state, SIM_END),
+    netWorth:     computeNetWorth(sim.state),
+  };
+}
+
+/**
+ * Apply `editOriginal` to a freshly compiled prebuilt, run it, copy it, run the
+ * copy, and assert both terminal metrics match to the cent.
+ */
+function assertCopyMatchesEditedOriginal(label, editOriginal) {
+  const { services } = buildAndCompilePrebuilt();
+  const original = services.scenarioService.getActive();
+  editOriginal(original);
+
+  const before = runToEnd(original);
+  const copy   = before.services.scenarioService.newScenario(original);
+  const after  = runToEnd(copy);
+
+  assert.strictEqual(after.netLiquidity, before.netLiquidity,
+    `${label}: copy net liquidity should equal the original's — original ${before.netLiquidity}, copy ${after.netLiquidity}`);
+  assert.strictEqual(after.netWorth, before.netWorth,
+    `${label}: copy net worth should equal the original's — original ${before.netWorth}, copy ${after.netWorth}`);
+}
+
+test('copy of an original with an EDITED company equity runs identically', () => {
+  assertCopyMatchesEditedOriginal('companyEquities', (cfg) => {
+    assert.ok(cfg.companyEquities?.length, 'reference scenario must carry a company equity');
+    cfg.companyEquities[0].value           = 2_000_000;
+    cfg.companyEquities[0].plannedSaleYear = 2032;
+  });
+});
+
+test('copy of an original with an ARMED bequest runs identically', () => {
+  assertCopyMatchesEditedOriginal('bequests', (cfg) => {
+    assert.ok(cfg.bequests?.length, 'reference scenario must carry a bequest');
+    cfg.bequests[0].inheritanceYear = 2030;
+  });
+});
+
+test('copy of an original with a DELETED default record runs identically', () => {
+  assertCopyMatchesEditedOriginal('deletedDefaults', (cfg) => {
+    cfg.accounts     = (cfg.accounts     ?? []).filter(a => a.stateKey !== 'collectibleAccount');
+    cfg.collectibles = (cfg.collectibles ?? []).filter(c => c.stateKey !== 'collectibleAccount');
+    // The Save/Rebuild harvest is what records the tombstone in the real app.
+    ScenarioLoader.recordDeletedDefaults(cfg);
+    assert.ok(cfg.deletedDefaults.collectibles.includes('collectibleAccount'),
+      'the deletion must be tombstoned for the test to mean anything');
+  });
+});
+
+test('copy carries every config field of the source, and shares no state with it', () => {
+  // Guards against the enumeration drift that caused the failures above: any
+  // collection added to the scenario record must reach the copy for free.
+  const { services } = buildAndCompilePrebuilt();
+  const original = services.scenarioService.getActive();
+  const copy     = services.scenarioService.newScenario(original);
+
+  const IDENTITY = new Set(['id', 'name', 'order', 'active', 'prebuilt', 'layer']);
+  const missing  = Object.keys(original).filter(k => !IDENTITY.has(k) && !(k in copy));
+  assert.deepStrictEqual(missing, [],
+    `every non-identity field must be copied; missing: ${missing.join(', ')}`);
+
+  // Deep-copied, not aliased: editing the copy must never reach the original.
+  for (const key of Object.keys(copy)) {
+    if (key === 'scenarioClass') continue;          // a class ref, shared on purpose
+    const value = copy[key];
+    if (value !== null && typeof value === 'object') {
+      assert.notStrictEqual(value, original[key], `${key} must not be shared by reference`);
+    }
+  }
+  copy.accounts[0].balance = -12_345;
+  copy.parameters.monthlyExpenses = -1;
+  assert.notStrictEqual(original.accounts[0].balance, -12_345, 'editing the copy must not touch the original');
+  assert.notStrictEqual(original.parameters.monthlyExpenses, -1, 'editing the copy must not touch the original');
 });
