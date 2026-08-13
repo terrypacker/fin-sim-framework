@@ -695,6 +695,10 @@ export class ScenarioSerializer {
       d.deductibleFraction = account.deductibleFraction ?? null;
       d.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
       d.maturityYear          = account.maturityYear          ?? null;
+      // The anchor the post-IO payment amortises from. Omitting it would drop a saved
+      // IO loan back onto the legacy self-damping schedule on the next load, which is
+      // the exact failure this field exists to prevent.
+      d.postIoPrincipal       = account.postIoPrincipal       ?? null;
       // design 86 G7 — the rate the debt was booked at, and so the basis every §988
       // gain is measured against. Omitting it made an authored booking rate silently
       // revert to "stamped at the first payment" on the next load, which understates
@@ -1185,6 +1189,8 @@ export class ScenarioSerializer {
       // design 86 G6 — absent ⇒ null ⇒ no term, the pre-86 behaviour.
       opts.interestOnlyUntilYear = d.interestOnlyUntilYear ?? null;
       opts.maturityYear          = d.maturityYear          ?? null;
+      // absent ⇒ the ctor defaults it from the opening balance for an IO loan.
+      opts.postIoPrincipal       = d.postIoPrincipal       ?? null;
       // design 86 G7 — absent ⇒ null ⇒ stamped at the first payment, as before.
       opts.bookingFxRate         = d.bookingFxRate         ?? null;
     }

@@ -377,6 +377,41 @@ of a "hold the leverage into later life" plan.
 from a spec file, which meant the single largest risk in the plan could not be authored
 in the app that the plan is actually maintained in.
 
+#### G6 correction — the post-IO payment is ANCHORED, not re-amortised each month
+
+The clause above, "the amortising payment over the REMAINING months once it expires
+(recomputed each month, so a variable rate re-amortises the way a real P&I loan does)",
+was **wrong in the one case this design exists to model**, and it stood for long enough
+to invert a study's conclusion.
+
+Re-amortising the live balance over the months remaining is an *identity* — and so
+harmless — only while the balance tracks its own schedule. It does not the moment an
+**offset** is involved. A fully offset loan accrues no interest, so the whole payment is
+principal and the balance runs ahead of schedule; re-amortising then cuts next month's
+payment, which lets the balance run further ahead, which cuts it again. The schedule
+self-damps and **the loan never retires early — it drifts to its stated maturity.** No
+lender behaves that way: the payment is set once when the IO period ends and held, so
+overpaying SHORTENS the loan. The engine could not express IO-then-fixed-payment at all,
+which is the most common real structure in this market.
+
+Fixed by anchoring branch 3 on **`postIoPrincipal`** — the principal at IO expiry, which
+is a constant because a loan in its IO window does not amortise by construction. The
+payment is therefore fixed at a fixed rate, still moves when Prime moves (the original
+intent survives), and is immune to extra principal. It is defaulted at construction on
+every route a loan can arrive by (`LoanAccount` ctor, `synthesizeLoanForProperty`,
+serializer, `_accountToStatePlain`, the account editor), and when absent — a state entry
+authored before the field existed — the pre-correction behaviour is kept exactly, so no
+stored scenario changes underneath itself.
+
+**Why it mattered more than it sounds.** On the reference plan a refinance study found a
+uniform ~7% of terminal wealth against refinancing, at *every* draw size — and a cost
+that does not scale with the amount drawn is not a cost of drawing. It was the loan
+surviving fourteen extra years into the plan's largest tax years and forcing liquidations
+on top of income already at the top marginal rate. The same loan modelled with a fixed
+payment retires before those years and the result moves by about seven points. **Guard:
+if a leverage result is flat across a lever it should respond to, suspect the schedule
+before believing the number.**
+
 ---
 
 ### G7 · No §988 gain or loss on foreign-currency debt

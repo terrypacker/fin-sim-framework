@@ -306,3 +306,115 @@ test('TERM-U1: scheduledLoanPayment, at each branch', () => {
   // unknown year (a synthetic state with no period) → IO stays IO, never a surprise balloon
   assert.equal(scheduledLoanPayment(io, 500_000, 2_500, 0.06, null), 2_500);
 });
+
+// ── design 86 G6, corrected: the post-IO payment is ANCHORED ─────────────────
+//
+// The reverted-to-P&I payment used to be re-amortised from the LIVE balance over the
+// months remaining. That is an identity — and so harmless — only while the balance
+// tracks its own schedule. A fully offset loan accrues no interest, so the whole
+// payment is principal and the balance runs AHEAD of schedule; re-amortising then cut
+// the payment, which let it run further ahead, which cut the payment again. The loan
+// never retired early, it drifted to its stated maturity. No lender behaves that way.
+
+/** An offset large enough to zero the interest, so every dollar paid is principal. */
+function fullyOffset(loanOverrides = {}) {
+  return {
+    hLoan: loanEntry({
+      balance: BALANCE, interestRate: RATE, interestOnly: true,
+      interestOnlyUntilYear: 2031, maturityYear: 2056,
+      paymentSourceKey: 'cash', ...loanOverrides,
+    }),
+    off:  { type: 'offset', kind: 'account', stateKey: 'off', balance: BALANCE,
+            offsetsPropertyKey: 'h', country: 'US', currency: USD,
+            drawdownPriority: null, holdings: [] },
+    cash: cashEntry(5_000_000),
+  };
+}
+
+test('TERM-6: a fully offset IO loan retires EARLY, and its payment does not decay', () => {
+  // Anchored on the IO-expiry principal: 500k over the 25-year post-IO term at 6%.
+  const anchored = fullyOffset({ postIoPrincipal: BALANCE });
+  const { byYear } = runYears(anchored, 2026, 2055);
+
+  const pi = byYear.filter(r => r.y >= 2031 && r.first > 0);
+  const first = pi[0].first, last = pi.at(-1).first;
+  assert.ok(Math.abs(first - last) < 0.01,
+    `payment must be FIXED across the P&I period, got ${first.toFixed(0)} → ${last.toFixed(0)}`);
+  assert.ok(Math.abs(first - 3_221) < 5, `expected ~3,221/mo, got ${first.toFixed(0)}`);
+
+  // Zero interest ⇒ every dollar is principal ⇒ 500k / 3,221 ≈ 156 months ≈ 2044,
+  // twelve years before the stated 2056 maturity.
+  const paidOff = byYear.find(r => r.balance < 0.01);
+  assert.ok(paidOff && paidOff.y <= 2045,
+    `must retire EARLY, not drift to maturity — paid off ${paidOff?.y ?? 'never'}`);
+});
+
+test('TERM-7: without an offset the anchored schedule is the ordinary one', () => {
+  // The regression that matters: for a normal loan, re-amortising the live balance
+  // over the months left IS the fixed payment, so anchoring must change nothing.
+  const loan = loanEntry({
+    balance: BALANCE, interestRate: RATE, interestOnly: true,
+    interestOnlyUntilYear: 2031, maturityYear: 2041,
+    postIoPrincipal: BALANCE, paymentSourceKey: 'cash',
+  });
+  const { state: end, byYear } = runYears({ hLoan: loan, cash: cashEntry(5_000_000) }, 2026, 2041);
+  const pi = byYear.filter(r => r.y >= 2031 && r.y < 2041);
+  for (const r of pi) assert.ok(Math.abs(r.first - pi[0].first) < 0.01, `${r.y} payment moved`);
+  assert.ok(Math.abs(end.hLoan.balance) < 0.01, 'still discharged by maturity');
+});
+
+test('TERM-8: an unanchored legacy loan keeps the pre-correction behaviour exactly', () => {
+  // A state entry authored before postIoPrincipal existed must not change underneath
+  // itself, so the live-balance path is preserved when the anchor is absent.
+  const legacy = fullyOffset();                     // no postIoPrincipal
+  delete legacy.hLoan.postIoPrincipal;
+  const { byYear } = runYears(legacy, 2026, 2055);
+  const pi = byYear.filter(r => r.y >= 2032 && r.first > 0);
+  assert.ok(pi.at(-1).first < pi[0].first * 0.6,
+    'legacy schedule self-damps: the payment should decay');
+  assert.ok(byYear.at(-1).balance > 1,
+    'and the loan should NOT be retired before its stated maturity');
+});
+
+test('TERM-U2: scheduledLoanPayment — anchored is flat, unanchored follows the balance', () => {
+  const base = { interestOnly: true, interestOnlyUntilYear: 2031, maturityYear: 2056 };
+  const anch = { ...base, postIoPrincipal: 500_000 };
+  // Same payment whatever the live balance has done, because the anchor is fixed.
+  const a2032 = scheduledLoanPayment(anch, 480_000, 0, 0.06, 2032);
+  const a2040 = scheduledLoanPayment(anch, 200_000, 0, 0.06, 2040);
+  assert.ok(Math.abs(a2032 - a2040) < 0.01, `anchored payment moved: ${a2032} vs ${a2040}`);
+  // …but it still tracks the RATE, which was the original design intent.
+  assert.ok(scheduledLoanPayment(anch, 480_000, 0, 0.09, 2032) > a2032 * 1.2,
+    'a rate rise must still raise the payment');
+  // Unanchored: the payment follows the live balance down.
+  assert.ok(scheduledLoanPayment(base, 200_000, 0, 0.06, 2040)
+          < scheduledLoanPayment(base, 480_000, 0, 0.06, 2032));
+  // Capped at payoff, and never below it, in both modes.
+  assert.equal(scheduledLoanPayment(anch, 1_000, 5, 0.06, 2040), 1_005);
+});
+
+test('TERM-9: postIoPrincipal defaults from the balance and round-trips', () => {
+  // ctor: an IO loan is anchored automatically; a P&I loan is not.
+  assert.equal(new LoanAccount(BALANCE, { interestOnly: true }).postIoPrincipal, BALANCE);
+  assert.equal(new LoanAccount(BALANCE, { interestOnly: false }).postIoPrincipal, null);
+  assert.equal(new LoanAccount(BALANCE, { interestOnly: true, postIoPrincipal: 123 }).postIoPrincipal, 123);
+
+  // synthesized from a property record
+  assert.equal(synthesizeLoanForProperty(
+    { stateKey: 'h', mortgageBalance: 400_000, mortgageInterestOnly: true }).postIoPrincipal, 400_000);
+  assert.equal(synthesizeLoanForProperty(
+    { stateKey: 'h', mortgageBalance: 400_000 }).postIoPrincipal, null);
+
+  // serializer: survives save/load, or the next load silently reverts the schedule
+  const acct = new LoanAccount(BALANCE, {
+    stateKey: 'hLoan', interestOnly: true, interestOnlyUntilYear: 2031, maturityYear: 2056,
+  });
+  const wire = ScenarioSerializer._serializeAccount(acct);
+  assert.equal(wire.postIoPrincipal, BALANCE, 'must be written to the wire');
+  assert.equal(ScenarioSerializer._makeAccount(wire).postIoPrincipal, BALANCE);
+
+  // …and a legacy save with no anchor still re-anchors from its balance on load,
+  // because an IO loan's balance has not amortised. Nothing silently loses the fix.
+  const legacy = { ...wire }; delete legacy.postIoPrincipal;
+  assert.equal(ScenarioSerializer._makeAccount(legacy).postIoPrincipal, BALANCE);
+});

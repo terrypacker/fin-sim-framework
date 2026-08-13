@@ -992,6 +992,16 @@ export class AccountEditor extends BaseComponent {
       data.interestOnly          = el.querySelector('[data-id="interestOnly"]').checked;
       data.interestOnlyUntilYear = num('interestOnlyUntilYear', true);
       data.maturityYear          = num('maturityYear', true);
+      // The post-IO payment anchor is DERIVED, not edited — there is no field for it.
+      // It has to be carried across an edit explicitly, because rebuilding the account
+      // from the form alone would re-derive it from the CURRENT balance, and for a loan
+      // already amortising that re-anchors it low and quietly restores the self-damping
+      // schedule scheduledLoanPayment exists to prevent. Preserve an existing anchor;
+      // default a newly interest-only loan from its balance (an IO loan's balance has
+      // not amortised); clear it when the loan is not interest-only at all.
+      data.postIoPrincipal = data.interestOnly
+        ? (this._node?.postIoPrincipal ?? (Number(data.balance) || null))
+        : null;
       // Clamped to [0,1] because it is a share: a stray 50 (percent, not fraction)
       // would otherwise multiply both the s8-1 deduction and the §988(e) business
       // split by fifty.

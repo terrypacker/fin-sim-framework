@@ -431,6 +431,9 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     // applied to them. See applyFacility, which re-books rather than making the caller
     // remember.
     bookingFxRate: ['mortgageBookingFxRate', 'bookingFxRate'],
+    // The post-IO payment anchor. A study that raises `balance` on an IO loan and
+    // leaves this alone prices the new principal against the OLD payment schedule.
+    postIoPrincipal: ['mortgagePostIoPrincipal', 'postIoPrincipal'],
   };
 
   for (const [field, [propField, loanField]] of Object.entries(MAP)) {

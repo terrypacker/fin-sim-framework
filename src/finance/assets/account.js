@@ -250,6 +250,14 @@ export class LoanAccount extends Account {
     // interest-only) forever, which is the pre-86 behaviour.
     this.interestOnlyUntilYear = opts.interestOnlyUntilYear ?? null;
     this.maturityYear          = opts.maturityYear          ?? null;
+    // The principal the post-IO P&I payment amortises from (see scheduledLoanPayment).
+    // A real lender fixes that payment when the IO period ends and holds it, so extra
+    // principal — an offset paying the loan down faster than schedule — shortens the
+    // loan instead of shrinking the payment. Defaulted to the opening balance because
+    // an IO loan does not amortise inside its window, so the two are the same number.
+    // Null on a non-IO loan: that path never reads it.
+    this.postIoPrincipal       = opts.postIoPrincipal
+      ?? (this.interestOnly ? (opts.balance ?? this.balance ?? null) : null);
     // §988 booking rate (design 86 G7 / P8): foreign units per USD on the date the
     // debt was incurred. A non-USD loan held by a US person realizes ordinary
     // exchange gain or loss on each PRINCIPAL repayment, measured against this rate.

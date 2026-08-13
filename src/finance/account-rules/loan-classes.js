@@ -66,6 +66,12 @@ export function synthesizeLoanForProperty(prop) {
     // 25–30 year term, and both are dates the borrower knows, not durations.
     interestOnlyUntilYear: prop.mortgageInterestOnlyUntilYear ?? null,
     maturityYear:          prop.mortgageMaturityYear          ?? null,
+    // The principal the post-IO P&I payment amortises from — see scheduledLoanPayment.
+    // Defaulted to the authored balance because an IO loan does not amortise inside its
+    // window, so its balance at IO expiry IS its balance now. Only meaningful for an IO
+    // loan; null on a P&I mortgage keeps that path byte-for-byte.
+    postIoPrincipal:       (prop.mortgageInterestOnly ?? false)
+      ? (prop.mortgagePostIoPrincipal ?? balance) : null,
     // §988 booking rate (design 86 G7). Without this a mortgage synthesized from a
     // property could never state when it was incurred, so a loan already outstanding
     // at t0 — which is the normal case for a real plan — would be stamped at the t0
@@ -246,12 +252,46 @@ export function resolveLoanRate(state, loan) {
  *      through the existing replenish/insufficient-funds path rather than a new one.
  *   2. **inside the IO period** (or `interestOnly` with no term) — exactly the
  *      accrued interest; the balance is flat by construction.
- *   3. **after IO expiry, with a maturity year** — the amortising payment over the
- *      months remaining, recomputed each month at the live rate. Recomputing is
- *      deliberate: a variable-rate P&I loan really is re-amortised when the rate
- *      moves, so this tracks Prime the way the IO payment does.
+ *   3. **after IO expiry, with a maturity year** — the amortising payment, ANCHORED on
+ *      `postIoPrincipal` (the balance at IO expiry) over the FULL post-IO term, and
+ *      recomputed at the live rate. See below for why the anchor matters.
  *   4. **otherwise** — the authored fixed `monthlyPayment`, capped at payoff. This is
  *      the pre-86 path and every term-less loan takes it, byte-for-byte.
+ *
+ * ─── why branch 3 is anchored (design 86 G6, corrected) ──────────────────────
+ *
+ * This originally re-amortised the LIVE balance over the months remaining, on the
+ * reasoning that a variable-rate P&I loan really is re-amortised when the rate moves.
+ * That reasoning is sound and the implementation still honours it — the payment tracks
+ * Prime — but re-amortising the *live* balance every month is only harmless while the
+ * balance tracks its own schedule.
+ *
+ * It does not, the moment an OFFSET is involved. A fully offset loan accrues no
+ * interest, so the entire payment is principal and the balance runs ahead of schedule;
+ * re-amortising it then cuts next month's payment, which lets the balance run further
+ * ahead, which cuts the payment again. The schedule self-damps and **the loan never
+ * retires early — it drifts all the way to its stated maturity.** No lender behaves
+ * this way: the payment is set once when the IO period ends and held, so overpaying
+ * SHORTENS the loan.
+ *
+ * The difference is not cosmetic. On the plan this was found on, it decided the sign of
+ * a whole refinance study: the same loan modelled to 2056 rather than retiring in 2042
+ * was still forcing liquidations during the plan's largest tax years, and the answer
+ * moved by ~7% of terminal wealth.
+ *
+ * Anchoring on the principal at IO expiry fixes it without giving up rate-tracking:
+ * that principal is a constant (a loan in its IO window does not amortise by
+ * construction), so the payment is constant at a constant rate, moves when Prime moves,
+ * and is immune to extra principal. `postIoPrincipal` is defaulted at construction for
+ * every interest-only loan; when it is absent — a legacy state entry authored before
+ * this field existed — the pre-existing live-balance behaviour is kept exactly, so no
+ * stored scenario changes underneath itself.
+ *
+ * Edge case, documented rather than guarded: a loan authored with `interestOnly` true
+ * and an IO expiry ALREADY in the past anchors on its authored (part-amortised) balance
+ * over the full original post-IO term, so its payment runs slightly low and the
+ * maturity branch discharges the remainder. Author such a loan as `interestOnly: false`
+ * with a `monthlyPayment` instead — that is what it is.
  *
  * @param {object} loan      loan state entry
  * @param {number} balance   outstanding principal (loan currency)
@@ -270,13 +310,19 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
     && (interestOnlyUntilYear == null || year == null || year < interestOnlyUntilYear);
   if (inIoWindow) return interest;
 
-  // Reverted from IO to P&I: amortise what is left over the months that remain.
+  // Reverted from IO to P&I.
   if (loan?.interestOnly && maturityYear != null && year != null) {
-    const monthsLeft = Math.max(1, (maturityYear - year) * 12);
+    const anchor = loan.postIoPrincipal;
+    // Anchored: fixed schedule from the IO-expiry principal over the full post-IO term.
+    // Unanchored (legacy): the pre-correction live-balance / months-remaining path.
+    const base   = anchor ?? balance;
+    const months = anchor != null && interestOnlyUntilYear != null
+      ? Math.max(1, (maturityYear - interestOnlyUntilYear) * 12)
+      : Math.max(1, (maturityYear - year) * 12);
     const i = rate / 12;
     const payment = i > 0
-      ? balance * i / (1 - Math.pow(1 + i, -monthsLeft))
-      : balance / monthsLeft;
+      ? base * i / (1 - Math.pow(1 + i, -months))
+      : base / months;
     return Math.min(payment, balance + interest);
   }
 

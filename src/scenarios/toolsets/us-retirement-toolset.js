@@ -137,6 +137,10 @@ function _accountToStatePlain(account) {
     plain.interestOnlyUntilYear = account.interestOnlyUntilYear ?? null;
     plain.maturityYear          = account.maturityYear          ?? null;
     plain.bookingFxRate         = account.bookingFxRate         ?? null;
+    // Anchor for the post-IO payment (see scheduledLoanPayment). Same reason as every
+    // other field here: the handler reads the runtime STATE entry, so leaving it out
+    // silently drops the loan back onto the legacy self-damping schedule.
+    plain.postIoPrincipal       = account.postIoPrincipal       ?? null;
   }
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;

@@ -100,6 +100,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
     this._interestOnlyUntilYear = null;
     this._maturityYear          = null;
     this._bookingFxRate         = null;
+    this._postIoPrincipal       = null;
   }
 
   interestRate(v)      { this._interestRate      = v; return this; }
@@ -116,6 +117,8 @@ class LoanAccountBuilder extends BaseAccountBuilder {
   maturityYear(v) { this._maturityYear = v; return this; }
   /** Foreign units per USD when the debt was incurred — the §988 basis (design 86 G7). */
   bookingFxRate(v) { this._bookingFxRate = v; return this; }
+  /** Principal the post-IO P&I payment amortises from; defaults to the opening balance. */
+  postIoPrincipal(v) { this._postIoPrincipal = v; return this; }
 
   build() {
     return new LoanAccount(this._balance, {
@@ -129,6 +132,7 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       interestOnlyUntilYear: this._interestOnlyUntilYear,
       maturityYear:          this._maturityYear,
       bookingFxRate:         this._bookingFxRate,
+      postIoPrincipal:       this._postIoPrincipal,
     });
   }
 }
