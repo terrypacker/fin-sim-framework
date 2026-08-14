@@ -310,7 +310,7 @@ import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
-import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
+import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computeRateDifferentialAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -1313,6 +1313,7 @@ export const Finance = {
   ORDINARY_CAPITAL_LOSS_CAP,
   _computeCapitalLossLimitation,
   _computeCapitalLossBasketAdjustment,
+  _computeRateDifferentialAdjustment,
   _computePassiveLossLimitation,
   _drawDownBasket,
   TaxService,

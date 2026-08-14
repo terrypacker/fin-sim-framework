@@ -1,8 +1,9 @@
 # 90 — Equity fidelity and capital losses
 
-**Status** (2026-08-12): **steps 1–8 BUILT.** Per-section status is on each heading; §9 has
+**Status** (2026-08-13): **steps 1–9 BUILT.** Per-section status is on each heading; §9 has
 the ordered list. Open: §7.4 (correlation structure), §8.4 (franking inside super), and the
-out-of-scope list in §11.
+out-of-scope list in §11. §4.5's own two deferred items are now closed — §904(b)(2) built
+as step 9 (§4.6), §904(f)/(g) measured and closed as unreachable (§4.7).
 
 *(This line read "PROPOSED. No code written." until 2026-08-12, through five landed steps.
 A stale status header on a doc whose sections each carry their own is worse than none — it
@@ -112,7 +113,12 @@ Per project convention, nothing below is stated from memory. Everything is on di
 | IRC §1211 — Limitation on capital losses | `docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapP-partII-sec1211.txt` |
 | IRC §1212 — Capital loss carrybacks and carryovers | `docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapP-partII-sec1212.txt` |
 | IRC §1222 — Other terms relating to capital gains and losses | `docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapP-partIII-sec1222.txt` |
+| IRC §904 — Limitation on credit | `docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapN-partIII-subpartA-sec904.txt` |
 | 26 CFR 1.1411-4 — Definition of net investment income | `docs/us-tax/CFR-26-1.1411-4-Net-Investment-Income.txt` |
+
+§904 was fetched for **step 9**; the rest for step 3. §904(b)(2)(B) and §904(b)(3)(E) are
+quoted in §4.6 — the rate differential portion is a formula, not the table of factors Pub
+514 publishes, and only the statute says so.
 
 US Code 2024 edition, from the Government Publishing Office via govinfo.gov. The regulation is
 the eCFR text current as of 2026-01-01 (govinfo's CFR volumes 302-redirect for this section;
@@ -552,7 +558,10 @@ not by its total income, which is what a naive apportionment would use.
   to remove the capital-gain component from the baskets too — which is a second, independent
   reason the per-basket gain figures have to exist rather than being derived on the fly.
 
-#### Out of scope for step 8, deliberately
+#### Out of scope for step 8, deliberately — both now resolved
+
+Both items below were deferred out of step 8. **§904(b)(2) is built as step 9 (§4.6);
+§904(f)/(g) is closed as unreachable (§4.7).** The original bullets read:
 
 - **§904(b)(2) capital gain rate differential adjustment.** Pub 514's other adjustment,
   keyed to the 0/15/20/25/28% rate groups. Independent of the partition invariant: it rescales
@@ -560,6 +569,12 @@ not by its total income, which is what a naive apportionment would use.
   a separate step; note it interacts with §6's short/long split rather than with this.
 - **§904(f) overall foreign loss / §904(g) overall domestic loss recapture.** A whole regime,
   triggered by a *net* foreign loss year rather than by capital losses as such.
+
+The first sentence of the first bullet was right about the mechanism and **wrong about the
+size** — "it rescales gains already in the right basket" reads as cosmetic, and §4.6 measures
+the reference plan's passive limitation falling 16.6% in its one disposal year. The second
+bullet's "whole regime" was right, and §4.7 is the measurement that says the regime has
+nothing to act on.
 
 #### Relationship to design 87
 
@@ -569,6 +584,175 @@ tagging of §1212 carryovers. Different provisions, different state, no shared c
 and §988 gain is ordinary general-basket income that never touches the capital-loss pools.
 They are the same *pattern* — a carried-forward quantity keeping its tag — and neither blocks
 the other. **Do not sequence step 8 behind Phase 3.**
+
+---
+
+### 4.6 §904(b)(2) — the capital gain rate differential  ✅ BUILT (step 9)
+
+**Implementation record.** `_computeRateDifferentialAdjustment` (`us-tax-rates-base.js`,
+beside the two functions whose outputs it consumes), applied to `totalTaxable` and to each
+basket's line 7 in `computeTax`; `basket()` gains a `capGainAdjustment` argument;
+`_adjustmentExceptionThreshold` reads the exception's income test off the module's own
+bracket table; two worksheet rows in `us-tax-document-2026.js`. **No new state, in any
+form** — not a field, not a schema entry, not a reset-allowlist line. Tests:
+`tests/unit/section-904b2-rate-differential.test.mjs` (24).
+
+**Golden movement: none, and the reason is checkable rather than reassuring.** The
+adjustment fires in exactly one year of the reference plan (the disposal year; every other
+year is under the \$20,000 de minimis). In that year it works as designed — worldwide
+capital gain 806,912, included fraction **0.4464**, so 446,746 comes off the denominator
+and off the passive basket alike — and the passive §904 limit falls **134,857 → 112,448,
+a 16.6% cut**. The credit does not move because it was availability-bound at 105,353, and
+112,448 still clears it. **By 6.7%.** A clean re-gold here means "this plan had 6.7% of
+slack", not "the adjustment is small"; on a plan with more realised gain, or more AU tax
+to credit, it binds.
+
+#### Why this needed no new state, when step 8 needed four fields
+
+Step 8's quantity is a *source* — knowable only at the disposal, so it had to be recorded
+when the disposal happened. Step 9's is a *rate group*, and the 0/15/20 split is decided by
+where the year's gain stacks at year end. It is **not knowable at booking time**, so
+recording it would have been impossible; it has to be derived at settle, and at settle it
+already exists. `applyBracketsDetailed` has carried the per-band breakdown since design 71
+§3.1, and `ltcgStacked.bands − ltcgBase.bands` is the split, band for band. The other three
+groups are `capLoss.collectibleGain` (28%), `capLoss.unrecaptured1250Gain` (25%) and
+`capLoss.shortTermGain` (unadjusted — its alternative rate *is* the ordinary rate).
+
+#### The rule, from the statute rather than the table
+
+Pub 514 publishes five factors — 0.4054, 0.5405, 0.6757, 0.7568 and their line-18
+complements. **§904(b)(3)(E)** says what they are:
+
+> The rate differential portion … is the same proportion of such amount as—
+> (i) the excess of— (I) the highest rate of tax set forth in subsection (a), (b), (c),
+> (d), or (e) of section 1 (whichever applies), over (II) the alternative rate of tax
+> determined under section 1(h), bears to (ii) that rate referred to in subclause (I).
+
+So the surviving share is `altRate ÷ topRate`, and every published factor is that formula
+at a 37% top rate: 15/37 = 0.4054, 28/37 = 0.7568. **It is derived, not transcribed** — a
+transcribed table is a second copy of a figure the rate modules already hold, and it would
+survive a change of top bracket that should have moved it. That is `published-base-guard`
+pointed at a rate rather than a threshold. A test asserts the derivation reproduces all
+five published numbers, and another asserts a 39.6% module does *not* produce 0.4054.
+
+**§904(b)(2)(B) adjusts both sides of the fraction** — clause (i) the foreign numerator,
+clause (ii) "the entire taxable income". The Form 1116 *Worksheet for Line 18* multipliers
+are the exact complements of the line-1a factors (0.2432 = 1 − 0.7568), which is the same
+number seen from the other side. **Adjusting only the numerator would be worse than
+adjusting neither**: it shrinks the fraction twice over and systematically under-credits.
+
+#### Two placement decisions, both from the form's own words
+
+- **The rate differential comes off line 7, AFTER the apportioned deduction — not off the
+  gross.** Form 1116's line 3d instruction is explicit: capital gains enter the
+  deduction-apportionment fraction *"without regard to any adjustments"*. Netting the
+  adjustment into `gross` instead would shrink 3f as well and hand the basket back part of
+  the deduction it should have borne. This is the one place step 9 does **not** follow step
+  8's precedent — step 8 does net into `gross` — and the divergence is deliberate rather
+  than overlooked. Whether step 8 should move to match is a separate question with its own
+  re-gold; it is not folded in here.
+- **§904(b)(3)(A) runs first, §904(b)(2)(B) second.** The U.S. capital loss adjustment caps
+  each basket's gain at the worldwide figure, and the rate differential then scales what it
+  leaves. That order is what makes the partition invariant survive **by construction**: Σ
+  basket reductions ≤ the worldwide reduction, so the denominator can never fall by less
+  than the numerators do. Measured over 800 settle computations on 20 stochastic seeds with
+  idiosyncratic vol on, the adjustment fired 60 times, Σ fractions peaked at exactly
+  1.000000, and the slack never went negative.
+
+#### One blended factor, and where it is exact
+
+Pub 514 Step 2 apportions per separate category *per rate group*. The model applies the
+worldwide included fraction to each basket's net capital gain instead. That is **exact
+whenever one basket holds all the capital gain**, which is this model's structural
+situation — §4.5 records that `foreignGeneralCapGainsYTD` is zero at every classifier and
+every disposal books to passive. It diverges only when two baskets hold gains with
+genuinely different rate-group mixes (a foreign 25% property gain meeting a US-source 20%
+gain in one year). Accepted, in the same terms as step 8's carryforward-source question,
+and recorded in the function header.
+
+The alternative was ~12 per-basket-per-character accumulators. It would not have removed
+the approximation — **the 0/15/20 layer has to blend regardless**, because that split does
+not exist until the year ends — so it would have bought a partial fix at the cost of state
+that the rest of the model has no other use for.
+
+#### The adjustment exception
+
+The Form 1116 instructions permit an election not to adjust at all, when taxable ordinary
+income is under a threshold **and** foreign source net capital gain is under \$20,000. Not
+adjusting always yields a larger fraction, so the election is taken whenever available.
+
+The income threshold is stated as \$394,600 MFJ / \$197,300 otherwise for 2025 — and those
+are **the floor of the 32% ordinary bracket, to the dollar**: `UsTaxRates2025` already
+carries `[394_600, 0.32]` and `[197_300, 0.32]`. So it is read off the bracket table, which
+makes it track the rate modules and the inflation wrapper for free. The \$20,000 is *not*
+indexed, for the same reason `ORDINARY_CAPITAL_LOSS_CAP` is not: no mechanism attaches to
+it, and inflating it would widen an exception Treasury has not widened.
+
+Modelling the election is what keeps 14 of the reference plan's 15 years bit-identical, and
+confines the movement to the year that actually realises gains. Note the model has no
+qualified-dividend concept — every dividend it books is taxed at ordinary rates — so
+omitting foreign qualified dividends from the \$20,000 test is exact here rather than
+generous.
+
+---
+
+### 4.7 §904(f)/(g) — closed as structurally unreachable, with the measurement
+
+Design 83 §11 deferred this with an explicit trigger: *"Build it only if the step-2
+invariants start tripping the zero-clamp often enough to matter — the assertion will tell
+us."* The assertion was never read. This is that reading, and the answer is **do not
+build it**.
+
+#### What was measured
+
+Instrumenting `_computeFtc` over 480 settle computations — 12 stochastic seeds of the
+reference plan run to simEnd:
+
+| condition that would create an account | count |
+|---|---:|
+| a foreign basket's income accumulator goes negative (separate limitation loss → OFL) | **0** |
+| US-source taxable income goes negative (overall domestic loss) | **0** |
+| the Form 1116 line-7 zero clamp fires | 108 |
+| …of those 108, years in which any credit was taken | **0** |
+
+#### Why the 108 clamps are not overall foreign losses
+
+This is the part worth keeping, because 108 out of 480 looks like a trigger and is not.
+
+`_computeFtc` apportions **all** unrelated deductions proportionally. So each basket's line
+7 is `gross × (1 − D/G)` and line 18 is `G × (1 − D/G)`, over the same `D` and `G`.
+Numerator and denominator therefore go negative *together and proportionally*: the 108
+clamps are years where `D > G` — the whole return has negative taxable income — not years
+where foreign income bore a loss that US income did not. Form 1116's own definitions agree:
+a U.S. loss is *"the total of the amounts entered on line 15 … over the amount computed for
+purposes of line 18"*, and under proportional apportionment that difference cannot change
+sign. Zero credit was taken in all 108, because there was no tax to credit against.
+
+An overall foreign loss needs a deduction **definitely related** to foreign income
+exceeding foreign gross income — a foreign rental, business or interest loss. The model has
+exactly one such route, a negative `foreignPassiveIncomeYTD`, and **§469 already suspends
+it** (`pal.foreignAdjustment`, design 86 G5b). It did not go negative once in 480 settles.
+
+So OFL, separate-limitation-loss and ODL accounts would all be written and never read: the
+regime cannot fire, and no working-detector control is available at the scenario level to
+prove otherwise. Building it would be the failure §10 warns about, committed on purpose.
+
+#### The trigger, stated precisely so the next reader does not re-derive it
+
+Revisit when **either** becomes true:
+
+1. **A deduction is allocated to a specific §904 basket** rather than apportioned across
+   all of them — foreign investment interest under §163(d) allocated by asset location, or
+   a foreign rental loss that §469 releases rather than suspends. That is the change that
+   makes a basket-level loss expressible at all, and it makes the whole regime live at once.
+2. **`foreignPassiveIncomeYTD` is observed negative at a settle.** Cheap to watch: the line-7
+   clamp in `_computeFtc` already sits at the exact point where an OFL would be created, and
+   is annotated to say so.
+
+Note the coupling §4.6 exposed: a form-exact §904(b)(2) *can* produce Σ line 15 > line 18 —
+a U.S. loss — and §904(g) is the regime that absorbs it. It does not arise here, because
+§904(b)(3)(A) caps Σ basket gain at the worldwide figure first (§4.6). If that ordering is
+ever changed, this closure needs re-reading, not just the invariant re-running.
 
 ---
 
@@ -938,11 +1122,18 @@ Ordered so each step is independently reviewable and the re-gold diffs stay attr
 | 6 | Correlation structure — betas and non-zero idio vol (§7.4) | **Yes**, and re-bases every stochastic result |
 | 7 | Franked dividends (§8) | **Yes** |
 | 8 | §904 basket sourcing of capital losses (§4.5) ✅ | **No** — one new field at `0`, as predicted |
+| 9 | §904(b)(2) capital gain rate differential (§4.6) ✅ | **No** — the one year it fires had 6.7% of slack |
 
 **Step 8 was implicit in step 3 and is not.** §4.4 named the interaction, step 3 shipped
 without it, and steps 5–6 made it reachable by giving the sleeves enough dispersion to form a
 carryforward. It is its own step because it turned out to be a separate piece of work with a
 separate acceptance test.
+
+**Step 9 is the smaller half of a pair that looked like one item.** §4.5 listed §904(b)(2)
+and §904(f)/(g) together as "out of scope, deliberately". They turned out to be opposites:
+one needed no new state and moves a real limitation by 16.6%, the other is a whole regime
+with nothing in the model able to trigger it (§4.7). The lesson is that "deferred" is not a
+size estimate, and the only way to tell the two apart was to measure.
 
 Its "re-golds? No" was a **prediction, and the point is that it was not the test**. The
 deterministic golden path never forms a capital-loss pool (§4's record: both pools end empty),
@@ -1006,6 +1197,14 @@ touches the RNG.
   you never reach it.
 - **An RNG-neutrality test for §7** — assert the sleeve loop draws zero uniforms when every idio
   vol is 0, so the property §1.4 relies on cannot be lost silently.
+- **Published factors reproduced from the formula, not transcribed (step 9).**
+  `section-904b2-rate-differential.test.mjs` derives all five of Pub 514's rate-group
+  factors from §904(b)(3)(E) and asserts they match the publication, then asserts a module
+  with a different top bracket does *not* reproduce them. That pairing is the point: the
+  first half proves the derivation is right, the second proves it is a derivation. A
+  transcribed table passes the first and fails the second, silently, in the year a top
+  rate changes. Mutation-verified the same way step 8 is — stub the adjustment to zeros
+  and exactly three `computeTax` tests go red.
 
 ---
 
@@ -1026,6 +1225,10 @@ touches the RNG.
   isolated diff. Folding it in would contaminate the re-gold this design must keep reviewable.
   **Recommend fixing it before step 6**, so ladder scenarios are trustworthy by the time
   dispersion makes losses common.
+
+- **§904(f) overall foreign loss / §904(g) overall domestic loss recapture.** Measured and
+  closed — **see §4.7 for the numbers and the trigger.** Listed here so the out-of-scope
+  list stays the one place a reader has to look; §4.7 is where the reasoning lives.
 
 - **Corporate capital losses (§1211(a), §1212(a)) and the §1256 election (§1212(c)).** No
   corporate entity and no futures in the model.

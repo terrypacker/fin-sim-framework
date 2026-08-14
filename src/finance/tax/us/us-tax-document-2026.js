@@ -212,6 +212,16 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         money('Form 1116 line 3e — gross income, all sources',      ftc.grossIncomeAllSources ?? 0),
         money('Form 1116 line 3c — deductions not definitely related', ftc.unrelatedDeductions ?? 0),
       );
+      // §904(b)(2)(B)(ii) — shown only when it bit, so an ordinary return is unchanged.
+      // The denominator two lines above is already net of it; the row exists so a reader
+      // can see why it is smaller than taxable income (design 90 §4.5 step 9).
+      const rd = taxDetail.rateDifferential;
+      if (rd?.worldwide > 0) {
+        lineItems.push(
+          money('  …less §904(b)(2) rate differential (worldwide)', -rd.worldwide),
+          ratio('  …capital gain included at',                       rd.includedFraction),
+        );
+      }
       const baskets = [['General', ftc.general], ['Passive', ftc.passive]];
       for (const [name, basket] of baskets) {
         lineItems.push(
@@ -220,6 +230,9 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             ? [money(`${name} — less Form 2555 exclusion`, -basket.excluded)]
             : []),
           money(`${name} — less apportioned deduction (3g)`, -(basket.apportionedDeduction ?? 0)),
+          ...(basket.capGainAdjustment > 0
+            ? [money(`${name} — less §904(b)(2) rate differential`, -basket.capGainAdjustment)]
+            : []),
           money(`${name} — foreign taxable income (line 7)`, basket.numerator),
           ratio(`${name} — limitation fraction`,        basket.frac),
           money(`${name} — §904 limit`,                 basket.limit),

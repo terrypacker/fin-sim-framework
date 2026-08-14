@@ -46,6 +46,32 @@ const COLLECTIBLES_RATE = 0.28;
  */
 const UNRECAPTURED_1250_MAX_RATE = 0.25;
 
+/**
+ * The \$20,000 de minimis in the Form 1116 *adjustment exception* — design 90 §4.5 step 9.
+ * Below this much foreign source net capital gain (plus foreign qualified dividends, of
+ * which this model has none: every dividend it books is taxed at ordinary rates) a
+ * taxpayer may elect not to make the §904(b)(2) rate differential adjustment at all.
+ *
+ * **Not inflation-indexed**, for the same reason `ORDINARY_CAPITAL_LOSS_CAP` is not: it is
+ * a fixed figure in the instructions and in Reg. §1.904(b)-1(b)(3), with no indexing
+ * mechanism attached. Inflating it would widen an exception Treasury has not widened.
+ */
+const RATE_DIFFERENTIAL_EXCEPTION_CAP = 20_000;
+
+/**
+ * The other half of the adjustment exception: taxable ordinary income (QDCGT worksheet
+ * line 5) must not exceed a threshold the Form 1116 instructions state as \$394,600 MFJ /
+ * \$197,300 otherwise for 2025.
+ *
+ * Those are **the floor of the 32% ordinary bracket**, to the dollar — `UsTaxRates2025`
+ * already carries `[394_600, 0.32]` and `[197_300, 0.32]`. So the threshold is read off
+ * the module's own bracket table rather than transcribed, which makes it track the rate
+ * modules and the bracket-inflation wrapper for free. A transcribed pair would be a
+ * second, silently stale copy of a figure the module already knows — the
+ * `published-base-guard` failure in miniature.
+ */
+const ADJUSTMENT_EXCEPTION_BRACKET_RATE = 0.32;
+
 export class UsTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'US'; }
 
@@ -243,6 +269,30 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const collectibles    = capLoss.collectibleGain;
     const collectiblesTax = collectibles * COLLECTIBLES_RATE;
 
+    // Step 4b: §904(b)(2) capital gain rate differential (design 90 §4.5, step 9).
+    // Computed here rather than beside `capBasket` because it needs the 0/15/20 rate-group
+    // split, and that split only exists once the LTCG layer has been stacked — which is
+    // step 3, two lines up. `ltcgStacked − ltcgBase` band-wise IS the split: the two
+    // schedules bracket the same interval, so their per-band differences sum to `cg`.
+    const topOrdinaryRate = brackets.length > 0 ? brackets[brackets.length - 1][1] : 0;
+    const rateDiff = _computeRateDifferentialAdjustment({
+      ltcgBands: ltcgStacked.bands.map((b, i) => ({
+        rate: b.rate, income: b.income - (ltcgBase.bands[i]?.income ?? 0),
+      })),
+      collectibleGain:      collectibles,
+      unrecaptured1250Gain: unrecap1250,
+      shortTermGain:        capLoss.shortTermGain,
+      topOrdinaryRate,
+      netGeneral: capBasket.netGeneral ?? 0,
+      netPassive: capBasket.netPassive ?? 0,
+      // QDCGT worksheet line 5 = taxable income less the preferential-rate layer, which
+      // is this model's `taxableOrdinary` exactly. Pre-FEIE-stacking deliberately: Form
+      // 1040 line 15 is not reduced by the exclusion either — §911 is applied through the
+      // tax worksheet, not by shrinking taxable income.
+      taxableOrdinary,
+      exceptionThreshold: _adjustmentExceptionThreshold(brackets),
+    });
+
     // Step 5: the Chapter-1 income tax, split in two because only one half is the
     // §904 limitation base (design 83 G2).
     //
@@ -346,9 +396,20 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // Additional Medicare surtax and the §72(t) penalty are all outside it.
     const ftc          = this._computeFtc(state, {
       grossTax: regularTax,
-      totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles + unrecap1250,
+      // §904(b)(2)(B)(ii) — "the entire taxable income shall include gain … only in an
+      // amount equal to capital gain net income reduced by the rate differential portion
+      // of net capital gain". This is the Form 1116 *Worksheet for Line 18*, whose
+      // per-group multipliers are the exact complements of the line-1a factors.
+      totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles + unrecap1250
+                    - rateDiff.worldwide,
       grossIncomeAllSources,
       unrelatedDeductions,
+      // §904(b)(2)(B)(i), per basket. Passed separately rather than netted into
+      // `*Gross` above, because Form 1116's line 3d instruction is explicit that the
+      // deduction-apportionment fraction takes capital gains "**without regard to any
+      // adjustments**" — so this comes off line 7 AFTER 3g, not off 3d before it.
+      generalCapGainAdjustment: rateDiff.general,
+      passiveCapGainAdjustment: rateDiff.passive,
       // Per basket: gross foreign income in the category (Form 1116 line 3d) and
       // the part of it excluded on Form 2555 (removed at line 1a, but NOT from 3d).
       //
@@ -419,6 +480,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       capitalLoss:            capLoss,
       shortTermCapitalGain:   capLoss.shortTermGain,
       capitalLossDeduction:   capLoss.allowance,
+      // The two Pub 514 adjustments to foreign source capital gains, in the order the
+      // publication runs them: §904(b)(3)(A)'s U.S. capital loss adjustment (design 90
+      // §4.5 step 8), then §904(b)(2)(B)'s rate differential (step 9). Reported rather
+      // than re-derived, because neither is visible from `ftc` alone — the basket rows
+      // show only the net line 7.
+      capitalLossBasketAdjustment: capBasket,
+      rateDifferential:            rateDiff,
       feieExcluded,
       // The exclusion ACTUALLY applied — `feieExcluded` capped at taxable ordinary
       // income by the stacking rule. The two differ when the qualifying exclusion
@@ -687,8 +755,8 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _computeFtc(state, {
     grossTax, totalTaxable,
     grossIncomeAllSources = 0, unrelatedDeductions = 0,
-    generalGross = 0, generalExcluded = 0,
-    passiveGross = 0,
+    generalGross = 0, generalExcluded = 0, generalCapGainAdjustment = 0,
+    passiveGross = 0, passiveCapGainAdjustment = 0,
   }) {
     const currentCY = state.currentPeriods?.US?.startMs != null
       ? new Date(state.currentPeriods.US.startMs).getUTCFullYear()
@@ -709,16 +777,27 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       ? unrelatedDeductions * Math.min(1, gross / grossIncomeAllSources)
       : 0;
 
-    const basket = (gross, excluded, currentTax, pool) => {
+    const basket = (gross, excluded, capGainAdjustment, currentTax, pool) => {
       const apportionedDeduction = apportionedShare(gross);
       // Form 1116 line 7 — foreign TAXABLE income: gross in the category, less the
-      // Form 2555 exclusion, less the ratable share of unrelated deductions.
+      // Form 2555 exclusion, less the ratable share of unrelated deductions, less the
+      // §904(b)(2)(B)(i) rate differential portion of this category's net capital gain.
+      //
+      // Order matters and it is the form's: 3g apportions against UNADJUSTED gross
+      // (line 3d: capital gains enter it "without regard to any adjustments"), and the
+      // rate differential comes off afterwards. Netting it into `gross` instead would
+      // shrink the apportionment fraction as well and quietly hand the basket back part
+      // of the deduction it should have borne.
       //
       // The zero clamp is an approximation: a real return would carry the shortfall
-      // as an overall foreign loss subject to §904(f) recapture in later years,
-      // which this model does not track. It bites only in thin-income years, where
-      // the absolute dollars are smallest — design 83 §10 records it as accepted.
-      const numerator = Math.max(0, gross - excluded - apportionedDeduction);
+      // as an overall foreign loss subject to §904(f) recapture in later years, which
+      // this model does not track. Design 90 §4.7 measured it — the clamp fires, but
+      // never as an overall foreign loss: deductions are apportioned proportionally
+      // above, so this and `totalTaxable` go negative TOGETHER, and a clamped year is a
+      // whole-return no-taxable-income year with no credit at stake. A real OFL needs a
+      // deduction definitely related to foreign income; if one is ever added, this line
+      // is where the account would be opened. Design 83 §10 records the clamp as accepted.
+      const numerator = Math.max(0, gross - excluded - apportionedDeduction - capGainAdjustment);
       const frac  = totalTaxable > 0 ? Math.min(1, Math.max(0, numerator / totalTaxable)) : 0;
       const limit = Math.min(Math.max(0, grossTax) * frac, headroom);
       const poolTotal = Object.values(pool).reduce((s, v) => s + v, 0);
@@ -727,7 +806,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       headroom = Math.max(0, headroom - credit);
       const { nextPool, currentYearUsed, carryoverUsed } = _drawDownBasket(currentTax, pool, credit, currentCY);
       const carryforwardRemaining = Object.values(nextPool).reduce((s, v) => s + v, 0);
-      return { gross, excluded, apportionedDeduction, numerator, frac, limit,
+      return { gross, excluded, apportionedDeduction, capGainAdjustment, numerator, frac, limit,
                currentTax, poolTotal, avail, credit,
                currentYearUsed, carryoverUsed, carryforwardRemaining, nextPool };
     };
@@ -752,10 +831,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // into general (the residual §904 category) is the bounded, one-line answer.
     // Apportioning each vintage by its year's general/passive income ratio — option
     // B — buys accuracy no simulator needs, since re-running is free and exact.
-    const general = basket(generalGross, generalExcluded,
+    const general = basket(generalGross, generalExcluded, generalCapGainAdjustment,
       (state.ftcCurrentGeneral ?? 0) + (state.ftcCurrentResourced ?? 0),
       _mergeVintagePools(state.ftcPoolGeneral ?? {}, state.ftcPoolResourced ?? {}));
-    const passive = basket(passiveGross, 0,               state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
+    const passive = basket(passiveGross, 0, passiveCapGainAdjustment,
+      state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
     const hasActivity = general.avail > 0 || passive.avail > 0
       || general.numerator > 0 || passive.numerator > 0;
 
@@ -791,6 +871,19 @@ const FTC_INVARIANT_EPSILON = 0.01;
  * object; neither input is mutated, because both are live state and the journal
  * stores diffs by reference (see [[journal-diff-live-alias]]).
  */
+/**
+ * The Form 1116 adjustment-exception income threshold for a bracket table — the floor of
+ * the `ADJUSTMENT_EXCEPTION_BRACKET_RATE` band. See that constant for why it is read off
+ * the table instead of transcribed. Returns Infinity when no such band exists, which
+ * makes the exception depend on the \$20,000 test alone rather than silently vanishing.
+ *
+ * @param {Array<[number, number]>} brackets  ascending by threshold
+ */
+function _adjustmentExceptionThreshold(brackets) {
+  const band = (brackets ?? []).find(([, rate]) => rate >= ADJUSTMENT_EXCEPTION_BRACKET_RATE);
+  return band ? band[0] : Infinity;
+}
+
 function _mergeVintagePools(a, b) {
   if (!b || Object.keys(b).length === 0) return a;
   const out = { ...a };
@@ -1109,13 +1202,149 @@ export function _computeCapitalLossBasketAdjustment(state, capLoss) {
                                      + (capLoss?.collectibleGain ?? 0) + (capLoss?.unrecaptured1250Gain ?? 0));
   const adjustment = Math.max(0, foreignSourceCapGain - worldwideCapGain);
 
-  const zero = { general: 0, passive: 0, adjustment: 0, foreignSourceCapGain, worldwideCapGain };
-  if (!(adjustment > 0) || !(foreignSourceCapGain > 0)) return zero;
+  if (!(adjustment > 0) || !(foreignSourceCapGain > 0)) {
+    return { general: 0, passive: 0, adjustment: 0, foreignSourceCapGain, worldwideCapGain,
+             netGeneral: general, netPassive: passive };
+  }
+
+  const general904 = adjustment * (general / foreignSourceCapGain);
+  const passive904 = adjustment * (passive / foreignSourceCapGain);
+  return {
+    general: general904,
+    passive: passive904,
+    adjustment, foreignSourceCapGain, worldwideCapGain,
+    // Each basket's net capital gain AFTER the adjustment — Pub 514's "resulting
+    // \$250 / \$500 on line 1a". This is §904(b)(3)(A)'s "foreign source capital gain
+    // net income", the base the §904(b)(2)(B) rate differential then scales; the
+    // publication is explicit that the two run in that order.
+    netGeneral: general - general904,
+    netPassive: passive - passive904,
+  };
+}
+
+/**
+ * The **capital gain rate differential adjustment** — IRC §904(b)(2)(B) and §904(b)(3)(E),
+ * as implemented by IRS Pub 514 (2025) pp.30–32 and the Form 1116 *Worksheet for Line 18*
+ * (design 90 §4.5, step 9).
+ *
+ * Preferential-rate income does not deserve full-rate limitation room. A dollar of
+ * long-term gain taxed at 15% generates 15/37 of the US tax that a dollar of ordinary
+ * income does, so §904(b)(2)(B) includes it in the §904 fraction at 15/37 of face — on
+ * BOTH sides of that fraction. Clause (i) does the foreign numerator, clause (ii) "the
+ * entire taxable income", i.e. the denominator. Adjusting one without the other is worse
+ * than adjusting neither.
+ *
+ * **§904(b)(3)(E), verbatim** — the rate differential portion is the same proportion of
+ * the amount as *"the excess of (I) the highest rate of tax set forth in subsection (a),
+ * (b), (c), (d), or (e) of section 1 (whichever applies), over (II) the alternative rate
+ * of tax determined under section 1(h), bears to (ii) that rate referred to in subclause
+ * (I)"* — i.e. `portion = amount × (topRate − altRate) ÷ topRate`, so the amount that
+ * survives is `amount × altRate ÷ topRate`. Pub 514's published factors are that formula
+ * at a 37% top rate: 15/37 = 0.4054, 20/37 = 0.5405, 25/37 = 0.6757, 28/37 = 0.7568, and
+ * the line-18 worksheet uses the exact complements (0.5946, 0.4595, 0.3243, 0.2432).
+ * They are derived here rather than transcribed so a rate module with a different top
+ * bracket — or the bracket-inflation wrapper — cannot silently keep 2025's arithmetic.
+ *
+ * ## The rate groups, and where each one comes from
+ *
+ * Pub 514 Table 4 lists six. All six are already computed by the time this runs, which is
+ * why step 9 needs no new state at all:
+ *
+ * | group | source |
+ * |---|---|
+ * | 0% / 15% / 20% | the per-band split of `applyBracketsDetailed(ltcgFloor + cg)` less its base |
+ * | 25% | `capLoss.unrecaptured1250Gain` (§1(h)(1)(D)) |
+ * | 28% | `capLoss.collectibleGain` (§1(h)(4)) |
+ * | short-term | `capLoss.shortTermGain` — taxed at ordinary rates, so its factor is 1 |
+ *
+ * The 25% group uses the statutory 25% ceiling, not the bracket differential `computeTax`
+ * actually charges. §904(b)(3)(E)(i)(II) says "the alternative rate of tax determined
+ * under section 1(h)", and for §1(h)(1)(D) that rate is 25%; a household whose marginal
+ * rate puts the real charge below the ceiling still uses the group's rate, which is what
+ * Pub 514's flat 0.6757 encodes.
+ *
+ * ## Why one blended factor, and when that is exact
+ *
+ * Pub 514 Step 2 apportions per separate category *per rate group*. This model knows the
+ * rate-group split only at the worldwide level, and structurally cannot know it per
+ * basket: the 0/15/20 split depends on where the year's gain stacks at year end, which is
+ * not knowable at the moment a disposal books to a basket. So the worldwide *included
+ * fraction* is applied to each basket's net capital gain.
+ *
+ * **That is exact whenever a single basket holds all the capital gain**, which is this
+ * model's structural situation — design 90 §4.5 records that `foreignGeneralCapGainsYTD`
+ * is zero at every disposal classifier, and every disposal books to passive. It diverges
+ * only when two baskets hold gains with genuinely different rate-group mixes (a foreign
+ * 25% property gain meeting a US-source 20% gain in one year). Recorded as accepted, in
+ * the same terms as the carryforward-source question one function above.
+ *
+ * ## The adjustment exception
+ *
+ * The Form 1116 instructions let a taxpayer elect not to adjust at all when taxable
+ * ordinary income is under the 32%-bracket floor AND foreign source net capital gain is
+ * under \$20,000. Not adjusting always yields a larger fraction, so the election is taken
+ * whenever it is available — which is what any preparer does, and what keeps a year
+ * carrying a trivial gain bit-identical to one carrying none.
+ *
+ * @param {object} args
+ * @param {Array<{rate:number, income:number}>} args.ltcgBands  per-band 0/15/20 split
+ * @param {number} args.collectibleGain        28% rate group
+ * @param {number} args.unrecaptured1250Gain   25% rate group
+ * @param {number} args.shortTermGain          short-term rate group (factor 1)
+ * @param {number} args.topOrdinaryRate        §1(a)–(e) highest rate
+ * @param {number} args.netGeneral             general-basket net capital gain, post-§904(b)(3)(A)
+ * @param {number} args.netPassive             passive-basket net capital gain, post-§904(b)(3)(A)
+ * @param {number} args.taxableOrdinary        QDCGT worksheet line 5 analogue
+ * @param {number} args.exceptionThreshold     the 32%-bracket floor for this filing status
+ * @returns {{ worldwide:number, general:number, passive:number, includedFraction:number,
+ *   worldwideCapGain:number, adjustedCapGain:number, exceptionApplied:boolean }}
+ *   `worldwide` is subtracted from the §904 denominator; `general`/`passive` from their
+ *   own Form 1116 line 7. All non-negative.
+ */
+export function _computeRateDifferentialAdjustment({
+  ltcgBands = [], collectibleGain = 0, unrecaptured1250Gain = 0, shortTermGain = 0,
+  topOrdinaryRate = 0, netGeneral = 0, netPassive = 0,
+  taxableOrdinary = 0, exceptionThreshold = Infinity,
+}) {
+  const groups = [
+    ...ltcgBands.map(b => ({ rate: b.rate, amount: b.income })),
+    { rate: UNRECAPTURED_1250_MAX_RATE, amount: unrecaptured1250Gain },
+    { rate: COLLECTIBLES_RATE,          amount: collectibleGain },
+    // Short-term gain is taxed at ordinary rates, so its alternative rate IS the top
+    // rate and its factor is 1. It is carried explicitly rather than dropped: it belongs
+    // in the blend's denominator, or a basket holding short-term gain would be scaled by
+    // a factor derived only from the long-term groups.
+    { rate: topOrdinaryRate,            amount: shortTermGain },
+  ].filter(g => g.amount > 0);
+
+  const worldwideCapGain = groups.reduce((s, g) => s + g.amount, 0);
+  const foreignNetCapGain = Math.max(0, netGeneral) + Math.max(0, netPassive);
+
+  const exceptionApplied = taxableOrdinary <= exceptionThreshold
+                        && foreignNetCapGain < RATE_DIFFERENTIAL_EXCEPTION_CAP;
+
+  const inert = {
+    worldwide: 0, general: 0, passive: 0, includedFraction: 1,
+    worldwideCapGain, adjustedCapGain: worldwideCapGain, exceptionApplied,
+  };
+  if (exceptionApplied || !(worldwideCapGain > 0) || !(topOrdinaryRate > 0)) return inert;
+
+  const adjustedCapGain = groups.reduce(
+    (s, g) => s + g.amount * Math.min(1, g.rate / topOrdinaryRate), 0);
+  const includedFraction = adjustedCapGain / worldwideCapGain;
+  const removed = 1 - includedFraction;
 
   return {
-    general: adjustment * (general / foreignSourceCapGain),
-    passive: adjustment * (passive / foreignSourceCapGain),
-    adjustment, foreignSourceCapGain, worldwideCapGain,
+    // §904(b)(2)(B)(ii) — off the denominator, at full worldwide scope.
+    worldwide: worldwideCapGain * removed,
+    // §904(b)(2)(B)(i) — off each basket's own line 7. Σ of these can never exceed
+    // `worldwide`, because §904(b)(3)(A) already capped Σ basket gain at the worldwide
+    // figure (that is what `_computeCapitalLossBasketAdjustment` enforces), so the
+    // denominator always falls by at least as much as the numerators do and the design
+    // 83 partition invariant survives this adjustment by construction.
+    general: Math.max(0, netGeneral) * removed,
+    passive: Math.max(0, netPassive) * removed,
+    includedFraction, worldwideCapGain, adjustedCapGain, exceptionApplied,
   };
 }
 

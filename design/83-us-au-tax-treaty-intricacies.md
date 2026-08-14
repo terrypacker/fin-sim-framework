@@ -1078,6 +1078,17 @@ approximate and it bites hardest in thin-income years, which are exactly the yea
 the absolute dollars are smallest. Build it only if the step-2 invariants start tripping
 the zero-clamp often enough to matter — the assertion will tell us.
 
+> **The assertion was read, on 2026-08-13 — and the answer is still "leave it", now for a
+> stronger reason.** Design 90 §4.7 has the measurement. The clamp fires in 108 of 480
+> settle computations, which looks like the trigger this paragraph set, but none of them is
+> an overall foreign loss: because `_computeFtc` apportions every deduction proportionally,
+> a basket's line 7 and the line-18 denominator go negative *together*, so the clamped years
+> are whole-return no-taxable-income years and zero credit was taken in all 108. A genuine
+> OFL needs a deduction **definitely related** to foreign income, and the model's only such
+> route — a negative `foreignPassiveIncomeYTD` — is suspended by §469 and was never observed.
+> §904(f)/(g) is not deferred for cost; it is unreachable. The trigger is restated precisely
+> in design 90 §4.7.
+
 **The super-deferral question (§7a.5). Leave it.** The documents are now on disk, so this
 is no longer blocked, but it is a *position* change, not a defect fix: it would flip G6's
 basket from general to passive and re-characterise contributions and in-fund earnings as
