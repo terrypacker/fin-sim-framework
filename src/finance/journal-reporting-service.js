@@ -26,10 +26,16 @@ import { StateTaxDocumentReporter } from './tax/state/state-tax-document.js';
  * event types (rebalancing summaries, withdrawal reports, etc.).
  */
 export class JournalReportingService {
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {import('../simulation-framework/type-registry.js').TypeRegistry} [opts.typeRegistry]
+   *   Forwarded to TaxDocumentRegistry so the AU CGT worksheet reads each disposal's
+   *   currency off the toolset manifest instead of a private table (design 91 §8.6).
+   */
+  constructor({ typeRegistry = null } = {}) {
     /** @type {Map<string, { generate(entry): object|null }>} */
     this._reporters = new Map();
-    const taxDocs = new TaxDocumentRegistry();
+    const taxDocs = new TaxDocumentRegistry({ typeRegistry });
     this.register('US_TAX_SETTLE_APPLY', taxDocs);
     this.register('AU_TAX_SETTLE_APPLY', taxDocs);
     this.register('STATE_TAX_SETTLE_APPLY', new StateTaxDocumentReporter());

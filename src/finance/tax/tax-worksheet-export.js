@@ -80,6 +80,10 @@ export const WORKSHEET_COLUMNS = [
  * @param {boolean}  [opts.includeSchedules=false]  also emit supplementary forms
  *                                             (Schedule D); see §4 note on table-shaped forms
  * @param {object}   [opts.service]            JournalReportingService override (tests)
+ * @param {object}   [opts.typeRegistry]       TypeRegistry, so the AU CGT worksheet reads
+ *                                             each disposal's currency off the toolset
+ *                                             manifest (design 91 §8.6 step 3). Ignored
+ *                                             when `service` is supplied.
  * @returns {object[]} worksheet rows, in document order, oldest year first
  */
 export function buildTaxWorksheetRows(journal, opts = {}) {
@@ -87,7 +91,8 @@ export function buildTaxWorksheetRows(journal, opts = {}) {
     cc = 'US',
     years = null,
     includeSchedules = false,
-    service = new JournalReportingService(),
+    typeRegistry = null,
+    service = new JournalReportingService({ typeRegistry }),
   } = opts;
 
   const countries  = Array.isArray(cc) ? cc : [cc];

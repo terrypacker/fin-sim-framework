@@ -1,12 +1,14 @@
 # 91 — The journal payload manifest: what it gates, and what it doesn't
 
-**Status** (2026-08-13): **§3–§7 BUILT — the gate is now wired and the manifest is
-authoritative.** §3, §4 and §5 (Tiers A and B) landed first — three payload gaps closed,
-the burn-down finished, drift detector repaired. `KNOWN_GAPS` is down from 31 action types to 12,
-and everything still pinned is a routing key (Tier C, deliberate). **§2 is a finding with an open
-decision** — the manifest gate is not wired on the product path, and turning it on is a data-shape
-change that should not ride along with a field declaration. §5.1 explains why the burn-down is the
-preparation step for that decision rather than independent of it.
+**Status** (2026-08-13): **§3–§7 BUILT — the manifest gate is wired and authoritative.** The
+`fields:` declarations now decide what reaches the journal; until §7 they decided nothing at all
+(§2). `KNOWN_GAPS` is down from 31 action types to 12, and everything still pinned is a routing
+key by choice (§5 Tier C). **§8 COMPLETE** — the disposal money carries currency codes,
+`capital-gains-by-disposal` converts (measured first, §8.7), the AU CGT worksheet reads the
+manifest instead of a private table, and the declarations are cross-checked against what the tax
+modules actually do (§8.9). Along the way: the CAPITAL_GAINS family had no golden at all, so
+`cross-border-disposals` was added and the coverage floor moved 45 → 51 (§8.8). One new defect is
+open — collectible disposals are assessed but never disclosed on the AU CGT worksheet (§8.9).
 
 Follows the manifest-drift work that added the static emitter scan to
 `tests/unit/action-payload-schema.test.mjs` and pinned 31 action types in `KNOWN_GAPS`. That
@@ -41,7 +43,7 @@ makes an undeclared field cost nothing arithmetically and everything reportorial
 
 ---
 
-## 2. The gate is not wired on the product path
+## 2. The gate was not wired on the product path  (fixed in §7)
 
 `Simulation._pickPayload` resolves the registry through the **sim's own bus**:
 
@@ -325,7 +327,220 @@ that actually exist as declared.
 
 ---
 
-## 8. Ordered steps
+## 8. Typing the disposal money  ✅ COMPLETE (steps 1–4)
+
+The one item §5 Tier A deferred: `salePrice`, `costBasis`, `proceeds`, `gain`, `mortgageBalance`
+and the whole `us*`/`au*` gain family are declared `ValueType.number()` on every disposal action,
+while **every other money field in the model is declared `ValueType.currency(code)`**. The
+deferral was right — it changes what cross-currency reports fold — but the investigation turned
+the question from "would this be nice" into "this is the third copy of a fact that has already
+shipped as a bug".
+
+### 8.1 The naming trap: `auGain` is not in AUD
+
+The unit rule for a disposal action is:
+
+> **Every money field is denominated in the disposing asset's currency — which is the ACTION
+> TYPE's country, not the field name's prefix.**
+
+So on `STOCK_WITHDRAWAL_TAX` (a US brokerage disposal) `auGain`, `auDiscountableGain`,
+`auShortTermGain` and `auLongTermGain` are all **USD**. The `au` prefix means "measured on the AU
+basis" — the s855-45 stepped-up cost base, the 12-month discount test — not "denominated in AUD".
+Conversion happens in the consumer, not the emitter:
+
+- `us-tax-module-2026.js:496` — `toAUD(auGain, 'USD', state)` on a US disposal.
+- `au-tax-module-2026.js:588` — `toUSD(char.long, 'AUD', state)` on an AU disposal, with the
+  comment "`gain` is in AUD here (the account's currency)".
+
+Both sites hard-code the currency as a literal, keyed off which module is handling which action
+type. The fact is real, load-bearing, and stated nowhere a machine can read it.
+
+### 8.2 It has already cost something
+
+`tax-document-registry.js:233` carries `AU_DISPOSAL_CURRENCY` — a hand-maintained map from
+disposal action type to currency code. Its own comment says why it exists:
+
+> *"The currency is what the old CGT schedule got wrong: `STOCK_WITHDRAWAL_TAX` carries USD
+> figures (it is a US brokerage disposal) and the schedule printed them straight onto an
+> AUD-denominated document, so the modal formatted USD as A\$."*
+
+That is this exact gap, found the hard way, and patched with a private lookup table rather than
+by declaring the unit where the unit belongs. The TypeRegistry is the designated home for
+"what unit is this field in" — and for the disposal family it answers `number()`, meaning
+"nothing".
+
+### 8.3 The live trap: one line away from a wrong total
+
+`CapitalGainsByDisposalDef` aggregates `proceeds` (`fn: 'sum'`) and declares **no**
+`reportCurrency`, so `normalizeAggregateCurrency` returns early and nothing converts. Its
+description carries the warning as prose instead: *"`proceeds` is the disposal's native-currency
+contract amount and is informational only, so on a cross-border row it is NOT in the same
+currency as `total`."*
+
+The state side of the same report is already fully typed — `usCapitalGainsYTD` → USD,
+`auCapitalGainsYTD` → AUD, and the per-person patterns too (`state-schema-registry.js:249+`), so
+`total` (which sums `stateDelta`) would convert correctly today.
+
+That asymmetry is the trap. Giving this report a `reportCurrency` is an obvious improvement and a
+one-line change — and doing it **now** would silently corrupt the `proceeds` column, because an
+undeclared money field takes `normalizeAggregateCurrency`'s `unknown` branch: counted as already
+being in the target currency. A US-source proceeds figure would be added to an AUD total at face
+value, wrong by the whole exchange rate, with only a console warning.
+
+So the honest statement of the situation is not "typing would be nice". It is: **the disposal
+family is the only thing standing between this report and a correct cross-currency mode, and
+while it stands there it is also a live footgun for whoever tries.**
+
+### 8.4 Scope
+
+10 action types, ~70 fields — all currently `number()`:
+
+| Currency | Types |
+|---|---|
+| USD | `STOCK_WITHDRAWAL_APPLY`, `STOCK_WITHDRAWAL_TAX`, `US_HOUSE_SALE_APPLY`, `US_HOUSE_SALE_TAX`, `COLLECTIBLE_SALE_APPLY`, `COLLECTIBLE_SALE_TAX`, `COMPANY_SALE_APPLY`, `COMPANY_SALE_TAX` |
+| AUD | `AU_STOCK_WITHDRAWAL_APPLY`, `AU_STOCK_WITHDRAWAL_TAX`, `AU_HOUSE_SALE_APPLY`, `AU_HOUSE_SALE_TAX` |
+
+Every money field on a type takes that type's code, `au*`-prefixed fields included — §8.1 is the
+whole point, and typing `auGain` as AUD would be the exact error the declaration exists to
+prevent.
+
+### 8.5 The one caveat, and why it does not block
+
+A fixed per-type code assumes a US-country asset is USD-denominated and an AU-country asset AUD.
+`RealProperty` does carry an explicit `currency` descriptor that a scenario could set against
+type, and `us-brokerage-classes.js` consults currency **nowhere at all**.
+
+But that assumption is not introduced by the declaration — it is already load-bearing in both tax
+modules (§8.1) and in `AU_DISPOSAL_CURRENCY` (§8.2). A declaration cannot be more wrong than the
+arithmetic it describes; it makes an implicit assumption explicit and therefore testable. The
+fully general alternative — stamp an explicit `currency` field on each disposal action, as
+`SECTION_988_GAIN` already does — is the right answer *if* mixed-currency assets ever become real,
+and it is a strictly larger change (emitter-side, every disposal path). Not now.
+
+### 8.6 The work, in order
+
+1. **Declare the codes** (§8.4). Inert on its own: `proceeds` is the only disposal money field any
+   report aggregates, and that report declares no `reportCurrency`. Verify inertness the same way
+   §7.1 did — journal payload keys are unchanged by a type change, so the check is that reports
+   render identically.
+2. **Give `CapitalGainsByDisposalDef` a `reportCurrency`** and delete the prose warning from its
+   description. This is the change with visible output, and it needs a before/after on the report
+   plus the tax-document exports that link to it.
+3. **Derive `AU_DISPOSAL_CURRENCY` from the registry** rather than maintaining it. Requires
+   threading a `TypeRegistry` into `TaxDocumentRegistry` / `JournalReportingService`, which today
+   are constructed bare (`journal-reporting-service.js:32`) — two constructors and two call sites.
+   Optional, and last: it removes the duplicate rather than fixing a defect.
+4. **Pin the assumption with a test**: for each type in §8.4, the declared code equals the code its
+   tax-module consumer converts from. That is what turns §8.5's caveat from a comment into a gate.
+
+Step 1 is safe and self-contained. Step 2 is the one that changes numbers on screen and should
+carry its own measurement, exactly as §7.1 did for the gate.
+
+**Steps 1 and 2 are now built** — §8.7 has the measurement that authorised step 2. Steps 3 and 4
+remain open.
+
+### 8.7 Measured: what step 2 actually changes
+
+Step 1 landed first (68 fields across 12 types), then step 2 was measured on three arms before
+being applied:
+
+| Arm | Meaning |
+|---|---|
+| **A** | today — no `reportCurrency`, nothing converts |
+| **B** | proposed, with step 1 landed |
+| **C** | proposed, with the disposal money still untyped — i.e. step 2 applied in the wrong order |
+
+**`total` does not move in any arm, on any scenario.** It sums `stateDelta`, whose currency comes
+from the state schema, so it was already correct. **Step 2's entire effect is the `proceeds`
+column** — a pleasingly small blast radius for a change that had looked risky.
+
+On a scenario that sells an AU property and reports in USD, the AU-denominated proceeds convert
+in arm B and do not in arm A/C: measured at a **16.3% overstatement** of the proceeds total when
+left unconverted. On a synthetic AU-report journal holding one USD and one AUD disposal, the
+USD row's proceeds convert at the run's own rate rather than being counted at face value.
+
+**The refinement this measurement forced.** §8.3 said applying step 2 without step 1 would
+"silently corrupt" the column. That is not quite right, and the precise version is worse:
+**arm C is numerically identical to arm A.** Converting an undeclared field is the identity, so
+the number would not change at all — what would change is the claim about it. The report would
+start declaring a currency, the honest warning in its description would be deleted as
+"no longer needed", and a raw AUD figure would sit in a column labelled USD with nothing left
+saying otherwise. The order of the two steps was load-bearing for the labelling, not the
+arithmetic.
+
+### 8.8 The disposal family had no golden at all
+
+The first attempt to measure step 2 could not: the reference plan books **no AU-assessed disposal
+in 44 years**, and its only disposal of any kind is a USD company-equity sale reported in USD —
+nothing to convert. Checking the golden coverage manifest explained why that was not already
+known: every disposal type — both house sales, both stock disposals, the collectible pair — sat
+in `KNOWN_GAPS`. **The entire CAPITAL_GAINS family was scenario-unguarded**, protected only by
+isolated reducer tests, while carrying the §121 proration, the AU main-residence concession, the
+s855-45 basis and (as of §8.4) the currency declarations.
+
+A new golden, `cross-border-disposals`, sells both houses and the gold collectible inside the run
+and on different sides of the 2031 move, so the US house is disposed of while AU-resident and is
+assessed by both returns. Six action types moved from `KNOWN_GAPS` to `COVERED` and the coverage
+floor ratcheted 45 → 51.
+
+That is the more valuable outcome of this section. The currency declarations were a real gap;
+the missing golden is why nobody had noticed either that gap or the report trap in §8.3.
+
+---
+
+---
+
+### 8.9 Steps 3 and 4, and what step 4 found
+
+**Step 3 — `AU_DISPOSAL_CURRENCY` is no longer an independent opinion.**
+`TaxDocumentRegistry` now takes an optional `{ typeRegistry }` and resolves a disposal's
+currency through `_disposalCurrency()`, which reads the manifest first
+(`fieldCurrency(type, 'proceeds')`). `JournalReportingService` forwards it;
+`workbench-app` and `scripts/tax/export-tax-csv.mjs` both had a `ServiceRegistry` in hand
+already, and `buildTaxWorksheetRows` takes a `typeRegistry` option for callers that build
+their own service.
+
+The map survives as the **no-registry fallback** — several callers construct the registry
+bare, and a hard dependency would have turned a lookup table into a wiring problem. What
+makes that safe is step 4's second test: build the same worksheet with and without a
+registry and require identical output, so the fallback cannot drift back into being a
+second answer.
+
+**Step 4 — the manifest is now checked against behaviour, not against a copy of itself.**
+`tests/unit/disposal-currency-declarations.test.mjs` runs every disposal type through its
+real tax-module reducer with a distinctive rate and infers, from how far the watched
+accumulator moved, which currency the module treated the payload as — then compares that
+to the declaration. A US disposal's payload landing in `auCapitalGainsYTD` scaled by the
+rate means the module read it as USD; landing 1:1 means AUD. Restating the table in the
+test would have proved nothing; deriving it from behaviour is what makes the test a check.
+
+Three supporting tests: the `au*`-on-a-US-disposal case called out by name (§8.1), the
+fallback-vs-manifest agreement above, and a **detector control** — a registry that lies
+about the currency must change the worksheet, or the first two would pass against a lookup
+nobody reads.
+
+#### The defect step 4 surfaced: collectible disposals never reach the AU CGT worksheet
+
+The cross-check could not probe `COLLECTIBLE_SALE_TAX` on `proceeds`, because that type
+declares none — and it declares none because **neither emitter sends one**.
+`us-collectible-classes` and the gold sleeve in `us-brokerage-classes` both emit gains
+only, no `proceeds`, no `costBasis`.
+
+`_extractAuDisposals` opens with `if (!d?.proceeds) continue;`. So an AU resident who
+sells gold or a collectible has the gain assessed — it feeds `auCapitalGainsYTD` and is
+taxed — but the disposal **never appears as a row on the NAT 4151 worksheet**. The return
+foots; the working that justifies it silently omits the asset.
+
+`AU_DISPOSAL_CURRENCY` even carries a `COLLECTIBLE_SALE_TAX: 'USD'` entry, for a case its
+own guard clause drops one line earlier. That entry has never been reachable.
+
+Not fixed here: adding `proceeds`/`costBasis` to both collectible emitters changes what a
+tax-facing document discloses, and belongs with a look at whether the 28% collectibles
+rate and the AU indexation path want the same treatment. Filed as the next item.
+
+---
+
+## 9. Ordered steps
 
 1. **DONE** — §4.1, §4.2, §4.3 declared; `KNOWN_GAPS` ratcheted from 31 types to 29.
 2. **DONE** — §3 detector repair (bus stamp, vacuity guard, null-aware, baseline-subtracting).
@@ -334,5 +549,10 @@ that actually exist as declared.
 5. **DONE** — §6 registered six mortality types + two investment-interest deduction types that
    no toolset declared at all; §7 wired the gate and verified the diff.
 6. Decide §4.4 / design 73 §6b (the `workCountry` TAX chain) with the design 73 source work.
-7. Separately: decide whether the disposal money set should carry real currency codes (§5
-   Tier A note). Report-affecting; needs its own diff. **Still open — the only item left.**
+7. **DONE** — disposal money typed (§8.4) and `capital-gains-by-disposal` given a
+   `reportCurrency` (§8.6 steps 1–2), measured first at §8.7. A `cross-border-disposals` golden
+   now guards the family (§8.8); coverage floor 45 → 51.
+8. **DONE** — §8.6 steps 3 (the worksheet reads the manifest, fallback pinned) and 4 (declared
+   codes cross-checked against tax-module behaviour), both at §8.9.
+9. **Open, found by step 4**: collectible disposals emit no `proceeds`, so they are assessed
+   but never disclosed on the AU CGT worksheet (§8.9). Tax-document-facing; needs its own call.

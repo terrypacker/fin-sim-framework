@@ -49,15 +49,21 @@ export const US_BROKERAGE = {
       { type: 'BOND_COUPON_TAX',                fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'US',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text() } },
+        fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), residency: ValueType.text() } },
       // The au* trio rides on a US disposal because an AU resident is taxed on
       // worldwide gains: auGain measures from the s855-45 stepped-up basis,
       // auIndexedGain from the CPI-indexed one, and auDiscountableGain is the slice
       // held ≥12 months. Emitted by three paths (StockWithdrawalApplyReducer,
       // AccountService.replenishSavings, the rebalancer), which between them cover
       // all three fields.
+      // Currency on the disposal money (design 91 §8). Every money field here is USD —
+      // the `au*` ones INCLUDED. The prefix means "measured on the AU basis" (the
+      // s855-45 stepped-up cost base, the 12-month discount test), NOT "denominated in
+      // AUD": the emitter works in the asset's currency and the consumer converts, e.g.
+      // `toAUD(auGain, 'USD', state)` in us-tax-module-2026. Typing auGain as AUD would
+      // be precisely the error this declaration exists to prevent.
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), auDiscountableGain: ValueType.number(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() , stateKey: ValueType.text()} },
+        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), auDiscountableGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text(), proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'FIXED_INCOME_EARNINGS_TAX',
         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
     ],

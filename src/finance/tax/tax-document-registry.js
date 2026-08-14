@@ -30,7 +30,16 @@ import { characterizeAuCapitalGain } from './capital-gain-character.js';
  * resolves the correct document module, and returns a TaxDocument.
  */
 export class TaxDocumentRegistry {
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {import('../../simulation-framework/type-registry.js').TypeRegistry} [opts.typeRegistry]
+   *   Source of truth for the currency a disposal's `proceeds` is denominated in
+   *   (design 91 §8.6 step 3). Optional: without it the module falls back to
+   *   AU_DISPOSAL_CURRENCY below, which a test pins against the manifest so the two
+   *   cannot disagree.
+   */
+  constructor({ typeRegistry = null } = {}) {
+    this._typeRegistry = typeRegistry;
     /** @type {Record<string, BaseTaxDocumentModule>} */
     this._modules = {};
 
@@ -72,7 +81,7 @@ export class TaxDocumentRegistry {
       // household list was handed to every person's `generate()`, so one taxpayer's
       // supplementary form listed the other's accounts.
       const disposals = cc === 'AU' && journal
-        ? _extractAuDisposals(journalEntry, journal, data.fxRate)
+        ? _extractAuDisposals(journalEntry, journal, data.fxRate, this._typeRegistry)
         : null;
       return personTaxDetails.flatMap(({ personKey, personName, taxDetail: pd }) => {
         const saleRecords = disposals ? _worksheetRowsFor(disposals, personKey) : [];
@@ -95,7 +104,7 @@ export class TaxDocumentRegistry {
     const saleRecords = journal
       ? cc === 'US' ? _extractUsSaleRecords(journalEntry, journal)
       // No per-person context, so every disposal belongs to the single filer.
-      : cc === 'AU' ? _worksheetRowsFor(_extractAuDisposals(journalEntry, journal, data.fxRate), null)
+      : cc === 'AU' ? _worksheetRowsFor(_extractAuDisposals(journalEntry, journal, data.fxRate, this._typeRegistry), null)
       : []
       : [];
     const result = module.generate(taxDetail, taxYear, saleRecords, period);
@@ -223,12 +232,19 @@ const AU_ASSET_CATEGORY = {
 };
 
 /**
- * Disposal action types that are AU-assessable for a RESIDENT, and the currency their
- * `proceeds` / `costBasis` are denominated in.
+ * FALLBACK ONLY — the currency each AU-assessable disposal's `proceeds` / `costBasis`
+ * is denominated in, used when no TypeRegistry was handed to TaxDocumentRegistry.
  *
  * The currency is what the old CGT schedule got wrong: `STOCK_WITHDRAWAL_TAX` carries
  * USD figures (it is a US brokerage disposal) and the schedule printed them straight
  * onto an AUD-denominated document, so the modal formatted USD as A$.
+ *
+ * Design 91 §8 moved the authority for this into the toolset manifests, where every
+ * disposal money field now declares `ValueType.currency(code)` — so `_disposalCurrency`
+ * below reads the registry first and this map is only the no-registry path. It is kept
+ * (rather than deleted) because several callers construct the registry bare, and
+ * pinned against the manifests by tax-worksheet-export.test.mjs so it cannot drift
+ * back into being a second opinion.
  */
 const AU_DISPOSAL_CURRENCY = {
   AU_STOCK_WITHDRAWAL_TAX: 'AUD',
@@ -274,7 +290,7 @@ const AU_PERSON_GAIN_FIELD = 'auPersonCapitalGainsYTD';
  * @param {number}   [settleRate]  - USD→AUD at settlement, for rows with no gain to imply one from.
  * @returns {{ disposals: object[], shareByStateKey: Map<string, object> }}
  */
-function _extractAuDisposals(currentEntry, journal, settleRate) {
+function _extractAuDisposals(currentEntry, journal, settleRate, typeRegistry = null) {
   const currentIdx = journal.indexOf(currentEntry);
   if (currentIdx < 0) return { disposals: [], shareByStateKey: new Map() };
 
@@ -309,7 +325,7 @@ function _extractAuDisposals(currentEntry, journal, settleRate) {
     const nativeGain  = auChar.short + auChar.long;
     const shares      = _personSharesFor(e, byInstance);
     const audTotal    = Object.values(shares).reduce((s, v) => s + v, 0);
-    const currency    = AU_DISPOSAL_CURRENCY[t] ?? 'USD';
+    const currency    = _disposalCurrency(typeRegistry, t);
 
     // Prefer the rate the booking IMPLIES — audTotal / nativeGain is exactly the rate
     // `toAUD` used at that moment, so proceeds and cost base convert on the same
@@ -337,6 +353,20 @@ function _extractAuDisposals(currentEntry, journal, settleRate) {
 }
 
 /** Whether a disposal action is assessable on an AU RESIDENT's return. */
+/**
+ * The currency a disposal action's money fields are denominated in: the manifest's
+ * declaration when a TypeRegistry is available, else the pinned fallback map.
+ *
+ * `proceeds` is the probe field because every AU-assessable disposal type declares it
+ * and it is the figure the worksheet actually prints. Design 91 §8.1: the answer is the
+ * ACTION TYPE's currency, so any money field on the type would give the same answer.
+ */
+function _disposalCurrency(typeRegistry, actionType) {
+  return typeRegistry?.fieldCurrency?.(actionType, 'proceeds')
+      ?? AU_DISPOSAL_CURRENCY[actionType]
+      ?? 'USD';
+}
+
 function _isAuAssessableDisposal(type, data) {
   // AU-specific action types are AU-source and always assessable here.
   if (type === 'AU_STOCK_WITHDRAWAL_TAX' || type === 'AU_HOUSE_SALE_TAX') return true;

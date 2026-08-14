@@ -45,14 +45,20 @@ export const US_COLLECTIBLES = {
     reducers: [CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer],
     actions: [
       { type: 'COLLECTIBLE_SALE_APPLY',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(),
+        fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'),
                   residency: ValueType.text(), stateKey: ValueType.text() } },
       // isGold separates bullion (an ordinary AU CGT asset, indexed) from a true
       // collectible; the au* pair carries the AU-resident assessment of the same
       // disposal. All three are emitted by the gold sleeve inside a brokerage
       // account as well as by a standalone collectible.
+      // Currency on the disposal money (design 91 §8). Every money field here is USD —
+      // the `au*` ones INCLUDED. The prefix means "measured on the AU basis" (the
+      // s855-45 stepped-up cost base, the 12-month discount test), NOT "denominated in
+      // AUD": the emitter works in the asset's currency and the consumer converts, e.g.
+      // `toAUD(auGain, 'USD', state)` in us-tax-module-2026. Typing auGain as AUD would
+      // be precisely the error this declaration exists to prevent.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), isGold: ValueType.boolean(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
       // `change` (the signed revaluation) and `stateKey` (which collectible), the two
       // fields CollectibleValueChangeHandler actually emits. The manifest previously
       // declared `amount`, a name nothing sends — so pickPayload kept nothing and every

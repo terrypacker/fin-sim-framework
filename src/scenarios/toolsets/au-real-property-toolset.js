@@ -77,8 +77,8 @@ export const AU_REAL_PROPERTY = {
       // already declared on AU_HOUSE_SALE_TAX; without it here the apply row cannot say
       // whose sale it was.
       { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text(),
-                  mortgageBalance: ValueType.number(), residency: ValueType.text(),
+        fields: { salePrice: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), stateKey: ValueType.text(),
+                  mortgageBalance: ValueType.currency('AUD'), residency: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
@@ -90,7 +90,7 @@ export const AU_REAL_PROPERTY = {
       // apportioned gain with no way to explain it. The ownership trio (design 76
       // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), gain: ValueType.number(), depreciationGain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text(),
+        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
                   acquisitionMs: ValueType.number(), saleMs: ValueType.number(),

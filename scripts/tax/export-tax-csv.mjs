@@ -335,6 +335,9 @@ async function main() {
     cc:               opts.cc.length === 1 ? opts.cc[0] : opts.cc,
     years:            opts.years,
     includeSchedules: opts.schedules,
+    // The AU CGT worksheet converts each disposal from its own currency; the manifest
+    // is where that currency is declared (design 91 §8.6 step 3).
+    typeRegistry:     ServiceRegistry.getInstance().typeRegistry,
   }));
 
   if (!rows.length) {

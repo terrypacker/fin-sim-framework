@@ -53,6 +53,8 @@ export const COVERED = [
   'AU_DIVIDEND_FRANKED_RESIDENT_TAX',
   'AU_FIXED_INCOME_EARNINGS_APPLY',
   'AU_FIXED_INCOME_EARNINGS_TAX',
+  'AU_HOUSE_SALE_APPLY',
+  'AU_HOUSE_SALE_TAX',
   'AU_PERIOD_ADVANCE',
   'AU_SAVINGS_EARNINGS_APPLY',
   'AU_SAVINGS_EARNINGS_TAX',
@@ -64,6 +66,8 @@ export const COVERED = [
   'BOND_SLEEVE_COUPON_APPLY',
   'CASH_SLEEVE_INTEREST_APPLY',
   'CHANGE_RESIDENCY_APPLY',
+  'COLLECTIBLE_SALE_APPLY',
+  'COLLECTIBLE_SALE_TAX',
   'COMPANY_SALE_APPLY',
   'COMPANY_SALE_TAX',
   'EXPENSE_DEBIT',
@@ -85,6 +89,8 @@ export const COVERED = [
   'STOCK_EARNINGS_APPLY',
   'SUPER_EARNINGS_APPLY',
   'SUPER_EARNINGS_TAX',
+  'US_HOUSE_SALE_APPLY',
+  'US_HOUSE_SALE_TAX',
   'US_PERIOD_ADVANCE',
   'US_SAVINGS_INTEREST_CREDIT',
   'US_TAX_PAYMENT_DEBIT',
@@ -111,14 +117,6 @@ export const KNOWN_GAPS = [
   'LOAN_PAYMENT_APPLY',
   'US_INVESTMENT_INTEREST_DEDUCTION',
   'US_RENTAL_INCOME_TAX',
-
-  // ── Property disposal and the main-residence concessions (design 83 G7)
-  // Same golden can sell the house at the end: §121 on the US side, the AU main-residence
-  // exemption on the other, both prorated.
-  'AU_HOUSE_SALE_APPLY',
-  'AU_HOUSE_SALE_TAX',
-  'US_HOUSE_SALE_APPLY',
-  'US_HOUSE_SALE_TAX',
 
   // ── Retirement contributions, withdrawals and RMDs (design 53)
   // The reference golden accumulates but barely decumulates — it ends with $12M, so the
@@ -214,9 +212,8 @@ export const KNOWN_GAPS = [
   'STOCK_CONTRIBUTION_APPLY',
 
   // ── Collectibles (design 57)
-  // The reference golden holds a collectible but never sells or revalues it.
-  'COLLECTIBLE_SALE_APPLY',
-  'COLLECTIBLE_SALE_TAX',
+  // cross-border-disposals sells the gold; nothing revalues one mid-run, which needs an
+  // authored COLLECTIBLE_VALUE_CHANGE event rather than a config flag.
   'COLLECTIBLE_VALUE_CHANGE_APPLY',
 
   // ── Taxable brokerage disposals and AU dividends

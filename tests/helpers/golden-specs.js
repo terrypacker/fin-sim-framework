@@ -61,6 +61,32 @@ export const GOLDEN_SPECS = [
     simEnd:   new Date(Date.UTC(2050, 0, 1)),
   },
   {
+    name:        'cross-border-disposals',
+    description:
+      'The disposal family, which no other golden reaches: both houses and the gold '
+      + 'collectible sold inside the run, each on a different side of the 2031 move. '
+      + 'The US house sells while the household is AU-resident, so one sale is assessed '
+      + 'by BOTH returns — §121 proration on the US side, the AU main-residence '
+      + 'concession on the other (83 G7), with the AU assessment measured off the '
+      + 's855-45 basis. That is also the case design 91 §8 typed: every money field on '
+      + 'a US disposal is USD including the `au*` ones, and the AU return converts. '
+      + 'Gold carries the 57 indexation path. Before this golden the entire '
+      + 'CAPITAL_GAINS family was scenario-unguarded — isolated reducer tests only.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2038, 0, 1)),
+    mutateCfg: (cfg) => {
+      const prop = key => cfg.realProperties.find(p => p.stateKey === key);
+      // Post-move: a US-source disposal landing on an AU return (and on a US one).
+      prop('usHouseProperty').plannedSaleYear = 2033;
+      // Later, so the two sales do not share a tax year and their gains stay legible
+      // in the fixture; AU-domiciled, AU-resident, the simple leg of the pair.
+      prop('auHouseProperty').plannedSaleYear = 2035;
+      // Pre-move, deliberately: a US-resident collectible disposal, so the golden
+      // holds the gold path on the side of the move where no AU assessment applies.
+      cfg.collectibles[0].plannedSaleYear = 2029;
+    },
+  },
+  {
     name:        'speculative-stake',
     description:
       'Design 88 phase 1 (recognition): the default plan with its private company '

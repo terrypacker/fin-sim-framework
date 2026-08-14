@@ -50,14 +50,14 @@ export const US_INCOME = {
       { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
-      { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
+      { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text(), destinationKey: ValueType.text() } },
       // proceeds/costBasis/description are what put the disposal on Schedule D and
       // Form 8949 — every other CAPITAL_GAINS type already declares them. Without
       // them the sale reached Form 1040 line 6 (which reads the YTD accumulator) but
       // was invisible on the schedules, since pickPayload keeps ONLY declared fields.
       { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
-                  proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+                  proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() } },
     ],
   },
 

@@ -441,9 +441,28 @@ class CapitalGainsByDisposalDef extends ReportDefinition {
     return 'Realized capital gains from asset sales during the period. `total` is each disposal\'s '
          + 'assessed contribution to the jurisdiction\'s capital-gains accumulator — for an AU '
          + 'return on a US asset that is the AUD-converted figure, not the USD contract gain. '
-         + '`proceeds` is the disposal\'s native-currency contract amount and is informational only, '
-         + 'so on a cross-border row it is NOT in the same currency as `total`.';
+         + '`proceeds` is the disposal\'s contract amount, converted into the report\'s currency '
+         + 'at the rate the run recorded on the disposal date, so it is in the same unit as `total`.';
   }
+
+  /**
+   * The jurisdiction's own currency — `total` sums that jurisdiction's accumulator,
+   * so the report ties out to the return it explains (same rule as tax-paid-by-year).
+   *
+   * This was `null` until design 91 §8: `proceeds` was declared `number()` on every
+   * disposal type, so declaring a currency here would have converted nothing and
+   * merely asserted that a USD proceeds figure was AUD. Typing the disposal money
+   * (§8.4) is what makes this line correct rather than cosmetic — measured at §8.7:
+   * `total` does not move at all, and a US-asset row's `proceeds` on the AU report
+   * converts instead of being counted at face value.
+   *
+   * NOTE the AU CGT worksheet converts the same figures at the rate IMPLIED by the
+   * booking (`audTotal / nativeGain`, tax-document-registry.js) rather than at the
+   * date rate used here, deliberately, so its proceeds and cost base move on exactly
+   * the same footing as the gain. The two can differ slightly; the worksheet's is the
+   * one that ties to the return.
+   */
+  reportCurrency(params) { return params?.cc === 'AU' ? 'AUD' : 'USD'; }
 
   // design 51/73 §0b.1: sum each disposal's *contribution* to the jurisdiction's
   // capital-gains accumulator (its stateDelta) rather than the action's native

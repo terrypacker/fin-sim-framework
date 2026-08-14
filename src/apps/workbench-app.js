@@ -182,7 +182,11 @@ export class WorkbenchApp extends BaseComponent {
     // Created once — survive scenario rebuilds.
     this._statePanelView   = new StatePanelView({ displaySettings: this.displaySettings, appBus: this.appBus });
     this._scenarioTabView  = new ScenarioTabView();
-    this._reportingService = new JournalReportingService();
+    // typeRegistry: the AU CGT worksheet reads each disposal's currency off the
+    // toolset manifest through it (design 91 §8.6 step 3).
+    this._reportingService = new JournalReportingService({
+      typeRegistry: ServiceRegistry.getInstance().typeRegistry,
+    });
     this._taxDocModal      = new TaxDocumentModal();
     this._editModal        = new NodeEditModal();
 

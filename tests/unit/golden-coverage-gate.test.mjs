@@ -101,7 +101,9 @@ test('golden coverage: KNOWN_GAPS holds nothing already covered or long gone', (
  * floor, which is the ratchet: adding a feature without a golden pushes the
  * percentage down, and that is meant to be an explicit decision.
  */
-const COVERAGE_FLOOR = 45; // action types fired by the golden set, 2026-08-07
+const COVERAGE_FLOOR = 51; // action types fired by the golden set, 2026-08-13
+                           // (45 → 51: cross-border-disposals added the CAPITAL_GAINS
+                           //  family, which no golden had ever reached)
 
 test(`golden coverage: at least ${COVERAGE_FLOOR} action types are exercised end to end`, () => {
   const pct = ((100 * fired.size) / universe.size).toFixed(0);

@@ -35,6 +35,8 @@ import { US_STATE_TAX } from '../../src/scenarios/toolsets/us-state-tax-toolset.
 import { AU_TAX }       from '../../src/scenarios/toolsets/au-tax-toolset.js';
 import { US_BANKING }   from '../../src/scenarios/toolsets/us-banking-toolset.js';
 import { AU_BANKING }   from '../../src/scenarios/toolsets/au-banking-toolset.js';
+import { US_BROKERAGE } from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
+import { AU_BROKERAGE } from '../../src/scenarios/toolsets/au-brokerage-toolset.js';
 import { loadScenarioSim } from '../helpers/scenario-harness.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -43,7 +45,8 @@ const WHOLE_SIM = { fromEntryId: null, toEntryId: null };
 
 function typeRegistry() {
   const reg = new TypeRegistry();
-  for (const t of [US_TAX, US_STATE_TAX, AU_TAX, US_BANKING, AU_BANKING]) reg.registerToolset(t);
+  for (const t of [US_TAX, US_STATE_TAX, AU_TAX, US_BANKING, AU_BANKING,
+                   US_BROKERAGE, AU_BROKERAGE]) reg.registerToolset(t);
   return reg;
 }
 
@@ -240,6 +243,51 @@ test('a report that declares no currency folds exactly as projected', async () =
   const { grandTotal, currency } = await runReport(def, { cc: 'AU', period: WHOLE_SIM }, apis);
   assert.strictEqual(currency, null);
   assert.strictEqual(grandTotal, 500, 'AUD income stays AUD — the AU return foots to this');
+});
+
+
+test('capital-gains-by-disposal converts a US-asset disposal\'s proceeds onto an AU return', async () => {
+  // Design 91 §8. `total` sums the AU accumulator (already AUD via the state schema)
+  // and was always right. `proceeds` comes off the action payload, and until the
+  // disposal money carried a currency code it was folded at FACE VALUE — a USD
+  // contract amount added straight onto an AUD column. Declaring reportCurrency
+  // without typing the payload would not have fixed that; it would only have
+  // asserted the wrong number was AUD.
+  const RATE = 1.55;
+  const def  = new ReportDefinitionRegistry().get('capital-gains-by-disposal');
+  assert.strictEqual(def.reportCurrency({ cc: 'AU' }), 'AUD');
+  assert.strictEqual(def.reportCurrency({ cc: 'US' }), 'USD');
+
+  const apis = apisFor([
+    auSettle(new Date(Date.UTC(2030, 5, 30)), RATE),
+    // US brokerage disposal assessed on the AU return: payload USD, accumulator AUD.
+    entry({
+      date: new Date(Date.UTC(2030, 5, 15)), actionType: 'STOCK_WITHDRAWAL_TAX',
+      data: { gain: 40000, proceeds: 100000, residency: 'AU', description: 'usStockAccount' },
+      stateDiff: [{ field: 'auCapitalGainsYTD', before: 0, after: 62000, delta: 62000 }],
+    }),
+    // Native AU disposal: payload and accumulator agree, both AUD.
+    entry({
+      date: new Date(Date.UTC(2030, 5, 15)), actionType: 'AU_STOCK_WITHDRAWAL_TAX',
+      data: { gain: 20000, proceeds: 60000, residency: 'AU', description: 'auStockAccount' },
+      stateDiff: [{ field: 'auCapitalGainsYTD', before: 62000, after: 82000, delta: 20000 }],
+    }),
+  ]);
+
+  const { groups, grandTotal, currency } = await runReport(def, { cc: 'AU', period: WHOLE_SIM }, apis);
+  assert.strictEqual(currency, 'AUD');
+  assert.strictEqual(grandTotal, 82000, 'the AU capital-gains line, unchanged by the conversion');
+
+  const byType = Object.fromEntries(groups.map(g => [g.key.actionType, g]));
+  // The aggregate keeps its NAME (`proceeds`) and is repointed at the derived
+  // `proceedsInAUD` row field, so the converted figure arrives under the original key.
+  assert.strictEqual(byType.STOCK_WITHDRAWAL_TAX.proceeds, 100000 * RATE,
+    'the USD contract amount converts at the run\'s own rate — 100,000 USD is not 100,000 AUD');
+  assert.strictEqual(byType.AU_STOCK_WITHDRAWAL_TAX.proceeds, 60000,
+    'an AUD row is already in the target currency and must pass through untouched');
+  // The drill-down row keeps the native amount it was journaled with.
+  assert.strictEqual(byType.STOCK_WITHDRAWAL_TAX.items[0].proceeds, 100000,
+    'conversion writes a DERIVED field; the row still shows what the journal recorded');
 });
 
 // ─── Per-diff account reports ─────────────────────────────────────────────────
