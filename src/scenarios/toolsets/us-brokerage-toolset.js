@@ -40,7 +40,9 @@ export const US_BROKERAGE = {
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', fields: { amount: ValueType.currency('USD') } },
       { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
-      { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD') } },
+      // residency is projected onto every report row (JournalDataSource._project), so it
+      // must be declared or the row's value goes null once the manifest gate is wired.
+      { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'STOCK_DIVIDEND_TAX',             fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'BOND_COUPON_APPLY',              fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'BOND_COUPON_CASH_APPLY',         fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },

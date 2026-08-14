@@ -45,14 +45,21 @@ export const US_COLLECTIBLES = {
     reducers: [CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer],
     actions: [
       { type: 'COLLECTIBLE_SALE_APPLY',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number() } },
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(),
+                  residency: ValueType.text(), stateKey: ValueType.text() } },
       // isGold separates bullion (an ordinary AU CGT asset, indexed) from a true
       // collectible; the au* pair carries the AU-resident assessment of the same
       // disposal. All three are emitted by the gold sleeve inside a brokerage
       // account as well as by a standalone collectible.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
         fields: { gain: ValueType.number(), auGain: ValueType.number(), auIndexedGain: ValueType.number(), isGold: ValueType.boolean(), usShortTermGain: ValueType.number(), usLongTermGain: ValueType.number(), auShortTermGain: ValueType.number(), auLongTermGain: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
-      { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', fields: { amount: ValueType.number() } },
+      // `change` (the signed revaluation) and `stateKey` (which collectible), the two
+      // fields CollectibleValueChangeHandler actually emits. The manifest previously
+      // declared `amount`, a name nothing sends — so pickPayload kept nothing and every
+      // revaluation reached the journal with an empty payload, invisible to any report
+      // even though the reducer applied it correctly to the collectible's value.
+      { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY',
+        fields: { change: ValueType.currency('USD'), stateKey: ValueType.text() } },
     ],
   },
 

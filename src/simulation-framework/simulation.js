@@ -158,6 +158,11 @@ export class Simulation {
     //   'off'             — legacy behaviour: advance the clock over an empty queue
     this.pastEndPolicy = opts.pastEndPolicy ?? 'throw';
 
+    // The TypeRegistry that gates journal payloads (design 91 §2). Optional: a sim
+    // without one journals heuristic payloads, which is the right behaviour for a bare
+    // framework fixture that has no toolsets and so no manifest to gate against.
+    this._typeRegistry = opts.typeRegistry ?? null;
+
     // Total order: by date, then by event `order` (lower runs first). The order
     // band makes same-date sequencing explicit — income/earnings default to 0 and
     // tax settlements sit in a high band so they always process after the year's
@@ -267,8 +272,21 @@ export class Simulation {
     };
   }
 
+  /**
+   * The journal payload for `action` — the toolset manifest's `fields:` block when a
+   * TypeRegistry is reachable, else the heuristic (every non-null, non-framework key).
+   *
+   * Resolution order matters (design 91 §2). `opts.typeRegistry` is first because it is
+   * the only path that a sim built by BaseScenario can use: every such sim gets its OWN
+   * EventBus so per-run telemetry dies with the run, and that private bus carries no
+   * `serviceRegistry`. Reading the registry off the bus alone therefore meant the
+   * manifest NEVER gated a payload in the product — every journal entry was heuristic,
+   * and the toolset declarations decided nothing. The bus lookup is kept as the second
+   * source for sims constructed directly against a ServiceRegistry bus (framework
+   * fixtures, older tests) which have no opts to pass.
+   */
   _pickPayload(action) {
-    const reg = this.bus.serviceRegistry?.typeRegistry;
+    const reg = this._typeRegistry ?? this.bus.serviceRegistry?.typeRegistry;
     if (reg) return reg.pickPayload(action);
     return _heuristicPickPayload(action);
   }

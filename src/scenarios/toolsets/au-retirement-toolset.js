@@ -98,8 +98,11 @@ export const AU_RETIREMENT = {
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
       { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
-      { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
-      { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
+      // `blocked` marks a withdrawal the preservation rules refused. It is the only
+      // record that the attempt happened at all — a refused withdrawal moves no state,
+      // so it leaves no diff to infer it from.
+      { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD'), blocked: ValueType.boolean() } },
+      { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD'), blocked: ValueType.boolean() } },
       { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD') } },
       // design 77 §5.1 — `amount` is NET of the fund's Div 295 earnings tax, `grossAmount`
       // is the pre-tax base and `taxRate` the rate applied (0 in pension phase). All three
@@ -108,8 +111,29 @@ export const AU_RETIREMENT = {
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
-      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number() } },
+      // personId — see the US_RETIREMENT declaration of this shared type; the two must
+      // stay identical, since registerActionType is last-writer-wins over the entry.
+      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number(), personId: ValueType.text() } },
       { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
+      // ── Mortality family (design 27 step 7 / design 68) ──────────────────────
+      // Every type MortalityHandler generates. These were registered NOWHERE until
+      // design 91 §6: neither drift pass could see them (the static scan only checks
+      // types some toolset already declares, and the 2-year detector run has no
+      // deaths), and nothing failed because an unregistered type falls through to
+      // Simulation's heuristic. That silence ends the moment the manifest gate is
+      // wired — TypeRegistry._fallbackPayload THROWS under setStrict(true) — so a
+      // strict run would have died on the first death rather than dropping a field.
+      // Declared identically in US_RETIREMENT, which owns the same reducers.
+      { type: 'PERSON_DIED_APPLY',          fields: { personId: ValueType.text(), personName: ValueType.text(), date: ValueType.any(), taxJurisdiction: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number(), incomeSupportRecipient: ValueType.boolean() } },
+      { type: 'ACCOUNT_RETITLE_APPLY',      fields: { deceasedId: ValueType.text(), survivorId: ValueType.text() } },
+      { type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', fields: { survivorId: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number() } },
+      // `slice` + `reason` are what make a spending change explainable: without them
+      // a guardrail cut and a survivor adjustment are the same anonymous delta.
+      { type: 'SPENDING_STRATEGY_APPLY',    fields: { slice: ValueType.text(), delta: ValueType.number(), reason: ValueType.text() } },
+      // Last-survivor AU super death benefit — `paidViaEstate` decides whether the 2%
+      // Medicare levy rides on top of the 15% (design 68 Gap 4).
+      { type: 'SUPER_DEATH_BENEFIT_APPLY',  fields: { stateKey: ValueType.text(), taxable: ValueType.number(), paidViaEstate: ValueType.boolean() } },
+      { type: 'SCENARIO_COMPLETE_CHECK',    fields: {} },
     ],
   },
 

@@ -98,7 +98,9 @@ export const US_ROTH_CONVERSION = {
     handlers: [RothConversionHandler, RothConversionPolicyHandler],
     reducers: [RothConversionApplyReducer],
     actions: [
-      { type: 'ROTH_CONVERSION_APPLY', fields: { amount: ValueType.currency('USD') } },
+      // residency decides how the conversion is priced (design 84 G1) and is projected
+      // onto report rows; the iraKey/rothKey routing pair stays undeclared by design.
+      { type: 'ROTH_CONVERSION_APPLY', fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'ROTH_CONVERSION_TAX',   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
     ],
   },

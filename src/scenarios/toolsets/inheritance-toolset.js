@@ -121,6 +121,9 @@ export const INHERITANCE = {
         inheritedValue: ValueType.number(),
         usCitizen:      ValueType.text(),
         auResident:     ValueType.text(),
+        // The date the inheritance is RECEIVED, which is not always the journal entry's
+        // own date — it seeds the IRD 10-year clock and the US step-up (design 63).
+        inheritanceDateMs: ValueType.number(),
       } },
       { type: 'INHERITED_RA_DISTRIBUTION_APPLY', fields: {
         amount:    ValueType.currency('USD'),

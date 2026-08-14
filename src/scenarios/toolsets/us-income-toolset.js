@@ -36,10 +36,17 @@ export const US_INCOME = {
     actions: [
       { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'SS_INCOME_TAX',       fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
-      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
+      // workCountry — where the employment is EXERCISED (design 73 Gap 1), stamped by
+      // MonthlyWagesHandler on every wage/SE apply. It decides source, and source
+      // decides FEIE/§904 basketing, so a "wages by source country" drill that cannot
+      // see it silently reports every wage as domestic. Neither drift pass caught this
+      // one: the handler picks the action type through a variable (invisible to the
+      // static scan) and the field is null whenever workCountry falls back to an unset
+      // residency (invisible to the dynamic pass, which skips null values).
+      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
       { type: 'WAGES_INCOME_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'WAGES_WITHHELD_APPLY', fields: { amount: ValueType.currency('USD') } },
-      { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
+      { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
       { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },

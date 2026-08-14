@@ -60,10 +60,18 @@ export const US_REAL_PROPERTY = {
       // Buying a dwelling mid-run (design 83 §10 follow-on). cc: null — one shared
       // action/reducer for both countries' purchase events, declared by both
       // toolsets because registerActionType is idempotent.
+      // purchaseMs is the acquisition date the CGT clock runs from, and it is not
+      // always the journal entry's date. Declared identically in both toolsets — this
+      // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
-        fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number() } },
+        fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
+                  purchaseMs: ValueType.number() } },
+      // mortgageBalance — the bridge from sale price to the cash that actually lands.
+      // `number()` to match salePrice/costBasis; see the AU twin for why the disposal
+      // money fields are deliberately native and unconverted.
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text(),
+                  mortgageBalance: ValueType.number(), residency: ValueType.text() } },
       // depreciationGain is the unrecaptured §1250 slice, taxed at its own ceiling
       // and deliberately kept OUT of `gain`; auGain/auDiscountableGain are the AU
       // resident's assessment of the same sale, measured from the s855-45 basis after
@@ -74,16 +82,22 @@ export const US_REAL_PROPERTY = {
       // US_LOAN_PAYMENT + AU_LOAN_PAYMENT, declared by both real-property toolsets
       // (registerActionType is idempotent). cc: null so it stays in REAL_PROPERTY_CASH
       // regardless of which country's loan it settles.
+      // cashDue is NOT a duplicate of `payment`: `payment` is in the LOAN's currency,
+      // cashDue in the paying account's. Must stay byte-identical to the AU toolset's
+      // declaration of this shared type — registerActionType is last-writer-wins.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
-        fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number() } },
+        fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
+                  cashDue: ValueType.number() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any
       // country, and its US tax character is decided by the US classifier.
       // `residency` is the §988(a)(3)(B) tax-home test that decides SOURCE, and it must
       // be declared or pickPayload drops it and every gain reverts to US-source.
+      // holdingId identifies the position the gain came off; `accountKey` cannot, because
+      // a ladder holds many positions in one account, each with its own fxBasisRate.
       { type: 'SECTION_988_GAIN', cc: null,
-        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(),
+        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
                   residency: ValueType.text() } },
@@ -91,6 +105,22 @@ export const US_REAL_PROPERTY = {
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_TAX', cc: 'US',
         fields: { amount: ValueType.number(), residency: ValueType.text() , ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+      // Investment-interest deduction on a non-property loan (design 86 G3): AU s8-1
+      // (no quarantine) and US §163(d) (a pool) read these off the journal. Emitted by
+      // LoanPaymentHandler beside LOAN_PAYMENT_APPLY, wired by both real-property
+      // toolsets, and until design 91 §6 registered by neither — invisible because the
+      // reference plan's loans set no `deductibleFraction`, so the emitter returns null
+      // and the type never fires. `amount` is number(), not currency(): the payload
+      // carries its own explicit `currency` field because an AU-country loan may be
+      // USD-denominated, and a fixed code on the type could contradict it.
+      { type: 'US_INVESTMENT_INTEREST_DEDUCTION', cc: 'US',
+        fields: { loanKey: ValueType.text(), amount: ValueType.number(), residency: ValueType.text(),
+                  currency: ValueType.text(), ownerId: ValueType.text(),
+                  ownershipType: ValueType.text(), owners: ValueType.any() } },
+      { type: 'AU_INVESTMENT_INTEREST_DEDUCTION', cc: 'AU',
+        fields: { loanKey: ValueType.text(), amount: ValueType.number(), residency: ValueType.text(),
+                  currency: ValueType.text(), ownerId: ValueType.text(),
+                  ownershipType: ValueType.text(), owners: ValueType.any() } },
       { type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), delta: ValueType.number() } },
     ],

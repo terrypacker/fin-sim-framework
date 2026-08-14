@@ -61,10 +61,25 @@ export const AU_REAL_PROPERTY = {
       // Buying a dwelling mid-run (design 83 §10 follow-on). cc: null — one shared
       // action/reducer for both countries' purchase events, declared by both
       // toolsets because registerActionType is idempotent.
+      // purchaseMs is the acquisition date the CGT clock runs from, and it is not
+      // always the journal entry's date. Declared identically in both toolsets — this
+      // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
-        fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number() } },
+        fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
+                  purchaseMs: ValueType.number() } },
+      // mortgageBalance is the whole bridge from sale price to the cash that actually
+      // lands: nothing else on the row states what the sale paid off. Declared
+      // `number()`, NOT currency('AUD'), to match salePrice/costBasis — the disposal
+      // money fields are deliberately native and unconverted (see
+      // CapitalGainsByDisposalDef's description, which documents that `proceeds` is
+      // informational and not in the report's currency). Typing one of the three and
+      // not the others would convert half a row. The ownership trio is design 76 Gap B,
+      // already declared on AU_HOUSE_SALE_TAX; without it here the apply row cannot say
+      // whose sale it was.
       { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
-        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text(),
+                  mortgageBalance: ValueType.number(), residency: ValueType.text(),
+                  ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text() } },
@@ -85,23 +100,54 @@ export const AU_REAL_PROPERTY = {
       // US_LOAN_PAYMENT + AU_LOAN_PAYMENT, declared by both real-property toolsets
       // (registerActionType is idempotent). cc: null so it stays in REAL_PROPERTY_CASH
       // regardless of which country's loan it settles.
+      // cashDue is NOT a duplicate of `payment`: `payment` is denominated in the LOAN's
+      // currency, cashDue in the paying account's, and they differ by the FX rate for
+      // an A$ mortgage served from a USD pool. Without it the journal cannot explain
+      // why the cash debit and the loan credit are different numbers. `number()` for
+      // the same reason `payment` is — this action is cc: null and settles loans in
+      // either currency, so no single code is correct for it.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
-        fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number() } },
+        fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
+                  cashDue: ValueType.number() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any
       // country, and its US tax character is decided by the US classifier.
       // `residency` is the §988(a)(3)(B) tax-home test that decides SOURCE, and it must
       // be declared or pickPayload drops it and every gain reverts to US-source.
+      // holdingId identifies the position the gain came off. `accountKey` cannot: a bond
+      // ladder holds many positions in one account and each carries its own fxBasisRate,
+      // so a §988 audit trail keyed on the account alone cannot be tied back to a lot.
       { type: 'SECTION_988_GAIN', cc: null,
-        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(),
+        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
                   residency: ValueType.text() } },
+      // Investment-interest deduction on a non-property loan (design 86 G3): AU s8-1
+      // (no quarantine) and US §163(d) (a pool) read these off the journal. Emitted by
+      // LoanPaymentHandler beside LOAN_PAYMENT_APPLY, wired by both real-property
+      // toolsets, and until design 91 §6 registered by neither — invisible because the
+      // reference plan's loans set no `deductibleFraction`, so the emitter returns null
+      // and the type never fires. `amount` is number(), not currency(): the payload
+      // carries its own explicit `currency` field because an AU-country loan may be
+      // USD-denominated, and a fixed code on the type could contradict it. Declared
+      // identically in US_REAL_PROPERTY — one shared emitter, last-writer-wins registry.
+      { type: 'US_INVESTMENT_INTEREST_DEDUCTION', cc: 'US',
+        fields: { loanKey: ValueType.text(), amount: ValueType.number(), residency: ValueType.text(),
+                  currency: ValueType.text(), ownerId: ValueType.text(),
+                  ownershipType: ValueType.text(), owners: ValueType.any() } },
+      { type: 'AU_INVESTMENT_INTEREST_DEDUCTION', cc: 'AU',
+        fields: { loanKey: ValueType.text(), amount: ValueType.number(), residency: ValueType.text(),
+                  currency: ValueType.text(), ownerId: ValueType.text(),
+                  ownershipType: ValueType.text(), owners: ValueType.any() } },
       { type: 'AU_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { netCash: ValueType.currency('AUD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
+      // The ownership trio (design 76 Gap B) is declared on the US rental twin and on
+      // every capital-gains type; this was the omission, so AU rental income was the
+      // one attributable stream a per-person report could not attribute.
       { type: 'AU_RENTAL_INCOME_TAX', cc: 'AU',
-        fields: { amount: ValueType.number(), residency: ValueType.text() } },
+        fields: { amount: ValueType.number(), residency: ValueType.text(),
+                  ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
     ],
   },
 

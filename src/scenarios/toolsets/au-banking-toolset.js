@@ -46,7 +46,9 @@ export const AU_BANKING = {
         fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_SAVINGS_EARNINGS_APPLY',   fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'AU_SAVINGS_EARNINGS_TAX',     fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), stateKey: ValueType.text() } },
-      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
+      // stateKey names the sleeve the interest was credited to. Declared on the paired
+      // AU_FIXED_INCOME_EARNINGS_TAX and on ~50 other types; this was the odd one out.
+      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'AU_FIXED_INCOME_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), stateKey: ValueType.text() } },
     ],
   },

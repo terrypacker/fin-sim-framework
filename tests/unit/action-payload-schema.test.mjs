@@ -21,11 +21,21 @@
  *
  *   1. DYNAMIC — run IntlRetirementScenario and intercept every pickPayload()
  *      call. Sees actions however they were built (spreads, conditional keys,
- *      post-hoc assignment), but only for code paths the run reaches.
+ *      post-hoc assignment), but only for code paths the run reaches. It counts
+ *      a key even when its value is null: pickPayload drops nulls, but the key is
+ *      part of the action's shape and carries data in another run.
  *
  *   2. STATIC — parse every object literal under `src/` whose `type:` names a
  *      registered action type and compare its keys to that type's manifest.
  *      Blind to spread-built payloads, but run-independent.
+ *
+ * Pass 1 was once vacuous OUTRIGHT, and the reason mattered more than the test:
+ * Simulation._pickPayload resolved the registry only through `sim.bus.serviceRegistry`,
+ * and BaseScenario builds every sim with a private EventBus that nobody stamps. So the
+ * detector was never called here — and, in the product, the manifest gated nothing at
+ * all: every journal payload came from Simulation's heuristic. Design 91 §7 wired the
+ * registry through `opts.typeRegistry`; this test now runs on that same path, and the
+ * interception-count guard below fails loudly if it ever goes quiet again.
  *
  * Pass 2 exists because pass 1 was passing vacuously over whole families. The
  * 2-year window sells nothing, so no disposal action ever reached the detector
@@ -52,8 +62,14 @@ import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.
 
 // ─── DriftDetectorRegistry ────────────────────────────────────────────────────
 
-// Must mirror FRAMEWORK_FIELDS in type-registry.js.
-const FRAMEWORK_FIELDS = new Set(['id', 'type', 'name', 'kind', 'layer', 'siblingIndex', 'data', 'meta']);
+// Must mirror FRAMEWORK_FIELDS in type-registry.js, plus the two instance fields
+// every SimGraphNode-derived action class carries (`definitionId`, `timestamp`).
+// Those are execution-graph plumbing, not payload: type-registry.js does not list
+// them because they are always null on the heuristic path and so drop out anyway,
+// but the null-aware detector below would otherwise report them for every action
+// class in the model.
+const FRAMEWORK_FIELDS = new Set(['id', 'type', 'name', 'kind', 'layer', 'siblingIndex', 'data', 'meta',
+                                  'definitionId', 'timestamp']);
 
 /**
  * TypeRegistry subclass that intercepts pickPayload() to detect two drift classes:
@@ -70,16 +86,23 @@ class DriftDetectorRegistry extends TypeRegistry {
     super();
     this._undeclaredFields  = new Map(); // actionType → Set<fieldName>
     this._unregisteredTypes = new Set(); // actionType strings with no registry entry
+    this._seenTypes         = new Set(); // every action type that reached pickPayload
   }
 
   pickPayload(action) {
+    this._seenTypes.add(action.type);
     const entry = this._actionTypes.get(action.type);
     if (entry) {
       const declared = new Set(Object.keys(entry.fields ?? {}));
       for (const k of Object.keys(action)) {
         if (FRAMEWORK_FIELDS.has(k)) continue;
         if (k.startsWith('_'))       continue;
-        if (action[k] == null)       continue;
+        // Null values are NOT skipped. pickPayload drops them either way, so a null
+        // costs nothing today — but the KEY is part of the action's shape, and the
+        // same key carries data in a run where the source field is set. Skipping
+        // nulls is how `workCountry` stayed invisible on the wage actions: it falls
+        // back to an unset residency in the reference plan, and its emitter picks the
+        // action type through a variable, so the static pass could not see it either.
         if (!declared.has(k)) {
           if (!this._undeclaredFields.has(action.type)) {
             this._undeclaredFields.set(action.type, new Set());
@@ -93,6 +116,7 @@ class DriftDetectorRegistry extends TypeRegistry {
 
   // Override fallback to track unregistered types without console warnings.
   _fallbackPayload(action) {
+    this._seenTypes.add(action.type);
     this._unregisteredTypes.add(action.type);
     const out = {};
     for (const k of Object.keys(action)) {
@@ -116,6 +140,9 @@ class DriftDetectorRegistry extends TypeRegistry {
   get unregisteredTypes() {
     return [...this._unregisteredTypes].sort();
   }
+
+  /** How many distinct action types actually reached the detector. */
+  get seenTypeCount() { return this._seenTypes.size; }
 }
 
 // ─── Scenario setup ──────────────────────────────────────────────────────────
@@ -133,6 +160,8 @@ const SIM_END   = new Date(Date.UTC(2028, 1, 1));
  * Returns the detector after the run completes.
  */
 let _detector = null;
+/** The sim the detector ran against — read by the wiring test below. */
+let _simUnderTest = null;
 function getDetector() {
   if (_detector) return _detector;
 
@@ -160,6 +189,14 @@ function getDetector() {
 
   const sim = registry.simulationRegistry.get('primary');
 
+  // No wiring needed here any more, and that is the point: BaseScenario hands the sim
+  // its TypeRegistry through `opts.typeRegistry` (design 91 §7), so the detector — which
+  // IS this registry's typeRegistry — gates payloads by exactly the path the product
+  // uses. It did not always: _pickPayload used to resolve only through
+  // `sim.bus.serviceRegistry`, which BaseScenario's private per-run bus never carried,
+  // so the detector was never called and every dynamic assertion below passed over an
+  // empty set. The interception-count guard is what keeps that from returning.
+
   // Enable journal so _pickPayload is called for every reducer execution;
   // discard the entries themselves — we only care about the detector's findings.
   sim.journal.enabled  = true;
@@ -167,7 +204,8 @@ function getDetector() {
 
   sim.stepTo(SIM_END);
 
-  _detector = detector;
+  _detector     = detector;
+  _simUnderTest = sim;
   return detector;
 }
 
@@ -264,51 +302,37 @@ function scanEmitters(declared) {
 }
 
 /**
- * The drift that existed when the static pass was written, pinned exactly so the
- * set can only shrink. Not a list of 31 bugs: many are routing keys (`cashKey`,
- * `iraKey`, `dstKey`) that a reducer consumes and no report wants, and leaving
- * those undeclared is a legitimate choice — pickPayload drops them either way.
- * The point of pinning is that the NEXT undeclared field is a deliberate decision
- * rather than an accident nobody sees.
+ * What remains undeclared, pinned exactly so the set can only shrink.
+ *
+ * It started at 31 action types / ~60 fields — a mix of real reporting gaps and
+ * plumbing. Design 91 §5 triaged it and the facts that a report could want are now
+ * declared; **everything left is a routing key**: `cashKey`, `dstKey`, `srcKey`,
+ * `iraKey`, `rothKey`, `k401Key`, `destinationKey`, and the `fx` rate used to reach
+ * them. Each names the state path a reducer should touch, and every one of them is
+ * recoverable from the state diffs on the same journal entry — which is where a
+ * report should read it from. Declaring them would list the plumbing in the payload
+ * without adding a fact.
+ *
+ * That makes the pin stronger than it was: a NEW entry here is no longer "probably
+ * plumbing", it is an exception that has to argue for itself.
  *
  * To burn one down: declare the field in the owning toolset and delete the entry
  * here (an entry that no longer drifts fails this test too, so the list cannot go
  * stale). CAPITAL_GAINS is deliberately absent — see the family test below.
  */
 const KNOWN_GAPS = {
-  AU_FIXED_INCOME_EARNINGS_APPLY:          ['stateKey'],
-  AU_HOUSE_SALE_APPLY:                     ['destinationKey', 'mortgageBalance', 'ownerId', 'owners', 'ownershipType', 'residency'],
+  AU_HOUSE_SALE_APPLY:                     ['destinationKey'],
   AU_RENTAL_INCOME_APPLY:                  ['cashKey'],
-  AU_RENTAL_INCOME_TAX:                    ['ownerId', 'owners', 'ownershipType'],
-  AU_WAGES_INCOME_TAX:                     ['workCountry'],
-  COLLECTIBLE_SALE_APPLY:                  ['destinationKey', 'residency', 'stateKey'],
-  COLLECTIBLE_VALUE_CHANGE_APPLY:          ['change', 'stateKey'],
-  EXPENSE_EVENT_APPLY:                     ['personId'],
+  COLLECTIBLE_SALE_APPLY:                  ['destinationKey'],
   FX_TRANSFER_APPLY:                       ['dstKey', 'srcKey'],
-  INHERIT_APPLY:                           ['inheritanceDateMs'],
-  INTL_TRANSFER_APPLY:                     ['direction', 'dstKey'],
-  IRA_RMD_APPLY:                           ['residency', 'stateKey'],
-  IRA_ROLLOVER_WITHDRAWAL_APPLY:           ['residency'],
-  IRA_WITHDRAWAL_CONTRIB_APPLY:            ['penaltyAmount'],
-  IRA_WITHDRAWAL_EARNINGS_APPLY:           ['penaltyAmount', 'residency'],
-  K401_RMD_APPLY:                          ['residency', 'stateKey'],
+  INTL_TRANSFER_APPLY:                     ['dstKey'],
   K401_TO_IRA_CONVERSION_APPLY:            ['iraKey', 'k401Key'],
-  K401_WITHDRAWAL_APPLY:                   ['penaltyAmount'],
-  LOAN_PAYMENT_APPLY:                      ['cashDue', 'cashKey', 'fx'],
-  PROPERTY_PURCHASE_APPLY:                 ['cashKey', 'fx', 'purchaseMs'],
-  ROTH_CONVERSION_APPLY:                   ['iraKey', 'residency', 'rothKey'],
-  ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY: ['residency'],
-  ROTH_WITHDRAWAL_EARNINGS_APPLY:          ['penaltyAmount', 'residency'],
+  LOAN_PAYMENT_APPLY:                      ['cashKey', 'fx'],
+  PROPERTY_PURCHASE_APPLY:                 ['cashKey', 'fx'],
+  ROTH_CONVERSION_APPLY:                   ['iraKey', 'rothKey'],
   SCHEDULED_EARLY_WITHDRAWAL_APPLY:        ['destinationKey', 'iraKey', 'k401Key', 'rothKey'],
-  SECTION_988_GAIN:                        ['holdingId'],
-  STOCK_DIVIDEND_APPLY:                    ['residency'],
-  SUPER_WITHDRAWAL_CONTRIB_APPLY:          ['blocked'],
-  SUPER_WITHDRAWAL_EARNINGS_APPLY:         ['blocked'],
-  US_HOUSE_SALE_APPLY:                     ['destinationKey', 'mortgageBalance', 'residency'],
+  US_HOUSE_SALE_APPLY:                     ['destinationKey'],
   US_RENTAL_INCOME_APPLY:                  ['cashKey'],
-  // The AUD restatement of US tax paid on US-source income — the design 83 FTC
-  // input. Undeclared, an FTC reconciliation cannot be drilled from the journal.
-  US_TAX_SETTLE_APPLY:                     ['usTaxPaidOnUsSourceAud'],
 };
 
 let _staticScan = null;
@@ -322,21 +346,99 @@ async function getStaticScan() {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
+// The 2-year reference run exercises ~35 distinct action types. A floor well under
+// that catches the failure this test was blind to for its whole life: the detector
+// wired in but never CALLED, so every assertion below passed over an empty set. Kept
+// loose enough that trimming a scenario feature does not trip it.
+const MIN_TYPES_EXERCISED = 25;
+
+test('the dynamic detector actually intercepted the run (guards against vacuous passes)', () => {
+  const detector = getDetector();
+  assert.ok(detector.seenTypeCount >= MIN_TYPES_EXERCISED,
+    `Only ${detector.seenTypeCount} action type(s) reached the detector (expected ≥ ${MIN_TYPES_EXERCISED}).\n` +
+    'Every dynamic assertion in this file is vacuous when this is 0. Check that\n' +
+    '`sim.bus.serviceRegistry` still points at the test registry — Simulation._pickPayload\n' +
+    'resolves the TypeRegistry through the SIM\'s bus, and BaseScenario gives each sim its own.');
+});
+
 test('no undeclared fields on registered action types (2-year IntlRetirementScenario)', () => {
   const detector   = getDetector();
   const mismatches = detector.fieldMismatches;
-  const types      = Object.keys(mismatches);
+
+  // Subtract the pinned static baseline: those are documented decisions, and the
+  // dynamic pass should report only what the static pass could not see (fields on
+  // actions whose `type` is chosen through a variable, or built by spread).
+  const types = Object.keys(mismatches)
+    .map(t => [t, mismatches[t].filter(f => !(KNOWN_GAPS[t] ?? []).includes(f))])
+    .filter(([, fields]) => fields.length > 0)
+    .map(([t]) => t);
 
   if (types.length === 0) return;
 
   const lines = types.map(t =>
-    `  ${t}: undeclared fields [${mismatches[t].join(', ')}]`
+    `  ${t}: undeclared fields [${mismatches[t].filter(f => !(KNOWN_GAPS[t] ?? []).includes(f)).join(', ')}]`
   ).join('\n');
   assert.fail(
     `${types.length} action type(s) have live fields not declared in their toolset manifest:\n` +
     `${lines}\n\n` +
     `Fix: add each missing field to the types.actions entry in the owning toolset's types block.`
   );
+});
+
+test('every action type a wired handler or reducer names is registered', () => {
+  // The dynamic test below only sees types the RUN reaches, and that is not enough:
+  // the whole mortality family (PERSON_DIED_APPLY, ACCOUNT_RETITLE_APPLY,
+  // SOCIAL_SECURITY_SURVIVOR_APPLY, SPENDING_STRATEGY_APPLY, SUPER_DEATH_BENEFIT_APPLY,
+  // SCENARIO_COMPLETE_CHECK) was registered in no toolset at all and nothing caught it,
+  // because a 2-year run has no deaths and the static scan only inspects types some
+  // toolset already declares. An unregistered type is worse than an undeclared field:
+  // TypeRegistry._fallbackPayload THROWS under setStrict(true).
+  //
+  // Handlers and reducers already declare their own action types
+  // (`generatedActionTypes` / `reducedActionTypes`), so this reads the wiring rather
+  // than the run — no scenario can be short enough to hide a gap from it.
+  const detector = getDetector();
+  const sim      = _simUnderTest;
+
+  // `RECORD_FIELD_VALUE` is a LABEL, not an action type. FieldValueAction's first
+  // constructor argument IS the type, and every caller passes a per-metric string —
+  // `wages_p1`, `us_rental_income`, `k401_annual_rmd_<owner>` — so the emitted set is
+  // unbounded and no manifest can enumerate it. Two dozen handlers name it in
+  // `generatedActionTypes` anyway, describing the family they emit rather than the
+  // type. Excluded knowingly: a 44-year probe confirms none of these ever reach
+  // pickPayload (see scripts/probes/probe-payload-gate-diff.mjs), so they cannot trip
+  // the strict-mode throw the rest of this test guards against.
+  const LABEL_NOT_A_TYPE = new Set(['RECORD_FIELD_VALUE']);
+
+  const claimed = new Map();   // actionType → Set(source description)
+  const claim = (type, src) => {
+    if (!type || LABEL_NOT_A_TYPE.has(type)) return;
+    if (!claimed.has(type)) claimed.set(type, new Set());
+    claimed.get(type).add(src);
+  };
+  for (const entries of sim.handlers.map.values()) {
+    for (const h of entries) {
+      for (const t of h.generatedActionTypes ?? []) claim(t, h.constructor?.name ?? h.name ?? 'handler');
+    }
+  }
+  for (const [actionType, list] of sim.reducers.map) {
+    claim(actionType, 'reducer pipeline');
+    for (const item of list) {
+      for (const t of item.reducer?.generatedActionTypes ?? []) {
+        claim(t, item.reducer?.constructor?.name ?? item.name ?? 'reducer');
+      }
+    }
+  }
+
+  const missing = [...claimed]
+    .filter(([type]) => !detector._actionTypes.has(type))
+    .map(([type, srcs]) => `  ${type}  ← ${[...srcs].sort().join(', ')}`)
+    .sort();
+
+  assert.equal(missing.length, 0,
+    `${missing.length} action type(s) are wired into the run but registered in no toolset manifest:\n` +
+    missing.join('\n') + '\n\n' +
+    'Fix: add each to the types.actions block of the toolset that wires its handler/reducer.');
 });
 
 test('all emitted action types are registered in a toolset manifest (2-year IntlRetirementScenario)', () => {

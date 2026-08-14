@@ -34,10 +34,13 @@ export const AU_INCOME = {
     handlers: [AuSeIncomeHandler],
     reducers: [AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer],
     actions: [
-      { type: 'SE_INCOME_AU_APPLY',    fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
+      // workCountry — see the US_INCOME manifest: the design 73 source test, stamped by
+      // MonthlyWagesHandler on the apply and forwarded to AU_WAGES_INCOME_TAX, which is
+      // where au-tax-module-2026 reads it to decide whether the wage is AU-sourced.
+      { type: 'SE_INCOME_AU_APPLY',    fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
       { type: 'AU_SE_INCOME_TAX',      fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
-      { type: 'AU_WAGES_INCOME_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
-      { type: 'AU_WAGES_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'AU_WAGES_INCOME_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
+      { type: 'AU_WAGES_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), workCountry: ValueType.text() } },
     ],
   },
 

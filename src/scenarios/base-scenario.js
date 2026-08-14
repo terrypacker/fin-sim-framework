@@ -347,6 +347,11 @@ export class BaseScenario extends SimGraphNode {
       opts: {
         derivedMetrics, telemetry, sampler, samplerCadence,
         simEnd: this.simEnd, pastEndPolicy,
+        // The toolset manifest that gates journal payloads (design 91 §2). Handed over
+        // explicitly rather than reached through the bus: the bus above is private to
+        // this run BY DESIGN, carries no serviceRegistry, and so left the manifest
+        // gating nothing at all — every payload fell back to Simulation's heuristic.
+        typeRegistry: this.context.typeRegistry ?? null,
       },
     });
 

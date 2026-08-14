@@ -45,7 +45,15 @@ export const US_TAX = {
         // fxRate — USD/AUD in force at the settle, reported on the return
         // (design 71 §5.5). Must be declared: pickPayload keeps ONLY declared
         // fields, so an undeclared field never reaches the document modules.
-        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number() } },
+        // usTaxPaidOnUsSourceAud — the AUD restatement of the US tax attributable to
+        // US-source income (design 83 G5), the number AU credits as a FITO. It is a
+        // treaty INPUT computed on the US settle and consumed a fiscal year later by
+        // the AU settle; undeclared, an FTC/FITO reconciliation could not be drilled
+        // from the journal even though the run used it. AUD, deliberately: it is
+        // already converted at the settle-date rate, and the declaration keeps
+        // report-currency normalisation from re-reading it as USD.
+        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number(),
+                  usTaxPaidOnUsSourceAud: ValueType.currency('AUD') } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can

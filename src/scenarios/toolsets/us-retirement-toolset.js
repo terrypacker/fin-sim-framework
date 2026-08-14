@@ -226,7 +226,14 @@ export const US_RETIREMENT = {
       { type: 'BOND_ACCRETION_APPLY',                   fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      // The WITHDRAWAL family's apply actions carry `penaltyAmount` (the §72(t) 10%)
+      // and `residency` alongside `amount`; both were declared only on the paired *_TAX
+      // types, so the two halves of the same withdrawal disagreed about what it carries.
+      // `residency` matters most: it is one of the fields JournalDataSource._project
+      // lifts onto every report row, so once the manifest gate is wired (design 91 §2.1)
+      // an undeclared one would be dropped and `row.residency` would go null on these
+      // rows. `number()` for penaltyAmount, matching every *_TAX sibling.
+      { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       // `auAssessableAmount` (design 84 G2) is the DERIVED slice s99B reaches. It MUST
       // be declared: pickPayload keeps only declared fields, so an undeclared one is
       // silently dropped and the tax module falls back to assessing the whole amount.
@@ -236,32 +243,55 @@ export const US_RETIREMENT = {
       { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text(), rolloverConversions: ValueType.any() } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_CONTRIBUTION_TAX',                   fields: { amount: ValueType.currency('USD') } },
-      { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_TAX',     fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
-      { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
-      { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'IRA_RMD_TAX',                    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
-      { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_TAX',            fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
-      { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'K401_RMD_TAX',                   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'K401_TO_IRA_CONVERSION_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
-      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number() } },
+      // personId — whose expense this is (design 89 spending-over-time). Stamped by
+      // ExpenseEventHandler and already declared on the LATE_LIFE_CARE_APPLY sibling;
+      // without it a per-person spending drill has nothing to group by. Must stay
+      // identical to the AU_RETIREMENT declaration of this shared type.
+      { type: 'EXPENSE_EVENT_APPLY',        fields: { amount: ValueType.number(), category: ValueType.text(), currency: ValueType.text(), propertyKey: ValueType.text(), capitalizeAmount: ValueType.number(), personId: ValueType.text() } },
       { type: 'HOUSE_REPAIR_APPLY',         fields: { stateKey: ValueType.text(), amount: ValueType.number(), capitalize: ValueType.number() } },
       { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
+      // ── Mortality family (design 27 step 7 / design 68) ──────────────────────
+      // Every type MortalityHandler generates. These were registered NOWHERE until
+      // design 91 §6: neither drift pass could see them (the static scan only checks
+      // types some toolset already declares, and the 2-year detector run has no
+      // deaths), and nothing failed because an unregistered type falls through to
+      // Simulation's heuristic. That silence ends the moment the manifest gate is
+      // wired — TypeRegistry._fallbackPayload THROWS under setStrict(true) — so a
+      // strict run would have died on the first death rather than dropping a field.
+      // Declared identically in AU_RETIREMENT, which owns the same reducers.
+      { type: 'PERSON_DIED_APPLY',          fields: { personId: ValueType.text(), personName: ValueType.text(), date: ValueType.any(), taxJurisdiction: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number(), incomeSupportRecipient: ValueType.boolean() } },
+      { type: 'ACCOUNT_RETITLE_APPLY',      fields: { deceasedId: ValueType.text(), survivorId: ValueType.text() } },
+      { type: 'SOCIAL_SECURITY_SURVIVOR_APPLY', fields: { survivorId: ValueType.text(), deceasedSocialSecurityMonthly: ValueType.number() } },
+      // `slice` + `reason` are what make a spending change explainable: without them
+      // a guardrail cut and a survivor adjustment are the same anonymous delta.
+      { type: 'SPENDING_STRATEGY_APPLY',    fields: { slice: ValueType.text(), delta: ValueType.number(), reason: ValueType.text() } },
+      // Last-survivor AU super death benefit — `paidViaEstate` decides whether the 2%
+      // Medicare levy rides on top of the 15% (design 68 Gap 4).
+      { type: 'SUPER_DEATH_BENEFIT_APPLY',  fields: { stateKey: ValueType.text(), taxable: ValueType.number(), paidViaEstate: ValueType.boolean() } },
+      { type: 'SCENARIO_COMPLETE_CHECK',    fields: {} },
     ],
   },
 

@@ -1,7 +1,8 @@
 # 73 — Cross-border source defects surfaced by tax-export validation
 
-**Status: IMPLEMENTED.** All five sequencing steps in §5 are built, tested and committed on
-`wip/design-73-tax-source-fixes`. Three gaps, all in the AU tax module, all found by reading the
+**Status: IMPLEMENTED**, with one follow-up opened later — see **§6b**, where `workCountry` is
+dropped by three of the four apply reducers. All five sequencing steps in §5 are built, tested and
+committed on `wip/design-73-tax-source-fixes`. Three gaps, all in the AU tax module, all found by reading the
 `design/71` CSV exports line-by-line against a real scenario rather than by a failing test.
 
 **What implementation changed about this document.** Three things came out differently from the
@@ -729,6 +730,65 @@ Every item above is implemented. Where the plan and the code diverge:
   them.
 - **The "pro-rated discount for a straddling holding" case is not tested, because it is not
   built** — see the status note at the top. Non-resident gains take no discount at all today.
+
+---
+
+## 6b. Open follow-up — `workCountry` stops at the apply action on three of four paths
+
+**Status: OPEN.** Found 2026-08-13 while triaging the journal payload manifest (design 91 §4.4),
+not by a failing test. Nothing here is known to be wrong yet — it is an asymmetry that either
+needs a reason or needs closing.
+
+`MonthlyWagesHandler` stamps `workCountry` on **all four** income apply actions it can emit —
+`WAGES_INCOME_APPLY`, `AU_WAGES_INCOME_APPLY`, `SE_INCOME_US_APPLY`, `SE_INCOME_AU_APPLY`
+(`monthly-wages-handler.js:95-97`). Exactly one reducer forwards it:
+
+| Apply action | Reducer | Chains | Forwards `workCountry`? |
+|---|---|---|---|
+| `AU_WAGES_INCOME_APPLY` | `AuWagesIncomeApplyReducer` | `AU_WAGES_INCOME_TAX` | **yes** — `au-income-classes.js:85` |
+| `WAGES_INCOME_APPLY` | `WagesIncomeApplyReducer` | `WAGES_INCOME_TAX` | no — `us-income-classes.js:81` |
+| `SE_INCOME_US_APPLY` | `SeIncomeUsApplyReducer` | `SE_INCOME_US_TAX` | no — `us-income-classes.js:130` |
+| `SE_INCOME_AU_APPLY` | `AuSeIncomeApplyReducer` | `AU_SE_INCOME_TAX` | no — `au-income-classes.js:44` |
+
+Each of those three destructures `{ amount, residency, personKey, targetKey }` and rebuilds the
+tax action from those four fields alone, so the source attribute is dropped one hop after it is
+computed. §1's fix threaded it exactly as far as the gap being fixed required, and no further.
+
+### Why it may matter
+
+Three questions, in the order they should be answered:
+
+1. **AU self-employment income.** `AU_SE_INCOME_TAX` is the SE twin of `AU_WAGES_INCOME_TAX`, and
+   §1's whole argument — source is the place of performance, not the currency of payment [R7] —
+   applies to services income however it is characterised. If the wage branch needed
+   `workCountry` to avoid sourcing by denomination, the AU SE branch has the same defect for the
+   same reason. **This is the one most likely to be a real bug**, and it is a smaller version of
+   the gap §1 already fixed rather than a new question.
+2. **US earned income sourcing.** Compensation for services is sourced where the services are
+   performed (§861(a)(3) / §862(a)(3)); the FEIE (§911) and §904 basketing both turn on that.
+   Today the US side infers it from residency instead. Whether that is materially wrong depends
+   on whether a plan can produce a US-resident earner performing services in Australia, or the
+   reverse — which is precisely the case §1 declined to make unrepresentable.
+3. **Reporting.** All four apply types now **declare** `workCountry` (design 91 §4.3), so a
+   "wages by source country" drill reads correctly off the apply rows regardless. Only the
+   AU wage row carries it on the tax action. That is a cosmetic inconsistency in the drill, not
+   a tax error.
+
+### The known limitation this is NOT
+
+§1's accepted limitation is about **routing**: a USD-paid wage for work performed in Australia
+emits no AU action at all, so Australia assesses nothing. That is unchanged and still open. This
+section is narrower — the actions that *are* emitted lose the attribute on the way to the tax
+action. Fixing this does not fix that, and fixing that (emitting the AU tax action off
+`workCountry` while cash follows `wageCurrency`) would make this asymmetry worse, because the
+decoupled tax action would have to carry a field its own apply reducer currently discards.
+
+### Suggested order
+
+Answer (1) first: it is self-contained, has a precedent to copy exactly, and either confirms a
+real defect or closes cleanly. (2) belongs with any future work on US-side sourcing — it is a
+tax-model decision, not a plumbing fix, and should not be made inside a reducer edit. (3) needs
+nothing unless (1) or (2) changes.
 
 ---
 

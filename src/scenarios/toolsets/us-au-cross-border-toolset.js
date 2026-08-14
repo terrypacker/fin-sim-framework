@@ -60,15 +60,23 @@ export const US_AU_CROSS_BORDER = {
     actions: [
       { type: 'CHANGE_RESIDENCY_APPLY' },
       // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
-      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number() } },
+      // `direction` ('US_TO_AU' / 'AU_TO_US') is the whole meaning of a cross-border
+      // sweep; targetDeficit alone does not say which way the money went. Declared on
+      // INTL_TRANSFER_RECORD already — this is the action twin of that marker.
+      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number(), direction: ValueType.text() } },
       // §988 on foreign-currency CASH (design 87 phases 1–2). Declared here as well as
       // in the two real-property toolsets — registerActionType is idempotent, and both
       // conversion paths (this toolset's IntlTransferApplyReducer and the inline sweep
       // in AccountService.replenishSavings) emit it, so a scenario with cross-border
       // banking but no real property must still have the type registered or every
       // currency disposition is dropped on the floor.
+      // Third declaration of this shared type (the two real-property toolsets carry the
+      // others); registerActionType is last-writer-wins over the WHOLE entry, so all
+      // three must list the same fields or a gain's visibility depends on registration
+      // order. holdingId identifies the position the gain came off — see the AU
+      // real-property toolset for why accountKey is not enough.
       { type: 'SECTION_988_GAIN', cc: null,
-        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(),
+        fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(),
                   deMinimis: ValueType.number(), residency: ValueType.text() } },
