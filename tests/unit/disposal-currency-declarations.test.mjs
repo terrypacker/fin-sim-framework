@@ -141,9 +141,10 @@ test('every disposal type declares the currency its tax module converts from', (
   const mismatches = [];
 
   for (const c of CASES) {
-    // Probe whichever money field the type declares. `proceeds` for most; the
-    // collectible types carry only gains, because their emitters send no proceeds at
-    // all (design 91 §8.9) — which is a defect in its own right, but not this one.
+    // Probe whichever money field the type declares, preferring `proceeds`. The
+    // fallback to `gain` is what let this loop cover COLLECTIBLE_SALE_TAX back when it
+    // declared no proceeds at all — the defect this test surfaced (design 91 §8.9),
+    // since fixed. Kept so a future type that carries only gains is still checked.
     const field    = ['proceeds', 'gain'].find(f => reg.fieldCurrency(c.type, f)) ?? 'proceeds';
     const declared = reg.fieldCurrency(c.type, field);
     assert.ok(declared, `${c.type} must declare a currency on a money field (design 91 §8.4)`);
@@ -255,4 +256,36 @@ test('a registry declaring a different currency changes the worksheet (detector 
   assert.notStrictEqual(truthful, lied,
     'declaring the disposal AUD must stop the worksheet converting it — if this passes ' +
     'unchanged, TaxDocumentRegistry is not consulting the registry at all');
+});
+
+test('a collectible disposal reaches the AU CGT worksheet', () => {
+  // Design 91 §8.9. `_extractAuDisposals` skips any disposal with no `proceeds`, and
+  // neither collectible emitter sent one — so an AU resident's gold sale was assessed
+  // and taxed while appearing on no worksheet row at all. The gain was never in doubt;
+  // the disclosure was missing.
+  const journal = [
+    entry({
+      actionType: 'COLLECTIBLE_SALE_TAX',
+      data: { gain: GAIN, auGain: GAIN, auIndexedGain: GAIN, isGold: true,
+              proceeds: GAIN * 3, costBasis: GAIN * 2,
+              residency: 'AU', description: 'collectibleAccount', stateKey: 'collectibleAccount' },
+    }),
+    entry({
+      actionType: 'AU_TAX_SETTLE_APPLY',
+      date: new Date(Date.UTC(2033, 11, 31)),
+      data: { cc: 'AU', fxRate: RATE, taxDetail: auTaxDetail() },
+    }),
+  ];
+  const docs = new TaxDocumentRegistry({ typeRegistry: typeRegistry() })
+    .generate(journal[1], journal);
+
+  const proceeds = worksheetProceeds(docs);
+  assert.ok(proceeds != null, 'the collectible disposal must appear as a worksheet row');
+  assert.strictEqual(proceeds, GAIN * 3 * RATE,
+    'a USD collectible converts onto the AUD worksheet like any other US-domiciled disposal');
+
+  const list = Array.isArray(docs) ? docs : [docs];
+  const table = list.find(d => d?.table?.columns?.includes('Capital Proceeds'))?.table;
+  assert.strictEqual(table.rows[0][1], 'Collectables',
+    'and lands in the ATO category the worksheet already had a mapping for');
 });

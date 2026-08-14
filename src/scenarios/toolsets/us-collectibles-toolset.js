@@ -58,7 +58,8 @@ export const US_COLLECTIBLES = {
       // `toAUD(auGain, 'USD', state)` in us-tax-module-2026. Typing auGain as AUD would
       // be precisely the error this declaration exists to prevent.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any()} },
+        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+                  proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD')} },
       // `change` (the signed revaluation) and `stateKey` (which collectible), the two
       // fields CollectibleValueChangeHandler actually emits. The manifest previously
       // declared `amount`, a name nothing sends — so pickPayload kept nothing and every

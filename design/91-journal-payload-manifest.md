@@ -7,8 +7,9 @@ key by choice (§5 Tier C). **§8 COMPLETE** — the disposal money carries curr
 `capital-gains-by-disposal` converts (measured first, §8.7), the AU CGT worksheet reads the
 manifest instead of a private table, and the declarations are cross-checked against what the tax
 modules actually do (§8.9). Along the way: the CAPITAL_GAINS family had no golden at all, so
-`cross-border-disposals` was added and the coverage floor moved 45 → 51 (§8.8). One new defect is
-open — collectible disposals are assessed but never disclosed on the AU CGT worksheet (§8.9).
+`cross-border-disposals` was added and the coverage floor moved 45 → 51 (§8.8). The defect step 4 surfaced — collectible
+disposals assessed but never disclosed on the AU CGT worksheet — is fixed too (§8.9), leaving two
+narrower follow-ups it exposed in turn.
 
 Follows the manifest-drift work that added the static emitter scan to
 `tests/unit/action-payload-schema.test.mjs` and pinned 31 action types in `KNOWN_GAPS`. That
@@ -519,7 +520,7 @@ fallback-vs-manifest agreement above, and a **detector control** — a registry 
 about the currency must change the worksheet, or the first two would pass against a lookup
 nobody reads.
 
-#### The defect step 4 surfaced: collectible disposals never reach the AU CGT worksheet
+#### The defect step 4 surfaced: collectible disposals never reached the AU CGT worksheet  ✅ FIXED
 
 The cross-check could not probe `COLLECTIBLE_SALE_TAX` on `proceeds`, because that type
 declares none — and it declares none because **neither emitter sends one**.
@@ -534,9 +535,33 @@ foots; the working that justifies it silently omits the asset.
 `AU_DISPOSAL_CURRENCY` even carries a `COLLECTIBLE_SALE_TAX: 'USD'` entry, for a case its
 own guard clause drops one line earlier. That entry has never been reachable.
 
-Not fixed here: adding `proceeds`/`costBasis` to both collectible emitters changes what a
-tax-facing document discloses, and belongs with a look at whether the 28% collectibles
-rate and the AU indexation path want the same treatment. Filed as the next item.
+**Fixed.** Both emitters — the standalone collectible and the gold sleeve inside a
+brokerage sale — now send `proceeds` and `costBasis`, declared `currency('USD')` on the
+type. An AU resident's collectible sale now appears as a worksheet row, in the
+`Collectables` category the mapping already had, converted like any other US-domiciled
+disposal.
+
+The blast radius was checked before touching it and is confined to the AU worksheet:
+`_extractUsSaleRecords` gates on an explicit `US_DISPOSAL_ACTION_TYPES` allowlist rather
+than on the presence of `proceeds`, so Form 8949 and Schedule D are untouched.
+
+Two things deliberately NOT done, both of which this exposed:
+
+1. **Whether a collectable should be assessed at all.** ITAA 1997 s118-10 exempts
+   collectables acquired for \$500 or less, and the model assesses unconditionally. That is
+   an *assessment* question, not a disclosure one — it changes tax, needs the primary
+   source on disk first (the ATO blocks automated fetches; use the PDF route), and is
+   independent of everything above.
+2. **Collectibles are missing from the US disposal documents too.**
+   `US_DISPOSAL_ACTION_TYPES` lists only `STOCK_WITHDRAWAL_TAX`, `US_HOUSE_SALE_TAX` and
+   `COMPANY_SALE_TAX`, so a collectible sale reaches neither Form 8949 nor Schedule D —
+   despite carrying its own §1(h)(4) 28% rate. Same class of gap as the AU one, on the
+   other return, and now visible because the AU side was closed. Adding it is one
+   allowlist entry plus a check of how the 28% rate should present.
+
+Coverage note: `cross-border-disposals` sells the gold *pre*-move, so the golden exercises
+the US-resident collectible path; the AU-assessed path is covered by the unit test above
+rather than end to end. Moving the sale would trade one case for the other, so it stays.
 
 ---
 
@@ -554,5 +579,9 @@ rate and the AU indexation path want the same treatment. Filed as the next item.
    now guards the family (§8.8); coverage floor 45 → 51.
 8. **DONE** — §8.6 steps 3 (the worksheet reads the manifest, fallback pinned) and 4 (declared
    codes cross-checked against tax-module behaviour), both at §8.9.
-9. **Open, found by step 4**: collectible disposals emit no `proceeds`, so they are assessed
-   but never disclosed on the AU CGT worksheet (§8.9). Tax-document-facing; needs its own call.
+9. **DONE** — collectible disposals now emit `proceeds`/`costBasis` and reach the AU CGT
+   worksheet (§8.9).
+10. Open, both surfaced by step 9 and both narrower than it: the s118-10 \$500 collectables
+    exemption (an assessment question, needs the primary source on disk), and collectibles
+    missing from Form 8949 / Schedule D on the US side (one allowlist entry plus a decision
+    on how the §1(h)(4) 28% rate should present).

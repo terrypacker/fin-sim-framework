@@ -95,8 +95,15 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
       state,
       stateUpdate,
       // Design 76 Gap B: attribute the AU gain to the collectible's owner(s).
+      // `proceeds` / `costBasis` are what put the disposal on the AU CGT worksheet:
+      // _extractAuDisposals skips any entry without proceeds, so until design 91 §8.9 an
+      // AU resident's collectible sale was assessed (it feeds auCapitalGainsYTD and is
+      // taxed) yet appeared on no worksheet row — the return footed, the working that
+      // justifies it silently omitted the asset. Both are USD, as declared: this is a
+      // US-domiciled collectible, and the AU return converts on the way in.
       [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+        proceeds: salePrice, costBasis,
         ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]
     );
   }

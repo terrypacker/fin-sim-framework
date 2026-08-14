@@ -346,7 +346,10 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       // collectible's ownership, which this slice does not have.
       const { usShortTermGain: cUsShort, usLongTermGain: cUsLong,
               auShortTermGain: cAuShort, auLongTermGain: cAuLong } = collTerms;
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, stateKey: key });
+      // proceeds/costBasis — the gold sleeve's slice of the sale. Same reason as the
+      // standalone collectible (design 91 §8.9): without them this disposal is assessed
+      // but never disclosed on the AU CGT worksheet.
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key });
     }
     return this.newState(
       state,
