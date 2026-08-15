@@ -11,6 +11,8 @@
 import { HandlerEntry }                    from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount }         from '../fx/expense-fx.js';
+import { blendExpensePriceLevel }          from '../spending/expense-price-level.js';
+import { SPEND_CATEGORY, blendCapitalFraction } from '../spending/spend-category.js';
 import { gaussianFrom }                    from '../fx/fx-process-models.js';
 import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
   from '../account-rules/currency-basis.js';
@@ -171,6 +173,19 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     // Design 87 §14.4 item 2 / G12 — the §212 share of this same debit, accumulated with
     // the money because one tick can repair a home and a rental out of one account.
     let businessDebit = 0;
+    // Design 89 §5.6 — as in HouseRunningCostHandler. A repair draw is NOT indexed
+    // (repairMedian is a fixed nominal parameter; repairValuePct rides prop.value's
+    // appreciation), but it is still nominal money spent in prop.country at time t,
+    // so prop.country's level is what converts it to base-year real. That repairs
+    // therefore shrink in real terms over a long plan is a design 75 modelling
+    // question, deliberately not changed here.
+    let deflatedDebit = 0;
+    // Design 89 §8.1 — the part of this debit that lifts a cost basis rather than being
+    // consumed. `capitalizeRepairs` is per property and this tick can repair two, so it
+    // accumulates with the money exactly as businessDebit and deflatedDebit do. Read
+    // from the SAME expression that HOUSE_REPAIR_APPLY carries below, so the debit and
+    // the basis lift cannot disagree about the split.
+    let capitalDebit = 0;
     const applyActions = [];
     for (const key of this.propertyKeys) {
       const prop = state[key];
@@ -183,7 +198,10 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
       const debit = convertExpenseToAccount(native, propCurrency, account, state);
       totalDebit    += debit;
       businessDebit += debit * propertyExpenseBusinessFraction(prop);
-      applyActions.push({ type: 'HOUSE_REPAIR_APPLY', stateKey: key, amount: native, capitalize: prop.capitalizeRepairs ?? 0 });
+      deflatedDebit += debit / (state.inflationAccumulator?.[cc] ?? 1);
+      const capitalize = prop.capitalizeRepairs ?? 0;
+      capitalDebit  += debit * capitalize;
+      applyActions.push({ type: 'HOUSE_REPAIR_APPLY', stateKey: key, amount: native, capitalize });
     }
 
     const actions = [];
@@ -194,6 +212,12 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
         // Design 87 §14.4 item 2 — see HouseRunningCostHandler. Repairs on an
         // income-producing property are §212; on a home they are personal.
         { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey,
+          priceLevel: blendExpensePriceLevel(deflatedDebit, totalDebit),
+          // Design 89 §6.1(A) + §8.1. The only emitter whose capitalFraction is not a
+          // constant: design 75 §5.2 splits each repair by `capitalizeRepairs`, and a
+          // spending band that draws the capitalized part overstates what the plan costs.
+          spendCategory: SPEND_CATEGORY.HOUSING_REPAIR,
+          capitalFraction: blendCapitalFraction(capitalDebit, totalDebit),
           section988: { kind: 'DISPOSE',
                         businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
         new RecordMetricAction('house_repair_expenses', totalDebit),

@@ -11,6 +11,8 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
+import { blendExpensePriceLevel } from '../spending/expense-price-level.js';
+import { SPEND_CATEGORY } from '../spending/spend-category.js';
 import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
   from '../account-rules/currency-basis.js';
 
@@ -121,6 +123,10 @@ export class HouseRunningCostHandler extends HandlerEntry {
     // the running costs of a home and a rental out of one account, so the fraction has to
     // be accumulated alongside the money rather than read off either property.
     let businessDebit = 0;
+    // Design 89 §5.6 — Σ(debit/priceLevel), accumulated alongside the money for the
+    // same reason businessDebit is: each property is indexed at ITS OWN country's
+    // accumulator, and they are summed into one debit that can carry only one level.
+    let deflatedDebit = 0;
     for (const key of this.propertyKeys) {
       const prop = state[key];
       // Skip a missing or SOLD property — value drops to 0 at sale (design 75 §5.3).
@@ -142,6 +148,7 @@ export class HouseRunningCostHandler extends HandlerEntry {
       const debit = convertExpenseToAccount(monthlyNative, propCurrency, account, state);
       totalDebit    += debit;
       businessDebit += debit * propertyExpenseBusinessFraction(prop);
+      deflatedDebit += debit / (priceLevel || 1);
     }
 
     if (totalDebit <= 0) return [];
@@ -158,6 +165,13 @@ export class HouseRunningCostHandler extends HandlerEntry {
       // costs on a home are personal and fall to the capital branch. Read per tick, so a
       // property that stops renting flips its subsequent debits (design 87 §4's trap).
       { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey,
+        // Design 89 §5.6 — property costs are indexed at prop.country, not at the
+        // household's residence and not at the paying account's currency.
+        priceLevel: blendExpensePriceLevel(deflatedDebit, totalDebit),
+        // Design 89 §6.1(A). `capitalFraction` is 0 by nature, not by omission: rates,
+        // insurance and utilities are consumed in the period and lift no cost basis.
+        // Repairs are the ones that split (§8.1) — see RealPropertyRepairTickHandler.
+        spendCategory: SPEND_CATEGORY.HOUSING_RUNNING, capitalFraction: 0,
         section988: { kind: 'DISPOSE',
                       businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
       new RecordMetricAction('house_running_cost', totalDebit),

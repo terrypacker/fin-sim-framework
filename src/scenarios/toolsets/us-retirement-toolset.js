@@ -220,7 +220,36 @@ export const US_RETIREMENT = {
       // a currency disposition would compute correctly and then be invisible in every
       // report that reads the journal. Both retirement toolsets declare this shared type
       // and registerActionType is last-writer-wins, so they must stay identical.
-      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text(),
+      // `realizedAmount` is stamped by ExpenseDebitReducer, not by the four emitters:
+      // it is what the balance cap actually let through (design 89 §5.4). Declared so
+      // the journal carries intent and realized side by side on every dispatch —
+      // design 89 §5's intent-vs-realized pair, readable off the payload instead of
+      // reconstructed by pairing `amount` against `stateDelta` while dodging the fact
+      // that EXPENSE_DEBIT is journaled once per consuming reducer.
+      // `number()` not `currency()` deliberately, matching `amount`: this type spans
+      // both currencies (the pool is picked by residency), so a fixed per-type code
+      // would be the design 91 §8.1 error. Money reports read `stateDelta`, whose unit
+      // comes from the state schema.
+      // `priceLevel` is likewise stamped, by the four EMITTERS (design 89 §5.6): the
+      // index the money was incurred at, which is residence for living costs and
+      // prop.country for property costs — a different axis from the account's currency,
+      // and one a single debit can blend when several properties pay from one account.
+      // `spendCategory` + `capitalFraction` are stamped by the four EMITTERS
+      // (design 89 §6.1 A, §8.1). The category is the one thing that separates a
+      // month's groceries from a home's rates: same type, same pool, same
+      // `businessFraction`, and the report has to draw them as different bands.
+      // Emitted, never inferred — inferring it from targetKey/amount/cadence is the
+      // trap design 82 §2 exists to prevent, and it fails silently.
+      // NOT named `category`: `EXPENSE_EVENT_APPLY` below already declares one, it is
+      // the author's free text, and ExpenseEventHandler emits both in the same tick.
+      // `capitalFraction` is the share that lifted a cost basis rather than being
+      // consumed — non-constant only on the repair emitter, where design 75 §5.2's
+      // `capitalizeRepairs` splits it per property.
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), realizedAmount: ValueType.number(),
+                                                 priceLevel: ValueType.number(),
+                                                 spendCategory: ValueType.text(),
+                                                 capitalFraction: ValueType.number(),
+                                                 targetKey: ValueType.text(),
                                                  section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  family: 'WITHDRAWAL', fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
       { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },

@@ -77,6 +77,7 @@ import {
 } from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
+import { withBalances }             from '../finance/spending-reporting/account-flow-tie.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
@@ -585,10 +586,15 @@ export class WorkbenchApp extends BaseComponent {
     // never disturbs playback. Unconditional on purpose — ~45 cube builds per run is
     // not worth a mode the user can be in the wrong half of, and a panel whose empty
     // state reads "re-run with sampling on" is a panel people stop opening.
+    // `withBalances` (design 89 §7 b) layers per-account balances onto the SAME record.
+    // buildSim takes one sampler, and the alternative — having the spending panel
+    // reconstruct closing balances from the journal — would make its flow-ties-to-stock
+    // check compare the journal against itself. Sharing the sampler also means the two
+    // panels read the same instant rather than two instants that agree.
     this.scenario.buildSim({
-      sampler: createAllocationSampler({
+      sampler: withBalances(createAllocationSampler({
         displayNameFor: (stateKey) => registry.schemaRegistry.displayNameFor(stateKey),
-      }),
+      })),
       samplerCadence: 'year-boundary',
     });
 

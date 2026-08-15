@@ -13,6 +13,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../../simulation-fra
 import { OneOffEvent }                             from '../../../simulation-framework/events/one-off-event.js';
 import { convertExpenseToAccount }                 from '../../fx/expense-fx.js';
 import { propertyExpenseBusinessFraction }         from '../../account-rules/currency-basis.js';
+import { residencePriceLevel }                    from '../expense-price-level.js';
+import { SPEND_CATEGORY, blendCapitalFraction }   from '../spend-category.js';
 
 const EPSILON = 1e-9;
 
@@ -149,6 +151,29 @@ export class ExpenseEventHandler extends HandlerEntry {
     const section988 = { kind: 'DISPOSE',
                          businessFraction: property ? propertyExpenseBusinessFraction(property) : 0 };
 
+    // Design 89 §5.6 — the price index this outlay is deflated by, resolved on the
+    // SAME precedence the currency and the §212 status above already use: a
+    // property-linked event is spent in the property's economy, everything else in
+    // the household's. Event amounts are authored nominal and never indexed, so this
+    // converts them to base-year real rather than undoing an indexation.
+    const priceLevel = property
+      ? (state?.inflationAccumulator?.[property.country ?? 'US'] ?? 1)
+      : residencePriceLevel(state, this.primaryPersonKey);
+
+    // Design 89 §6.1(A) + §8.1 — what this event bought, and how much of it was
+    // capitalized rather than consumed. A capital improvement debits cash like any other
+    // event but lifts `capitalizedImprovements` (design 86 G8), so drawing it whole in a
+    // discretionary-spending band counts an investment as a cost. The gate is the same
+    // one `capitalizeAmount` uses below — an unlinked event capitalizes nothing, however
+    // it was authored — and it is hoisted here so both debit legs read one value.
+    //
+    // Note the deliberate name: `spendCategory`, because `EXPENSE_EVENT_APPLY` below
+    // already carries a `category` and it is the author's free text, not this vocabulary.
+    const capitalizeFrac  = data?.capitalize ?? 0;
+    const capitalFraction = (capitalizeFrac > 0 && property)
+      ? blendCapitalFraction(capitalizeFrac, 1)
+      : 0;
+
     // (2) Funding. `remaining` is always carried in the EVENT's currency; each
     // account converts at its own edge, so a part-funded event that spans two
     // currencies still totals the event amount.
@@ -165,6 +190,7 @@ export class ExpenseEventHandler extends HandlerEntry {
         // declaration it is given, so one object across two actions would have the second
         // leg silently rewrite the first leg's pool.
         actions.push({ type: 'EXPENSE_DEBIT', amount: take, targetKey: fundKey,
+                       priceLevel, spendCategory: SPEND_CATEGORY.DISCRETIONARY, capitalFraction,
                        section988: { ...section988 } });
         actions.push(new RecordBalanceAction(`${fundKey}.balance`, fundKey));
         // Back into event currency by the same ratio, so no rounding leaks either way.
@@ -180,6 +206,7 @@ export class ExpenseEventHandler extends HandlerEntry {
       // Prepended before its own debit, same contract as MonthlyExpensesHandler.
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: defaultKey });
       actions.push({ type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey: defaultKey,
+                     priceLevel, spendCategory: SPEND_CATEGORY.DISCRETIONARY, capitalFraction,
                      section988: { ...section988 } });
       actions.push(new RecordBalanceAction(`${defaultKey}.balance`, defaultKey));
     }
@@ -188,9 +215,8 @@ export class ExpenseEventHandler extends HandlerEntry {
     // rather than in the reducer because `capitalizedImprovements` is denominated in
     // the property's currency and the event need not be — an AUD improvement authored
     // in USD would otherwise inflate the eventual cost base by the exchange rate.
-    const capitalize = data?.capitalize ?? 0;
-    const capitalizeAmount = (capitalize > 0 && property)
-      ? capitalize * convertExpenseToAccount(amount, currency, property, state)
+    const capitalizeAmount = (capitalizeFrac > 0 && property)
+      ? capitalizeFrac * convertExpenseToAccount(amount, currency, property, state)
       : 0;
 
     actions.push({

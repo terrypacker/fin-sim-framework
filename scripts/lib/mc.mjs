@@ -135,9 +135,9 @@ export function buildMcConfig(cfg, { shock = false, overrides = {}, recentre = t
  * the arm; that is the same minutes-vs-milliseconds split the whole run/report
  * separation exists for.
  */
-export async function runArm({ cfg, n, mcConfig, shocks, mix = false }) {
+export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending = false }) {
   const runner = new IntlRetirementMcRunner({
-    n, mcConfig, cfgTemplate: cfg, mix,
+    n, mcConfig, cfgTemplate: cfg, mix, spending,
     simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
   });
 
@@ -192,9 +192,19 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false }) {
       })))
     : null;
 
+  // Per-path classified spending (design 89 phase 6). Kept as the runner's compact
+  // ~20-number summary rather than a cube, for the reason design 78 §4.5 gives about
+  // metrics-vs-state: n cubes is hundreds of megabytes. `failed` travels with each row
+  // for the same reason `mixSeries` carries it — a report conditioning on outcome must
+  // not have to re-join by seed and silently drop paths on a mismatch.
+  const spendingRuns = spending
+    ? runs.map(r => (r.spending ? { ...r.spending, seed: r.seed, failed: !!r.scenarioFailed } : null))
+    : null;
+
   return {
     rows,
     mixSeries,
+    spendingRuns,
     pathShape:  summary?.pathShape ?? null,
     // What world these rows describe (see summarizeProvenance). Persisted with the
     // arm so a report written days later can still say whether it is about the plan.

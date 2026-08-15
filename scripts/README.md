@@ -271,6 +271,27 @@ diagnostics before the answer, because a zero spread means either "the methods a
 "this scenario cannot tell them apart", and design 87 §14.2 records what happens when those
 two get confused. `--au-rental` is needed to make the ordinary/§212 branch fire at all.
 
+`probe-spending-composition` is design 89 §3/§4/§10 — "what fraction of the plan's outflow
+is actually spending?" It sums every negative `.balance` delta by action type **twice**: at
+face value, and through the real report machinery (`runReport` + `reportCurrency`) so each
+row converts at the run's own rate on its own date. The gap between the two columns is the
+point — on the reference plan `EXPENSE_DEBIT` falls ~7 points on conversion while every
+other line rises, because expenses are AUD-funded and AU tax is paid from a USD account.
+It is committed rather than throwaway because design 89's original table went stale enough
+to change its own headline: **shares go stale, the classification does not.** It also
+prints a COVERAGE block naming the debited state keys the shipped reports cannot see.
+
+`probe-consumption-intent-gap` is design 89 §5.1 step A. `AccumulateConsumptionReducer`
+builds `cumulativeConsumption` — what `DIE_WITH_TARGET` maximizes — from `action.amount`,
+which `ExpenseDebitReducer` then caps at the balance, so a short plan books consumption the
+household never received. The probe replicates the reducer's own arithmetic per **dispatch**
+(not per journal entry — `EXPENSE_DEBIT` is journaled three times) and **cross-checks its
+intent total against the run's own `cumulativeConsumption`** before reporting anything: a
+measurement of a bug is worthless if it is measured by a second bug, and that check caught
+exactly such a bug while this probe was being written. `--stress <x>` scales monthly
+expenses to make the cap bite, since a defect that cannot be provoked cannot be
+characterised. On a solvent plan the gap is exactly zero.
+
 ## dev/
 
 `build-index.js` (`npm run build:index`) regenerates the auto-generated

@@ -24,6 +24,8 @@ import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js'
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
 import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
+import { buildSpendingCube }         from '../spending-reporting/spending-cube.js';
+import { summarizeSpendingForRun }   from '../spending-reporting/spending-distribution.js';
 
 /** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
 export function computeNetWorthUsd(state) {
@@ -313,6 +315,14 @@ export class IntlRetirementMcRunner {
    *        asset MIX on every path (design 82 §8). Off by default: it is a real cost
    *        (one allocation cube per sampled year) and only the allocation-distribution
    *        report reads it, so an ordinary solvency run should not pay for it.
+   * @param {boolean}                   [opts.spending=false] - Also record the classified
+   *        SPENDING summary on every path (design 89 §11.1 phase 6). Off by default for
+   *        the same reason as `mix`, but the price is far higher and worth stating: a
+   *        spending cube is built from `stateDiff`, which only exists at
+   *        `telemetry: 'full'`, so switching this on takes an iteration from ~530 ms to
+   *        ~3,960 ms on the reference plan — **7.5x**. A `journal`-level run is NOT a
+   *        cheaper middle: it produces entries whose `stateDiff` is null, and the cube
+   *        silently computes zero. See spending-distribution.js.
    */
   constructor({
     n           = 100,
@@ -321,6 +331,7 @@ export class IntlRetirementMcRunner {
     simEnd      = new Date(Date.UTC(2041, 0, 1)),
     cfgTemplate = null,
     mix         = false,
+    spending    = false,
   } = {}) {
     this.n           = n;
     this.mcConfig    = mcConfig;
@@ -328,6 +339,7 @@ export class IntlRetirementMcRunner {
     this.simEnd      = simEnd;
     this.cfgTemplate = cfgTemplate;
     this.mix         = mix;
+    this.spending    = spending;
   }
 
   /**
@@ -407,7 +419,15 @@ export class IntlRetirementMcRunner {
         // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
         // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
         // See design 82 §8.3; an arm JSON from before this change is not comparable.
-        scenario.buildSim({ seed, telemetry: 'off', sampler, samplerCadence: MC_SAMPLER_CADENCE });
+        // `spending` forces FULL telemetry, and nothing less will do: the spending cube
+        // reads `stateDiff`, which `silent` mode skips entirely (simulation.js records the
+        // journal regardless of silent, but with a null diff). A 'journal'-level run
+        // therefore yields a well-formed journal whose cube totals zero — the quiet kind
+        // of wrong. Measured 7.5x, which is why this is opt-in (design 89 §20).
+        scenario.buildSim({
+          seed, telemetry: this.spending ? 'full' : 'off', sampler,
+          samplerCadence: MC_SAMPLER_CADENCE,
+        });
 
         const cfg = structuredClone(cfgTemplate);
         // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
@@ -444,6 +464,19 @@ export class IntlRetirementMcRunner {
         // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
         // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
         lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,
+        // Design 89 phase 6. Reduced to ~20 numbers HERE rather than kept as a cube:
+        // ~3,900 rows x n paths is hundreds of megabytes, and the whole reason an MC
+        // iteration records metrics instead of state (design 78 §4.5).
+        ...(this.spending
+          // `services: null` deliberately. The per-iteration registry is scoped to
+          // createSimulation and, on the compiler path, registers no accounts anyway — so
+          // the cube resolves each balance's unit from the account's own `currency.code`
+          // in live state, the fallback phase 2 added when the loan balances turned out to
+          // declare a currency KIND with a null CODE. Verified to give identical totals.
+          ? { spending: summarizeSpendingForRun(buildSpendingCube({
+              journal: sim.journal, state: sim.state, services: null, currency: 'USD',
+            })) }
+          : {}),
       }),
     });
 
@@ -508,6 +541,10 @@ export class IntlRetirementMcRunner {
       timeSeries:        r.result.timeSeries,
       pathShape:         computePathShape(r.result.timeSeries),
       lifetimeRepairSpend: r.result.lifetimeRepairSpend ?? 0,
+      // Design 89 phase 6. `runs` is an explicit projection, not a spread of `evaluate`'s
+      // result — a field added there and not listed here is silently dropped, which is
+      // exactly what happened on the first attempt at this one.
+      spending:          r.result.spending ?? null,
     }));
 
     // Sequence-of-returns readout (design 74 §5.2). Mark each path against the

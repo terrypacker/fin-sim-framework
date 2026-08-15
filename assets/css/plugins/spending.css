@@ -1,0 +1,209 @@
+/* ── Spending Plugin (design 89 §11 phase 5) ───────────────────────────────────
+ *
+ * The flow sibling of allocation.css, and deliberately the same skeleton: thin toolbar,
+ * provenance strip ABOVE the chart, clickable legend below. The provenance placement is
+ * not cosmetic — §7(a) and §7(b) have to be read before any band is, because a
+ * classification that loses a debit understates the cost of the plan without leaving a
+ * mark on the chart.
+ */
+
+.spend-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.spend-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.spend-spacer { flex: 1; }
+
+.spend-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Segmented real/nominal/share switch. Real leads because design 89 §9(b) makes real
+ * terms mandatory here rather than optional: a spending chart's whole subject is the
+ * level, and over 45 years inflation alone lifts every band ~3.7x. */
+.spend-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.spend-seg button {
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.spend-seg button:last-child { border-right: 0; }
+
+.spend-seg button.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.spend-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.spend-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+/* ── Provenance strip ─────────────────────────────────────────────────────── */
+
+.spend-provenance {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.spend-provenance:empty { display: none; }
+
+.spend-provenance code { font-size: 10px; color: var(--text-dim); }
+
+.spend-ok { color: var(--green); }
+
+/* A classification that is not total, or a flow that does not tie to the stock, makes
+ * every figure on the panel unquotable — this is meant to stop the reader, not decorate. */
+.spend-provenance--bad {
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-border);
+  color: var(--red);
+  white-space: normal;
+}
+
+/* ── Body: chart or the §7(b) grid ────────────────────────────────────────── */
+
+.spend-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.spend-chart {
+  position: absolute;
+  inset: 0;
+}
+
+.spend-grid {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 8px 9px 12px;
+}
+
+.spend-placeholder {
+  color: var(--text-muted);
+  padding: 16px 12px;
+  font-style: italic;
+}
+
+.spend-grid-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+  white-space: normal;
+}
+
+.spend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.spend-table th,
+.spend-table td {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+
+.spend-table thead th {
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.spend-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.spend-dim { color: var(--text-muted); }
+
+.spend-row-bad td { color: var(--red); }
+
+/* ── Legend / totals strip ────────────────────────────────────────────────── */
+
+.spend-legend {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 9px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.spend-legend:empty { display: none; }
+
+.spend-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.spend-legend-item:hover { color: var(--text); }
+
+.spend-legend-item--off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.spend-legend-item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.spend-legend-item strong { color: var(--text); }
