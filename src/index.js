@@ -18,7 +18,7 @@ import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, Supe
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
-import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
+import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, propertyExpenseBusinessFraction, blendExpenseBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
 import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-rules/currency-lot-observer.js';
 import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
@@ -563,6 +563,8 @@ export const Finance = {
   computeCurrencyDisposition,
   blendCurrencyBasisRate,
   currencyPoolBusinessFraction,
+  propertyExpenseBusinessFraction,
+  blendExpenseBusinessFraction,
   realizeCurrencyDisposition,
   acquireCurrencyBasis,
   isCurrencyLotPool,

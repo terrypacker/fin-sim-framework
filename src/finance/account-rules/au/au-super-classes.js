@@ -57,7 +57,27 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], -action.amount, null);
+    const auCashKey = resolveCashKey(this.stateRegistry, 'AU', state);
+    this.accountService.transaction(state[auCashKey], -action.amount, null);
+    // Design 87 §14.4 item 3 — the AUD leaving the cash pool is disposed of, and the
+    // super account it funds is NOT the other half of a same-currency transfer: design 87
+    // §5 puts super outside this design entirely (a super interest is a pension/trust
+    // interest, not a bank deposit, and its cross-border treatment is design 83's Art. 18
+    // and design 84's s99B work). `isCurrencyLotPool` excludes `type: 'super'` for that
+    // reason, so without this declaration the debit would read as a bare withdrawal and
+    // realize nothing.
+    //
+    // PERSONAL, and this is a recorded choice rather than an obvious one. Making a
+    // retirement contribution has no expenses properly allocable to it that meet §162 or
+    // §212 — the two provisions §988(e)(3) names by number. `§1.988-1(a)(9)(ii)`
+    // Example 1 does hold that buying an income-producing ASSET with nonfunctional
+    // currency stays inside §988, but its facts are a bond bought directly, where custody
+    // and advisory costs are the taxpayer's own §212 expenses. A fund interest's expenses
+    // are borne by the FUND, and whatever deduction a contribution attracts comes from
+    // the retirement provisions rather than from §212. So this falls to the capital
+    // branch with the \$200 exclusion — the over-disallowing direction the rest of this
+    // design takes when the answer is arguable.
+    action.section988 = { kind: 'DISPOSE', accountKey: auCashKey, businessFraction: 0 };
     // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so a
     // household with two super accounts credits — and taxes — the right member's.
     // Falls back to the canonical key for legacy dispatchers and pre-stateKey saves.

@@ -65,7 +65,10 @@ export const US_REAL_PROPERTY = {
       // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
-                  purchaseMs: ValueType.number() } },
+                  purchaseMs: ValueType.number(),
+                  // Design 87 §14.4 item 3 — the §988 character declaration, for journal
+                  // visibility. Must stay identical in both toolsets (last-writer-wins).
+                  section988: ValueType.any() } },
       // mortgageBalance — the bridge from sale price to the cash that actually lands.
       // `number()` to match salePrice/costBasis; see the AU twin for why the disposal
       // money fields are deliberately native and unconverted.

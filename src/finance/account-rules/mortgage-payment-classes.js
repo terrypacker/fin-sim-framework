@@ -12,6 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { resolveCashKey } from './cash-routing.js';
+import { propertyExpenseBusinessFraction } from './currency-basis.js';
 
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -167,7 +168,30 @@ export class AuMortgagePaymentHandler extends HandlerEntry {
       if (deficit > 0) {
         actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: cashKey });
       }
-      actions.push({ type: 'AU_MORTGAGE_PAYMENT_APPLY', stateKey, payment, cashKey });
+      // Design 87 §14.4 item 4 — the legacy scalar-`mortgageBalance` path, parallel to
+      // the migrated `LOAN_PAYMENT_APPLY`. Easy to miss precisely because the loan-account
+      // path already works: an AU mortgage serviced from an AUD pool is a disposition of
+      // nonfunctional currency either way, and until this was declared this path silently
+      // treated it as a `(a)(1)(iii)(C)` non-recognition withdrawal.
+      //
+      // TWO deliberate differences from the loan-account path, both worth knowing:
+      //
+      //  1. It names a fraction where `LoanPaymentHandler` names none. That handler lets
+      //     the observer fall back to the POOL's `deductibleFraction` because its pool is
+      //     typically an offset, whose §212 status is design 87 §8 Q1's genuinely open
+      //     question. This path's pool is the generic AU cash account, whose scalar
+      //     defaults to 0 and would understate — while the expense properly allocable to
+      //     a mortgage payment (the interest) is unambiguously §212 on a rental. Same
+      //     rule as this property's running costs, so one pool does not split its
+      //     character on which handler happened to fire.
+      //  2. It does NOT cancel. Design 87 §3's identity — the debt leg and the deposit
+      //     leg netting to zero on a matched facility — needs a §988 debt leg, and this
+      //     path has no `bookingFxRate` to supply one. So the currency leg here stands
+      //     alone. That is a property of the legacy scalar mortgage, not of this
+      //     declaration; the fix is to model the mortgage as a Loan account.
+      actions.push({ type: 'AU_MORTGAGE_PAYMENT_APPLY', stateKey, payment, cashKey,
+        section988: { kind: 'DISPOSE', accountKey: cashKey,
+                      businessFraction: propertyExpenseBusinessFraction(propState) } });
     }
 
     if (actions.length > 0) {

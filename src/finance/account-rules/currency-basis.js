@@ -135,6 +135,54 @@ export function currencyPoolBusinessFraction(account) {
 }
 
 /**
+ * The §988(e)(3) income-producing share of currency spent on ONE property's expenses.
+ *
+ * Design 87 §14.4 item 2. Where {@link currencyPoolBusinessFraction} answers "what is
+ * this ACCOUNT generally for", this answers "what did this particular disposition buy" —
+ * the per-disposition fraction G12 introduced. Running costs and repairs on a rental are
+ * §212 expenses of producing income; the same costs on a home are personal, and
+ * §1.988-1(a)(9) then puts the disposition outside §988 altogether.
+ *
+ * **It must stay identical to `section988BusinessFraction`'s property branch in
+ * loan-classes.js.** The mortgage on a property and the running costs of the same
+ * property are dispositions out of the same pool, and if the two rules disagree the pool
+ * splits its ordinary/personal character on nothing more than which handler emitted the
+ * debit. Hence the same `deductibleFraction`-then-`rentalEnabled` order, and hence no
+ * `monthlyRent > 0` test here even though the rental *income* classifiers apply one:
+ * a rental standing empty is still held for the production of income.
+ *
+ * Design 87 §4's live trap applies in full — this is read PER TICK, so a property that
+ * stops renting flips its subsequent expense debits from ordinary to personal (and its
+ * currency losses from deductible to disallowed) without anything being re-authored.
+ *
+ * @param {object|null} property  a real-property state entry
+ * @returns {number} 0..1
+ */
+export function propertyExpenseBusinessFraction(property) {
+  const stated = property?.deductibleFraction;
+  if (stated != null) return Math.min(1, Math.max(0, stated));
+  return property?.rentalEnabled ? 1 : 0;
+}
+
+/**
+ * Blend per-property fractions into the ONE fraction a combined debit can carry.
+ *
+ * Both property expense handlers accumulate several properties into a single
+ * `EXPENSE_DEBIT` — one home and one rental pay out of the same account on the same
+ * tick. §988(e)(3)'s "to the extent" is already a fraction, so the honest combination is
+ * the debit-weighted mean rather than a winner-takes-all flag: a tick that is 30% rental
+ * by value is 30% ordinary and 70% personal, which is exactly what the provision says.
+ *
+ * @param {number} businessDebit  the part of the debit attributable to §212 property
+ * @param {number} totalDebit     the whole debit
+ * @returns {number} 0..1, and 0 for a zero/absent debit
+ */
+export function blendExpenseBusinessFraction(businessDebit, totalDebit) {
+  if (!(totalDebit > 0)) return 0;
+  return Math.min(1, Math.max(0, businessDebit / totalDebit));
+}
+
+/**
  * The §988 leg of a debit from a foreign-currency cash pool: what to stamp on the
  * account, and what to book.
  *

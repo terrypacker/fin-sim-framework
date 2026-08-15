@@ -66,7 +66,10 @@ export const AU_REAL_PROPERTY = {
       // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
-                  purchaseMs: ValueType.number() } },
+                  purchaseMs: ValueType.number(),
+                  // Design 87 §14.4 item 3 — the §988 character declaration, for journal
+                  // visibility. Must stay identical in both toolsets (last-writer-wins).
+                  section988: ValueType.any() } },
       // mortgageBalance is the whole bridge from sale price to the cash that actually
       // lands: nothing else on the row states what the sale paid off. Declared
       // `number()`, NOT currency('AUD'), to match salePrice/costBasis — the disposal
@@ -82,7 +85,10 @@ export const AU_REAL_PROPERTY = {
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
-        fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text() } },
+        fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text(),
+                  // Design 87 §14.4 item 3 — stamped by the reducer, which is where the AU
+                  // cash key is resolved. Declared here for journal visibility.
+                  section988: ValueType.any() } },
       // Everything after `description` is the design 83 G7 main-residence working:
       // auTaxableFraction is the s118-185 apportionment, auExemptionReason names the
       // rule that produced it, and the acquisition/sale/occupation dates are the

@@ -707,6 +707,40 @@ class TaxPaymentDebitReducerBase extends Reducer {
       this.accountService.transaction(cashAccount, -debit, date);
     }
 
+    // ─── design 87 §14.4 item 1 — G12, the §988(e)(3)(B) carve-out ────────────────
+    // Paying a tax bill out of a foreign-currency deposit disposes of nonfunctional
+    // currency (§988(c)(1)(C)(i)) and is NOT on the `§1.988-2(a)(1)(iii)`
+    // non-recognition list, so it realizes. What makes this the FIRST emitter to wire
+    // is the fraction, not the disposal: §988(e)(3) adopts §212 "other than that part
+    // of section 212 dealing with expenses incurred in connection with taxes" — the
+    // same words in `§1.988-1(a)(9)(i)`. So currency disposed of to pay tax is a
+    // PERSONAL transaction even where every other expense of the same account is
+    // unambiguously §212, which falls to the capital branch (G10) with the $200
+    // exclusion rather than being ordinary §988. `currencyPoolBusinessFraction` reads
+    // one scalar off the account and cannot express that; the per-disposition fraction
+    // exists precisely for this and is otherwise unexercised.
+    //
+    // Character is declared here rather than by whoever emitted the action because it
+    // is a fact about the action TYPE — a tax payment is carved out however the bill
+    // arose — not about the caller's circumstances. Design 87 §6's "realize in the
+    // reducer" still governs the AMOUNT, and `units` is why: `replenishSavings` above
+    // may have credited this same pool inside this same observer bracket (a
+    // same-currency sweep from another AUD account, or a US→AU wire), so the pool's
+    // NET movement understates the disposition by the whole top-up.
+    //
+    // Stamped for both subclasses. The US pool is USD — the taxpayer's functional
+    // currency — so `isCurrencyLotPool` never tracks it and the declaration is inert
+    // there; declaring it in the shared base rather than in the AU subclass means a
+    // scenario that ever wires US_SAVINGS in a foreign currency is right by default.
+    if (debit > 0) {
+      action.section988 = {
+        kind: 'DISPOSE',
+        accountKey,
+        businessFraction: 0,
+        units: debit,
+      };
+    }
+
     const unpaid = action.amount - debit;
 
     // Any liability that same-country cash + the inline cross-border *cash* sweep

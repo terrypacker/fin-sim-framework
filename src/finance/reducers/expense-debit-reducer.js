@@ -61,6 +61,12 @@ export class ExpenseDebitReducer extends Reducer {
     if (debit > 0) {
       this.accountService.transaction(account, -debit, date);
     }
+    // Design 87 §14.4 item 2 — name the pool that disposed. CHARACTER (whether this is a
+    // disposition at all, and its §988(e)(3) share) is declared by whichever handler
+    // emitted the action, because only it knows what the money bought; the pool is
+    // resolved HERE, because `targetKey` may be absent and the residency fallback above
+    // is the only thing that knows which account a bare EXPENSE_DEBIT lands on.
+    if (debit > 0 && action.section988) action.section988.accountKey = accountKey;
     return this.newState(state);
   }
 }

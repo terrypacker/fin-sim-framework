@@ -126,7 +126,15 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     }
 
     actions.push(
-      { type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey },
+      // Design 87 §14.4 item 2 — spending foreign currency on goods and services is a
+      // disposition, priced by `§1.988-2(a)(2)(ii)(B)` as a sale of the units for USD at
+      // spot followed by a purchase for those dollars. Household living expenses have no
+      // expenses properly allocable to a trade or business, so §988(e)(3) makes the whole
+      // thing PERSONAL: `§1.988-1(a)(9)`'s Example 2 (a taxpayer's holiday hotels, food
+      // and sundries) is this line. Character falls to §1001/§1221 — capital — with the
+      // §988(e)(2) \$200 per-transaction exclusion, and any LOSS disallowed under §165(c).
+      { type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey,
+        section988: { kind: 'DISPOSE', businessFraction: 0 } },
       new RecordMetricAction('monthly_expenses', nativeAmount),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );
