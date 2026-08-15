@@ -14,12 +14,14 @@ import { RecordBalanceAction, FieldValueAction } from '../../simulation-framewor
 import { resolveCashKey } from './cash-routing.js';
 import { fxRate }         from '../fx/fx-conversion.js';
 import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
-// Design 87: the currency leg. This is a deliberate two-module cycle — currency-basis
-// delegates the shared §988 arithmetic back here so there is ONE implementation of it
-// rather than two that drift. Safe because everything crossing the boundary in both
-// directions is a hoisted `export function`, evaluated only at call time, never during
-// module initialization. Do not add a top-level `const` that reads across it.
-import { realizeCurrencyDisposition } from './currency-basis.js';
+// Design 87 phase 3 removed this module's import of `realizeCurrencyDisposition`: the
+// cash leg of a loan payment is now realized by the currency lot observer, off the
+// `section988` declaration stamped on LOAN_PAYMENT_APPLY. The cycle is now one-way —
+// `currency-basis` still delegates the shared §988 arithmetic to `computeSection988Gain`
+// here so there is ONE implementation rather than two that drift, but nothing in this
+// file reaches back. If you ever restore an import from `currency-basis`, note the old
+// warning still applies: everything crossing that boundary must be a hoisted
+// `export function`, never a top-level `const` evaluated during module initialization.
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -587,7 +589,19 @@ export class LoanPaymentHandler extends HandlerEntry {
         actions.push(new FieldValueAction('loan_negative_amortization', 'Loan Negative Amortization', -principalPart));
       }
 
-      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx });
+      // Design 87 G3 — servicing a foreign-currency loan from a same-currency pool (an
+      // offset, which resolveLoanCashKey makes the default) is simultaneously a repayment
+      // of principal AND a disposition of nonfunctional currency, §988(c)(1)(C)(i). The
+      // declaration is safe to stamp here even though design 87 §6 says to realize in the
+      // REDUCER rather than the handler: what is declared is CHARACTER, which does not
+      // depend on how much cash the pool could actually fund. The amount still comes from
+      // the debit the reducer performs.
+      //
+      // No `businessFraction` — the observer falls back to the pool's `deductibleFraction`.
+      // On a matched facility this leg is the near-exact mirror of the debt leg and the two
+      // largely cancel, which is the finding rather than a bug (design 87 §3).
+      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx,
+        section988: { kind: 'DISPOSE', accountKey: cashKey } });
       const deduction = investmentInterestAction(loan, loanKey, interest, payment,
                                                  firstResidency(state));
       if (deduction) actions.push(deduction);
@@ -684,9 +698,17 @@ export class LoanPaymentApplyReducer extends Reducer {
     // On a matched facility this is the near-exact mirror of the debt leg computed
     // below, so the two largely cancel — which is the finding, not a bug. See design
     // 87 §3 for the three cases where they do NOT cancel.
-    const cashS988 = (actualCash > 0 && cash)
-      ? realizeCurrencyDisposition(state, cashKey, cash, actualCash, section988Residence(state, loan))
-      : { patch: {}, actions: [] };
+    // MIGRATED to phase 3: the handler declares `section988: { kind: 'DISPOSE' }` on this
+    // action and the currency lot observer realizes it, measuring against LOTS rather than
+    // one blended rate. No `businessFraction` is declared, so the observer falls back to
+    // the pool's own `deductibleFraction` — which is the right answer here and NOT the
+    // flat 0 the two conversion paths use: an offset backing an income-producing property
+    // services a §212 expense, where converting savings to your home currency does not.
+    // That difference is exactly why design 87 G12 made the fraction per-disposition.
+    // The gross units disposed of — the handler's `cashDue` is only the SCHEDULED amount,
+    // and when the pool is short the reducer funds less. Only cash that actually left
+    // disposes of currency.
+    if (action.section988) action.section988.units = actualCash;
     if (actualCash > 0 && cash) this.accountService.transaction(cash, -actualCash, null);
 
     // Value delivered to the loan, converted back into the LOAN's currency. When the
@@ -707,16 +729,9 @@ export class LoanPaymentApplyReducer extends Reducer {
     const { patch: s988Patch, actions: s988Actions } =
       _section988ForPayment(state, loanKey, loan, oldBalance, principalPart);
 
-    // The cash pool's entry is spread AFTER transaction() mutated its balance in place,
-    // so only `fxBasisRate` is being added; writing a pre-debit copy back would undo
-    // the payment.
-    const cashPatch = (cash && Object.keys(cashS988.patch).length)
-      ? { [cashKey]: { ...cash, ...cashS988.patch } } : {};
-
     return this.newState(state, {
       [loanKey]: { ...loan, ...s988Patch, balance: +newBalance.toFixed(2) },
-      ...cashPatch,
-    }, [...s988Actions, ...cashS988.actions]);
+    }, s988Actions);
   }
 }
 

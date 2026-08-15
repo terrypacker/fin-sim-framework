@@ -204,6 +204,35 @@ test('FX988-7 the capital share reaches the CAPITAL accumulators, not ordinary i
   assert.ok(g.longTerm == null, `pro-rata reports no holding period, got ${g.longTerm}`);
 });
 
+test('FX988-8 a HANDLER-level top-up establishes basis before the conversion measures it', () => {
+  // `FxTransferToHandler` calls `replenishSavings` to top up its source BEFORE emitting any
+  // action, so the credit happens inside the handler with no reducer running. That move
+  // once escaped the observer entirely, and the failure was silent in the worst way: the
+  // pool rebuilt itself from the current balance and a STALE basis, pricing the topped-up
+  // currency at a rate that never applied to it.
+  //
+  // Note the units invariant does NOT catch this — `readPool` seeds units from the
+  // balance, so units always reconcile. Only basis moves, which is why this test asserts a
+  // gain figure rather than a drift of zero.
+  const { sim } = loadFxScenario(makeFxConfig({
+    auSavingsBalance: 1000, exchangeRate: 1.55, auBasisRate: 1.30,
+  }));
+  sim.state.usSavingsAccount.balance = 100000;
+  sim.state.usSavingsAccount.drawdownPriority = 1;
+
+  convert(sim, 5000);   // only 1000 AUD present ⇒ 4000 topped up at 1.55 inside the handler
+
+  const g = gains(sim);
+  assert.equal(g.length, 1);
+  // basis = 1000/1.30 + 4000/1.55 = 3349.88; proceeds = 5000/1.55 = 3225.81.
+  const expected = 5000 / 1.55 - (1000 / 1.30 + 4000 / 1.55);
+  assert.ok(Math.abs(g[0].gross - expected) < 0.05,
+    `gross ${g[0].gross} should be ${expected} — the top-up must carry its OWN basis`);
+  // The wrong answer this guards is -620.35: the whole 5000 priced at the pre-top-up rate.
+  assert.ok(Math.abs(g[0].gross - (5000 / 1.55 - 5000 / 1.30)) > 100,
+    'must not price the topped-up currency at the old rate');
+});
+
 test('FX988-6 the conversion measures basis accumulated across MANY credits — G8', () => {
   // The pool is fed by a USD→AUD conversion at one rate, then converted back at another.
   // Nothing authored: the basis is entirely what the ledger accumulated, which is the

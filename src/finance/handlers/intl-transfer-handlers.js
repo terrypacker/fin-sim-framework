@@ -65,7 +65,18 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     const targetDeficit = Math.max(0, audActual / rate - fee);
     const usStateKey    = this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
     return [
-      { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit },
+      // Design 87 phase 3 — the §988 character declaration the currency lot observer reads
+      // (G1, migrated out of IntlTransferApplyReducer). Only this direction disposes of
+      // nonfunctional currency; US_TO_AU acquires it and needs no declaration, because
+      // acquiring establishes basis and realizes nothing.
+      //
+      // `businessFraction: 0` — PERSONAL, the same position `FxTransferToHandler` takes and
+      // for the same reason: §988(e)(3) asks whether expenses properly allocable to the
+      // transaction meet §162 or §212, and converting your own savings into your home
+      // currency has none. Both conversion paths must agree, or the §988 total depends on
+      // which one a scenario happened to use — which is the whole defect G2 recorded.
+      { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit,
+        section988: { kind: 'DISPOSE', businessFraction: 0 } },
       new RecordMetricAction('intl_transfer_to_us', targetDeficit),
       new RecordBalanceAction(`${usStateKey}.balance`, usStateKey),
     ];

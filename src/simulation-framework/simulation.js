@@ -675,6 +675,16 @@ export class Simulation {
         }
       }
 
+      // Handlers are bracketed by observers for the same reason reducers are, and it is
+      // not a symmetry nicety: a handler may reach AccountService directly and move a
+      // balance without any reducer running — `FxTransferToHandler` calls
+      // `replenishSavings` to top up its source before emitting a single action. Those
+      // moves used to be invisible here, and invisibility was WORSE than absence: the next
+      // transition rebuilt the pool from the current balance and a stale basis, silently
+      // pricing currency at a rate that never applied to it.
+      const hObsTokens = this._reducerObservers && !this._reducerObservers.isEmpty
+        ? this._reducerObservers.before(this.state) : null;
+
       const actions = entry.call({
         sim: this,
         date: this.currentDate,
@@ -682,6 +692,14 @@ export class Simulation {
         meta: event.meta,
         state: this.state
       });
+
+      // No action exists at this point, so there is no character declaration to read and
+      // observers see mechanics only — a credit establishes basis, a debit is a
+      // non-recognition withdrawal. That is the correct default for the top-up case, and
+      // any site needing to declare a DISPOSE does it on an action, in a reducer.
+      const hObsActions = hObsTokens
+        ? this._reducerObservers.after(this.state, hObsTokens, { type: 'HANDLER' }, this.currentDate)
+        : [];
 
       if (!isInternal && !this.silent) {
         this.bus.publish(new ExecutionBusMessage({
@@ -701,7 +719,7 @@ export class Simulation {
 
       // Pass handlerContext so that if applyActions pauses mid-queue we know
       // which handler to resume from (the NEXT one: i + 1).
-      this.applyActions(actions, event, {
+      this.applyActions(hObsActions.length ? [...(actions ?? []), ...hObsActions] : actions, event, {
         handlerContext: { event, handlerIdx: i + 1, stateBefore, eventExecId, eventNodeId },
         handlerExecId:  handlerExecId ?? eventExecId, // anonymous handlers use event as parent
         eventNodeId,

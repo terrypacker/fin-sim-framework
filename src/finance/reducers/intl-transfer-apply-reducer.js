@@ -12,9 +12,6 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { convertNetOfFee, grossUpForTarget } from '../fx/fx-conversion.js';
-import { section988Residence } from '../account-rules/loan-classes.js';
-import { realizeCurrencyDisposition, acquireCurrencyBasis }
-  from '../account-rules/currency-basis.js';
 
 /**
  * Handles the INTL_TRANSFER_APPLY action.
@@ -126,24 +123,40 @@ export class IntlTransferApplyReducer extends Reducer {
       const audActual   = Math.min(audNeeded, auAcc.balance);
       const usdReceived = Math.max(0, convertNetOfFee(audActual, 'AUD', 'USD', rate, fee));
       // Design 87 G1 — converting AUD to USD is the paradigm §988 disposition of
-      // nonfunctional currency (§988(c)(1)(C)(i)). Realized BEFORE the debit, because
-      // the disposition is measured against the basis the pool carried while it still
-      // held these units. Unlike the offset leg there is no matched opposite position
-      // here, so this is the one place §988 produces a genuinely new number.
-      const s988 = audActual > 0
-        ? realizeCurrencyDisposition(state, auKey, auAcc, audActual, section988Residence(state, auAcc))
-        : { patch: {}, actions: [] };
+      // nonfunctional currency (§988(c)(1)(C)(i)), and unlike the offset leg there is no
+      // matched opposite position, so it is the one place §988 produces a genuinely new
+      // number.
+      //
+      // MIGRATED to phase 3: the realization is no longer computed here. The handler
+      // declares `section988: { kind: 'DISPOSE' }` on this action and the currency lot
+      // observer does the work, which buys three things this code could not. It measures
+      // against LOTS rather than a single blended rate, so FIFO is expressible; it routes
+      // the personal share to the CAPITAL branch (G10) instead of booking it as ordinary;
+      // and it sees the `replenishSavings` top-up above, which credits this same pool
+      // inside this reducer and which the old ordering priced at the pre-top-up rate.
+      // Name the disposing pool on the declaration the handler stamped. The handler cannot
+      // supply it: `auKey` comes from this reducer's own stateRegistry/config resolution
+      // above, not from anything on the action. It matters because `replenishSavings` may
+      // have topped this pool up from ANOTHER AUD account, and an unnamed DISPOSE would
+      // realize that internal leg too — turning a `(a)(1)(iii)(E)` non-recognition transfer
+      // into a taxable disposition.
+      if (action.section988) {
+        action.section988.accountKey = auKey;
+        // The GROSS units disposed of. `replenishSavings` above may have credited this
+        // same pool, so its NET movement understates the conversion — see the observer's
+        // note on declared units. This is the amount that actually moved, which is why
+        // design 87 §6 puts the decision in the reducer rather than the handler.
+        action.section988.units = audActual;
+      }
       if (audActual > 0) {
         this.accountService.transaction(auAcc, -audActual,   date);
         this.accountService.transaction(usAcc, +usdReceived, date);
       }
-      pendingTaxActions.push(...s988.actions);
       const usdShortfall = targetDeficit - usdReceived;
       if (usdShortfall > 0.01) {
-        return this.newState(state, this._patch(auKey, auAcc, s988.patch),
+        return this.newState(state, {},
           [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }]);
       }
-      if (Object.keys(s988.patch).length) return this.newState(state, this._patch(auKey, auAcc, s988.patch), pendingTaxActions);
 
     } else {
       const usdNeeded = grossUpForTarget(targetDeficit, 'USD', 'AUD', rate, fee);
@@ -163,21 +176,19 @@ export class IntlTransferApplyReducer extends Reducer {
       const usdActual   = Math.min(usdNeeded, usAcc.balance);
       const audReceived = Math.max(0, convertNetOfFee(usdActual, 'USD', 'AUD', rate, fee));
       // Design 87 G1, mirror direction — acquiring AUD establishes basis and realizes
-      // NOTHING. The blend must see the balance BEFORE the credit, so it is captured
-      // here rather than read back off the mutated account.
-      const balanceBefore = auAcc.balance ?? 0;
+      // NOTHING. MIGRATED to phase 3: the observer sees the credit and blends the pool's
+      // basis itself, so the balance-before capture this used to need is gone with it.
+      // Every other credit path in the model now gets the same treatment (G8), which is
+      // what this one call site could never provide.
       if (usdActual > 0) {
         this.accountService.transaction(usAcc, -usdActual,   date);
         this.accountService.transaction(auAcc, +audReceived, date);
       }
-      const acqPatch = audReceived > 0
-        ? acquireCurrencyBasis(state, auAcc, balanceBefore, audReceived) : {};
       const audShortfall = targetDeficit - audReceived;
       if (audShortfall > 0.01) {
-        return this.newState(state, this._patch(auKey, auAcc, acqPatch),
+        return this.newState(state, {},
           [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }]);
       }
-      if (Object.keys(acqPatch).length) return this.newState(state, this._patch(auKey, auAcc, acqPatch), pendingTaxActions);
     }
 
     return pendingTaxActions.length > 0
@@ -185,16 +196,6 @@ export class IntlTransferApplyReducer extends Reducer {
       : this.newState(state);
   }
 
-  /**
-   * Merge a §988 basis patch onto the AU pool's state entry.
-   *
-   * `accountService.transaction` has already mutated the live account object's balance
-   * in place, so the entry is spread AFTER the mutation and the patch carries only the
-   * `fxBasisRate` field — writing a stale copy back here would undo the transfer.
-   */
-  _patch(key, account, patch) {
-    return Object.keys(patch).length ? { [key]: { ...account, ...patch } } : {};
-  }
 }
 
 /**

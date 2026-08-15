@@ -1,9 +1,19 @@
 # 87 — Foreign-currency basis pools: §988 on cash, not just on debt
 
-**Status** (2026-08-06): **PHASES 1, 2, 2b BUILT**, suite green (4,615 unit + 1,017 viz);
-phase 3 specified but deliberately not built. Grew out of design 86 G7/P8, which built
-§988 on foreign-currency **debt** and, in doing so, made it obvious that the debt is
-only one leg of the position.
+**Status** (2026-08-14): **PHASES 1, 2, 2b BUILT. PHASE 3 PARTLY BUILT** — the lot ledger,
+its observer seam, G8, G11, G12 and G10 are in; four disposition emitters are not. Suite
+green (4,985 unit + 1,023 viz). Grew out of design 86 G7/P8, which built §988 on
+foreign-currency **debt** and, in doing so, made it obvious that the debt is only one leg
+of the position.
+
+> **Picking this up cold? Read §14 first.** It is the phase-3 build record: what exists,
+> the one concept the whole thing turns on (the observer owns *mechanics*, callers declare
+> *character*), the three bugs the build surfaced, and the ordered list of what is left.
+> §12 remains the entry point for the *regulations*.
+>
+> **§5 G6's answer changed on 2026-08-14 and the doc below is updated but the reasoning is
+> worth knowing:** the measurement that made pro-rata the obvious incumbent turned out to
+> be stale. See §14.2.
 
 **Revised 2026-08-08.** Everything above §12 was written against the *statute* alone,
 because the regulations were not on disk. They are now — `§1.988-1` and `§1.988-2`, see
@@ -149,8 +159,11 @@ an offset, and what `resolveLoanCashKey` already makes the model do — each pay
 simultaneously:
 
 1. a repayment of AUD principal (the debt leg, **built** — design 86 P8), and
-2. a disposition of AUD out of the deposit (the currency leg, **built** — Phase 2 G3;
-   `LoanPaymentApplyReducer` calls `realizeCurrencyDisposition` on the cash it pays from).
+2. a disposition of AUD out of the deposit (the currency leg, **built** — Phase 2 G3).
+   *Moved 2026-08-14:* `LoanPaymentApplyReducer` no longer calls
+   `realizeCurrencyDisposition` itself. It stamps `section988: { kind: 'DISPOSE' }` on
+   `LOAN_PAYMENT_APPLY` and the currency lot observer realizes it — §14. The cancellation
+   below is unchanged and is pinned through the new path by CB-14..16.
 
 *(This line said the currency leg was "not built" until 2026-08-12, long after Phase 2
 landed. §9's phase table was right and this paragraph was stale — and it was the stale
@@ -226,14 +239,22 @@ section*. So on the personal share:
   excluded outright, not merely de-characterized.
 - **Losses are unchanged** — nondeductible under §165(c), per Quijano.
 
-> **Gap G10 (new, not built).** `computeCurrencyDisposition` books the personal share as
-> **ordinary** §988 gain. Per the above it should be **capital**. The error is confined
-> to character, not amount, and it runs against the taxpayer at ordinary rates. It is
-> also *dormant on the live scenario*, where the offset is rental-linked and the business
-> fraction is 1 — so this is a correctness fix with no expected effect on current
-> numbers, and it needs a working-detector control to prove it fires at all (§10).
+> **Gap G10 — BUILT on the observer path (2026-08-14), still open on three others.**
+> The lot observer routes the personal share to the **capital** accumulators via
+> `capitalGain` on `SECTION_988_GAIN`, and the US classifier books it there rather than in
+> ordinary income. Still wrong wherever `computeSection988Gain` is the emitter — the debt
+> leg, bond redemption, and `AccountService.pushTransfer` — because that function folds the
+> personal share into `recognized`. Each becomes correct when migrated (§14.4 item 6).
+>
+> The error is confined to character, not amount, and it runs against the taxpayer at
+> ordinary rates.
+>
 > **A capital branch needs a holding period, which a single `fxBasisRate` scalar cannot
-> supply** — see §5 G6 for why that is the one real argument for a lot ledger.
+> supply** — so under the default pro-rata the term is unknowable and the gain is treated
+> as SHORT-term, the conservative reading. `longTerm` is emitted as `null` and consumers
+> must read null as *unknown*, never as "known short". Only FIFO can answer it, which is
+> the one real argument for the lot ledger and is now measurable rather than theoretical
+> (§14.2).
 
 **§988(e)(2)** is the de minimis, and its scope is narrower than design 86 assumed:
 
@@ -351,12 +372,16 @@ redemption. Coupons carry their own item between accrual and payment
 (Reg. §1.988-2(b)(3), holder side), identically zero here because the two are
 simultaneous.
 
-### Phase 3 — the general currency pool (G5–G8, G11, G12). **Specified, not scheduled.**
+### Phase 3 — the general currency pool (G5–G8, G11, G12). **MOSTLY BUILT 2026-08-14.**
 
-Written down now, while the analysis is in hand, so it can be picked up cold.
+Written down before it was built, so it could be picked up cold. It was. **§14 is the
+build record and supersedes the statuses in this section where they disagree** — G5, G8,
+G11 and G12 are in; G7 is not and may never be needed; the remaining work is disposition
+emitters, listed in §14.4.
 
-- **G5 — a lot ledger on every foreign-currency cash account.** Credits create lots
-  stamped with the spot rate; **dispositions** consume them — *not* every debit, per §1a.
+- **G5 — a lot ledger on every foreign-currency cash account. BUILT (§14.1).** Credits
+  create lots stamped with the spot rate; **dispositions** consume them — *not* every
+  debit, per §1a.
   The codebase already has this shape twice — `Holding.costBasis` for CGT and design 84
   G9's rollover ledger — so this is a pattern to copy, not to invent. Beware
   [[basis-ledger-revaluation-drift]]'s failure mode: anything that revalues a balance
@@ -388,8 +413,20 @@ Written down now, while the analysis is in hand, so it can be picked up cold.
   satisfy it by construction) and one lock (**all** nonfunctional-currency accounts,
   **every** year; changing later is a method change).
 
-  **The decision: pro-rata is the incumbent, and FIFO must earn the switch.** The reason
-  is that we have already built pro-rata without labelling it as such —
+  > **UPDATED 2026-08-14 — the "FIFO must earn the switch" bar has been LOWERED, because
+  > the measurement it rested on was stale.** The real-history `--compare` figure that made
+  > method look immaterial (a fraction of a percent) was pasted from an earlier
+  > classification of the source file; re-running the same command gave a spread roughly
+  > **forty times larger**, around 8% of recognised gain, with the ordinary/capital split
+  > moving more than the total did. Both conventions are therefore now BUILT and selectable
+  > (§14.1); pro-rata remains the DEFAULT, but only so that golden movement has one cause,
+  > not because the choice is known to be free. See §14.2 for why the historical study
+  > structurally could not settle this, and what would.
+  >
+  > Figures live in the gitignored working directory, not here — §12's rule.
+
+  **The original decision (pro-rata is the incumbent, FIFO must earn the switch).** The
+  reason is that we have already built pro-rata without labelling it as such —
   `fxBasisRate` + `blendCurrencyBasisRate` *is* the reg's pro-rata method exactly, not an
   approximation of it:
 
@@ -434,11 +471,16 @@ Written down now, while the analysis is in hand, so it can be picked up cold.
   operation with no lot walk. G7 survives only as a **FIFO cost**, which is one more
   reason for FIFO to have to earn the switch. If FIFO is ever adopted, the gate is a
   minimum balance or minimum holding period below which a pool is not tracked.
-- **G8 — the AUD leg of foreign-currency income.** Rent received in AUD, AU wages, AU
-  interest: each is an acquisition of currency at that day's rate. Phase 3 is where
-  those become lots rather than untracked balance.
+- **G8 — the AUD leg of foreign-currency income. BUILT.** Rent received in AUD, AU wages,
+  AU interest: each is an acquisition of currency at that day's rate. Delivered by the
+  observer rather than by wiring each income reducer — about half of the ~20 credit paths
+  patch `state[key].balance` directly and never reach `AccountService` at all, so per-site
+  wiring would have missed them (§14.1).
 
-- **G11 — pools are PER-ACCOUNT with basis carryover, not one commingled pool.**
+- **G11 — pools are PER-ACCOUNT with basis carryover, not one commingled pool. BUILT.**
+  The observer infers a transfer from the SHAPE of the movement — one pool of a currency
+  falls while another rises — so a transfer path nobody remembered to annotate still
+  carries basis instead of silently re-marking to market.
   Added 2026-08-08, correcting a claim made while designing the ingest tool. It is
   tempting to read `§1.988-2(a)(2)(iii)(B)(1)`'s "consistently applied … to **all
   accounts**" as merging them. It does not: it requires the *method* be consistent, and
@@ -463,8 +505,10 @@ Written down now, while the analysis is in hand, so it can be picked up cold.
   Either way **every account in the currency must be ingested**, because basis flows
   between them and a carryover you cannot see cannot be computed.
 
-- **G12 — the `§988(e)(3)(B)` tax carve-out.** Not modelled, and invisible until you look
-  at real data. §988(e)(3) adopts §212 **"other than that part of section 212 dealing
+- **G12 — the `§988(e)(3)(B)` tax carve-out. The MECHANISM is built; the emitter that
+  uses it is not (§14.4 item 1).** The fraction is now per-disposition, so the carve-out
+  is expressible; the AU tax-payment path has not yet been declared, so it is not yet
+  expressed. Invisible until you look at real data. §988(e)(3) adopts §212 **"other than that part of section 212 dealing
   with expenses incurred in connection with taxes"** — the same words in
   `§1.988-1(a)(9)(i)`. So currency disposed of to *pay tax* is a **personal** transaction
   even where it is unambiguously connected to an income-producing property. It falls to
@@ -549,6 +593,14 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
    **over-disallows, never over-deducts** — and it is exact at both ends (a
    rental-linked pool clears both tests; a purely personal one clears neither).
 
+   **A partial answer, taken 2026-08-14 for CONVERSIONS but not for the offset.** All three
+   conversion paths now declare `businessFraction: 0` — personal. §988(e)(3) asks whether
+   expenses properly allocable to the transaction meet §162 or §212, and converting your own
+   savings into your home currency has none, so it falls to the capital branch with the
+   \$200 exclusion rather than being ordinary §988. All three paths must agree or the total
+   depends on which one a scenario used, which is the defect G2 records. That leaves the
+   offset question below genuinely open.
+
    The offset deposit is precisely where the gap opens. §988(e)(3) is weak for it: the
    provision asks about "expenses properly allocable to such transaction" and a deposit
    has no expenses — and an offset earns no interest by design
@@ -566,12 +618,14 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
    but §988(d)(2)(B) demands identification, and Quijano says it must be contemporaneous.
    Probably "no, and that is the finding" — but it should be a recorded decision rather
    than an omission, because a reader will ask.
-3. **What convention for lot consumption (G6) — ANSWERED 2026-08-08.**
-   `§1.988-2(a)(2)(iii)(B)(1)` names FIFO, LIFO and pro-rata as reasonable methods and
-   bars only systematic highest-basis-first. **Pro-rata is the incumbent** (it is what
-   `fxBasisRate` already implements, exactly) and FIFO must earn the switch on the two
-   measurements in §5 G6. The residual open item is not *which rule* but **whether the
-   two measurements favour switching**, and that needs real transaction history.
+3. **What convention for lot consumption (G6) — RULE answered 2026-08-08, CHOICE reopened
+   2026-08-14.** `§1.988-2(a)(2)(iii)(B)(1)` names FIFO, LIFO and pro-rata as reasonable
+   methods and bars only systematic highest-basis-first — that part is settled. What is
+   *not* settled is which to adopt: the measurement that made pro-rata look free was stale,
+   and the corrected spread is material (§14.2). Both are now built and selectable, so
+   pro-rata is the DEFAULT rather than the answer. **The deciding measurement — dispersion
+   across MC rate paths on a plan with a `moveYear` — has still never been run**, and the
+   historical study cannot substitute for it because it is single-residency.
 4. **Does the AU side assess anything?** For an Australian resident an AUD balance is
    their own functional currency, so Div 775 ITAA 1997 has no forex realisation event
    and the answer is no. For a *US*-resident holding AUD there is no AU nexus either.
@@ -589,11 +643,15 @@ Every one of these cost time on the debt leg and will recur on the currency leg.
 | **2b** | G9 foreign-currency bonds, per-holding, redemption path | **built** (sale-before-maturity remaining) |
 | **—** | §11 `CASH ⇒ no capital gain` guard in `consumeHoldings` + `Holding` invariant | **built** |
 | **—** | §11a invariant re-asserted at `_patchHolding`; `_unrealizedGainSplit` skips CASH; cash-interest reinvest raises basis | **built** |
-| **—** | G10 personal share is **capital**, not ordinary §988 (§4) | **not built** — character-only, dormant on the live scenario |
-| **3** | G5 lot ledger · G7 materiality gate (FIFO-only) · G8 income-side acquisition | **specified, not scheduled** |
-| **3** | G11 per-account pools + basis carryover on transfer (§5) | **specified** — decide before G5 is written |
-| **3** | G12 §988(e)(3)(B) tax carve-out; needs a per-disposition fraction (§5) | **specified**, blocked on G5 |
-| **—** | G6 consumption convention | **answered** — pro-rata incumbent (§5 G6, §8 Q3) |
+| **—** | G10 personal share is **capital**, not ordinary §988 (§4) | **built on the observer path only** — the three `computeSection988Gain` emitters still fold the personal share into ordinary (§14.4) |
+| **3** | G5 lot ledger, both conventions, shared with the ingest tool | **built** — §14.1 |
+| **3** | G8 income-side acquisition — every credit establishes basis | **built**, via the observer rather than per-site wiring |
+| **3** | G11 per-account pools + basis carryover on transfer (§5) | **built** — inferred from the shape of the movement, no declaration needed |
+| **3** | G12 §988(e)(3)(B) tax carve-out; needs a per-disposition fraction (§5) | **built** — the fraction is per-disposition; the tax-payment emitter that consumes it is not (§14.4) |
+| **3** | G7 materiality gate (FIFO-only) | **not built, and may never be needed** — see §5 G7 |
+| **3** | disposition emitters: FX_TRANSFER (the third conversion path) | **built** — §14.3 |
+| **3** | disposition emitters: expenses · AU property purchase · AU tax payment · super contributions | **not built** — §14.4, the ordered list |
+| **—** | G6 consumption convention | **both built and selectable**; pro-rata is the DEFAULT, not a settled answer (§5 G6, §14.2) |
 | **—** | ingest + validation of real history (`scripts/tax/section988-ingest.mjs`) | **built** — §12; computes no tax by design |
 | **—** | §13 observed-data replay overlay | **sketch only**, successor design |
 
@@ -647,8 +705,10 @@ turns out to be one of the three conventions the regulation names. Two common ca
 A pool whose history is genuinely unknown should be left null: the model will stamp it
 and recognize nothing, which is the honest answer rather than a fabricated one.
 
-**Phase 3's G5 lot ledger is what removes this authoring burden** — with per-lot basis
-the rate stops being a single authored scalar and becomes an accumulated fact. That is
+**Phase 3's G5 lot ledger is what removes this authoring burden, and it is now BUILT** —
+basis accumulates from every credit rather than being a single authored scalar. The
+*opening* balance still has to be seeded, which is what §13.6 step 1 addresses and why that
+step is now the highest-value item in this design. That is
 the strongest argument for eventually building it, and note it is an argument for **G5
 alone**: deriving a pro-rata rate from real history needs the history just as much as
 FIFO does. G5 does not commit you to G6's answer.
@@ -863,16 +923,18 @@ Mapping that onto this design:
 | conversions realize §988 with no offsetting leg | **built** — phase 1 (G1, G2) |
 | a mortgage serviced from a same-currency pool, both legs | **built** — phase 2 (G3) + design 86 P8 |
 | source follows the tax home, flipping at the move year | **built** — §6 |
-| income *acquiring* basis at the day's rate | **G8, not built.** Today the balance grows without the pool's basis rate following it |
-| a **per-disposition** use fraction, not a per-account scalar | **G5 + G12, not built.** One account here is simultaneously §212 (property expenses), personal (household), and carved-out (tax payments) |
-| personal share as **capital**, with a holding period | **G10, not built** |
-| same-currency sweeps carrying basis between accounts | **G11, not built** |
+| income *acquiring* basis at the day's rate | **G8, BUILT** (§14) |
+| a **per-disposition** use fraction, not a per-account scalar | **G5 + G12, BUILT.** One account here is simultaneously §212 (property expenses), personal (household), and carved-out (tax payments) — now expressible. The tax-payment emitter that would exercise it is still unwired (§14.4) |
+| personal share as **capital**, with a holding period | **G10, BUILT on the observer path**; the three legacy `computeSection988Gain` emitters still book it as ordinary. A holding period needs FIFO, which is selectable but not the default |
+| same-currency sweeps carrying basis between accounts | **G11, BUILT** |
 | a **published** rate per transaction date | **built, outside the engine** — `rates/`, deliberately not `effectiveExchangeRates` |
 
-**The honest summary: the engine can model the *structure* today but not the
-*heterogeneity*.** Everything unbuilt above is a variant of one thing — the model
-carries a single scalar (`fxBasisRate`, `deductibleFraction`) per account where reality
-carries a distribution per transaction. That is a fair simplification for projecting a
+**The honest summary WAS: the engine can model the *structure* today but not the
+*heterogeneity*.** Everything unbuilt in that table was a variant of one thing — the model
+carried a single scalar (`fxBasisRate`, `deductibleFraction`) per account where reality
+carries a distribution per transaction. *Phase 3 closed that gap*: basis is now per-lot and
+the use fraction is per-disposition. What remains is not a modelling limit but unwired
+emitters (§14.4). That is a fair simplification for projecting a
 future, because a projected account genuinely is homogeneous. It stops being fair the
 moment the account is real.
 
@@ -996,3 +1058,172 @@ Encouragingly, most of this is a wiring exercise rather than new machinery:
    observed. The first falsifiable thing here, and the deliverable that justifies the rest.
 4. **Endogenous event overlay** — only if 3 shows a gap that only real events can close,
    and with the internal-consistency risk stated up front.
+
+---
+
+## 14. Phase 3 as built — the pickup guide
+
+Added 2026-08-14. Phases 1–2 tracked a currency pool as a single blended rate
+(`fxBasisRate`). Phase 3 replaces that with a **lot ledger**, fed by observing what each
+reducer did to the balances rather than by calling into it from each of the ~20 places
+that move them. This section is the build record: read it before touching the code.
+
+### 14.1 What exists, and the one idea it all turns on
+
+> **The observer owns MECHANICS. Callers declare CHARACTER.**
+
+That split is the whole design and everything else follows from it.
+
+**Mechanics** — how many units a pool holds and what USD basis they carry — is a fact
+about the balance, and a balance is observable. **Character** — whether a debit is a
+*disposition* under `§1.988-2(a)(1)(iii)`, and what share of it is §162/§212 business use
+under `§988(e)(3)` — is a fact about *what the money bought*, which a balance delta cannot
+possibly reveal and only the caller knows.
+
+Splitting them is what made the ledger safe to land before any emitter was wired.
+Mechanics cannot be forgotten, because a new credit path cannot hide from a balance
+comparison. Character is opt-in, one action at a time.
+
+| file | role |
+|---|---|
+| `src/finance/account-rules/currency-lots.js` | `CurrencyLotPool` (both conventions) + `allocateGain`. **Shared with `scripts/lib/section988-ledger.mjs`**, so the engine's ledger inherits the ingest tool's test suite instead of starting at zero coverage. Convention-FREE: it stores units and USD basis, never a rate, because the two callers quote FX in opposite directions. |
+| `src/simulation-framework/reducer-observer-registry.js` | generic, domain-free seam. Mirrors `DerivedMetricsRegistry`. |
+| `src/simulation-framework/simulation.js` | brackets **reducers** (around the state assignment, before the journal diff) **and handlers**. |
+| `src/finance/account-rules/currency-lot-observer.js` | all the §988 logic. |
+| `src/scenarios/base-scenario.js` | registers it beside `derivedMetrics`. |
+
+**The declaration**, carried on an action, using the same three axes the ingest tool uses
+so a movement is described identically whether projected or reconstructed:
+
+```js
+action.section988 = {
+  kind: 'DISPOSE' | 'INTERNAL' | 'IGNORE',
+  businessFraction,   // §988(e)(3) "to the extent", PER DISPOSITION (G12).
+                      //   Falls back to the account's deductibleFraction.
+  accountKey,         // which pool disposes. Absent ⇒ every debit in the bracket.
+  units,              // GROSS units disposed, when a net delta would hide them.
+}
+```
+
+**The defaults, and they all lean the same way:**
+
+| observed | declared | ledger does |
+|---|---|---|
+| balance UP | (none) | acquire a lot at spot — **this is G8** |
+| balance UP *and* DOWN | (none) | same-currency transfer: basis CARRIES OVER — **this is G11**, inferred from the shape, no flag needed |
+| balance DOWN | (none) | consume lots, carry basis out, **realize NOTHING** |
+| balance DOWN | `DISPOSE` | consume lots and emit `SECTION_988_GAIN` |
+| either | `IGNORE` | rescale the pool, holding basis:units |
+
+Row three is load-bearing: `§1.988-2(a)(1)(iii)(C)` puts a bare withdrawal on the
+**non-recognition** list, so an undeclared debit **understates** §988 rather than inventing
+it. That is what makes an unwired emitter a safe state to be in, and it is why the emitters
+in §14.4 can be added one at a time.
+
+Two smaller decisions worth not re-litigating:
+
+- **State is authoritative; the observer caches no pools.** `restoreSnapshot`/`rewind` (the
+  workbench timeline, the optimizer's MPC seam) and `Simulation`'s self-clone replace state
+  wholesale — a cached pool would describe an abandoned world with no symptom until a tax
+  figure came out wrong. Rebuilding costs two numbers under pro-rata.
+- **`fxLots` reaches state only under FIFO.** Pro-rata is fully described by `fxBasisUsd` +
+  `fxBasisRate` and never consults a lot, so publishing hundreds of them per pool would cost
+  every run and bury every golden fixture's real diff. First attempt moved 236 golden fields;
+  gating it moved 2.
+
+### 14.2 G6 reopened — and the rule that cost
+
+The working directory's `--compare` table said method (FIFO vs pro-rata) was worth a
+fraction of a percent, and design 87 leaned on that to make pro-rata the incumbent. That
+number was **stale** — pasted from an earlier classification of the source file. Re-running
+the identical command gave a spread roughly **forty times larger**, with the
+ordinary/capital split moving more than the total.
+
+> **A pasted number is a snapshot of an input that keeps moving.** Re-run before leaning on
+> any measured figure in a working-directory README. Same failure mode as §3's stale prose
+> build status — and note it is the *stale* half that gets believed, because it reads like a
+> settled conclusion.
+
+**Why the study could not settle it anyway, and this is the more useful half.** Over a
+pool's whole life the two methods **agree** — both consume 100% of the basis — so method
+never changes a lifetime total. It only decides *which disposition* each dollar of basis
+attaches to, and therefore which **year**, which **business fraction**, and which
+**residency**. It becomes a permanent difference rather than a timing one exactly when tax
+treatment varies across dispositions:
+
+1. **The `moveYear`.** §988 source follows the tax home (§6), so method decides how much
+   basis is consumed while US-source versus foreign-source — different §904 baskets,
+   different FTC. **The historical study is single-residency and structurally blind to this.**
+2. **A business fraction that changes mid-plan** (§4's trap: a property stops renting).
+   Business share is ordinary deductible; personal loss is disallowed outright.
+3. **Bracket effects** across a 40-year plan.
+4. **LT/ST on the capital branch**, which only FIFO can answer.
+
+And the pool *shapes* differ: the real history is a few large lots — the **converging**
+shape, where the methods agree. A projection with continuous AUD income in and continuous
+mortgage/expenses out under a wandering rate is the **diverging** shape. The study measured
+the case least likely to separate them.
+
+**What would settle it:** run both conventions across MC rate paths on a plan with a
+`moveYear` and compare *dispersion*, not a point estimate — the tiebreak §5 G6 already
+names, which has never actually been run. Both conventions are built and selectable, so
+this is now a measurement rather than an argument.
+
+### 14.3 Three bugs the build surfaced
+
+Recorded because each was silent, and two were in already-committed code.
+
+1. **Handler-level balance moves escaped the observer.** `FxTransferToHandler` calls
+   `replenishSavings` *before* emitting any action, so a top-up credit happened with no
+   reducer running. The pool then rebuilt from the current balance and a **stale basis**,
+   pricing the topped-up currency at a rate that never applied to it. Fixed by bracketing
+   handlers too. **The units invariant cannot catch this class of error** — `readPool` seeds
+   units from the balance, so units always reconcile and only *basis* moves. Any check here
+   must assert a gain figure, not a drift of zero.
+2. **`DISPOSE` was ambiguous when one reducer moves several pools.**
+   `IntlTransferApplyReducer` can top its AU pool up *from another AUD pool* and then
+   convert out of it; an unnamed `DISPOSE` realized the internal leg too, taxing a
+   `(a)(1)(iii)(E)` non-recognition transfer. Hence `accountKey`.
+3. **Observation is per bracket, so it sees NET deltas.** A pool credited *and* debited
+   inside one reducer nets out, and under pro-rata a net movement is **not** arithmetically
+   equivalent to a credit followed by a debit. Hence `units`, stamped by the reducer — which
+   is §6's "realize in the reducer, not the handler" restated: the caller that moved the
+   money is the only one that knows how much moved.
+
+Also worth knowing: `AccountService.transaction()` is **not** a usable choke point for this.
+Reducers must be pure (`README.md`), it mutates in place, it takes `Account` domain objects
+rather than the state projection, and it pro-rates across sleeves — which several reducers
+must not do. That is why the seam is at the pipeline level instead.
+
+### 14.4 What is left, in the order that de-risks it
+
+Everything below is a **disposition emitter**: a `section988` declaration on an existing
+action. The ledger already tracks basis correctly for all of them; until each is declared,
+its debit is treated as a non-recognition withdrawal and **understates** §988.
+
+1. **`AuTaxPaymentDebitReducer`** — and do this one first, because it is the only place
+   `§988(e)(3)(B)`'s carve-out (**G12**) actually bites: currency disposed of to pay tax is
+   *personal* even where the property is unambiguously income-producing. Declare
+   `businessFraction: 0`. The per-disposition fraction exists precisely for this and is
+   currently unexercised.
+2. **`ExpenseDebitReducer`** — living expenses, house running costs, property repairs.
+   Highest volume by far, so it is where §7's de-minimis-at-volume worry (**G7**) would
+   finally be tested. Note most of it is personal and therefore capital, not ordinary.
+3. **AU property purchase** (`property-purchase.js`) and **super contributions**
+   (`au-super-classes.js`, `downsizer-contribution.js`) — currency exchanged for property,
+   priced by `§1.988-2(a)(2)(ii)(B)`. Low volume, clean.
+4. **`AuMortgagePaymentApplyReducer`** — the legacy scalar-`mortgageBalance` path, parallel
+   to the migrated `LOAN_PAYMENT_APPLY`. Easy to miss because the loan-account path already
+   works.
+5. **Migrate `AccountService.pushTransfer` (G2)** — deliberately left explicit. It realizes
+   from a *service* spanning several accounts, which one action cannot describe per-leg. It
+   coexists correctly today (observer does mechanics, `pushTransfer` decides character) so
+   this is cleanup, not a defect.
+6. **G10's remaining half.** The capital branch is built on the observer path only. The three
+   `computeSection988Gain` emitters — the debt leg, bond redemption, and `pushTransfer` —
+   still fold the personal share into ordinary. Each becomes correct when migrated.
+
+**Before trusting any of it on a real plan:** phases 1–3 are still **inert without an
+authored `fxBasisRate`** (§10). §13.6 step 1 — seeding it from the ingest tool's closing
+pool — is now the single highest-value item in this design, because the ledger it feeds
+finally exists.

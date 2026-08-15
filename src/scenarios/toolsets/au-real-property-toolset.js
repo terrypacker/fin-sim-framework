@@ -108,7 +108,9 @@ export const AU_REAL_PROPERTY = {
       // either currency, so no single code is correct for it.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
-                  cashDue: ValueType.number() } },
+                  cashDue: ValueType.number(),
+                  // Design 87 G3 — the §988 character declaration, for journal visibility.
+                  section988: ValueType.any() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any

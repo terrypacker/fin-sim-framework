@@ -35,6 +35,7 @@ import {
   computeCurrencyDisposition, blendCurrencyBasisRate, isForeignCurrencyPool,
   currencyPoolBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis,
 } from '../../src/finance/account-rules/currency-basis.js';
+import { createCurrencyLotObserver } from '../../src/finance/account-rules/currency-lot-observer.js';
 
 // Rates are AUD per USD, matching effectiveExchangeRates.USD_AUD.
 const ACQ    = 1.40;
@@ -187,15 +188,29 @@ function offsetLoanState({ rate = STRONG, fxBasisRate = ACQ, bookingFxRate = ACQ
   };
 }
 
+/**
+ * One loan payment, bracketed by the currency lot observer exactly as `_processReducers`
+ * brackets it in a real run.
+ *
+ * Design 87 phase 3 moved the CASH leg out of `LoanPaymentApplyReducer` and onto the
+ * observer, which the reducer signals with `section988: { kind: 'DISPOSE' }`. The debt leg
+ * (design 86 P8) still comes from the reducer. Both legs are collected here so CB-14..18
+ * keep asserting the same finding — the cancellation of §3 — at the level it now happens.
+ */
 function payOnce(state) {
-  const handler = new LoanPaymentHandler();
-  const reducer = new LoanPaymentApplyReducer({ accountService: makeSvc() });
+  const handler  = new LoanPaymentHandler();
+  const reducer  = new LoanPaymentApplyReducer({ accountService: makeSvc() });
+  const observer = createCurrencyLotObserver();
+  const date     = new Date('2030-06-30');
   let emitted = [];
   for (const action of handler.call({ state })) {
     if (action.type !== 'LOAN_PAYMENT_APPLY') continue;
-    const res = reducer.reduce(state, action);
-    state   = res.state ?? res;
-    emitted = emitted.concat((res.next ?? []).filter(a => a.type === 'SECTION_988_GAIN'));
+    const token = observer.before(state);
+    const res   = reducer.reduce(state, action);
+    state       = res.state ?? res;
+    const obs   = observer.after(state, token, action, date);
+    emitted = emitted.concat(
+      [...(res.next ?? []), ...obs].filter(a => a.type === 'SECTION_988_GAIN'));
   }
   return { state, emitted };
 }

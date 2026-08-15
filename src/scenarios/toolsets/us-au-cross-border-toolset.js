@@ -63,7 +63,11 @@ export const US_AU_CROSS_BORDER = {
       // `direction` ('US_TO_AU' / 'AU_TO_US') is the whole meaning of a cross-border
       // sweep; targetDeficit alone does not say which way the money went. Declared on
       // INTL_TRANSFER_RECORD already — this is the action twin of that marker.
-      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number(), direction: ValueType.text() } },
+      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number(), direction: ValueType.text(),
+        // Declared for JOURNAL visibility; the observer reads the live action, which
+        // pickPayload never filters. Undeclared, a §988 conversion computes correctly and
+        // is then invisible in every report that reads the journal.
+        section988: ValueType.any() } },
       // §988 on foreign-currency CASH (design 87 phases 1–2). Declared here as well as
       // in the two real-property toolsets — registerActionType is idempotent, and both
       // conversion paths (this toolset's IntlTransferApplyReducer and the inline sweep

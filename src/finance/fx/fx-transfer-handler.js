@@ -101,7 +101,7 @@ export class FxTransferToHandler extends HandlerEntry {
         // §988(e)(2) \$200 per-transaction exclusion rather than being ordinary §988.
         // This is the position design 87 open question 1 left unresolved for a deposit,
         // and it is the one that moves the most money on a real conversion history.
-        section988: { kind: 'DISPOSE', businessFraction: 0 },
+        section988: { kind: 'DISPOSE', businessFraction: 0, accountKey: srcKey },
       },
       new RecordMetricAction(`fx_transfer_${from}_${to}`, toCredit),
       new RecordBalanceAction(`${dstKey}.balance`, dstKey),

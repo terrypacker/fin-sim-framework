@@ -360,6 +360,59 @@ test('CL-25 emitted actions from every observer are collected in order', () => {
   assert.deepEqual(out.map(a => a.type), ['ONE', 'TWO']);
 });
 
+// ─── CL-29..31 · a DISPOSE names its pool ─────────────────────────────────────────────
+
+test('CL-29 a named DISPOSE realizes only that pool; a same-currency top-up stays non-recognition', () => {
+  // One reducer, three movements: pool A funds pool B (an internal transfer), and B is
+  // then converted out. Without `accountKey` the DISPOSE would realize A's debit too,
+  // taxing a §1.988-2(a)(1)(iii)(E) non-recognition transfer.
+  const obs = createCurrencyLotObserver();
+  const state = stateWith({ a: audAccount({ balance: 0 }), b: audAccount({ balance: 0 }) }, STRONG);
+  observe(obs, state, { type: 'X' }, (s) => { s.a.balance = 1300; s.b.balance = 1300; });
+
+  state.effectiveExchangeRates.USD_AUD = WEAK;
+  const { emitted } = observe(obs, state,
+    { type: 'INTL_TRANSFER_APPLY', section988: { kind: 'DISPOSE', businessFraction: 1, accountKey: 'b', units: 650 } },
+    (s) => { s.a.balance = 650; s.b.balance = 1300; });   // A→B 650, then B converts 650 out
+
+  assert.equal(emitted.length, 1, 'only the named pool disposes');
+  assert.equal(emitted[0].accountKey, 'b');
+  // B's NET movement is zero — the top-up and the conversion cancel exactly. Declaring
+  // `units` is what keeps the disposition visible at all; on the net alone it vanishes.
+  assert.ok(Math.abs(state.a.balance - 650) < 0.01);
+});
+
+test('CL-30 the named pool disposes AFTER its funding credit lands, not before', () => {
+  // Ordering: the disposal must measure a pool that already contains what funded it.
+  // A is 1300 AUD of basis 1000 (rate 1.30). It moves to B while spot is 1.60, then B
+  // converts the lot straight out at 1.60. Carryover basis means the gain is A's loss,
+  // NOT zero — if the debit ran before the credit, B would price against its own old rate.
+  const obs = createCurrencyLotObserver();
+  const state = stateWith({ a: audAccount({ balance: 0 }), b: audAccount({ balance: 0 }) }, STRONG);
+  observe(obs, state, { type: 'X' }, (s) => { s.a.balance = 1300; });
+
+  state.effectiveExchangeRates.USD_AUD = WEAK;
+  const { emitted } = observe(obs, state,
+    { type: 'INTL_TRANSFER_APPLY', section988: { kind: 'DISPOSE', businessFraction: 1, accountKey: 'b', units: 1300 } },
+    (s) => { s.a.balance = 0; s.b.balance = 0; });   // A→B 1300, B converts all 1300 out
+
+  assert.equal(emitted.length, 1);
+  // basis carried from A = 1000 USD; proceeds = 1300/1.60 = 812.50 ⇒ loss of 187.50.
+  assert.ok(Math.abs(emitted[0].gross - (1300 / WEAK - 1000)) < 0.01,
+    `gross ${emitted[0].gross} should be ${1300 / WEAK - 1000}`);
+});
+
+test('CL-31 an UNNAMED DISPOSE still applies to every debit — back-compatible', () => {
+  const obs = createCurrencyLotObserver();
+  const state = stateWith({ a: audAccount({ balance: 0 }) }, STRONG);
+  observe(obs, state, { type: 'X' }, (s) => { s.a.balance = 1300; });
+  state.effectiveExchangeRates.USD_AUD = WEAK;
+  const { emitted } = observe(obs, state,
+    { type: 'FX_TRANSFER_APPLY', section988: { kind: 'DISPOSE', businessFraction: 1 } },
+    (s) => { s.a.balance = 650; });
+  assert.equal(emitted.length, 1, 'a single-pool caller needs no accountKey');
+});
+
 // ─── CL-26..28 · state is authoritative ───────────────────────────────────────────────
 
 test('CL-26 a restored snapshot is honoured, not overridden by a stale cached pool', () => {

@@ -139,6 +139,41 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
     for (const k in state) if (isCurrencyLotPool(state[k])) keys.push(k);
   };
 
+  /**
+   * Apply credit legs, either as fresh acquisitions at spot or as carryover from a
+   * matched debit.
+   *
+   * @param carriedBasis USD basis that left a tracked pool in this same transition
+   * @param carriedUnits the units that basis came with
+   * @param isTransfer   true when the movement is `(a)(1)(iii)(E)` non-recognition
+   */
+  const applyCredits = (credits, state, date, carriedBasis, carriedUnits, isTransfer) => {
+    if (!credits) return;
+    const totalCredit = credits.reduce((s, c) => s + c.delta, 0);
+    for (const { key, account, delta, opening } of credits) {
+      const pool = readPool(account, state, date, opening);
+      const rate = spotFor(state, accountCurrencyCode(account));
+      let basis = null;
+      if (isTransfer && carriedUnits > EPS) {
+        // This leg's share of what left, by units. Anything beyond what a tracked pool
+        // actually supplied (a transfer part-funded from somewhere unpooled) is a real
+        // acquisition and is priced at spot rather than given free basis.
+        const share      = totalCredit > 0 ? delta / totalCredit : 1;
+        const carryUnits = carriedUnits * share;
+        const carryBasis = carriedBasis * share;
+        if (delta <= carryUnits + EPS) {
+          basis = carryUnits > 0 ? carryBasis * (delta / carryUnits) : 0;
+        } else {
+          basis = carryBasis + (rate > 0 ? usdOf(delta - carryUnits, rate) : 0);
+        }
+      } else if (rate > 0) {
+        basis = usdOf(delta, rate);
+      }
+      if (basis != null) pool.acquire(date, delta, basis);
+      syncToState(state, key, pool);
+    }
+  };
+
   /** Scale a pool to `targetUnits`, holding the basis:units ratio. */
   const rescale = (pool, targetUnits) => {
     if (!(pool.units > EPS) || !(targetUnits >= 0)) return;
@@ -271,11 +306,50 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
         return [];
       }
 
-      // ── Debits first, so any basis leaving is available to a credit below ────────
+      // ── WHICH debit disposes, and in WHAT ORDER the legs apply ───────────────────
+      // A DISPOSE declaration may name the account it applies to. It matters because one
+      // reducer can move several pools at once: `IntlTransferApplyReducer` tops its AU
+      // pool up — possibly from ANOTHER AUD pool — and then converts out of it. Without a
+      // named account, "kind: DISPOSE" would realize the internal top-up leg too, turning
+      // a `(a)(1)(iii)(E)` non-recognition transfer into a taxable disposition. An
+      // unnamed DISPOSE still applies to every debit, which is right for the single-pool
+      // callers and is the back-compatible reading.
+      const disposesKey = decl?.accountKey ?? null;
+      const isDisposal  = (key) => kind === 'DISPOSE' && (disposesKey == null || disposesKey === key);
+
+      // ── the GROSS disposal, when a net delta would hide it ───────────────────────
+      // Observation is per reducer, so a pool credited AND debited inside one reducer
+      // shows only its NET movement — and `IntlTransferApplyReducer` does exactly that:
+      // `replenishSavings` tops the AU pool up, then the conversion debits it. Realizing
+      // on the net would understate the disposition by the whole top-up, and under
+      // pro-rata a net movement is NOT arithmetically equivalent to a credit followed by
+      // a debit.
+      //
+      // So a declaration may state the units actually disposed of. The credit is then
+      // implied — `net + units` — and applied first, exactly reproducing the two real
+      // movements. This is design 87 §6's "realize in the reducer, not the handler"
+      // restated: what is declared is the amount that MOVED, which only the caller that
+      // moved it knows.
+      const declUnits = disposesKey != null && decl?.units > 0 ? decl.units : null;
+      if (declUnits != null) {
+        if (debits)  debits  = debits.filter(d => d.key !== disposesKey);
+        if (credits) credits = credits.filter(c => c.key !== disposesKey);
+      }
+
+      // Three phases, and the order is forced by what each needs to see:
+      //   1. NON-disposing debits, so basis leaving a pool is available to carry over;
+      //   2. credits, which either take that carryover or acquire at spot;
+      //   3. disposing debits LAST, so the disposal measures a pool that already includes
+      //      whatever funded it. Consuming before the funding credit lands would price the
+      //      disposal at whatever rate the pool happened to carry before — the same silent
+      //      defect the handler bracket fixed, one scope down.
+      const plainDebits    = (debits ?? []).filter(d => !isDisposal(d.key));
+      const disposalDebits = (debits ?? []).filter(d =>  isDisposal(d.key));
+
       let carried = 0;
       let carriedUnits = 0;
       const emitted = [];
-      for (const { key, account, delta, opening } of debits ?? []) {
+      for (const { key, account, delta, opening } of plainDebits) {
         const pool = readPool(account, state, date, opening);
         const { basis, held, shortfall } = pool.consume(date, delta);
         carried += basis;
@@ -289,9 +363,49 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
             `${shortfall.toFixed(2)} — overdraft or missing history; units excluded.`);
         }
 
-        // Only a DECLARED disposition realizes. Everything else is a withdrawal, which
-        // `§1.988-2(a)(1)(iii)(C)` puts on the non-recognition list with carryover basis.
-        if (kind === 'DISPOSE') {
+        syncToState(state, key, pool);
+      }
+
+      // ── Credits ──────────────────────────────────────────────────────────────────
+      // A same-currency move (something fell, something rose) is `(a)(1)(iii)(E)`
+      // non-recognition and the units keep "the adjusted basis of the units transferred".
+      // Inferred from the shape rather than requiring a flag, so an unannotated transfer
+      // path still carries basis instead of silently re-marking to market.
+      const isTransfer = kind === 'INTERNAL' || (plainDebits.length > 0 && credits);
+      applyCredits(credits, state, date, carried, carriedUnits, isTransfer);
+
+      // ── the declared gross disposal, if any: implied credit first, then dispose ──
+      if (declUnits != null) {
+        const account = state[disposesKey];
+        const opening = token[disposesKey] ?? 0;
+        const net     = (account?.balance ?? 0) - opening;
+        const implied = net + declUnits;
+        const pool    = readPool(account, state, date, opening);
+        const rate    = spotFor(state, accountCurrencyCode(account));
+        if (implied > EPS) {
+          // Funded from a tracked same-currency pool ⇒ carryover; otherwise a genuine
+          // acquisition priced at spot.
+          const fromCarry = Math.min(implied, carriedUnits);
+          let basis = 0;
+          if (fromCarry > EPS && carriedUnits > EPS) basis += carried * (fromCarry / carriedUnits);
+          if (implied - fromCarry > EPS && rate > 0) basis += usdOf(implied - fromCarry, rate);
+          pool.acquire(date, implied, basis);
+          carried      -= fromCarry > EPS && carriedUnits > EPS ? carried * (fromCarry / carriedUnits) : 0;
+          carriedUnits -= fromCarry;
+        }
+        disposalDebits.push({ key: disposesKey, account, delta: declUnits, opening, pool });
+      }
+
+      // ── Disposing debits, last ───────────────────────────────────────────────────
+      for (const { key, account, delta, opening, pool: prebuilt } of disposalDebits) {
+        const pool = prebuilt ?? readPool(account, state, date, opening);
+        const { basis, held, shortfall } = pool.consume(date, delta);
+        if (shortfall > EPS && STRICT) {
+          console.warn(
+            `[§988] ${key}: disposal of ${delta.toFixed(2)} exceeded the pool by ` +
+            `${shortfall.toFixed(2)} — overdraft or missing history; units excluded.`);
+        }
+        {
           const priced = delta - shortfall;
           const rate   = spotFor(state, accountCurrencyCode(account));
           if (priced > EPS && rate > 0) {
@@ -327,36 +441,6 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
             }
           }
         }
-        syncToState(state, key, pool);
-      }
-
-      // ── Credits ──────────────────────────────────────────────────────────────────
-      // A same-currency move (something fell, something rose) is `(a)(1)(iii)(E)`
-      // non-recognition and the units keep "the adjusted basis of the units transferred".
-      // Inferred from the shape rather than requiring a flag, so an unannotated transfer
-      // path still carries basis instead of silently re-marking to market.
-      const isTransfer = kind === 'INTERNAL' || (debits && credits && kind !== 'DISPOSE');
-      const totalCredit = (credits ?? []).reduce((s, c) => s + c.delta, 0);
-      for (const { key, account, delta, opening } of credits ?? []) {
-        const pool = readPool(account, state, date, opening);
-        const rate = spotFor(state, accountCurrencyCode(account));
-        let basis = null;
-        if (isTransfer && carriedUnits > EPS) {
-          // This leg's share of what left, by units. Anything beyond what a tracked pool
-          // actually supplied (a transfer part-funded from somewhere unpooled) is a real
-          // acquisition and is priced at spot rather than given free basis.
-          const share      = totalCredit > 0 ? delta / totalCredit : 1;
-          const carryUnits = carriedUnits * share;
-          const carryBasis = carried * share;
-          if (delta <= carryUnits + EPS) {
-            basis = carryUnits > 0 ? carryBasis * (delta / carryUnits) : 0;
-          } else {
-            basis = carryBasis + (rate > 0 ? usdOf(delta - carryUnits, rate) : 0);
-          }
-        } else if (rate > 0) {
-          basis = usdOf(delta, rate);
-        }
-        if (basis != null) pool.acquire(date, delta, basis);
         syncToState(state, key, pool);
       }
 
