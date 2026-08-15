@@ -18,6 +18,133 @@ import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-re
 const SUPER_TAX_RATE = 0.15;
 
 /**
+ * Book AUD-denominated **personal services income** — wages (`AU_WAGES_INCOME_TAX`)
+ * and self-employment (`AU_SE_INCOME_TAX`) — against three independent axes.
+ *
+ * Design 73 §6b. The two classifiers used to be written out separately and each
+ * collapsed the axes into a single test, in opposite directions: wages branched on
+ * source alone, SE on residency alone. Each was therefore right in exactly the half
+ * the other got wrong, and the shared helper exists so that cannot drift apart
+ * again — the bookings are identical, and the only thing that ever differed between
+ * a wage and a sole trader's fee here was which comment block sat above it. (AU SE
+ * income never feeds `usSeEarningsYTD`: SECA does not reach it under the
+ * totalization agreement, and that stays true by omission on both paths.)
+ *
+ * **Axis 1 — AU assessability**, ITAA 1997 s6-5. Subsection (2): an Australian
+ * resident is assessed on ordinary income "from all sources, whether in or out of
+ * Australia". Subsection (3): a foreign resident is assessed on ordinary income
+ * "from all Australian sources". Either limb is sufficient, which is precisely what
+ * neither classifier used to say. Source of services income is the place of
+ * performance — `workCountry`, not the payment currency, the payer's residence or
+ * the account the money lands in (FCT v French (1957) 98 CLR 398 [R7], where an
+ * Australian engineer's New Zealand weeks were NZ-source although the salary was
+ * paid into his Australian bank account throughout).
+ *
+ * **Axis 2 — which way treaty relief runs**, and therefore which US accumulator the
+ * income belongs in. AU-source ⇒ genuinely foreign income of a US citizen ⇒ the
+ * §904 general numerator `foreignGeneralIncomeYTD`. US-source income of an AU
+ * resident ⇒ the US taxes as source State and Australia gives the credit (Art 22(2)),
+ * so it belongs in the *removal set* (`usSource*UsdYTD` + `usSourceOrdinaryAudYTD`)
+ * that sizes the FITO limit — never in both. Getting this backwards is not a
+ * rounding error: US-source income in the general numerator inflates the §904
+ * limitation and lets unrelated foreign taxes be credited against US tax on US
+ * income, while an AU assessment with no removal-set entry is an assessment with no
+ * relief attached to it.
+ *
+ * Treaty authority is Art 15(1) for employment and Art 14 for services performed in
+ * an independent capacity: taxable only in the residence State "unless the
+ * employment is exercised / such services are performed in the other State". Both
+ * articles *add* a source-State right; neither removes the residence State's, which
+ * is why axis 1 has two limbs and axis 2 has one. Neither article is touched by the
+ * 2001 Protocol.
+ *
+ * **Axis 3 — the §911 FEIE cap accumulator**, which needs both: foreign *earned*
+ * income (AU-sourced) of a US person whose tax home is abroad (AU-resident).
+ * `_computeFeie` independently skips anyone whose residency is not 'AU', so writing
+ * only on the conjunction keeps that gate a second line of defence rather than the
+ * only thing standing between a US resident and an exclusion they cannot claim —
+ * and on the source limb it is the *only* guard, since a US-performed AUD job by an
+ * AU resident passes the residency test that gate applies.
+ *
+ * TODO(design 73 §4): Art 27(2) is an anti-double-exemption rule. Where AU-performed
+ * services are exempted at source by the Art 15(2) / Art 14 presence tests AND
+ * excluded from US tax by the FEIE, Australia may tax after all — "the purpose of the
+ * exemption at source is to avoid double taxation, not to provide double exemption".
+ * Neither presence test is modelled, so the source limb always assesses and cannot
+ * produce the taxed-by-neither outcome; guard it if either test is ever added.
+ *
+ * @param {object} state   state before the action
+ * @param {object} action  `{ amount (AUD), residency, personKey, workCountry }`
+ * @returns {object} next state
+ */
+function bookAuPersonalServicesIncome(state, action) {
+  const { amount, residency, personKey } = action;
+  // Absent on pre-73 saved actions ⇒ the earner works where they live, which is the
+  // pre-73 assumption and keeps every scenario that never sets it byte-identical.
+  const workCountry  = action.workCountry ?? residency ?? null;
+  const isAuSourced  = workCountry === 'AU';
+  const isAuResident = residency === 'AU';
+  const usd = toUSD(amount, 'AUD', state);
+
+  // Always on the US worldwide return, whatever the source: the model's earners are
+  // US citizens, taxed on worldwide income however it is denominated.
+  let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + usd };
+
+  // Axis 2 — direction of relief. Mutually exclusive by construction.
+  if (isAuSourced) {
+    next = { ...next, foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd };
+  } else if (isAuResident) {
+    next = {
+      ...next,
+      usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + usd,
+      usSourceGeneralUsdYTD:  (state.usSourceGeneralUsdYTD  ?? 0) + usd,
+    };
+  }
+
+  // Axis 1 — neither limb of s6-5 reached: a foreign resident's foreign-source
+  // income. The AUD still lands in the AU account; this is a tax classification,
+  // not a cash-flow change, so the AU return simply shows nothing.
+  if (!isAuResident && !isAuSourced) return next;
+
+  // AU-source services income is assessable whoever performs it. For a resident that
+  // was already true; for a foreign resident it is assessed at foreign-resident
+  // marginal rates on a lodged return (30% from the first dollar, no tax-free
+  // threshold, no Medicare levy [R3]), NOT withheld finally at source — services
+  // income was never a withholding category; only interest, unfranked dividends and
+  // royalties are [R1, R5]. Both limbs feed the accumulator the non-resident bracket
+  // path already reads.
+  //
+  // The AUD twin of the removal set: the US-source slice of AU assessable income,
+  // which `_assessResidentPreFito` subtracts to size the s770-75 FITO limit. It is a
+  // *subset* of the assessable figure, so it is written alongside, never instead.
+  const usSourceAud  = isAuSourced ? 0 : amount;
+  const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
+
+  if (!usePerPerson) {
+    return {
+      ...next,
+      auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+      ...(usSourceAud > 0
+        ? { usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + usSourceAud }
+        : {}),
+    };
+  }
+  return {
+    ...next,
+    // Attributed to the *earner* via personKey, not to the AU account's owner:
+    // personal services income belongs to the person who performed the services and
+    // is never apportionable (design 76 Gap B/D).
+    auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
+    ...(usSourceAud > 0
+      ? { auPersonUsSourceOrdinaryAudYTD: { ...(state.auPersonUsSourceOrdinaryAudYTD ?? {}), [personKey]: ((state.auPersonUsSourceOrdinaryAudYTD?.[personKey]) ?? 0) + usSourceAud } }
+      : {}),
+    ...(isAuResident && isAuSourced
+      ? { auPersonEarnedIncomeYTD: { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount } }
+      : {}),
+  };
+}
+
+/**
  * AuTaxModule2026 — AU tax classification rules for FY starting July 2026.
  *
  * Returns Stage-2 (TAX_CALC priority) reducer functions for all _TAX child
@@ -71,90 +198,20 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
   _auWagesReducerFns() {
     return [
-      // Design 50: wages paid in AUD — always US ordinary income (worldwide, on a
-      // citizen's return). Attributed to the *earner* via personKey (like
-      // AU_SE_INCOME_TAX), not to the AU account's owner — the wage belongs to the
-      // person who earned it.
+      // Design 50: wages paid in AUD. Design 73 Gap 1 made the classifier read
+      // `workCountry` (place of performance) rather than the payment currency;
+      // design 73 §6b separated that source question from the residency question it
+      // had been fused to, and moved the whole booking into
+      // `bookAuPersonalServicesIncome` — see there for the three axes, the s6-5
+      // limbs and the treaty articles behind each.
       //
-      // Design 73 Gap 1 — branch on SOURCE first, then residency. Source of
-      // employment income is the place the services are performed, not the payment
-      // currency, the payer's residence, or the account the money lands in. FCT v
-      // French (1957) 98 CLR 398 is this case in mirror image: an Australian
-      // engineer working a few weeks a year in New Zealand, *with his salary paid
-      // into his Australian bank account throughout*, was held to have NZ-source
-      // wages for those weeks. Payment location lost to place of performance.
-      //
-      // Treaty side, Art 15(1): remuneration "may be taxed only in the State of
-      // residence unless the employment is exercised ... in the other State".
-      // Residence-only taxation is the default; the source State's right is the
-      // exception, unlocked by the employment being EXERCISED there. Art 27(1)'s
-      // deeming rule ("income Australia may tax under the Convention is deemed
-      // Australian-source") therefore never fires for work performed in the US —
-      // which is why the §904 general basket must not be fed on that branch either.
-      //
-      // Design 52: AU-source earned income → §904 General numerator; the resident
-      // earner's slice also feeds the per-person FEIE cap accumulator.
-      ['AU_WAGES_INCOME_TAX', (state, action) => {
-        const { amount, residency, personKey } = action;
-        // Absent on pre-73 saved actions ⇒ the earner works where they live.
-        const workCountry  = action.workCountry ?? residency ?? null;
-        const isAuSourced  = workCountry === 'AU';
-        const isAuResident = residency === 'AU';
-        const usd = toUSD(amount, 'AUD', state);
-
-        // Always on the US worldwide return, whatever the source.
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + usd };
-
-        if (!isAuSourced) {
-          // Work performed outside Australia. Australia has no claim under Art 15
-          // however the wage is denominated or wherever it is banked, so the AU
-          // return shows nothing — no assessable income, no withholding. And with
-          // no Australian taxing right there is no Australian source for treaty
-          // purposes, so this must NOT enter foreignGeneralIncomeYTD: US-source
-          // income in the §904 general basket numerator would inflate the
-          // limitation and let unrelated foreign taxes be credited against US tax
-          // on US income. The AUD still lands in the AU account — this is a tax
-          // classification, not a cash-flow change.
-          return next;
-        }
-
-        // AU-source from here: the employment is exercised in Australia.
-        next = { ...next, foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd };
-
-        // AU-source wages are ASSESSABLE income whoever earns them. For a resident
-        // that was already true; for a foreign resident it is the fix — such a wage
-        // is assessed at foreign-resident marginal rates on a lodged return (30%
-        // from the first dollar, no tax-free threshold, no Medicare levy [R3]), NOT
-        // withheld finally at source. Wages were never a withholding category; only
-        // interest, unfranked dividends and royalties are [R1, R5]. Both branches
-        // therefore feed the same accumulator — the one the non-resident bracket
-        // path already reads and that no feeder had ever written while non-resident,
-        // which is why line 5 of the AU return read 0.00 in every non-resident year.
-        //
-        // TODO(design 73 §4): Art 27(2) is an anti-double-exemption rule. Where an
-        // AU-performed wage is exempted at source by the Art 15(2) 183-day test AND
-        // excluded from US tax by the §911 FEIE, Australia may tax it after all —
-        // "the purpose of the exemption at source is to avoid double taxation, not
-        // to provide double exemption". The Art 15(2) test is not modelled, so this
-        // branch always assesses and cannot produce the taxed-by-neither outcome;
-        // guard it if that test is ever added.
-        const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
-        if (!usePerPerson) {
-          return { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
-        }
-        return {
-          ...next,
-          auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
-          // The FEIE cap accumulator is *foreign earned income* of a US person whose
-          // tax home is abroad, so only the AU-resident earner's slice belongs in it.
-          // `_computeFeie` independently skips anyone whose residency is not 'AU';
-          // not writing it here means that gate is a second line of defence rather
-          // than the only thing preventing a US resident from excluding AU wages.
-          ...(isAuResident
-            ? { auPersonEarnedIncomeYTD: { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount } }
-            : {}),
-        };
-      }],
+      // What §6b changed here: an AU resident performing the work in the US used to
+      // fall off this classifier with nothing booked to the AU return at all. Art
+      // 15(1) grants the US a source-State right in that case; it does not take away
+      // Australia's residence-State right, and s6-5(2) assesses the resident on
+      // income "from all sources, whether in or out of Australia". It is now
+      // assessed, with the US-source markers that fund the FITO relief against it.
+      ['AU_WAGES_INCOME_TAX', (state, action) => bookAuPersonalServicesIncome(state, action)],
     ];
   }
 
@@ -806,31 +863,21 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
   _auIncomeReducerFns() {
     return [
-      // EVT-49: AU self-employment income — always US ordinary income; AU ordinary income if resident.
-      // Design 52: AU-source earned income → §904 General numerator + per-person FEIE cap.
-      ['AU_SE_INCOME_TAX', (state, action) => {
-        const { amount, residency, personKey } = action;
-        const isAuResident = residency === 'AU';
-        const usd = toUSD(amount, 'AUD', state);
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + usd };
-        if (isAuResident) {
-          // §904 General numerator only when AU taxes it (resident) — a
-          // non-resident's AU-source SE income is not AU-assessed in this model,
-          // so there is no foreign tax to credit (matches the pre-52 ftcYTD gate).
-          const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
-          next = {
-            ...next,
-            foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd,
-            ...(usePerPerson
-              ? {
-                  auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
-                  auPersonEarnedIncomeYTD:   { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount },
-                }
-              : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-          };
-        }
-        return next;
-      }],
+      // EVT-49: AU self-employment income. Books identically to AUD wages — see
+      // `bookAuPersonalServicesIncome` for the axes; s6-5 draws no line between
+      // employment and independent services income, and neither does the model.
+      //
+      // Design 73 §6b — this classifier used to branch on residency alone, so a
+      // foreign resident's Australian-performed fees were assessed nowhere: not the
+      // "no foreign tax to credit" case its comment claimed, but the same gap §1
+      // had already fixed for wages, one classifier over. s6-5(3) assesses a foreign
+      // resident on ordinary income from all Australian sources, and Art 14 gives
+      // Australia the taxing right over independent services performed there where
+      // the individual is present more than 183 days or has a fixed base — a
+      // year-long `workCountry` satisfies the first, and Art 14 is untouched by the
+      // 2001 Protocol. Its twin defect, an AU resident's US-performed fees feeding
+      // the §904 general numerator and the FEIE cap, is closed by the same helper.
+      ['AU_SE_INCOME_TAX', (state, action) => bookAuPersonalServicesIncome(state, action)],
     ];
   }
 }

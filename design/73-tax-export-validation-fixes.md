@@ -1,9 +1,11 @@
 # 73 — Cross-border source defects surfaced by tax-export validation
 
-**Status: IMPLEMENTED**, with one follow-up opened later — see **§6b**, where `workCountry` is
-dropped by three of the four apply reducers. All five sequencing steps in §5 are built, tested and
+**Status: IMPLEMENTED.** All five sequencing steps in §5 are built, tested and
 committed on `wip/design-73-tax-source-fixes`. Three gaps, all in the AU tax module, all found by reading the
 `design/71` CSV exports line-by-line against a real scenario rather than by a failing test.
+A follow-up opened later — `workCountry` dropped by three of the four apply reducers — is **closed
+for the AU classifiers** in **§6b**, which also corrects one decision recorded in §1 below; the
+US-side sourcing question it raised stays open there.
 
 **What implementation changed about this document.** Three things came out differently from the
 plan, each corrected in place below and flagged here so a reader of the original text is not
@@ -342,6 +344,15 @@ rates. Trading one wrong default for another is not progress.
    - `workCountry === 'US'` → US-source. Add to `usOrdinaryIncomeYTD` only. **No** AU accumulator,
      **no** `foreignGeneralIncomeYTD`. (The AUD still lands in the AU account — this is a tax
      classification change, not a cash-flow one.)
+
+     > **Superseded by §6b, on the resident half.** Dropping `foreignGeneralIncomeYTD` is right and
+     > stands. Dropping the AU accumulator is right only for a **foreign resident**. Written
+     > unconditionally it also silenced the AU return for an **AU resident** performing the work in
+     > the US, and s6-5(2) assesses a resident on ordinary income "from all sources, whether in or
+     > out of Australia" [R15]. Art 15(1) hands the US a source-State right where the employment is
+     > exercised there; it does not take Australia's residence-State right away — the two articles
+     > that could, Art 22 and Art 27, are relief and re-sourcing provisions, not exclusions. That
+     > cell now assesses, with the Art 22(2) removal-set entries that fund the FITO against it.
    - `workCountry === 'AU'` **and** earner is AU-resident → unchanged (AU ordinary income,
      per-person FEIE accumulator, general basket).
    - `workCountry === 'AU'` **and** earner is a non-resident → AU-source income of a foreign
@@ -733,62 +744,132 @@ Every item above is implemented. Where the plan and the code diverge:
 
 ---
 
-## 6b. Open follow-up — `workCountry` stops at the apply action on three of four paths
+## 6b. `workCountry` stopped at the apply action — and hid an axis the classifiers had fused
 
-**Status: OPEN.** Found 2026-08-13 while triaging the journal payload manifest (design 91 §4.4),
-not by a failing test. Nothing here is known to be wrong yet — it is an asymmetry that either
-needs a reason or needs closing.
+**Status: CLOSED for the AU classifiers**, built 2026-08-14. Item (2) below — US-side earned-income
+sourcing — remains **OPEN** and is deliberately not built here. Opened 2026-08-13 while triaging the
+journal payload manifest (design 91 §4.4), not by a failing test.
 
 `MonthlyWagesHandler` stamps `workCountry` on **all four** income apply actions it can emit —
 `WAGES_INCOME_APPLY`, `AU_WAGES_INCOME_APPLY`, `SE_INCOME_US_APPLY`, `SE_INCOME_AU_APPLY`
-(`monthly-wages-handler.js:95-97`). Exactly one reducer forwards it:
+(`monthly-wages-handler.js:95-97`). Exactly one reducer forwarded it:
 
-| Apply action | Reducer | Chains | Forwards `workCountry`? |
+| Apply action | Reducer | Chains | Forwarded `workCountry`? |
 |---|---|---|---|
-| `AU_WAGES_INCOME_APPLY` | `AuWagesIncomeApplyReducer` | `AU_WAGES_INCOME_TAX` | **yes** — `au-income-classes.js:85` |
-| `WAGES_INCOME_APPLY` | `WagesIncomeApplyReducer` | `WAGES_INCOME_TAX` | no — `us-income-classes.js:81` |
-| `SE_INCOME_US_APPLY` | `SeIncomeUsApplyReducer` | `SE_INCOME_US_TAX` | no — `us-income-classes.js:130` |
-| `SE_INCOME_AU_APPLY` | `AuSeIncomeApplyReducer` | `AU_SE_INCOME_TAX` | no — `au-income-classes.js:44` |
+| `AU_WAGES_INCOME_APPLY` | `AuWagesIncomeApplyReducer` | `AU_WAGES_INCOME_TAX` | **yes** |
+| `SE_INCOME_AU_APPLY` | `AuSeIncomeApplyReducer` | `AU_SE_INCOME_TAX` | no → **now yes** |
+| `WAGES_INCOME_APPLY` | `WagesIncomeApplyReducer` | `WAGES_INCOME_TAX` | no — nothing reads it (see item 2) |
+| `SE_INCOME_US_APPLY` | `SeIncomeUsApplyReducer` | `SE_INCOME_US_TAX` | no — nothing reads it (see item 2) |
 
-Each of those three destructures `{ amount, residency, personKey, targetKey }` and rebuilds the
-tax action from those four fields alone, so the source attribute is dropped one hop after it is
+Each of the three destructured `{ amount, residency, personKey, targetKey }` and rebuilt the tax
+action from those four fields alone, so the source attribute was dropped one hop after it was
 computed. §1's fix threaded it exactly as far as the gap being fixed required, and no further.
 
-### Why it may matter
+### What the dropped field was hiding
 
-Three questions, in the order they should be answered:
+The plumbing was the smaller half. Reading the two AU classifiers side by side — which the missing
+field is what finally prompted — showed that **each collapses two independent axes into a single
+test, and they collapse them in opposite directions.** `AU_WAGES_INCOME_TAX` branched on source
+alone; `AU_SE_INCOME_TAX` branched on residency alone. Against ITAA 1997 s6-5 [R15]:
 
-1. **AU self-employment income.** `AU_SE_INCOME_TAX` is the SE twin of `AU_WAGES_INCOME_TAX`, and
-   §1's whole argument — source is the place of performance, not the currency of payment [R7] —
-   applies to services income however it is characterised. If the wage branch needed
-   `workCountry` to avoid sourcing by denomination, the AU SE branch has the same defect for the
-   same reason. **This is the one most likely to be a real bug**, and it is a smaller version of
-   the gap §1 already fixed rather than a new question.
-2. **US earned income sourcing.** Compensation for services is sourced where the services are
-   performed (§861(a)(3) / §862(a)(3)); the FEIE (§911) and §904 basketing both turn on that.
-   Today the US side infers it from residency instead. Whether that is materially wrong depends
-   on whether a plan can produce a US-resident earner performing services in Australia, or the
-   reverse — which is precisely the case §1 declined to make unrepresentable.
-3. **Reporting.** All four apply types now **declare** `workCountry` (design 91 §4.3), so a
-   "wages by source country" drill reads correctly off the apply rows regardless. Only the
-   AU wage row carries it on the tax action. That is a cosmetic inconsistency in the drill, not
-   a tax error.
+| residency / `workCountry` | `AU_WAGES_INCOME_TAX` was | `AU_SE_INCOME_TAX` was | Correct |
+|---|---|---|---|
+| AU / AU | assess + general basket + FEIE | same | ✓ both |
+| AU / US | **nothing on the AU return** | assess + general basket + FEIE | assess (s6-5(2)); basket + FEIE wrong |
+| US / AU | assess + general basket | **nothing at all** | assess (s6-5(3)); basket right |
+| US / US | US ordinary only | US ordinary only | ✓ both |
 
-### The known limitation this is NOT
+Each classifier is right in exactly the half the other gets wrong, which is what two independent
+derivations of the same rule look like when neither author had the other's case in front of them.
+The decomposition that satisfies both rows and both statutes needs three predicates, not one:
 
-§1's accepted limitation is about **routing**: a USD-paid wage for work performed in Australia
-emits no AU action at all, so Australia assesses nothing. That is unchanged and still open. This
-section is narrower — the actions that *are* emitted lose the attribute on the way to the tax
-action. Fixing this does not fix that, and fixing that (emitting the AU tax action off
-`workCountry` while cash follows `wageCurrency`) would make this asymmetry worse, because the
-decoupled tax action would have to carry a field its own apply reducer currently discards.
+- **AU assessable** ⇔ `isAuResident || isAuSourced` — s6-5(2) worldwide, s6-5(3) Australian-source.
+- **`foreignGeneralIncomeYTD`** (§904 general numerator) ⇔ `isAuSourced` **only**. US-source income
+  of an AU resident belongs in the *Art 22(2) removal set* (`usSource*UsdYTD` +
+  `usSourceOrdinaryAudYTD`) instead: the US taxes as source State and Australia gives the credit,
+  so that dollar sizes the s770-75 FITO limit rather than the §904 limitation. Never both.
+- **`auPersonEarnedIncomeYTD`** (§911 FEIE cap) ⇔ `isAuResident && isAuSourced` — foreign *earned*
+  income of a US person whose tax home is abroad.
 
-### Suggested order
+Both errors in the AU/US cell are wrong-relief bugs rather than missing-tax ones, and that cell is
+where the FEIE gate fails open: `_computeFeie` skips anyone whose residency is not `'AU'`
+(`us-tax-rates-base.js:722`), and this earner **is** AU-resident. Its "second line of defence"
+(§1's phrase) is the only line here, and it does not hold. That, not the non-resident cell §6b
+originally nominated, is the most serious of the three.
 
-Answer (1) first: it is self-contained, has a precedent to copy exactly, and either confirms a
-real defect or closes cleanly. (2) belongs with any future work on US-side sourcing — it is a
-tax-model decision, not a plumbing fix, and should not be made inside a reducer edit. (3) needs
-nothing unless (1) or (2) changes.
+### Fix
+
+One shared helper, `bookAuPersonalServicesIncome` in `au-tax-module-2026.js`, with both classifiers
+reduced to a call. The two bookings turned out to be *identical* once the axes were separated —
+s6-5 draws no line between employment and independent services income, Art 14 mirrors Art 15(1),
+and §904 does not distinguish them either. The only thing that had ever differed between the two
+implementations was which comment block sat above it. (AU SE income still never feeds
+`usSeEarningsYTD`; SECA does not reach it under the totalization agreement, and that now holds by
+omission on one path instead of two.)
+
+1. `AuSeIncomeApplyReducer` forwards `workCountry`, and the `AU_SE_INCOME_TAX` payload manifest
+   declares it (`au-income-toolset.js`). The manifest gate is live, so an undeclared field on an
+   emitted action fails the build — the plumbing fix and its declaration are one change.
+2. Both classifiers call the helper. Behaviour on the AU/US and US/AU cells changes as tabled
+   above; the two diagonal cells are untouched.
+3. **`workCountry` unset still resolves to residency**, so both off-diagonal cells are unreachable
+   until a scenario sets the field. The whole change is inert on every existing scenario: all four
+   golden fixtures are byte-identical, and `npm run test:unit` is 4,945 green.
+
+### Treaty basis, and why axis 1 has two limbs while axis 2 has one
+
+Art 15(1) (employment) and Art 14 (independent personal services) are the same sentence twice:
+income is taxable *only* in the residence State "unless the employment is exercised / such services
+are performed in the other State". Both **add** a source-State right; neither removes the residence
+State's — Art 22 (relief) and Art 27 (re-sourcing) exist precisely because both States may reach the
+same dollar. So residence and source are two independent grants, and only the source grant decides
+which basket the income sits in.
+
+Art 14 also settles the non-resident SE cell on its own terms: Australia may tax independent
+services performed there where the individual is present more than 183 days **or** has a fixed base
+regularly available. A `workCountry` that holds for a whole year satisfies the first limb, so the
+model's representable cases are inside the grant. Neither article is touched by the 2001 Protocol
+(§7 caveat 1 lists what is), so the 1982 text is current law here.
+
+Both articles are now read off disk rather than from the Technical Explanation:
+`docs/us-tax/Treaty-Australia-Convention-1982-08-06.txt` [R14], with the statute at
+`docs/au-tax/ITAA-1997/…VOL01` [R15].
+
+### Tests
+
+`tests/unit/personal-services-income-source.test.mjs` — PSI-1..8 walk both classifiers through all
+four cells; **PSI-9 asserts the two agree cell for cell**, which is the guard against them drifting
+back apart; PSI-10 pins the unset-`workCountry` fallback (the inertness claim above); PSI-11 pins
+the forwarding hop; PSI-12 keeps SECA out. `WCR-8` in `evt-wage-currency-routing.test.mjs` runs the
+non-resident SE cell end to end through the real chain, since PSI-11 only covers one hop of it.
+
+**Mutation-verified**, three ways: dropping the `workCountry` forward fails WCR-8; collapsing axis 1
+back to `!isAuResident` fails PSI-3, PSI-7 and both WCR-6 and WCR-8; collapsing it to `!isAuSourced`
+fails PSI-2 and PSI-6. The goldens catch none of them — the reference retiree has no wages, which is
+already recorded against these action types in the coverage manifest.
+
+### Still open — item (2), US earned-income sourcing
+
+Compensation for services is sourced where the services are performed (§861(a)(3) / §862(a)(3)); the
+FEIE and §904 basketing both turn on that, and `WAGES_INCOME_TAX` / `SE_INCOME_US_TAX` infer it from
+residency instead (`us-tax-module-2026.js:799-858`). Deliberately not built here, for two reasons.
+**Neither sourcing section is on disk** — `docs/us-tax/` holds the 1116/514/8949/Schedule D
+instructions, §904, §988 and the treaty, but no sourcing statute, and the standing rule is fetch
+first, cite second. And it is a tax-model decision about the US return rather than a plumbing fix,
+so it should not be made inside a reducer edit. The two US apply reducers therefore still do not
+forward `workCountry`: forwarding it would declare a payload field no classifier reads.
+
+The §1 KNOWN LIMITATION is unchanged and still open, and is a different thing again: it is about
+**routing**. A USD-paid wage for work performed in Australia emits no AU action at all, so Australia
+assesses nothing. This section fixed what happens to the actions that *are* emitted. Fixing routing
+(emitting the AU tax action off `workCountry` while cash follows `wageCurrency`) is now strictly
+easier than it was, because the classifier it would emit into already handles all four cells.
+
+### Reporting
+
+All four apply types declare `workCountry` (design 91 §4.3), so a "wages by source country" drill
+reads correctly off the apply rows regardless of any of the above. Both AU tax actions now carry it
+too; the two US ones do not, which is the cosmetic tail of item (2) and moves with it.
 
 ---
 
@@ -817,6 +898,8 @@ web tooling but extract cleanly with `pdftotext -layout`, which is how they were
 | R11 | Asena Advisors — [US–AU DTA Article 6: Income from Real Property](https://asenaadvisors.com/blog/dta-article-6-income-from-real-property/) | Superseded by R9. Retained only as a plain-English cross-check |
 | R12 | ATO — [Rental income you must declare](https://www.ato.gov.au/individuals-and-families/investments-and-assets/property-and-land/residential-rental-properties/rental-income-you-must-declare) | Foreign-resident landlords lodge annually and declare **net** rental income |
 | R13 | **US Treasury Technical Explanation of the 2001 Protocol** (signed 27 Sep 2001, released 5 Mar 2003) — [home.treasury.gov](https://home.treasury.gov/system/files/131/Treaty-Australia-Protocol-TE-3-5-2003.pdf) (41pp; read in full via `pdftotext -layout`) | **Primary source, read directly.** Which Convention articles the Protocol amends (see caveat 1); Art 10 replaced — 15% general, 5% and 0% both requiring a *corporate* beneficial owner, franked dividends statutorily exempt; Art 11 replaced but the 10% cap retained, 0% only for governments/central banks/unrelated financial institutions; Art 12(2) royalty cap cut 10% → 5% and the royalty definition narrowed; Art 27 re-sourcing restated |
+| R14 | **1982 AU–US Convention, operative text** — `docs/us-tax/Treaty-Australia-Convention-1982-08-06.txt` | **Primary source, on disk.** §6b: Art 14 (Independent Personal Services) — residence-only unless performed in the other State *and* >183 days present or a fixed base; Art 15(1) in the same words for employment; Art 27(2) anti-double-exemption naming both articles. R9/R13 explain this text; this is the text |
+| R15 | **ITAA 1997 s6-5** — `docs/au-tax/ITAA-1997/C2026C00324VOL01.txt` | **Primary source, on disk.** §6b axis 1: (2) an Australian resident is assessed on ordinary income "from all sources, whether in or out of Australia"; (3) a foreign resident on ordinary income "from all Australian sources". The two limbs neither AU personal-services classifier used to have |
 
 **Caveats on this reference set.**
 

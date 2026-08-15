@@ -51,7 +51,7 @@ const SE = new Date(Date.UTC(2026, 5, 1)); // 5 months — before any move / ret
  * Build the default config, give the spouse an AUD wage + an AU savings account
  * to receive it, run to SE, return sim.state.
  */
-function runAudSpouse({ workCountry } = {}) {
+function runAudSpouse({ workCountry, selfEmployed } = {}) {
   ServiceRegistry.resetAll();
   const reg = ServiceRegistry.getInstance();
   const sc  = new IntlRetirementScenario({ context: reg.simulationContext, simStart: SS, simEnd: SE });
@@ -61,6 +61,7 @@ function runAudSpouse({ workCountry } = {}) {
   spouse.wageCurrency = 'AUD';
   spouse.monthlyWage  = 4000;
   if (workCountry !== undefined) spouse.workCountry = workCountry;
+  if (selfEmployed !== undefined) spouse.selfEmployed = selfEmployed;
   cfg.accounts.push({
     __type: 'SavingsAccount', stateKey: 'spouseAuSavingsAccount', name: 'AU Savings (Spouse)',
     ownerId: 'spouse', role: 'au-savings', balance: 0, minimumBalance: 0,
@@ -164,6 +165,26 @@ test('WCR-6: the same earner working IN Australia IS assessed there, at NR margi
     'and is NOT routed through the flat-rate final withholding bucket');
   assert.ok((state.foreignGeneralIncomeYTD ?? 0) > 0,
     'genuinely foreign-source ⇒ the general basket IS fed here');
+});
+
+test('WCR-8: the same is true of self-employment income (design 73 §6b)', () => {
+  // The SE twin of WCR-6, end to end. `AU_SE_INCOME_TAX` used to branch on residency
+  // alone, so this earner — a foreign resident performing the services IN Australia —
+  // was assessed nowhere; and separately, `AuSeIncomeApplyReducer` dropped
+  // `workCountry` when it rebuilt the tax action, so the attribute never reached the
+  // classifier to be branched on. This exercises both halves through the real chain:
+  // MonthlyWagesHandler → SE_INCOME_AU_APPLY → AU_SE_INCOME_TAX. The unit matrix in
+  // personal-services-income-source.test.mjs covers the other three cells.
+  const state = runAudSpouse({ workCountry: 'AU', selfEmployed: true });
+
+  assert.ok(sumMap(state.auPersonOrdinaryIncomeYTD) > 0,
+    's6-5(3): a foreign resident is assessed on ordinary income from Australian sources');
+  assert.strictEqual(sumMap(state.auPersonNonResidentWithholdingYTD), 0,
+    'services income was never a withholding category');
+  assert.ok((state.foreignGeneralIncomeYTD ?? 0) > 0,
+    'genuinely AU-source ⇒ the §904 general basket IS fed');
+  assert.strictEqual(state.usSeEarningsYTD ?? 0, 0,
+    'and SECA still does not reach it (totalization)');
 });
 
 test('WCR-7: workCountry changes the tax classification, not the cash flow', () => {

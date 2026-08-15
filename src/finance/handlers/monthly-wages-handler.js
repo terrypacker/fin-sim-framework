@@ -37,8 +37,13 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * performed in Australia emits no AU action and Australia assesses nothing —
  * unchanged from before, and wrong. Fixing it means emitting the AU tax action off
  * `workCountry` while the cash still follows `wageCurrency`, decoupling the tax
- * action from the cash-flow action. `workCountry` is stamped on BOTH apply types so
- * that change is a reducer-side one when it comes.
+ * action from the cash-flow action. `workCountry` is stamped on ALL FOUR apply types
+ * so that change is a reducer-side one when it comes.
+ *
+ * Design 73 §6b: both AU classifiers now read it, via `AuWagesIncomeApplyReducer`
+ * and `AuSeIncomeApplyReducer`. The two US apply reducers still drop it — nothing on
+ * the US return reads it yet, because US earned-income sourcing (§861(a)(3) /
+ * §862(a)(3)) is a tax-model question left open in §6b.
  *
  * @param {object} [opts]
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry

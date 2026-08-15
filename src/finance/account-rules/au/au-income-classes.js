@@ -21,7 +21,14 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
 /**
  * EVT-49: AU Self-Employment Income — credit AU cash pool, chain AU_SE_INCOME_TAX.
  * US: always ordinary income (US citizen taxed on worldwide income).
- * AU: ordinary income if AU resident.
+ * AU: ordinary income if the earner is AU-resident OR the services were performed
+ * in Australia — see `bookAuPersonalServicesIncome` in au-tax-module-2026.
+ *
+ * Design 73 §6b: like AUD wages, this reducer is about the fee's *denomination*,
+ * not its source, so it forwards `workCountry` — where the services are actually
+ * performed — to the tax action. Before §6b it destructured four fields and rebuilt
+ * the tax action from those alone, dropping the source attribute one hop after
+ * MonthlyWagesHandler computed it.
  */
 export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   static type        = 'AuSeIncomeApplyReducer';
@@ -37,11 +44,14 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey } = action;
+    const { amount, residency, personKey, targetKey, workCountry } = action;
     // Credit the transaction account the handler resolved (design 69, parity with
     // AU wages); fall back to the single AU cash pool for legacy actions.
     this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
-    return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, residency, personKey }]);
+    // `workCountry` is absent on actions saved before design 73 §6b and on the bare
+    // SE_INCOME_AU event path; the tax reducer falls back to residency, which is the
+    // pre-73 assumption for a resident earner.
+    return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, residency, personKey, workCountry }]);
   }
 }
 
