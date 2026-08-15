@@ -19,6 +19,7 @@ import '../assets/css/plugins/decision-graph.css';
 import '../assets/css/plugins/cross-action-query.css';
 import '../assets/css/plugins/holdings.css';
 import '../assets/css/plugins/allocation.css';
+import '../assets/css/plugins/spending.css';
 import '../assets/css/plugins/mpc-cockpit.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';

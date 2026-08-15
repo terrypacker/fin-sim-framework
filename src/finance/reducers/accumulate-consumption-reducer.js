@@ -21,6 +21,20 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *   2. deflate by the residence price level (state.inflationAccumulator[cc]) so a
  *      dollar consumed at 65 and at 90 count equally in real terms.
  *
+ * **REALIZED, not intent** (design 89 §5.4). `ExpenseDebitReducer` caps the debit at
+ * the available balance and publishes what moved as `action.realizedAmount`; this
+ * reads that. Reading `action.amount` — what the strategy asked for — meant a plan
+ * that ran short booked consumption the household never received, into the very
+ * quantity the `consumption`, `crra` and DIE_WITH_TARGET objectives maximize.
+ * Measured at 53% / 276% / 660% overstatement under 2x / 4x / 8x expense stress,
+ * and EXACTLY ZERO on any solvent plan, because the cap only binds when short.
+ *
+ * The `?? action.amount` fallback covers an EXPENSE_DEBIT dispatched without the
+ * debit reducer (unit tests do this). It is only ever correct because
+ * PRIORITY.CASH_FLOW runs strictly before PRIORITY.METRICS — pinned by
+ * `tests/unit/consumption-intent-gap.test.mjs`, which exists so that a future
+ * re-ordering fails loudly instead of silently restoring the old behaviour.
+ *
  * A pure-of-final-state accumulator (like cumulativeTaxesPaid / cumulativeDeficit):
  * no per-step objective callback, readable at the end and windowable via a
  * snapshot delta.
@@ -36,12 +50,12 @@ export class AccumulateConsumptionReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const amount = action.amount ?? 0;
+    // Design 89 §5.4 — the money that MOVED, not the money that was asked for.
+    const amount = action.realizedAmount ?? action.amount ?? 0;
     if (!amount) return this.newState(state);
 
     const account  = state[action.targetKey];
     const currency = account?.currency?.code ?? account?.currency ?? 'USD';
-    const cc       = currency === 'AUD' ? 'AU' : 'US';
 
     let usd = amount;
     if (currency === 'AUD') {
@@ -50,9 +64,14 @@ export class AccumulateConsumptionReducer extends Reducer {
       usd = amount / rate;
     }
 
-    // Deflate to base-year dollars by the residence cumulative price level.
-    const priceLevel = state.inflationAccumulator?.[cc] ?? 1;
-    const real = usd / (priceLevel || 1);
+    // Design 89 §5.6 — the price level is STAMPED by the emitter, never inferred here.
+    // CURRENCY is still read off the account (that IS the account's axis: `amount` is
+    // denominated in it), but the price INDEX is a different axis entirely, and one
+    // action can even blend two of them when several properties pay from one account.
+    // The `?? currency-derived` fallback keeps a hand-dispatched EXPENSE_DEBIT working.
+    const cc         = currency === 'AUD' ? 'AU' : 'US';
+    const priceLevel = action.priceLevel ?? state.inflationAccumulator?.[cc] ?? 1;
+    const real       = usd / (priceLevel || 1);
 
     return this.newState({
       ...state,

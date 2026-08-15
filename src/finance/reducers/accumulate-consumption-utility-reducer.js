@@ -31,6 +31,15 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * 65 and at 90 enter the utility on equal real footing, then applies u per
  * EXPENSE_DEBIT. A pure-of-final-state accumulator, windowable via a snapshot
  * delta — no per-step objective callback (design/38 §5).
+ *
+ * **REALIZED, not intent** (design 89 §5.4) — it mirrors that reducer's
+ * `action.realizedAmount` read too, and had to. This one is the sharper case:
+ * `MAX_CRRA_UTILITY` is a bare `maximize Σ u(c)` with NO deficit penalty, and
+ * `OptimizationProblem.feasibilityFirst` defaults to false outside MPC, so on that
+ * objective NOTHING opposed the overstatement. With u(c) = 2 − 2/√c on [0, 2) at
+ * γ=1.5 and floor=1, booking intent meant an empty-account month scored the same
+ * utility as one that actually spent the money. Reading what moved is the only
+ * ruin signal this objective has.
  */
 export class AccumulateConsumptionUtilityReducer extends Reducer {
   static description = 'Accumulates cumulativeConsumptionUtility as lifetime CRRA utility of real (base-year USD) per-period consumption.';
@@ -69,12 +78,14 @@ export class AccumulateConsumptionUtilityReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const amount = action.amount ?? 0;
+    // Design 89 §5.4 — the money that MOVED, not the money that was asked for.
+    // Kept identical to AccumulateConsumptionReducer's read on purpose: these two
+    // drifting apart is what made this defect a two-file fix (design 89 §5.3).
+    const amount = action.realizedAmount ?? action.amount ?? 0;
     if (!amount) return this.newState(state);
 
     const account  = state[action.targetKey];
     const currency = account?.currency?.code ?? account?.currency ?? 'USD';
-    const cc       = currency === 'AUD' ? 'AU' : 'US';
 
     let usd = amount;
     if (currency === 'AUD') {
@@ -83,8 +94,14 @@ export class AccumulateConsumptionUtilityReducer extends Reducer {
       usd = amount / rate;
     }
 
-    const priceLevel = state.inflationAccumulator?.[cc] ?? 1;
-    const real = usd / (priceLevel || 1);
+    // Design 89 §5.6 — the price level is STAMPED by the emitter, never inferred here.
+    // CURRENCY is still read off the account (that IS the account's axis: `amount` is
+    // denominated in it), but the price INDEX is a different axis entirely, and one
+    // action can even blend two of them when several properties pay from one account.
+    // The `?? currency-derived` fallback keeps a hand-dispatched EXPENSE_DEBIT working.
+    const cc         = currency === 'AUD' ? 'AU' : 'US';
+    const priceLevel = action.priceLevel ?? state.inflationAccumulator?.[cc] ?? 1;
+    const real       = usd / (priceLevel || 1);
 
     return this.newState({
       ...state,

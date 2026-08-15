@@ -96,7 +96,18 @@ export const AU_RETIREMENT = {
       // a currency disposition would compute correctly and then be invisible in every
       // report that reads the journal. Both retirement toolsets declare this shared type
       // and registerActionType is last-writer-wins, so they must stay identical.
-      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text(),
+      // `realizedAmount`: see the us-retirement-toolset declaration. Stamped by
+      // ExpenseDebitReducer (design 89 §5.4), not by an emitter. Both toolsets declare
+      // this shared type and registerActionType is last-writer-wins, so they must stay
+      // identical — `action-payload-schema.test.mjs` fails if they drift.
+      // `priceLevel`: see the us-retirement-toolset declaration (design 89 §5.6).
+      // `spendCategory` + `capitalFraction`: see the us-retirement-toolset declaration
+      // (design 89 §6.1 A, §8.1), including why it is not called `category`.
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), realizedAmount: ValueType.number(),
+                                                 priceLevel: ValueType.number(),
+                                                 spendCategory: ValueType.text(),
+                                                 capitalFraction: ValueType.number(),
+                                                 targetKey: ValueType.text(),
                                                  section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
       { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },

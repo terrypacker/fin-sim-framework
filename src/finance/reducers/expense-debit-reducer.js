@@ -23,6 +23,20 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * negative — ReplenishSavingsReducer runs first (lower priority = earlier)
  * and tops up the account before this fires.
  *
+ * **That cap is why this reducer stamps `action.realizedAmount`** (design 89 §5.4).
+ * The two consumption accumulators run after it, at PRIORITY.METRICS, and used to
+ * read `action.amount` — the money the strategy ASKED for, not the money that
+ * moved. On a plan that runs short they diverge, and `cumulativeConsumption` /
+ * `cumulativeConsumptionUtility` are what the `consumption`, `crra` and
+ * DIE_WITH_TARGET objectives maximize, so the optimizer was being paid for
+ * spending the household never got (design 89 §5.2 measured 53%/276%/660% at
+ * 2x/4x/8x expense stress; exactly zero on any solvent plan).
+ *
+ * The cap is applied HERE and nowhere else, so the realized figure is published
+ * from here rather than recomputed downstream — the alternative was three copies
+ * of one rule (design 89 §5.4.4). This mirrors the `section988.accountKey`
+ * write-back below: both are facts only this reducer knows.
+ *
  * @param {object} opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
  * @param {string} [opts.usAccountKey='usSavingsAccount']
@@ -61,6 +75,12 @@ export class ExpenseDebitReducer extends Reducer {
     if (debit > 0) {
       this.accountService.transaction(account, -debit, date);
     }
+    // Design 89 §5.4 — publish what actually moved, for the METRICS accumulators
+    // that run after this. Stamped even when it is 0: a month the household could
+    // not fund is consumption of zero, not consumption of `amount`, and leaving the
+    // field absent would send the accumulators back to their `?? action.amount`
+    // fallback with no way to tell a funded month from an unfunded one.
+    action.realizedAmount = debit;
     // Design 87 §14.4 item 2 — name the pool that disposed. CHARACTER (whether this is a
     // disposition at all, and its §988(e)(3) share) is declared by whichever handler
     // emitted the action, because only it knows what the money bought; the pool is

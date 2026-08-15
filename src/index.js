@@ -162,6 +162,7 @@ import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEG
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { exportDrillReports } from './finance/journal-reporting/drill-report-export.js';
+import { PRICE_LEVEL_PATHS, JournalPriceLevels } from './finance/journal-reporting/journal-price-levels.js';
 import { buildReportRows, rowsToCsv, generateReportCsv } from './finance/journal-reporting/report-csv.js';
 import { USD_AUD_PATH, JournalFxRates, normalizeAggregateCurrency } from './finance/journal-reporting/report-currency.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
@@ -239,7 +240,9 @@ import { RealPropertyService } from './finance/services/real-property-service.js
 import { StateRegistry } from './finance/services/state-registry.js';
 import { ParameterValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
 import { ageBandStartAge, ageSpendingFactor } from './finance/spending/age-spending-factor.js';
+import { blendExpensePriceLevel, residencePriceLevel } from './finance/spending/expense-price-level.js';
 import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-portfolio-value.js';
+import { SPEND_CATEGORY, SPEND_CATEGORIES, blendCapitalFraction } from './finance/spending/spend-category.js';
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
 import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
@@ -253,6 +256,12 @@ import { LateLifeCareApplyReducer } from './finance/spending/strategies/late-lif
 import { LateLifeCareHandler } from './finance/spending/strategies/late-life-care-handler.js';
 import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime-aware-spending-reducer.js';
 import { RetirementDateHandler } from './finance/spending/strategies/retirement-date-handler.js';
+import { createBalanceSampler, withBalances, buildAccountFlows, checkJournalContinuity, checkFlowTiesToStock, checkFlowInvariant } from './finance/spending-reporting/account-flow-tie.js';
+import { SPEND_TIER, REPORT_CATEGORY, CATEGORY_TIER, classifyDebit, classifiedActionTypes } from './finance/spending-reporting/spending-classification.js';
+import { loanBalanceKeys, buildSpendingCube, checkClassificationTotal, spendingSummary, categoriesByValue } from './finance/spending-reporting/spending-cube.js';
+import { TAX_CATEGORIES, summarizeSpendingForRun, percentiles, aggregateSpendingRuns, exceedanceRate, describeSpendingDistribution } from './finance/spending-reporting/spending-distribution.js';
+import { CATEGORY_ORDER, buildSpendingSeries, bySpendingTier, intentVsRealized } from './finance/spending-reporting/spending-grouping.js';
+import { CATEGORY_COLOR, CATEGORY_COLOR_DARK, colorForCategory } from './finance/spending-reporting/spending-palette.js';
 import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { StateTaxService } from './finance/state-tax-service.js';
@@ -1026,6 +1035,8 @@ export const Finance = {
   JournalDataSource,
   JournalQueryApi,
   exportDrillReports,
+  PRICE_LEVEL_PATHS,
+  JournalPriceLevels,
   buildReportRows,
   rowsToCsv,
   generateReportCsv,
@@ -1204,7 +1215,12 @@ export const Finance = {
   StateSchemaRegistry,
   ageBandStartAge,
   ageSpendingFactor,
+  blendExpensePriceLevel,
+  residencePriceLevel,
   computeGuardrailPortfolioValue,
+  SPEND_CATEGORY,
+  SPEND_CATEGORIES,
+  blendCapitalFraction,
   SpendingStrategyApplyReducer,
   SPENDING_STRATEGY_REGISTRY,
   DEFAULT_AGE_BANDS,
@@ -1223,6 +1239,35 @@ export const Finance = {
   LateLifeCareHandler,
   RegimeAwareSpendingReducer,
   RetirementDateHandler,
+  createBalanceSampler,
+  withBalances,
+  buildAccountFlows,
+  checkJournalContinuity,
+  checkFlowTiesToStock,
+  checkFlowInvariant,
+  SPEND_TIER,
+  REPORT_CATEGORY,
+  CATEGORY_TIER,
+  classifyDebit,
+  classifiedActionTypes,
+  loanBalanceKeys,
+  buildSpendingCube,
+  checkClassificationTotal,
+  spendingSummary,
+  categoriesByValue,
+  TAX_CATEGORIES,
+  summarizeSpendingForRun,
+  percentiles,
+  aggregateSpendingRuns,
+  exceedanceRate,
+  describeSpendingDistribution,
+  CATEGORY_ORDER,
+  buildSpendingSeries,
+  bySpendingTier,
+  intentVsRealized,
+  CATEGORY_COLOR,
+  CATEGORY_COLOR_DARK,
+  colorForCategory,
   ACCOUNT_ROLES,
   INHERITED_RETIREMENT_ROLES,
   InternationalRetirementFinancialState,

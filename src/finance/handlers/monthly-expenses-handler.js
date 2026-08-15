@@ -11,6 +11,8 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
+import { residencePriceLevel } from '../spending/expense-price-level.js';
+import { SPEND_CATEGORY } from '../spending/spend-category.js';
 
 /**
  * Handles the MONTHLY_EXPENSES event.
@@ -133,7 +135,18 @@ export class MonthlyExpensesHandler extends HandlerEntry {
       // thing PERSONAL: `§1.988-1(a)(9)`'s Example 2 (a taxpayer's holiday hotels, food
       // and sundries) is this line. Character falls to §1001/§1221 — capital — with the
       // §988(e)(2) \$200 per-transaction exclusion, and any LOSS disallowed under §165(c).
+      // Design 89 §5.6 — the price index this money was incurred at. RESIDENCE, not
+      // the account's currency: InflationAdjustReducer inflates state.monthlyExpenses
+      // at the residence country's rate, so that is the index the consumption
+      // accumulators must divide by to get base-year real dollars.
+      // Design 89 §6.1(A) — what the household bought. Nothing else on this payload
+      // distinguishes a month's groceries from a home's rates: both resolve the same
+      // residence-appropriate pool and both are `businessFraction: 0`.
+      // `capitalFraction` is structurally 0 here — living costs lift no cost basis —
+      // and stamped anyway so every EXPENSE_DEBIT carries the pair (§8.1).
       { type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey,
+        priceLevel: residencePriceLevel(state, this.primaryPersonKey),
+        spendCategory: SPEND_CATEGORY.LIVING, capitalFraction: 0,
         section988: { kind: 'DISPOSE', businessFraction: 0 } },
       new RecordMetricAction('monthly_expenses', nativeAmount),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
