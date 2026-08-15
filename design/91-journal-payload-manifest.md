@@ -545,7 +545,8 @@ The blast radius was checked before touching it and is confined to the AU worksh
 `_extractUsSaleRecords` gates on an explicit `US_DISPOSAL_ACTION_TYPES` allowlist rather
 than on the presence of `proceeds`, so Form 8949 and Schedule D are untouched.
 
-Two things deliberately NOT done, both of which this exposed:
+Two things deliberately NOT done at the time, both of which this exposed — taken up in
+§8.10 below.
 
 1. **Whether a collectable should be assessed at all.** ITAA 1997 s118-10 exempts
    collectables acquired for \$500 or less, and the model assesses unconditionally. That is
@@ -565,6 +566,85 @@ rather than end to end. Moving the sale would trade one case for the other, so i
 
 ---
 
+### 8.10 The two follow-ups, and the definition mismatch underneath both
+
+Reading the primary sources for the two items above turned them into one question, asked
+twice: **each country decides for itself what a "collectible" is, and they disagree.** The
+action type is named for the US answer. Every downstream reader that assumed the name was
+the answer got the other country wrong.
+
+*Sources fetched to disk first, per the standing rule.* IRS instructions come down as PDFs
+without a fight (`irs.gov/pub/irs-pdf`, `pdftotext -layout`): `IRS-Schedule-D-Instructions-2025.txt`
+and `IRS-Form-8949-Instructions-2025.txt` now sit in `docs/us-tax/`. The AU side needed no
+fetch at all — Div 108 and Div 118 were already in `docs/au-tax/ITAA-1997/`, which is worth
+noting because item 1 was deferred partly on the belief that they were not.
+
+**The mismatch.** §408(m), via the Schedule D instructions, makes collectibles include
+*"metals (such as gold, silver, and platinum bullion)"*, with no test of what the owner
+uses the asset for. s108-10(2) is the opposite shape: a closed list of artwork, jewellery,
+antiques, coins/medallions, rare books, stamps — *"that is used or kept mainly for your (or
+your associate's) personal use or enjoyment."* Investment bullion is a collectible in the US
+and an ordinary CGT asset in Australia. The model's assessment side already knew this
+(design 57 Part 2 Item C routes `isGold` through ordinary indexation); its *disclosure* side
+did not.
+
+**Item 2 — collectibles on Form 8949 / Schedule D. DONE, and the premise it rested on was
+wrong.** The exclusion comment claimed a collectible has "its own Form 1040 line, not line
+6". There is no such line. §1(h)(4) segregates a *rate*, not a reporting channel:
+
+- Form 8949 instructions, the column (f) code table: *"You disposed of collectibles … **C**
+  … Enter -0- in column (g). Report the disposition on Form 8949 as you would report any
+  sale or exchange."*
+- Schedule D instructions, 28% Rate Gain Worksheet line 1: *"Enter the total of all
+  collectibles gain or (loss) from items **you reported on Form 8949, Part II**."*
+
+So the disposal belongs in the Part II totals like any other long-term sale, and line 18
+*restates* the 28% slice for the Schedule D Tax Worksheet. That distinction is the whole
+implementation risk: adding the gain to the net capital gain instead of partitioning it
+would double-count the disposal on a return that already taxes it at 28% on the 1040.
+
+Built: the allowlist entry; code C on the 8949 row (unconditional on the asset, unlike H
+which is conditional on an adjustment — so `_saleAdjustment` now returns a sorted code
+list rather than a single code gated on a non-zero adjustment); a Schedule D line 18 that
+appears only in a year with a collectible and floors at zero, so a collectible LOSS stays
+in the net gain (an ordinary capital loss under §1211, design 90 §4) without producing a
+negative 28% rate gain; and a `Collectible` default description, since neither emitter
+declares one and the generic fallback named the wrong asset class on the one row whose
+class is the point. The 1040's collectibles line now says where it ties.
+
+Measured on `cross-border-disposals` (CY2029, the pre-move gold sale): a return that
+previously disclosed a five-figure collectible gain on a bare 1040 with **no schedule at
+all** now files an 8949 row coded C and a Schedule D whose line 18 equals the gain and
+whose 28% tax on the 1040 is exactly 28% of it.
+
+**Item 1 — the s118-10 \$500 exemption. NOT built, and the reading says not to.** Two
+independent reasons, either sufficient. First, s118-10(1) only reaches an asset that is a
+*collectable*, and per s108-10(2) that needs the personal-use-or-enjoyment character —
+which the model's investment assets do not have, and bullion in particular cannot have.
+Second, the threshold is \$500 of first-element cost base: an asset that small is below the
+resolution of anything this model is built to answer, so the branch would be dead code with
+a legal citation attached. Building it would add an assessment rule that never fires and
+one more thing to keep true.
+
+**What the same reading DID find, and it is a disclosure bug. FIXED.** `AU_ASSET_CATEGORY`
+mapped `COLLECTIBLE_SALE_TAX` → "Collectables" for every disposal of that type, bullion
+included. NAT 4151's item 11 is not a label; it carries the rules with it — *"You can only
+use capital losses from collectables to offset capital gains from collectables"* (s108-10(1))
+and the \$500 exemption. Filing bullion there asserts a quarantine that does not apply to
+it, on a worksheet whose entire purpose is to show the working behind the return. The
+payload already declares `isGold`, so `_auAssetCategory` now reads it and routes bullion to
+item 12, "Other CGT assets and any other CGT events". Note this is the *category* only —
+the assessment was already right, and the loss-quarantine machinery for a true collectable
+remains the open gap `au-tax-document-2026.js` states (now stated more precisely: it is not
+the bullion case).
+
+Coverage: the two-way category test is the interesting one, since it is the only place the
+US and AU definitions of the same word are pinned against each other. `isGold` is also now
+covered by a payload-manifest test — it decides an ATO category, so a dropped declaration
+would silently re-file bullion as a collectable.
+
+---
+
 ## 9. Ordered steps
 
 1. **DONE** — §4.1, §4.2, §4.3 declared; `KNOWN_GAPS` ratcheted from 31 types to 29.
@@ -581,7 +661,8 @@ rather than end to end. Moving the sale would trade one case for the other, so i
    codes cross-checked against tax-module behaviour), both at §8.9.
 9. **DONE** — collectible disposals now emit `proceeds`/`costBasis` and reach the AU CGT
    worksheet (§8.9).
-10. Open, both surfaced by step 9 and both narrower than it: the s118-10 \$500 collectables
-    exemption (an assessment question, needs the primary source on disk), and collectibles
-    missing from Form 8949 / Schedule D on the US side (one allowlist entry plus a decision
-    on how the §1(h)(4) 28% rate should present).
+10. **DONE** — both step-9 follow-ups closed at §8.10, which found the definition mismatch
+    under them: collectibles now reach Form 8949 (code C) and Schedule D (line 18 restates
+    the 28% slice, it does not add to it), and the AU worksheet no longer files bullion as
+    an ATO collectable. The s118-10 \$500 exemption is **declined** with reasons, not
+    deferred. IRS Schedule D and 8949 instructions added to `docs/us-tax/`.

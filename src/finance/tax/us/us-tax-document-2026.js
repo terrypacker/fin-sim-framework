@@ -77,7 +77,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
               : []),
             { label: 'Taxable Ordinary Income',             amount:  taxDetail.taxableIncome },
             { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains,         drillReport: drill('capital-gains-by-disposal')     },
-            { label: 'Collectible Gains',                   amount:  inputs.collectibleGains },
+            // Named for where it ties: this is the 28%-rate slice, which Schedule D
+            // reports INSIDE its Part II totals and restates on line 18. The line
+            // above is therefore the rest of the net capital gain, not all of it —
+            // Schedule D's "Transfer to Form 1040, Line 7" is the sum of the two.
+            { label: 'Collectible Gains (28% rate, Sch. D line 18)',
+                                                            amount:  inputs.collectibleGains },
           ],
         },
         {
@@ -260,12 +265,27 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
    * carries the exclusion as a negative column (g) figure (Form 8949 code H) — see
    * `_saleAdjustment` in tax-document-registry.js. Netting it into the gain instead
    * would foot arithmetically while misstating the sale.
+   *
+   * **Line 18 does not add to the return; it partitions it.** A collectible is inside
+   * the Part II totals above like any other long-term sale, and line 18 restates the
+   * 28%-rate slice so the Schedule D Tax Worksheet can rate it separately — adding it
+   * to the net gain would double-count the disposal. Only worksheet line 1 (the
+   * collectibles gain reported on Form 8949, Part II) is modelled; lines 2–6 are
+   * §1202 exclusions, Forms 4684/6252/6781/8824, 1099-DIV box 2d / 2439 / K-1
+   * collectibles gain, and the long-term loss-carryover interaction, none of which
+   * this model produces. Line 7's floor at zero IS applied, which is what keeps a
+   * collectible LOSS out of line 18 while leaving it in the net gain above — the
+   * §1(h)(4) rate attaches to net collectible GAIN only.
+   * Reference: docs/us-tax/IRS-Schedule-D-Instructions-2025.txt, "28% Rate Gain
+   * Worksheet—Line 18".
    */
   _generateScheduleD(saleRecords, taxYear) {
     const totalProceeds   = saleRecords.reduce((s, r) => s + r.proceeds,  0);
     const totalCostBasis  = saleRecords.reduce((s, r) => s + r.costBasis, 0);
     const totalAdjustment = saleRecords.reduce((s, r) => s + (r.adjustment ?? 0), 0);
     const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
+    const collectibles    = saleRecords.filter(r => r.collectible);
+    const rateGain28      = Math.max(0, collectibles.reduce((s, r) => s + r.gain, 0));
     return {
       title:        `Schedule D — ${taxYear}`,
       country:      'US',
@@ -286,6 +306,14 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
           heading: 'Net Capital Gain',
           lineItems: [
             { label: 'Net Capital Gain (Line 15)',          amount: totalGain },
+            // Printed only when there is a collectible in the year — the real form
+            // leaves line 18 blank unless line 17 is "Yes" and a 28%-rate item was
+            // reported, and a permanent zero here reads as an assertion that the
+            // worksheet was run rather than that it did not apply.
+            ...(collectibles.length
+              ? [{ label: '28% Rate Gain (Line 18, from the 28% Rate Gain Worksheet)',
+                   amount: rateGain28, sub: true }]
+              : []),
             { label: 'Transfer to Form 1040, Line 7',       amount: totalGain },
           ],
         },

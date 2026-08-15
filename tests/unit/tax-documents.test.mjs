@@ -30,6 +30,7 @@ import { worksheetRowsFromDocuments, tableDocumentToCsv, cellText } from '../../
 
 import { TypeRegistry as _TypeRegistry } from '../../src/simulation-framework/type-registry.js';
 import { US_INCOME as _US_INCOME }       from '../../src/scenarios/toolsets/us-income-toolset.js';
+import { US_COLLECTIBLES as _US_COLLECTIBLES } from '../../src/scenarios/toolsets/us-collectibles-toolset.js';
 
 /** Minimal registry carrying the disposal action declarations under test. */
 function buildTypeRegistryForDisposals() {
@@ -995,6 +996,123 @@ test('company-equity disposals reach Schedule D too', () => {
   const gain = schedD.sections.flatMap(s => s.lineItems)
     .find(li => li.label.startsWith('Net Long-Term Gain')).amount;
   assert.strictEqual(gain, 90_000);
+});
+
+// ── Collectibles on the US schedules (design 91 §8.9 follow-up 2) ─────────────
+//
+// A collectible used to be excluded from US_DISPOSAL_ACTION_TYPES on the premise
+// that a 28% asset has "its own Form 1040 line, not line 6". It does not: the rate
+// is segregated, the REPORTING is not. Both instruction sets are on disk —
+// docs/us-tax/IRS-Schedule-D-Instructions-2025.txt ("28% Rate Gain Worksheet—Line
+// 18 … 1. Enter the total of all collectibles gain or (loss) from items you
+// reported on Form 8949, Part II") and IRS-Form-8949-Instructions-2025.txt ("You
+// disposed of collectibles … C … Enter -0- in column (g)").
+
+/** A one-collectible year, as the journal records it. */
+function collectibleJournal(data, { collectibleGains = 40_000 } = {}) {
+  const detail      = { ...usDetail({ usCollectibleGainsYTD: collectibleGains }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  return [settleEntry, [
+    ...fanOut('COLLECTIBLE_SALE_TAX', data,
+      { instanceId: 'i-col', reducers: ['dynamic:US:COLLECTIBLE_SALE_TAX',
+                                        'state:classify:COLLECTIBLE_SALE_TAX'] }),
+    settleEntry,
+  ]];
+}
+
+const lineOf = (doc, label) => doc.sections.flatMap(s => s.lineItems)
+  .find(li => li.label.startsWith(label));
+
+test('a collectible sale reaches Form 8949 and Schedule D, coded C', () => {
+  const [settleEntry, journal] = collectibleJournal(
+    { gain: 40_000, proceeds: 100_000, costBasis: 60_000, isGold: true, stateKey: 'collectibleAccount' });
+
+  const [, schedD, f8949] = new TaxDocumentRegistry().generate(settleEntry, journal);
+
+  assert.strictEqual(f8949.table.rows.length, 1, 'the disposal must appear on Form 8949');
+  const [row] = f8949.table.rows;
+  assert.strictEqual(row[5], 'C', 'a collectibles disposition carries code C in column (f)');
+  assert.strictEqual(row[6], 0,   'and no adjustment in column (g)');
+
+  // Inside the Part II totals like any other long-term sale — the 28% rate does not
+  // move the disposal off the schedule, it only re-rates the gain.
+  assert.strictEqual(lineOf(schedD, 'Total Proceeds').amount,      100_000);
+  assert.strictEqual(lineOf(schedD, 'Total Cost Basis').amount,     60_000);
+  assert.strictEqual(lineOf(schedD, 'Net Long-Term Gain').amount,   40_000);
+});
+
+test('Schedule D line 18 restates the 28% slice without adding to the net gain', () => {
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 20_000, usCollectibleGainsYTD: 40_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('STOCK_WITHDRAWAL_TAX', { gain: 20_000, proceeds: 55_000, costBasis: 35_000, description: 'Brokerage' },
+      { instanceId: 'i-eq', reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX'] }),
+    ...fanOut('COLLECTIBLE_SALE_TAX', { gain: 40_000, proceeds: 100_000, costBasis: 60_000, isGold: true },
+      { instanceId: 'i-col', reducers: ['dynamic:US:COLLECTIBLE_SALE_TAX'] }),
+    settleEntry,
+  ];
+
+  const [, schedD] = new TaxDocumentRegistry().generate(settleEntry, journal);
+
+  assert.strictEqual(lineOf(schedD, 'Net Capital Gain (Line 15)').amount, 60_000,
+    'line 15 is BOTH disposals — collectibles are not a separate reporting channel');
+  assert.strictEqual(lineOf(schedD, '28% Rate Gain (Line 18').amount, 40_000,
+    'line 18 restates the collectible slice for the rate computation');
+  assert.strictEqual(lineOf(schedD, 'Transfer to Form 1040').amount, 60_000,
+    'and does not add to what transfers — that would double-count the disposal');
+});
+
+test('Schedule D omits line 18 in a year with no collectible', () => {
+  const detail      = { ...usDetail({ usCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [
+    ...fanOut('STOCK_WITHDRAWAL_TAX', { gain: 20_000, proceeds: 55_000, costBasis: 35_000 },
+      { instanceId: 'i-eq', reducers: ['dynamic:US:STOCK_WITHDRAWAL_TAX'] }),
+    settleEntry,
+  ];
+  const [, schedD, f8949] = new TaxDocumentRegistry().generate(settleEntry, journal);
+  assert.strictEqual(lineOf(schedD, '28% Rate Gain'), undefined,
+    'a permanent zero would assert the worksheet was run when it did not apply');
+  assert.strictEqual(f8949.table.rows[0][5], '', 'and an ordinary sale stays uncoded');
+});
+
+test('a collectible LOSS stays in the net gain but out of line 18', () => {
+  // §1(h)(4) rates net collectible GAIN. The loss is an ordinary capital loss in the
+  // §1211 netting (design 90 §4), so it reduces line 15 — and worksheet line 7's
+  // floor at zero is what keeps it from producing a negative 28% rate gain.
+  const [settleEntry, journal] = collectibleJournal(
+    { gain: -15_000, proceeds: 45_000, costBasis: 60_000, isGold: true }, { collectibleGains: -15_000 });
+
+  const [, schedD] = new TaxDocumentRegistry().generate(settleEntry, journal);
+  assert.strictEqual(lineOf(schedD, 'Net Long-Term Gain').amount, -15_000);
+  assert.strictEqual(lineOf(schedD, '28% Rate Gain (Line 18').amount, 0);
+});
+
+test('a collectible row is described as one, not as an "Investment Account"', () => {
+  // Neither emitter declares `description`, so the row falls through to a default.
+  // The generic one names the wrong asset class on the single row whose class is
+  // the reason it is coded C.
+  const [settleEntry, journal] = collectibleJournal(
+    { gain: 40_000, proceeds: 100_000, costBasis: 60_000, isGold: true });
+  const [, , f8949] = new TaxDocumentRegistry().generate(settleEntry, journal);
+  assert.strictEqual(f8949.table.rows[0][0], 'Collectible');
+});
+
+test('COLLECTIBLE_SALE_TAX declares the sale detail the schedules need', () => {
+  // Same gate as COMPANY_SALE_TAX below: undeclared fields are dropped by
+  // pickPayload, and `isGold` is load-bearing on the AU side too (it decides the
+  // ATO asset category), so all three must survive the manifest.
+  const reg = new _TypeRegistry();
+  reg.registerToolset(_US_COLLECTIBLES);
+  const payload = reg.pickPayload({
+    type: 'COLLECTIBLE_SALE_TAX', gain: 40_000, proceeds: 100_000,
+    costBasis: 60_000, isGold: true, undeclaredProbe: 'dropped',
+  });
+  assert.strictEqual(payload.proceeds,  100_000);
+  assert.strictEqual(payload.costBasis,  60_000);
+  assert.strictEqual(payload.isGold,     true);
+  assert.strictEqual(payload.undeclaredProbe, undefined,
+    'undeclared fields must drop, else this test proves nothing');
 });
 
 test('COMPANY_SALE_TAX declares the sale detail Schedule D needs', () => {

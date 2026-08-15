@@ -417,8 +417,15 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
    * s108-10(1) quarantines a collectables loss to collectables gains, which is what
    * the worksheet's Part 9 and its separate carried-forward balance exist to enforce.
    * `COLLECTIBLE_SALE_TAX` books into the same `auCapitalGainsYTD` as everything else,
-   * so a bullion loss here would shelter ordinary capital gains. Narrow — it needs a
-   * collectable sold below its cost base — but stated rather than silently footed.
+   * so a collectable loss here would shelter ordinary capital gains. Narrow — it needs
+   * a collectable sold below its cost base — but stated rather than silently footed.
+   *
+   * The gap is narrower than the action type's name suggests, and NOT the bullion
+   * case: s108-10(2) requires the asset be *"used or kept mainly for your … personal
+   * use or enjoyment"*, which investment bullion is not, so a bullion loss offsetting
+   * ordinary gains is the CORRECT answer and only a true collectable is quarantined.
+   * `_auAssetCategory` in tax-document-registry.js draws the same line on the
+   * disclosure side, off the payload's `isGold`.
    */
   _cgtLossParts(taxDetail, steps, m) {
     if (!steps) return [];

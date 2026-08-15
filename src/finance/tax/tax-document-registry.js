@@ -232,6 +232,36 @@ const AU_ASSET_CATEGORY = {
 };
 
 /**
+ * The category for ONE disposal — the map above, except where the payload says the
+ * asset is not what its action type suggests.
+ *
+ * **Bullion is not a collectable, and the category is not cosmetic.** s108-10(2)
+ * defines a collectable as artwork, jewellery, an antique, a coin or medallion, a
+ * rare folio/manuscript/book, or a stamp/first day cover *"that is used or kept
+ * mainly for your (or your associate's) personal use or enjoyment"*. Investment
+ * bullion is none of those things and is not kept for enjoyment — which is the same
+ * conclusion design 57 Part 2 Item C already reached on the assessment side, where
+ * `isGold` routes the gain through ordinary CGT indexation rather than the
+ * collectable treatment.
+ *
+ * Listing it under Collectables anyway asserts two rules that do not apply to it:
+ * *"You can only use capital losses from collectables to offset capital gains from
+ * collectables"* (s108-10(1), and NAT 4151 item 11 says it in those words), and the
+ * s118-10(1) \$500 exemption. A bullion loss offsets ordinary capital gains, so the
+ * row belongs in item 12, "Other CGT assets and any other CGT events".
+ *
+ * The US side of the same disposal reaches the opposite answer, correctly: §408(m)
+ * makes *"metals (such as gold, silver, and platinum bullion)"* a collectible for
+ * the 28% rate (docs/us-tax/IRS-Schedule-D-Instructions-2025.txt), with no
+ * personal-use test. One asset, two definitions — the action type is named for the
+ * US one, so the AU document has to read `isGold` rather than the type.
+ */
+function _auAssetCategory(actionType, data) {
+  if (actionType === 'COLLECTIBLE_SALE_TAX' && data?.isGold) return 'Other CGT assets';
+  return AU_ASSET_CATEGORY[actionType] ?? 'Other CGT assets';
+}
+
+/**
  * FALLBACK ONLY — the currency each AU-assessable disposal's `proceeds` / `costBasis`
  * is denominated in, used when no TypeRegistry was handed to TaxDocumentRegistry.
  *
@@ -337,8 +367,10 @@ function _extractAuDisposals(currentEntry, journal, settleRate, typeRegistry = n
 
     disposals.push({
       stateKey:    d.stateKey ?? null,
-      description: d.description ?? (t === 'AU_HOUSE_SALE_TAX' ? 'AU Real Property' : 'Investment Account'),
-      category:    AU_ASSET_CATEGORY[t] ?? 'Other CGT assets',
+      description: d.description
+                   ?? (t === 'AU_HOUSE_SALE_TAX' ? 'AU Real Property' : null)
+                   ?? DEFAULT_DISPOSAL_DESCRIPTION[t] ?? 'Investment Account',
+      category:    _auAssetCategory(t, d),
       dateSold:    new Date(e.date),
       proceeds:    d.proceeds,
       rate:        impliedRate,
@@ -515,18 +547,48 @@ function _worksheetRowsFor({ disposals, shareByStateKey }, personKey) {
 }
 
 /**
- * Every disposal type that feeds `usCapitalGainsYTD`, i.e. Form 1040 line 6.
+ * Every disposal reported on Form 8949 / Schedule D.
  *
  * `STOCK_WITHDRAWAL_TAX` covers explicit sales (StockWithdrawalApplyReducer) and
- * brokerage drawdowns (`AccountService.replenishSavings`). The other two used to be
- * missing, so Schedule D silently omitted the house and company-equity disposals
- * while Form 1040 counted them — the reason CY2026 read `L6 650,000` against a
- * Schedule D of `0.00`. Collectibles are deliberately absent: they carry their own
- * 28% rate and their own Form 1040 line (§1(h)(4)), not line 6.
+ * brokerage drawdowns (`AccountService.replenishSavings`). The house and company
+ * types used to be missing, so Schedule D silently omitted those disposals while
+ * Form 1040 counted them — the reason CY2026 read `L6 650,000` against a Schedule D
+ * of `0.00`.
+ *
+ * **Collectibles belong here too, and used to be excluded on a wrong premise** — that
+ * a 28% asset has "its own Form 1040 line, not line 6". It does not. The 28% rate of
+ * §1(h)(4) is a RATE segregation, not a separate reporting channel: a collectible is
+ * reported on Form 8949 like any other sale and reaches Schedule D inside the Part II
+ * totals, and the 28% Rate Gain Worksheet then pulls it back out for the rate
+ * computation. The instructions say both halves in as many words:
+ *
+ *   "28% Rate Gain Worksheet—Line 18 … 1. Enter the total of all collectibles gain or
+ *    (loss) from items you reported on Form 8949, Part II"
+ *      — docs/us-tax/IRS-Schedule-D-Instructions-2025.txt
+ *
+ *   "You disposed of collectibles … [code] C … Enter -0- in column (g). Report the
+ *    disposition on Form 8949 as you would report any sale or exchange."
+ *      — docs/us-tax/IRS-Form-8949-Instructions-2025.txt
+ *
+ * The US accumulator a collectible feeds (`usCollectibleGainsYTD`) is separate from
+ * `usCapitalGainsYTD`, which is why this set is no longer described as "the types
+ * that feed line 6" — membership is about what the schedules disclose, not about
+ * which bucket the rate computation reads.
  */
 const US_DISPOSAL_ACTION_TYPES = new Set([
-  'STOCK_WITHDRAWAL_TAX', 'US_HOUSE_SALE_TAX', 'COMPANY_SALE_TAX',
+  'STOCK_WITHDRAWAL_TAX', 'US_HOUSE_SALE_TAX', 'COMPANY_SALE_TAX', 'COLLECTIBLE_SALE_TAX',
 ]);
+
+/**
+ * Column (a) fallback when the emitter sends no `description` and the row has no
+ * `stateKey` to resolve a display name from. `COLLECTIBLE_SALE_TAX` is the case that
+ * needs it: neither emitter declares `description`, and "Investment Account" on a
+ * gold row is worse than a generic label — it names the wrong kind of asset on the
+ * one row whose asset class is the reason it is coded C.
+ */
+const DEFAULT_DISPOSAL_DESCRIPTION = {
+  COLLECTIBLE_SALE_TAX: 'Collectible',
+};
 
 /**
  * Form 8949 column (g) — the adjustment that reconciles a disposal's economic gain
@@ -544,15 +606,26 @@ const US_DISPOSAL_ACTION_TYPES = new Set([
  *
  * Schedule D then foots as (d) − (e) + (g), which is exactly its column (h).
  *
+ * **Code C carries no adjustment.** A collectibles disposition is coded even though
+ * column (g) is zero — the code is what identifies the row as 28%-rate property for
+ * the 28% Rate Gain Worksheet, so unlike H it is a property of the ASSET rather than
+ * of a reconciling difference: *"You disposed of collectibles … C … Enter -0- in
+ * column (g)"* (docs/us-tax/IRS-Form-8949-Instructions-2025.txt). Codes are entered
+ * in alphabetical order when more than one applies; the two cannot co-occur here (a
+ * main home is not a collectible), but the sort keeps that true by construction
+ * rather than by luck.
+ *
  * @returns {{ adjustment: number, code: string }}
  */
 function _saleAdjustment(actionType, proceeds, costBasis, gain) {
   const adjustment = Math.round(((gain - (proceeds - costBasis)) + Number.EPSILON) * 100) / 100;
-  if (adjustment === 0) return { adjustment: 0, code: '' };
-  // H is specifically the main-home exclusion; anything else is a real reconciling
-  // difference we have no authority to label, so it stays coded blank rather than
-  // borrowing a code that would misstate why the return differs.
-  return { adjustment, code: actionType === 'US_HOUSE_SALE_TAX' ? 'H' : '' };
+  const codes = [];
+  if (actionType === 'COLLECTIBLE_SALE_TAX') codes.push('C');
+  // H is specifically the main-home exclusion; any OTHER non-zero adjustment is a real
+  // reconciling difference we have no authority to label, so it stays coded blank
+  // rather than borrowing a code that would misstate why the return differs.
+  if (adjustment !== 0 && actionType === 'US_HOUSE_SALE_TAX') codes.push('H');
+  return { adjustment, code: codes.sort().join('') };
 }
 
 /**
@@ -594,12 +667,16 @@ function _extractUsSaleRecords(currentEntry, journal) {
       // Schedule D describe the same accounts and would otherwise print raw stateKeys
       // beside an AU worksheet that prints names.
       stateKey:     d.stateKey,
-      description:  d.description ?? 'Investment Account',
+      description:  d.description ?? DEFAULT_DISPOSAL_DESCRIPTION[t] ?? 'Investment Account',
       dateAcquired: 'Various',
       dateSold:     new Date(e.date),
       proceeds,
       costBasis,
       gain,
+      // What the 28% Rate Gain Worksheet selects on. Kept as a record flag rather
+      // than re-derived from the code letter in the document module: the code is a
+      // presentation detail of column (f), the 28%-rate character is the fact.
+      collectible:  t === 'COLLECTIBLE_SALE_TAX',
       ..._saleAdjustment(t, proceeds, costBasis, gain),
     });
   }

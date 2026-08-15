@@ -286,6 +286,40 @@ test('a collectible disposal reaches the AU CGT worksheet', () => {
 
   const list = Array.isArray(docs) ? docs : [docs];
   const table = list.find(d => d?.table?.columns?.includes('Capital Proceeds'))?.table;
-  assert.strictEqual(table.rows[0][1], 'Collectables',
-    'and lands in the ATO category the worksheet already had a mapping for');
+  // NOT "Collectables" — this row is `isGold`. s108-10(2) makes a collectable an
+  // artwork/coin/etc "used or kept mainly for your personal use or enjoyment", which
+  // investment bullion is not, and the category carries the s108-10(1) loss
+  // quarantine and the s118-10(1) $500 exemption with it. See _auAssetCategory.
+  assert.strictEqual(table.rows[0][1], 'Other CGT assets',
+    'bullion is an ordinary AU CGT asset, not an ATO collectable');
+});
+
+test('a TRUE collectable is categorised as one, and bullion is not', () => {
+  // The two halves of s108-10(2), on the one action type that can be either. The US
+  // side calls both "collectibles" (§408(m) covers bullion for the 28% rate), so the
+  // AU category cannot be read off the action type — only off `isGold`.
+  const category = (isGold) => {
+    const journal = [
+      entry({
+        actionType: 'COLLECTIBLE_SALE_TAX',
+        data: { gain: GAIN, auGain: GAIN, auIndexedGain: GAIN, isGold,
+                proceeds: GAIN * 3, costBasis: GAIN * 2,
+                residency: 'AU', description: 'collectibleAccount', stateKey: 'collectibleAccount' },
+      }),
+      entry({
+        actionType: 'AU_TAX_SETTLE_APPLY',
+        date: new Date(Date.UTC(2033, 11, 31)),
+        data: { cc: 'AU', fxRate: RATE, taxDetail: auTaxDetail() },
+      }),
+    ];
+    const docs = new TaxDocumentRegistry({ typeRegistry: typeRegistry() })
+      .generate(journal[1], journal);
+    const list = Array.isArray(docs) ? docs : [docs];
+    return list.find(d => d?.table?.columns?.includes('Capital Proceeds'))?.table.rows[0][1];
+  };
+
+  assert.strictEqual(category(false), 'Collectables',
+    'a non-bullion collectible is an ATO collectable (item 11)');
+  assert.strictEqual(category(true),  'Other CGT assets',
+    'bullion is not (item 12) — otherwise the row asserts a loss quarantine that does not apply to it');
 });
