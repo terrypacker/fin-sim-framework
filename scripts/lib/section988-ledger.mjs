@@ -69,116 +69,17 @@
  */
 
 import { KIND, BASIS, reconcileInternal } from './section988-source.mjs';
+// The pool, the conventions and the ordinary/capital split live in `src/` because the
+// SIMULATION uses them too — design 87 phase 3 builds the same ledger into the engine, and
+// two implementations of a path-dependent calculation would drift without ever failing a
+// test. Re-exported below so this module's own import surface is unchanged.
+import {
+  CurrencyLotPool, LEDGER_METHOD, POOLING, PERSONAL_DE_MINIMIS_USD, allocateGain,
+} from '../../src/finance/account-rules/currency-lots.js';
 
-export const LEDGER_METHOD = { FIFO: 'fifo', PRO_RATA: 'pro-rata' };
-export const POOLING = { PER_ACCOUNT: 'per-account', COMMINGLED: 'commingled' };
-
-/** `§988(e)(2)`: personal gain of this much or less is excluded, per transaction. */
-export const PERSONAL_DE_MINIMIS_USD = 200;
-
-/** A capital gain is long-term above this, which only FIFO can ever know. */
-const LONG_TERM_DAYS = 366;
+export { LEDGER_METHOD, POOLING, PERSONAL_DE_MINIMIS_USD, allocateGain };
 
 const round2 = (n) => Math.round(n * 100) / 100;
-const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
-
-/**
- * One pool of currency: units of AUD and the USD basis they carry.
- *
- * Pro-rata needs only the two totals — that is the whole method, and why design 87 calls
- * it stateless. FIFO additionally needs the lots, because a holding period is a fact
- * about *which* units left, which no aggregate can answer.
- */
-class Pool {
-  constructor(method) {
-    this.method = method;
-    this.units = 0;
-    this.basis = 0;
-    this.lots = [];
-  }
-
-  acquire(date, units, basis) {
-    if (!(units > 0)) return;
-    this.units += units;
-    this.basis += basis;
-    this.lots.push({ date, units, basis });
-  }
-
-  /**
-   * Remove `units` and return the USD basis they carried, plus how long they were held.
-   *
-   * The `held` figure is units-weighted and is `null` under pro-rata — deliberately, and
-   * not as a shortcut. Pro-rata cannot say which units left, so it cannot say how long
-   * they were held; design 87 is careful that this is an inference from the method's
-   * logic rather than a rule in the regulation. Returning a number here would invent a
-   * holding period the method is not entitled to.
-   */
-  consume(date, units) {
-    if (!(units > 0) || !(this.units > 0)) return { basis: 0, held: null, shortfall: units };
-    const take = Math.min(units, this.units);
-    const shortfall = units - take;
-
-    if (this.method === LEDGER_METHOD.PRO_RATA) {
-      const basis = this.basis * (take / this.units);
-      this.units -= take;
-      this.basis -= basis;
-      if (this.units <= 1e-9) { this.units = 0; this.basis = 0; this.lots = []; }
-      return { basis, held: null, shortfall };
-    }
-
-    let left = take;
-    let basis = 0;
-    let weightedDays = 0;
-    while (left > 1e-9 && this.lots.length) {
-      const lot = this.lots[0];
-      const from = Math.min(left, lot.units);
-      const lotBasis = lot.basis * (from / lot.units);
-      basis += lotBasis;
-      weightedDays += from * daysBetween(lot.date, date);
-      lot.units -= from;
-      lot.basis -= lotBasis;
-      left -= from;
-      if (lot.units <= 1e-9) this.lots.shift();
-    }
-    this.units -= take;
-    this.basis -= basis;
-    if (this.units <= 1e-9) { this.units = 0; this.basis = 0; this.lots = []; }
-    return { basis, held: take > 0 ? weightedDays / take : null, shortfall };
-  }
-}
-
-/**
- * Split one disposition's gain into where it actually lands on a return.
- *
- * @param gross  total USD gain (positive) or loss (negative) on the units disposed of
- * @param frac   business share, 0..1
- * @param held   units-weighted days held, or null when the method cannot say
- */
-export function allocateGain(gross, frac, held) {
-  const f = Math.min(1, Math.max(0, frac ?? 0));
-  const business = gross * f;
-  const personal = gross * (1 - f);
-
-  // `+ 0` normalises -0, which `gross * 0` produces for a negative gross and which then
-  // leaks into JSON as "-0".
-  const out = {
-    ordinary: business + 0,
-    capitalGain: 0,
-    deMinimisExcluded: 0,
-    disallowedPersonalLoss: 0,
-    longTerm: held == null ? null : held >= LONG_TERM_DAYS,
-  };
-
-  if (personal >= 0) {
-    // §988(e)(2) excludes the personal gain from the whole subtitle at or below \$200.
-    if (personal <= PERSONAL_DE_MINIMIS_USD) out.deMinimisExcluded = personal;
-    else out.capitalGain = personal;
-  } else {
-    // Personal loss: disallowed outright. The \$200 floor is written for gain only.
-    out.disallowedPersonalLoss = -personal;
-  }
-  return out;
-}
 
 /**
  * Which of the four buckets the PERSONAL share of one disposition landed in.
@@ -223,7 +124,7 @@ export function runLedger(classified, options = {}) {
   const poolKeyFor = (account) => (pooling === POOLING.COMMINGLED ? '*' : (account ?? ''));
   const poolFor = (account) => {
     const key = poolKeyFor(account);
-    if (!pools.has(key)) pools.set(key, new Pool(method));
+    if (!pools.has(key)) pools.set(key, new CurrencyLotPool(method));
     return pools.get(key);
   };
 

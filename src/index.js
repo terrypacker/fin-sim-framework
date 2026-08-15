@@ -19,6 +19,7 @@ import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, do
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
+import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
@@ -562,6 +563,12 @@ export const Finance = {
   currencyPoolBusinessFraction,
   realizeCurrencyDisposition,
   acquireCurrencyBasis,
+  LEDGER_METHOD,
+  POOLING,
+  LONG_TERM_DAYS,
+  PERSONAL_DE_MINIMIS_USD,
+  CurrencyLotPool,
+  allocateGain,
   InheritHandler,
   InheritApplyReducer,
   InheritanceNeTaxApplyReducer,
