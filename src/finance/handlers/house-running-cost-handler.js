@@ -11,6 +11,8 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
+import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
+  from '../account-rules/currency-basis.js';
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -115,6 +117,10 @@ export class HouseRunningCostHandler extends HandlerEntry {
       : 0;
 
     let totalDebit = 0;   // accumulated in the target account's currency
+    // Design 87 §14.4 item 2 / G12 — the §212 share of the SAME debit. One tick can pay
+    // the running costs of a home and a rental out of one account, so the fraction has to
+    // be accumulated alongside the money rather than read off either property.
+    let businessDebit = 0;
     for (const key of this.propertyKeys) {
       const prop = state[key];
       // Skip a missing or SOLD property — value drops to 0 at sale (design 75 §5.3).
@@ -133,7 +139,9 @@ export class HouseRunningCostHandler extends HandlerEntry {
 
       const propCurrency = (typeof prop.currency === 'string' ? prop.currency : prop.currency?.code)
         ?? (cc === 'AU' ? 'AUD' : 'USD');
-      totalDebit += convertExpenseToAccount(monthlyNative, propCurrency, account, state);
+      const debit = convertExpenseToAccount(monthlyNative, propCurrency, account, state);
+      totalDebit    += debit;
+      businessDebit += debit * propertyExpenseBusinessFraction(prop);
     }
 
     if (totalDebit <= 0) return [];
@@ -145,7 +153,13 @@ export class HouseRunningCostHandler extends HandlerEntry {
       actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
     }
     actions.push(
-      { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey },
+      // Design 87 §14.4 item 2 — running costs of an income-producing property are §212
+      // expenses, so the currency spent on them is an ORDINARY §988 disposition; the same
+      // costs on a home are personal and fall to the capital branch. Read per tick, so a
+      // property that stops renting flips its subsequent debits (design 87 §4's trap).
+      { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey,
+        section988: { kind: 'DISPOSE',
+                      businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
       new RecordMetricAction('house_running_cost', totalDebit),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );

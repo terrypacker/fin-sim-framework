@@ -65,7 +65,10 @@ export const US_REAL_PROPERTY = {
       // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
-                  purchaseMs: ValueType.number() } },
+                  purchaseMs: ValueType.number(),
+                  // Design 87 §14.4 item 3 — the §988 character declaration, for journal
+                  // visibility. Must stay identical in both toolsets (last-writer-wins).
+                  section988: ValueType.any() } },
       // mortgageBalance — the bridge from sale price to the cash that actually lands.
       // `number()` to match salePrice/costBasis; see the AU twin for why the disposal
       // money fields are deliberately native and unconverted.
@@ -87,7 +90,9 @@ export const US_REAL_PROPERTY = {
       // declaration of this shared type — registerActionType is last-writer-wins.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
-                  cashDue: ValueType.number() } },
+                  cashDue: ValueType.number(),
+                  // Design 87 G3 — the §988 character declaration, for journal visibility.
+                  section988: ValueType.any() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any
@@ -100,6 +105,7 @@ export const US_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
+                  capitalGain: ValueType.number(), longTerm: ValueType.any(),
                   residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },

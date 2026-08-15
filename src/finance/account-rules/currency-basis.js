@@ -70,14 +70,20 @@ export function isForeignCurrencyPool(account) {
  * @param {number} acqRate     foreign units per USD when those units were acquired
  * @param {number} dispRate    foreign units per USD on the disposition date
  * @param {number} businessFrac 0..1 — the §988(e)(3) "to the extent … §162/§212" share
- * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number }}
- *          all USD; `recognized` is signed (what actually reaches the return).
+ * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number,
+ *            capitalGain: number, longTerm: boolean|null }} all USD.
  *
  * The §988(e) split is the same asymmetry the debt leg models, and this is the leg
  * Congress actually wrote §988(e)(2) for — see {@link computeSection988Gain}'s caveat
  * and design 87 §4. The personal share recognizes gain above the \$200 per-transaction
  * de minimis; the matching personal loss is disallowed under §165(c)
  * (Quijano v. United States, 93 F.3d 26 (1st Cir. 1996)).
+ *
+ * That surviving personal gain is **capital**, not ordinary — design 87 G10. Currency is
+ * property and disposing of it is a sale or exchange, so once §988(e)(1) takes the
+ * personal share outside §988, §1221/§1222 pick it up. `longTerm` is null because this
+ * scalar-rate path cannot say WHICH units left, and a consumer must read null as
+ * *unknown*, never as "known short".
  */
 export function computeCurrencyDisposition(units, acqRate, dispRate, businessFrac) {
   // Transposed rates: the deposit is the mirror of the debt. See the header.
@@ -135,6 +141,54 @@ export function currencyPoolBusinessFraction(account) {
 }
 
 /**
+ * The §988(e)(3) income-producing share of currency spent on ONE property's expenses.
+ *
+ * Design 87 §14.4 item 2. Where {@link currencyPoolBusinessFraction} answers "what is
+ * this ACCOUNT generally for", this answers "what did this particular disposition buy" —
+ * the per-disposition fraction G12 introduced. Running costs and repairs on a rental are
+ * §212 expenses of producing income; the same costs on a home are personal, and
+ * §1.988-1(a)(9) then puts the disposition outside §988 altogether.
+ *
+ * **It must stay identical to `section988BusinessFraction`'s property branch in
+ * loan-classes.js.** The mortgage on a property and the running costs of the same
+ * property are dispositions out of the same pool, and if the two rules disagree the pool
+ * splits its ordinary/personal character on nothing more than which handler emitted the
+ * debit. Hence the same `deductibleFraction`-then-`rentalEnabled` order, and hence no
+ * `monthlyRent > 0` test here even though the rental *income* classifiers apply one:
+ * a rental standing empty is still held for the production of income.
+ *
+ * Design 87 §4's live trap applies in full — this is read PER TICK, so a property that
+ * stops renting flips its subsequent expense debits from ordinary to personal (and its
+ * currency losses from deductible to disallowed) without anything being re-authored.
+ *
+ * @param {object|null} property  a real-property state entry
+ * @returns {number} 0..1
+ */
+export function propertyExpenseBusinessFraction(property) {
+  const stated = property?.deductibleFraction;
+  if (stated != null) return Math.min(1, Math.max(0, stated));
+  return property?.rentalEnabled ? 1 : 0;
+}
+
+/**
+ * Blend per-property fractions into the ONE fraction a combined debit can carry.
+ *
+ * Both property expense handlers accumulate several properties into a single
+ * `EXPENSE_DEBIT` — one home and one rental pay out of the same account on the same
+ * tick. §988(e)(3)'s "to the extent" is already a fraction, so the honest combination is
+ * the debit-weighted mean rather than a winner-takes-all flag: a tick that is 30% rental
+ * by value is 30% ordinary and 70% personal, which is exactly what the provision says.
+ *
+ * @param {number} businessDebit  the part of the debit attributable to §212 property
+ * @param {number} totalDebit     the whole debit
+ * @returns {number} 0..1, and 0 for a zero/absent debit
+ */
+export function blendExpenseBusinessFraction(businessDebit, totalDebit) {
+  if (!(totalDebit > 0)) return 0;
+  return Math.min(1, Math.max(0, businessDebit / totalDebit));
+}
+
+/**
  * The §988 leg of a debit from a foreign-currency cash pool: what to stamp on the
  * account, and what to book.
  *
@@ -144,14 +198,34 @@ export function currencyPoolBusinessFraction(account) {
  * acquisition history is unknowable to the model, so treating it as acquired now
  * **understates** §988 rather than inventing it. Author the real rate to fix that.
  *
+ * ─── why this survived phase 3, and what changed instead — design 87 §14.4 item 5 ────
+ *
+ * Every other emitter moved to a `section988` declaration read by the currency lot
+ * observer. This one did not, and the reason is structural rather than an omission. Its
+ * caller is `AccountService.pushTransfer`, which runs *inside* a service that can convert
+ * out of SEVERAL source pools during one draw and which is reached both from reducers and
+ * straight from handlers (`FxTransferToHandler`). A declaration is carried on one action
+ * and names one `accountKey`, so it cannot describe a multi-pool span, and a handler has
+ * no action to carry it at all. Moving the seam would mean giving the service its own
+ * declaration channel — more machinery than the coexistence costs.
+ *
+ * The coexistence is safe because the two halves do disjoint jobs: the observer sees an
+ * *undeclared* debit and treats it as a `(a)(1)(iii)(C)` non-recognition withdrawal
+ * (carrying basis out, realizing nothing), while this function books the character. What
+ * phase 3 DID change is that both now compute through the same splitter (`allocateGain`),
+ * so the two cannot disagree about where a personal share lands.
+ *
  * @param {object} state
  * @param {string} accountKey  state key, stamped onto the action for the journal
  * @param {object} account     the pool's state entry
  * @param {number} units       units leaving the account (> 0); 0/negative is a no-op
  * @param {string|null} residency  §988(a)(3)(B) tax home — see section988Residence
+ * @param {number|null} [businessFraction=null]  the §988(e)(3) share for THIS disposition,
+ *        overriding the account's scalar. Null falls back to the account.
  * @returns {{ patch: object, actions: object[] }}
  */
-export function realizeCurrencyDisposition(state, accountKey, account, units, residency = null) {
+export function realizeCurrencyDisposition(state, accountKey, account, units, residency = null,
+                                           businessFraction = null) {
   const none = { patch: {}, actions: [] };
   if (!isForeignCurrencyPool(account)) return none;
 
@@ -161,9 +235,14 @@ export function realizeCurrencyDisposition(state, accountKey, account, units, re
   if (account.fxBasisRate == null) return { patch: { fxBasisRate: spot }, actions: [] };
   if (!(units > 0)) return none;
 
-  const r = computeCurrencyDisposition(
-    units, account.fxBasisRate, spot, currencyPoolBusinessFraction(account));
-  if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return none;
+  const frac = businessFraction ?? currencyPoolBusinessFraction(account);
+  const r = computeCurrencyDisposition(units, account.fxBasisRate, spot, frac);
+  // Emit on ANY of the four outcomes, matching the lot observer. A de-minimis-excluded
+  // gain and a disallowed personal loss both move zero tax and are both figures a return
+  // reports, so suppressing them would make the journal disagree with the 1040 — and
+  // would make this path disagree with every other emitter about what a zero means.
+  if (Math.abs(r.recognized) <= 1e-9 && r.capitalGain <= 1e-9
+      && r.disallowedLoss <= 1e-9 && r.deMinimis <= 1e-9) return none;
 
   return {
     patch: {},
@@ -173,6 +252,7 @@ export function realizeCurrencyDisposition(state, accountKey, account, units, re
       currency: accountCurrencyCode(account),
       amount: r.recognized, gross: r.gross,
       disallowedLoss: r.disallowedLoss, deMinimis: r.deMinimis,
+      capitalGain: r.capitalGain, longTerm: r.longTerm,
       residency,
     }],
   };

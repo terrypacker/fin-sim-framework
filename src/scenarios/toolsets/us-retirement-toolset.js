@@ -214,7 +214,14 @@ export const US_RETIREMENT = {
       K401WithdrawalApplyReducer, K401RmdApplyReducer, K401ToIraConversionApplyReducer,
     ],
     actions: [
-      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text() } },
+      // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
+      // lot observer reads. Declared for JOURNAL visibility rather than for the mechanism
+      // (the observer sees the live action, which pickPayload never filters): undeclared,
+      // a currency disposition would compute correctly and then be invisible in every
+      // report that reads the journal. Both retirement toolsets declare this shared type
+      // and registerActionType is last-writer-wins, so they must stay identical.
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text(),
+                                                 section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  family: 'WITHDRAWAL', fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
       { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },

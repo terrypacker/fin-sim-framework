@@ -693,12 +693,39 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // `disallowedLoss` is the §988(e) personal share: recorded for the return, and
       // deliberately NOT deductible anywhere. It is the foreign-mortgage trap — a
       // currency move that cost real money and still produces no deduction.
+      //
+      // ─── the PERSONAL share is capital, not ordinary (design 87 G10) ────────────
+      // §988(e)(1) switches §988 off for an individual's personal transactions, and
+      // `§1.988-1(a)(9)` restates that as a DEFINITIONAL exclusion: such a transaction
+      // "shall be considered a section 988 transaction only to the extent" expenses
+      // allocable to it meet §162 or §212. Its Example 2 — a holiday's hotels and meals —
+      // holds those dispositions are not §988 transactions at all. Not "relieved by a de
+      // minimis": outside the section.
+      //
+      // So §988(a)(1)(A)'s ordinary characterization never attaches to the personal share.
+      // Character falls back to §1001/§1221, where currency IS a capital asset, and the
+      // gain joins the capital pools rather than ordinary income. `amount` remains the
+      // ordinary business share so every existing consumer keeps its meaning.
+      //
+      // `longTerm` is null under pro-rata, which cannot say which units left and so cannot
+      // say how long they were held. Null is treated as SHORT-term here: that is the
+      // conservative reading (the higher rate) and it is honest about the method's limit —
+      // claiming long-term on an unknown holding period would be a position the ledger
+      // cannot support. It is also exactly what FIFO buys, and the reason design 87 G6's
+      // convention choice is not purely cosmetic.
       ['SECTION_988_GAIN', (state, action) => {
-        const { amount = 0, disallowedLoss = 0, residency = null } = action;
-        const next = {
+        const { amount = 0, disallowedLoss = 0, residency = null,
+                capitalGain = 0, longTerm = null } = action;
+        let next = {
           ...state,
           usSection988DisallowedLossYTD: (state.usSection988DisallowedLossYTD ?? 0) + disallowedLoss,
         };
+        if (capitalGain !== 0) {
+          next = longTerm === true
+            ? { ...next, usCapitalGainsYTD: state.usCapitalGainsYTD + capitalGain }
+            : { ...next,
+                usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + capitalGain };
+        }
         if (amount >= 0) {
           return {
             ...next,

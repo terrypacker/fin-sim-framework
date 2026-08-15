@@ -63,7 +63,11 @@ export const US_AU_CROSS_BORDER = {
       // `direction` ('US_TO_AU' / 'AU_TO_US') is the whole meaning of a cross-border
       // sweep; targetDeficit alone does not say which way the money went. Declared on
       // INTL_TRANSFER_RECORD already — this is the action twin of that marker.
-      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number(), direction: ValueType.text() } },
+      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number(), direction: ValueType.text(),
+        // Declared for JOURNAL visibility; the observer reads the live action, which
+        // pickPayload never filters. Undeclared, a §988 conversion computes correctly and
+        // is then invisible in every report that reads the journal.
+        section988: ValueType.any() } },
       // §988 on foreign-currency CASH (design 87 phases 1–2). Declared here as well as
       // in the two real-property toolsets — registerActionType is idempotent, and both
       // conversion paths (this toolset's IntlTransferApplyReducer and the inline sweep
@@ -79,7 +83,8 @@ export const US_AU_CROSS_BORDER = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(),
-                  deMinimis: ValueType.number(), residency: ValueType.text() } },
+                  deMinimis: ValueType.number(), capitalGain: ValueType.number(),
+                  longTerm: ValueType.any(), residency: ValueType.text() } },
       // INTL_TRANSFER_RECORD: journal-only marker for inline cross-border cash
       // sweeps in replenishSavings (design 44 Gap A / A2).
       {
@@ -104,6 +109,13 @@ export const US_AU_CROSS_BORDER = {
           toAmount:   ValueType.number(),
           rate:       ValueType.number(),
           fee:        ValueType.currency('USD'),
+          // Design 87 phase 3 — the §988 character declaration the currency lot observer
+          // reads. Declared for JOURNAL visibility rather than for the mechanism: the
+          // observer runs inside the reducer bracket and sees the live action, which
+          // `pickPayload` never touches (it filters only the journal `data:` payload at
+          // simulation.js). Undeclared, a §988 conversion would compute correctly and then
+          // be invisible in every report that reads the journal.
+          section988: ValueType.any(),
         },
       },
       // Time-varying FX walk step (design 47). pair id + new log-deviation.
@@ -167,6 +179,18 @@ export const US_AU_CROSS_BORDER = {
           + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
       },
       {
+        key: 'fxBasisMethod', label: '§988 Lot Consumption Method',
+        type: 'Enum', group: 'FX', mc: false, opt: false,
+        options: ['pro-rata', 'fifo'],
+        defaultValue: 'pro-rata',
+        description: 'Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method '
+          + 'consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata '
+          + 'is the default because it is exactly what a single fxBasisRate scalar implements. '
+          + 'FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs '
+          + 'and pro-rata cannot supply — at the cost of publishing a lot array on every pool. '
+          + 'The choice is locked at adoption and binds all future years (design 87 G6).',
+      },
+      {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
         defaultValue: 0.06,
@@ -228,6 +252,14 @@ export const US_AU_CROSS_BORDER = {
         AU: p.auInflationRate  ?? 0.03,
       },
       inflationAccumulator: { US: 1.0, AU: 1.0 },
+      // Design 87 G6 — which of `§1.988-2(a)(2)(iii)(B)(1)`'s named methods the currency
+      // lot ledger consumes by. Projected into STATE rather than read from the parameter
+      // bag at the observer, because `base-scenario` builds the observer from the resolved
+      // initial state and never sees the params; and because a saved scenario must carry
+      // the choice with it — the regulation locks the method at adoption and binds every
+      // later year, so a run that silently reverted to the default would be filing a
+      // different method than the taxpayer elected.
+      fxBasisMethod:        p.fxBasisMethod ?? 'pro-rata',
       ...fxPatches,
     };
 

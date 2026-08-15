@@ -10,7 +10,12 @@
 
 /**
  * Registry of derived-metric functions run against simulation state just before
- * each EXECUTION_END snapshot (non-silent runs only).
+ * each EXECUTION_END snapshot.
+ *
+ * These run at EVERY telemetry level, including silent and Monte Carlo runs — they are
+ * computation, not observation (design 78 §4.2). Gating them on `!silent` once left
+ * `netWorth` at *0* rather than absent in every silent run, a trap each batch caller had
+ * to know to route around. See the note beside the call site in `simulation.js`.
  *
  * Each registered function receives the mutable state object and may write any
  * fields it likes (conventionally under state.metrics.*).  Functions run in

@@ -15,6 +15,7 @@ import { consumeHoldings } from '../../holdings/holdings-fifo.js';
 import { disposalTermFields } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { section988ForBondPrincipal } from '../bond-currency-basis.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -209,7 +210,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy;
     this.reducedActionTypes   = ['AU_STOCK_WITHDRAWAL_APPLY'];
-    this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX'];
+    this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX', 'SECTION_988_GAIN'];
   }
 
   reduce(state, action) {
@@ -270,7 +271,12 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key, stateKey: key },
+       // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger: "or the instrument is
+       // disposed of". A foreign-currency bond sold before maturity realizes the same
+       // accumulated exchange position a redemption would. Null unless this disposal
+       // actually consumed such a lot, so a plain AU equity sale is unchanged.
+       ...section988ForBondPrincipal(state, key, sa, r.section988 ?? {})]
     );
   }
 }

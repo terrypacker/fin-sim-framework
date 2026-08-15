@@ -59,7 +59,11 @@ export const US_TAX = {
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can
         // exclude it; pickPayload would otherwise drop it and the filter would
         // silently pass everything.
-        fields: { amount: ValueType.currency('USD'), escalated: ValueType.boolean() } },
+        // `section988` — see AU_TAX_PAYMENT_DEBIT. Inert on this action as long as the US
+        // savings pool is USD (the taxpayer's functional currency is never §988 property),
+        // and declared anyway so the shared base's stamp stays visible if it is not.
+        fields: { amount: ValueType.currency('USD'), escalated: ValueType.boolean(),
+                  section988: ValueType.any() } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },
     ],
   },

@@ -66,7 +66,10 @@ export const AU_REAL_PROPERTY = {
       // shared type is last-writer-wins over the whole entry.
       { type: 'PROPERTY_PURCHASE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), price: ValueType.number(), cashDue: ValueType.number(),
-                  purchaseMs: ValueType.number() } },
+                  purchaseMs: ValueType.number(),
+                  // Design 87 §14.4 item 3 — the §988 character declaration, for journal
+                  // visibility. Must stay identical in both toolsets (last-writer-wins).
+                  section988: ValueType.any() } },
       // mortgageBalance is the whole bridge from sale price to the cash that actually
       // lands: nothing else on the row states what the sale paid off. Declared
       // `number()`, NOT currency('AUD'), to match salePrice/costBasis — the disposal
@@ -82,7 +85,10 @@ export const AU_REAL_PROPERTY = {
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any() } },
       // ITAA97 s292-102 downsizer contribution — a CASH movement into super, not a tax.
       { type: 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
-        fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text() } },
+        fields: { personKey: ValueType.text(), amount: ValueType.number(), reason: ValueType.text(),
+                  // Design 87 §14.4 item 3 — stamped by the reducer, which is where the AU
+                  // cash key is resolved. Declared here for journal visibility.
+                  section988: ValueType.any() } },
       // Everything after `description` is the design 83 G7 main-residence working:
       // auTaxableFraction is the s118-185 apportionment, auExemptionReason names the
       // rule that produced it, and the acquisition/sale/occupation dates are the
@@ -108,7 +114,9 @@ export const AU_REAL_PROPERTY = {
       // either currency, so no single code is correct for it.
       { type: 'LOAN_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { loanKey: ValueType.text(), payment: ValueType.number(), interest: ValueType.number(),
-                  cashDue: ValueType.number() } },
+                  cashDue: ValueType.number(),
+                  // Design 87 G3 — the §988 character declaration, for journal visibility.
+                  section988: ValueType.any() } },
       // §988 exchange gain/loss on foreign-currency debt (design 86 G7 / P8). Declared
       // by both real-property toolsets alongside LOAN_PAYMENT_APPLY, which emits it;
       // registerActionType is idempotent. cc: null — it is realized on a loan in any
@@ -122,6 +130,7 @@ export const AU_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
+                  capitalGain: ValueType.number(), longTerm: ValueType.any(),
                   residency: ValueType.text() } },
       // Investment-interest deduction on a non-property loan (design 86 G3): AU s8-1
       // (no quarantine) and US §163(d) (a pool) read these off the journal. Emitted by

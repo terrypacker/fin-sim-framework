@@ -14,12 +14,16 @@ import { RecordBalanceAction, FieldValueAction } from '../../simulation-framewor
 import { resolveCashKey } from './cash-routing.js';
 import { fxRate }         from '../fx/fx-conversion.js';
 import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
-// Design 87: the currency leg. This is a deliberate two-module cycle — currency-basis
-// delegates the shared §988 arithmetic back here so there is ONE implementation of it
-// rather than two that drift. Safe because everything crossing the boundary in both
-// directions is a hoisted `export function`, evaluated only at call time, never during
-// module initialization. Do not add a top-level `const` that reads across it.
-import { realizeCurrencyDisposition } from './currency-basis.js';
+// The ONE §988(e) splitter. `currency-lots.js` imports nothing, so this is cycle-free.
+import { allocateGain, PERSONAL_CHARACTER, PERSONAL_DE_MINIMIS_USD } from './currency-lots.js';
+// Design 87 phase 3 removed this module's import of `realizeCurrencyDisposition`: the
+// cash leg of a loan payment is now realized by the currency lot observer, off the
+// `section988` declaration stamped on LOAN_PAYMENT_APPLY. The cycle is now one-way —
+// `currency-basis` still delegates the shared §988 arithmetic to `computeSection988Gain`
+// here so there is ONE implementation rather than two that drift, but nothing in this
+// file reaches back. If you ever restore an import from `currency-basis`, note the old
+// warning still applies: everything crossing that boundary must be a hoisted
+// `export function`, never a top-level `const` evaluated during module initialization.
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -341,8 +345,12 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
  * currency-pool leg in currency-basis.js, not the retirement of a debt. Retiring a
  * mortgage disposes of no currency by the obligor, so the floor has no home here.
  * Design 87 G4.
+ *
+ * Re-exported from `currency-lots.js` rather than redeclared: the two used to be
+ * independent literals, which is one edit away from a floor that applies at \$200 on one
+ * leg and something else on another.
  */
-export const SECTION_988_PERSONAL_DE_MINIMIS_USD = 200;
+export const SECTION_988_PERSONAL_DE_MINIMIS_USD = PERSONAL_DE_MINIMIS_USD;
 
 /**
  * The income-producing share of a loan for §988(e) purposes.
@@ -392,6 +400,15 @@ export function section988BusinessFraction(state, loan) {
  *     26 (1st Cir. 1996), a sterling mortgage on a UK residence — so a US person can
  *     owe tax on a currency move that cost them money.
  *
+ * ON THE PERSONAL SHARE'S CHARACTER — design 87 G10, §14.4 item 6. §988(e)(1) switches
+ * the section off for a personal transaction, so §988(a)(1)(A)'s ordinary character never
+ * attaches and character falls back to §1001/§1221/§1222. That does NOT give the same
+ * answer on both legs of a currency position, so this function takes it as a parameter:
+ * a taxpayer who disposed of PROPERTY (currency, or a bond in the holder's hands) has a
+ * sale or exchange of a capital asset and gets capital gain, while an OBLIGOR retiring
+ * its own liability disposed of nothing and so has no sale or exchange for §1222 to
+ * reach. The default is CAPITAL; the mortgage leg passes ORDINARY.
+ *
  * ON THE $200 FLOOR — design 87 G4. §988(e)(2) is by its terms confined to cases where
  * "nonfunctional currency **is disposed of** by an individual". Retiring a DEBT
  * disposes of no currency by the obligor, so the de minimis has no home on the debt
@@ -409,33 +426,41 @@ export function section988BusinessFraction(state, loan) {
  * @param {number} spotRate       foreign units per USD on the payment date
  * @param {number} businessFrac   0..1, from {@link section988BusinessFraction}
  * @param {boolean} [applyDeMinimis=true]  apply the §988(e)(2) per-transaction floor
- * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number }}
- *          all USD; `recognized` is signed (the amount that reaches the return).
+ * @param {string} [personalCharacter='CAPITAL']  what the personal share becomes once
+ *        §988 stops applying to it — see {@link PERSONAL_CHARACTER}. CAPITAL for a
+ *        disposition of property (currency, a bond); ORDINARY for the obligor's leg.
+ * @param {number|null} [heldDays=null]  days the disposed property was held, or null
+ *        when the method cannot say (pro-rata). Only reaches the capital branch.
+ * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number,
+ *            capitalGain: number, longTerm: boolean|null }}
+ *          all USD. `recognized` is the signed ORDINARY amount; a personal capital gain
+ *          leaves separately as `capitalGain`, because the two land in different pools on
+ *          the return and summing them would recharacterise one of them.
  */
 export function computeSection988Gain(principalPaid, bookingRate, spotRate, businessFrac,
-                                      applyDeMinimis = true) {
-  const zero = { recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0 };
+                                      applyDeMinimis = true,
+                                      personalCharacter = PERSONAL_CHARACTER.CAPITAL,
+                                      heldDays = null) {
+  const zero = {
+    recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0,
+    capitalGain: 0, longTerm: null,
+  };
   if (!(principalPaid > 0) || !(bookingRate > 0) || !(spotRate > 0)) return zero;
 
-  const gross    = principalPaid * (1 / bookingRate - 1 / spotRate);
-  const frac     = Math.min(1, Math.max(0, businessFrac));
-  const business = gross * frac;
-  const personal = gross * (1 - frac);
-
-  // `+ 0` normalizes -0, which `gross * 0` produces for a negative gross and which
-  // then leaks into state and JSON as "-0".
-  if (personal >= 0) {
-    // Personal GAIN: recognized, unless the whole personal piece is de minimis.
-    const deMinimis = (applyDeMinimis && personal <= SECTION_988_PERSONAL_DE_MINIMIS_USD)
-      ? personal : 0;
-    return {
-      recognized: business + (personal - deMinimis) + 0,
-      gross, disallowedLoss: 0, deMinimis,
-    };
-  }
-  // Personal LOSS: disallowed outright. No de minimis floor applies to a loss —
-  // §988(e)(2) is written for gain only.
-  return { recognized: business + 0, gross, disallowedLoss: -personal, deMinimis: 0 };
+  const gross = principalPaid * (1 / bookingRate - 1 / spotRate);
+  // ONE splitter, shared with the lot observer and the historical ingest tool. This
+  // function used to carry its own copy of the §988(e) split, and the copy was the reason
+  // G10's capital branch was built on the observer path only — design 87 §14.4 item 6.
+  const alloc = allocateGain(gross, businessFrac, heldDays,
+                             { applyDeMinimis, personalCharacter });
+  return {
+    recognized: alloc.ordinary,
+    gross,
+    disallowedLoss: alloc.disallowedPersonalLoss,
+    deMinimis: alloc.deMinimisExcluded,
+    capitalGain: alloc.capitalGain,
+    longTerm: alloc.longTerm,
+  };
 }
 
 /**
@@ -587,7 +612,19 @@ export class LoanPaymentHandler extends HandlerEntry {
         actions.push(new FieldValueAction('loan_negative_amortization', 'Loan Negative Amortization', -principalPart));
       }
 
-      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx });
+      // Design 87 G3 — servicing a foreign-currency loan from a same-currency pool (an
+      // offset, which resolveLoanCashKey makes the default) is simultaneously a repayment
+      // of principal AND a disposition of nonfunctional currency, §988(c)(1)(C)(i). The
+      // declaration is safe to stamp here even though design 87 §6 says to realize in the
+      // REDUCER rather than the handler: what is declared is CHARACTER, which does not
+      // depend on how much cash the pool could actually fund. The amount still comes from
+      // the debit the reducer performs.
+      //
+      // No `businessFraction` — the observer falls back to the pool's `deductibleFraction`.
+      // On a matched facility this leg is the near-exact mirror of the debt leg and the two
+      // largely cancel, which is the finding rather than a bug (design 87 §3).
+      actions.push({ type: 'LOAN_PAYMENT_APPLY', loanKey, cashKey, payment, interest, cashDue, fx,
+        section988: { kind: 'DISPOSE', accountKey: cashKey } });
       const deduction = investmentInterestAction(loan, loanKey, interest, payment,
                                                  firstResidency(state));
       if (deduction) actions.push(deduction);
@@ -684,9 +721,17 @@ export class LoanPaymentApplyReducer extends Reducer {
     // On a matched facility this is the near-exact mirror of the debt leg computed
     // below, so the two largely cancel — which is the finding, not a bug. See design
     // 87 §3 for the three cases where they do NOT cancel.
-    const cashS988 = (actualCash > 0 && cash)
-      ? realizeCurrencyDisposition(state, cashKey, cash, actualCash, section988Residence(state, loan))
-      : { patch: {}, actions: [] };
+    // MIGRATED to phase 3: the handler declares `section988: { kind: 'DISPOSE' }` on this
+    // action and the currency lot observer realizes it, measuring against LOTS rather than
+    // one blended rate. No `businessFraction` is declared, so the observer falls back to
+    // the pool's own `deductibleFraction` — which is the right answer here and NOT the
+    // flat 0 the two conversion paths use: an offset backing an income-producing property
+    // services a §212 expense, where converting savings to your home currency does not.
+    // That difference is exactly why design 87 G12 made the fraction per-disposition.
+    // The gross units disposed of — the handler's `cashDue` is only the SCHEDULED amount,
+    // and when the pool is short the reducer funds less. Only cash that actually left
+    // disposes of currency.
+    if (action.section988) action.section988.units = actualCash;
     if (actualCash > 0 && cash) this.accountService.transaction(cash, -actualCash, null);
 
     // Value delivered to the loan, converted back into the LOAN's currency. When the
@@ -707,16 +752,9 @@ export class LoanPaymentApplyReducer extends Reducer {
     const { patch: s988Patch, actions: s988Actions } =
       _section988ForPayment(state, loanKey, loan, oldBalance, principalPart);
 
-    // The cash pool's entry is spread AFTER transaction() mutated its balance in place,
-    // so only `fxBasisRate` is being added; writing a pre-debit copy back would undo
-    // the payment.
-    const cashPatch = (cash && Object.keys(cashS988.patch).length)
-      ? { [cashKey]: { ...cash, ...cashS988.patch } } : {};
-
     return this.newState(state, {
       [loanKey]: { ...loan, ...s988Patch, balance: +newBalance.toFixed(2) },
-      ...cashPatch,
-    }, [...s988Actions, ...cashS988.actions]);
+    }, s988Actions);
   }
 }
 
@@ -779,8 +817,20 @@ function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) 
 
   // `false` — no §988(e)(2) de minimis on the debt leg. Design 87 G4: the provision
   // reaches dispositions of nonfunctional CURRENCY, and retiring a debt is not one.
+  //
+  // `ORDINARY` — and this is the one place in the design that does NOT take G10's capital
+  // branch. §988(e)(1) does take the personal share outside §988, so §988(a)(1)(A) is not
+  // what makes it ordinary; §1222 is what fails to make it capital. Every §1222 term
+  // begins "gain from the sale or exchange of a capital asset", and an obligor paying
+  // down its own mortgage has neither: it holds no asset in the transaction and parts
+  // with none. The currency leg of the SAME payment does dispose of property, and it is
+  // capital — so a fully-offset personal facility can produce an ordinary gain on one leg
+  // and a disallowed capital loss on the other. That asymmetry is real, it is §4's
+  // Quijano trap in its sharpest form, and collapsing both legs to one character would
+  // hide it.
   const r = computeSection988Gain(
-    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan), false);
+    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan),
+    false, PERSONAL_CHARACTER.ORDINARY);
   if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return none;
 
   return {

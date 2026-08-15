@@ -260,8 +260,16 @@ statement's own closing balance.
 ## probes/
 
 Targeted engine-fidelity probes, each tied to a design doc: `probe-residency-cgt`,
-`probe-foreign-property-cgt` (both wired to npm scripts), plus
-`prototype-crossborder-allocation-scope` and `prototype-rebalance-cadence`.
+`probe-foreign-property-cgt`, `probe-988-method-dispersion` (all wired to npm scripts),
+plus `prototype-crossborder-allocation-scope` and `prototype-rebalance-cadence`.
+
+`probe-988-method-dispersion` (`npm run probe:988-method`) is design 87 G6's deciding
+measurement: the two `§1.988-2(a)(2)(iii)(B)(1)` consumption conventions run across seeded
+FX paths, paired by seed, reported as **dispersion** rather than a winner — because the
+election is locked at adoption and binds every later year. It prints separability
+diagnostics before the answer, because a zero spread means either "the methods agree" or
+"this scenario cannot tell them apart", and design 87 §14.2 records what happens when those
+two get confused. `--au-rental` is needed to make the ordinary/§212 branch fire at all.
 
 ## dev/
 

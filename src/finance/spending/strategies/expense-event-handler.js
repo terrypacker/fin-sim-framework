@@ -12,6 +12,7 @@ import { HandlerEntry }                            from '../../../simulation-fra
 import { RecordBalanceAction, RecordMetricAction } from '../../../simulation-framework/actions.js';
 import { OneOffEvent }                             from '../../../simulation-framework/events/one-off-event.js';
 import { convertExpenseToAccount }                 from '../../fx/expense-fx.js';
+import { propertyExpenseBusinessFraction }         from '../../account-rules/currency-basis.js';
 
 const EPSILON = 1e-9;
 
@@ -138,6 +139,16 @@ export class ExpenseEventHandler extends HandlerEntry {
     const defaultKey = _residencyTargetKey(this, state, personId);
     const actions    = [];
 
+    // Design 87 §14.4 item 2 — the §988 character of the currency this event spends.
+    // A property-linked event inherits the property's §212 status, exactly as it already
+    // inherits the property's currency above (design 86 G8); everything else is a
+    // household outlay and therefore personal. Declared once and shared by BOTH debit
+    // legs below: an event part-funded from a nominated account and part from savings is
+    // ONE transaction under §988(e)(2)'s per-transaction floor, and the two legs must not
+    // disagree about what the money bought.
+    const section988 = { kind: 'DISPOSE',
+                         businessFraction: property ? propertyExpenseBusinessFraction(property) : 0 };
+
     // (2) Funding. `remaining` is always carried in the EVENT's currency; each
     // account converts at its own edge, so a part-funded event that spans two
     // currencies still totals the event amount.
@@ -150,7 +161,11 @@ export class ExpenseEventHandler extends HandlerEntry {
       const available = Math.max(0, (fundAcct.balance ?? 0) - (fundAcct.minimumBalance ?? 0));
       const take      = Math.min(want, available);
       if (take > EPSILON) {
-        actions.push({ type: 'EXPENSE_DEBIT', amount: take, targetKey: fundKey });
+        // Spread, never shared: `ExpenseDebitReducer` stamps `accountKey` onto the
+        // declaration it is given, so one object across two actions would have the second
+        // leg silently rewrite the first leg's pool.
+        actions.push({ type: 'EXPENSE_DEBIT', amount: take, targetKey: fundKey,
+                       section988: { ...section988 } });
         actions.push(new RecordBalanceAction(`${fundKey}.balance`, fundKey));
         // Back into event currency by the same ratio, so no rounding leaks either way.
         remaining -= want > EPSILON ? remaining * (take / want) : remaining;
@@ -164,7 +179,8 @@ export class ExpenseEventHandler extends HandlerEntry {
       const deficit      = (defaultAcct.minimumBalance ?? 0) - postDebitBal;
       // Prepended before its own debit, same contract as MonthlyExpensesHandler.
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey: defaultKey });
-      actions.push({ type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey: defaultKey });
+      actions.push({ type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey: defaultKey,
+                     section988: { ...section988 } });
       actions.push(new RecordBalanceAction(`${defaultKey}.balance`, defaultKey));
     }
 

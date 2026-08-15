@@ -46,6 +46,7 @@ import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { resolveDestinationCashKey } from './cash-routing.js';
 import { fxRate } from '../fx/fx-conversion.js';
+import { propertyExpenseBusinessFraction } from './currency-basis.js';
 
 /**
  * `order` for a purchase event. The sale events are authored at the default 0, so any
@@ -156,6 +157,28 @@ export class PropertyPurchaseHandler extends HandlerEntry {
     actions.push({
       type: 'PROPERTY_PURCHASE_APPLY',
       stateKey, cashKey, price, cashDue, fx,
+      // Design 87 §14.4 item 3 — buying property with nonfunctional currency disposes of
+      // it, priced by `§1.988-2(a)(2)(ii)(B)` as a sale of the units for USD at spot
+      // followed by a purchase for those dollars.
+      //
+      // The fraction is the property's own §212 status, which looks wrong at first
+      // glance — a purchase price is CAPITALIZED, not deducted, so there is no §162/§212
+      // expense to point at. `§1.988-1(a)(9)(ii)` Example 1 settles it the other way: X
+      // buys pounds and immediately acquires a pound-denominated bond, and the reg holds
+      // that "the disposition of the pounds and the acquisition of the bond ARE section
+      // 988 transactions … because expenses properly allocable to such transactions meet
+      // the requirements of section 212". Acquiring an income-producing asset is inside
+      // §988; Example 2's holiday spending is outside it. So a rental purchase is
+      // ordinary and a home purchase is personal, which is also what keeps this property
+      // consistent with its own mortgage and running costs — three dispositions out of
+      // one pool that must not disagree about what the property is for.
+      //
+      // No `units`: nothing credits this pool inside the reducer (the REPLENISH_SAVINGS
+      // above is a separate action and a separate bracket), so the observed net delta IS
+      // the disposal — including the reducer's cap to the available balance, which is
+      // design 87 §6's "realize in the reducer" obtained for free by observing.
+      section988: { kind: 'DISPOSE', accountKey: cashKey,
+                    businessFraction: propertyExpenseBusinessFraction(prop) },
       // Fallback only — the reducer prefers the event date, which is exact.
       purchaseMs: state.currentPeriods?.[prop.country ?? 'US']?.startMs
                ?? state.currentPeriods?.US?.startMs ?? null,

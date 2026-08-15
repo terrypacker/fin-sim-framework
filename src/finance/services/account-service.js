@@ -24,6 +24,7 @@ import { resolveDrawdownSelection, withRebalanceCoupling } from '../holdings/hol
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 import { realizeCurrencyDisposition } from '../account-rules/currency-basis.js';
+import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
 
 // Cash/savings roles: drawn before investments (cash band) and liquid across the
 // currency border in replenishSavings, and only ever drawn down to minimumBalance.
@@ -676,7 +677,15 @@ export class AccountService extends AssetService {
       //
       // Stamping `fxBasisRate` mutates the live account object, matching how this
       // service already mutates balances via transaction().
-      const s988 = realizeCurrencyDisposition(state, srcKey, srcAccount, sourceAmount, residency);
+      //
+      // `0` — PERSONAL, stated rather than read off the account. §988(e)(3) asks whether
+      // expenses properly allocable to the transaction meet §162 or §212, and converting
+      // your own savings into your home currency has none. The other two conversion paths
+      // (`IntlTransferToUsHandler`, `FxTransferToHandler`) both declare 0, and all three
+      // must agree: a pool with an authored `deductibleFraction` would otherwise make the
+      // §988 character of a conversion depend on which drawdown branch happened to run,
+      // which is precisely the defect G2 exists to prevent. Design 87 §8 Q1.
+      const s988 = realizeCurrencyDisposition(state, srcKey, srcAccount, sourceAmount, residency, 0);
       if (s988.patch.fxBasisRate != null) srcAccount.fxBasisRate = s988.patch.fxBasisRate;
       pendingTaxActions.push(...s988.actions);
       crossBorderTransfers.push({
@@ -737,7 +746,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -752,7 +761,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel, state
         );
       }
     } else {
@@ -804,7 +813,7 @@ export class AccountService extends AssetService {
             const weight = equal ? (1 / avail.length) : (s.amt / total);
             const want = Math.min(target * weight, remaining);
             const got  = this._drawPenaltyFree(
-              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel
+              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state
             );
             remaining     -= got;
             drawnThisPass += got;
@@ -960,7 +969,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (!isDeferredTaxable(account)) continue;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel, state
         );
       }
     }
@@ -1306,7 +1315,7 @@ export class AccountService extends AssetService {
    * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
    * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null, auCpiLevel = 1) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null, auCpiLevel = 1, state = null) {
     if (want < 1e-9) return 0;
     // Gross up the source-side need by the fee so a full draw nets `want` at the
     // target after the wire cost is paid.
@@ -1431,6 +1440,18 @@ export class AccountService extends AssetService {
             usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
             stateKey: account.stateKey ?? key,
           });
+        }
+        // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger, "or the instrument is
+        // disposed of". This is the path that raises the large majority of a real plan's
+        // disposals, so leaving it out would have made the bond leg fire almost only at
+        // maturity. `section988` is null unless the draw actually consumed a foreign
+        // BOND lot carrying an authored `fxBasisRate`.
+        // `state` is optional on this method's signature (several unit tests call it
+        // directly), and absent it the §988 leg is skipped rather than guessed at — an
+        // understatement, matching design 87's default everywhere else.
+        if (state) {
+          pendingTaxActions.push(...section988ForBondPrincipal(
+            state, account.stateKey ?? key, account, brokerageFifo.section988 ?? {}));
         }
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super

@@ -53,7 +53,13 @@ export const AU_TAX = {
         // first pass could not fund (see TaxPaymentDebitReducerBase). Must be
         // declared: pickPayload keeps ONLY declared fields, and "Tax Paid by Year"
         // filters on it to avoid counting the funded part twice.
-        fields: { amount: ValueType.currency('AUD'), escalated: ValueType.boolean() } },
+        // Design 87 §14.4 item 1 / G12 — the §988 character declaration the currency lot
+        // observer reads off this action. Declared for JOURNAL visibility rather than for
+        // the mechanism (the observer sees the live action, which pickPayload never
+        // filters): undeclared, an AU tax payment out of an AUD pool would dispose
+        // correctly and then be invisible in every report that reads the journal.
+        fields: { amount: ValueType.currency('AUD'), escalated: ValueType.boolean(),
+                  section988: ValueType.any() } },
       { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },
     ],
   },

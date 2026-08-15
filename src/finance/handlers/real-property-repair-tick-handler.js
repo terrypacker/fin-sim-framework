@@ -12,6 +12,8 @@ import { HandlerEntry }                    from '../../simulation-framework/hand
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount }         from '../fx/expense-fx.js';
 import { gaussianFrom }                    from '../fx/fx-process-models.js';
+import { propertyExpenseBusinessFraction, blendExpenseBusinessFraction }
+  from '../account-rules/currency-basis.js';
 
 /**
  * Lognormal severity with a given median: median · exp(σ·z), z ~ N(0,1). One normal draw.
@@ -166,6 +168,9 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     if (!account) return [];
 
     let totalDebit = 0;                 // in the target account currency
+    // Design 87 §14.4 item 2 / G12 — the §212 share of this same debit, accumulated with
+    // the money because one tick can repair a home and a rental out of one account.
+    let businessDebit = 0;
     const applyActions = [];
     for (const key of this.propertyKeys) {
       const prop = state[key];
@@ -175,7 +180,9 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
       const cc           = prop.country ?? 'US';
       const propCurrency = (typeof prop.currency === 'string' ? prop.currency : prop.currency?.code)
         ?? (cc === 'AU' ? 'AUD' : 'USD');
-      totalDebit += convertExpenseToAccount(native, propCurrency, account, state);
+      const debit = convertExpenseToAccount(native, propCurrency, account, state);
+      totalDebit    += debit;
+      businessDebit += debit * propertyExpenseBusinessFraction(prop);
       applyActions.push({ type: 'HOUSE_REPAIR_APPLY', stateKey: key, amount: native, capitalize: prop.capitalizeRepairs ?? 0 });
     }
 
@@ -184,7 +191,11 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
       const deficit = (account.minimumBalance ?? 0) - (account.balance - totalDebit);
       if (deficit > 0) actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
       actions.push(
-        { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey },
+        // Design 87 §14.4 item 2 — see HouseRunningCostHandler. Repairs on an
+        // income-producing property are §212; on a home they are personal.
+        { type: 'EXPENSE_DEBIT', amount: totalDebit, targetKey,
+          section988: { kind: 'DISPOSE',
+                        businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
         new RecordMetricAction('house_repair_expenses', totalDebit),
         new RecordBalanceAction(`${targetKey}.balance`, targetKey),
       );

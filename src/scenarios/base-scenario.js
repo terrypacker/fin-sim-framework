@@ -12,6 +12,8 @@ import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
 import {EventBus} from "../simulation-framework/event-bus.js";
 import {DerivedMetricsRegistry} from "../simulation-framework/derived-metrics-registry.js";
+import {ReducerObserverRegistry} from "../simulation-framework/reducer-observer-registry.js";
+import {createCurrencyLotObserver} from "../finance/account-rules/currency-lot-observer.js";
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
 import {deriveOffsetCapacity} from "../finance/derived-metrics/offset-capacity.js";
@@ -330,6 +332,22 @@ export class BaseScenario extends SimGraphNode {
     // figures are 0 when the plan holds no offset account, so this is inert otherwise.
     derivedMetrics.register(deriveOffsetCapacity);
 
+    // Design 87 phase 3 — the §988 currency lot ledger. An observer rather than a call at
+    // each of the ~20 sites that move a foreign cash balance, about half of which patch
+    // `state[key].balance` directly and so cannot be reached from AccountService at all.
+    // Inert on a plan with no non-USD cash account: `before` returns null after one scan
+    // and every later transition short-circuits.
+    const reducerObservers = new ReducerObserverRegistry();
+    // The consumption convention (design 87 G6) travels on state, so a saved scenario
+    // carries the method it was built with. `§1.988-2(a)(2)(iii)(B)(1)` requires the
+    // method be "consistently applied from year to year … to all accounts", which makes
+    // it a property of the taxpayer rather than of a run, and silently defaulting a
+    // scenario that elected FIFO back to pro-rata would file a method the taxpayer did
+    // not choose. An unknown or absent value falls back to pro-rata, the incumbent.
+    reducerObservers.register(createCurrencyLotObserver({
+      method: resolved?.fxBasisMethod ?? undefined,
+    }));
+
     // Per-run execution bus. The Simulation publishes execution telemetry
     // (EXECUTION_*, BREAKPOINT_HIT) onto its own bus, NOT the persistent
     // ServiceRegistry bus, so every telemetry subscription dies with the sim
@@ -345,7 +363,7 @@ export class BaseScenario extends SimGraphNode {
       // schedule events out to it and no further, so stepping past it produces a
       // half-advanced world. Handing it to the sim lets stepTo() say so.
       opts: {
-        derivedMetrics, telemetry, sampler, samplerCadence,
+        derivedMetrics, reducerObservers, telemetry, sampler, samplerCadence,
         simEnd: this.simEnd, pastEndPolicy,
         // The toolset manifest that gates journal payloads (design 91 §2). Handed over
         // explicitly rather than reached through the bus: the bus above is private to

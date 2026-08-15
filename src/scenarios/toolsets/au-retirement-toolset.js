@@ -90,13 +90,24 @@ export const AU_RETIREMENT = {
       SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
     ],
     actions: [
-      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text() } },
+      // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
+      // lot observer reads. Declared for JOURNAL visibility rather than for the mechanism
+      // (the observer sees the live action, which pickPayload never filters): undeclared,
+      // a currency disposition would compute correctly and then be invisible in every
+      // report that reads the journal. Both retirement toolsets declare this shared type
+      // and registerActionType is last-writer-wins, so they must stay identical.
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text(),
+                                                 section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
       { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
-      { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD') } },
+      // `section988` — design 87 §14.4 item 3. The AUD leaving the cash pool is disposed
+      // of; the super account it funds is outside this design (§5), so there is no
+      // carryover leg. Stamped by the reducer, which resolves the AU cash key.
+      { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD'),
+                                                             section988: ValueType.any() } },
       { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       // `blocked` marks a withdrawal the preservation rules refused. It is the only
       // record that the attempt happened at all — a refused withdrawal moves no state,

@@ -172,6 +172,19 @@ export class SuperDownsizerContributionApplyReducer extends AccountServiceReduce
     if (cash && debited > 0) this.accountService.transaction(cash, -debited, null);
     if (debited > 0) this.accountService.transaction(sa, debited, null);
 
+    // Design 87 §14.4 item 3 — same rule as an ordinary super contribution: the AUD
+    // leaving the cash pool is a disposition, the super account is outside this design
+    // (design 87 §5) so there is no carryover leg, and a retirement contribution has no
+    // §162/§212 expenses allocable to it, so it is personal. See
+    // `SuperContributionApplyReducer` for the full reasoning; the two must agree or a
+    // downsizer contribution and a concessional one would split one pool's character.
+    //
+    // Note the sale proceeds land in this same pool "moments earlier" per the comment
+    // above — but in a DIFFERENT reducer, hence a different observer bracket, so the
+    // credit is already booked at its own spot rate and no `units` declaration is needed
+    // to keep this debit gross.
+    if (debited > 0) action.section988 = { kind: 'DISPOSE', accountKey: cashKey, businessFraction: 0 };
+
     return this.newState(
       state,
       { [superKey]: { ...state[superKey],

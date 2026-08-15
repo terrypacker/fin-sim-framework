@@ -17,6 +17,7 @@ import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { section988ForBondPrincipal } from '../bond-currency-basis.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -247,7 +248,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy; // 'FIFO' | 'LIFO' | 'SPECIFIC' (per design §6.4)
     this.reducedActionTypes   = ['STOCK_WITHDRAWAL_APPLY'];
-    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX'];
+    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
   }
 
   reduce(state, action) {
@@ -351,6 +352,12 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       // but never disclosed on the AU CGT worksheet.
       taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency, usShortTermGain: cUsShort, usLongTermGain: cUsLong, auShortTermGain: cAuShort, auLongTermGain: cAuLong, proceeds: collectibleProceeds, costBasis: collectibleBasis, stateKey: key });
     }
+    // Design 87 G9 — the second Reg. §1.988-2(b)(5) trigger, "or the instrument is
+    // disposed of". Wired on the US reducer too even though a USD account has no §988
+    // exposure: the reducer is generic over `stateKey`, `isForeignBondAccount` is what
+    // actually decides, and leaving one of the four `consumeHoldings` callers unwired is
+    // how a §988 total comes to depend on which sale path a scenario happened to use.
+    taxActions.push(...section988ForBondPrincipal(state, key, sa, r.section988 ?? {}));
     return this.newState(
       state,
       {

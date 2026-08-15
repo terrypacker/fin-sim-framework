@@ -37,6 +37,7 @@ import {
   LoanPaymentHandler, LoanPaymentApplyReducer,
   computeSection988Gain, blendSection988BookingRate, section988BusinessFraction,
 } from '../../src/finance/account-rules/loan-classes.js';
+import { PERSONAL_CHARACTER } from '../../src/finance/account-rules/currency-lots.js';
 import { UsTaxModule2026 }  from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2026 }   from '../../src/finance/tax/us/us-tax-rates-2026.js';
 
@@ -64,10 +65,26 @@ test('S988-2: a strengthened foreign currency produces a LOSS', () => {
   assert.equal(r.disallowedLoss, 0);
 });
 
-test('S988-3: a PERSONAL exchange gain is fully taxable', () => {
-  const r = computeSection988Gain(100_000, BOOK, WEAK, 0);
+test('S988-3: a PERSONAL exchange gain is fully taxable — as ORDINARY on the debt leg', () => {
+  // Design 87 §14.4 item 6. The obligor's personal share stays ordinary: §988(e)(1) takes
+  // it outside §988, but §1222 cannot make it capital either, because every §1222 term
+  // begins "gain from the sale or exchange of a capital asset" and paying down your own
+  // mortgage is neither. `false` — no de minimis on the debt leg (G4).
+  const r = computeSection988Gain(100_000, BOOK, WEAK, 0, false, PERSONAL_CHARACTER.ORDINARY);
   assert.ok(r.gross > 0);
   assert.ok(Math.abs(r.recognized - r.gross) < 1e-9);
+  assert.equal(r.capitalGain, 0, 'the obligor has no capital asset to have sold');
+});
+
+test('S988-3b: the SAME gain on a disposition of property is CAPITAL, not ordinary', () => {
+  // The working-detector control for S988-3: identical inputs, and the only difference is
+  // that the taxpayer parted with property (currency, or a bond in the holder's hands).
+  // Without this pairing S988-3 would pass equally well against a function that had no
+  // character branch at all — design 87 §7 trap 5, one level up.
+  const r = computeSection988Gain(100_000, BOOK, WEAK, 0, false, PERSONAL_CHARACTER.CAPITAL);
+  assert.equal(r.recognized, 0, 'nothing ordinary');
+  assert.ok(Math.abs(r.capitalGain - r.gross) < 1e-9);
+  assert.equal(r.longTerm, null, 'no holding period supplied ⇒ unknown, never "known short"');
 });
 
 test('S988-4: a PERSONAL exchange loss is DISALLOWED — the foreign-mortgage trap', () => {
@@ -78,10 +95,14 @@ test('S988-4: a PERSONAL exchange loss is DISALLOWED — the foreign-mortgage tr
 });
 
 test('S988-5: the §988(e) asymmetry is real — same move, opposite directions, not symmetric', () => {
-  const gain = computeSection988Gain(100_000, BOOK, WEAK,   0);
-  const loss = computeSection988Gain(100_000, BOOK, STRONG, 0);
+  const gain = computeSection988Gain(100_000, BOOK, WEAK,   0, false, PERSONAL_CHARACTER.ORDINARY);
+  const loss = computeSection988Gain(100_000, BOOK, STRONG, 0, false, PERSONAL_CHARACTER.ORDINARY);
   assert.ok(gain.recognized > 0);
   assert.equal(loss.recognized, 0);
+  // And the asymmetry survives the character split rather than being an artifact of it:
+  // under CAPITAL the gain simply moves pools, while the loss is disallowed either way.
+  assert.ok(computeSection988Gain(100_000, BOOK, WEAK, 0, false).capitalGain > 0);
+  assert.equal(computeSection988Gain(100_000, BOOK, STRONG, 0, false).capitalGain, 0);
 });
 
 test('S988-6: a personal gain of $200 or less is de minimis under §988(e)(2)', () => {
@@ -93,7 +114,7 @@ test('S988-6: a personal gain of $200 or less is de minimis under §988(e)(2)', 
 });
 
 test('S988-7: a personal gain ABOVE the de minimis is recognized in full, not just the excess', () => {
-  const r = computeSection988Gain(100_000, BOOK, WEAK, 0);
+  const r = computeSection988Gain(100_000, BOOK, WEAK, 0, true, PERSONAL_CHARACTER.ORDINARY);
   assert.ok(r.gross > 200);
   assert.ok(Math.abs(r.recognized - r.gross) < 1e-9);
   assert.equal(r.deMinimis, 0);

@@ -12,8 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield }       from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
-import { computeSection988Gain, section988Residence }
-  from '../account-rules/loan-classes.js';
+import { section988ForRedemption } from '../account-rules/bond-currency-basis.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -104,70 +103,19 @@ export class BondMaturityReducer extends Reducer {
       // mortgage leg uses). Collected before the map so the pre-redemption holding —
       // which still carries `fxBasisRate` — is the one measured.
       for (const h of account.holdings) {
-        if (isMatured(h, asOfMs)) s988Actions.push(...section988ForRedemption(state, key, account, h));
+        if (isMatured(h, asOfMs)) s988Actions.push(...section988ForRedemption(state, key, account, h, asOfMs));
       }
 
-      const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates, yieldCurve) : h);
+      // The spot the redeemed principal is translated at — and therefore the rate at
+      // which a ROLL re-acquires. Passed in rather than read inside `redeem` so the
+      // realization above and the re-stamp below cannot use different rates.
+      const spot = state.effectiveExchangeRates?.USD_AUD ?? null;
+      const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates, yieldCurve, spot) : h);
       accountUpdates[key] = _syncBalance({ ...account, holdings: nextHoldings });
     }
 
     return this.newState(state, accountUpdates, s988Actions);
   }
-}
-
-/**
- * §988 on the redemption of a foreign-currency bond — design 87 G9.
- *
- * Only BOND is reached. EQUITY and GOLD are deliberately absent: §988(c)(1)(B) is a
- * closed list (debt instruments, accrued items, forwards/futures/options) and a share
- * is on none of it, so its currency movement stays *inside* the capital gain via §1001
- * translation. Booking a separate §988 item on an equity sleeve would both double-count
- * the move and recharacterise capital gain as ordinary.
- *
- * Measured on the PRINCIPAL received (par), not on market value: Reg. §1.988-2(b)(5)
- * separates the exchange component of principal from the instrument's own price
- * movement, which remains capital.
- *
- * @returns {object[]} zero or one SECTION_988_GAIN action
- */
-function section988ForRedemption(state, accountKey, account, holding) {
-  if (holding.allocation !== ALLOCATION.BOND) return [];
-  if (holding.fxBasisRate == null) return [];
-  // Keyed on the ACCOUNT's currency: the bond is denominated in whatever the account
-  // is. Super is excluded for the same reason design 87 §5 keeps it out everywhere —
-  // a pension interest is its own regime (design 83 Art. 18 / design 84 s99B), and
-  // reaching inside it here would conflate two unrelated sets of rules.
-  const ccy = account.currency?.code ?? account.currency ?? null;
-  if (ccy == null || ccy === 'USD' || account.type === 'super') return [];
-
-  const par = holding.inflationLinked
-    ? Math.max(holding.marketValue ?? 0, holding.faceValue ?? 0)
-    : (holding.faceValue ?? holding.marketValue ?? 0);
-  if (!(par > 0)) return [];
-
-  const spot = state?.effectiveExchangeRates?.USD_AUD ?? 1.55;
-  if (!(spot > 0)) return [];
-
-  // A bond held in a taxable account is an investment — §212 — so the §988(e)(3) share
-  // is 1 unless the account says otherwise. That is the opposite default from a cash
-  // pool, where the balance funds living expenses; the difference is deliberate.
-  const frac = account.deductibleFraction ?? 1;
-  // Rates TRANSPOSED, because this is the HOLDER of the debt, not the obligor —
-  // Reg. §1.988-2(b)(5) vs (b)(6). `computeSection988Gain` is written in the obligor's
-  // convention, so passing (acq, spot) here would invert the sign of every redemption.
-  // `false`: no §988(e)(2) de minimis. Redeeming a debt instrument returns principal;
-  // it is not a disposition of nonfunctional currency. Same reasoning as the mortgage.
-  const r = computeSection988Gain(par, spot, holding.fxBasisRate, frac, false);
-  if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return [];
-
-  return [{
-    type: 'SECTION_988_GAIN',
-    accountKey, holdingId: holding.id ?? null,
-    currency: account.currency?.code ?? account.currency ?? null,
-    amount: r.recognized, gross: r.gross,
-    disallowedLoss: r.disallowedLoss, deMinimis: r.deMinimis,
-    residency: section988Residence(state, account),
-  }];
 }
 
 /** True when a holding is an individual bond that has reached maturity. */
@@ -182,7 +130,7 @@ function isMatured(h, asOfMs) {
  * at par to a CASH holding (default). `faceValue ?? marketValue` is the par
  * proceeds.
  */
-function redeem(h, asOfMs, effectiveRates, yieldCurve = {}) {
+function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
   // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
@@ -227,6 +175,16 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}) {
       // not re-issued as one (design 66 §G5/§G6).
       zeroCoupon:      false,
       inflationLinked: false,
+      // Design 87 G9 — RE-STAMP the §988 basis at the roll rate. `Reg. §1.988-2(b)(5)`
+      // makes an instrument's principal amount "the holder's purchase price in units of
+      // nonfunctional currency", and the roll IS a purchase: the matured principal was
+      // just realized above, and these units buy a different instrument at today's spot.
+      // Carrying the old rate through `...h` would measure the next redemption against a
+      // rate that never applied to the new bond and recognize the same currency movement
+      // twice — the exact defect `blendSection988BookingRate` exists to prevent on the
+      // debt leg. `?? h.fxBasisRate` keeps an authored rate alive when no spot is
+      // available rather than silently discarding basis.
+      fxBasisRate:     h.fxBasisRate == null ? null : (spot > 0 ? spot : h.fxBasisRate),
     };
   }
 
@@ -247,6 +205,12 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}) {
     rollTermYears:  null,
     taxExemption:   'none',
     issuingState:   null,
+    // Design 87 G9/§11 — the §988 position closed when the principal was realized above,
+    // and a CASH sleeve has no per-holding currency basis at all: a cash pool's basis
+    // lives on the ACCOUNT (`fxBasisRate` / `fxBasisUsd`, maintained by the lot observer).
+    // Leaving a stale per-holding rate here would be a second, contradictory basis for the
+    // same money — [[cash-sleeve-has-no-capital-gain]] one field over.
+    fxBasisRate:     null,
     zeroCoupon:      false,
     inflationLinked: false,
   };
