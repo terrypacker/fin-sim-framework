@@ -122,6 +122,7 @@ export const AU_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
+                  capitalGain: ValueType.number(), longTerm: ValueType.any(),
                   residency: ValueType.text() } },
       // Investment-interest deduction on a non-property loan (design 86 G3): AU s8-1
       // (no quarantine) and US §163(d) (a pool) read these off the journal. Emitted by

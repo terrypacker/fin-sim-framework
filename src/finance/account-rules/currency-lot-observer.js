@@ -51,7 +51,7 @@
  * | balance UP            | (none)        | acquire a lot at today's spot                 |
  * | balance UP and DOWN   | (none)        | same-currency transfer: basis CARRIES OVER    |
  * | balance DOWN          | (none)        | consume lots, carry basis out, realize NOTHING |
- * | balance DOWN          | `DISPOSE`     | consume lots and realize (once emitters land) |
+ * | balance DOWN          | `DISPOSE`     | consume lots and emit SECTION_988_GAIN        |
  * | either                | `IGNORE`      | rescale the pool, holding basis:units          |
  *
  * The third row is load-bearing. `§1.988-2(a)(1)(iii)(C)` puts a bare withdrawal on the
@@ -67,8 +67,9 @@
  * transfer path nobody remembered to annotate still gets the carryover right.
  */
 
-import { accountCurrencyCode } from './currency-basis.js';
-import { CurrencyLotPool, LEDGER_METHOD } from './currency-lots.js';
+import { accountCurrencyCode, currencyPoolBusinessFraction } from './currency-basis.js';
+import { section988Residence } from './loan-classes.js';
+import { CurrencyLotPool, LEDGER_METHOD, allocateGain } from './currency-lots.js';
 import { ALLOCATION } from '../holdings/allocation.js';
 
 const EPS = 1e-6;
@@ -273,9 +274,10 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
       // ── Debits first, so any basis leaving is available to a credit below ────────
       let carried = 0;
       let carriedUnits = 0;
+      const emitted = [];
       for (const { key, account, delta, opening } of debits ?? []) {
         const pool = readPool(account, state, date, opening);
-        const { basis, shortfall } = pool.consume(date, delta);
+        const { basis, held, shortfall } = pool.consume(date, delta);
         carried += basis;
         carriedUnits += delta - shortfall;
         if (shortfall > EPS && STRICT) {
@@ -285,6 +287,45 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
           console.warn(
             `[§988] ${key}: disposal of ${delta.toFixed(2)} exceeded the pool by ` +
             `${shortfall.toFixed(2)} — overdraft or missing history; units excluded.`);
+        }
+
+        // Only a DECLARED disposition realizes. Everything else is a withdrawal, which
+        // `§1.988-2(a)(1)(iii)(C)` puts on the non-recognition list with carryover basis.
+        if (kind === 'DISPOSE') {
+          const priced = delta - shortfall;
+          const rate   = spotFor(state, accountCurrencyCode(account));
+          if (priced > EPS && rate > 0) {
+            const gain  = usdOf(priced, rate) - basis;     // proceeds − basis, both USD
+            // §988(e)(3)'s "to the extent" fraction, per DISPOSITION (design 87 G12).
+            // The account's own `deductibleFraction` is only the fallback: one account can
+            // be simultaneously §212 (property expenses), personal (household) and
+            // carved out (tax payments, §988(e)(3)(B)), and a scalar cannot say so.
+            const frac  = decl?.businessFraction ?? currencyPoolBusinessFraction(account);
+            const alloc = allocateGain(gain, frac, held);
+            if (Math.abs(alloc.ordinary) > 1e-9 || alloc.capitalGain > 1e-9
+                || alloc.disallowedPersonalLoss > 1e-9 || alloc.deMinimisExcluded > 1e-9) {
+              emitted.push({
+                type: 'SECTION_988_GAIN',
+                accountKey: key,
+                currency: accountCurrencyCode(account),
+                // `amount` stays the ORDINARY business share, so every existing consumer
+                // keeps its meaning. The personal share leaves separately as `capitalGain`
+                // — design 87 G10: `§1.988-1(a)(9)` puts a personal transaction outside
+                // §988 altogether, so §988(a)(1)(A)'s ordinary character never attaches and
+                // character falls back to §1001/§1221, where currency is a capital asset.
+                amount: alloc.ordinary,
+                gross: gain,
+                capitalGain: alloc.capitalGain,
+                // null under pro-rata, which cannot say WHICH units left and so cannot say
+                // how long they were held. Consumers must treat null as "unknown", never
+                // as short-term.
+                longTerm: alloc.longTerm,
+                disallowedLoss: alloc.disallowedPersonalLoss,
+                deMinimis: alloc.deMinimisExcluded,
+                residency: section988Residence(state, account),
+              });
+            }
+          }
         }
         syncToState(state, key, pool);
       }
@@ -339,11 +380,7 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
         }
       }
 
-      // Emits nothing yet, by design. Phase 3 lands the ledger INERT — the three existing
-      // call sites keep realizing through `realizeCurrencyDisposition` off the
-      // `fxBasisRate` this observer now maintains — so the goldens move once, for one
-      // reason. Each disposition emitter is a later step and a `DISPOSE` declaration.
-      return [];
+      return emitted;
     },
 
     /**

@@ -86,6 +86,22 @@ export class FxTransferToHandler extends HandlerEntry {
         toAmount:   toCredit,
         rate,
         fee,
+        // Design 87 phase 3 — THE THIRD CONVERSION PATH. `INTL_TRANSFER_APPLY` (G1) and
+        // the inline sweep in `replenishSavings` (G2) both realize; this one never has,
+        // so the §988 total silently depended on which transfer path a scenario used.
+        // That is the same double-path shape design 44 Gap A records, for the third time.
+        //
+        // Only the DEBITED leg can be a disposition, and only when it is nonfunctional
+        // currency — so this is stamped unconditionally and the lot observer ignores it
+        // when the source is USD, which is not §988 property in a US person's hands.
+        //
+        // `businessFraction: 0` — PERSONAL. §988(e)(3) asks whether expenses properly
+        // allocable to the transaction meet §162 or §212, and converting your own savings
+        // into your home currency has none. So it falls to the capital branch with the
+        // §988(e)(2) \$200 per-transaction exclusion rather than being ordinary §988.
+        // This is the position design 87 open question 1 left unresolved for a deposit,
+        // and it is the one that moves the most money on a real conversion history.
+        section988: { kind: 'DISPOSE', businessFraction: 0 },
       },
       new RecordMetricAction(`fx_transfer_${from}_${to}`, toCredit),
       new RecordBalanceAction(`${dstKey}.balance`, dstKey),

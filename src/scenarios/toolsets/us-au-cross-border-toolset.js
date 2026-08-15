@@ -79,7 +79,8 @@ export const US_AU_CROSS_BORDER = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(),
-                  deMinimis: ValueType.number(), residency: ValueType.text() } },
+                  deMinimis: ValueType.number(), capitalGain: ValueType.number(),
+                  longTerm: ValueType.any(), residency: ValueType.text() } },
       // INTL_TRANSFER_RECORD: journal-only marker for inline cross-border cash
       // sweeps in replenishSavings (design 44 Gap A / A2).
       {
@@ -104,6 +105,13 @@ export const US_AU_CROSS_BORDER = {
           toAmount:   ValueType.number(),
           rate:       ValueType.number(),
           fee:        ValueType.currency('USD'),
+          // Design 87 phase 3 — the §988 character declaration the currency lot observer
+          // reads. Declared for JOURNAL visibility rather than for the mechanism: the
+          // observer runs inside the reducer bracket and sees the live action, which
+          // `pickPayload` never touches (it filters only the journal `data:` payload at
+          // simulation.js). Undeclared, a §988 conversion would compute correctly and then
+          // be invisible in every report that reads the journal.
+          section988: ValueType.any(),
         },
       },
       // Time-varying FX walk step (design 47). pair id + new log-deviation.

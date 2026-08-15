@@ -100,6 +100,7 @@ export const US_REAL_PROPERTY = {
         fields: { loanKey: ValueType.text(), accountKey: ValueType.text(), holdingId: ValueType.text(),
                   currency: ValueType.text(), amount: ValueType.number(),
                   gross: ValueType.number(), disallowedLoss: ValueType.number(), deMinimis: ValueType.number(),
+                  capitalGain: ValueType.number(), longTerm: ValueType.any(),
                   residency: ValueType.text() } },
       { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
