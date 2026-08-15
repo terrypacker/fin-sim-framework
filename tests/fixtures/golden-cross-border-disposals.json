@@ -186,6 +186,8 @@
    "symbol": "A$"
   },
   "drawdownPriority": 0,
+  "fxBasisRate": 1.55,
+  "fxBasisUsd": 448928.193548,
   "holdings": [
    {
     "acquisitionDateByCountry": null,

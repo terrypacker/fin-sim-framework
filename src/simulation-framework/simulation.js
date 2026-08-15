@@ -200,6 +200,14 @@ export class Simulation {
     // write state that downstream code reads, so they are computation, not
     // observation (design 78 §4.2).
     this._derivedMetrics = opts.derivedMetrics ?? opts.deriveMetrics ?? null;
+
+    // Optional ReducerObserverRegistry bracketing every reducer invocation, for
+    // invariants that are properties of a TRANSITION rather than of an action — no
+    // single reducer can maintain those, because no single reducer knows it is the one
+    // that moved the thing. Domain-agnostic in the same way `derivedMetrics` is: the
+    // finance layer registers what it needs and the engine only knows "call these".
+    // Runs at EVERY telemetry level, for the same reason derived metrics do.
+    this._reducerObservers = opts.reducerObservers ?? null;
     this.silent = opts.silent ?? level.silent; // when true: skip bus, clones, diffs
     this.journal = new Journal({ enabled: opts.enableJournal ?? level.journal });
 
@@ -1030,10 +1038,32 @@ export class Simulation {
         });
       }
 
+      // Reducer observers bracket the call. `before` must capture by VALUE: reducers
+      // reached through AccountService mutate state entries IN PLACE, so a token holding
+      // an object reference would be compared against itself and see nothing.
+      const obsTokens = this._reducerObservers && !this._reducerObservers.isEmpty
+        ? this._reducerObservers.before(this.state) : null;
+
       const result = reducerWrapper.fn(this.state, action, this.currentDate);
       this.reducerExecutions++;
 
       if (!result) {
+        // A falsy return means "no NEW state object", not "nothing happened": a reducer
+        // that delegated to AccountService may have mutated entries in place and still
+        // returned nothing. That is exactly the case a by-value observer catches and the
+        // diff below cannot, so observers run on this path too.
+        if (obsTokens) {
+          const obsActions = this._reducerObservers.after(
+            this.state, obsTokens, action, this.currentDate);
+          if (obsActions.length) {
+            actionQueue.unshift(...obsActions.map((a, i) => {
+              const decorated = this.decorateAction(a, action);
+              decorated.siblingIndex = i;
+              if (reducerNodeId) decorated._emittedByNodeId = reducerNodeId;
+              return decorated;
+            }));
+          }
+        }
         if (useTracker) MutationTracker.flush(); // discard — no state change
         if (!this.silent && reducerExecId) {
           this.bus.publish(new ExecutionBusMessage({
@@ -1085,6 +1115,24 @@ export class Simulation {
       }
 
       this.state = nextState;
+
+      // Observers run AFTER the assignment and BEFORE the diff below, so anything they
+      // write is attributed in the journal to the reducer that caused it — a credit and
+      // the basis lot it created appear as one entry rather than the ledger drifting in
+      // invisibly. Emitted actions are unshifted exactly as `result.next` was above, so
+      // they are reduced immediately after the movement that produced them.
+      if (obsTokens) {
+        const obsActions = this._reducerObservers.after(
+          this.state, obsTokens, action, this.currentDate);
+        if (obsActions.length) {
+          actionQueue.unshift(...obsActions.map((a, i) => {
+            const decorated = this.decorateAction(a, action);
+            decorated.siblingIndex = i;
+            if (reducerNodeId) decorated._emittedByNodeId = reducerNodeId;
+            return decorated;
+          }));
+        }
+      }
 
       let sd = null;
       if (!this.silent) {

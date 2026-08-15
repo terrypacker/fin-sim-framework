@@ -19,6 +19,7 @@ import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, do
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
+import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-rules/currency-lot-observer.js';
 import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
@@ -381,6 +382,7 @@ import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-fra
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
+import { ReducerObserverRegistry } from './simulation-framework/reducer-observer-registry.js';
 import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer, AccountServiceReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
@@ -563,6 +565,8 @@ export const Finance = {
   currencyPoolBusinessFraction,
   realizeCurrencyDisposition,
   acquireCurrencyBasis,
+  isCurrencyLotPool,
+  createCurrencyLotObserver,
   LEDGER_METHOD,
   POOLING,
   LONG_TERM_DAYS,
@@ -1393,6 +1397,7 @@ export const Engine = {
   JournalEntry,
   Journal,
   MinHeap,
+  ReducerObserverRegistry,
   ReducerPipeline,
   PRIORITY,
   Reducer,
