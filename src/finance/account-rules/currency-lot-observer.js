@@ -118,12 +118,35 @@ const usdOf = (units, rate) => units / rate;
  * Build the observer.
  *
  * @param {object}  [opts]
- * @param {string}  [opts.method] LEDGER_METHOD.PRO_RATA (default) or FIFO — design 87 G6.
- *        Pro-rata is the incumbent because it is exactly what `fxBasisRate` already
- *        implements, so defaulting to it keeps the golden movement from G8/G11 separable
- *        from a method change.
+ * @param {string}  [opts.method] LEDGER_METHOD.PRO_RATA or FIFO — design 87 G6. An
+ *        EXPLICIT OVERRIDE for tests and probes. Normally omitted: the convention is read
+ *        from `state.fxBasisMethod` per call, see {@link methodFor}. Pro-rata is the
+ *        incumbent because it is exactly what `fxBasisRate` already implements, so
+ *        defaulting to it keeps the golden movement from G8/G11 separable from a method
+ *        change.
  */
-export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = {}) {
+export function createCurrencyLotObserver({ method: override = null } = {}) {
+  /**
+   * The convention IN FORCE, read from state on every call rather than captured once.
+   *
+   * This must be lazy, and the reason is a wiring order that made it silently inert on the
+   * first attempt: `BaseScenario` constructs the observer inside `buildSim()`, but a
+   * toolset's `state()` patches — where `fxBasisMethod` comes from — are not applied until
+   * `ScenarioLoader.load()` runs afterwards. An observer that read the field at
+   * construction saw `undefined` every time and quietly ran pro-rata no matter what the
+   * scenario elected, with the only symptom being that FIFO's `fxLots` never appeared.
+   *
+   * Reading per call is also the correct behaviour under `restoreSnapshot` / `rewind`,
+   * which replace state wholesale — the same argument that keeps the pools themselves out
+   * of this closure (design 87 §14.1: state is authoritative).
+   *
+   * An unrecognised value falls back to the incumbent rather than throwing, because it
+   * arrives from state: an old save, or a hand-edited scenario JSON, must still run.
+   */
+  const methodFor = (state) => {
+    const m = override ?? state?.fxBasisMethod ?? LEDGER_METHOD.PRO_RATA;
+    return Object.values(LEDGER_METHOD).includes(m) ? m : LEDGER_METHOD.PRO_RATA;
+  };
   /**
    * Cached list of pooled state keys.
    *
@@ -205,6 +228,7 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
    * Design 87 §13.6 step 1 is what eventually replaces that guess.
    */
   const readPool = (account, state, date, openingUnits) => {
+    const method = methodFor(state);
     const pool = new CurrencyLotPool(method);
     const units = Math.max(0, openingUnits ?? 0);
 
@@ -251,7 +275,7 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
     // fixture's real diff under a wall of lot rows. FIFO genuinely needs them (a holding
     // period is a fact about WHICH units left), so FIFO pays for them. Keeping this
     // conditional is what lets the method stay a cheap experiment rather than a commitment.
-    if (method === LEDGER_METHOD.FIFO) account.fxLots = pool.lots.map(l => ({ ...l }));
+    if (methodFor(state) === LEDGER_METHOD.FIFO) account.fxLots = pool.lots.map(l => ({ ...l }));
   };
 
   return {
@@ -448,7 +472,7 @@ export function createCurrencyLotObserver({ method = LEDGER_METHOD.PRO_RATA } = 
         for (const k of keys) {
           const account = state[k];
           if (!account || account.fxBasisUsd == null) continue;
-          const tracked = method === LEDGER_METHOD.FIFO && Array.isArray(account.fxLots)
+          const tracked = methodFor(state) === LEDGER_METHOD.FIFO && Array.isArray(account.fxLots)
             ? account.fxLots.reduce((sum, l) => sum + l.units, 0)
             : (account.fxBasisRate > 0 ? account.fxBasisUsd * account.fxBasisRate : 0);
           const drift = Math.abs((account.balance ?? 0) - tracked);

@@ -60,6 +60,28 @@ export const LONG_TERM_DAYS = 366;
 /** `§988(e)(2)`: personal gain of this much or less is excluded, per transaction. */
 export const PERSONAL_DE_MINIMIS_USD = 200;
 
+/**
+ * What the PERSONAL share of a §988 item becomes once §988 stops applying to it.
+ *
+ * `§988(e)(1)` switches the section off for an individual's personal transactions, so
+ * §988(a)(1)(A)'s ordinary characterization never attaches and character falls back to
+ * general principles. Those principles do not give the same answer on both sides of a
+ * position, which is why this is a parameter rather than a constant — design 87 §14.4
+ * item 6:
+ *
+ *   · `CAPITAL` — the taxpayer disposed of PROPERTY. Nonfunctional currency is a capital
+ *     asset, and so is a debt instrument in the holder's hands, so the disposition is a
+ *     "sale or exchange of a capital asset" and §1222 gives capital gain. This is the
+ *     cash pool and the bond holder.
+ *   · `ORDINARY` — the taxpayer is the OBLIGOR discharging its own liability. It disposed
+ *     of nothing; there is no capital asset and no sale or exchange, so §1222 cannot
+ *     reach it and the gain stays ordinary. This is the foreign-currency mortgage leg.
+ *
+ * Getting this wrong is silent and runs in only one direction — booking the mortgage
+ * leg's personal share as capital would understate tax at the taxpayer's own risk.
+ */
+export const PERSONAL_CHARACTER = { CAPITAL: 'CAPITAL', ORDINARY: 'ORDINARY' };
+
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 /**
@@ -137,11 +159,26 @@ export class CurrencyLotPool {
  * outright: the floor is written for gain only, and personal-use property gets no loss
  * deduction (§165(c); *Quijano v. United States*, 93 F.3d 26 (1st Cir. 1996)).
  *
+ * **This is the ONE splitter**, shared by every §988 emitter in the engine and by the
+ * historical ingest tool. `computeSection988Gain` in loan-classes.js is a thin adapter
+ * over it — design 87 §14.4 items 5 and 6 collapsed the second implementation into this
+ * one so the debt leg, the bond leg, the conversion paths and the lot observer cannot
+ * disagree about where a personal share lands.
+ *
  * @param gross  total USD gain (positive) or loss (negative) on the units disposed of
  * @param frac   business share, 0..1
  * @param held   units-weighted days held, or null when the method cannot say
+ * @param {object}  [opts]
+ * @param {boolean} [opts.applyDeMinimis=true] apply `§988(e)(2)`'s \$200 per-transaction
+ *        floor. FALSE on the debt and bond legs: the provision by its terms reaches a
+ *        case where "nonfunctional currency **is disposed of**", and neither retiring a
+ *        mortgage nor receiving a bond's principal is one (design 87 G4).
+ * @param {string}  [opts.personalCharacter=CAPITAL] see {@link PERSONAL_CHARACTER}.
  */
-export function allocateGain(gross, frac, held) {
+export function allocateGain(gross, frac, held, {
+  applyDeMinimis = true,
+  personalCharacter = PERSONAL_CHARACTER.CAPITAL,
+} = {}) {
   const f = Math.min(1, Math.max(0, frac ?? 0));
   const business = gross * f;
   const personal = gross * (1 - f);
@@ -158,10 +195,13 @@ export function allocateGain(gross, frac, held) {
 
   if (personal >= 0) {
     // §988(e)(2) excludes the personal gain from the whole subtitle at or below \$200.
-    if (personal <= PERSONAL_DE_MINIMIS_USD) out.deMinimisExcluded = personal;
+    if (applyDeMinimis && personal <= PERSONAL_DE_MINIMIS_USD) out.deMinimisExcluded = personal;
+    else if (personalCharacter === PERSONAL_CHARACTER.ORDINARY) out.ordinary += personal;
     else out.capitalGain = personal;
   } else {
-    // Personal loss: disallowed outright. The \$200 floor is written for gain only.
+    // Personal loss: disallowed outright. The \$200 floor is written for gain only, and
+    // the disallowance does not turn on character — §165(c) denies a personal loss
+    // whether it would have been ordinary or capital (Quijano).
     out.disallowedPersonalLoss = -personal;
   }
   return out;

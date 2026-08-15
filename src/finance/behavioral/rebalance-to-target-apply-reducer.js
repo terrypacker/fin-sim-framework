@@ -16,6 +16,7 @@ import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
+import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
 
 /**
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
@@ -109,7 +110,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
   constructor() {
     super('Rebalance To Target Apply', PRIORITY.POSITION_UPDATE);
     this.reducedActionTypes   = ['REBALANCE_TO_TARGET_APPLY'];
-    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX'];
+    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
   }
 
   reduce(state, action) {
@@ -152,6 +153,11 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         });
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
         taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
+        // Design 87 G9 — a rebalance that trims a foreign-currency BOND sleeve disposes
+        // of the instrument just as a drawdown sale does, and Reg. §1.988-2(b)(5) fires on
+        // "or the instrument is disposed of" either way. Only the BOND leg can produce a
+        // tally, so the EQUITY/GOLD legs pass through unchanged.
+        taxActions.push(...section988ForBondPrincipal(state, stateKey, account, r.section988 ?? {}));
       } else {
         // Gain realised by a pro-rata reduction, computed BEFORE it happens and
         // without altering it. `_reduceProRata` scales each lot's costBasis with its

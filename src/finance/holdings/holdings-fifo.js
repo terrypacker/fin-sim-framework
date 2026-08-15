@@ -101,7 +101,14 @@ import { isLongTerm, YEAR_MS }     from './holding-period.js';
  *   The design-65 selection policy; null ⇒ FIFO (identical to the historic behavior).
  * @param {{ asOfMs: number, countries: string[] }|null} [opts.terms=null]
  *   Disposal date + the countries to characterize for; absent ⇒ no term tally.
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, realizedGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
+ * §988 bond principal (design 87 G9): `section988` is `{ principal, usdBasis, weightedDays }`
+ * when the disposal consumed any BOND lot in a foreign currency carrying an authored
+ * `fxBasisRate`, and **null** otherwise. It reports the PRINCIPAL (par) share consumed and
+ * what it cost in USD, never the proceeds — Reg. §1.988-2(b)(5) separates the exchange
+ * component of principal from the instrument's own price movement. Callers hand it to
+ * `section988ForBondPrincipal`; see `bond-currency-basis.js`.
+ *
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, realizedDiscountableGainByCountry: Object<string,number>, realizedGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleGainByCountryAndTerm: Object<string,{short:number,long:number}>, collectibleProceeds: number, collectibleBasis: number, collectibleBasisByCountry: Object<string,number>, collectibleIndexedBasisByCountry: Object<string,number>, section988: {principal:number,usdBasis:number,weightedDays:number|null}|null, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = YEAR_MS;
@@ -115,7 +122,7 @@ function _emptyTermTally(countries) {
 
 export function consumeHoldings(holdings, amount, { indexation = null, selection = null, terms = null } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, realizedGainByCountryAndTerm: {}, collectibleGainByCountryAndTerm: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, realizedGainByCountryAndTerm: {}, collectibleGainByCountryAndTerm: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, section988: null, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -156,6 +163,25 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   const termsOn       = termCountries.length > 0 && termAsOfMs != null;
   const realizedGainByCountryAndTerm    = termsOn ? _emptyTermTally(termCountries) : {};
   const collectibleGainByCountryAndTerm = termsOn ? _emptyTermTally(termCountries) : {};
+  // §988 on a foreign-currency BOND sold BEFORE maturity — design 87 G9's second (b)(5)
+  // trigger, "or the instrument is disposed of". Tallied here rather than at each caller
+  // because this is the one shared liquidation primitive: the drawdown, both brokerage
+  // sale reducers and the rebalancer all pass through it, and per-site detection would
+  // have to re-derive "which lots left" from a result that does not report them.
+  //
+  // UNCONDITIONAL and un-gated, unlike `indexation` / `terms` above. It costs one
+  // allocation-free predicate per lot and stays null unless a lot is a BOND carrying an
+  // authored `fxBasisRate`, so there is no context for a caller to forget to pass — which
+  // is the failure mode design 87 §14.1 chose the observer seam to avoid. Turning the
+  // tally into a tax action is still per-caller; an unwired caller UNDERSTATES §988,
+  // matching every other default in the design.
+  //
+  // Principal, not proceeds: Reg. §1.988-2(b)(5) separates the exchange component of
+  // PRINCIPAL from the instrument's own price movement, which stays capital under §1001.
+  let s988Principal = 0;
+  let s988UsdBasis  = 0;
+  let s988Weighted  = 0;
+  const s988AsOfMs  = termAsOfMs ?? indexation?.asOfMs ?? null;
   const newHoldings = [];
 
   for (const h of sorted) {
@@ -243,6 +269,22 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
         bucket[c][isLongTerm(c, termAsOfMs - acqTs) ? 'long' : 'short'] += take - cbShare;
       }
     }
+    // Design 87 G9 — the §988 principal leaving with this lot. `faceValue ?? marketValue`
+    // matches `bondPrincipalUnits`; the two must agree or the amount realized on a sale
+    // and the amount realized at maturity would measure different things.
+    if (h.allocation === ALLOCATION.BOND && h.fxBasisRate > 0) {
+      const par = h.inflationLinked
+        ? Math.max(mv, h.faceValue ?? 0)
+        : (h.faceValue ?? mv);
+      const parShare = par * fraction;
+      if (parShare > 0) {
+        s988Principal += parShare;
+        s988UsdBasis  += parShare / h.fxBasisRate;
+        if (s988AsOfMs != null) {
+          s988Weighted += parShare * Math.max(0, s988AsOfMs - _purchaseTs(h));
+        }
+      }
+    }
     consumed      += take;
     remaining     -= take;
     const remainingMv = mv - take;
@@ -255,6 +297,13 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
         costBasis:   isCash ? +remainingMv.toFixed(2)
                             : +((h.costBasis ?? 0) - basisShare).toFixed(2),
       };
+      // A partly-sold bond keeps only the part of its PRINCIPAL that was not sold.
+      // Carrying the whole `faceValue` through the spread — which is what happened before
+      // design 87 G9 went looking — would redeem the full original par at maturity after
+      // half of it had already been sold, and would double-count the same units' §988.
+      if (h.faceValue != null && mv > 0) {
+        partial.faceValue = +(h.faceValue * (remainingMv / mv)).toFixed(2);
+      }
       // Deplete each per-country cost base by the same consumed fraction.
       if (h.costBaseByCountry) {
         partial.costBaseByCountry = {};
@@ -290,6 +339,21 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     collectibleBasis:    +collectibleBasis.toFixed(2),
     collectibleBasisByCountry,
     collectibleIndexedBasisByCountry,
+    // Null — not a zeroed object — when nothing §988 was consumed, so a caller cannot
+    // mistake "no foreign bond in this disposal" for "a foreign bond that gained zero".
+    // Design 87's whole failure mode is a zero that reads like a correct answer.
+    section988: s988Principal > 0
+      ? {
+          principal:    +s988Principal.toFixed(2),
+          // NOT rounded. This is a transient tally, not a state field, and rounding it
+          // would make the sale trigger and the maturity trigger value the same principal
+          // slightly differently — which is exactly the drift CB-38 pins.
+          usdBasis:     s988UsdBasis,
+          weightedDays: s988AsOfMs != null
+            ? Math.round(s988Weighted / s988Principal / 86400000)
+            : null,
+        }
+      : null,
     newHoldings,
     consumed:      +consumed.toFixed(2),
   };

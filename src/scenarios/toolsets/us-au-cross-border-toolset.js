@@ -179,6 +179,18 @@ export const US_AU_CROSS_BORDER = {
           + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
       },
       {
+        key: 'fxBasisMethod', label: '§988 Lot Consumption Method',
+        type: 'Enum', group: 'FX', mc: false, opt: false,
+        options: ['pro-rata', 'fifo'],
+        defaultValue: 'pro-rata',
+        description: 'Reg. §1.988-2(a)(2)(iii)(B)(1) lets a taxpayer use "any reasonable method '
+          + 'consistently applied … to all accounts" and names FIFO, LIFO and pro rata. Pro-rata '
+          + 'is the default because it is exactly what a single fxBasisRate scalar implements. '
+          + 'FIFO additionally supplies a HOLDING PERIOD, which the personal capital branch needs '
+          + 'and pro-rata cannot supply — at the cost of publishing a lot array on every pool. '
+          + 'The choice is locked at adoption and binds all future years (design 87 G6).',
+      },
+      {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
         defaultValue: 0.06,
@@ -240,6 +252,14 @@ export const US_AU_CROSS_BORDER = {
         AU: p.auInflationRate  ?? 0.03,
       },
       inflationAccumulator: { US: 1.0, AU: 1.0 },
+      // Design 87 G6 — which of `§1.988-2(a)(2)(iii)(B)(1)`'s named methods the currency
+      // lot ledger consumes by. Projected into STATE rather than read from the parameter
+      // bag at the observer, because `base-scenario` builds the observer from the resolved
+      // initial state and never sees the params; and because a saved scenario must carry
+      // the choice with it — the regulation locks the method at adoption and binds every
+      // later year, so a run that silently reverted to the default would be filing a
+      // different method than the taxpayer elected.
+      fxBasisMethod:        p.fxBasisMethod ?? 'pro-rata',
       ...fxPatches,
     };
 

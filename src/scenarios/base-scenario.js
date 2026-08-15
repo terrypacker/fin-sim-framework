@@ -338,7 +338,15 @@ export class BaseScenario extends SimGraphNode {
     // Inert on a plan with no non-USD cash account: `before` returns null after one scan
     // and every later transition short-circuits.
     const reducerObservers = new ReducerObserverRegistry();
-    reducerObservers.register(createCurrencyLotObserver());
+    // The consumption convention (design 87 G6) travels on state, so a saved scenario
+    // carries the method it was built with. `§1.988-2(a)(2)(iii)(B)(1)` requires the
+    // method be "consistently applied from year to year … to all accounts", which makes
+    // it a property of the taxpayer rather than of a run, and silently defaulting a
+    // scenario that elected FIFO back to pro-rata would file a method the taxpayer did
+    // not choose. An unknown or absent value falls back to pro-rata, the incumbent.
+    reducerObservers.register(createCurrencyLotObserver({
+      method: resolved?.fxBasisMethod ?? undefined,
+    }));
 
     // Per-run execution bus. The Simulation publishes execution telemetry
     // (EXECUTION_*, BREAKPOINT_HIT) onto its own bus, NOT the persistent

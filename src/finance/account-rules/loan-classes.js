@@ -14,6 +14,8 @@ import { RecordBalanceAction, FieldValueAction } from '../../simulation-framewor
 import { resolveCashKey } from './cash-routing.js';
 import { fxRate }         from '../fx/fx-conversion.js';
 import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
+// The ONE §988(e) splitter. `currency-lots.js` imports nothing, so this is cycle-free.
+import { allocateGain, PERSONAL_CHARACTER, PERSONAL_DE_MINIMIS_USD } from './currency-lots.js';
 // Design 87 phase 3 removed this module's import of `realizeCurrencyDisposition`: the
 // cash leg of a loan payment is now realized by the currency lot observer, off the
 // `section988` declaration stamped on LOAN_PAYMENT_APPLY. The cycle is now one-way —
@@ -343,8 +345,12 @@ export function scheduledLoanPayment(loan, balance, interest, rate, year) {
  * currency-pool leg in currency-basis.js, not the retirement of a debt. Retiring a
  * mortgage disposes of no currency by the obligor, so the floor has no home here.
  * Design 87 G4.
+ *
+ * Re-exported from `currency-lots.js` rather than redeclared: the two used to be
+ * independent literals, which is one edit away from a floor that applies at \$200 on one
+ * leg and something else on another.
  */
-export const SECTION_988_PERSONAL_DE_MINIMIS_USD = 200;
+export const SECTION_988_PERSONAL_DE_MINIMIS_USD = PERSONAL_DE_MINIMIS_USD;
 
 /**
  * The income-producing share of a loan for §988(e) purposes.
@@ -394,6 +400,15 @@ export function section988BusinessFraction(state, loan) {
  *     26 (1st Cir. 1996), a sterling mortgage on a UK residence — so a US person can
  *     owe tax on a currency move that cost them money.
  *
+ * ON THE PERSONAL SHARE'S CHARACTER — design 87 G10, §14.4 item 6. §988(e)(1) switches
+ * the section off for a personal transaction, so §988(a)(1)(A)'s ordinary character never
+ * attaches and character falls back to §1001/§1221/§1222. That does NOT give the same
+ * answer on both legs of a currency position, so this function takes it as a parameter:
+ * a taxpayer who disposed of PROPERTY (currency, or a bond in the holder's hands) has a
+ * sale or exchange of a capital asset and gets capital gain, while an OBLIGOR retiring
+ * its own liability disposed of nothing and so has no sale or exchange for §1222 to
+ * reach. The default is CAPITAL; the mortgage leg passes ORDINARY.
+ *
  * ON THE $200 FLOOR — design 87 G4. §988(e)(2) is by its terms confined to cases where
  * "nonfunctional currency **is disposed of** by an individual". Retiring a DEBT
  * disposes of no currency by the obligor, so the de minimis has no home on the debt
@@ -411,33 +426,41 @@ export function section988BusinessFraction(state, loan) {
  * @param {number} spotRate       foreign units per USD on the payment date
  * @param {number} businessFrac   0..1, from {@link section988BusinessFraction}
  * @param {boolean} [applyDeMinimis=true]  apply the §988(e)(2) per-transaction floor
- * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number }}
- *          all USD; `recognized` is signed (the amount that reaches the return).
+ * @param {string} [personalCharacter='CAPITAL']  what the personal share becomes once
+ *        §988 stops applying to it — see {@link PERSONAL_CHARACTER}. CAPITAL for a
+ *        disposition of property (currency, a bond); ORDINARY for the obligor's leg.
+ * @param {number|null} [heldDays=null]  days the disposed property was held, or null
+ *        when the method cannot say (pro-rata). Only reaches the capital branch.
+ * @returns {{ recognized: number, gross: number, disallowedLoss: number, deMinimis: number,
+ *            capitalGain: number, longTerm: boolean|null }}
+ *          all USD. `recognized` is the signed ORDINARY amount; a personal capital gain
+ *          leaves separately as `capitalGain`, because the two land in different pools on
+ *          the return and summing them would recharacterise one of them.
  */
 export function computeSection988Gain(principalPaid, bookingRate, spotRate, businessFrac,
-                                      applyDeMinimis = true) {
-  const zero = { recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0 };
+                                      applyDeMinimis = true,
+                                      personalCharacter = PERSONAL_CHARACTER.CAPITAL,
+                                      heldDays = null) {
+  const zero = {
+    recognized: 0, gross: 0, disallowedLoss: 0, deMinimis: 0,
+    capitalGain: 0, longTerm: null,
+  };
   if (!(principalPaid > 0) || !(bookingRate > 0) || !(spotRate > 0)) return zero;
 
-  const gross    = principalPaid * (1 / bookingRate - 1 / spotRate);
-  const frac     = Math.min(1, Math.max(0, businessFrac));
-  const business = gross * frac;
-  const personal = gross * (1 - frac);
-
-  // `+ 0` normalizes -0, which `gross * 0` produces for a negative gross and which
-  // then leaks into state and JSON as "-0".
-  if (personal >= 0) {
-    // Personal GAIN: recognized, unless the whole personal piece is de minimis.
-    const deMinimis = (applyDeMinimis && personal <= SECTION_988_PERSONAL_DE_MINIMIS_USD)
-      ? personal : 0;
-    return {
-      recognized: business + (personal - deMinimis) + 0,
-      gross, disallowedLoss: 0, deMinimis,
-    };
-  }
-  // Personal LOSS: disallowed outright. No de minimis floor applies to a loss —
-  // §988(e)(2) is written for gain only.
-  return { recognized: business + 0, gross, disallowedLoss: -personal, deMinimis: 0 };
+  const gross = principalPaid * (1 / bookingRate - 1 / spotRate);
+  // ONE splitter, shared with the lot observer and the historical ingest tool. This
+  // function used to carry its own copy of the §988(e) split, and the copy was the reason
+  // G10's capital branch was built on the observer path only — design 87 §14.4 item 6.
+  const alloc = allocateGain(gross, businessFrac, heldDays,
+                             { applyDeMinimis, personalCharacter });
+  return {
+    recognized: alloc.ordinary,
+    gross,
+    disallowedLoss: alloc.disallowedPersonalLoss,
+    deMinimis: alloc.deMinimisExcluded,
+    capitalGain: alloc.capitalGain,
+    longTerm: alloc.longTerm,
+  };
 }
 
 /**
@@ -794,8 +817,20 @@ function _section988ForPayment(state, loanKey, loan, oldBalance, principalPart) 
 
   // `false` — no §988(e)(2) de minimis on the debt leg. Design 87 G4: the provision
   // reaches dispositions of nonfunctional CURRENCY, and retiring a debt is not one.
+  //
+  // `ORDINARY` — and this is the one place in the design that does NOT take G10's capital
+  // branch. §988(e)(1) does take the personal share outside §988, so §988(a)(1)(A) is not
+  // what makes it ordinary; §1222 is what fails to make it capital. Every §1222 term
+  // begins "gain from the sale or exchange of a capital asset", and an obligor paying
+  // down its own mortgage has neither: it holds no asset in the transaction and parts
+  // with none. The currency leg of the SAME payment does dispose of property, and it is
+  // capital — so a fully-offset personal facility can produce an ordinary gain on one leg
+  // and a disallowed capital loss on the other. That asymmetry is real, it is §4's
+  // Quijano trap in its sharpest form, and collapsing both legs to one character would
+  // hide it.
   const r = computeSection988Gain(
-    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan), false);
+    principalPart, loan.bookingFxRate, spot, section988BusinessFraction(state, loan),
+    false, PERSONAL_CHARACTER.ORDINARY);
   if (Math.abs(r.recognized) <= 1e-9 && r.disallowedLoss <= 1e-9) return none;
 
   return {

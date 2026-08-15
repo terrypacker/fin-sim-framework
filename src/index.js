@@ -17,10 +17,11 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
+import { bondPrincipalUnits, isForeignBondAccount, section988ForBondPrincipal, section988ForRedemption } from './finance/account-rules/bond-currency-basis.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, resolvePresentCash } from './finance/account-rules/cash-routing.js';
 import { accountCurrencyCode, isForeignCurrencyPool, computeCurrencyDisposition, blendCurrencyBasisRate, currencyPoolBusinessFraction, propertyExpenseBusinessFraction, blendExpenseBusinessFraction, realizeCurrencyDisposition, acquireCurrencyBasis } from './finance/account-rules/currency-basis.js';
 import { isCurrencyLotPool, createCurrencyLotObserver } from './finance/account-rules/currency-lot-observer.js';
-import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
+import { LEDGER_METHOD, POOLING, LONG_TERM_DAYS, PERSONAL_DE_MINIMIS_USD, PERSONAL_CHARACTER, CurrencyLotPool, allocateGain } from './finance/account-rules/currency-lots.js';
 import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
 import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, propertyNeedsLoanPayment, accountNeedsLoanPayment, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, scheduledLoanPayment, SECTION_988_PERSONAL_DE_MINIMIS_USD, section988BusinessFraction, computeSection988Gain, blendSection988BookingRate, investmentInterestAction, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer, section988Residence } from './finance/account-rules/loan-classes.js';
@@ -554,6 +555,10 @@ export const Finance = {
   downsizerContributions,
   SuperDownsizerContributionApplyReducer,
   BaseAccountModule,
+  bondPrincipalUnits,
+  isForeignBondAccount,
+  section988ForBondPrincipal,
+  section988ForRedemption,
   resolveCashKey,
   resolveDestinationCashKey,
   resolveSaleDestinationKey,
@@ -573,6 +578,7 @@ export const Finance = {
   POOLING,
   LONG_TERM_DAYS,
   PERSONAL_DE_MINIMIS_USD,
+  PERSONAL_CHARACTER,
   CurrencyLotPool,
   allocateGain,
   InheritHandler,

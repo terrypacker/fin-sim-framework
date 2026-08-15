@@ -558,6 +558,7 @@
  "fxAnchorRates": {
   "USD_AUD": 1.55
  },
+ "fxBasisMethod": "pro-rata",
  "fxDeviation": {
   "USD_AUD": 0
  },
