@@ -754,6 +754,32 @@ a U.S. loss — and §904(g) is the regime that absorbs it. It does not arise he
 §904(b)(3)(A) caps Σ basket gain at the worldwide figure first (§4.6). If that ordering is
 ever changed, this closure needs re-reading, not just the invariant re-running.
 
+#### Correction — "together and proportionally" is true of the SUM, not of each basket
+
+The closure above survives; the sentence it leans on does not, and the reference plan
+crashed on the difference at CY2032. §4.6 is the reason: the rate differential comes off
+the denominator at **worldwide** scope (`(B)(ii)`) but off the numerator of the basket that
+**holds the gain** (`(B)(i)`). It is the one deduction-like figure in `_computeFtc` that is
+*not* apportioned across the baskets, so it is the one that can push a single basket's
+line 7 negative while another's stays positive — precisely the shape "proportionally" ruled
+out.
+
+The plan's CY2032 is that year in its mildest form. Ordinary income under the standard
+deduction and a long-term gain that fits inside the 0% rate band ⇒ the gain's included
+fraction is **zero**, so `(B)(ii)` removes all of it and line 18 lands on 0.00. The passive
+basket, holding the gain, clamps. The general basket — whose only content is a §988
+exchange gain on the AU mortgage — keeps a numerator of \$2,144 over a denominator of zero,
+and the per-basket assertion threw mid-run on a return whose tax, limitation base and
+credit are all zero.
+
+The zero-clamp closure is unaffected: still a no-taxable-income year, still no credit at
+stake, still not an overall foreign loss. What changed is the **assertion**, which now
+reads the invariant the way the identity actually holds — across the baskets, on pre-clamp
+numerators, and only while the denominator is positive — and adds the one check that is
+unconditionally true and was only ever implied: Σ basket gross ≤ gross income from all
+sources. Trigger 2 above is unchanged and still watchable at the same line.
+`tests/unit/section-904b2-rate-differential.test.mjs`, last describe block.
+
 ---
 
 ## 5. Capital losses — Australia  ✅ BUILT (step 4)

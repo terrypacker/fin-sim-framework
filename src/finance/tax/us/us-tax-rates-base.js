@@ -797,7 +797,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // whole-return no-taxable-income year with no credit at stake. A real OFL needs a
       // deduction definitely related to foreign income; if one is ever added, this line
       // is where the account would be opened. Design 83 §10 records the clamp as accepted.
-      const numerator = Math.max(0, gross - excluded - apportionedDeduction - capGainAdjustment);
+      //
+      // §904(b)(2)(B)(i) broke the "TOGETHER" half of that: the rate differential is
+      // charged to the basket that holds the gain, so ONE basket can clamp while another
+      // stays positive. `rawNumerator` is kept for the invariants, which have to be read
+      // across the baskets rather than one at a time — see `_assertFtcInvariants`.
+      const rawNumerator = gross - excluded - apportionedDeduction - capGainAdjustment;
+      const numerator = Math.max(0, rawNumerator);
       const frac  = totalTaxable > 0 ? Math.min(1, Math.max(0, numerator / totalTaxable)) : 0;
       const limit = Math.min(Math.max(0, grossTax) * frac, headroom);
       const poolTotal = Object.values(pool).reduce((s, v) => s + v, 0);
@@ -806,7 +812,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       headroom = Math.max(0, headroom - credit);
       const { nextPool, currentYearUsed, carryoverUsed } = _drawDownBasket(currentTax, pool, credit, currentCY);
       const carryforwardRemaining = Object.values(nextPool).reduce((s, v) => s + v, 0);
-      return { gross, excluded, apportionedDeduction, capGainAdjustment, numerator, frac, limit,
+      return { gross, excluded, apportionedDeduction, capGainAdjustment, rawNumerator, numerator, frac, limit,
                currentTax, poolTotal, avail, credit,
                currentYearUsed, carryoverUsed, carryforwardRemaining, nextPool };
     };
@@ -1383,16 +1389,38 @@ export function _computePassiveLossLimitation(state) {
  * `drillReport` link, and no §904 line has one. A limitation fraction of 5.157 sat
  * in a shipped export for weeks because nothing here was checked.
  *
- * 1. each basket's foreign taxable income ≤ the total taxable income it divides by;
- * 2. the fractions sum to ≤ 1 (they partition one taxpayer's income);
- * 3. total credit ≤ the limitation base.
+ * 1. the baskets' gross income partitions gross income from all sources;
+ * 2. the baskets' foreign taxable income, SUMMED, ≤ the total taxable income it
+ *    divides by;
+ * 3. the fractions sum to ≤ 1 (they partition one taxpayer's income);
+ * 4. total credit ≤ the limitation base.
  *
- * (1) and (2) hold by construction once the unrelated deductions are apportioned
- * (G1): the identity totalTaxable = grossIncomeAllSources − unrelatedDeductions −
- * FEIE makes Σ numerators ≤ totalTaxable exact. So a failure here means the basket
- * accumulators no longer partition gross income — a classifier double-counting or
- * routing income to a basket without adding it to the US totals — which is a real
- * bug worth stopping on, not a rounding issue.
+ * (1) is the one the message has always named, and the only one of the four that is
+ * unconditionally true: a basket accumulator is a subset-TAG of gross income, so a
+ * classifier that double-counts, or that routes income to a basket without adding it
+ * to the US totals, breaks it at the moment it is introduced. Everything else here is
+ * downstream of it.
+ *
+ * (2) and (3) hold once the unrelated deductions are apportioned (G1): the identity
+ * totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE makes Σ numerators
+ * ≤ totalTaxable exact — but only while the return HAS taxable income, and only in the
+ * sum. Two things break the per-basket, all-years reading, and both of them fire in an
+ * ordinary low-income retirement year on the reference plan:
+ *
+ *   · `taxableOrdinary` clamps at zero when the standard deduction exceeds ordinary
+ *     income, so the denominator drops a deduction the identity has already spent
+ *     — and once gross income is below total deductions the leftover deduction has no
+ *     US-source income left to sit against, which is what the identity assumes; and
+ *   · §904(b)(2)(B) takes a 0%-rate-group capital gain out of the denominator in full
+ *     (ii) but charges (i) only to the basket that HOLDS the gain, so the other
+ *     basket's numerator can outlive a denominator that has collapsed to zero.
+ *
+ * A year like that is a no-taxable-income year: `basket()`'s `totalTaxable > 0` guard
+ * has already forced every `frac` to zero, the limitation base is zero too, and there
+ * is no credit at stake — the harmless case design 90 §4.7 describes, reached by a
+ * route it did not anticipate. So (2) and (3) are asserted only when the denominator
+ * is positive, and (2) is read across the baskets on the PRE-clamp numerators, since
+ * `numerator`'s own zero clamp is what lets one basket hide another's shortfall.
  *
  * Warn-then-throw rather than a bare throw so the message names the offender; in a
  * production build it degrades to a console warning.
@@ -1403,14 +1431,22 @@ function _assertFtcInvariants(ftc) {
     .filter(([, b]) => b != null);
 
   const failures = [];
-  for (const [name, b] of baskets) {
-    if (b.numerator > totalTaxable + FTC_INVARIANT_EPSILON) {
-      failures.push(`${name} numerator ${b.numerator.toFixed(2)} exceeds §904 denominator ${totalTaxable.toFixed(2)}`);
-    }
+  const grossSum = baskets.reduce((s, [, b]) => s + (b.gross ?? 0), 0);
+  if (grossSum > (ftc.grossIncomeAllSources ?? 0) + FTC_INVARIANT_EPSILON) {
+    failures.push(`basket gross sums to ${grossSum.toFixed(2)}, which exceeds gross income `
+      + `from all sources ${(ftc.grossIncomeAllSources ?? 0).toFixed(2)}`);
   }
-  const fracSum = baskets.reduce((s, [, b]) => s + b.frac, 0);
-  if (fracSum > 1 + FTC_INVARIANT_EPSILON) {
-    failures.push(`§904 fractions sum to ${fracSum.toFixed(5)}, which exceeds 1`);
+  if (totalTaxable > 0) {
+    const numeratorSum = baskets.reduce((s, [, b]) => s + (b.rawNumerator ?? b.numerator), 0);
+    if (numeratorSum > totalTaxable + FTC_INVARIANT_EPSILON) {
+      failures.push(`basket numerators sum to ${numeratorSum.toFixed(2)}, which exceeds the §904 `
+        + `denominator ${totalTaxable.toFixed(2)} `
+        + `(${baskets.map(([n, b]) => `${n}=${(b.rawNumerator ?? b.numerator).toFixed(2)}`).join(' ')})`);
+    }
+    const fracSum = baskets.reduce((s, [, b]) => s + b.frac, 0);
+    if (fracSum > 1 + FTC_INVARIANT_EPSILON) {
+      failures.push(`§904 fractions sum to ${fracSum.toFixed(5)}, which exceeds 1`);
+    }
   }
   if (ftc.credit > limitationBase + FTC_INVARIANT_EPSILON) {
     failures.push(`credit ${ftc.credit.toFixed(2)} exceeds the limitation base ${limitationBase.toFixed(2)}`);

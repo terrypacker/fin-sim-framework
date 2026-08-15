@@ -315,3 +315,88 @@ describe('the adjustment reaches the §904 limitation', () => {
     assert.equal(detail.rateDifferential.worldwide, 0);
   });
 });
+
+// ─── The zero-denominator year the invariant used to call a bug ──────────────
+//
+// The cases above all have taxable income. These do not, and the live plan crashed on
+// the first of them at CY2032: `_assertFtcInvariants` threw, mid-run, on a return whose
+// tax and credit are both zero.
+//
+// The adjustment is what produces it. A retired couple whose ordinary income is under
+// the standard deduction pays 0% on a long-term gain that fits inside the 0% rate band,
+// so §904(b)(2)(B)(ii) removes the WHOLE gain from the §904 denominator — leaving zero —
+// while (i) charges the offsetting reduction only to the basket that holds the gain.
+// Any other basket's numerator then stands over a denominator of zero. The old
+// per-basket assertion read that as a broken income partition. It is not one: the
+// baskets still sum to gross income exactly, `basket()`'s own `totalTaxable > 0` guard
+// has already forced every fraction to zero, and there is no credit to get wrong.
+//
+// Mutation-verified: put the per-basket `numerator > totalTaxable` comparison back in
+// `_assertFtcInvariants` and the first test goes red — it is the CY2032 crash, in one
+// call. Drop the gross-partition check and the last one goes red. The middle test is the
+// second clamp on its own: it never threw in shipped code, but it is what an invariant
+// re-derived from the identity (rather than gated on a live denominator) breaks on next,
+// so it is pinned here before someone tightens this back up.
+describe('a no-taxable-income year does not trip the §904 invariant', () => {
+  // Standard deduction 32,200 MFJ; 0% LTCG band runs to 98,900. Ordinary income sits
+  // below the first and the gain inside the second, which is the whole setup.
+  const zeroTaxYear = (o = {}) => ({
+    people: { primary: { residency: 'AU' } },
+    currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) } },
+    // Worldwide ordinary income: 28,000 of AU interest/dividends plus a 3,000 §988
+    // exchange gain on the AU mortgage, which §988(a)(3)(B) sources to the general
+    // basket for an AU-resident taxpayer. The general basket's ONLY content.
+    usOrdinaryIncomeYTD:       31_000,
+    foreignGeneralIncomeYTD:    3_000,
+    foreignPassiveIncomeYTD:  118_000,   // 28,000 ordinary + the 90,000 gain
+    usCapitalGainsYTD:         90_000,
+    foreignPassiveCapGainsYTD: 90_000,
+    ftcCurrentGeneral:              0,   // Australia taxes neither: Div 775 has no
+    ftcCurrentPassive:          2_000,   // forex event on the taxpayer's own currency
+    ...o,
+  });
+
+  test('a 0%-rate gain zeroes the denominator without zeroing the other basket', () => {
+    const detail = new UsTaxRates2026().computeTax(zeroTaxYear());
+
+    // The precondition — without it this test would pass for the wrong reason.
+    assert.equal(detail.rateDifferential.exceptionApplied, false);
+    near(detail.rateDifferential.worldwide, 90_000, 0.01,
+      'the whole gain sits in the 0% group, so all of it comes out of the denominator');
+    near(detail.ftc.totalTaxable, 0, 0.01);
+    assert.ok(detail.ftc.general.numerator > 0,
+      'the §988 basket survives the collapse — that is what used to throw');
+
+    // And the reason it is harmless: no fraction, no limit, no credit.
+    assert.equal(detail.ftc.general.frac, 0);
+    assert.equal(detail.ftc.passive.frac, 0);
+    assert.equal(detail.ftc.credit, 0);
+    near(detail.ftc.limitationBase, 0, 0.01);
+    // The foreign tax is banked, not lost, and can be credited in a later year.
+    near(Object.values(detail.ftc.nextPoolPassive).reduce((s, v) => s + v, 0), 2_000, 0.01);
+  });
+
+  test('deductions above gross income are not a broken partition either', () => {
+    // The same plan two years on: no disposal, so the clamp that fires is the
+    // `taxableOrdinary` one alone. Total deductions now exceed total gross income, which
+    // leaves the identity's leftover deduction with no US-source income to sit against.
+    const detail = new UsTaxRates2026().computeTax(zeroTaxYear({
+      usOrdinaryIncomeYTD:       25_000,
+      foreignGeneralIncomeYTD:        0,
+      foreignPassiveIncomeYTD:    3_800,
+      usCapitalGainsYTD:              0,
+      foreignPassiveCapGainsYTD:      0,
+    }));
+    assert.ok(detail.ftc.totalTaxable <= 0);
+    assert.equal(detail.ftc.credit, 0);
+  });
+
+  test('but a basket holding income the US totals never saw still throws', () => {
+    // The failure the assertion exists for, in the same zero-tax year: a classifier that
+    // books foreign passive income to the basket without adding it to gross income. The
+    // guard above must not swallow this.
+    assert.throws(
+      () => new UsTaxRates2026().computeTax(zeroTaxYear({ foreignPassiveIncomeYTD: 218_000 })),
+      /basket gross sums to .* exceeds gross income from all sources/);
+  });
+});
