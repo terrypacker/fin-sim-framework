@@ -843,8 +843,21 @@ classification change that subsumes part of G1's symptom but not its cause.
 - limitation base excludes NIIT, SECA, Additional Medicare **and §72(t)**.
 - `Σ per-basket credit ≤ limitation base`.
 
-None of these are currently asserted, and `npm run crossfoot` cannot see them — it only checks
-worksheet lines that carry a `drillReport` link, and none of the §904 worksheet lines do.
+> **Two of these four turned out not to be invariants (2026-08-15).** The per-basket check
+> was withdrawn first — §904(b)(2)(B) is basket-asymmetric, so a zero-tax year clamps one
+> basket's denominator while another stays positive. `Σ fractions ≤ 1` fell the same way
+> and for the same reason, one level up: **§22**, where Form 1116 line 33's own note names
+> *"U.S. capital gains or qualified dividends subject to the capital gain rate differential"*
+> as the case in which the per-category credits exceed the total tax — and caps them there.
+> Both were written from the
+> `totalTaxable = gross − unrelated − FEIE` identity, which holds only *before* (B)(ii)
+> reduces the denominator at worldwide scope. The two that survive are
+> `Σ basket gross ≤ grossIncomeAllSources` — the actual classifier test — and
+> `Σ credit ≤ limitation base`.
+
+The two survivors ARE asserted, in `_assertFtcInvariants`. `npm run crossfoot` still cannot
+see them — it only checks worksheet lines that carry a `drillReport` link, and none of the
+§904 worksheet lines do.
 
 ---
 
@@ -2268,6 +2281,7 @@ Tests: `tests/unit/evt-main-residence.test.mjs` (23),
 |---|---|
 | G1, G2, G3, G4, G5, G6, G8, G9, G10 (parts 1–3), G11 | **DONE** |
 | G7 | **DONE** (step 4 not applicable) — see §21 |
+| **G12** | **DONE** (2026-08-15) — two of §8's four invariants were not invariants: (B)(ii) is worldwide in scope and (B)(i) is per basket, so a domestic capital gain shrinks the denominator without touching any numerator. Form 1116's line 19 clamp and line 33 cap are the designed answer and were already implemented; the assertion was withdrawn, no arithmetic changed. See §22. |
 
 G7 is the only gap left, and it is unchanged: six steps (§7b.5), one of which
 apportions the CGT discount by residency days across *every* AU CGT asset, another of
@@ -2299,3 +2313,182 @@ unmeasured sign claim in this family has a real chance of being backwards, and e
 "share of the base" figure moves when a neighbouring gap lands. §13.4 sized G10 part 3
 at 0.8%; by the time it was built it was 3.5% of a base three-quarters smaller.
 Measure, then decide.
+
+---
+
+## 22. G12 — the §904 invariant fires on a legal asymmetry, not a classifier bug — **FIXED** (2026-08-15)
+
+Found while building design 89 phase 6, which runs Monte Carlo at `telemetry: 'full'`.
+Under `JOURNAL_STRICT` the run **throws** and the sweep dies:
+
+```
+§904 limitation invariant violated — basket numerators sum to 19016.25, which exceeds
+the §904 denominator 4516.70 (general=1059.98 passive=17956.27); §904 fractions sum to
+1.23468, which exceeds 1. Gross income all sources 137445.55, unrelated deductions
+42445.82, basket gross general=1533.58 passive=57497.64.
+The basket accumulators should partition gross income (design 83 §8).
+```
+
+**Not caused by design 89.** The same path throws with identical figures whether the
+spending recorder is on or off — which is also a useful confirmation that telemetry is
+observation-only.
+
+**Not the zero-denominator false alarm** either. That one was fixed earlier the same day
+and only fires when `totalTaxable` collapses to 0; here `totalTaxable` is 4,516.70 and the
+check that trips is the *sum* one, which that fix deliberately kept as a true invariant.
+
+### 22.1 Frequency
+
+| scenario | paths | §904 warnings | distinct year-shapes |
+|---|---|---|---|
+| reference plan | 30 | **16** | 8 |
+| synthetic default | 30 | 0 | — |
+
+More than half the perturbed paths on the reference plan. This is not a rare corner, and a
+throw makes it unrecoverable mid-run — an MC sweep or a workbench playback simply stops.
+
+### 22.2 The mechanism, instrumented
+
+Two failing years, with the `_computeFtc` inputs dumped:
+
+| | year A | year B |
+|---|---|---|
+| ordinary income after FEIE | **0.00** | 7,453.32 |
+| capital gain | 93,392.40 | 153,517.89 |
+| collectibles | 5,968.50 | 11,810.51 |
+| denominator **before** §904(b)(2)(B)(ii) | 99,360.90 | 172,781.72 |
+| `rateDiff.worldwide` | **−94,844.20** | **−138,395.15** |
+| denominator after | **4,516.70** | **34,386.57** |
+| `rateDiff.passive` / `.general` | 21,785.00 / 0.00 | 28,636.55 / 0.00 |
+| Σ basket numerators | 19,016.25 | 35,235.44 |
+| Σ §904 fractions | 1.235 | 1.020 |
+
+**(B)(ii) and (B)(i) have different scopes, and that is the whole finding.**
+`§904(b)(2)(B)(ii)` removes the rate-differential portion of net capital gain from
+**worldwide** taxable income — including gain that is US-source and therefore in *no*
+basket. `(B)(i)` removes it **per basket**, from that basket's own foreign gain only.
+
+So when worldwide income is dominated by *domestic capital gain* while the foreign baskets
+hold *ordinary* income (AU rent, interest, dividends), the denominator collapses — by 95%
+in year A — while the numerators barely move. Year A's worldwide reduction is 94,844
+against the passive basket's own 21,785 and general's zero.
+
+### 22.3 The invariant contradicts a comment three lines above the code that breaks it
+
+`us-tax-rates-base.js` says, of the deduction apportionment:
+
+> Including all three is what makes the limitation footable: the identity
+> `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE`
+> holds exactly, so Σ basket numerators can never exceed the denominator and the §904
+> fractions cannot sum past 1.
+
+That identity is true — **before** (B)(ii). The very next use of `totalTaxable` is
+
+```js
+totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles + unrecap1250
+              - rateDiff.worldwide,
+```
+
+and nothing removes the same quantity from the numerators. The invariant in §8 was written
+from the identity and inherited its unstated precondition. The earlier zero-denominator fix
+found the same asymmetry and relaxed the **per-basket** check; it did not carry the
+reasoning to the **sum**.
+
+Form 1116 anticipates this: line 19's instruction is *"If line 17 is more than line 18,
+enter '1'."* §9 decision #4 already recorded that the clamp is correct and that "the bug is
+a numerator that reaches it". What that decision did not anticipate is a numerator reaching
+the clamp for a **lawful** reason rather than a defect.
+
+### 22.4 Materiality — measured, and it is not what the message implies
+
+The message says the accumulators "should partition gross income". They do: Σ basket gross
+(59,031.22) is well under `grossIncomeAllSources` (137,445.55) in every failing year, and
+that check — the one the earlier fix identified as the real classifier test — **never
+fired.** So the classification is not broken.
+
+| | year A | year B |
+|---|---|---|
+| general / passive fraction | 0.235 / **1.000** (clamped from 3.98) | 0.020 / **1.000** |
+| limitation base | 1,671 | 10,711 |
+| credit taken | 1,671 | 3,812 |
+| credit > limitation base? | **no** | **no** |
+
+**No over-credit occurred in any failing year.** In year B the binding constraint was
+foreign tax available, not the limitation. In year A the credit exactly equalled the
+limitation base, so the limitation was binding — but not breached.
+
+### 22.5 Settled against the primary source — the IRS names this taxpayer
+
+The open question here was whether the clamp over-credits: once a basket's fraction clamps
+to 1, that basket alone can absorb the entire limitation base. `docs/us-tax/IRS-Form-1116-Instructions-2025.txt`
+answers it three times over.
+
+**The Worksheet for Line 18** subtracts the rate-differential portions from worldwide
+taxable income — line 10 enters 0%-rate gains at **100%**, not at a factor — and line 12
+ends *"if the result is zero or less, enter -0-"*. The IRS expects the denominator to
+collapse.
+
+**Line 19** is *"If line 17 is more than line 18, enter '1'."* Line 17 > line 18 is a
+contemplated state, not an error.
+
+**Line 33** is the answer to the over-credit question, and it names our exact fact pattern:
+
+> Enter the smaller of line 20 or line 32.
+>
+> **Note.** Generally, line 32 will exceed line 20 **only if you have U.S. capital gains or
+> qualified dividends that are subject to the capital gain rate differential** (figured in
+> the Worksheet for Line 18).
+
+Line 20 is total US tax; line 32 is the sum of the per-category credits, each already
+clamped at 1. So the form's design is: clamp per basket, then cap the total. **Both are
+already implemented** — the per-basket clamp at `frac`, and line 33 by `headroom`, which
+starts at `grossTax` and is decremented as each basket draws, so `Σ credits ≤ limitationBase`
+holds *by construction* rather than by assertion.
+
+**Conclusion: the computation was correct the whole time and the assertion was wrong.**
+`Σ numerators ≤ totalTaxable` and `Σ fractions ≤ 1` are not invariants of §904 once
+(B)(ii)'s worldwide scope diverges from (B)(i)'s basket scope. They were derived from the
+`totalTaxable = gross − unrelated − FEIE` identity, which describes the denominator *before*
+(B)(ii) — an unstated precondition that the code then violates three lines later.
+
+### 22.6 Fixed (2026-08-15)
+
+`_assertFtcInvariants` now asserts **two** things instead of four:
+
+| check | status | why |
+|---|---|---|
+| `Σ basket gross ≤ grossIncomeAllSources` | **kept** | the only one that constrains the CLASSIFIER, and it held in every failing year |
+| `Σ credits ≤ limitationBase` | **kept** | Form 1116 line 33 — the check that would actually catch money leaving through the wrong door |
+| `Σ numerators ≤ totalTaxable` | **withdrawn** | not implied by §904 once (B)(ii) and (B)(i) scopes diverge (§22.5) |
+| `Σ fractions ≤ 1` | **withdrawn** | same cause; Form 1116 line 19 mandates the clamp that produces it |
+
+**No tax arithmetic changed.** The diff is confined to the assertion body, its docblock, and
+two comments that asserted the falsified implication — including the one at the deduction
+apportionment that claimed the identity means "Σ basket numerators can never exceed the
+denominator". Verified: the phase-6 MC study produces **figures identical** to the earlier
+`FTC_LIMITATION_STRICT=off` run, and now completes with no override at all.
+
+Deliberately **not** done:
+
+- **The denominator was not changed.** (B)(ii)'s worldwide scope is the statute; making it
+  basket-scoped to satisfy an assertion would be changing the law to match a comment.
+- **The clamp was not changed.** It is Form 1116 line 19, and §22.5 establishes it does not
+  over-credit.
+
+Regressions: `tests/unit/section-904b2-rate-differential.test.mjs`, last describe block —
+a synthetic year with a **positive** denominator (4,540.54) where both baskets clamp to 1,
+Σ fractions = 2, and the credit lands exactly on the limitation base. Restoring either
+withdrawn check fails those tests; the classifier guard is separately re-tested in the same
+year and still throws.
+
+### 22.7 Reproducing
+
+```
+FTC_LIMITATION_STRICT=off node scripts/lab/spending-mc.mjs \
+  --scenario <plan.json> -n 30
+```
+
+with `console.warn` captured — 16 warnings, 8 distinct shapes. `FTC_LIMITATION_STRICT=on`
+(or any `JOURNAL_STRICT` run) turns the first one into a throw. The figures in §22.2 came
+from a temporary dump of `_computeFtc`'s inputs and of the `ftc` object inside
+`_assertFtcInvariants`; the instrumentation was reverted.
