@@ -20,8 +20,10 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { buildAllocationSeries, mixAt, groupKey, NO_VALUE }
+import { buildAllocationSeries, mixAt }
   from '../../src/finance/allocation-reporting/allocation-grouping.js';
+import { groupKey, NO_VALUE }
+  from '../../src/finance/reporting-common/series-keys.js';
 import { ASSET_CLASS } from '../../src/finance/allocation-reporting/asset-class.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

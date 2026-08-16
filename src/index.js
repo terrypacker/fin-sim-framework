@@ -47,8 +47,8 @@ import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReduce
 import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
 import { CUBE_SOURCE, buildAllocationCube } from './finance/allocation-reporting/allocation-cube.js';
-import { NO_VALUE, groupKey, buildAllocationSeries, mixAt } from './finance/allocation-reporting/allocation-grouping.js';
-import { ASSET_CLASS_COLOR, ASSET_CLASS_COLOR_DARK, PALETTE_CYCLE, PALETTE_CYCLE_DARK, colorForSeriesKey } from './finance/allocation-reporting/allocation-palette.js';
+import { buildAllocationSeries, mixAt } from './finance/allocation-reporting/allocation-grouping.js';
+import { ASSET_CLASS_COLOR, ASSET_CLASS_COLOR_DARK, colorForSeriesKey } from './finance/allocation-reporting/allocation-palette.js';
 import { createAllocationSampler, summarizeSamples, lastYearEndIndex, samplesToRows, samplesToTargetRows } from './finance/allocation-reporting/allocation-sampler.js';
 import { ASSET_CLASS, ASSET_CLASS_VALUES, LIABILITY_CLASSES, assetClassForAllocation, exposureCountryForRateKey } from './finance/allocation-reporting/asset-class.js';
 import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
@@ -227,6 +227,8 @@ import { SocialSecuritySurvivorApplyReducer } from './finance/reducers/social-se
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { SuperDeathBenefitApplyReducer } from './finance/reducers/super-death-benefit-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
+import { PALETTE_CYCLE, PALETTE_CYCLE_DARK, cycleColor } from './finance/reporting-common/palette-cycle.js';
+import { NO_VALUE, KEY_SEP, groupKey, lastKeySegment } from './finance/reporting-common/series-keys.js';
 import { getResidency, isResident, residentsOf, primaryPersonKey, primaryResidencyState, getBirthDate } from './finance/residency-utils.js';
 import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compare-runner.js';
 import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldRows, pairEntriesWithinDay, firstDivergenceDate, runningNetWorthSeries, buildJournalOverlay } from './finance/scenario-compare/scenario-compare-utils.js';
@@ -733,14 +735,10 @@ export const Finance = {
   getUniformDistributionPeriod,
   CUBE_SOURCE,
   buildAllocationCube,
-  NO_VALUE,
-  groupKey,
   buildAllocationSeries,
   mixAt,
   ASSET_CLASS_COLOR,
   ASSET_CLASS_COLOR_DARK,
-  PALETTE_CYCLE,
-  PALETTE_CYCLE_DARK,
   colorForSeriesKey,
   createAllocationSampler,
   summarizeSamples,
@@ -1186,6 +1184,13 @@ export const Finance = {
   StockDividendCashApplyReducer,
   SuperDeathBenefitApplyReducer,
   UsSavingsInterestCreditReducer,
+  PALETTE_CYCLE,
+  PALETTE_CYCLE_DARK,
+  cycleColor,
+  NO_VALUE,
+  KEY_SEP,
+  groupKey,
+  lastKeySegment,
   getResidency,
   isResident,
   residentsOf,

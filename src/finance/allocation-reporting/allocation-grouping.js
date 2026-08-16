@@ -9,6 +9,7 @@
  */
 
 import { ASSET_CLASS_VALUES, LIABILITY_CLASSES } from './asset-class.js';
+import { NO_VALUE, groupKey } from '../reporting-common/series-keys.js';
 
 /**
  * allocation-grouping.js — pivot allocation fact rows into chart-ready series.
@@ -32,9 +33,6 @@ import { ASSET_CLASS_VALUES, LIABILITY_CLASSES } from './asset-class.js';
  *   exposure vs domicile       by: ['exposureCountry'] / by: ['domicileCountry']
  */
 
-/** Rendered in place of a null/absent dimension value — visible, never silently merged. */
-export const NO_VALUE = '(none)';
-
 /**
  * Canonical key order per dimension, so a legend and its colours stay put between
  * charts and between runs. A chart whose EQUITY band changes colour when a class
@@ -45,14 +43,6 @@ const CANONICAL_ORDER = Object.freeze({
   assetClass: ASSET_CLASS_VALUES,
   allocation: Object.freeze(['EQUITY', 'BOND', 'CASH', 'GOLD']),
 });
-
-const _dimValue = (row, dim) => {
-  const v = row?.[dim];
-  return v == null || v === '' ? NO_VALUE : String(v);
-};
-
-/** Composite key for a multi-dimension group. ` · ` reads as a path in a legend. */
-export const groupKey = (row, dims) => dims.map(d => _dimValue(row, d)).join(' · ');
 
 const _dayKey = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 

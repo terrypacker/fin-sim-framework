@@ -36,6 +36,7 @@
  */
 
 import { REPORT_CATEGORY, CATEGORY_TIER, SPEND_TIER } from './spending-classification.js';
+import { groupKey } from '../reporting-common/series-keys.js';
 
 /**
  * Canonical band order, so a legend and its colours stay put between charts, between
@@ -64,17 +65,6 @@ export const CATEGORY_ORDER = Object.freeze([
   REPORT_CATEGORY.REVALUATION,
   REPORT_CATEGORY.UNCLASSIFIED,
 ]);
-
-/** Rendered in place of a null/absent dimension value — visible, never silently merged. */
-export const NO_VALUE = '(none)';
-
-const _dimValue = (row, dim) => {
-  const v = row?.[dim];
-  return v == null || v === '' ? NO_VALUE : String(v);
-};
-
-/** Composite key for a multi-dimension group. ` · ` reads as a path in a legend. */
-export const groupKey = (row, dims) => dims.map(d => _dimValue(row, d)).join(' · ');
 
 /**
  * Pivot cube rows into aligned per-year series.

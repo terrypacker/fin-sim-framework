@@ -9,6 +9,8 @@
  */
 
 import { ASSET_CLASS } from './asset-class.js';
+import { PALETTE_CYCLE, PALETTE_CYCLE_DARK } from '../reporting-common/palette-cycle.js';
+import { lastKeySegment } from '../reporting-common/series-keys.js';
 
 /**
  * allocation-palette.js — which hue means which asset class.
@@ -54,16 +56,6 @@ export const ASSET_CLASS_COLOR_DARK = Object.freeze({
   [ASSET_CLASS.UNKNOWN]:        '#8b8f98',
 });
 
-/** Fallback cycle for keys that are not an asset class (rateKey, role, account name). */
-export const PALETTE_CYCLE = Object.freeze(
-  ['#2a78d6', '#4f9d69', '#d8a13a', '#a05fc0', '#dd7a3c', '#3fa8a0', '#e34948', '#8d8b84', '#6b7fd7', '#b1873f']);
-
-export const PALETTE_CYCLE_DARK = Object.freeze(
-  ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#fb7185', '#94a3b8', '#818cf8', '#a3e635']);
-
-/** The separator `groupKey` puts between dimensions in a composite series key. */
-const KEY_SEP = ' · ';
-
 /**
  * Colour for a series key.
  *
@@ -84,7 +76,7 @@ export function colorForSeriesKey(key, index, { dark = false } = {}) {
   const cycle   = dark ? PALETTE_CYCLE_DARK      : PALETTE_CYCLE;
 
   if (byClass[key]) return byClass[key];
-  const tail = String(key).split(KEY_SEP).pop();
+  const tail = lastKeySegment(key);
   if (byClass[tail]) return byClass[tail];
   return cycle[Math.abs(index) % cycle.length];
 }

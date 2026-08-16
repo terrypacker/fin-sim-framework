@@ -61,8 +61,10 @@ import { REPORT_CATEGORY, SPEND_TIER }
   from '../../src/finance/spending-reporting/spending-classification.js';
 import { createBalanceSampler, checkFlowInvariant }
   from '../../src/finance/spending-reporting/account-flow-tie.js';
-import { CATEGORY_COLOR, PALETTE_CYCLE }
+import { CATEGORY_COLOR }
   from '../../src/finance/spending-reporting/spending-palette.js';
+import { PALETTE_CYCLE }
+  from '../../src/finance/reporting-common/palette-cycle.js';
 
 const USAGE = `
 spending-report.mjs — what the plan actually costs, as one HTML page.

@@ -39,7 +39,8 @@ import { createRequire } from 'node:module';
 import {
   mixBands, mixByOutcome, thresholdProbabilities, DEFAULT_MIX_THRESHOLDS,
 } from '../../src/finance/allocation-reporting/mix-distribution.js';
-import { ASSET_CLASS_COLOR, PALETTE_CYCLE } from '../../src/finance/allocation-reporting/allocation-palette.js';
+import { ASSET_CLASS_COLOR } from '../../src/finance/allocation-reporting/allocation-palette.js';
+import { PALETTE_CYCLE }     from '../../src/finance/reporting-common/palette-cycle.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

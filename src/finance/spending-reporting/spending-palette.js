@@ -9,6 +9,8 @@
  */
 
 import { REPORT_CATEGORY } from './spending-classification.js';
+import { PALETTE_CYCLE, PALETTE_CYCLE_DARK } from '../reporting-common/palette-cycle.js';
+import { lastKeySegment } from '../reporting-common/series-keys.js';
 
 /**
  * spending-palette.js — which hue means which spending category.
@@ -78,16 +80,6 @@ export const CATEGORY_COLOR_DARK = Object.freeze({
   [REPORT_CATEGORY.UNCLASSIFIED]:      '#fb7185',
 });
 
-/** Fallback cycle for keys that are not a category (an account name, an action type). */
-export const PALETTE_CYCLE = Object.freeze(
-  ['#2a78d6', '#4f9d69', '#d8a13a', '#a05fc0', '#dd7a3c', '#3fa8a0', '#e34948', '#8d8b84']);
-
-export const PALETTE_CYCLE_DARK = Object.freeze(
-  ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#fb7185', '#94a3b8']);
-
-/** The separator `groupKey` puts between dimensions in a composite series key. */
-const KEY_SEP = ' · ';
-
 /**
  * Colour for a series key.
  *
@@ -106,6 +98,6 @@ const KEY_SEP = ' · ';
 export function colorForCategory(key, index = 0, { dark = false } = {}) {
   const table = dark ? CATEGORY_COLOR_DARK : CATEGORY_COLOR;
   const cycle = dark ? PALETTE_CYCLE_DARK  : PALETTE_CYCLE;
-  const last  = String(key ?? '').split(KEY_SEP).pop();
+  const last  = lastKeySegment(key);
   return table[last] ?? cycle[index % cycle.length];
 }

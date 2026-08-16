@@ -79,7 +79,8 @@ import { buildAllocationSeries, mixAt } from '../../src/finance/allocation-repor
 import { ASSET_CLASS }            from '../../src/finance/allocation-reporting/asset-class.js';
 import { createAllocationSampler, samplesToRows, samplesToTargetRows, lastYearEndIndex } from '../../src/finance/allocation-reporting/allocation-sampler.js';
 import { targetedStateKeys, driftAgainstTarget } from '../../src/finance/allocation-reporting/target-cube.js';
-import { ASSET_CLASS_COLOR, PALETTE_CYCLE }       from '../../src/finance/allocation-reporting/allocation-palette.js';
+import { ASSET_CLASS_COLOR }      from '../../src/finance/allocation-reporting/allocation-palette.js';
+import { PALETTE_CYCLE }          from '../../src/finance/reporting-common/palette-cycle.js';
 
 const USAGE = `
 allocation-report.mjs — asset allocation over time, as one HTML page.
