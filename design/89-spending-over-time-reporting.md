@@ -1,7 +1,7 @@
 # 89 — Spending over time: what the plan actually costs
 
-**Status** (2026-08-15): **PHASE 0 DONE. The §5.1 A–E thread is CLOSED — code shipped.
-Phases 1–6 of the chart itself are still proposed; §15 is where the next session starts.**
+**Status** (2026-08-15): **PHASES 0–6 BUILT. The §5.1 A–E thread is CLOSED — code shipped.
+Phase 7 (spending in the MC *UI*) is PROPOSED; §21 is where the next session starts.**
 
 Section 3 is a measurement, not a proposal — it is what the design is shaped around, and it is
 now reproducible (`scripts/probes/probe-spending-composition.mjs`) rather than quoted.
@@ -1099,6 +1099,7 @@ disagree about a share.
 | **4** ✅ | §7(b) flow-ties-to-stock invariant against 82's samples | **DONE 2026-08-15.** `account-flow-tie.js`. Holds exactly on the reference plan: 945 account-years, 8,464 balance movements, **0** breaks. |
 | **5** ✅ | workbench panel | **DONE 2026-08-15.** `spending-plugin.js` + `spending.css`. Reads the run's journal and samples; never re-steps. Verified in the running app: `✓ classification total · ✓ ties across 945 account-years`. |
 | **6** ✅ | Monte Carlo — spending as a distribution | **DONE 2026-08-15.** `spending-distribution.js` + `scripts/lab/spending-mc.mjs`, opt-in on the MC runner. Measured on the reference plan: **P(tax > 50% of what the plan costs) = 57%**. |
+| **7** | the MC **UI** — surface phase 6 in the workbench MC tab | **PROPOSED, §21.** Phase 6 shipped the aggregation and a script; the MC tab builds the same runner and never passes the flag. The data path is three lines; the cost model and the missing per-year vector are the design work. |
 
 **What changed from the draft's phasing, and why.**
 
@@ -1574,7 +1575,7 @@ before assuming that is acceptable, and consider classifying inside the run inst
 
 ---
 
-## 20. Phase 6 — spending as a distribution  (2026-08-15).  **Design complete.**
+## 20. Phase 6 — spending as a distribution  (2026-08-15).  **The chart is complete.**
 
 ### 20.1 What shipped
 
@@ -1583,7 +1584,10 @@ an opt-in `spending` flag on `IntlRetirementMcRunner` and `runArm` (mirroring `m
 19 mutation-verified tests in `tests/unit/spending-distribution.test.mjs`. Full suite
 green: 5135 unit + 1038 viz.
 
-With phase 6 closed, **every phase 0–6 in §11.1 is built.**
+With phase 6 closed, **every phase 0–6 in §11.1 is built.** Phase 7 (§21) was added
+afterwards, on the same day: phase 6 delivered the aggregation and a **script**, and the
+question "why can I not see this in the MC tab" turned out to have a short answer and two
+long ones.
 
 ### 20.2 §19.4's plan was not buildable, and the measurement says why
 
@@ -1677,5 +1681,143 @@ reporting one.
 |---|---|---|
 | The §904 invariant violation on perturbed paths | design 83 §8's territory; measured to be independent of anything here | §20.6 |
 | Spending is not persisted into arm JSON, so `mc-report.mjs` cannot read it | `mc-report` globs the arm directory and a new key would need its own care ([[mc-report-globs-arm-dir]]); the study script reports directly instead | — |
-| An in-state per-category accumulator would make this work at `telemetry: 'off'` | it is a sim-model change — new state, a new reducer, and a golden re-gold — and it duplicates the classification into the run. Worth it only if MC spending becomes routine | §20.2 |
+| An in-state per-category accumulator would make this work at `telemetry: 'off'` | it is a sim-model change — new state, a new reducer, and a golden re-gold — and it duplicates the classification into the run. Worth it only if MC spending becomes routine | §20.2, and now **§21.6** — phase 7 is what would make it routine |
+| The MC **UI** cannot switch this on | the flag is on the runner and the tab never passes it; that is phase 7, not an omission here | **§21** |
 | `CARE`, `FX_COST`, the AU super fund tax | unchanged since §16.5 — the three things the taxonomy still cannot see | §16.5 |
+
+---
+
+## 21. Phase 7 — spending in the Monte Carlo **UI**  (2026-08-15).  **PROPOSED.**
+
+Phase 6 shipped the aggregation layer and a **script**. Nothing of it is reachable from the
+app. This phase closes that, and the reason it is a phase rather than a footnote is that two
+of the three obstacles are real design decisions, not wiring.
+
+### 21.1 It is the same Monte Carlo — the tab just never passes the flag
+
+Worth stating plainly, because the natural assumption is the opposite: the MC UI is not a
+different or lesser Monte Carlo that would need its own spending apparatus. It builds the
+*identical* runner.
+
+```js
+// src/visualization/monte-carlo/monte-carlo-controller.js:38
+const runner = new IntlRetirementMcRunner({ n, mcConfig, simStart, simEnd, cfgTemplate });
+//                                                     ↑ no `spending`, and no `mix` either
+```
+
+Three things are already true, which is why the data path is short:
+
+- `IntlRetirementMcRunner` takes `spending` in its constructor and forces `telemetry: 'full'`
+  when it is set (`intl-retirement-mc-runner.js:428`).
+- `runs[i].spending` is already in the explicit projection (`:547`) — the trap §20's last
+  bullet records was paid for once and stays paid.
+- `aggregateSpendingRuns`, `exceedanceRate` and `describeSpendingDistribution` live in
+  `src/finance/spending-reporting/`, not in `scripts/`. The lab script is a *caller*, so the
+  panel can be a second caller with nothing moved.
+
+So: thread a boolean from `McConfigPanel` → `MonteCarloController` → the runner, then call
+`aggregateSpendingRuns(runs.map(r => r.spending))` in `McResultsPanel`. That part is an
+afternoon.
+
+### 21.2 Obstacle 1 — 7.5x, on the main thread, at n = 100
+
+§20.2's measurement is a *script* measurement, and the browser changes what it means. The MC
+loop yields between iterations and only between them
+(`await new Promise(resolve => setTimeout(resolve, 0))`, `:516`), so the sim itself runs on the
+main thread. The tab's iteration default is `100` (`mc-config-panel.js:271`).
+
+| | per iteration | n = 100 | what the user experiences |
+|---|---|---|---|
+| today (`telemetry: 'off'`) | ~530 ms | ~53 s | half-second hitches, progress paints |
+| with `spending` | ~3,963 ms | **~6.6 min** | **4-second freezes**, ~100 of them |
+
+The wall-clock is defensible for an opt-in study. The *freeze* is not — a 4-second
+unresponsive main thread reads as a hung app, and it will be blamed on the checkbox rather
+than on telemetry. **This is the reason phase 7 is not just a checkbox.**
+
+Two ways out, and they are not exclusive:
+
+- **Warn and shrink.** Ticking the box drops the iteration default to a study-sized n and the
+  control carries the multiplier in its own label. Cheapest, honest, and it does not remove the
+  freeze — it removes the surprise.
+- **Move MC to a worker.** The precedent already exists in this codebase:
+  `src/finance/optimization/parallel/rollout-worker-pool.js:52` runs sims in module workers for
+  the optimiser. MC is not wired to it. That is a larger change than phase 7 and it would
+  improve the *ordinary* MC run too, so it should be justified on its own merits rather than
+  smuggled in here.
+
+### 21.3 Obstacle 2 — there is no per-year vector, so there is no band
+
+This is the one that matters for a design called *spending over time*, and it is easy to miss.
+
+`summarizeSpendingForRun` is deliberately ~20 numbers (§20.1's "reduced HERE rather than kept
+as a cube"). `years` is a **count**; `byCategoryReal` is a **lifetime total per category**.
+Meanwhile the MC fan chart is built from `r.timeSeries` (`mc-results-panel.js:361`).
+
+**So what phase 6 can render today is a lifetime cost distribution, not spending-over-time as
+bands.** The panel would be a distributional sibling of the *totals*, not of the phase-5 chart.
+That is still the answer to §1's first question and it is worth shipping — but the gap should
+be named before someone opens the tab expecting a fan chart of spending.
+
+Widening the record is cheap and is the recommendation if bands are wanted: a per-year ×
+per-category matrix is ~45 × ~12 × n numbers — on the order of 50k for n = 100, nothing beside
+`timeSeries`. It is a change in shared framework code, so `scripts/lab/spending-mc.mjs` and any
+future `mc-report` key inherit it. Note the asymmetry with the run record: keeping the *cube*
+was rejected at ~3,900 rows/path; keeping a *reduced matrix* is two orders of magnitude
+smaller and does not reopen that decision.
+
+### 21.4 The proposed build
+
+**Control.** A checkbox in `McConfigPanel._render()`, beside Iterations, whose label carries
+the cost — not a tooltip. `mix` (design 82 §8.1) is in exactly the same position: a runner flag
+with no UI. **Build the control for both**, as a small "extra telemetry" group, so the second
+one is not a second pattern.
+
+**Results.** A third section in `McResultsPanel`, gated on any path having a `spending` record.
+Not a fan chart (§21.3) — a **stacked percentile bar**: one row per category, p10/p50/p90 real
+USD. `agg.categories` is already sorted by p50 and `byCategoryReal[c].firedRate` already
+distinguishes a category that is small from one that is lumpy — `HOUSING_REPAIR` and
+`ASSET_IMPROVEMENT` show p50 = 0 with a non-zero p90 (§20.5), and without `firedRate` on the
+row that reads as a bug. Header line straight from `describeSpendingDistribution(agg)`.
+
+**The headline number gets a badge, not a chart.** `exceedanceRate(records, 'taxShare', 0.5)`
+is the most decision-relevant single figure the whole design produced, and it belongs in the
+existing badge grid next to success rate.
+
+Two cross-checks that cost nothing and earn their pixels:
+
+- **`wentShortRate` beside `successRate`.** §20.5 found them identical — two fully independent
+  mechanisms (§5's per-year capped-debit detector and `scenarioFailed`) agreeing. Rendered side
+  by side, that stops being a fact in a design doc and becomes a check the user sees on every
+  run. A divergence is a real signal about one of the two.
+- **`unclassifiedTypes` as a visible banner, not a console line.** §20.4's allowlist gap was
+  found by perturbation, and the UI will perturb into corners a 30-path script never reaches.
+  The alarm already carries its address; the panel only has to show it.
+
+### 21.5 One thing to decide before building
+
+**Does the spending record survive into the replayed run?** `McRunsPanel` lets a path be
+selected and replayed, and the workbench already has a phase-5 Spending panel that reads a
+single run's journal. The obvious and probably correct answer is that replay re-runs the path
+and the phase-5 panel then shows it *over time* — which means the MC panel needs no drill-down
+at all, and §21.3's missing band is answered by "click the path" rather than by widening the
+record. **Check that replay reproduces the path exactly before relying on it**; if it does,
+that is the cheaper half of §21.3 and it should be built first.
+
+### 21.6 What would make this stop being opt-in
+
+§20.7's in-state per-category accumulator. At `telemetry: 'off'` the cube costs nothing, the
+7.5x disappears, §21.2 evaporates entirely, and spending joins net worth as something every MC
+run reports rather than something a user opts into. It remains what §20.7 says it is — new
+state, a new reducer, a golden re-gold, and the classification duplicated into the run — so the
+sequencing is deliberate: **ship phase 7 opt-in first and let usage answer whether the
+accumulator is worth it.** Phase 7 is the thing that makes MC spending routine enough to ask.
+
+### 21.7 Open items
+
+| item | why it is not this phase | where |
+|---|---|---|
+| MC on a worker pool | improves the ordinary run too, so it deserves its own justification; phase 7 must be shippable without it | §21.2 |
+| Per-year × per-category matrix in the run record | only needed if replay does not answer the drill-down question | §21.3, §21.5 |
+| `mix` has no UI either | same control, and phase 7 should build it for both rather than leave a second one | §21.4 |
+| Spending still not persisted into arm JSON | unchanged from §20.7; a UI panel does not read arm files | §20.7 |
