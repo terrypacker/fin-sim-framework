@@ -361,10 +361,17 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     //
     // Including all three is what makes the limitation footable: the identity
     //   totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE
-    // holds exactly, so Σ basket numerators can never exceed the denominator and
-    // the §904 fractions cannot sum past 1. Apportioning the standard deduction
-    // alone would leave the SE and contribution deductions unallocated and the
-    // fractions could still overshoot.
+    // holds exactly. Apportioning the standard deduction alone would leave the SE and
+    // contribution deductions unallocated and the fractions could overshoot for a
+    // reason that IS a defect.
+    //
+    // The identity describes the denominator BEFORE §904(b)(2)(B)(ii), which the
+    // `totalTaxable:` argument below then subtracts `rateDiff.worldwide` from. So it
+    // does NOT imply "Σ basket numerators can never exceed the denominator" — this
+    // comment used to claim that, and design 83 §22 is the measurement that falsified
+    // it. (B)(ii) is worldwide in scope and (B)(i) is per basket, so a domestic capital
+    // gain shrinks the denominator without touching any numerator. Form 1116 answers
+    // that with the line 19 clamp and the line 33 cap, both implemented below.
     // §1250 gain joins the gross and the §904 denominator with the other gain buckets.
     // Leaving it out of either is the G5b failure in miniature: a basket numerator that
     // includes the whole foreign property gain, over a denominator that does not.
@@ -800,8 +807,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       //
       // §904(b)(2)(B)(i) broke the "TOGETHER" half of that: the rate differential is
       // charged to the basket that holds the gain, so ONE basket can clamp while another
-      // stays positive. `rawNumerator` is kept for the invariants, which have to be read
-      // across the baskets rather than one at a time — see `_assertFtcInvariants`.
+      // stays positive — and, design 83 §22, the denominator does not have to reach zero
+      // for that to happen. `rawNumerator` is the pre-clamp figure, exposed because
+      // `numerator`'s own floor at zero hides exactly how far a basket outran the
+      // denominator; the invariants no longer read it (§22 withdrew those two checks),
+      // but a reader auditing a clamped year cannot reconstruct it from anything else.
       const rawNumerator = gross - excluded - apportionedDeduction - capGainAdjustment;
       const numerator = Math.max(0, rawNumerator);
       const frac  = totalTaxable > 0 ? Math.min(1, Math.max(0, numerator / totalTaxable)) : 0;
@@ -1390,37 +1400,54 @@ export function _computePassiveLossLimitation(state) {
  * in a shipped export for weeks because nothing here was checked.
  *
  * 1. the baskets' gross income partitions gross income from all sources;
- * 2. the baskets' foreign taxable income, SUMMED, ≤ the total taxable income it
- *    divides by;
- * 3. the fractions sum to ≤ 1 (they partition one taxpayer's income);
- * 4. total credit ≤ the limitation base.
+ * 2. total credit ≤ the limitation base.
  *
- * (1) is the one the message has always named, and the only one of the four that is
- * unconditionally true: a basket accumulator is a subset-TAG of gross income, so a
- * classifier that double-counts, or that routes income to a basket without adding it
- * to the US totals, breaks it at the moment it is introduced. Everything else here is
- * downstream of it.
+ * (1) is the one the message has always named, and the only one that constrains the
+ * CLASSIFIER: a basket accumulator is a subset-TAG of gross income, so a classifier
+ * that double-counts, or that routes income to a basket without adding it to the US
+ * totals, breaks it at the moment it is introduced.
  *
- * (2) and (3) hold once the unrelated deductions are apportioned (G1): the identity
- * totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE makes Σ numerators
- * ≤ totalTaxable exact — but only while the return HAS taxable income, and only in the
- * sum. Two things break the per-basket, all-years reading, and both of them fire in an
- * ordinary low-income retirement year on the reference plan:
+ * (2) is Form 1116 **line 33**, "Enter the smaller of line 20 or line 32". It is
+ * enforced by construction in `basket()` — `headroom` starts at `grossTax` and each
+ * basket's `limit` is capped by what is left of it — so this asserts a property the
+ * code already guarantees rather than one it hopes for. Kept because it is the check
+ * that would actually catch an over-credit.
  *
- *   · `taxableOrdinary` clamps at zero when the standard deduction exceeds ordinary
- *     income, so the denominator drops a deduction the identity has already spent
- *     — and once gross income is below total deductions the leftover deduction has no
- *     US-source income left to sit against, which is what the identity assumes; and
- *   · §904(b)(2)(B) takes a 0%-rate-group capital gain out of the denominator in full
- *     (ii) but charges (i) only to the basket that HOLDS the gain, so the other
- *     basket's numerator can outlive a denominator that has collapsed to zero.
+ * ─── two checks that used to live here and were NOT invariants (design 83 §22) ───
  *
- * A year like that is a no-taxable-income year: `basket()`'s `totalTaxable > 0` guard
- * has already forced every `frac` to zero, the limitation base is zero too, and there
- * is no credit at stake — the harmless case design 90 §4.7 describes, reached by a
- * route it did not anticipate. So (2) and (3) are asserted only when the denominator
- * is positive, and (2) is read across the baskets on the PRE-clamp numerators, since
- * `numerator`'s own zero clamp is what lets one basket hide another's shortfall.
+ * `Σ numerators ≤ totalTaxable` and `Σ fractions ≤ 1` were both asserted, on the
+ * strength of the identity `totalTaxable = grossIncomeAllSources − unrelatedDeductions
+ * − FEIE`. That identity is real, but it describes the denominator BEFORE
+ * §904(b)(2)(B)(ii), and the denominator this function receives is
+ * `… − rateDiff.worldwide`. Nothing removes that quantity from the numerators.
+ *
+ * The two provisions have different SCOPES, and that is the whole of it. (B)(ii)
+ * removes the rate-differential portion of net capital gain from **worldwide** taxable
+ * income — including gain that is US-source and therefore in no basket at all. (B)(i)
+ * removes it **per basket**, from that basket's own foreign gain. A taxpayer whose
+ * worldwide income is dominated by DOMESTIC capital gain while the foreign baskets
+ * hold ORDINARY income (rent, interest, dividends) therefore has a denominator that
+ * collapses while the numerators barely move. Measured on the reference plan: a
+ * denominator of 99,360.90 reduced to 4,516.70 against basket numerators summing to
+ * 19,016.25 — Σ fractions 1.23, on more than half of a 30-path MC sweep.
+ *
+ * **The IRS anticipates exactly this.** The Worksheet for Line 18 ends "if the result
+ * is zero or less, enter -0-"; line 19's instruction is "If line 17 is more than
+ * line 18, enter '1'"; and the line 33 instruction carries the note:
+ *
+ *     "Generally, line 32 will exceed line 20 only if you have U.S. capital gains or
+ *      qualified dividends that are subject to the capital gain rate differential
+ *      (figured in the Worksheet for Line 18)."
+ *
+ * — which is this taxpayer, named. The form's answer is the per-basket clamp at 1
+ * plus the overall cap at line 33, both of which this code implements. So a fraction
+ * sum above 1 is a lawful outcome, not a defect, and asserting against it turned a
+ * correct computation into an unrecoverable mid-run throw.
+ *
+ * An earlier pass found the same asymmetry and relaxed only the PER-BASKET form of
+ * the check, on the reading that it mattered only when the denominator collapsed to
+ * zero — a no-taxable-income year with no credit at stake. It does not need to reach
+ * zero; 4,516.70 with a live credit is enough.
  *
  * Warn-then-throw rather than a bare throw so the message names the offender; in a
  * production build it degrades to a console warning.
@@ -1436,28 +1463,21 @@ function _assertFtcInvariants(ftc) {
     failures.push(`basket gross sums to ${grossSum.toFixed(2)}, which exceeds gross income `
       + `from all sources ${(ftc.grossIncomeAllSources ?? 0).toFixed(2)}`);
   }
-  if (totalTaxable > 0) {
-    const numeratorSum = baskets.reduce((s, [, b]) => s + (b.rawNumerator ?? b.numerator), 0);
-    if (numeratorSum > totalTaxable + FTC_INVARIANT_EPSILON) {
-      failures.push(`basket numerators sum to ${numeratorSum.toFixed(2)}, which exceeds the §904 `
-        + `denominator ${totalTaxable.toFixed(2)} `
-        + `(${baskets.map(([n, b]) => `${n}=${(b.rawNumerator ?? b.numerator).toFixed(2)}`).join(' ')})`);
-    }
-    const fracSum = baskets.reduce((s, [, b]) => s + b.frac, 0);
-    if (fracSum > 1 + FTC_INVARIANT_EPSILON) {
-      failures.push(`§904 fractions sum to ${fracSum.toFixed(5)}, which exceeds 1`);
-    }
-  }
+  // Form 1116 line 33. Enforced by `headroom` in basket(), so this asserts what the
+  // code already guarantees — and it is the only check here that would catch money
+  // actually leaving through the wrong door.
   if (ftc.credit > limitationBase + FTC_INVARIANT_EPSILON) {
-    failures.push(`credit ${ftc.credit.toFixed(2)} exceeds the limitation base ${limitationBase.toFixed(2)}`);
+    failures.push(`credit ${ftc.credit.toFixed(2)} exceeds the limitation base `
+      + `${limitationBase.toFixed(2)} (Form 1116 line 33)`);
   }
   if (failures.length === 0) return;
 
   const message = `§904 limitation invariant violated — ${failures.join('; ')}. `
     + `Gross income all sources ${ftc.grossIncomeAllSources?.toFixed(2)}, `
     + `unrelated deductions ${ftc.unrelatedDeductions?.toFixed(2)}, `
+    + `§904 denominator ${totalTaxable?.toFixed(2)}, `
     + `basket gross ${baskets.map(([n, b]) => `${n}=${b.gross?.toFixed(2)}`).join(' ')}. `
-    + 'The basket accumulators should partition gross income (design 83 §8).';
+    + 'The basket accumulators should partition gross income (design 83 §8/§22).';
   if (_ftcStrict()) throw new Error(message);
   console.warn(message);
 }

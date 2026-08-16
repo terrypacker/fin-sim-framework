@@ -400,3 +400,88 @@ describe('a no-taxable-income year does not trip the §904 invariant', () => {
       /basket gross sums to .* exceeds gross income from all sources/);
   });
 });
+
+describe('a POSITIVE denominator can still be outrun — design 83 §22', () => {
+  // The zero-denominator block above is the harmless case: every `frac` is already
+  // forced to 0 and no credit is at stake. This is the case it did not anticipate.
+  //
+  // §904(b)(2)(B)(ii) removes the rate-differential portion of net capital gain from
+  // WORLDWIDE taxable income — including gain that is US-source and so in no basket.
+  // (B)(i) removes it PER BASKET, from that basket's own foreign gain. A taxpayer whose
+  // worldwide income is dominated by a DOMESTIC gain, while the foreign baskets hold
+  // ordinary and re-sourced income, therefore has a denominator that collapses while the
+  // numerators barely move — with the denominator still positive and a live credit.
+  //
+  // Found on >50% of a 30-path MC sweep of the reference plan, where it threw and killed
+  // the run. The shape is reproduced here synthetically.
+  const clampedYear = (o = {}) => ({
+    people: { primary: { residency: 'AU' } },
+    currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) } },
+    // Ordinary income below the standard deduction, so `taxableOrdinary` clamps to 0 and
+    // the denominator is made of capital gain alone.
+    usOrdinaryIncomeYTD:        32_000,
+    foreignGeneralIncomeYTD:    30_000,   // AU rent/pension — ordinary, general basket
+    foreignPassiveIncomeYTD:     2_000,
+    // Re-sourced US dividends/interest/gains (G10 part 1). This is what lets the passive
+    // basket's gross exceed the year's ordinary income on the real plan.
+    usSourcePassiveUsdYTD:      45_000,
+    // The domestic gain that shrinks the denominator, and a collectibles gain whose 28%
+    // group retains most of its value — which is the whole of what survives in `line 18`.
+    usCapitalGainsYTD:          93_000,
+    usCollectibleGainsYTD:       6_000,
+    // ≥ $20,000 of foreign gain, which defeats the Form 1116 adjustment exception. Without
+    // it there is no adjustment at all and this test passes for the wrong reason.
+    foreignPassiveCapGainsYTD:  27_000,
+    ftcCurrentGeneral:             400,
+    ftcCurrentPassive:           9_000,
+    ...o,
+  });
+
+  test('both fractions clamp to 1 and NOTHING throws', () => {
+    const detail = new UsTaxRates2026().computeTax(clampedYear());
+    const { ftc } = detail;
+
+    // The preconditions, so a future change cannot make this pass vacuously.
+    assert.equal(detail.rateDifferential.exceptionApplied, false);
+    assert.ok(ftc.totalTaxable > 0,
+      'a POSITIVE denominator is the whole point — the zero case is tested above');
+    near(ftc.totalTaxable, 4_540.54, 1);
+
+    // The denominator that survives is the 28% group's retained share: the 0%/15%/20%
+    // groups are stripped by (B)(ii) and the collectibles' 6,000 x (1 - 0.2432) is what
+    // is left. That is why it is small but not zero.
+    near(detail.rateDifferential.worldwide, 94_459.46, 1);
+
+    // Both baskets outrun it, so Σ fractions is 2 — the condition that used to throw.
+    assert.equal(ftc.general.frac, 1);
+    assert.equal(ftc.passive.frac, 1);
+    assert.ok(ftc.general.rawNumerator + ftc.passive.rawNumerator > ftc.totalTaxable,
+      'Σ numerators must exceed the denominator or this is not the case under test');
+  });
+
+  test('Form 1116 line 33 is what holds, and it holds by construction', () => {
+    // "Enter the smaller of line 20 or line 32." The instructions' own note says line 32
+    // exceeds line 20 "only if you have U.S. capital gains or qualified dividends that
+    // are subject to the capital gain rate differential" — this taxpayer, named. The cap
+    // is `headroom` in basket(), not the assertion.
+    const { ftc } = new UsTaxRates2026().computeTax(clampedYear());
+
+    near(ftc.credit, ftc.limitationBase, 0.01,
+      'two baskets each entitled to the whole limit take exactly the limit between them');
+    assert.ok(ftc.credit <= ftc.limitationBase + 0.01);
+
+    // Un-credited foreign tax is banked, not lost — the clamp does not create credit.
+    const banked = Object.values(ftc.nextPoolGeneral).reduce((s, v) => s + v, 0)
+                 + Object.values(ftc.nextPoolPassive).reduce((s, v) => s + v, 0);
+    assert.ok(banked > 0, 'the excess foreign tax carries forward');
+    near(ftc.credit + banked, 9_400, 0.01, 'credited + carried = the foreign tax paid');
+  });
+
+  test('the classifier guard is still live in exactly this year', () => {
+    // The relaxation must not have disarmed the one check that constrains the classifier.
+    // Same year, but the passive basket is handed income the US totals never saw.
+    assert.throws(
+      () => new UsTaxRates2026().computeTax(clampedYear({ usSourcePassiveUsdYTD: 145_000 })),
+      /basket gross sums to .* exceeds gross income from all sources/);
+  });
+});
