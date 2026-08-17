@@ -10,10 +10,11 @@
 
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership, resolveAttributionAsset, ownershipFractions } from '../../ownership-utils.js';
-import { toUSD } from '../tax-fx.js';
+import { toUSD, toAUD } from '../tax-fx.js';
 import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from '../capital-gain-character.js';
 import { frankingCreditOn } from './franking.js';
-import { us121Exclusion, cgtDiscountFraction } from '../../account-rules/main-residence.js';
+import { us121Exclusion, cgtDiscountFraction,
+         US_PRIMARY_HOME_EXCLUSION_MFJ, US_PRIMARY_HOME_EXCLUSION_SINGLE } from '../../account-rules/main-residence.js';
 
 const SUPER_TAX_RATE = 0.15;
 
@@ -166,6 +167,39 @@ function bookAuPersonalServicesIncome(state, action) {
 export class AuTaxModule2026 extends BaseTaxModule {
   get countryCode() { return 'AU'; }
   get year()        { return 2026; }
+
+  /**
+   * The Australian-assessable slice of an AU house-sale gain — s118-185 applied to the
+   * SIGNED gain, design 83 G7 step 2 and design 90 §5.
+   *
+   * Static and shared because two year-modules need the identical figure and they
+   * reached different answers when each computed its own. FY2026 books it into
+   * `auCapitalGainsYTD`; the FY2027 reform module books the *assessable* gain into
+   * `auRealCapitalGainsYTD`, which is the bucket `AuTaxRates2027` actually taxes. When
+   * the reform module used the raw `action.gain` instead, the exemption was computed,
+   * printed on the return's "Capital Gains" line, and then thrown away one line later —
+   * the return showed an 11.77% main-residence exemption and taxed 100% of the gain.
+   *
+   * That defect could only surface on a dwelling whose exemption was non-zero, so it sat
+   * behind the sale-date day-count bug that was forcing `auTaxableFraction` to 1 on the
+   * very scenarios that would have caught it.
+   *
+   * `gain` is floored at zero while the signed fields are not, so the min() picks the
+   * signed figure whenever the disposal was a loss: the main-residence concession
+   * disregards a loss on the exempt portion exactly as it disregards a gain, so a partly
+   * exempt dwelling surrenders the same share of both.
+   *
+   * @param {object} action an AU_HOUSE_SALE_TAX payload
+   * @returns {number} the assessable gain in the property's own currency (AUD)
+   */
+  static auAssessableHouseGain(action) {
+    const gain              = action?.gain ?? 0;
+    const auTaxableFraction = action?.auTaxableFraction ?? 1;   // pre-G7 default: all of it
+    const auSignedGain      = (action?.auShortTermGain ?? null) != null || (action?.auLongTermGain ?? null) != null
+      ? (action.auShortTermGain ?? 0) + (action.auLongTermGain ?? 0)
+      : gain;
+    return +(Math.min(gain, auSignedGain) * auTaxableFraction).toFixed(2);
+  }
 
   getReducerFns() {
     return new Map([
@@ -724,16 +758,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // own §121, on its own test, over its own period. Applying the AU fraction to
         // both would double-relieve, which is why the fraction arrives here rather
         // than having been netted into `gain` upstream.
-        const auTaxableFraction = action.auTaxableFraction ?? 1;   // pre-G7 default: all of it
-        // Design 90 §5 — SIGNED. `gain` is floored, so a dwelling sold below its cost
-        // base gave an assessable gain of 0 and the loss disappeared. The signed AU
-        // total takes the SAME s118-185 fraction: the main-residence concession
-        // disregards a loss on the exempt portion exactly as it disregards a gain, so
-        // a partly-exempt dwelling surrenders the same share of both.
-        const auSignedGain      = (action.auShortTermGain ?? null) != null || (action.auLongTermGain ?? null) != null
-          ? (action.auShortTermGain ?? 0) + (action.auLongTermGain ?? 0)
-          : gain;
-        const auAssessableGain  = +(Math.min(gain, auSignedGain) * auTaxableFraction).toFixed(2);
+        const auAssessableGain  = AuTaxModule2026.auAssessableHouseGain(action);
 
         // The depreciation slice. Australia needs no special handling — s110-45(2)
         // already enlarged the gain by taking Div 43 out of the cost base, and that
@@ -742,13 +767,22 @@ export class AuTaxModule2026 extends BaseTaxModule {
         // rather than taxed at the LTCG rates, and §121 can never exclude it.
         const depGain      = Math.max(0, Math.min(action.depreciationGain ?? 0, gain));
         const excludable   = Math.max(0, gain - depGain);
+        // Every figure in this payload is AUD (the AU sale reducer stamps the property's
+        // own currency), so the §121 ceiling has to cross the FX line before it can be
+        // compared against them. Passing the bare statutory constant tested a
+        // US$500,000 cap against an A$ gain and silently denied exclusion between
+        // A$500,000 and the true A$775,000-equivalent.
+        const s121Cap      = toAUD(
+          state.usFilingSingle === true ? US_PRIMARY_HOME_EXCLUSION_SINGLE : US_PRIMARY_HOME_EXCLUSION_MFJ,
+          'USD', state);
         const s121         = us121Exclusion(
           { mainResidenceFrom:  action.mainResidenceFrom,
             mainResidenceUntil: action.mainResidenceUntil,
             isPrimaryResidence: action.isPrimaryResidence },
           { gain, depreciationGain: depGain,
             acquisitionMs: action.acquisitionMs, saleMs: action.saleMs,
-            filingSingle:  state.usFilingSingle === true });
+            filingSingle:  state.usFilingSingle === true,
+            cap:           s121Cap });
         const usTaxableGain = +Math.max(0, excludable - s121.excluded).toFixed(2);
 
         const usdGain     = toUSD(usTaxableGain, 'AUD', state);

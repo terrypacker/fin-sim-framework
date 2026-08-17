@@ -194,6 +194,16 @@ export function auMainResidenceExemption(prop, { acquisitionMs, saleMs, residenc
  * and then occupied is therefore in the penalised order, and its exclusion is capped by
  * a fraction that no amount of subsequent occupancy can fully undo.
  *
+ * **`gain` sets the currency, and the cap has to follow it.** Every figure here is in
+ * whatever currency the caller measured the disposal in — USD for a US dwelling, AUD
+ * for an Australian one, since the AU sale reducer stamps its payload in the property's
+ * own currency. The §121 ceiling is a US dollar amount, so a caller working in anything
+ * else must convert it and pass it as `cap`; leaving the default in place compares a
+ * US$500,000 ceiling against an A$ gain and denies exclusion that is actually available
+ * (at 1.55 the ceiling should be A$775,000, so a qualified gain anywhere between the
+ * two is over-taxed). Defaulting rather than requiring the argument keeps the US caller
+ * — where the statutory constant IS the right answer — reading as it always did.
+ *
  * @param {object} prop        property state (reads mainResidenceFrom/Until)
  * @param {object} opts
  * @param {number}  opts.gain             total realised gain (post-depreciation basis)
@@ -201,11 +211,13 @@ export function auMainResidenceExemption(prop, { acquisitionMs, saleMs, residenc
  * @param {?number} opts.acquisitionMs
  * @param {?number} opts.saleMs
  * @param {boolean} opts.filingSingle
+ * @param {?number} opts.cap   the §121 ceiling in `gain`'s currency; omit for USD
  * @returns {{excluded: number, eligible: boolean, nonqualifiedFraction: number,
  *            cap: number, reason: string}}
  */
-export function us121Exclusion(prop, { gain, depreciationGain = 0, acquisitionMs, saleMs, filingSingle }) {
-  const cap  = filingSingle ? US_PRIMARY_HOME_EXCLUSION_SINGLE : US_PRIMARY_HOME_EXCLUSION_MFJ;
+export function us121Exclusion(prop, { gain, depreciationGain = 0, acquisitionMs, saleMs, filingSingle,
+                                       cap: capOverride = null }) {
+  const cap  = capOverride ?? (filingSingle ? US_PRIMARY_HOME_EXCLUSION_SINGLE : US_PRIMARY_HOME_EXCLUSION_MFJ);
   const none = (reason) => ({ excluded: 0, eligible: false, nonqualifiedFraction: 1, cap, reason });
 
   if (!(gain > 0)) return none('no-gain');

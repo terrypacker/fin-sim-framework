@@ -65,8 +65,17 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     fns.set('AU_HOUSE_SALE_TAX', (state, action) => {
       const next = baseHouse(state, action);
       if (action.residency !== 'AU') return next;
-      // Property cost-base indexation is deferred (design 57 §6.4) — use the raw gain.
-      const realGain = action.auIndexedGain ?? action.gain ?? 0;
+      // Property cost-base indexation is deferred (design 57 §6.4), so the real bucket
+      // takes the un-indexed gain — but it must take the ASSESSABLE one. This bucket is
+      // what `AuTaxRates2027._cgtRelief` actually taxes, so booking the raw `action.gain`
+      // here discarded the s118-185 main-residence exemption the parent reducer had just
+      // computed: the return printed the exemption on its "Capital Gains" line and taxed
+      // 100% of the gain on the next. Measured on a dwelling with an 11.77% exemption,
+      // that was A$116,508 of phantom assessable income — ~A$54,759 of tax.
+      //
+      // The exemption was zero on every scenario in the suite (the sale-date day-count
+      // bug was forcing `auTaxableFraction` to 1), which is why nothing caught it.
+      const realGain = action.auIndexedGain ?? AuTaxModule2026.auAssessableHouseGain(action);
       const asset = { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners };
       return this._recordRealGain(next, state, realGain, asset);
     });

@@ -355,3 +355,75 @@ test('MR-23: end to end — a returning resident\'s AU house discount is apporti
   const discountable = Object.values(sim.state.auPersonDiscountableGainsYTD ?? {}).reduce((a, c) => a + c, 0);
   assert.ok(near(discountable, base, 0.01), 'the whole discountable gain is apportioned, not part of it');
 });
+
+// ── The two defects the au-house-sale review found ───────────────────────────
+//
+// Both are about relief that IS computed and then fails to reach the money. Neither
+// was caught by anything in the suite: MR-1..23 all exercise the pure day-count
+// functions or the FY2026 booking, and the scenarios that reach the FY2027 reform
+// module all had a zero main-residence exemption, because the sale-date day-count was
+// collapsing `auTaxableFraction` to 1 on every one of them.
+
+test('MR-24: the FY2027 reform taxes the s118-185-REDUCED gain, not the raw gain', async () => {
+  // F8. `AuTaxRates2027._cgtRelief` assesses `auRealCapitalGainsYTD`, so whatever the
+  // reform module books there IS the tax base. Booking `action.gain` printed the
+  // exemption on the return's Capital Gains line and then taxed 100% of the gain one
+  // line below — measured at A$116,508 of phantom assessable income on a dwelling with
+  // an 11.77% exemption.
+  const { AuTaxModule2027 } = await import('../../src/finance/tax/au/au-tax-module-2027.js');
+  const fns = new AuTaxModule2027().getReducerFns();
+
+  const action = {
+    type: 'AU_HOUSE_SALE_TAX', residency: 'AU',
+    gain: 1_000_000, auLongTermGain: 1_000_000, auShortTermGain: 0,
+    auTaxableFraction: 0.75,          // a quarter of the ownership period was main residence
+    depreciationGain: 0,
+    ownershipType: 'joint', ownerId: 'p1', owners: [],
+    acquisitionMs: Y(2016), saleMs: Y(2034),
+    mainResidenceFrom: Y(2031), isPrimaryResidence: false,
+  };
+  const state = {
+    usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0,
+    effectiveExchangeRates: { USD_AUD: 1, AUD_USD: 1 },
+    usFilingSingle: false,
+  };
+  const out = fns.get('AU_HOUSE_SALE_TAX')(state, action);
+
+  assert.equal(out.auRealCapitalGainsYTD, 750_000,
+    'the taxed bucket must carry the exempt-reduced gain');
+  assert.equal(out.auCapitalGainsYTD, 750_000,
+    'and must agree with the gross bucket the FY2026 parent booked');
+});
+
+test('MR-26: the assessable-gain rule is shared, and honours a loss', async () => {
+  const { AuTaxModule2026 } = await import('../../src/finance/tax/au/au-tax-module-2026.js');
+  const g = AuTaxModule2026.auAssessableHouseGain;
+
+  assert.equal(g({ gain: 1_000_000, auLongTermGain: 1_000_000, auTaxableFraction: 1 }), 1_000_000,
+    'a fully assessable dwelling is untouched — the no-change guard for MR-24');
+  assert.equal(g({ gain: 1_000_000, auLongTermGain: 1_000_000, auTaxableFraction: 0.75 }), 750_000);
+  assert.equal(g({ gain: 1_000_000 }), 1_000_000, 'pre-G7 payloads default to fully assessable');
+  // A loss: `gain` is floored at 0 while the signed fields are not, and the concession
+  // disregards the same share of a loss as of a gain (design 90 §5).
+  assert.equal(g({ gain: 0, auLongTermGain: -200_000, auTaxableFraction: 0.75 }), -150_000);
+});
+
+test('MR-27: the §121 cap is applied in the gain\'s own currency', () => {
+  // F9. Every figure the AU house-sale path hands §121 is AUD, but the ceiling is a US
+  // dollar amount. Comparing them directly denies exclusion on any qualified gain
+  // between US$500,000 and its AUD equivalent — A$775,000 at 1.55.
+  const occupiedThroughout = { isPrimaryResidence: true, mainResidenceFrom: null, mainResidenceUntil: null };
+  const opts = { gain: 700_000, depreciationGain: 0, acquisitionMs: ACQ, saleMs: SALE, filingSingle: false };
+
+  const bare = us121Exclusion(occupiedThroughout, opts);
+  assert.equal(bare.excluded, 500_000, 'default cap is the statutory US$500,000');
+
+  const audCap = us121Exclusion(occupiedThroughout, { ...opts, cap: 775_000 });
+  assert.equal(audCap.excluded, 700_000,
+    'an A$700,000 qualified gain is entirely inside the A$775,000-equivalent ceiling');
+  assert.equal(audCap.cap, 775_000, 'the reported cap is the one actually applied');
+
+  // The override must still bind when the gain outruns it.
+  const over = us121Exclusion(occupiedThroughout, { ...opts, gain: 900_000, cap: 775_000 });
+  assert.equal(over.excluded, 775_000);
+});
