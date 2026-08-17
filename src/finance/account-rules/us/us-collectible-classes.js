@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
-import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
 
@@ -45,14 +45,15 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['COLLECTIBLE_SALE_APPLY'];
-    this.generatedActionTypes = ['COLLECTIBLE_SALE_TAX'];
+    this.generatedActionTypes = ['COLLECTIBLE_SALE_TAX', 'INTL_TRANSFER_RECORD'];
   }
 
   reduce(state, action, date) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
-    this.accountService.transaction(state[destKey], salePrice, null);
+    const { transfer: fxLeg } = creditSaleProceeds(
+      this.accountService, state, destKey, salePrice, 'USD', stateKey, null);
     const stateUpdate = {};
     const key = stateKey ?? 'collectibleAccount';
     const col = state[key];
@@ -103,7 +104,8 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
       // taxed) yet appeared on no worksheet row — the return footed, the working that
       // justifies it silently omitted the asset. Both are USD, as declared: this is a
       // US-domiciled collectible, and the AU return converts on the way in.
-      [{ type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
+      [...(fxLeg ? [fxLeg] : []),
+       { type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         proceeds: salePrice, costBasis,
         ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]

@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
+import { convertNetOfFee, fxFeeIn } from '../fx/fx-conversion.js';
 
 /**
  * Resolve the state key of the cash pool a country's debits/credits should hit
@@ -139,4 +140,70 @@ export function resolvePresentCash(stateRegistry, country, state, ownerId = null
     return { key: otherKey, account: state[otherKey], country: other, crossed: true };
   }
   return null;
+}
+
+/**
+ * Credit an asset disposal's proceeds to its destination account, converting when the
+ * two are denominated in different currencies.
+ *
+ * **The conversion is the whole point.** `AccountService.transaction` is a currency-blind
+ * numeric credit — it adds the number it is given to `account.balance` and nothing on the
+ * path inspects either currency. So a sale reducer that handed it the proceeds directly
+ * booked A$1,342,583 of Australian house proceeds into a USD brokerage account as
+ * $1,342,583, a 1.55x windfall that then compounded for the rest of the run. On the
+ * measured plan that was +$473,151 at the sale and +$2,015,515 by 2070, and because the
+ * error scales with proceeds and compounds from the sale date it silently inverted every
+ * comparison of *when* to sell.
+ *
+ * Nothing guarded it because same-currency is the overwhelmingly common case and the
+ * asset editors happily let an AU property name a US account as its sale destination.
+ *
+ * Uses the same `convertNetOfFee` the drawdown sweep does (design 44 §5a), so a disposal
+ * and a cash sweep across the same border agree to the cent.
+ *
+ * **No §988 event.** The proceeds are converted at the disposal, so the foreign currency
+ * is never held: there is no basis and no holding period for an exchange gain to accrue
+ * against. `AccountService.replenishSavings` realizes §988 because it spends a foreign
+ * balance that has been sitting there; this does not. Design 87 §8.
+ *
+ * @param {object} accountService
+ * @param {object} state
+ * @param {string} destKey   destination account state key (already resolved)
+ * @param {number} amount    proceeds in `fromCcy`
+ * @param {string} fromCcy   the disposed asset's own currency
+ * @param {?string} srcKey   the asset's state key, for the journal record
+ * @param {?Date} date
+ * @returns {{credited: number, transfer: ?object}} `transfer` is an INTL_TRANSFER_RECORD
+ *          action for a cross-currency credit, else null — the caller emits it so the leg
+ *          is visible in the journal rather than appearing as a bare balance jump.
+ */
+export function creditSaleProceeds(accountService, state, destKey, amount, fromCcy, srcKey = null, date = null) {
+  const dest  = state[destKey];
+  const toCcy = dest?.currency?.code ?? dest?.country ?? fromCcy;
+
+  if (toCcy === fromCcy || !(amount > 0)) {
+    accountService.transaction(dest, amount, date);
+    return { credited: amount, transfer: null };
+  }
+
+  const usdAud   = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
+  const fxFeeUsd = state.effectiveFxFees?.USD_AUD ?? 15;
+  const fee      = fxFeeIn(toCcy, fromCcy, usdAud, fxFeeUsd);
+  const credited = Math.max(0, convertNetOfFee(amount, fromCcy, toCcy, usdAud, fxFeeUsd));
+  accountService.transaction(dest, credited, date);
+
+  return {
+    credited,
+    transfer: {
+      type:       'INTL_TRANSFER_RECORD',
+      direction:  fromCcy === 'AUD' ? 'AU_TO_US' : 'US_TO_AU',
+      srcKey,
+      dstKey:     destKey,
+      from:       fromCcy,
+      to:         toCcy,
+      fromAmount: +amount.toFixed(2),
+      toAmount:   +credited.toFixed(2),
+      fee:        +fee.toFixed(2),
+    },
+  };
 }

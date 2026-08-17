@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
-import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 
@@ -77,7 +77,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['US_HOUSE_SALE_APPLY'];
-    this.generatedActionTypes = ['US_HOUSE_SALE_TAX'];
+    this.generatedActionTypes = ['US_HOUSE_SALE_TAX', 'INTL_TRANSFER_RECORD'];
   }
 
   reduce(state, action, date) {
@@ -161,7 +161,11 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       });
 
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
-    this.accountService.transaction(state[destKey], netProceeds, null);
+    // Mirror of the AU path: a US property may name an AUD account as its destination,
+    // and `transaction` would credit USD proceeds as AUD. See `creditSaleProceeds`.
+    const { transfer: fxLeg } = creditSaleProceeds(
+      this.accountService, state, destKey, netProceeds,
+      propState?.currency?.code ?? 'USD', stateKey, null);
     const updates = {};
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
@@ -179,7 +183,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       // every CAPITAL_GAINS disposal type) so the Capital Gains by Disposal report
       // aggregates it uniformly. proceeds/costBasis/description give the report a
       // readable, drillable row.
-      [{
+      [...(fxLeg ? [fxLeg] : []), {
         type:        'US_HOUSE_SALE_TAX',
         gain:        taxableGain,
         // Unrecaptured §1250 gain rides alongside rather than inside `gain`: it is

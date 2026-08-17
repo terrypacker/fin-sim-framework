@@ -462,3 +462,56 @@ test('MR-28: the exemption day-count ends at the SALE, not at the tax period sta
   assert.ok(sale.auTaxableFraction > 0.9 && sale.auTaxableFraction < 1,
     `~6 months of a ~15.5 year hold should exempt a few percent, got taxable ${sale.auTaxableFraction}`);
 });
+
+test('MR-29: AUD house proceeds are CONVERTED into a USD destination account', async () => {
+  // F1. `AccountService.transaction` is a currency-blind numeric credit, and nothing on
+  // the sale path inspected either currency — so an AU property naming a USD account as
+  // its sale destination had A$1,342,583 booked there as $1,342,583. On the measured plan
+  // that was +$473,151 at the sale and +$2,015,515 by 2070, and because it scales with
+  // proceeds and compounds from the sale date it inverted every comparison of WHEN to
+  // sell. Nothing guarded it: same-currency is the ordinary case and the asset editors
+  // let an AU property name a US account freely.
+  const { loadScenarioSim } = await import('../helpers/scenario-harness.js');
+  const { sim } = loadScenarioSim({
+    params: { moveYear: 2028 },
+    simStart: '2026-01-01', simEnd: '2034-01-01',
+    mutateCfg: (cfg) => {
+      const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
+      au.plannedSaleYear        = 2032;
+      au.saleDestinationAccount = 'usStockAccount';   // USD, while the house is AUD
+    },
+    stepTo: '2032-03-01',
+  });
+
+  const [apply] = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
+  assert.ok(apply, 'the sale must have happened');
+
+  // Both figures on the payload are AUD — the property's own currency.
+  const { salePrice, mortgageBalance } = apply.action.data;
+  const netProceedsAud = salePrice - (mortgageBalance ?? 0);
+  assert.ok(netProceedsAud > 0);
+
+  const credited = apply.stateDiff.find(d => d.field === 'usStockAccount.balance')?.delta;
+  assert.ok(credited > 0, 'the USD account must receive the proceeds');
+
+  // Converted at the run's pinned 1.55, less the flat US$15 transfer fee. The bug booked
+  // `netProceedsAud` here verbatim, so this assertion is the whole fix.
+  const FX = 1.55, FEE_USD = 15;
+  assert.equal(Math.round(credited * 100) / 100,
+               Math.round((netProceedsAud / FX - FEE_USD) * 100) / 100);
+  assert.ok(credited < netProceedsAud * 0.7,
+            'a USD credit of AUD proceeds must be materially SMALLER, not one-for-one');
+
+  // And the border crossing is journaled rather than appearing as a bare balance jump.
+  // Matched on srcKey: this plan also sweeps cash across the border after the 2028 move,
+  // so the journal carries other INTL_TRANSFER_RECORDs and the first one is not ours.
+  const xfer = sim.journal.getActions('INTL_TRANSFER_RECORD')
+    .map(e => e.action.data)
+    .find(d => d.srcKey === 'auHouseProperty');
+  assert.ok(xfer, 'the cross-currency sale credit emits its own INTL_TRANSFER_RECORD');
+  assert.equal(xfer.from, 'AUD');
+  assert.equal(xfer.to,   'USD');
+  assert.equal(xfer.direction, 'AU_TO_US');
+  assert.equal(Math.round(xfer.toAmount * 100) / 100, Math.round(credited * 100) / 100,
+    'the record must state the amount actually credited');
+});

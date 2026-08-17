@@ -13,7 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
-import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { auMainResidenceExemption, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { downsizerContributions } from './downsizer-contribution.js';
 import { ownershipFractions } from '../../ownership-utils.js';
@@ -47,7 +47,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['AU_HOUSE_SALE_APPLY'];
-    this.generatedActionTypes = ['AU_HOUSE_SALE_TAX', 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY'];
+    this.generatedActionTypes = ['AU_HOUSE_SALE_TAX', 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY', 'INTL_TRANSFER_RECORD'];
   }
 
   reduce(state, action, date) {
@@ -129,7 +129,12 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
       });
 
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'AU', state, destinationKey);
-    this.accountService.transaction(state[destKey], netProceeds, null);
+    // The proceeds are AUD; the destination need not be. An AU property may name a US
+    // brokerage account as its sale destination, and crediting the raw number there was
+    // a 1.55x windfall — see `creditSaleProceeds`.
+    const { transfer: fxLeg } = creditSaleProceeds(
+      this.accountService, state, destKey, netProceeds,
+      propState?.currency?.code ?? 'AUD', stateKey, null);
     const updates = {};
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
@@ -147,6 +152,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
       state,
       updates,
       [...downsizerActions,
+       ...(fxLeg ? [fxLeg] : []),
        { type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners,
          usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
          proceeds: salePrice, costBasis: adjustedBasis, description,

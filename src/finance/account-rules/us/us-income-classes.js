@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
-import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
+import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
 
@@ -175,14 +175,15 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['COMPANY_SALE_APPLY'];
-    this.generatedActionTypes = ['COMPANY_SALE_TAX'];
+    this.generatedActionTypes = ['COMPANY_SALE_TAX', 'INTL_TRANSFER_RECORD'];
   }
 
   reduce(state, action, date) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
-    this.accountService.transaction(state[destKey], salePrice, null);
+    const { transfer: fxLeg } = creditSaleProceeds(
+      this.accountService, state, destKey, salePrice, 'USD', stateKey, null);
     const stateUpdate = {};
     const eq = stateKey ? state[stateKey] : null;
     if (stateKey && eq != null) {
@@ -230,7 +231,8 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
 
     // Design 76 Gap B: carry the equity's ownership so the AU gain is attributed to
     // its holder rather than halved across the household (mirrors AU_HOUSE_SALE_TAX).
-    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
+    return this.newState(state, stateUpdate, [...(fxLeg ? [fxLeg] : []),
+      { type: 'COMPANY_SALE_TAX', gain, auGain, auIndexedGain, residency,
       usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
       // Sale detail for Schedule D / Form 8949 (mirrors US_HOUSE_SALE_TAX). `gain`
       // alone identifies the tax, not the disposal — a return has to show what was

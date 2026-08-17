@@ -463,7 +463,16 @@ test('EVT-36: AU-resident collectible sale credits saleDestinationAccount instea
 
   const destDiff = findDiff(apply, 'checkingAccount.balance');
   assert.ok(destDiff, 'sale proceeds should land in checkingAccount (saleDestinationAccount)');
-  assert.strictEqual(destDiff.delta, config.collectibles[0].value);
+  // The collectible is USD and this destination is AUD, so the proceeds CONVERT on the
+  // way in: 10,000 x 1.55 less the flat US$15 transfer fee expressed in AUD. This
+  // asserted the raw USD figure until `creditSaleProceeds` was introduced — crediting a
+  // USD number straight into an AUD account (and the same on the AU house-sale path,
+  // where it was worth +$473k) is precisely what that helper exists to stop. The
+  // US-destination sibling above is same-currency and is deliberately unchanged.
+  const FX = 1.55, FEE_USD = 15;
+  assert.strictEqual(
+    Math.round(destDiff.delta * 100) / 100,
+    Math.round((config.collectibles[0].value * FX - FEE_USD * FX) * 100) / 100);
 
   const defaultDiff = findDiff(apply, 'usSavingsAccount.balance');
   assert.strictEqual(defaultDiff, undefined, 'default usSavingsAccount should not be touched');
