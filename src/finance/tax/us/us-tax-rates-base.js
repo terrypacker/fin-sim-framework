@@ -215,6 +215,27 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
                             - invInt.allowed;
     const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
+    // The part of the deduction ordinary income could not absorb. Form 1040 line 15 is
+    // AGI *less* the deduction, and AGI includes capital gain — so a deduction larger
+    // than ordinary income shelters preferential-rate income rather than evaporating.
+    // This model's `agi` is ordinary-only (gains live in their own buckets), so the
+    // floor above silently dropped the remainder: the gains were taxed in full and the
+    // §904 denominator was overstated by the same amount, breaking the Form 1116
+    // identity `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE`
+    // documented at `unrelatedDeductions` below. Restoring it is what this is for.
+    //
+    // **Which layer absorbs it is statutory, not a choice.** §1(h)(1)(D)(ii) subtracts
+    // from the unrecaptured §1250 gain "the excess of … the sum of the amount on which
+    // tax is determined under subparagraph (A) plus the net capital gain, over …
+    // taxable income" — which is exactly this shortfall — and §1(h)(1)(E) then does the
+    // same for 28-percent rate gain against whatever is left. So the order is §1250
+    // first, then collectibles, then the 0/15/20 layer last. That is the most expensive
+    // order for the taxpayer of the three available, and it is the one the statute names.
+    const unusedDeduction = Math.max(0, stdDeduction - agi);
+    const shelter1250     = Math.min(capLoss.unrecaptured1250Gain, unusedDeduction);
+    const shelterColl     = Math.min(capLoss.collectibleGain,      unusedDeduction - shelter1250);
+    const shelterLtcg     = Math.min(capLoss.longTermGain,         unusedDeduction - shelter1250 - shelterColl);
+
     // Step 1b: FEIE (Form 2555) — exclude foreign *earned* income up to the cap
     // per qualifying person (design 52 §4.2). Excluded income is already inside
     // usOrdinaryIncomeYTD/agi (AU wages/SE are worldwide income), so the exclusion
@@ -248,11 +269,15 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // would have overstated the tax for precisely the taxpayer this models.
     // Post-§1211 netting (design 90 §4): a capital loss walks the long-term rate groups
     // highest-rate-first, so each of these three may have been reduced before it is taxed.
-    const unrecap1250     = capLoss.unrecaptured1250Gain;
-    const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250, brackets);
-    const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,               brackets);
+    // `unrecap1250` stays GROSS — it is income, and the income-side consumers below
+    // (NII, MAGI, Form 1116 line 3e) are all pre-deduction figures. Only the rate layer
+    // is sheltered, which is what §1(h)(1)(D) reduces.
+    const unrecap1250      = capLoss.unrecaptured1250Gain;
+    const unrecap1250Taxed = unrecap1250 - shelter1250;
+    const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250Taxed, brackets);
+    const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,                    brackets);
     const unrecap1250Tax  = Math.min(u1250Stacked.tax - u1250Base.tax,
-                                     unrecap1250 * UNRECAPTURED_1250_MAX_RATE);
+                                     unrecap1250Taxed * UNRECAPTURED_1250_MAX_RATE);
 
     // Step 3: long-term capital gains tax — stack on top of taxable ordinary
     // income (IRC §1(h)). Capital gains sit in the brackets above the ordinary
@@ -260,14 +285,16 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // applied to gains alone. The §1250 layer sits between the two, so the LTCG base
     // includes it; with no §1250 gain this is bit-identical to the pre-G7 computation.
     const cg              = capLoss.longTermGain;
-    const ltcgFloor       = taxableOrdinaryAfterFeie + unrecap1250;
-    const ltcgStacked     = applyBracketsDetailed(ltcgFloor + cg, ltcgBrackets);
-    const ltcgBase        = applyBracketsDetailed(ltcgFloor,      ltcgBrackets);
+    const cgTaxed         = cg - shelterLtcg;
+    const ltcgFloor       = taxableOrdinaryAfterFeie + unrecap1250Taxed;
+    const ltcgStacked     = applyBracketsDetailed(ltcgFloor + cgTaxed, ltcgBrackets);
+    const ltcgBase        = applyBracketsDetailed(ltcgFloor,           ltcgBrackets);
     const capitalGainsTax = ltcgStacked.tax - ltcgBase.tax;
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
-    const collectibles    = capLoss.collectibleGain;
-    const collectiblesTax = collectibles * COLLECTIBLES_RATE;
+    const collectibles      = capLoss.collectibleGain;
+    const collectiblesTaxed = collectibles - shelterColl;
+    const collectiblesTax   = collectiblesTaxed * COLLECTIBLES_RATE;
 
     // Step 4b: §904(b)(2) capital gain rate differential (design 90 §4.5, step 9).
     // Computed here rather than beside `capBasket` because it needs the 0/15/20 rate-group
@@ -279,8 +306,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       ltcgBands: ltcgStacked.bands.map((b, i) => ({
         rate: b.rate, income: b.income - (ltcgBase.bands[i]?.income ?? 0),
       })),
-      collectibleGain:      collectibles,
-      unrecaptured1250Gain: unrecap1250,
+      // The sheltered figures, matching the `ltcgBands` above (which bracket `cgTaxed`)
+      // and the `totalTaxable` this adjustment is subtracted from. Feeding gross amounts
+      // here would adjust a denominator for gain the denominator no longer contains.
+      collectibleGain:      collectiblesTaxed,
+      unrecaptured1250Gain: unrecap1250Taxed,
       shortTermGain:        capLoss.shortTermGain,
       topOrdinaryRate,
       netGeneral: capBasket.netGeneral ?? 0,
@@ -407,7 +437,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // amount equal to capital gain net income reduced by the rate differential portion
       // of net capital gain". This is the Form 1116 *Worksheet for Line 18*, whose
       // per-group multipliers are the exact complements of the line-1a factors.
-      totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles + unrecap1250
+      // Sheltered, so this stays Form 1040 line 15: when the deduction outruns ordinary
+      // income the remainder comes off the gains here too, which is what keeps the
+      // identity `totalTaxable = grossIncomeAllSources − unrelatedDeductions − FEIE`
+      // exact instead of overstating the §904 denominator by the unused deduction.
+      totalTaxable: taxableOrdinaryAfterFeie + cgTaxed + collectiblesTaxed + unrecap1250Taxed
                     - rateDiff.worldwide,
       grossIncomeAllSources,
       unrelatedDeductions,

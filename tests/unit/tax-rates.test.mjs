@@ -295,9 +295,13 @@ test('TE-3: AU ordinary income uses progressive brackets with Medicare levy', ()
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('TE-4: US LTCG uses preferred rate brackets (0%/15%/20%), not ordinary income brackets', () => {
-  // $200k CG: [0, 96700] @ 0% = 0 | [96700, 200000] @ 15% = 103300 * 0.15 = 15495
+  // $200k CG and nothing else. Form 1040 line 15 is AGI less the standard deduction and
+  // AGI includes the gain, so taxable income is 200,000 - 30,000 = 170,000:
+  //   [0, 96700] @ 0% = 0 | [96700, 170000] @ 15% = 73300 * 0.15 = 10995
+  // This asserted 15495 until the standard deduction stopped being discarded whenever it
+  // outran ordinary income — the whole 30,000 was being thrown away here.
   const { netLiability } = usRates.computeTax(usState({ usCapitalGainsYTD: 200000 }));
-  assert.strictEqual(netLiability, 15495);
+  assert.strictEqual(netLiability, 10995);
 });
 
 test('TE-4: US LTCG up to $96,700 is taxed at 0%', () => {
@@ -406,13 +410,14 @@ test('TE-4b: stacking with FEIE — gains sit above FEIE-reduced ordinary income
   assert.strictEqual(capitalGainsTax, 13_995);
 });
 
-test('TE-4b: zero ordinary income stacking matches pre-fix zero-ordinary behavior', () => {
-  // When there is no ordinary income, stacking is a no-op (stack on $0 = direct).
-  // This verifies the fix does not regress the simple case.
+test('TE-4b: with no ordinary income the deduction lands on the gain, not on nothing', () => {
+  // Stacking is a no-op with no ordinary income (stack on $0 = direct), but the standard
+  // deduction is NOT: it comes off Form 1040 line 15, which includes the gain. So the
+  // preferential layer is 170,000, not 200,000 — 73,300 at 15% = 10,995.
   const { capitalGainsTax } = usRates.computeTax(
     usState({ usCapitalGainsYTD: 200_000 }),
   );
-  assert.strictEqual(capitalGainsTax, 15_495);
+  assert.strictEqual(capitalGainsTax, 10_995);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -505,16 +510,22 @@ test('TE-7: US collectible sale classifier populates usCollectibleGainsYTD', () 
 });
 
 test('TE-7: US rates module applies 28% to collectible gains', () => {
-  // $10k collectible gain → 10000 * 0.28 = 2800
+  // $10k collectible gain and nothing else: the $30,000 standard deduction covers it
+  // entirely, so taxable income is 0 and so is the tax. §1(h)(1)(E) is what shelters a
+  // 28%-rate gain once §1(h)(1)(D) has taken the §1250 layer (there is none here).
   const { netLiability } = usRates.computeTax(usState({ usCollectibleGainsYTD: 10000 }));
-  assert.strictEqual(Math.round(netLiability * 100) / 100, 2800);
+  assert.strictEqual(Math.round(netLiability * 100) / 100, 0);
+  // The 28% rate itself is unchanged — put it above the deduction and it reappears.
+  const above = usRates.computeTax(usState({ usCollectibleGainsYTD: 40000 })).netLiability;
+  assert.strictEqual(Math.round(above * 100) / 100, 2800);   // (40000 - 30000) * 0.28
 });
 
 test('TE-7: US collectible rate is distinct from LTCG rate (28% vs 15%)', () => {
   const collectibleTax = usRates.computeTax(usState({ usCollectibleGainsYTD: 100000 })).netLiability;
   const ltcgTax        = usRates.computeTax(usState({ usCapitalGainsYTD:      100000 })).netLiability;
-  // 100k collectibles: 28000 | 100k LTCG: [0,96700] @ 0% + [96700,100000] @ 15% = 495
-  assert.strictEqual(Math.round(collectibleTax * 100) / 100, 28000);
+  // Both are net of the $30,000 standard deduction, so each is taxed on 70,000:
+  //   collectibles: 70000 * 0.28 = 19600 | LTCG: 70000 is inside the 0% band → 0
+  assert.strictEqual(Math.round(collectibleTax * 100) / 100, 19600);
   assert.ok(collectibleTax > ltcgTax, 'collectible 28% rate exceeds LTCG 0%/15% on same amount');
 });
 
@@ -738,11 +749,16 @@ test('US MFJ standardDeduction in result inputs is $30,000', () => {
 });
 
 test('US single filer LTCG 0% bracket threshold is $48,350 (not $96,700 MFJ)', () => {
-  // $60k CG: MFJ → 0% (below $96,700); Single → taxed at 15% above $48,350
-  const mfjTax    = usRates.computeTax(usState({ usCapitalGainsYTD: 60_000 })).netLiability;
-  const singleTax = usRates.computeTax(usState({ usCapitalGainsYTD: 60_000, usFilingSingle: true })).netLiability;
-  assert.strictEqual(mfjTax, 0, 'MFJ: $60k CG is below $96,700 0% threshold');
-  assert.ok(singleTax > 0, 'Single: $60k CG exceeds $48,350 0% threshold');
+  // $80k CG, net of each filing status's own standard deduction:
+  //   MFJ    80,000 - 30,000 = 50,000 → inside the $96,700 0% band → 0
+  //   Single 80,000 - 15,000 = 65,000 → 15% * (65,000 - 48,350) = 2,497.50
+  // The figure was $60k while the deduction was being discarded; at $60k both statuses
+  // now land inside their 0% band and the test could not tell them apart.
+  const mfjTax    = usRates.computeTax(usState({ usCapitalGainsYTD: 80_000 })).netLiability;
+  const singleTax = usRates.computeTax(usState({ usCapitalGainsYTD: 80_000, usFilingSingle: true })).netLiability;
+  assert.strictEqual(mfjTax, 0, 'MFJ: $80k CG less $30k deduction is below the $96,700 0% threshold');
+  assert.strictEqual(Math.round(singleTax * 100) / 100, 2497.50,
+    'Single: $80k CG less $15k deduction exceeds the $48,350 0% threshold');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -944,4 +960,57 @@ test('US-2026: LTCG stacks on ordinary income against the 2026 breakpoints', () 
   const expected = (98_900 - 50_000) * 0.00 + (110_000 - 98_900) * 0.15;
   assert.ok(Math.abs(result.capitalGainsTax - expected) < 0.01,
     `LTCG tax ${result.capitalGainsTax} ≠ ${expected}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// The standard deduction when it outruns ordinary income
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// `taxableOrdinary = Math.max(0, agi - stdDeduction)` floored, and this model's `agi` is
+// ordinary-only — gains live in their own buckets. So for the taxpayer this whole model
+// exists to serve, a retiree living off capital gains, the entire standard deduction was
+// being discarded. TE-4 above was asserting $200k of LTCG at $15,495 when a real 1040
+// charges $10,995.
+
+test('SD-1: a deduction larger than ordinary income shelters preferential-rate gain', () => {
+  const d = 30_000;   // MFJ 2025
+  // Ordinary income absorbs half the deduction; the rest has to reach the gain.
+  const r = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 15_000, usCapitalGainsYTD: 200_000 }));
+  // taxable income = 15,000 + 200,000 - 30,000 = 185,000, of which 185,000 - 0 ordinary
+  // is the preferential layer: [0, 96700] @ 0%, [96700, 185000] @ 15% = 13,245.
+  assert.strictEqual(r.taxableIncome, 0, 'ordinary income is fully absorbed');
+  assert.strictEqual(r.capitalGainsTax, 13_245);
+  assert.ok(d > 15_000, 'precondition: the deduction must outrun ordinary income');
+});
+
+test('SD-2: §1(h)(1)(D) takes the §1250 layer before the 28% and 0/15/20 layers', () => {
+  // No ordinary income, so the whole deduction has to land somewhere. The statute names
+  // the order: §1250 first (§1(h)(1)(D)(ii)), then 28% gain (§1(h)(1)(E)), then the rest.
+  const r = usRates.computeTax(usState({
+    usUnrecaptured1250GainYTD: 20_000,
+    usCollectibleGainsYTD:     20_000,
+    usCapitalGainsYTD:         20_000,
+  }));
+  // 30,000 of deduction: 20,000 kills the §1250 layer, the remaining 10,000 halves the
+  // collectibles layer, and the 0/15/20 layer is untouched (and inside the 0% band).
+  assert.strictEqual(r.unrecapturedSection1250Tax, 0, '§1250 layer fully sheltered');
+  assert.strictEqual(Math.round(r.collectiblesTax * 100) / 100, 2_800, '(20,000 - 10,000) * 0.28');
+  assert.strictEqual(r.capitalGainsTax, 0, '20,000 sits inside the 0% LTCG band');
+});
+
+test('SD-3: the Form 1116 identity holds when the deduction outruns ordinary income', () => {
+  // `totalTaxable = grossIncomeAllSources - unrelatedDeductions - FEIE` is documented at
+  // `unrelatedDeductions` in us-tax-rates-base.js, and it is what the §904 denominator is
+  // built on. The floored `taxableOrdinary` broke it by exactly the unused deduction.
+  const r = usRates.computeTax(usState({
+    usOrdinaryIncomeYTD: 10_000,
+    usCapitalGainsYTD:  100_000,
+    foreignPassiveIncomeYTD: 100_000,
+  }));
+  const { grossIncomeAllSources, totalTaxable } = r.ftc;
+  const rateDiff = r.rateDifferential.worldwide;
+  assert.strictEqual(grossIncomeAllSources, 110_000);
+  // 110,000 gross - 30,000 deduction = 80,000 of taxable income, less the §904(b)(2)
+  // adjustment the denominator carries.
+  assert.strictEqual(Math.round((totalTaxable + rateDiff) * 100) / 100, 80_000);
 });

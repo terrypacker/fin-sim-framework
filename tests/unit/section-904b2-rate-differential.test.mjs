@@ -361,8 +361,12 @@ describe('a no-taxable-income year does not trip the §904 invariant', () => {
 
     // The precondition — without it this test would pass for the wrong reason.
     assert.equal(detail.rateDifferential.exceptionApplied, false);
-    near(detail.rateDifferential.worldwide, 90_000, 0.01,
-      'the whole gain sits in the 0% group, so all of it comes out of the denominator');
+    // 88,800, not the full 90,000: ordinary income is 31,000 against a 32,200 standard
+    // deduction, and the 1,200 it cannot absorb comes off the gain (Form 1040 line 15 is
+    // AGI less the deduction, and AGI includes the gain). All of what remains sits in the
+    // 0% group, so all of THAT comes out of the denominator — which is the point here.
+    near(detail.rateDifferential.worldwide, 88_800, 0.01,
+      'the whole gain that reaches taxable income sits in the 0% group');
     near(detail.ftc.totalTaxable, 0, 0.01);
     assert.ok(detail.ftc.general.numerator > 0,
       'the §988 basket survives the collapse — that is what used to throw');
@@ -445,12 +449,16 @@ describe('a POSITIVE denominator can still be outrun — design 83 §22', () => 
     assert.equal(detail.rateDifferential.exceptionApplied, false);
     assert.ok(ftc.totalTaxable > 0,
       'a POSITIVE denominator is the whole point — the zero case is tested above');
-    near(ftc.totalTaxable, 4_540.54, 1);
+    near(ftc.totalTaxable, 4_389.19, 1);
 
     // The denominator that survives is the 28% group's retained share: the 0%/15%/20%
-    // groups are stripped by (B)(ii) and the collectibles' 6,000 x (1 - 0.2432) is what
-    // is left. That is why it is small but not zero.
-    near(detail.rateDifferential.worldwide, 94_459.46, 1);
+    // groups are stripped by (B)(ii) and the collectibles x (1 - 0.2432) is what is left.
+    // That is why it is small but not zero.
+    //
+    // The collectibles base is 5,800 rather than 6,000: ordinary income is 32,000 against
+    // a 32,200 standard deduction, and §1(h)(1)(E) puts the 200 it cannot absorb onto the
+    // 28% layer once §1(h)(1)(D) has taken the §1250 layer (there is none here).
+    near(detail.rateDifferential.worldwide, 94_410.81, 1);
 
     // Both baskets outrun it, so Σ fractions is 2 — the condition that used to throw.
     assert.equal(ftc.general.frac, 1);
