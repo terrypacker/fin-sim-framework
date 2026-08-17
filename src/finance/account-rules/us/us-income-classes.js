@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
+import { toMs } from '../main-residence.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -177,7 +178,7 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['COMPANY_SALE_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
@@ -209,7 +210,9 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
     // Design 90 §9 step 2 — the signed, §1222-charactered split. A vested company stake
     // is a capital asset held for profit, so §165(c)(2) allows a loss on it; there is no
     // personal-use carve-out of the kind the residence disposal has to apply.
-    const saleMs = state.currentPeriods?.US?.startMs ?? null;
+    // Design 83 G7 — the disposal date drives the holding-period split; the period
+    // start is only a fallback for a replayed action dispatched without a date.
+    const saleMs = toMs(date) ?? state.currentPeriods?.US?.startMs ?? null;
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       singleAssetTermFields({
         proceeds: salePrice, usBasis: costBasis, auBasis,

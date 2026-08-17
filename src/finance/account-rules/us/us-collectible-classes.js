@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
+import { toMs } from '../main-residence.js';
 
 /** Default US cash pool key when no saleDestinationAccount is provided. */
 const defaultUsCashKey = (state) =>
@@ -47,7 +48,7 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['COLLECTIBLE_SALE_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
@@ -88,7 +89,8 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
         // safe default besides. Same shape as the CompanyEquity disposal.
         acquisitionMs:   null,
         auAcquisitionMs: col?.acquisitionDateByCountry?.AU ?? null,
-        saleMs: state.currentPeriods?.US?.startMs ?? null,
+        // Design 83 G7 — the disposal date, not the tax period start.
+        saleMs: toMs(date) ?? state.currentPeriods?.US?.startMs ?? null,
       });
 
     return this.newState(

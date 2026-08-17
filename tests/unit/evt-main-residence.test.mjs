@@ -427,3 +427,38 @@ test('MR-27: the §121 cap is applied in the gain\'s own currency', () => {
   const over = us121Exclusion(occupiedThroughout, { ...opts, gain: 900_000, cap: 775_000 });
   assert.equal(over.excluded, 775_000);
 });
+
+test('MR-28: the exemption day-count ends at the SALE, not at the tax period start', async () => {
+  // F3. `saleMs` was taken from `state.currentPeriods.AU.startMs` — the start of the AU
+  // financial year the disposal falls in — so a January sale had its day counts measured
+  // to the preceding 1 July. For a dwelling occupied from 1 July that truncated the
+  // main-residence window to zero length, `mainResidenceWindow` returned null, and
+  // s118-185 relief was denied outright with reason 'never-a-main-residence'.
+  //
+  // The simulation passes the event date to every reducer as its third argument; it was
+  // simply not being read. This asserts on the emitted payload rather than on tax,
+  // because the payload is where the day count is decided and it names its own reason.
+  const { loadScenarioSim } = await import('../helpers/scenario-harness.js');
+  const { sim } = loadScenarioSim({
+    params: { moveYear: 2028 },
+    simStart: '2026-01-01', simEnd: '2034-01-01',
+    mutateCfg: (cfg) => {
+      const au = cfg.realProperties.find(p => p.stateKey === 'auHouseProperty');
+      au.acquisitionDate    = Date.UTC(2016, 6, 1);
+      au.isPrimaryResidence = false;
+      au.mainResidenceFrom  = '2031-07-01';   // moved in on the first day of FY2031-32
+      au.plannedSaleYear    = 2032;           // sold 15 Jan 2032 — same financial year
+    },
+    stepTo: '2033-01-01',
+  });
+
+  const sale = sim.journal.getActions('AU_HOUSE_SALE_TAX')[0]?.action?.data;
+  assert.ok(sale, 'the sale must have happened');
+
+  assert.equal(sale.saleMs, Date.UTC(2032, 0, 15),
+    'saleMs is the CGT event date, not the 1 July financial-year start');
+  assert.equal(sale.auExemptionReason, 's118-185-partial',
+    'a dwelling occupied for the last six months is partially exempt, not "never a main residence"');
+  assert.ok(sale.auTaxableFraction > 0.9 && sale.auTaxableFraction < 1,
+    `~6 months of a ~15.5 year hold should exempt a few percent, got taxable ${sale.auTaxableFraction}`);
+});

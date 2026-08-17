@@ -50,7 +50,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['AU_HOUSE_SALE_TAX', 'SUPER_DOWNSIZER_CONTRIBUTION_APPLY'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, costBasis, mortgageBalance, residency, ownershipType, ownerId, owners, stateKey, destinationKey } = action;
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
@@ -74,7 +74,19 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     //     unrecaptured §1250 gain at a 25% ceiling and §121 can never exclude it, so it
     //     has to travel separately.
     //   · `gain` — the whole thing, which is what the US starts from.
-    const saleMs = state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
+    //
+    // `saleMs` is the date of the CGT event, and it has to be the DISPOSAL date, not
+    // the start of the tax period the disposal falls in. Both s118-185 and §121(b)(5)
+    // are day counts that end at the sale, and §121(a)'s two-of-five test is a cliff
+    // measured back from it — so a `saleMs` that lands on 1 July truncates the owner's
+    // occupancy by up to a full year, and can deny relief outright. It did: a dwelling
+    // occupied from 1 July 2031 and sold 15 January 2032 produced a zero-length
+    // main-residence window and `auExemptionReason: 'never-a-main-residence'`, because
+    // the truncated sale date was byte-identical to `mainResidenceFrom`.
+    //
+    // The simulation passes the event date as the reducer's third argument; the period
+    // start is kept only as a fallback for a replayed action dispatched without one.
+    const saleMs = toMs(date) ?? state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
     const auExemption = auMainResidenceExemption(propState, {
       acquisitionMs:   toMs(propState?.acquisitionDate),
       saleMs,

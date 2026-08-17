@@ -80,8 +80,12 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['US_HOUSE_SALE_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, costBasis, mortgageBalance, stateKey, destinationKey, residency } = action;
+    // Design 83 G7 — every day count below ends at the DISPOSAL, not at the start of
+    // the tax period containing it. The period start is a fallback for a replayed
+    // action dispatched without a date.
+    const eventMs = toMs(date);
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
     // Depreciation taken during the hold reduces the tax basis, so the gain is
@@ -104,7 +108,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const s121        = us121Exclusion(propState, {
       gain: rawGain, depreciationGain: s1250Gain,
       acquisitionMs: toMs(propState?.acquisitionDate),
-      saleMs: state.currentPeriods?.US?.startMs ?? null,
+      saleMs: eventMs ?? state.currentPeriods?.US?.startMs ?? null,
       filingSingle: state.usFilingSingle === true,
     });
     // Depreciation is never excludable and is taxed in its own §1250 bucket, so it
@@ -122,7 +126,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const auBasis   = propState?.costBaseByCountry?.AU;
     let auGain = 0, auDiscountableGain = 0;
     if (auBasis != null && residency === 'AU') {
-      const saleMs      = state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
+      const saleMs      = eventMs ?? state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
       const deemedAcqMs = propState.acquisitionDateByCountry?.AU ?? null;
       const auRawGain   = Math.max(0, salePrice - auBasis);
       const exemptFrac  = auMainResidenceExemptFraction(propState, deemedAcqMs, saleMs);
@@ -146,7 +150,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     //
     // Depreciation is the tell: a property that has taken depreciation was held for the
     // production of income, which is §165(c)(2) territory whatever the flag says.
-    const saleMs = state.currentPeriods?.US?.startMs ?? null;
+    const saleMs = eventMs ?? state.currentPeriods?.US?.startMs ?? null;
     const deductibleLoss = propState?.isPrimaryResidence !== true || accumulatedDep > 0;
     const { usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain } =
       singleAssetTermFields({
