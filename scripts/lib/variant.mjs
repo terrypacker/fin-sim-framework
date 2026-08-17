@@ -32,7 +32,8 @@
  *   equity            [{...}]          inject CompanyEquity records (tranches)
  *   companyEquity     {stateKey: {...}} per-equity overrides on tranches the scenario
  *                                      ALREADY carries (sale year, value, …)
- *   property          {stateKey: {...}} per-property overrides (sale year, value, costs)
+ *   property          {stateKey: {...}} per-property overrides (sale year, sale destination,
+ *                                      value, costs)
  *   loan              {loanKey: {...}}  per-loan overrides (balance, payment, rate,
  *                                       interestOnly) — works on a synthesized
  *                                       mortgage or a standalone LoanAccount
@@ -357,6 +358,16 @@ export function applyProperty(cfg, set, stateKey, o = {}) {
     if (rec) rec.plannedSaleYear = o.saleYear;
     if (st)  st.plannedSaleYear  = o.saleYear;
     set(`prop.${stateKey}.plannedSaleYear`, o.saleYear);
+  }
+  // Where the sale proceeds land. A first-class lever because it is not a detail: on a
+  // cross-border plan the destination decides the proceeds' currency, asset class, owner
+  // (hence which person's progressive AU brackets the later income runs through) and
+  // drawdown position — measured at up to $2.3m of terminal wealth on the au-house-sale
+  // plan, the same order as the sale YEAR itself. Studies that sweep the year while
+  // holding this fixed are choosing an answer, not measuring one.
+  if ('saleDestination' in o) {
+    if (rec) rec.saleDestinationAccount = o.saleDestination;
+    if (st)  st.saleDestinationAccount  = o.saleDestination;
   }
   if (o.value != null || o.valueMult != null) {
     const base = o.value ?? (rec?.value ?? st?.value ?? 0);
