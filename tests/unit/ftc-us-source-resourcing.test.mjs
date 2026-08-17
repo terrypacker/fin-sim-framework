@@ -87,8 +87,7 @@ test('RS-1: AU tax on US-source income IS creditable — nothing is withheld', (
     personTaxDetails: [person(105_000, /* fitoLimit */ 100_000, /* fito */ 10_000)],
   };
   const patch = stage(baseState(), action);
-  assert.equal(patch.ftcCurrentPassive, 105_000);
-  assert.equal(patch.ftcCurrentGeneral, 0);
+  assert.equal(patch.ftcCurrentForeignTax, 105_000);
 });
 
 test('RS-2: the third "re-sourced by treaty" basket is not produced at all', () => {
@@ -98,33 +97,83 @@ test('RS-2: the third "re-sourced by treaty" basket is not produced at all', () 
   });
   assert.equal(patch.ftcCurrentResourced, undefined,
     'Reg. §1.904-4(k)(1)(iv)(A) disapplies the separate category for Art. 22(4) relief');
-  assert.deepEqual(Object.keys(patch).sort(), ['ftcCurrentGeneral', 'ftcCurrentPassive']);
+  assert.deepEqual(Object.keys(patch).sort(), ['ftcCurrentForeignTax']);
 });
 
-test('RS-3: the base splits across the two baskets by basket income share', () => {
-  const patch = stage(
-    baseState({ foreignGeneralIncomeYTD: 3_000, foreignPassiveIncomeYTD: 1_000 }),
+test('RS-3: the AU settle does not split — it stages one unapportioned figure', () => {
+  // The basket shares visible on 30 June are a half-year snapshot of a calendar-year
+  // return, so the reducer must not use them. Same staged total whatever they say.
+  const flat  = stage(baseState({ foreignGeneralIncomeYTD: 3_000, foreignPassiveIncomeYTD: 1_000 }),
     { tax: 105_000, personTaxDetails: [person(105_000, 100_000, 10_000)] });
-  assert.equal(patch.ftcCurrentGeneral, 105_000 * 0.75);
-  assert.equal(patch.ftcCurrentPassive, 105_000 * 0.25);
+  const empty = stage(baseState({ foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 0 }),
+    { tax: 105_000, personTaxDetails: [person(105_000, 100_000, 10_000)] });
+  assert.equal(flat.ftcCurrentForeignTax,  105_000);
+  assert.equal(empty.ftcCurrentForeignTax, 105_000);
+  assert.equal(flat.ftcCurrentGeneral, undefined, 'no basket split leaves the AU settle');
+  assert.equal(flat.ftcCurrentPassive, undefined);
 });
 
-test('RS-4: with no basket income the tax banks in general, the residual category', () => {
+test('RS-4: the US settle splits the staged tax by FULL-YEAR basket income', () => {
+  const r = new UsTaxRates2025().computeTax({
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD:     400_000,
+    foreignGeneralIncomeYTD: 300_000,
+    foreignPassiveIncomeYTD: 100_000,
+    ftcCurrentForeignTax:    105_000,
+  });
+  assert.equal(r.ftc.general.currentTax, 105_000 * 0.75);
+  assert.equal(r.ftc.passive.currentTax, 105_000 * 0.25);
+});
+
+test('RS-5: an empty June snapshot no longer strands the year in the general basket', () => {
+  // The F7 regression. The AU settle runs 30 June and sees nothing; the US return for
+  // the same calendar year is all passive. The staged tax must follow the US year, not
+  // the June snapshot, or the vintage banks behind an empty basket and expires there.
   const patch = stage(
     baseState({ foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 0 }),
-    { tax: 4_000, personTaxDetails: [person(4_000, 0, 0)] });
-  assert.equal(patch.ftcCurrentGeneral, 4_000);
-  assert.equal(patch.ftcCurrentPassive, 0);
+    { tax: 200_000, personTaxDetails: [person(200_000, 0, 0)] });
+  const r = new UsTaxRates2025().computeTax({
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD:     0,
+    usCapitalGainsYTD:       800_000,
+    foreignGeneralIncomeYTD: 0,
+    foreignPassiveIncomeYTD: 800_000,   // the whole US year is foreign passive
+    ...patch,
+  });
+  assert.equal(r.ftc.general.currentTax, 0, 'nothing banked behind the empty basket');
+  assert.equal(r.ftc.passive.currentTax, 200_000);
+  assert.ok(r.ftc.passive.credit > 0, 'and it is actually creditable');
+  assert.equal(r.ftc.general.credit, 0);
 });
 
-test('RS-5: a negative or absent liability stages nothing', () => {
-  assert.equal(stage(baseState(), { tax: -100 }).ftcCurrentPassive, 0);
-  assert.equal(stage(baseState(), {}).ftcCurrentPassive, 0);
+test('RS-6: with no foreign income in either basket the fallback is passive', () => {
+  // Neither basket can credit anything this year, so this only decides which pool
+  // banks the vintage. Passive is where a foreign-resident investor's income lives;
+  // general — the statutory residual — is what produced the permanently dead pool.
+  const r = new UsTaxRates2025().computeTax({
+    usFilingSingle: false,
+    effectiveExchangeRates: rate1,
+    currentPeriods: usPeriod2025,
+    usOrdinaryIncomeYTD:  100_000,
+    ftcCurrentForeignTax: 4_000,
+  });
+  assert.equal(r.ftc.general.currentTax, 0);
+  assert.equal(r.ftc.passive.currentTax, 4_000);
+  assert.equal(r.ftc.passive.nextPool[2025], 4_000, 'banked as a passive vintage');
+});
+
+test('RS-7: a negative or absent liability stages nothing', () => {
+  assert.equal(stage(baseState(), { tax: -100 }).ftcCurrentForeignTax, 0);
+  assert.equal(stage(baseState(), {}).ftcCurrentForeignTax, 0);
 });
 
 // ─── G4: the deleted pool heals rather than vanishing ────────────────────────
 
-test('RS-6: a saved state carrying the deleted re-sourced pool folds into general', () => {
+test('RS-8: a saved state carrying the deleted re-sourced pool folds into general', () => {
   // Option A is "re-derive" — a simulator has no filed return to preserve. The fold
   // exists only so a state SAVED before G3 does not silently lose real balances.
   const r = new UsTaxRates2025().computeTax({
@@ -144,7 +193,7 @@ test('RS-6: a saved state carrying the deleted re-sourced pool folds into genera
   assert.equal(r.ftc.resourced, undefined, 'no third basket on the result either');
 });
 
-test('RS-7: the fold is idempotent — the settle clears the pool it folded', () => {
+test('RS-9: the fold is idempotent — the settle clears the pool it folded', () => {
   const patches = new UsTaxSettleApplyReducer()._extraStatePatches(
     {}, { taxDetail: { ftc: { nextPoolGeneral: { 2025: 7 }, nextPoolPassive: {} } } });
   // Without this the same vintages would be folded in again at every later settle,
@@ -154,7 +203,7 @@ test('RS-7: the fold is idempotent — the settle clears the pool it folded', ()
 
 // ─── End to end: what actually bounds the credit now ─────────────────────────
 
-test('RS-8: across the reference run the credit never exceeds the tax it offsets', () => {
+test('RS-10: across the reference run the credit never exceeds the tax it offsets', () => {
   ServiceRegistry.resetAll();
   // simEnd must be passed explicitly: the scenario's own default horizon is
   // 2041-01-01, and stepping past a sim's simEnd leaves recurring events unscheduled

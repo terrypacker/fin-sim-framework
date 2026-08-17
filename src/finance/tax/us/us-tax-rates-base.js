@@ -847,11 +847,41 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // into general (the residual §904 category) is the bounded, one-line answer.
     // Apportioning each vintage by its year's general/passive income ratio — option
     // B — buys accuracy no simulator needs, since re-running is free and exact.
+    // Design 52 §4.4 — apportion the staged AU liability across the baskets HERE,
+    // not at the AU settle that staged it. Reg. §1.904-6(a) allocates a foreign tax
+    // to the category of the income it was imposed on, and `generalGross`/`passiveGross`
+    // above are that income measured over the whole US calendar year — the same
+    // figures the limitation itself runs on, so the tax and the room it is tested
+    // against can no longer disagree.
+    //
+    // The AU settle used to do this split on 30 June, reading US-side accumulators
+    // that the US settle resets on 31 December. That gave it a half-year snapshot, and
+    // an empty one defaulted the whole liability into general, where it sat behind an
+    // empty basket until it expired. `AuTaxSettleApplyReducer._extraStatePatches`
+    // carries the measurement.
+    //
+    // A year with no foreign-source income in EITHER basket credits nothing whichever
+    // way this lands (both fractions are zero), so the fallback only decides which pool
+    // banks the vintage for later. It goes to passive: §904(d)(2)(B) passive category
+    // income is interest, dividends, rents, royalties, annuities and capital gains,
+    // which is what a foreign-resident taxpayer with a staged foreign liability and no
+    // current basket income is overwhelmingly holding. General is the residual category
+    // as a matter of statutory structure, but banking a vintage there on a technicality
+    // is what produced the dead pool this replaces.
+    const stagedForeignTax   = Math.max(0, state.ftcCurrentForeignTax ?? 0);
+    const apportionBase      = generalGross + passiveGross;
+    const stagedGeneral      = apportionBase > 0 ? stagedForeignTax * (generalGross / apportionBase) : 0;
+    const stagedPassive      = stagedForeignTax - stagedGeneral;
+
+    // The pre-split `ftcCurrent*` fields are added on top rather than replaced: a state
+    // saved before the split moved carries real balances in them, and several unit
+    // tests drive `computeTax` with a basket figure directly. A run from simStart never
+    // populates them, so on a fresh run these terms are zero.
     const general = basket(generalGross, generalExcluded, generalCapGainAdjustment,
-      (state.ftcCurrentGeneral ?? 0) + (state.ftcCurrentResourced ?? 0),
+      stagedGeneral + (state.ftcCurrentGeneral ?? 0) + (state.ftcCurrentResourced ?? 0),
       _mergeVintagePools(state.ftcPoolGeneral ?? {}, state.ftcPoolResourced ?? {}));
     const passive = basket(passiveGross, 0, passiveCapGainAdjustment,
-      state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
+      stagedPassive + (state.ftcCurrentPassive ?? 0), state.ftcPoolPassive ?? {});
     const hasActivity = general.avail > 0 || passive.avail > 0
       || general.numerator > 0 || passive.numerator > 0;
 

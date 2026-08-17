@@ -210,6 +210,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // reintroduce the partition failure by being untracked.
     this.foreignGeneralCapGainsYTD = 0;
     this.foreignPassiveCapGainsYTD = 0;
+    // Design 52 §4.4 — the AU liability staged for the next US settle, unapportioned.
+    // The US settle splits it across the baskets on full-year basket income, because
+    // the 30 June AU settle cannot see the second half of the US calendar year.
+    this.ftcCurrentForeignTax = 0;
+    // Pre-split per-basket staging. Legacy: nothing writes these now.
     this.ftcCurrentGeneral = 0;
     this.ftcCurrentPassive = 0;
     // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).

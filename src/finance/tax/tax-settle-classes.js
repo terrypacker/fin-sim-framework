@@ -55,6 +55,12 @@ const YTD_FIELDS = {
        'usSourceGeneralUsdYTD', 'usSourcePassiveUsdYTD',
        // design 83 G10 part 2 — treaty-rate-capped subsets of usSourceOrdinaryUsdYTD
        'usSourceDividendsUsdYTD', 'usSourceInterestUsdYTD',
+       // design 52 §4.4 — the AU liability staged for THIS US return, unapportioned.
+       // Resets with the rest: the US settle consumes it, splits it by full-year basket
+       // income, and banks whatever the limitation could not absorb into the vintages.
+       'ftcCurrentForeignTax',
+       // Pre-split staging fields. Nothing writes them any more; they stay in the reset
+       // so a state saved before the split moved is drained rather than double-counted.
        'ftcCurrentGeneral', 'ftcCurrentPassive', 'ftcCurrentResourced',
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
        'neInheritanceTaxYTD',
@@ -469,14 +475,38 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static cc              = 'AU';
   static applyActionType = 'AU_TAX_SETTLE_APPLY';
   static debitActionType = 'AU_TAX_PAYMENT_DEBIT';
-  static description     = 'Resets AU YTD tax fields after settlement; funds the US §904 current-year foreign tax per basket; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
+  static description     = 'Resets AU YTD tax fields after settlement; stages the whole AU liability as US §904 current-year foreign tax; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
 
   /**
-   * Fund the US §904 pools (design 52 §4.4). Apportion the AU liability across the
-   * two baskets by basket income share, convert to USD, and stage it as the
-   * current-year foreign tax the next US settle consumes.
+   * Fund the US §904 credit (design 52 §4.4). Convert the AU liability to USD at the
+   * settlement rate and stage the WHOLE amount for the next US settle to consume.
    *
-   * **Design 83 G3 — nothing is removed before apportioning any more.** This method
+   * **The basket split does not happen here, and must not.** It used to: this method
+   * apportioned the liability across general/passive by
+   * `foreignGeneralIncomeYTD : foreignPassiveIncomeYTD`, defaulting the whole amount to
+   * general when both were zero. Those two accumulators are *US*-side YTD buckets,
+   * reset by the US settle on 31 December — and this reducer runs on 30 June. So the
+   * split was decided on a 1 Jan–30 Jun half-year snapshot of a calendar-year return.
+   *
+   * Whenever that half contained no foreign-source income — the ordinary case for a
+   * portfolio whose realisations fall on a 1 July rebalance and a 31 December
+   * distribution — `denom` was zero and the entire year's AU tax went to the general
+   * basket. The old comment argued that was harmless ("a pool with no income to sit
+   * against is limited to zero credit anyway, so this only decides which pool banks the
+   * vintage"). It is not: the vintage keeps its basket for its whole ten-year life, and
+   * a general vintage sitting behind a permanently empty general basket has a
+   * limitation fraction of zero forever. Measured on a real AU-resident retiree plan,
+   * $8.06M of AU tax was banked in a basket holding no income, while the passive basket
+   * ran $3.5M of unused §904 room in the same run's last decade.
+   *
+   * A calendar-year apportionment cannot be computed in June, because the second half
+   * of the US year has not happened yet. So the split moved to where the full year is
+   * known: `UsTaxRatesBase._computeFtc` divides `ftcCurrentForeignTax` by the same
+   * `generalGross`/`passiveGross` it already computes for the limitation itself. This
+   * reducer keeps the currency conversion, which does belong here — `toUSD` must read
+   * the rate at the AU settlement date, not at the US one.
+   *
+   * **Design 83 G3 — nothing is removed before staging.** This method
    * used to subtract the AU tax on US-SOURCE income and stage it in a third,
    * "re-sourced by treaty" basket of its own. Both halves of that are now gone:
    *
@@ -488,9 +518,10 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    *     other Contracting State"*. Art. 22(4) opens with exactly that clause. The
    *     income is still re-sourced (Art. 27(1)(c)), it just lands in its ordinary
    *     category — the US classifiers now book it into general/passive by character.
-   *   - **So the whole AU liability is creditable**, and the general/passive income
-   *     shares below already include the re-sourced income, which is what makes the
-   *     apportionment land the tax in the same basket as the income that bore it.
+   *   - **So the whole AU liability is creditable**, and the basket income shares the
+   *     US settle apportions it by already include the re-sourced income, which is what
+   *     makes the apportionment land the tax in the same basket as the income that bore
+   *     it.
    *
    * Two baskets partitioning one taxpayer's income also means the §904 fractions
    * cannot sum past 1 — the invariant design 83 G1 asserts. Before G3, the third
@@ -509,9 +540,6 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    */
   _extraStatePatches(state, action) {
     const auCreditable = Math.max(0, action.tax ?? 0);
-    const gen   = Math.max(0, state.foreignGeneralIncomeYTD ?? 0);
-    const pass  = Math.max(0, state.foreignPassiveIncomeYTD ?? 0);
-    const denom = gen + pass;
     // Design 83 G10 — carry this FY's realised AU rate on capital gains forward for
     // the §865(g)(2) test on the next US return. A one-settle lag is not a
     // compromise here, it is the real filing sequence: the AU FY ends 30 June and
@@ -519,14 +547,8 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     // tax on the earlier gains and estimates the later ones. Null (no gains this FY)
     // leaves the previous determination standing rather than reading as 0%.
     const cgtRate = _auCgtEffectiveRate(action);
-    // With no basket income there is nothing to apportion against. Default to
-    // general: it is the residual §904 category, and a pool with no income to sit
-    // against is limited to zero credit anyway, so this only decides which pool
-    // banks the vintage.
-    const generalShare = denom > 0 ? gen / denom : 1;
     return {
-      ftcCurrentGeneral: toUSD(auCreditable * generalShare,       'AUD', state),
-      ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
+      ftcCurrentForeignTax: toUSD(auCreditable, 'AUD', state),
       ...(cgtRate != null ? { auCgtEffectiveRate: cgtRate } : {}),
       ..._auLossPoolPatch(state, action),
     };

@@ -115,6 +115,11 @@ export const US_TAX = {
       usSourceInterestUsdYTD:  0,
       usSourceGeneralUsdYTD:   0,
       usSourcePassiveUsdYTD:   0,
+      // Design 52 §4.4 — the AU liability staged for the next US settle, unapportioned;
+      // the US settle splits it across the baskets on full-year basket income.
+      ftcCurrentForeignTax:    0,
+      // Pre-split per-basket staging. Legacy: nothing writes these now, but a saved
+      // state can carry them and `_computeFtc` still reads them.
       ftcCurrentGeneral:       0,
       ftcCurrentPassive:       0,
       // Design 72 §1 — treaty re-sourced basket (Form 1116 category F).

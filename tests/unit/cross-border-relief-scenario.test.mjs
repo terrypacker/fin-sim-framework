@@ -299,8 +299,32 @@ function runDefaultIntlRetirement() {
 // the dividend is roughly neutral at a 30% marginal rate. Refundability (s67-25) pushes
 // the other way but is far smaller here, since this household's base tax always absorbs
 // the credit. See design 76 §8.2 for the ranked gaps and why they do not cancel.
-const EXPECTED_LIFETIME_TAX = 717_687;
-const EXPECTED_NET_WORTH     = 12_183_627;
+// Design 52 §4.4 — the §904 basket apportionment moved from the AU settle to the US
+// settle, and lifetime tax fell 12.2% (717,687 → 630,228) with net worth up 1.1%.
+//
+// This is the one downward swing this lock-in's own warning is NOT about. The guard
+// exists to catch relief the taxpayer never earned; here the credit taken went from
+// US$159,269 to US$270,591 while the AU tax staged stayed at US$270,591 — the credit
+// now equals the foreign tax exactly and still cannot exceed it. Both pools end the
+// run at zero instead of stranding US$110,431. Nothing new is being credited; the same
+// foreign tax finally reaches the basket that had the limitation room.
+//
+// The mechanism it fixes: the AU settle runs 30 June and split the liability using
+// `foreign{General,Passive}IncomeYTD`, which are US-side accumulators the US settle
+// resets on 31 December — so the split ran on half a calendar year. On this reference
+// plan that put 100% of the AU tax in PASSIVE (US$269,700 of it), while the plan's
+// super withdrawals were generating GENERAL basket room the tax could not reach; the
+// passive basket saturated and US$110,431 sat in the pool until the run ended. On an
+// AU-resident plan whose realisations fall outside the January–June window the same
+// bug points the other way and strands everything in general. Either way the vintage
+// keeps its basket for its whole ten-year life, so a misfiled year never recovers.
+//
+// A sharp downward swing from HERE would still mean over-relief. The two invariants
+// that make this one safe are `_assertFtcInvariants` (running under JOURNAL_STRICT at
+// every settle) and RS-10 in ftc-us-source-resourcing.test.mjs, which asserts across
+// this very run that the credit never exceeds the tax it offsets.
+const EXPECTED_LIFETIME_TAX = 630_228;
+const EXPECTED_NET_WORTH     = 12_320_962;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

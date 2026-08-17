@@ -264,8 +264,12 @@ export class StateSchemaRegistry {
     // U.S. capital loss adjustment. `general` is structurally zero today (see the state).
     this.register('foreignGeneralCapGainsYTD',   ParameterValueType.currency('USD'));
     this.register('foreignPassiveCapGainsYTD',   ParameterValueType.currency('USD'));
-    // Current-year AU foreign tax available to credit this US settle, per basket
-    // (funded at the AU settle §4.4, consumed + banked at the US settle §4.3).
+    // Current-year AU foreign tax available to credit this US settle (funded at the AU
+    // settle §4.4, apportioned across the baskets + consumed + banked at the US settle
+    // §4.3). Unapportioned: the split needs the full US calendar year, which does not
+    // exist at the 30 June AU settle.
+    this.register('ftcCurrentForeignTax',        ParameterValueType.currency('USD'));
+    // Pre-split per-basket staging. Read-only legacy: nothing writes these now.
     this.register('ftcCurrentGeneral',           ParameterValueType.currency('USD'));
     this.register('ftcCurrentPassive',           ParameterValueType.currency('USD'));
     this.register('ftcCurrentResourced',         ParameterValueType.currency('USD'));

@@ -204,7 +204,7 @@ test('draw-down: vintages older than 10 years expire', () => {
 
 // ─── AU→US pool funding (§4.4) ───────────────────────────────────────────────
 
-test('funding: AU settle apportions the AU tax to baskets in USD', () => {
+test('funding: AU settle stages the whole AU liability in USD, unapportioned', () => {
   const out = new AuTaxSettleApplyReducer().reduce(
     { effectiveExchangeRates: rate1, foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 50_000, auSuperTaxYTD: 2_000 },
     { type: 'AU_TAX_SETTLE_APPLY', tax: 10_000 },   // post-FITO AU net liability (AUD)
@@ -213,8 +213,7 @@ test('funding: AU settle apportions the AU tax to baskets in USD', () => {
   // (it left the member's liability), so the reducer must NOT subtract auSuperTaxYTD
   // a second time. It is present in state here precisely to catch that: a residual
   // `− superTax` would produce 8,000 and understate the creditable base.
-  assert.equal(out.ftcCurrentPassive, 10_000);
-  assert.equal(out.ftcCurrentGeneral, 0);
+  assert.equal(out.ftcCurrentForeignTax, 10_000);
 });
 
 test('funding: super fund tax is NOT creditable and never enters the §904 baskets', () => {
@@ -225,17 +224,21 @@ test('funding: super fund tax is NOT creditable and never enters the §904 baske
     { effectiveExchangeRates: rate1, foreignGeneralIncomeYTD: 0, foreignPassiveIncomeYTD: 50_000, auSuperTaxYTD: 9_000 },
     { type: 'AU_TAX_SETTLE_APPLY', tax: 0, fundTax: 9_000 },
   );
-  assert.equal(out.ftcCurrentPassive, 0);
-  assert.equal(out.ftcCurrentGeneral, 0);
+  assert.equal(out.ftcCurrentForeignTax, 0);
 });
 
-test('funding: mixed baskets split by AU-source income share', () => {
+test('funding: the AU settle does NOT split by its own half-year basket snapshot', () => {
+  // Design 52 §4.4 — `foreign{General,Passive}IncomeYTD` are US-side accumulators that
+  // the US settle resets on 31 December, so on 30 June they hold half a calendar year.
+  // Splitting on them banked whole years in a basket that could never credit them; the
+  // apportionment moved to `UsTaxRatesBase._computeFtc`, which sees the full US year.
   const out = new AuTaxSettleApplyReducer().reduce(
     { effectiveExchangeRates: rate1, foreignGeneralIncomeYTD: 25_000, foreignPassiveIncomeYTD: 25_000, auSuperTaxYTD: 0 },
     { type: 'AU_TAX_SETTLE_APPLY', tax: 8_000 },
   );
-  assert.equal(out.ftcCurrentGeneral, 4_000);
-  assert.equal(out.ftcCurrentPassive, 4_000);
+  assert.equal(out.ftcCurrentForeignTax, 8_000);
+  assert.equal(out.ftcCurrentGeneral, undefined, 'the AU settle writes no basket split');
+  assert.equal(out.ftcCurrentPassive, undefined);
 });
 
 // ─── US→AU FITO funding (§4.6) ───────────────────────────────────────────────

@@ -549,6 +549,7 @@
  },
  "foreignGeneralIncomeYTD": 0,
  "foreignPassiveIncomeYTD": 0,
+ "ftcCurrentForeignTax": 0,
  "ftcCurrentGeneral": 0,
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
