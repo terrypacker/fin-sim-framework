@@ -413,17 +413,28 @@ class NiitBaseByComponentDef extends ReportDefinition {
   buildQuery(params, api) {
     const { period, personKeys } = params;
     const periodAst  = api.periodOf(period);
-    // NII = usNetInvestmentIncomeYTD (interest/dividends/coupons/net rents) + capital
-    // gains + collectible gains — the three buckets computeTax sums in step 5b. The
-    // gains live in their own accumulators and are never folded into the NII one, so
-    // drilling on usNetInvestmentIncomeYTD alone would explain only a fraction of the
-    // line and leave the bulk of the base unaccounted for.
+    // NII = usNetInvestmentIncomeYTD (interest/dividends/coupons/net rents) + every
+    // gain bucket computeTax sums into `netGainForNii` in step 5b. The gains live in
+    // their own accumulators and are never folded into the NII one, so drilling on
+    // usNetInvestmentIncomeYTD alone would explain only a fraction of the line and
+    // leave the bulk of the base unaccounted for.
+    //
+    // The list must track `netGainForNii` exactly, or the drill silently under-foots by
+    // whichever bucket it omits. It omitted two: the unrecaptured §1250 slice — a
+    // depreciated property is carved OUT of usCapitalGainsYTD, so a house sale left its
+    // depreciation slice in the line and nowhere in the report — and short-term gain,
+    // which §1411(c)(1)(A)(iii) does not distinguish by character. Both are inert until
+    // a plan produces them, which is why the gap survived: `npm run crossfoot` reports
+    // it as `line != drill` on the NIIT base.
     const conditions = [
       periodAst,
       {
         op: 'in',
         field: 'stateKey',
-        value: ['usNetInvestmentIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD'],
+        value: [
+          'usNetInvestmentIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD',
+          'usUnrecaptured1250GainYTD', 'usShortTermCapitalGainsYTD',
+        ],
       },
       // Exclude the annual settle, whose diff resets each accumulator to 0 (a large
       // negative delta that would cancel the total).

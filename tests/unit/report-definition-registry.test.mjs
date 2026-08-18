@@ -840,6 +840,39 @@ test('niit-base-by-component: sums all three NII accumulators and excludes the s
   assert.strictEqual(Math.round(grandTotal * 100) / 100, 694353.32);
 });
 
+test('niit-base-by-component: the §1250 slice and short-term gain are in the base', async () => {
+  // F4. `netGainForNii` sums FOUR gain buckets; the report listed two of them. The
+  // §1250 slice is the one that bites in practice: a depreciated property's
+  // depreciation gain is carved OUT of usCapitalGainsYTD by the disposal reducer, so
+  // it appeared in the Form 8960 line and in NO report row — `npm run crossfoot`
+  // reads it as `line != drill` on the NIIT base, by exactly the slice.
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('niit-base-by-component');
+
+  const entries = [
+    // A foreign house sale assessed on the US return: the gain splits across two
+    // accumulators and both are §1411 net gain.
+    entry({
+      actionType: 'AU_HOUSE_SALE_TAX',
+      data:       { gain: 500000 },
+      stateDiff:  [
+        { field: 'usCapitalGainsYTD',        before: 0, after: 478311.50, delta: 478311.50 },
+        { field: 'usUnrecaptured1250GainYTD', before: 0, after: 60154.84, delta:  60154.84 },
+      ],
+    }),
+    // §1411(c)(1)(A)(iii) does not distinguish character — short-term gain counts too.
+    entry({
+      actionType: 'STOCK_WITHDRAWAL_TAX',
+      data:       { gain: 9000 },
+      stateDiff:  [{ field: 'usShortTermCapitalGainsYTD', before: 0, after: 9000, delta: 9000 }],
+    }),
+  ];
+
+  const { grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  assert.strictEqual(Math.round(grandTotal * 100) / 100, 547466.34,
+    'every bucket computeTax sums into netGainForNii must be reachable from the drill');
+});
+
 test('niit-base-by-component: personKeys facet filters the base', async () => {
   const reg = new ReportDefinitionRegistry();
   const def = reg.get('niit-base-by-component');

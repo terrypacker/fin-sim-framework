@@ -567,6 +567,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       investmentInterest: invInt,
       brackets: this._bracketBreakdown({
         filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
+        u1250Stacked, u1250Base, unrecap1250Taxed, unrecap1250Tax,
         ltcgStacked, ltcgBase, collectibles, collectiblesTax,
         niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
         usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
@@ -679,6 +680,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
    */
   _bracketBreakdown({
     filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
+    u1250Stacked, u1250Base, unrecap1250Taxed, unrecap1250Tax,
     ltcgStacked, ltcgBase, collectibles, collectiblesTax,
     niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
     usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
@@ -701,6 +703,29 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // bands are always differenced — they show which LTCG band the gain reached
       // given the ordinary income sitting underneath it.
       ltcg: subtractBands(ltcgStacked.bands, ltcgBase.bands),
+      // Unrecaptured §1250 gain (§1(h)(1)(D)) — the one rate group on this return whose
+      // tax is the LESSER of two computations, so a single band set cannot describe it.
+      // Which limb won is reported rather than left to be inferred:
+      //
+      //   ceilingApplied false → the ordinary bracket differential set the tax, and
+      //     `bands` are that differential; Σ band.tax equals the line exactly.
+      //   ceilingApplied true  → the 25% ceiling bit, and the line is `gain × 0.25`;
+      //     the differential bands are still carried, because "what the brackets would
+      //     have charged" is the only way to see BY HOW MUCH the ceiling helped.
+      //
+      // The document module picks one presentation from this so the worksheet's
+      // "Σ bands = line" invariant holds in both cases — attaching the differential
+      // unconditionally would fail it in exactly the years the ceiling matters.
+      unrecap1250: unrecap1250Taxed > 0
+        ? {
+            gain:           unrecap1250Taxed,
+            tax:            unrecap1250Tax,
+            ceilingRate:    UNRECAPTURED_1250_MAX_RATE,
+            ceilingApplied: (u1250Stacked.tax - u1250Base.tax)
+                            > unrecap1250Taxed * UNRECAPTURED_1250_MAX_RATE,
+            bands:          subtractBands(u1250Stacked.bands, u1250Base.bands),
+          }
+        : null,
       collectibles: flatRateBand(COLLECTIBLES_RATE, collectibles, collectiblesTax),
       niit: {
         ...flatRateBand(this._niitRate, niitBase, niitTax),

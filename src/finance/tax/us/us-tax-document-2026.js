@@ -83,6 +83,33 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             // Schedule D's "Transfer to Form 1040, Line 7" is the sum of the two.
             { label: 'Collectible Gains (28% rate, Sch. D line 18)',
                                                             amount:  inputs.collectibleGains },
+            // The depreciation slice of a real-property gain (§1(h)(1)(D)). Named for
+            // where it ties, like the collectibles line above it: Schedule D restates it
+            // on line 19 for the Schedule D Tax Worksheet, and it does NOT add to the
+            // capital-gain line — the two accumulators partition the taxable gain. The
+            // disposal reducers carve the slice OUT of `gain` before booking it, so the
+            // line above already excludes it and the two must be added, never netted.
+            //
+            // Emitted only when there is one, following the accumulator's own precedent:
+            // a household that never depreciated a property has no slice, and a permanent
+            // zero row reads as an assertion that the carve-out was computed.
+            ...(taxDetail.unrecapturedSection1250Gain > 0
+              ? [
+                  { label: 'Unrecaptured \u00a71250 Gain (25% rate, Sch. D line 19)',
+                    amount: taxDetail.unrecapturedSection1250Gain },
+                  // §1(h)(1)(D)(ii): a standard deduction larger than ordinary income
+                  // is absorbed by THIS layer first, before collectibles and before the
+                  // 0/15/20 layer. Without the row the tax line's bands span less than
+                  // the gain above them and nothing on the return says why — and the
+                  // §1250 layer is the only place the reader can ever see this shelter,
+                  // since it is exhausted here before it reaches the other two.
+                  ...(br.unrecap1250 && br.unrecap1250.gain < taxDetail.unrecapturedSection1250Gain
+                    ? [{ label:  '  …less unused standard deduction absorbed (\u00a71(h)(1)(D)(ii))',
+                         amount: -(taxDetail.unrecapturedSection1250Gain - br.unrecap1250.gain),
+                         sub:    true }]
+                    : []),
+                ]
+              : []),
           ],
         },
         {
@@ -90,6 +117,25 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
           lineItems: [
             { label: 'Tax on Ordinary Income',      amount: taxDetail.ordinaryTax,     bands: br.ordinary },
             { label: 'Long-Term Capital Gains Tax', amount: taxDetail.capitalGainsTax, bands: br.ltcg },
+            // §1(h)(1)(D). Inside `grossTax` since design 83 G7 but never listed, so on a
+            // return with a depreciated property the visible lines did not sum to the
+            // stated total — the same defect design 71 §2.2 found for SECA, and what
+            // `export:tax --check` catches as a Tax Computation footing violation.
+            //
+            // The tax is the LESSER of the ordinary bracket differential and 25% of the
+            // slice, so the supporting detail is whichever limb actually set it: the
+            // differenced bands, or a flat 25% row. See `_bracketBreakdown`.
+            ...(taxDetail.unrecapturedSection1250Tax > 0
+              ? [{
+                  label:  'Unrecaptured \u00a71250 Gain Tax (25% max)',
+                  amount: taxDetail.unrecapturedSection1250Tax,
+                  ...(br.unrecap1250?.ceilingApplied
+                    ? { flat: { rate:   br.unrecap1250.ceilingRate,
+                                income: br.unrecap1250.gain,
+                                tax:    br.unrecap1250.tax } }
+                    : { bands: br.unrecap1250?.bands ?? [] }),
+                }]
+              : []),
             { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax, flat: br.collectibles },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
             // The drill hangs off the NII sub-row, NOT the tax line (design 73
@@ -164,7 +210,10 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
       summary: {
         grossIncome:   inputs.grossOrdinaryIncome
           + Math.max(0, inputs.capitalGains)
-          + Math.max(0, inputs.collectibleGains),
+          + Math.max(0, inputs.collectibleGains)
+          // The §1250 slice is income the return taxes and the other two lines do not
+          // contain — it is carved out of `capitalGains`, not folded into it.
+          + Math.max(0, taxDetail.unrecapturedSection1250Gain ?? 0),
         grossTax:      taxDetail.grossTax,
         credits:       taxDetail.credits,
         netLiability:  taxDetail.netLiability,
