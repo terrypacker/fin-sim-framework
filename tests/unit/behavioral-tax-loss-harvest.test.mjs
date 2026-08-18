@@ -181,6 +181,62 @@ describe('StockHarvestApplyReducer', () => {
     assert.strictEqual(rebuilt.costBasis,   2000);
   });
 
+
+  // ── F3 residue: the harvest's own clock ────────────────────────────────────────
+  //
+  // `asOfMs` did two jobs in this reducer at once — the Division 115 ≥12-month gate and
+  // the §1222 short/long split — and it came from
+  // `currentPeriods.AU.startMs`. A harvest is the one disposal whose date the
+  // taxpayer deliberately CHOOSES, and reading it off the financial-year start
+  // backdated every one of them by up to a full year. Design 83 G7 fixed the same idiom
+  // on four disposal reducers; this one and the rebalancer were the residue.
+
+  test('TLH-13: the 12-month gate runs to the harvest date, not the AU period start', () => {
+    const sold  = holding({ id: 'h1', mv: 3000, basis: 1000 });   // gain of 2000
+    sold.purchaseDate = new Date(Date.UTC(2030, 8, 1));           // bought 1 Sep 2030
+    const sub   = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_AU' });
+    const state = makeState('auStockAccount', account({ holdings: [sold, sub] }), {
+      // 1 January 2032: the AU financial year began the preceding 1 July.
+      currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2031, 6, 1) } },
+    });
+
+    const result = new StockHarvestApplyReducer().reduce(state, {
+      type: 'STOCK_HARVEST_APPLY',
+      stateKey: 'auStockAccount', sellAmount: 3000,
+      sourceHoldingId: 'h1', substituteHoldingId: 'h2',
+      purpose: 'GAIN', residency: 'AU',
+    }, new Date(Date.UTC(2032, 0, 1)));
+
+    const tax = result.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+    assert.ok(tax, 'STOCK_WITHDRAWAL_TAX must be chained');
+    assert.strictEqual(tax.auGain, 2000);
+    assert.strictEqual(tax.auDiscountableGain, 2000,
+      'sixteen months held is discountable; the 1 July clock read ten and gave 0');
+    assert.strictEqual(tax.usLongTermGain, 2000, 'and §1222 long-term on the same facts');
+  });
+
+  test('TLH-14: a lot genuinely inside twelve months is still not discountable', () => {
+    // The control TLH-13 needs — moving to the right date must not simply make
+    // everything eligible.
+    const sold  = holding({ id: 'h1', mv: 3000, basis: 1000 });
+    sold.purchaseDate = new Date(Date.UTC(2031, 8, 1));           // bought 1 Sep 2031
+    const sub   = holding({ id: 'h2', mv: 2000, basis: 2000, rateKey: 'EQUITY_AU' });
+    const state = makeState('auStockAccount', account({ holdings: [sold, sub] }), {
+      currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2031, 6, 1) } },
+    });
+
+    const result = new StockHarvestApplyReducer().reduce(state, {
+      type: 'STOCK_HARVEST_APPLY',
+      stateKey: 'auStockAccount', sellAmount: 3000,
+      sourceHoldingId: 'h1', substituteHoldingId: 'h2',
+      purpose: 'GAIN', residency: 'AU',
+    }, new Date(Date.UTC(2032, 0, 1)));
+
+    const tax = result.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+    assert.strictEqual(tax.auDiscountableGain, 0, 'four months is short of Division 115');
+    assert.strictEqual(tax.usShortTermGain, 2000, 'and short-term under §1222(1)');
+  });
+
 });
 
 // ─── TaxLossHarvestHandler ────────────────────────────────────────────────────

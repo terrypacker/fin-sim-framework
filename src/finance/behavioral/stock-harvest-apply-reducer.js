@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { singleAssetTermFields } from '../holdings/holding-period.js';
+import { toMs } from '../account-rules/main-residence.js';
 
 /**
  * StockHarvestApplyReducer — dedicated sell+rebuy path for tax-loss and tax-gain
@@ -43,7 +44,7 @@ export class StockHarvestApplyReducer extends Reducer {
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { stateKey, sellAmount, sourceHoldingId, substituteHoldingId, purpose, residency } = action;
     const account = state[stateKey];
     if (!account) return state;
@@ -69,7 +70,12 @@ export class StockHarvestApplyReducer extends Reducer {
     const auBasisShare = +(((source.costBaseByCountry?.AU ?? source.costBasis) ?? 0) * basisFrac).toFixed(2);
     const auGainLoss   = +(consume - auBasisShare).toFixed(2);
     const purchasedMs  = source.purchaseDate != null ? new Date(source.purchaseDate).getTime() : null;
-    const asOfMs       = state.currentPeriods?.AU?.startMs ?? null;
+    // Design 83 G7 (F3) — the CGT event date, not the start of the AU financial year
+    // containing it. This one value does three jobs below: the ≥12-month Div 115 gate,
+    // the §1222 short/long split, and the `saleMs` stamped on the emitted payload. The
+    // period start understated the hold by up to a full year on all three at once, and
+    // a harvest is precisely the disposal whose date the taxpayer CHOSE.
+    const asOfMs       = toMs(date) ?? state.currentPeriods?.AU?.startMs ?? null;
     const held12mo     = purchasedMs != null && asOfMs != null
       ? (asOfMs - purchasedMs) >= 365 * 24 * 60 * 60 * 1000
       : false;

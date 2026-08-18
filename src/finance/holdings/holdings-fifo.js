@@ -322,10 +322,17 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     collectibleBasisByCountry[idxCountry]        = +collectibleBasisByCountry[idxCountry].toFixed(2);
     collectibleIndexedBasisByCountry[idxCountry] = +collectibleIndexedBasisByCountry[idxCountry].toFixed(2);
   }
-  for (const c of termCountries) {
-    for (const term of ['short', 'long']) {
-      realizedGainByCountryAndTerm[c][term]    = +realizedGainByCountryAndTerm[c][term].toFixed(2);
-      collectibleGainByCountryAndTerm[c][term] = +collectibleGainByCountryAndTerm[c][term].toFixed(2);
+  // `termsOn`, not `termCountries` — the two are not the same test. A caller that names
+  // countries but has no as-of date (`terms: { countries: [...], asOfMs: null }`) leaves
+  // both tallies as `{}`, and rounding a named country's bucket then dereferenced
+  // `undefined.short`. Unreachable only while every caller passed a non-null date, which
+  // in two reducers was a `Date.now()` wall clock standing in for the missing one.
+  if (termsOn) {
+    for (const c of termCountries) {
+      for (const term of ['short', 'long']) {
+        realizedGainByCountryAndTerm[c][term]    = +realizedGainByCountryAndTerm[c][term].toFixed(2);
+        collectibleGainByCountryAndTerm[c][term] = +collectibleGainByCountryAndTerm[c][term].toFixed(2);
+      }
     }
   }
   return {

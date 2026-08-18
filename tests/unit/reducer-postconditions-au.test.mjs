@@ -179,6 +179,53 @@ test('AuStockWithdrawal: FIFO-consume holdings, credit AU cash by salePrice, syn
   assert.equal(next.auSavingsAccount.balance, 15000);
 });
 
+// ─── F3 residue: the AU event path's disposal clock ───────────────────────────
+//
+// The mirror of the US sibling in reducer-postconditions-us-brokerage.test.mjs. This
+// reducer took `asOfMs` from `currentPeriods.AU.startMs`, so an AU disposal in January
+// had its Division 115 ≥12-month gate and its §1222 long/short split measured to the
+// preceding 1 July — the whole first half of the financial year discarded. Written out
+// rather than left to the US test's symmetry: the two are one-line siblings, and this
+// codebase has been bitten before by an emitter that looked identical and was not
+// (design/inconsistencies §4.11).
+
+test('F3: the AU event-path 12-month test ends at the sale, not at the AU period start', () => {
+  const state = {
+    auSavingsAccount: acct('auSavingsAccount', 5_000),
+    auStockAccount:   makeAccount({ stateKey: 'auStockAccount', currency: 'AUD',
+      holdings: [{ id: 'lot-1', marketValue: 150_000, costBasis: 100_000,
+                   purchaseDate: new Date(Date.UTC(2030, 8, 1)) }] }),   // bought 1 Sep 2030
+    currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2031, 6, 1) } },
+  };
+  const next = new AuStockWithdrawalApplyReducer(makeServices()).reduce(state,
+    { type: 'AU_STOCK_WITHDRAWAL_APPLY', salePrice: 30_000, residency: 'AU' },
+    new Date(Date.UTC(2032, 0, 1)));                                     // sold 1 Jan 2032
+
+  const tax = (next.next ?? []).find(a => a.type === 'AU_STOCK_WITHDRAWAL_TAX');
+  assert.ok(tax, 'the sale emits an AU_STOCK_WITHDRAWAL_TAX');
+  // 30,000 of a 150,000 lot ⇒ basis share 100,000 × 1/5 = 20,000, gain 10,000.
+  assert.equal(tax.auGain, 10_000);
+  assert.equal(tax.auDiscountableGain, 10_000, 'sixteen months qualifies under Division 115');
+  assert.equal(tax.usLongTermGain, 10_000, 'and is long-term under §1222(3)');
+});
+
+test('F3 control: an AU lot genuinely inside twelve months stays short-term', () => {
+  const state = {
+    auSavingsAccount: acct('auSavingsAccount', 5_000),
+    auStockAccount:   makeAccount({ stateKey: 'auStockAccount', currency: 'AUD',
+      holdings: [{ id: 'lot-1', marketValue: 150_000, costBasis: 100_000,
+                   purchaseDate: new Date(Date.UTC(2031, 8, 1)) }] }),   // bought 1 Sep 2031
+    currentPeriods: { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2031, 6, 1) } },
+  };
+  const next = new AuStockWithdrawalApplyReducer(makeServices()).reduce(state,
+    { type: 'AU_STOCK_WITHDRAWAL_APPLY', salePrice: 30_000, residency: 'AU' },
+    new Date(Date.UTC(2032, 0, 1)));
+
+  const tax = (next.next ?? []).find(a => a.type === 'AU_STOCK_WITHDRAWAL_TAX');
+  assert.equal(tax.auDiscountableGain, 0, 'four months is short of Division 115');
+  assert.equal(tax.usShortTermGain, 10_000, 'and short-term under §1222(1)');
+});
+
 // ─── AU income + real property ────────────────────────────────────────────────
 
 test('AuSeIncome: credits AU cash pool, keeps §4.4 on cash (I3)', () => {

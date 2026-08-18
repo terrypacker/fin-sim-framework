@@ -150,3 +150,58 @@ test('CollectibleValueChange: scalar value += change (pure, I1); missing entry i
   const missing = r.reduce({ collectibleAccount: { value: 1 } }, { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', stateKey: 'nope', change: 5 });
   assert.equal(missing.collectibleAccount.value, 1, 'I7: unknown key leaves state unchanged');
 });
+
+// ─── F3 residue: the event path's disposal clock ──────────────────────────────
+//
+// `asOfMs` came from `currentPeriods.AU.startMs`, and it ends two day counts that decide
+// money: Division 115's inclusive ≥12-month discount test and §1222's exclusive >1-year
+// long/short split. On the AU financial year that put every January disposal's clock on
+// the preceding 1 July — up to a full year of hold thrown away. Design 83 G7 fixed the
+// four house/collectible/company reducers; these two brokerage ones were the residue,
+// and they carried a `Date.now()` fallback besides, which is a wall clock inside a
+// reducer the rest of the model guarantees is bit-deterministic.
+
+/** One EQUITY lot bought `purchasedUtc`, in a taxable US brokerage account. */
+function lotAcct(purchasedUtc, { mv = 150_000, basis = 100_000 } = {}) {
+  return makeAccount({
+    stateKey: 'usStockAccount',
+    holdings: [{ id: 'lot-1', marketValue: mv, costBasis: basis,
+                 purchaseDate: new Date(purchasedUtc) }],
+  });
+}
+
+/** Sell `salePrice` on 1 Jan 2032 with the AU financial year six months underway. */
+function sellAcrossPeriod(state, salePrice = 30_000) {
+  const next = new StockWithdrawalApplyReducer(makeServices()).reduce(state,
+    { type: 'STOCK_WITHDRAWAL_APPLY', salePrice, residency: 'AU' },
+    new Date(Date.UTC(2032, 0, 1)));
+  return (next.next ?? []).find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+}
+
+const acrossPeriodState = (purchasedUtc) => ({
+  usSavingsAccount: usCashAcct(5_000),
+  usStockAccount:   lotAcct(purchasedUtc),
+  currentPeriods:   { US: { startMs: Date.UTC(2032, 0, 1) }, AU: { startMs: Date.UTC(2031, 6, 1) } },
+});
+
+test('F3: the event-path 12-month test ends at the sale, not at the AU period start', () => {
+  // Bought 1 Sep 2030, sold 1 Jan 2032 — sixteen months. Measured to 1 Jul 2031 it is
+  // ten, and both the AU discount and the US long-term rate were lost.
+  const tax = sellAcrossPeriod(acrossPeriodState(Date.UTC(2030, 8, 1)));
+  assert.ok(tax, 'the sale emits a STOCK_WITHDRAWAL_TAX');
+  // 30,000 of a 150,000 lot ⇒ basis share 100,000 × 1/5 = 20,000, gain 10,000.
+  assert.equal(tax.auGain, 10_000);
+  assert.equal(tax.auDiscountableGain, 10_000, 'sixteen months qualifies under Division 115');
+  assert.equal(tax.usLongTermGain, 10_000, 'and is long-term under §1222(3)');
+  assert.equal(tax.usShortTermGain, 0);
+});
+
+test('F3 control: a lot genuinely inside twelve months stays short-term', () => {
+  // Bought 1 Sep 2031, sold 1 Jan 2032 — four months on the correct clock and on the
+  // wrong one. Reading the true date must not simply make everything eligible.
+  const tax = sellAcrossPeriod(acrossPeriodState(Date.UTC(2031, 8, 1)));
+  assert.equal(tax.auGain, 10_000);
+  assert.equal(tax.auDiscountableGain, 0, 'four months is short of Division 115');
+  assert.equal(tax.usShortTermGain, 10_000, 'and short-term under §1222(1)');
+  assert.equal(tax.usLongTermGain, 0);
+});

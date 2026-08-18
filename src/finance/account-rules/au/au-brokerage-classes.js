@@ -16,6 +16,7 @@ import { disposalTermFields } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { section988ForBondPrincipal } from '../bond-currency-basis.js';
+import { toMs } from '../main-residence.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -213,7 +214,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX', 'SECTION_988_GAIN'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, residency } = action;
     // Per-account (design 55 §7 / 76 Gap C) — see the dividend reducers above.
     const key = action.stateKey ?? 'auStockAccount';
@@ -226,7 +227,13 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     // Indexation reads the dedicated ATO CPI series (design 57 Part 2, Item A),
     // falling back to inflationAccumulator (and 1) for old saves.
     const auLevel   = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
-    const asOfMs    = state.currentPeriods?.AU?.startMs ?? Date.now();
+    // Design 83 G7 (F3) — the DISPOSAL date, not the start of the financial year the
+    // disposal falls in. See the US sibling reducer for why: this same `asOfMs` ends
+    // both Div 115's ≥12-month test and §1222's >1-year split, and the period start
+    // understated the hold by up to a full year. Fallback only for a replayed action
+    // dispatched without a date; the old `Date.now()` fallback is gone because a wall
+    // clock in a reducer breaks the sim's bit-determinism.
+    const asOfMs    = toMs(date) ?? state.currentPeriods?.AU?.startMs ?? null;
     // Allocation-aware liquidation (design 65): shares the engine draw's selection
     // policy. Null (default FIFO/FIFO) ⇒ byte-identical to the prior FIFO.
     const selection = withRebalanceCoupling(resolveDrawdownSelection({

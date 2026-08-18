@@ -18,6 +18,7 @@ import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { section988ForBondPrincipal } from '../bond-currency-basis.js';
+import { toMs } from '../main-residence.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -251,7 +252,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { salePrice, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
     const sa  = state[key];
@@ -267,7 +268,15 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // falling back to inflationAccumulator (and 1) for old saves. The stamp
     // (residency step-up) reads the same accumulator so the ratio is consistent.
     const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
-    const asOfMs  = state.currentPeriods?.AU?.startMs ?? Date.now();
+    // Design 83 G7 (F3) — the as-of date is the DISPOSAL date. It ends two day counts
+    // that decide money: Div 115's inclusive ≥12-month discount test and §1222's
+    // exclusive >1-year long/short split. Taking it from `currentPeriods.AU.startMs`
+    // measured every sale to the preceding 1 July, understating the hold by up to a
+    // full financial year and denying the discount on a lot that qualified. The
+    // period start survives only as a fallback for a replayed action dispatched
+    // without a date; `Date.now()` never was one — a wall clock in a reducer breaks
+    // the sim's bit-determinism, so it is gone.
+    const asOfMs  = toMs(date) ?? state.currentPeriods?.AU?.startMs ?? null;
     // Allocation-aware liquidation (design 65): the event path shares the same
     // selection policy as the engine draw, so both realize identical tax for the
     // same account + policy. Null (default FIFO/FIFO) ⇒ byte-identical to the prior FIFO.

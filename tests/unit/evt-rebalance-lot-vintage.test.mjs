@@ -432,3 +432,103 @@ test('RLV-13: compaction blends acquisitionPriceLevel so the indexed AU basis is
     'the merged lot indexes to exactly the same AU cost base');
   assert.equal(after.realizedBasis, before.realizedBasis, 'un-indexed basis unchanged too');
 });
+
+// ── 5. F3 residue — the rebalance clock is the EVENT date, on both legs ──────────
+//
+// The four reducers design 83 G7 fixed were not the whole of the "period start standing
+// in for the disposal date" idiom. It also lived here, in the rebalancer, twice and in
+// OPPOSITE directions: the sell leg's Division 115 / §1222 day counts ran to
+// `currentPeriods.AU.startMs`, and the buy leg stamped its new lots with
+// `currentPeriods[country].startMs`. A rebalance fires on 1 January, so on the AU
+// financial year those are both the preceding 1 July — the sell leg understated every
+// hold by six months and denied the discount, while the buy leg started the next
+// discount clock six months before the taxpayer owned anything.
+//
+// The `rebalance()` helper above is exactly why this survived RLV-1..13: it sets both
+// period starts to `atMs`, so the wrong clock and the right one read the same. These
+// use a helper that pulls them apart.
+
+/** As `rebalance()`, but the AU period start is the real 1 July, not the event date. */
+function rebalanceAcrossPeriod(acct, target, { eventMs, auPeriodStartMs, residency = 'AU' } = {}) {
+  const state = {
+    activeRegimes: [], regimeActions: {},
+    people: { p1: { residency } },
+    // The shape a live AU-resident run actually has on 1 January: the US period started
+    // today, the AU financial year started six months ago.
+    currentPeriods: { US: { startMs: eventMs }, AU: { startMs: auPeriodStartMs } },
+    [acct.stateKey]: acct,
+  };
+  const reducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: acct.stateKey, role: acct.role }],
+    targetAllocation: target,
+    driftBandTaxable: 0.10, driftBandSheltered: 0.02,
+  });
+  const actions = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE' }).next ?? [];
+  let applied = state;
+  let taxes   = [];
+  for (const a of actions) {
+    applied = APPLY.reduce(applied, a, new Date(eventMs));
+    taxes   = [...taxes, ...(applied.next ?? [])];
+  }
+  return { acct: applied[acct.stateKey], taxes, fired: actions.length > 0 };
+}
+
+/** A lot bought 1 Sep 2030 alongside a long-seasoned bond sleeve. */
+const acrossPeriodAccount = () => account([
+  { id: 'h-EQUITY', allocation: ALLOCATION.EQUITY, marketValue: 150_000, costBasis: 100_000,
+    rateKey: RATE_KEYS.EQUITY_AU, purchaseDate: new Date(Date.UTC(2030, 8, 1)),
+    costBaseByCountry: null, acquisitionDateByCountry: null },
+  { id: 'h-BOND',   allocation: ALLOCATION.BOND,   marketValue: 50_000, costBasis: 50_000,
+    rateKey: RATE_KEYS.FIXED_INCOME_AU, purchaseDate: new Date(Date.UTC(2015, 0, 1)),
+    costBaseByCountry: null, acquisitionDateByCountry: null },
+], ACCOUNT_ROLES.AU_STOCK);
+
+test('RLV-14: the sell leg\'s 12-month test ends at the rebalance, not at 1 July', () => {
+  // Bought 1 Sep 2030, sold 1 Jan 2032 — sixteen months, comfortably past Division 115's
+  // inclusive twelve. Measured to the AU financial year's 1 Jul 2031 start it is ten,
+  // and the discount vanished.
+  const sold = rebalanceAcrossPeriod(acrossPeriodAccount(), { EQUITY: 0.4, BOND: 0.6 }, {
+    eventMs:         Date.UTC(2032, 0, 1),
+    auPeriodStartMs: Date.UTC(2031, 6, 1),
+  });
+  assert.ok(sold.fired, 'a 35-point drift breaches the taxable band');
+
+  const tax = sold.taxes.find(t => t.type === 'AU_STOCK_WITHDRAWAL_TAX'
+                                && t.description === 'rebalance');
+  assert.ok(tax, 'the equity trim emits an AU CGT action');
+  // 70,000 of a 150,000 lot ⇒ basis share 100,000 × 7/15 = 46,666.67, gain 23,333.33.
+  assert.equal(tax.auGain, 23_333.33);
+  assert.equal(tax.auDiscountableGain, 23_333.33,
+    'sixteen months held is discountable; the 1 July clock read ten and gave 0');
+});
+
+test('RLV-15: a lot genuinely inside twelve months is still NOT discountable', () => {
+  // The control RLV-14 needs. Moving the sale date to the right answer must not simply
+  // make everything eligible — a lot bought 1 Sep 2030 and sold 1 Mar 2031 is six months
+  // old on BOTH clocks, and stays ineligible.
+  const sold = rebalanceAcrossPeriod(acrossPeriodAccount(), { EQUITY: 0.4, BOND: 0.6 }, {
+    eventMs:         Date.UTC(2031, 2, 1),
+    auPeriodStartMs: Date.UTC(2030, 6, 1),
+  });
+  const tax = sold.taxes.find(t => t.type === 'AU_STOCK_WITHDRAWAL_TAX'
+                                && t.description === 'rebalance');
+  assert.ok(tax);
+  assert.equal(tax.auGain, 23_333.33);
+  assert.equal(tax.auDiscountableGain, 0, 'six months is short of Division 115');
+});
+
+test('RLV-16: the buy leg stamps the rebalance date, not the AU financial-year start', () => {
+  // The same error running the other way. `purchaseMs` came from
+  // `currentPeriods[country].startMs`, and this account's country is AU — so a lot bought
+  // on 1 January 2032 was recorded as acquired on 1 July 2031, aging six months for free
+  // and reaching Division 115 half a year early. RLV-3 pins this date too, but only where
+  // the period start and the event date are the same instant.
+  const { acct } = rebalanceAcrossPeriod(acrossPeriodAccount(), { EQUITY: 0.4, BOND: 0.6 }, {
+    eventMs:         Date.UTC(2032, 0, 1),
+    auPeriodStartMs: Date.UTC(2031, 6, 1),
+  });
+  const fresh = lotsOf(acct, ALLOCATION.BOND).find(h => h.id !== 'h-BOND');
+  assert.ok(fresh, 'the bond buy landed in its own lot');
+  assert.equal(fresh.purchaseDate.getTime(), Date.UTC(2032, 0, 1),
+    'stamped with the rebalance date, not the preceding 1 July');
+});

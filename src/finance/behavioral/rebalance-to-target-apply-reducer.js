@@ -17,6 +17,7 @@ import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
 import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
+import { toMs } from '../account-rules/main-residence.js';
 
 /**
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
@@ -113,16 +114,25 @@ export class RebalanceToTargetApplyReducer extends Reducer {
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { stateKey, role, taxable, country, legs } = action;
     const account = state[stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
     const residency  = _primaryResidency(state);
     const auLevel    = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
-    const auAsOfMs   = state.currentPeriods?.AU?.startMs ?? Date.now();
-    const purchaseMs = state.currentPeriods?.[country]?.startMs
-                    ?? state.currentPeriods?.US?.startMs ?? Date.now();
+    // Design 83 G7 (F3) — the rebalance date, on BOTH clocks, and the two were wrong in
+    // opposite directions. A rebalance runs on 1 January, so `currentPeriods.AU.startMs`
+    // put every sell leg's ≥12-month Div 115 test and §1222 split six months EARLY —
+    // systematically understating the hold and denying the discount — while the buy
+    // legs stamped their new lots as acquired the preceding 1 July, six months early on
+    // a clock that runs the other way, starting the next discount period before the
+    // taxpayer owned anything. The event date settles both. `Date.now()` is gone: a
+    // wall clock in a reducer breaks the sim's bit-determinism.
+    const eventMs    = toMs(date);
+    const auAsOfMs   = eventMs ?? state.currentPeriods?.AU?.startMs ?? null;
+    const purchaseMs = eventMs ?? state.currentPeriods?.[country]?.startMs
+                    ?? state.currentPeriods?.US?.startMs ?? null;
 
     let holdings = [...account.holdings];
     const taxActions = [];
