@@ -36,6 +36,8 @@ import {
   WORKSHEET_COLUMNS,
 } from '../../src/finance/tax/tax-worksheet-export.js';
 import { JournalReportingService } from '../../src/finance/journal-reporting-service.js';
+import { UsTaxDocument2026 }       from '../../src/finance/tax/us/us-tax-document-2026.js';
+import { UsTaxRates2025 }          from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { ServiceRegistry }         from '../../src/services/service-registry.js';
 import { IntlRetirementScenario }  from '../../src/scenarios/intl-retirement-scenario.js';
 
@@ -370,6 +372,76 @@ test('TWE-19: SUBLINE rows are excluded from the footing sums', () => {
 test('TWE-20: verification of an empty row set is a no-op, not a failure', () => {
   assert.deepEqual(verifyWorksheetRows([]),        { failures: [], reconciled: 0, years: 0 });
   assert.deepEqual(verifyWorksheetRows(undefined), { failures: [], reconciled: 0, years: 0 });
+});
+
+// ─── The cross-form invariant (F4) ────────────────────────────────────────────
+//
+// Every other check in the verifier compares a form against itself, which is why
+// Schedule D could report a fraction of the return's own capital gain and every
+// footing still passed. It did, three separate ways at once: foreign-situated
+// disposals were absent from the register, gold sold through two of the four
+// emitters stamped no `proceeds` so the register skipped it, and short-term
+// disposals reached the schedule while the 1040 face named no line for them.
+
+/**
+ * A 1040 + Schedule D pair covering all four rate groups, as worksheet rows.
+ *
+ * Built from documents rather than from a run: the reference scenario's disposals are
+ * mostly gainless, and a fixture whose Schedule D is empty would let both tests below
+ * pass without ever exercising the tie.
+ */
+function fourRateGroupFiling() {
+  const detail = new UsTaxRates2025().computeTax({
+    usOrdinaryIncomeYTD:        90_000,
+    usCapitalGainsYTD:         120_000,
+    usCollectibleGainsYTD:       8_000,
+    usUnrecaptured1250GainYTD:  20_000,
+    usShortTermCapitalGainsYTD: 11_000,
+  });
+  const saleRecords = [
+    { description: 'Brokerage', dateAcquired: 'Various', dateSold: new Date(Date.UTC(2025, 5, 1)),
+      proceeds: 400_000, costBasis: 249_000, gain: 151_000, depreciationGain: 20_000,
+      shortTermGain: 11_000, collectible: false, adjustment: 0, code: '' },
+    { description: 'Collectible', dateAcquired: 'Various', dateSold: new Date(Date.UTC(2025, 6, 1)),
+      proceeds: 30_000, costBasis: 22_000, gain: 8_000, depreciationGain: 0,
+      shortTermGain: 0, collectible: true, adjustment: 0, code: 'C' },
+  ];
+  return worksheetRowsFromDocuments(new UsTaxDocument2026().generate(detail, 2025, saleRecords));
+}
+
+test('TWE-41: Schedule D transfers exactly what the 1040 states as capital gain', () => {
+  const rows = fourRateGroupFiling();
+  assert.ok(rows.some(r => r.form === 'Schedule D' && r.rowType === 'LINE'),
+    'fixture precondition: a Schedule D exists to compare against');
+  // All four groups are live, so the tie is checked across every one of them.
+  for (const label of ['Long-Term Capital Gains (Sch. D)',
+                       'Collectible Gains (28% rate, Sch. D line 18)',
+                       'Unrecaptured \u00a71250 Gain (25% rate, Sch. D line 19)',
+                       'Short-Term Capital Gain (taxed at ordinary rates, \u00a71(h))']) {
+    assert.ok(rows.some(r => r.form === 'Form 1040' && r.label === label), `${label} is on the return`);
+  }
+  assert.deepEqual(verifyWorksheetRows(rows).failures, []);
+});
+
+test('TWE-42: a Schedule D that under-reports the 1040 is a failure, not a silent pass', () => {
+  // The working detector. Without it TWE-41 passes on a verifier that never ran the
+  // check at all — which is precisely the state this file was in before F4.
+  const rows     = fourRateGroupFiling();
+  const transfer = rows.find(r => r.form === 'Schedule D' && r.label === 'Transfer to Form 1040, Line 7');
+  assert.ok(transfer, 'fixture precondition: a transfer line exists');
+
+  const broken   = rows.map(r => (r === transfer ? { ...r, amount: r.amount - 1_000 } : r));
+  const failures = verifyWorksheetRows(broken).failures;
+  assert.equal(failures.length, 1, 'exactly the tie, not a cascade');
+  assert.match(failures[0], /Schedule D transfers .* but Form 1040 states/);
+});
+
+test('TWE-43: an export without schedules is a no-op for the tie, not a failure', () => {
+  // `--schedules` is off by default; the cross-form check must stay silent rather than
+  // report every year as broken because one side of the comparison is absent.
+  const rows = buildTaxWorksheetRows(runScenario(), { cc: 'US' });
+  assert.ok(!rows.some(r => r.form === 'Schedule D'), 'precondition: no schedule rows');
+  assert.deepEqual(verifyWorksheetRows(rows).failures, []);
 });
 
 // ─── Local helpers ────────────────────────────────────────────────────────────

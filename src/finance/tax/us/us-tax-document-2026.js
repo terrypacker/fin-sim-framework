@@ -63,6 +63,21 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             ...(taxDetail.selfEmploymentTaxDeduction > 0
               ? [{ label: '½ Self-Employment Tax Deduction', amount: -taxDetail.selfEmploymentTaxDeduction }]
               : []),
+            // §1211/§1212 (design 90 §4), the AGI half. Both of these are ABOVE the line —
+            // short-term gain is ordinary income for rate purposes (§1(h) reserves the
+            // preferential rates for net LONG-term gain, §1222(11)) and the loss
+            // allowance is a §62(a)(3) deduction — so without them AGI does not follow
+            // from the lines above it, which is the design 71 §2.2 defect in a fourth
+            // guise. Surfaced by the Schedule D tie in `verifyWorksheetRows`: the
+            // schedule reported short-term disposals the return's face never mentioned.
+            ...(taxDetail.capitalLoss?.shortTermGain > 0
+              ? [{ label: 'Short-Term Capital Gain (taxed at ordinary rates, \u00a71(h))',
+                   amount: taxDetail.capitalLoss.shortTermGain }]
+              : []),
+            ...(taxDetail.capitalLoss?.allowance > 0
+              ? [{ label: 'Capital Loss Deduction (\u00a71211(b))',
+                   amount: -taxDetail.capitalLoss.allowance }]
+              : []),
             { label: 'Adjusted Gross Income',               amount:  taxDetail.adjustedGrossIncome },
             { label: 'Standard Deduction',                  amount: -inputs.standardDeduction },
             // The exclusion APPLIED (stacking-capped), not the uncapped qualifying
@@ -109,6 +124,18 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
                          sub:    true }]
                     : []),
                 ]
+              : []),
+            // §1212(b) pools — what the year's losses did NOT get to deduct. `memo`
+            // because they are stated, not assessed: a reader seeing a \$3,000 deduction
+            // against a much larger loss must be able to find the rest, and no footing
+            // sum may count it. Same rowType the AU Div 295 disclosure uses.
+            ...(taxDetail.capitalLoss?.closingShort > 0
+              ? [{ label: 'Short-Term Capital Loss — carried forward (\u00a71212(b)(1)(A))',
+                   amount: taxDetail.capitalLoss.closingShort, memo: true }]
+              : []),
+            ...(taxDetail.capitalLoss?.closingLong > 0
+              ? [{ label: 'Long-Term Capital Loss — carried forward (\u00a71212(b)(1)(B))',
+                   amount: taxDetail.capitalLoss.closingLong, memo: true }]
               : []),
           ],
         },
@@ -339,6 +366,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     // already inside the Part II totals, and this restates it so the Schedule D Tax
     // Worksheet can rate it at its own 25% ceiling.
     const rateGain25      = Math.max(0, saleRecords.reduce((s, r) => s + (r.depreciationGain ?? 0), 0));
+    // Schedule D line 7. Restated, not separated: this model's disposal payloads carry
+    // ONE sale price per disposal, and a sale that consumed both seasoned and fresh lots
+    // cannot apportion it between Part I and Part II. Reporting the combined totals with
+    // the short-term slice named is the honest form of that limit — dropping the slice
+    // instead is what left short-term disposals on no form at all.
+    const shortTermGain   = saleRecords.reduce((s, r) => s + (r.shortTermGain ?? 0), 0);
     return {
       title:        `Schedule D — ${taxYear}`,
       country:      'US',
@@ -346,19 +379,28 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
       filingStatus: 'Capital Gains and Losses',
       sections: [
         {
-          heading: 'Part II — Long-Term Capital Gains and Losses',
+          heading: 'Parts I & II — Capital Gains and Losses',
           lineItems: [
             { label: 'Total Proceeds (from Form 8949)',    amount: totalProceeds   },
             { label: 'Total Cost Basis (from Form 8949)',  amount: totalCostBasis  },
             { label: 'Adjustments to Gain or Loss (Form 8949, column (g))',
                                                            amount: totalAdjustment },
-            { label: 'Net Long-Term Gain / (Loss)',        amount: totalGain       },
+            { label: 'Net Capital Gain / (Loss)',          amount: totalGain       },
           ],
         },
         {
           heading: 'Net Capital Gain',
           lineItems: [
-            { label: 'Net Capital Gain (Line 15)',          amount: totalGain },
+            { label: 'Net Capital Gain (Line 16)',          amount: totalGain },
+            // Printed only when the year produced short-term character, on the same
+            // terms as lines 18 and 19 below. It is taxed at ordinary rates and shows on
+            // the 1040's own Short-Term Capital Gain line, so restating it here is what
+            // lets a reader see which part of this schedule did NOT reach line 18/19 or
+            // the preferential brackets.
+            ...(shortTermGain !== 0
+              ? [{ label: 'Net Short-Term Gain / (Loss) (Line 7)',
+                   amount: shortTermGain, sub: true }]
+              : []),
             // Printed only when there is a collectible in the year — the real form
             // leaves line 18 blank unless line 17 is "Yes" and a 28%-rate item was
             // reported, and a permanent zero here reads as an assertion that the
@@ -381,20 +423,39 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     };
   }
 
-  /** Form 8949 Part II, including columns (f) Code and (g) Amount of adjustment. */
+  /**
+   * Form 8949, including columns (f) Code and (g) Amount of adjustment.
+   *
+   * **The two FX columns are not on the real form, and are here for the reason the
+   * rest of the form is:** every figure on this table is USD, but a foreign-situated
+   * disposal was struck in another currency, and a reader given only the translated
+   * numbers cannot check a single one of them. `§1.988-1(d)` requires a named spot
+   * rate per transaction; naming it beside the row is the honest form of that. The
+   * columns appear only when the year actually contains a foreign disposal, so a
+   * purely domestic 8949 is exactly the eight columns of the real form.
+   *
+   * The rate is the one the run held AT THE DISPOSAL, not at the settlement — see
+   * `_extractUsSaleRecords` and `FxTimeline`.
+   */
   _generateForm8949(saleRecords, taxYear) {
     const totalProceeds   = saleRecords.reduce((s, r) => s + r.proceeds,  0);
     const totalCostBasis  = saleRecords.reduce((s, r) => s + r.costBasis, 0);
     const totalAdjustment = saleRecords.reduce((s, r) => s + (r.adjustment ?? 0), 0);
     const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
+    const hasForeign      = saleRecords.some(r => r.fxRate != null);
+    const fxCells         = r => (hasForeign
+      ? [r.currency ?? 'USD', r.fxRate ?? '']
+      : []);
     return {
       title:        `Form 8949 — ${taxYear}`,
       country:      'US',
       taxYear,
-      filingStatus: 'Part II — Long-Term (held more than one year)',
+      filingStatus: 'Parts I & II — Sales and Other Dispositions',
       table: {
         heading: 'Sales and Other Dispositions of Capital Assets',
-        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis',
+        columns: ['Description', 'Date Acquired', 'Date Sold',
+                  ...(hasForeign ? ['Currency', 'FX Rate'] : []),
+                  'Proceeds', 'Cost Basis',
                   'Code', 'Adjustment', 'Gain / (Loss)'],
         rows: saleRecords.map(r => [
           // Keyed cell (design 70): the modal resolves the account's display name,
@@ -405,13 +466,15 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
           r.stateKey ? { stateKey: r.stateKey, text: r.description } : r.description,
           r.dateAcquired,
           _fmtDate(r.dateSold),
+          ...fxCells(r),
           r.proceeds,
           r.costBasis,
           r.code ?? '',
           r.adjustment ?? 0,
           r.gain,
         ]),
-        totals: ['Totals', '', '', totalProceeds, totalCostBasis, '', totalAdjustment, totalGain],
+        totals: ['Totals', '', '', ...(hasForeign ? ['', ''] : []),
+                 totalProceeds, totalCostBasis, '', totalAdjustment, totalGain],
       },
     };
   }
@@ -419,5 +482,10 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
 
 function _fmtDate(date) {
   if (!date) return '—';
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // `timeZone: 'UTC'` is load-bearing, not tidiness. Every date in the run is a UTC
+  // instant, and rendering one west of Greenwich rolls it back a day — a disposal
+  // settled on 15 Jan printed as 14 Jan on Form 8949, which is a column (c) entry
+  // that disagrees with the journal and, near a year boundary, with the tax year of
+  // the return it sits on. Same trap the plugin date layer already pays for.
+  return new Date(date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
 }

@@ -602,8 +602,10 @@ const US_DISPOSAL_ACTION_TYPES = new Set([
  * return taxes at its own ceiling and restates on Schedule D line 19, not part of the
  * net long-term gain the other three sum to.
  */
-const US_GAIN_FIELDS = ['usCapitalGainsYTD', 'usShortTermCapitalGainsYTD', 'usCollectibleGainsYTD'];
 const US_1250_FIELD  = 'usUnrecaptured1250GainYTD';
+/** Schedule D line 7's accumulator — one OF `US_GAIN_FIELDS`, tallied again on its own. */
+const US_SHORT_FIELD = 'usShortTermCapitalGainsYTD';
+const US_GAIN_FIELDS = ['usCapitalGainsYTD', US_SHORT_FIELD, 'usCollectibleGainsYTD'];
 
 /**
  * Column (a) fallback when the emitter sends no `description` and the row has no
@@ -747,6 +749,8 @@ function _extractUsSaleRecords(currentEntry, journal, settleRate = null, typeReg
       // net gain the way line 18 does for collectibles, and adding either to it would
       // report the disposal twice.
       depreciationGain: booked.unrecap1250,
+      // Schedule D line 7's share of this row — see `_usGainDeltas`.
+      shortTermGain:    booked.shortTerm,
       // What the disposal was struck in, and the rate that put it on a USD form. Both
       // are disclosure, not arithmetic: a reader cannot check a translated foreign
       // sale without them, and `rate` is the one number on the row that no other
@@ -780,7 +784,7 @@ function _extractUsSaleRecords(currentEntry, journal, settleRate = null, typeReg
 function _usGainDeltas(entry, byInstance) {
   const id      = entry.action?.instanceId;
   const entries = id == null ? [entry] : (byInstance.get(id) ?? [entry]);
-  let gain = 0, unrecap1250 = 0, any = false;
+  let gain = 0, unrecap1250 = 0, shortTerm = 0, any = false;
   for (const e of entries) {
     for (const f of e.stateDiff ?? []) {
       const isGain = US_GAIN_FIELDS.includes(f.field);
@@ -788,7 +792,13 @@ function _usGainDeltas(entry, byInstance) {
       const delta = f.delta ?? ((f.after ?? 0) - (f.before ?? 0));
       any = true;
       if (isGain) gain += delta; else unrecap1250 += delta;
+      // Tracked alongside rather than split out of `gain`: Schedule D line 16 is the
+      // COMBINED net gain, and the short-term slice is restated for the rate
+      // computation exactly as lines 18 and 19 restate theirs. Splitting the row would
+      // need a per-term `proceeds`, which no disposal payload carries — one sale can
+      // consume both seasoned and fresh lots and reports a single sale price.
+      if (f.field === US_SHORT_FIELD) shortTerm += delta;
     }
   }
-  return { gain, unrecap1250, any };
+  return { gain, unrecap1250, shortTerm, any };
 }

@@ -393,10 +393,14 @@ export function verifyWorksheetRows(rows) {
  */
 function _verifyScheduleDTie(lines) {
   const failures = [];
+  // Every line of the 1040 that a disposal on Schedule D can land on. The return
+  // splits the year's gain across four rate groups; the schedule states it as one
+  // number, and the sum of the four is what that number must be.
   const GAIN_LABELS = [
     'Long-Term Capital Gains (Sch. D)',
     'Collectible Gains (28% rate, Sch. D line 18)',
     'Unrecaptured \u00a71250 Gain (25% rate, Sch. D line 19)',
+    'Short-Term Capital Gain (taxed at ordinary rates, \u00a71(h))',
   ];
   const filings = new Map();
   for (const r of lines) {

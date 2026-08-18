@@ -600,5 +600,10 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
 
 function _fmtDate(date) {
   if (!date) return '—';
-  return new Date(date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  // `timeZone: 'UTC'` is load-bearing, not tidiness. Every date in the run is a UTC
+  // instant, and rendering one west of Greenwich rolls it back a day — a disposal
+  // settled on 15 Jan printed as 14 Jan on Form 8949, which is a column (c) entry
+  // that disagrees with the journal and, near a year boundary, with the tax year of
+  // the return it sits on. Same trap the plugin date layer already pays for.
+  return new Date(date).toLocaleDateString('en-AU', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 }

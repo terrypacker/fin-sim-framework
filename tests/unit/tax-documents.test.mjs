@@ -891,7 +891,7 @@ test('Schedule D / 8949 count a fanned-out disposal once, not once per reducer',
     .flatMap(s => s.lineItems).find(li => li.label.startsWith(label)).amount;
 
   assert.strictEqual(f8949.table.rows.length, 1, 'one disposal ⇒ one Form 8949 row');
-  assert.strictEqual(amountOf('Net Long-Term Gain'), 20_000, 'gain must not triple');
+  assert.strictEqual(amountOf('Net Capital Gain / (Loss)'), 20_000, 'gain must not triple');
   assert.strictEqual(amountOf('Total Proceeds'),     55_000, 'proceeds must not triple');
   assert.strictEqual(amountOf('Total Cost Basis'),   35_000, 'cost basis must not triple');
 });
@@ -928,7 +928,7 @@ test('distinct disposals are still counted separately when they share a reducer'
 
   const [, schedD, f8949] = registry.generate(settleEntry, journal);
   const gain = schedD.sections.flatMap(s => s.lineItems)
-    .find(li => li.label.startsWith('Net Long-Term Gain')).amount;
+    .find(li => li.label.startsWith('Net Capital Gain / (Loss)')).amount;
   assert.strictEqual(f8949.table.rows.length, 2, 'two distinct disposals ⇒ two rows');
   assert.strictEqual(gain, 30_000);
 });
@@ -955,12 +955,12 @@ test('a main-home sale reaches Schedule D with the §121 exclusion as a code-H a
   assert.strictEqual(amountOf('Total Cost Basis'),   500_000);
   assert.strictEqual(amountOf('Adjustments to Gain or Loss'), -500_000,
     '§121 exclusion belongs in column (g) as a negative number');
-  assert.strictEqual(amountOf('Net Long-Term Gain'), 150_000);
+  assert.strictEqual(amountOf('Net Capital Gain / (Loss)'), 150_000);
 
   // Schedule D column (h) identity: (d) − (e) + (g).
   assert.strictEqual(
     amountOf('Total Proceeds') - amountOf('Total Cost Basis') + amountOf('Adjustments to Gain or Loss'),
-    amountOf('Net Long-Term Gain'));
+    amountOf('Net Capital Gain / (Loss)'));
 
   const [row] = f8949.table.rows;
   assert.strictEqual(row[5], 'H',       'main-home exclusion carries Form 8949 code H');
@@ -994,7 +994,7 @@ test('company-equity disposals reach Schedule D too', () => {
   ];
   const [, schedD] = registry.generate(settleEntry, journal);
   const gain = schedD.sections.flatMap(s => s.lineItems)
-    .find(li => li.label.startsWith('Net Long-Term Gain')).amount;
+    .find(li => li.label.startsWith('Net Capital Gain / (Loss)')).amount;
   assert.strictEqual(gain, 90_000);
 });
 
@@ -1038,7 +1038,7 @@ test('a collectible sale reaches Form 8949 and Schedule D, coded C', () => {
   // move the disposal off the schedule, it only re-rates the gain.
   assert.strictEqual(lineOf(schedD, 'Total Proceeds').amount,      100_000);
   assert.strictEqual(lineOf(schedD, 'Total Cost Basis').amount,     60_000);
-  assert.strictEqual(lineOf(schedD, 'Net Long-Term Gain').amount,   40_000);
+  assert.strictEqual(lineOf(schedD, 'Net Capital Gain / (Loss)').amount,   40_000);
 });
 
 test('Schedule D line 18 restates the 28% slice without adding to the net gain', () => {
@@ -1054,7 +1054,7 @@ test('Schedule D line 18 restates the 28% slice without adding to the net gain',
 
   const [, schedD] = new TaxDocumentRegistry().generate(settleEntry, journal);
 
-  assert.strictEqual(lineOf(schedD, 'Net Capital Gain (Line 15)').amount, 60_000,
+  assert.strictEqual(lineOf(schedD, 'Net Capital Gain (Line 16)').amount, 60_000,
     'line 15 is BOTH disposals — collectibles are not a separate reporting channel');
   assert.strictEqual(lineOf(schedD, '28% Rate Gain (Line 18').amount, 40_000,
     'line 18 restates the collectible slice for the rate computation');
@@ -1084,7 +1084,7 @@ test('a collectible LOSS stays in the net gain but out of line 18', () => {
     { gain: -15_000, proceeds: 45_000, costBasis: 60_000, isGold: true }, { collectibleGains: -15_000 });
 
   const [, schedD] = new TaxDocumentRegistry().generate(settleEntry, journal);
-  assert.strictEqual(lineOf(schedD, 'Net Long-Term Gain').amount, -15_000);
+  assert.strictEqual(lineOf(schedD, 'Net Capital Gain / (Loss)').amount, -15_000);
   assert.strictEqual(lineOf(schedD, '28% Rate Gain (Line 18').amount, 0);
 });
 
@@ -1325,4 +1325,146 @@ test('table CSV renders a keyed cell as its fallback text when nothing resolved 
   const csv = tableDocumentToCsv(ws);
   assert.ok(csv.includes('usStockAccount'));
   assert.ok(!csv.includes('[object Object]'), 'a keyed cell must never stringify raw');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Foreign-situated disposals on a US return (F4 · the FX half)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// A US citizen is taxed on worldwide capital gains, so an AU house or an AU brokerage
+// sale belongs on Form 8949 exactly like a domestic one. Neither type was in
+// `US_DISPOSAL_ACTION_TYPES`, so Schedule D could total a fraction of the 1040's own
+// capital-gain line with nothing on either form to say what the difference was.
+//
+// Two things had to be true before they could be added, and each is asserted below:
+// the money is AUD and the form is USD, and the US-assessed gain is NOT any arithmetic
+// over the payload — §121 and the §1250 carve-out are applied inside the reducer and
+// never stamped back, so the state diff is the only place the return's own figure
+// exists.
+
+/**
+ * One AU-situated disposal, with the US accumulators it booked into and whatever FX
+ * moves surround it.
+ *
+ * Entries are sorted by date, because a real journal is chronological and
+ * `FxTimeline.at` keys on POSITION. Building the fixture any other way tests a journal
+ * the simulation cannot produce — and an unsorted first draft of this helper duly
+ * "found" a bug that was only its own ordering.
+ */
+function auDisposalJournal(type, data, deltas, { fxMoves = [], dateMs = Date.UTC(2032, 0, 15) } = {}) {
+  const detail = { ...usDetail({ usCapitalGainsYTD: deltas.usCapitalGainsYTD ?? 0 }), taxYear: 2032 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2032, 11, 31));
+  const entries = [
+    ...fxMoves.map(({ before, after, dateMs: ms }) => ({
+      date:   new Date(ms),
+      action: { type: 'RECOMPUTE_REGIMES', data: {} },
+      stateDiff: [{ field: 'effectiveExchangeRates.USD_AUD', before, after }],
+    })),
+    {
+      date:      new Date(dateMs),
+      action:    { type, data, instanceId: 'i-au-1' },
+      reducer:   { name: `dynamic:AU:${type}` },
+      stateDiff: Object.entries(deltas).map(([field, delta]) => ({ field, before: 0, after: delta, delta })),
+    },
+    settleEntry,
+  ].sort((a, b) => a.date - b.date);
+  return [settleEntry, entries];
+}
+
+test('an AU house sale reaches Schedule D, translated at the disposal-date rate', () => {
+  const registry = new TaxDocumentRegistry();
+  // A$1,518,382.82 sale on an A$683,760 base. The US return assessed US$478,311.50 of
+  // long-term gain plus a US$60,154.84 §1250 slice — figures that exist ONLY as state
+  // deltas: `gain` here is the AU-measure gross gain, in AUD, before §121 and before
+  // the §1250 carve-out.
+  const [settleEntry, journal] = auDisposalJournal(
+    'AU_HOUSE_SALE_TAX',
+    { gain: 834_622.82, proceeds: 1_518_382.82, costBasis: 683_760, depreciationGain: 93_240,
+      description: 'auHouseProperty', residency: 'AU' },
+    { usCapitalGainsYTD: 478_311.50, usUnrecaptured1250GainYTD: 60_154.84 },
+    { fxMoves: [{ before: 1.55, after: 1.55, dateMs: Date.UTC(2032, 0, 1) }] },
+  );
+
+  const [, schedD, f8949] = registry.generate(settleEntry, journal);
+  assert.strictEqual(f8949.table.rows.length, 1, 'the foreign disposal is on the form at all');
+
+  // Proceeds and basis are converted at the rate; the gain is the state delta.
+  assert.strictEqual(Math.round(lineOf(schedD, 'Total Proceeds').amount   * 100) / 100, 979_601.82);
+  assert.strictEqual(Math.round(lineOf(schedD, 'Total Cost Basis').amount * 100) / 100, 441_135.48);
+  assert.strictEqual(Math.round(lineOf(schedD, 'Net Capital Gain / (Loss)').amount * 100) / 100,
+    538_466.34, 'column (h) is the whole taxable gain: LTCG + the §1250 slice');
+  // Column (g) is left carrying ONLY a §121-style reconciling difference. Before the
+  // §1250 slice joined the gain it absorbed the carve-out too, which misread a
+  // statutory rate split as an adjustment to the sale.
+  assert.strictEqual(Math.round(lineOf(schedD, 'Adjustments to Gain').amount * 100) / 100, 0);
+  assert.strictEqual(Math.round(lineOf(schedD, 'Unrecaptured §1250 Gain (Line 19').amount * 100) / 100,
+    60_154.84, 'line 19 restates the slice without adding to the net gain');
+});
+
+test('the 8949 discloses the currency and rate behind a translated row', () => {
+  const registry = new TaxDocumentRegistry();
+  const [settleEntry, journal] = auDisposalJournal(
+    'AU_STOCK_WITHDRAWAL_TAX',
+    { gain: 31_000, proceeds: 155_000, costBasis: 124_000, description: 'auStockAccount', residency: 'AU' },
+    { usCapitalGainsYTD: 20_000 },
+    { fxMoves: [{ before: 1.55, after: 1.55, dateMs: Date.UTC(2032, 0, 1) }] },
+  );
+  const f8949 = registry.generate(settleEntry, journal)[2];
+  assert.ok(f8949.table.columns.includes('Currency'), 'FX columns appear for a foreign row');
+  assert.ok(f8949.table.columns.includes('FX Rate'));
+  const row = f8949.table.rows[0];
+  assert.strictEqual(row[f8949.table.columns.indexOf('Currency')], 'AUD');
+  assert.strictEqual(row[f8949.table.columns.indexOf('FX Rate')],  1.55);
+  assert.strictEqual(Math.round(row[f8949.table.columns.indexOf('Proceeds')] * 100) / 100, 100_000);
+});
+
+test('a purely domestic 8949 keeps the real form’s columns, with no FX pair', () => {
+  const registry = new TaxDocumentRegistry();
+  const detail   = { ...usDetail({ usCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settle   = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal  = [
+    { date: new Date(Date.UTC(2025, 5, 1)),
+      action: { type: 'STOCK_WITHDRAWAL_TAX', instanceId: 'i-1',
+                data: { gain: 20_000, proceeds: 55_000, costBasis: 35_000, description: 'Brokerage' } },
+      stateDiff: [{ field: 'usCapitalGainsYTD', before: 0, after: 20_000, delta: 20_000 }] },
+    settle,
+  ];
+  const f8949 = registry.generate(settle, journal)[2];
+  assert.ok(!f8949.table.columns.includes('Currency'), 'no FX columns without a foreign disposal');
+  assert.strictEqual(f8949.table.columns.length, 8, 'the eight columns of the real form');
+});
+
+test('a disposal is translated at the rate in force AT IT, not at the settlement', () => {
+  // The rate moves mid-year. A January sale must not be restated at the December rate:
+  // `taxFxRate` is a year-end benchmark, and the whole reason `FxTimeline` exists is
+  // that it never applied to this disposal.
+  const registry = new TaxDocumentRegistry();
+  const [settleEntry, journal] = auDisposalJournal(
+    'AU_STOCK_WITHDRAWAL_TAX',
+    { gain: 31_000, proceeds: 200_000, costBasis: 169_000, description: 'auStockAccount', residency: 'AU' },
+    { usCapitalGainsYTD: 20_000 },
+    { fxMoves: [
+        { before: 1.55, after: 2.00, dateMs: Date.UTC(2032, 0, 1) },   // in force at the sale
+        { before: 2.00, after: 1.25, dateMs: Date.UTC(2032, 5, 1) },   // after it
+      ] },
+  );
+  const f8949 = registry.generate(settleEntry, journal)[2];
+  assert.strictEqual(f8949.table.rows[0][f8949.table.columns.indexOf('FX Rate')], 2.00);
+  assert.strictEqual(f8949.table.rows[0][f8949.table.columns.indexOf('Proceeds')], 100_000,
+    '200,000 AUD at 2.00, not at the 1.25 the year ended on');
+});
+
+test('Form 8949 dates are the UTC dates the run recorded, not local ones', () => {
+  // A UTC instant rendered in a timezone west of Greenwich rolls back a day. On column
+  // (c) that is a date disagreeing with the journal, and near a year boundary it names
+  // the wrong tax year on the return it sits on.
+  const registry = new TaxDocumentRegistry();
+  const [settleEntry, journal] = auDisposalJournal(
+    'AU_STOCK_WITHDRAWAL_TAX',
+    { gain: 1_000, proceeds: 10_000, costBasis: 9_000, description: 'auStockAccount', residency: 'AU' },
+    { usCapitalGainsYTD: 645 },
+    { dateMs: Date.UTC(2032, 0, 15) },
+  );
+  const f8949 = registry.generate(settleEntry, journal)[2];
+  assert.match(f8949.table.rows[0][2], /Jan 15, 2032/);
 });
