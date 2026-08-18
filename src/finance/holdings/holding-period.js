@@ -125,3 +125,92 @@ export function singleAssetTermFields({ proceeds, usBasis, auBasis, acquisitionM
     auLongTermGain:  auLong ? auGain : 0,
   };
 }
+
+/**
+ * The AU CGT-reform cost-base indexation factor for a **scalar** asset — a house, a
+ * vested equity stake, a bar of bullion. `consumeHoldingsFifo` already does this per
+ * lot for account holdings (`holdings-fifo.js`); scalar assets have no lots, so the
+ * same arithmetic lives here rather than being re-inlined at each disposal.
+ *
+ * Two ways to know the price level the asset was acquired at, in order:
+ *
+ *   1. **A stamped `acquisitionPriceLevel`** — written by the s855-45 residency
+ *      step-up (`recordResidencyChange`) and by an in-sim purchase. The factor is
+ *      the plain ratio `level(sale) / level(acquisition)`, exactly as for a lot.
+ *   2. **A back-cast from the acquisition DATE.** An asset the plan already owned when
+ *      the run began has a real acquisition date but no stamped level: the accumulator
+ *      is 1.0 at sim start and knows nothing about the years before it. Compounding the
+ *      CPI rate over the whole holding period recovers the missing factor.
+ *
+ *      This matters because design 57 Part 2 Item B taxes the WHOLE gain of an asset
+ *      held across 1 July 2027 under the new regime, on the stated rationale that
+ *      "cost-base indexation already relieves the inflationary part of the whole
+ *      holding period". A dwelling bought in 2016 and sold in 2032 is assessed on its
+ *      2016 cost base; refusing to index the pre-run decade would take the reform's
+ *      penalty (no Division 115 discount, 30% floor) without the relief that is
+ *      supposed to pay for it. The pre-run CPI is not observed — the model has no
+ *      history — so the run's own CPI rate stands in for it, the same proxy the design
+ *      already accepts for the forward series. Authors who know the real figure can set
+ *      `acquisitionPriceLevel` on the asset and take branch 1 instead.
+ *
+ * With **neither** — no stamped level and no acquisition date — the basis is returned
+ * unindexed. §6.3 sketches an alternative ("lots bootstrapped from the scenario get the
+ * sim-start level (1.0)") that would index such an asset from t0, but `consumeHoldingsFifo`
+ * has never done that, and making scalar assets the one family that grants relief off a
+ * *missing* field would be a worse inconsistency than the one this closes. Relief follows a
+ * stated acquisition, which is also what the ATO asks for. The return prints a zero
+ * indexation-relief line when this bites, so it is visible rather than silent.
+ *
+ * The ≥12-month gate is the reform's own (ITAA97 Div 115's clock, measured from the AU
+ * deemed acquisition), and indexation never ratchets the basis DOWN — it cannot create
+ * or increase a capital loss.
+ *
+ * @param {object}      o
+ * @param {number}      o.auBasis                    AU cost base before indexation
+ * @param {number|null} [o.acquisitionPriceLevel]    stamped CPI level at AU acquisition
+ * @param {number}      [o.currentPriceLevel=1]      CPI level now (cpiAccumulator.AU)
+ * @param {number|null} [o.auAcquisitionMs]          AU (deemed) acquisition date
+ * @param {number|null} [o.saleMs]                   disposal date
+ * @param {number}      [o.cpiRate=0]                annual CPI rate, for the back-cast
+ * @returns {number} the indexed AU cost base, never below `auBasis`
+ */
+export function auIndexedCostBase({ auBasis, acquisitionPriceLevel = null, currentPriceLevel = 1,
+                                    auAcquisitionMs = null, saleMs = null, cpiRate = 0 }) {
+  const heldMs = (auAcquisitionMs != null && saleMs != null) ? saleMs - auAcquisitionMs : null;
+  // Undated ⇒ not short-term, matching `singleAssetTermFields`: every asset in this family
+  // is held for years, and the alternative default would deny relief on a missing field.
+  // (An undated asset with no stamped level indexes at factor 1 regardless — see above.)
+  if (heldMs != null && !isLongTerm('AU', heldMs)) return auBasis;
+
+  let factor = 1;
+  if (acquisitionPriceLevel != null && acquisitionPriceLevel > 0 && currentPriceLevel > 0) {
+    factor = currentPriceLevel / acquisitionPriceLevel;
+  } else if (heldMs != null && heldMs > 0 && cpiRate > 0) {
+    factor = (1 + cpiRate) ** (heldMs / YEAR_MS);
+  }
+  return auBasis * Math.max(1, factor);
+}
+
+/**
+ * The AU CGT indexation rate in force, read the same way `InflationAdjustReducer`
+ * reads it so the back-cast above compounds the identical series the accumulator does.
+ * @param {object} state
+ * @returns {number}
+ */
+export function auCpiRate(state) {
+  return state?.cpiRates?.AU
+      ?? state?.effectiveInflationRates?.AU
+      ?? state?.inflationRates?.AU
+      ?? 0;
+}
+
+/**
+ * The AU CPI level now, reading the dedicated ATO series with the inflation
+ * accumulator as fallback (design 57 Part 2 Item A). Both the stamp and the sale
+ * must read the same accumulator or the ratio is meaningless.
+ * @param {object} state
+ * @returns {number}
+ */
+export function auCpiLevel(state) {
+  return state?.cpiAccumulator?.AU ?? state?.inflationAccumulator?.AU ?? 1;
+}

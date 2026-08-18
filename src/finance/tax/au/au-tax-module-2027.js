@@ -27,10 +27,13 @@ import { toAUD } from '../tax-fx.js';
  * and FTC classification are unchanged (US does not index).
  *
  *   Stock: uses action.auIndexedGain (design 57 §6.3, computed per-lot in the AU
- *          brokerage sale reducer). Until the 1 Jul 2027 deemed reset (§6.4)
- *          stamps acquisition price levels, auIndexedGain === auGain.
- *   House: property indexation is deferred (§6.4); the raw gain is used, so the
- *          reform's discount removal + 30% floor still apply to house sales.
+ *          brokerage sale reducer). A lot with no acquisition price level and no
+ *          purchase date cannot be indexed, and auIndexedGain === auGain.
+ *   House: also uses action.auIndexedGain — the indexed, post-s118-185 assessable
+ *          gain, computed in the AU/US real-property sale reducers (design 57
+ *          §6.3). Property used to book its RAW gain here, taking the reform's
+ *          discount removal and 30% floor without the cost-base indexation that is
+ *          supposed to pay for them; see the AU_HOUSE_SALE_TAX reducer below.
  *
  * Cross-border (US-source) resident capital gains matter just as much: an AU
  * resident's US-brokerage sales, company-equity sales, and gold/collectible sales
@@ -65,16 +68,20 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     fns.set('AU_HOUSE_SALE_TAX', (state, action) => {
       const next = baseHouse(state, action);
       if (action.residency !== 'AU') return next;
-      // Property cost-base indexation is deferred (design 57 §6.4), so the real bucket
-      // takes the un-indexed gain — but it must take the ASSESSABLE one. This bucket is
-      // what `AuTaxRates2027._cgtRelief` actually taxes, so booking the raw `action.gain`
-      // here discarded the s118-185 main-residence exemption the parent reducer had just
-      // computed: the return printed the exemption on its "Capital Gains" line and taxed
-      // 100% of the gain on the next. Measured on a dwelling with an 11.77% exemption,
-      // that was A$116,508 of phantom assessable income — ~A$54,759 of tax.
+      // This bucket is what `AuTaxRates2027._cgtRelief` actually taxes, so it must take
+      // the ASSESSABLE gain. Booking the raw `action.gain` here discarded the s118-185
+      // main-residence exemption the parent reducer had just computed: the return printed
+      // the exemption on its "Capital Gains" line and taxed 100% of the gain on the next.
+      // Measured on a dwelling with an 11.77% exemption, that was A$116,508 of phantom
+      // assessable income — ~A$54,759 of tax. The exemption was zero on every scenario in
+      // the suite (the sale-date day-count bug was forcing `auTaxableFraction` to 1),
+      // which is why nothing caught it.
       //
-      // The exemption was zero on every scenario in the suite (the sale-date day-count
-      // bug was forcing `auTaxableFraction` to 1), which is why nothing caught it.
+      // `auIndexedGain` is now that same assessable figure measured from the CPI-indexed
+      // cost base (design 57 §6.3). It was absent for years — §10 said "property
+      // indexation deferred to §6.4", meaning the Phase-4 deemed-reset work would deliver
+      // it, and Part 2 Item B then deleted the deemed reset without revisiting property.
+      // The fallback stays for a replayed action emitted before the field existed.
       const realGain = action.auIndexedGain ?? AuTaxModule2026.auAssessableHouseGain(action);
       const asset = { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners };
       return this._recordRealGain(next, state, realGain, asset);
@@ -108,17 +115,17 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     });
 
     // US house (foreign real property, design 62 §5): AU-assessable for a resident
-    // from the stepped-up basis net of the main-residence exemption. Indexation is
-    // deferred for property (design 57 §6.4), so the real gain is the un-indexed
-    // auGain — matching the AU_HOUSE_SALE_TAX treatment.
+    // from the stepped-up basis net of the main-residence exemption, and — like every
+    // other AU CGT asset under the reform — indexed from the deemed-acquisition price
+    // level stamped at the move (design 57 §6.3). Matches AU_HOUSE_SALE_TAX.
     fns.set('US_HOUSE_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainAud = toAUD(action.auGain ?? 0, 'USD', state);
+      const realGainAud = toAUD(action.auIndexedGain ?? action.auGain ?? 0, 'USD', state);
       return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
     // Collectibles: bullion (isGold) is an ordinary AU CGT asset → indexed like
-    // equity; true collectibles are NOT indexed under the reform (design 57 §6.4).
+    // equity; true collectibles are NOT indexed under the reform (design 57 Part 2, Q3).
     fns.set('COLLECTIBLE_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
       const realGainUsd = action.isGold

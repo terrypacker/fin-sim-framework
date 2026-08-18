@@ -96,7 +96,7 @@ export const AU_REAL_PROPERTY = {
       // apportioned gain with no way to explain it. The ownership trio (design 76
       // Gap B) attributes the gain to the owner(s) rather than splitting it 50/50.
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
+        fields: { usShortTermGain: ValueType.currency('AUD'), usLongTermGain: ValueType.currency('AUD'), auShortTermGain: ValueType.currency('AUD'), auLongTermGain: ValueType.currency('AUD'), gain: ValueType.currency('AUD'), auIndexedGain: ValueType.currency('AUD'), depreciationGain: ValueType.currency('AUD'), residency: ValueType.text(), proceeds: ValueType.currency('AUD'), costBasis: ValueType.currency('AUD'), description: ValueType.text(),
                   ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   auTaxableFraction: ValueType.number(), auExemptionReason: ValueType.text(),
                   acquisitionMs: ValueType.number(), saleMs: ValueType.number(),
@@ -368,6 +368,16 @@ function _propertyToStatePlain(prop, startYear) {
     mainResidenceFrom:   prop.mainResidenceFrom  ?? null,
     mainResidenceUntil:  prop.mainResidenceUntil ?? null,
     acquisitionDate:     prop.acquisitionDate    ?? null,
+    // Design 57 §6.3 — the CPI level this dwelling was acquired at, for the reform's
+    // cost-base indexation. An AU-situs dwelling is taxable Australian property, so it
+    // never gets the s855-45 residency step-up that stamps this on a foreign one; a
+    // dwelling bought during the run has it stamped by PropertyPurchaseApplyReducer,
+    // and one the plan already owned at t0 has no level at all — the disposal back-casts
+    // from `acquisitionDate` instead. An author who knows the real 20xx figure can state
+    // it here and override the back-cast, which is only possible if the field reaches
+    // STATE: the sale reducer reads the state entry, not the record (design 76 Gap A).
+    // Projected only when set, so an unstated plan's state stays byte-identical.
+    ...(prop.acquisitionPriceLevel != null ? { acquisitionPriceLevel: prop.acquisitionPriceLevel } : {}),
     purchaseYear:        prop.purchaseYear       ?? null,
     purchasePrice:       prop.purchasePrice      ?? null,
     purchaseFundFrom:    prop.purchaseFundFrom   ?? null,

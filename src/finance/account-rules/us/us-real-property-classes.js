@@ -14,7 +14,7 @@ import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { us121Exclusion, unrecaptured1250Gain, toMs } from '../main-residence.js';
-import { singleAssetTermFields } from '../../holdings/holding-period.js';
+import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate } from '../../holdings/holding-period.js';
 
 // IRC §121 caps and the ownership/use rules now live in ../main-residence.js, shared
 // with the AU dwelling path. The note that used to sit here — "the 2-of-5-year
@@ -122,9 +122,9 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // exemption. The US §121 exclusion stays US-side only. When the property was not
     // stepped up (domestic/TAP, or not owned at the move) auBasis is absent ⇒ no AU
     // gain here. Both figures are in the property currency (USD); the AU classifier
-    // converts. Indexation is deferred for property (design 57 §6.4), matching AU_HOUSE.
+    // converts.
     const auBasis   = propState?.costBaseByCountry?.AU;
-    let auGain = 0, auDiscountableGain = 0;
+    let auGain = 0, auDiscountableGain = 0, auIndexedGain = 0;
     if (auBasis != null && residency === 'AU') {
       const saleMs      = eventMs ?? state.currentPeriods?.AU?.startMs ?? state.currentPeriods?.US?.startMs ?? null;
       const deemedAcqMs = propState.acquisitionDateByCountry?.AU ?? null;
@@ -135,6 +135,20 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
       // acquisition. The non-exempt slice is discountable only when held long enough.
       const held12mo = deemedAcqMs != null && saleMs != null && (saleMs - deemedAcqMs) >= YEAR_MS;
       auDiscountableGain = held12mo ? auGain : 0;
+      // Design 57 §6.3 — the FY2027 reform's cost-base indexation. The AU basis here is
+      // the s855-45 step-up, so the level it indexes from is normally the one stamped at
+      // the move; a dwelling bought after arriving indexes from its purchase level, and
+      // one with neither back-casts off its acquisition date. Same shape as the AU
+      // dwelling's `auIndexedGain`: indexed first, exemption applied second.
+      const indexedAuBasis = auIndexedCostBase({
+        auBasis,
+        acquisitionPriceLevel: propState?.acquisitionPriceLevel ?? null,
+        currentPriceLevel:     auCpiLevel(state),
+        auAcquisitionMs:       deemedAcqMs,
+        saleMs,
+        cpiRate:               auCpiRate(state),
+      });
+      auIndexedGain = +(Math.max(0, salePrice - indexedAuBasis) * (1 - exemptFrac)).toFixed(2);
     }
 
     // Design 90 §9 step 2 — the signed, §1222-charactered split, and the ONE disposal
@@ -192,6 +206,9 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         depreciationGain: s1250Gain,
         auGain,
         auDiscountableGain,
+        // The FY2027 reform's assessable (indexed, post-exemption) AU gain. FY≤2026
+        // modules ignore it and keep discounting `auGain`.
+        auIndexedGain,
         // Design 90 §9 step 2. Note these measure from the SAME adjusted basis as
         // `gain`, but before the §121 exclusion and before the §1250 carve-out: those
         // two shrink the taxable gain and neither can create a loss, so applying them

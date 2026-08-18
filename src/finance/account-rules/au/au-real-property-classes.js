@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
-import { singleAssetTermFields } from '../../holdings/holding-period.js';
+import { singleAssetTermFields, auIndexedCostBase, auCpiLevel, auCpiRate } from '../../holdings/holding-period.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { auMainResidenceExemption, unrecaptured1250Gain, toMs } from '../main-residence.js';
 import { downsizerContributions } from './downsizer-contribution.js';
@@ -128,6 +128,38 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
         saleMs, deductibleLoss,
       });
 
+    // Design 57 §6.3 — the reform's cost-base indexation, for real property.
+    //
+    // The FY2027 regime is a trade: the Division 115 50% discount goes away and a 30%
+    // minimum-tax floor arrives, and cost-base indexation is what pays for both. Every
+    // other AU CGT asset in the model already gets the indexed half — brokerage lots via
+    // `consumeHoldingsFifo`, bullion and company equity from their stamped step-up level
+    // — but property was left booking its RAW gain, so a dwelling took the penalty and
+    // none of the relief. Design 57 §10 described that as "property indexation deferred
+    // to §6.4", meaning the Phase-4 deemed-reset work would deliver it; Part 2 Item B
+    // then deleted the deemed reset outright and property was never revisited.
+    //
+    // `auIndexedGain` is the indexed analogue of `AuTaxModule2026.auAssessableHouseGain`
+    // — same min-against-the-US-gain, same s118-185 fraction — because that is exactly
+    // what `AuTaxRates2027._cgtRelief` assesses. Emitting the pre-exemption figure here
+    // would re-open the phantom-assessable-income defect noted in `au-tax-module-2027.js`.
+    const auBasisRaw     = propState?.costBaseByCountry?.AU ?? adjustedBasis;
+    const indexedAuBasis = auIndexedCostBase({
+      auBasis:               auBasisRaw,
+      acquisitionPriceLevel: propState?.acquisitionPriceLevel ?? null,
+      currentPriceLevel:     auCpiLevel(state),
+      auAcquisitionMs:       propState?.acquisitionDateByCountry?.AU ?? toMs(propState?.acquisitionDate),
+      saleMs,
+      cpiRate:               auCpiRate(state),
+    });
+    const auSignedGain = auShortTermGain + auLongTermGain;
+    // ITAA97 s960-275: indexation can neither create nor increase a capital loss, so a
+    // disposal already under water keeps its un-indexed figure untouched.
+    const auSignedIndexedGain = auSignedGain <= 0
+      ? auSignedGain
+      : Math.max(0, +(salePrice - indexedAuBasis).toFixed(2));
+    const auIndexedGain = +(Math.min(gain, auSignedIndexedGain) * auExemption.taxableFraction).toFixed(2);
+
     const destKey     = resolveDestinationCashKey(this.stateRegistry, 'AU', state, destinationKey);
     // The proceeds are AUD; the destination need not be. An AU property may name a US
     // brokerage account as its sale destination, and crediting the raw number there was
@@ -155,6 +187,9 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
        ...(fxLeg ? [fxLeg] : []),
        { type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners,
          usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+         // The FY2027 reform's assessable (indexed, post-s118-185) AU gain. FY≤2026
+         // modules ignore it and keep discounting `gain`.
+         auIndexedGain,
          proceeds: salePrice, costBasis: adjustedBasis, description,
          // G7: the AU-assessable slice after s118-185, and the §1250 slice the US
          // taxes at its own rate. Both default to the pre-G7 answer — taxableFraction

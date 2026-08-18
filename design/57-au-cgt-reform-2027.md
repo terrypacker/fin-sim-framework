@@ -14,8 +14,11 @@ fidelity, and the §11 questions are resolved (see **Decisions locked** below).
   slicing, schema), and `AuTaxRates2027._cgtRelief` taxing the indexed gain. **Additive /
   behavior-neutral until Phase 4**: no lot carries an acquisition level yet, so
   `auIndexedGain === auGain` and the reference scenario is unchanged. Property (house)
-  indexation is intentionally deferred (§6.4) — house gains route into the real bucket
-  un-indexed, so the discount-removal + 30% floor still apply.
+  indexation is deferred **to the §6.4 work** — house gains route into the real bucket
+  un-indexed for now, so the discount-removal + 30% floor still apply. *(That deferral
+  outlived its plan by two phases: Part 2 Item B deleted the §6.4 deemed reset without
+  revisiting property, and the code comment hardened into "property is never indexed."
+  Closed by **Part 4** below.)*
 - **Phase 4 (done)** — activates the reform: the **1 July 2027 deemed cost base reset**
   (`AuCgtBasisResetReducer` + `AuCgtBasisResetHandler`, scheduled by the `AU_TAX` toolset
   only when the sim spans the date) restamps each AU_STOCK lot's `costBaseByCountry.AU` to
@@ -68,7 +71,7 @@ registered; "Tax on Income" ordinary-vs-CGT breakdown sub-rows). The Phase-4 ref
 | Path | Action type | Classified in | Real-bucket routed? |
 |---|---|---|---|
 | AU brokerage sale | `AU_STOCK_WITHDRAWAL_TAX` | AU module | ✅ indexed (`auIndexedGain`) |
-| AU property sale | `AU_HOUSE_SALE_TAX` | AU module | ✅ raw gain (indexation deferred §6.4) |
+| AU property sale | `AU_HOUSE_SALE_TAX` | AU module | ✅ raw gain (indexation deferred §6.4 — now indexed, **Part 4**) |
 | US brokerage drawdown / TLH | `STOCK_WITHDRAWAL_TAX` | **US module** | ❌ leaks |
 | US company/equity sale | `COMPANY_SALE_TAX` | **US module** | ❌ leaks |
 | US collectible / **Gold** sale | `COLLECTIBLE_SALE_TAX` | **US module** | ❌ leaks (gold too — design 56 §7.2) |
@@ -86,7 +89,7 @@ AU side it must be *indexed*, unlike true collectibles.
 | Path | AU assessed (real) gain |
 |---|---|
 | AU brokerage | indexed (`auIndexedGain`) — unchanged |
-| AU property | raw gain, indexation deferred — unchanged |
+| AU property | raw gain, indexation deferred — *superseded by **Part 4**: indexed like every other AU CGT asset* |
 | US brokerage / TLH | **indexed**; deemed acquisition = **AU residency date** (Q1) |
 | US company | **0 basis ⇒ full proceeds taxed, un-indexed** (Q2) |
 | US true collectibles | **un-indexed** raw gain (Q3) |
@@ -251,6 +254,82 @@ passing golden coexisted with a return that did not add up.
 7 tests in `tests/unit/au-min-tax-topup-offsets.test.mjs`, 5 of which fail against the pre-fix
 code (the two that pass are the inertness assertions, which must pass both ways or they are
 testing nothing).
+
+---
+
+### ✅ Part 4 (2026-08-18) — real property finally gets the indexation half
+
+Found by the `au-house-sale` study (F2). A dwelling sold post-2027 was taking the reform's
+**penalty** — Division 115's 50% discount removed, the 30% minimum-tax floor applied — and
+none of its **relief**: `AU_HOUSE_SALE_TAX` booked the RAW gain into `auRealCapitalGainsYTD`,
+which is the bucket `AuTaxRates2027._cgtRelief` actually assesses. Every other AU CGT asset in
+the model was already indexed (brokerage lots per lot in `consumeHoldingsFifo`; bullion and
+company equity from the level stamped at the s855-45 step-up), so the asymmetry was visible
+*inside a single return*: share disposals printed a cost-base indexation relief line while the
+house printed none.
+
+**This was never a decision — it was a stale comment.** §10 Phase 3 said "property indexation
+deferred to §6.4", meaning the §6.4 deemed-reset work would deliver it. Phase 4 built the reset
+for AU_STOCK lots only, Part 2 Item B then **deleted the deemed reset outright**, and nobody
+revisited property. The comment in `au-tax-module-2027.js` had meanwhile hardened into a flat
+"property cost-base indexation is deferred", which is not what any section of this design says.
+Item B's own rationale makes the gap self-contradictory: it taxes the **whole** gain of an asset
+held across 1 July 2027 precisely because "cost-base indexation already relieves the inflationary
+part of the whole holding period" — which was false for the one asset class that never indexed.
+
+**Built:**
+
+1. **`auIndexedCostBase()` in `holdings/holding-period.js`** — the scalar-asset analogue of the
+   per-lot factor `consumeHoldingsFifo` computes. Same module, and for the same stated reason:
+   this is a per-asset fact that reaches several emitters, and it drifts if each one re-inlines
+   it. Alongside it, `auCpiLevel(state)` / `auCpiRate(state)` read the dedicated ATO series with
+   exactly `InflationAdjustReducer`'s fallback order, so the stamp and the sale index off the
+   same series (Item A).
+2. **`auIndexedGain` on `AU_HOUSE_SALE_TAX`** (`au-real-property-classes.js`) — the indexed
+   analogue of `AuTaxModule2026.auAssessableHouseGain`: same `min` against the US-basis gain,
+   same s118-185 fraction. It must be the *assessable* figure, because that is what the rates
+   module taxes — emitting the pre-exemption gain here would re-open the phantom-assessable-income
+   defect the un-indexed path already had to fix.
+3. **`auIndexedGain` on `US_HOUSE_SALE_TAX`** (`us-real-property-classes.js`) — the AU resident's
+   assessment of a foreign dwelling, indexed from the level stamped at the move, exemption applied
+   after. `AuTaxModule2027` now reads it in preference to the nominal `auGain`.
+4. **`PropertyPurchaseApplyReducer` stamps `acquisitionPriceLevel`** — a dwelling bought during
+   the run is acquired at a known price level, so record it exactly rather than back-casting it.
+5. **AU real-property state projection carries `acquisitionPriceLevel`** when the author sets one
+   (projected only when set, so an unstated plan's state stays byte-identical). The sale reducer
+   reads the STATE entry, not the record — design 76 Gap A — so without this the author's field
+   would be silently inert.
+
+**The back-cast, and why it is the interesting decision.** An AU-situs dwelling is *taxable
+Australian property*: it never receives the s855-45 residency step-up, so nothing ever stamps its
+`acquisitionPriceLevel`. A house the plan already owned at t0 therefore has a real acquisition
+date and no price level — the accumulator is 1.0 at sim start and knows nothing about the years
+before it. `auIndexedCostBase` compounds the run's own CPI rate from `acquisitionDate` to the
+disposal to recover the missing factor. The pre-run CPI is not observed; the run's rate stands in
+for it, the same proxy §6.3 already accepts for the forward series. An author who knows the real
+figure sets `acquisitionPriceLevel` on the property and takes the exact ratio instead.
+
+**Where relief still does not reach:** a property with **no `acquisitionDate` at all** is not
+indexed. §6.3's sentence "lots bootstrapped from the scenario get the sim-start level (1.0)"
+would instead index it from t0 — but `consumeHoldingsFifo` has never done that (a lot with no
+level indexes at factor 1), and making property the one asset class that grants relief off a
+missing field would be worse than the inconsistency it fixes. Relief follows a *stated*
+acquisition, which is also what the ATO requires. The return prints a zero indexation-relief line
+when this bites, so it is visible rather than silent. **Note the reference scenario's AU House
+states no `acquisitionDate`** — which is why no golden moved on this change.
+
+**Measured** on the `au-house-sale` v3 study (AU dwelling acquired 2016-07-01, sold 2032-01-15,
+AU CPI 3%): the FY2031-32 AU liability falls by **~54%**, entirely from the indexation relief
+line, and the indexed cost base is ~1.58× the nominal one. `--check` footing invariants pass on
+all nine settled years. `test:unit` 5190 + `test:viz` 1038 GREEN, with a new
+`tests/unit/evt-au-cgt-property-indexation.test.mjs` (13 tests) covering the factor, the 12-month
+gate, the no-downward-ratchet rule, the assessable-gain composition, the loss case, both dwelling
+paths, and the purchase stamp.
+
+**Still open after this:** F5 (the indexation-relief line prints as a negative on the "Income"
+section, a presentation question) and the un-gated 12-month test on the *company equity* and
+*bullion* scalar paths, which compute their factor inline and never check the Division 115 clock.
+Both are independent of this change.
 
 ---
 
@@ -785,7 +864,8 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
 - **Phase 3 ✅ done** — indexation: `Holding.acquisitionPriceLevel` + Option-A per-lot indexed
   gain (`consumeHoldingsFifo` + AU stock sale reducer) + `auRealCapitalGainsYTD` +
   `AuTaxModule2027` + `AuTaxRates2027._cgtRelief` taxing the indexed gain. Property indexation
-  deferred to §6.4. Behavior-neutral until Phase 4 stamps acquisition levels.
+  deferred to §6.4 (delivered by **Part 4**). Behavior-neutral until Phase 4 stamps
+  acquisition levels.
 - **Phase 4 ✅ done** — 1 July 2027 deemed cost base reset (Method 1: restamps
   `costBaseByCountry.AU` + `acquisitionPriceLevel`, scheduled only when the sim spans the
   date) + the Age Pension / JobSeeker exemption flag (§6.6). This activates indexation and

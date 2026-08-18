@@ -152,7 +152,7 @@ import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-spli
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingActivity } from './finance/holdings/holding-activity.js';
-import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields } from './finance/holdings/holding-period.js';
+import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
@@ -288,6 +288,7 @@ import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBands, flatRateBand } from './finance/tax/bracket-schedule.js';
 import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from './finance/tax/capital-gain-character.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
+import { FxTimeline, convertAtRate } from './finance/tax/fx-timeline.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
 import { RESIDENCY_COST_BASE_STEP_UP, stepsUpCostBaseOnResidency } from './finance/tax/residency-cost-base-policy.js';
@@ -991,6 +992,9 @@ export const Finance = {
   isLongTerm,
   disposalTermFields,
   singleAssetTermFields,
+  auIndexedCostBase,
+  auCpiRate,
+  auCpiLevel,
   HoldingTransactReducer,
   HoldingRevalueReducer,
   HoldingSetBasisReducer,
@@ -1308,6 +1312,8 @@ export const Finance = {
   characterizeAuCapitalGain,
   basketCapGainPatch,
   DynamicTaxReducer,
+  FxTimeline,
+  convertAtRate,
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
   UsPeriodAdvanceReducer,

@@ -46,6 +46,7 @@ import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { resolveDestinationCashKey } from './cash-routing.js';
 import { fxRate } from '../fx/fx-conversion.js';
+import { auCpiLevel } from '../holdings/holding-period.js';
 import { propertyExpenseBusinessFraction } from './currency-basis.js';
 
 /**
@@ -258,6 +259,12 @@ export class PropertyPurchaseApplyReducer extends AccountServiceReducer {
         accumulatedDepreciation: 0,
         capitalizedImprovements: 0,
         acquisitionDate: purchaseMs ?? prop.acquisitionDate ?? null,
+        // Design 57 §6.3 — the AU CGT-reform indexation base. The dwelling is acquired
+        // HERE, so this is the one moment its price level is known exactly; without the
+        // stamp the disposal has to back-cast it off the acquisition date, which is the
+        // approximation reserved for assets the plan already owned at t0. The record's
+        // own value wins when the author supplied one.
+        acquisitionPriceLevel: prop.acquisitionPriceLevel ?? auCpiLevel(state),
       },
     });
   }
