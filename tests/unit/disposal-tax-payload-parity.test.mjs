@@ -72,15 +72,26 @@ const SRC_DIR = path.join(ROOT, 'src');
 const TERM_FIELDS = ['usShortTermGain', 'usLongTermGain', 'auShortTermGain', 'auLongTermGain'];
 
 /**
+ * The Form 8949 / CGT-worksheet pair. Every disposal register — `_extractUsSaleRecords`
+ * and `_extractAuDisposals` alike — SKIPS an entry whose `proceeds` is absent, so an
+ * emitter that omits them produces a disposal that is assessed and taxed while
+ * appearing on no supplementary form at all. That is the quietest failure in this file:
+ * the return still foots, and only a cross-check of Schedule D against the 1040's own
+ * capital-gain line reveals the asset is missing. Design 91 §8.9 fixed one emitter;
+ * two others had the same hole, which is why the contract now carries them.
+ */
+const REGISTER_FIELDS = ['proceeds', 'costBasis'];
+
+/**
  * Fields every emitter of these action types must set explicitly, because the
  * consumer's `??` fallback for a missing one is a wrong answer rather than a safe
  * one. `gain` and `residency` are included as the floor: `residency` gates the
  * whole AU branch, so an emitter that forgets it books no AU tax at all.
  */
 const REQUIRED = {
-  STOCK_WITHDRAWAL_TAX:    ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS],
-  AU_STOCK_WITHDRAWAL_TAX: ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS],
-  COLLECTIBLE_SALE_TAX:    ['gain', 'auGain', 'isGold', 'residency', ...TERM_FIELDS],
+  STOCK_WITHDRAWAL_TAX:    ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS, ...REGISTER_FIELDS],
+  AU_STOCK_WITHDRAWAL_TAX: ['gain', 'auGain', 'auDiscountableGain', 'residency', ...TERM_FIELDS, ...REGISTER_FIELDS],
+  COLLECTIBLE_SALE_TAX:    ['gain', 'auGain', 'isGold', 'residency', ...TERM_FIELDS, ...REGISTER_FIELDS],
 };
 
 /**

@@ -1438,6 +1438,13 @@ export class AccountService extends AssetService {
             type: 'COLLECTIBLE_SALE_TAX', gain: collGain, auGain: collAuGain,
             auIndexedGain: collIndexedAuGain, isGold: true, residency,
             usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+            // Design 91 §8.9's reasoning, applied to the two emitters it did not reach:
+            // every disposal register skips an entry with no `proceeds`, so without
+            // these the gold slice was assessed and taxed while appearing on no
+            // Schedule D, Form 8949 or AU CGT worksheet row. The equity leg above has
+            // carried them all along, off the same FIFO tally.
+            proceeds: collProceeds, costBasis: collBasis,
+            description: account.name || key,
             stateKey: account.stateKey ?? key,
           });
         }

@@ -246,6 +246,11 @@ function _sellTax({ allocation, country, proceeds, fifo, residency, stateKey = n
       auGain:        Math.max(0, +(proceeds - collAuBasis).toFixed(2)),
       auIndexedGain: Math.max(0, +(proceeds - collIndexedAu).toFixed(2)),
       usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+      // Design 91 §8.9 — a disposal register skips any entry without `proceeds`, so
+      // omitting these taxed the gold leg while leaving it off every worksheet. The
+      // two stock branches below have always stamped them; this branch is the one that
+      // did not. All GOLD lots here, so the whole leg is the collectible slice.
+      proceeds, costBasis: realizedBasis, description: 'rebalance',
     };
   }
   // CGT 50%-discount-eligible slice (design 62 §4): gain from lots held ≥12 months from

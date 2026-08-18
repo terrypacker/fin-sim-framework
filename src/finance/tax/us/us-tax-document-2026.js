@@ -335,6 +335,10 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
     const collectibles    = saleRecords.filter(r => r.collectible);
     const rateGain28      = Math.max(0, collectibles.reduce((s, r) => s + r.gain, 0));
+    // Line 19, the §1250 counterpart of line 18. Same partitioning rule: the slice is
+    // already inside the Part II totals, and this restates it so the Schedule D Tax
+    // Worksheet can rate it at its own 25% ceiling.
+    const rateGain25      = Math.max(0, saleRecords.reduce((s, r) => s + (r.depreciationGain ?? 0), 0));
     return {
       title:        `Schedule D — ${taxYear}`,
       country:      'US',
@@ -362,6 +366,13 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             ...(collectibles.length
               ? [{ label: '28% Rate Gain (Line 18, from the 28% Rate Gain Worksheet)',
                    amount: rateGain28, sub: true }]
+              : []),
+            // Printed on the same terms as line 18 above: only when the year actually
+            // produced a depreciation slice. A permanent zero would assert that the
+            // Unrecaptured Section 1250 Gain Worksheet was run and came to nothing.
+            ...(rateGain25 > 0
+              ? [{ label: 'Unrecaptured §1250 Gain (Line 19, from the §1250 Worksheet)',
+                   amount: rateGain25, sub: true }]
               : []),
             { label: 'Transfer to Form 1040, Line 7',       amount: totalGain },
           ],

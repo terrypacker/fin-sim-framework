@@ -371,7 +371,53 @@ export function verifyWorksheetRows(rows) {
     }
   }
 
+  failures.push(..._verifyScheduleDTie(lines));
+
   return { failures, reconciled, years: new Set(lines.map(r => r.taxYear)).size };
+}
+
+/**
+ * Schedule D's transfer line must equal the gain lines it feeds on the Form 1040.
+ *
+ * The one invariant that spans two FORMS, which is why it lives outside the per-filing
+ * loop above — and why nothing caught the defect it exists for. The 1040 states the
+ * year's gain in three lines (the 0/15/20 layer, the 28% layer, the §1250 layer) and
+ * Schedule D states the same disposals in one; every check before this compared a form
+ * only against itself, so Schedule D could report a fraction of the return's own
+ * capital gain and every footing still passed. It did: foreign-situated disposals were
+ * missing from the register entirely, and so was every gold sleeve sold through an
+ * emitter that stamped no `proceeds`.
+ *
+ * Runs only when the export includes schedules (`--schedules`); without them there is
+ * no Schedule D to compare and this is silently a no-op, not a failure.
+ */
+function _verifyScheduleDTie(lines) {
+  const failures = [];
+  const GAIN_LABELS = [
+    'Long-Term Capital Gains (Sch. D)',
+    'Collectible Gains (28% rate, Sch. D line 18)',
+    'Unrecaptured \u00a71250 Gain (25% rate, Sch. D line 19)',
+  ];
+  const filings = new Map();
+  for (const r of lines) {
+    if (r.country !== 'US') continue;
+    const key = `${r.taxYear}${r.personKey ? ` [${r.personKey}]` : ''}`;
+    if (!filings.has(key)) filings.set(key, { f1040: [], schedD: [] });
+    if (r.form === 'Form 1040')  filings.get(key).f1040.push(r);
+    if (r.form === 'Schedule D') filings.get(key).schedD.push(r);
+  }
+
+  for (const [key, { f1040, schedD }] of filings) {
+    const transfer = schedD.find(r => r.label === 'Transfer to Form 1040, Line 7');
+    if (!transfer || !f1040.length) continue;
+    const stated = GAIN_LABELS.reduce(
+      (s, label) => s + (f1040.find(r => r.label === label)?.amount ?? 0), 0);
+    if (Math.abs(stated - transfer.amount) > CENT) {
+      failures.push(`${key} US: Schedule D transfers ${transfer.amount.toFixed(2)} `
+        + `but Form 1040 states ${stated.toFixed(2)} of capital gain`);
+    }
+  }
+  return failures;
 }
 
 /** Identity of one filing: a year's form for one filer. `parentLine` is scoped to it. */

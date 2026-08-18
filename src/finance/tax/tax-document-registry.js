@@ -17,6 +17,7 @@ import { AuTaxDocument2025 }     from './au/au-tax-document-2025.js';
 import { AuTaxDocument2026 }     from './au/au-tax-document-2026.js';
 import { AuTaxDocument2027 }     from './au/au-tax-document-2027.js';
 import { TAX_FX_PAIR }           from './tax-fx.js';
+import { FxTimeline, convertAtRate } from './fx-timeline.js';
 import { characterizeAuCapitalGain } from './capital-gain-character.js';
 
 /**
@@ -102,7 +103,7 @@ export class TaxDocumentRegistry {
     const taxYear    = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
     const module     = this._get(cc, taxYear);
     const saleRecords = journal
-      ? cc === 'US' ? _extractUsSaleRecords(journalEntry, journal)
+      ? cc === 'US' ? _extractUsSaleRecords(journalEntry, journal, data.fxRate, this._typeRegistry)
       // No per-person context, so every disposal belongs to the single filer.
       : cc === 'AU' ? _worksheetRowsFor(_extractAuDisposals(journalEntry, journal, data.fxRate, this._typeRegistry), null)
       : []
@@ -577,7 +578,32 @@ function _worksheetRowsFor({ disposals, shareByStateKey }, personKey) {
  */
 const US_DISPOSAL_ACTION_TYPES = new Set([
   'STOCK_WITHDRAWAL_TAX', 'US_HOUSE_SALE_TAX', 'COMPANY_SALE_TAX', 'COLLECTIBLE_SALE_TAX',
+  // A US citizen is taxed on worldwide capital gains, so an AU-situated disposal is
+  // reported on Form 8949 exactly like a domestic one. Both of these book into
+  // `usCapitalGainsYTD` (au-tax-module-2026) and both were missing from this register,
+  // which is why Schedule D could total a fraction of the 1040's own capital-gain line
+  // with nothing on either form to say what the difference was. Their money fields are
+  // AUD; `_usDisposalRate` is what puts them on a USD form.
+  'AU_STOCK_WITHDRAWAL_TAX', 'AU_HOUSE_SALE_TAX',
 ]);
+
+/**
+ * The US accumulators a disposal can book into, and what each one is on Schedule D.
+ *
+ * Read from the state diff rather than from the action payload, for the same reason
+ * `_extractAuDisposals` reads the AU gain that way and `CapitalGainsByDisposalDef`
+ * sums `stateDelta` rather than `gain`: the payload is the disposal's own measure in
+ * its own currency, while the accumulator holds what the RETURN was assessed on —
+ * converted, §121-excluded, §1250-carved and signed. For an AU house those differ by
+ * more than the exchange rate, and no arithmetic over the payload recovers the
+ * difference, because §121 is applied inside the reducer and never stamped back.
+ *
+ * `usUnrecaptured1250GainYTD` is kept apart from the other three: it is a gain the
+ * return taxes at its own ceiling and restates on Schedule D line 19, not part of the
+ * net long-term gain the other three sum to.
+ */
+const US_GAIN_FIELDS = ['usCapitalGainsYTD', 'usShortTermCapitalGainsYTD', 'usCollectibleGainsYTD'];
+const US_1250_FIELD  = 'usUnrecaptured1250GainYTD';
 
 /**
  * Column (a) fallback when the emitter sends no `description` and the row has no
@@ -632,11 +658,34 @@ function _saleAdjustment(actionType, proceeds, costBasis, gain) {
  * Collect the US disposal journal entries carrying sale detail (a `proceeds` field)
  * between the previous US TAX_SETTLE_APPLY and the current one.
  *
+ * Every money figure on the returned record is **USD**, whatever currency the disposal
+ * was struck in. Two different mechanisms get it there, and the split is the whole
+ * point of this function:
+ *
+ *   `gain` / `depreciationGain` come from the disposal's own STATE DIFF — what it
+ *     actually added to the US accumulators. That is the return's figure by
+ *     definition: already converted, already net of §121 and signed. `gain` is the
+ *     whole taxable gain across every rate group, which is what Schedule D column (h)
+ *     reports; `depreciationGain` is the §1250 slice INSIDE it, restated on line 19.
+ *     See `US_GAIN_FIELDS`.
+ *   `proceeds` / `costBasis` have no accumulator to read, so they are converted at the
+ *     rate the run held AT THE DISPOSAL — `_usDisposalRate` — rather than at the
+ *     settle-date rate, which is a year-end benchmark that never applied to a January
+ *     sale.
+ *
+ * Because the two arrive by different routes, column (g) absorbs whatever separates
+ * them; that is exactly its job on a real Form 8949, and `_saleAdjustment` codes the
+ * cases it can name.
+ *
  * @param {object}   currentEntry  - The TAX_SETTLE_APPLY journal entry being reported.
  * @param {object[]} journal       - Full journal entry array.
- * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain, adjustment, code }[]}
+ * @param {?number}  [settleRate]  - AUD per USD at the settlement; the fallback when a
+ *                                   disposal predates every recorded rate move.
+ * @param {?object}  [typeRegistry] - Declares each disposal type's native currency.
+ * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain,
+ *             depreciationGain, currency, fxRate, adjustment, code }[]}
  */
-function _extractUsSaleRecords(currentEntry, journal) {
+function _extractUsSaleRecords(currentEntry, journal, settleRate = null, typeRegistry = null) {
   const currentIdx = journal.indexOf(currentEntry);
   if (currentIdx < 0) return [];
 
@@ -650,6 +699,11 @@ function _extractUsSaleRecords(currentEntry, journal) {
     }
   }
 
+  // Both indexes are one linear pass over the journal, built once per document — the
+  // same cost profile `_indexByInstance` already documents for the AU side.
+  const byInstance = _indexByInstance(journal);
+  const fx         = new FxTimeline(journal);
+
   const records = [];
   const isFirstForAction = _firstEntryPerAction();
   for (let i = yearStartIdx; i < currentIdx; i++) {
@@ -659,9 +713,24 @@ function _extractUsSaleRecords(currentEntry, journal) {
     if (!US_DISPOSAL_ACTION_TYPES.has(t) || d?.proceeds == null) continue;
     if (!isFirstForAction(e)) continue;
 
-    const proceeds  = d.proceeds;
-    const costBasis = d.costBasis ?? (d.proceeds - (d.gain ?? 0));
-    const gain      = d.gain ?? 0;
+    const booked   = _usGainDeltas(e, byInstance);
+    const currency = _disposalCurrency(typeRegistry, t);
+    // `fx.at(i)` and not `fx.onDate(e.date)`: several reducers can move the rate on one
+    // date (the period-advance mirror, then the regime overwrite), so the journal
+    // POSITION is what identifies the rate this disposal's reducer actually read.
+    const rate     = currency === 'USD' ? 1 : (fx.at(i) ?? settleRate);
+    const usd      = v => convertAtRate(v, currency, 'USD', rate);
+
+    const proceeds  = usd(d.proceeds);
+    const costBasis = usd(d.costBasis ?? (d.proceeds - (d.gain ?? 0)));
+    // Σ of EVERY US gain accumulator this disposal touched — long, short, collectible
+    // and the §1250 slice. Schedule D column (h) is the whole taxable gain of the row;
+    // the rate groups inside it are restated on lines 18 and 19, not netted out of it.
+    // Summing only some of them is what left column (g) carrying the §1250 carve-out
+    // as if it were a reconciling difference. Falls back to the payload only when the
+    // disposal booked nothing at all, which is how a zero-gain sale still gets a row.
+    const gain      = booked.any ? booked.gain + booked.unrecap1250 : usd(d.gain ?? 0);
+
     records.push({
       // Carried for the same reason the AU worksheet carries it: Form 8949 and
       // Schedule D describe the same accounts and would otherwise print raw stateKeys
@@ -673,6 +742,17 @@ function _extractUsSaleRecords(currentEntry, journal) {
       proceeds,
       costBasis,
       gain,
+      // Schedule D line 19 — the depreciation slice INSIDE `gain`, taxed at its own
+      // ceiling (design 83 G7 step 3b). Restated, never added: line 19 partitions the
+      // net gain the way line 18 does for collectibles, and adding either to it would
+      // report the disposal twice.
+      depreciationGain: booked.unrecap1250,
+      // What the disposal was struck in, and the rate that put it on a USD form. Both
+      // are disclosure, not arithmetic: a reader cannot check a translated foreign
+      // sale without them, and `rate` is the one number on the row that no other
+      // figure on the return reveals.
+      currency,
+      fxRate:       currency === 'USD' ? null : (rate ?? null),
       // What the 28% Rate Gain Worksheet selects on. Kept as a record flag rather
       // than re-derived from the code letter in the document module: the code is a
       // presentation detail of column (f), the 28%-rate character is the fact.
@@ -681,4 +761,34 @@ function _extractUsSaleRecords(currentEntry, journal) {
     });
   }
   return records;
+}
+
+/**
+ * The USD amounts a disposal booked into the US gain accumulators, summed across every
+ * journal entry sharing its `instanceId`.
+ *
+ * Summed across the fan-out rather than read off the first entry, for the reason
+ * `_personSharesFor` documents: one action becomes one entry per consuming reducer,
+ * and which of them books the US gain depends on the type — the US module's reducer
+ * for a US disposal, the AU module's for an AU one. Only one reducer writes a given
+ * accumulator per action, so the sum cannot double-count.
+ *
+ * `any` distinguishes "booked zero" from "booked nothing": a disposal that reached no
+ * US accumulator at all (an old journal predating an accumulator, a type this build
+ * does not assess) must fall back to its payload rather than silently report 0.
+ */
+function _usGainDeltas(entry, byInstance) {
+  const id      = entry.action?.instanceId;
+  const entries = id == null ? [entry] : (byInstance.get(id) ?? [entry]);
+  let gain = 0, unrecap1250 = 0, any = false;
+  for (const e of entries) {
+    for (const f of e.stateDiff ?? []) {
+      const isGain = US_GAIN_FIELDS.includes(f.field);
+      if (!isGain && f.field !== US_1250_FIELD) continue;
+      const delta = f.delta ?? ((f.after ?? 0) - (f.before ?? 0));
+      any = true;
+      if (isGain) gain += delta; else unrecap1250 += delta;
+    }
+  }
+  return { gain, unrecap1250, any };
 }
