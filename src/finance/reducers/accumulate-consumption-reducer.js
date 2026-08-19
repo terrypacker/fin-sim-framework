@@ -57,10 +57,28 @@ export class AccumulateConsumptionReducer extends Reducer {
     const account  = state[action.targetKey];
     const currency = account?.currency?.code ?? account?.currency ?? 'USD';
 
+    // The BASE-YEAR anchor rate, not spot — and the pairing with the deflator below is
+    // the whole reason. This line and the price level together convert a nominal local
+    // amount into BASE-YEAR USD, so both halves must be base-year quantities:
+    //
+    //     real_AUD  = nominal_AUD / AU_price_accumulator      → base-year AUD
+    //     base_USD  = real_AUD    / base_year_AUD_per_USD     → base-year USD
+    //
+    // Using spot here divided a base-year-AUD quantity by a CURRENT nominal rate, which
+    // is not a unit that exists. The symptom: with the AUD cost of living held fixed
+    // (`monthlyExpensesCurrency: 'RESIDENCE'`), lifetime `cumulativeConsumption` varied
+    // **36% across FX seeds** while the household ate identical food in every path — and
+    // this quantity is exactly what MAX_CRRA_UTILITY and DIE_WITH_TARGET maximize, so the
+    // optimizer was being paid to pick exchange-rate paths.
+    //
+    // The alternative coherent convention is to convert at spot and deflate by the US
+    // index; that is what `spending-cube.js` does for REPORTING (§9.b.1, one deflator for
+    // the whole cube). The two agree only under exact PPP and are deliberately different:
+    // an objective wants the household's real basket, a report wants its USD cost.
     let usd = amount;
     if (currency === 'AUD') {
-      const rate = state.effectiveExchangeRates?.['USD_AUD']
-        ?? state.baseExchangeRates?.['USD_AUD'] ?? 1;
+      const rate = state.baseExchangeRates?.['USD_AUD']
+        ?? state.effectiveExchangeRates?.['USD_AUD'] ?? 1;
       usd = amount / rate;
     }
 

@@ -87,10 +87,13 @@ export class AccumulateConsumptionUtilityReducer extends Reducer {
     const account  = state[action.targetKey];
     const currency = account?.currency?.code ?? account?.currency ?? 'USD';
 
+    // BASE-YEAR anchor rate, not spot — see AccumulateConsumptionReducer for the unit
+    // argument and the 36%-phantom-variation measurement. Kept identical to that read on
+    // purpose: these two drifting apart is what made the last defect a two-file fix.
     let usd = amount;
     if (currency === 'AUD') {
-      const rate = state.effectiveExchangeRates?.['USD_AUD']
-        ?? state.baseExchangeRates?.['USD_AUD'] ?? 1;
+      const rate = state.baseExchangeRates?.['USD_AUD']
+        ?? state.effectiveExchangeRates?.['USD_AUD'] ?? 1;
       usd = amount / rate;
     }
 
