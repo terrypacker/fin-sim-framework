@@ -1,8 +1,13 @@
 # 92 — The FX observation overlay: driving the simulation from a published rate feed
 
-**Status** (2026-08-15): **PROPOSED.** Nothing built. This is design 87 §13.6 **step 2**
-("published FX overlay") promoted out of sketch altitude into a specification, plus the
-extrapolation question 87 §13 deliberately left alone.
+**Status** (2026-08-18): **STEPS 1–2 BUILT.** §14's decisions are locked (see §14). The
+packaged series and the calibration tool exist and are tested; the overlay modes (§3, §4,
+steps 3–7) are **not built** and are deliberately deferred until the calibrated
+`MEAN_REVERTING` has been used in anger. `HISTORICAL_SAMPLED` is **cut** — see §14 Q4.
+
+This is design 87 §13.6 **step 2** ("published FX overlay") promoted out of sketch
+altitude into a specification, plus the extrapolation question 87 §13 deliberately left
+alone.
 
 Design 87 closed everything except §13, the observed-data overlay. Its own conclusion was
 that FX is the cheapest possible first overlay, because `effectiveExchangeRates.USD_AUD`
@@ -141,16 +146,15 @@ different things rather than variations:
 |---|---|---|---|
 | `HISTORICAL_REPLAY` | sim month *i* → series month `start + i` | yes | "what if the next 30 years look like 1985–2015?" |
 | `HISTORICAL_LOOP` | sim month *i* → series month `start + (i mod N)` over a window of N | yes | a horizon longer than the window, without inventing data |
-| `HISTORICAL_SAMPLED` | as `HISTORICAL_REPLAY`, but the start offset is drawn per MC iteration | no | historical dispersion, ~one path per available start month |
+| ~~`HISTORICAL_SAMPLED`~~ | as `HISTORICAL_REPLAY`, but the start offset is drawn per MC iteration | no | **CUT — §14 Q4.** Too few independent paths at a retirement horizon |
 | `HISTORICAL_BOOTSTRAP` | resample blocks of historical monthly log-returns | no | historical *character* (fat tails, vol clustering) on an unlimited horizon |
 
-`HISTORICAL_SAMPLED` is the cheap bridge between replay and bootstrap and is easy to
-overlook: it is `HISTORICAL_REPLAY` with `fxReplayStart` drawn instead of authored. It
-produces genuinely observed paths — no resampling artifacts at all — at the cost of
-having only as many distinct paths as the series has valid start months (a few hundred,
-heavily overlapping and therefore far less independent than the count suggests). For MC
-work it is strictly better than a deterministic replay (§6.2) and strictly worse than a
-bootstrap for tail estimation.
+`HISTORICAL_SAMPLED` looked like the cheap bridge between replay and bootstrap — it is
+`HISTORICAL_REPLAY` with `fxReplayStart` drawn instead of authored, producing genuinely
+observed paths with no resampling artifacts. **It was cut once the count was actually
+computed** (§14 Q4): the post-float window yields 91 distinct starts at a 35-year horizon
+and adjacent starts share 419 of 420 months, so the effective number of independent paths
+is ~1. It would look like a working MC axis and report near-zero dispersion.
 
 ### 3.1 `HISTORICAL_LOOP` and the seam
 
@@ -265,10 +269,10 @@ This does not make the overlay comparable to `NONE`, and cannot: `NONE` schedule
 between `NONE` and `MEAN_REVERTING`, and the right response is a test that pins the
 draw count per model rather than an attempt to paper over it.
 
-`HISTORICAL_SAMPLED` draws its start offset **once, at configuration time**, from the
-iteration seed — not in-loop — so its in-loop draw ledger also matches. `HISTORICAL_BOOTSTRAP`
-draws in-loop by design; budget one uniform per block boundary and document that its
-ledger differs.
+`HISTORICAL_BOOTSTRAP` draws in-loop by design. Budget a **fixed two uniforms per tick**
+and discard the unused one, rather than the "one uniform per block boundary" this document
+first proposed: a variable draw count per tick desynchronises the ledger between seeds,
+which is the very contamination §6.1 exists to prevent.
 
 ### 6.2 A deterministic overlay collapses the FX dimension in Monte Carlo
 
@@ -280,7 +284,7 @@ world, and it is precisely the failure mode of an inert parameter that looks liv
 Two defences, both cheap:
 
 - The MC runner **warns** when a deterministic FX mode is active with more than one
-  iteration, naming `HISTORICAL_SAMPLED` and `HISTORICAL_BOOTSTRAP` as the alternatives.
+  iteration, naming `HISTORICAL_BOOTSTRAP` as the alternative.
 - `fxVolatility` and `fxReversionSpeed` are gated `visibleWhen` a stochastic model is
   selected ([[visiblewhen-composable-dsl]]), and are refused as MC/optimizer axes under
   replay modes. `fxVolatility` is currently `mc: true`; sampling it under replay would be
@@ -331,14 +335,30 @@ wear that description and only one of them is a new model.
 
 ### 8.1 Calibration is a tool, not a model — and it is the highest value per unit of work
 
-`fxVolatility` defaults to 0.06 and `fxReversionSpeed` to 0.5. Both are guesses. The
-series on disk can replace both with estimates:
+`fxVolatility` defaulted to 0.06 and `fxReversionSpeed` to 0.5. Both were guesses, and
+both were wrong in a way that mattered — the measured values are 0.1133 and 0.296, so the
+shipped volatility was about **half** the observed figure. The series on disk replaces
+both with estimates:
 
 ```text
 σ̂  = sd( monthly log returns ) × √12
 k̂  = −12 · ln( ρ̂₁ )        from an AR(1) fit of log deviation about its window mean
 μ̂  = mean( monthly log returns ) × 12          # reported, never silently applied
 ```
+
+> **SUPERSEDED (18 Aug 2026) — the k̂ estimator above is wrong for this purpose.**
+> `−12·ln(ρ̂₁)` is the MLE *if the series really is an OU*. FX is not, and under that
+> misspecification the lag-1 statistic is the worst available target: most sensitive to
+> month-to-month noise, least informative about the multi-year behaviour a retirement
+> projection exists to model. On the post-float window it returns k=0.296 (half-life
+> 2.3y), which reproduces the observed 1-year dispersion and then flattens — understating
+> 10-year dispersion by a third and 44-year dispersion by ~40%.
+>
+> What shipped instead is `fitFxTermStructure`, which fits (σ, k) to the observed **term
+> structure of dispersion** across horizons with ≥4 non-overlapping windows: post-float
+> σ=0.1142, **k=0.114**, half-life 6.1 years. The variance ratio agrees (at 10y: history
+> 0.650, term-structure fit 0.634, lag-1 fit 0.370). σ̂ and μ̂ above are unaffected — only
+> k̂ moves. See `scenarios/fx-study/fx-study.md` §5.
 
 This adds **no** enum value, **no** new code path in the loop, and **no** new failure
 mode. It makes the two knobs that already exist honest, and it is the cheapest way to get
@@ -383,7 +403,7 @@ All in the existing `FX` group on `us-au-cross-border-toolset`.
 
 | key | type | default | notes |
 |---|---|---|---|
-| `fxProcessModel` | Enum | `NONE` | gains `HISTORICAL_REPLAY`, `HISTORICAL_LOOP`, `HISTORICAL_SAMPLED`, `HISTORICAL_BOOTSTRAP` |
+| `fxProcessModel` | Enum | `NONE` | gains `HISTORICAL_REPLAY`, `HISTORICAL_LOOP`, `HISTORICAL_BOOTSTRAP` (`HISTORICAL_SAMPLED` cut, §14 Q4) |
 | `fxSeriesId` | Enum | `USD_AUD.H10.monthly` | one option today; exists so a second pair is additive |
 | `fxReplayAnchoring` | Enum | `RETURNS` | `RETURNS` \| `LEVEL`; `LEVEL` forbidden with `HISTORICAL_LOOP` (§4) |
 | `fxReplayStart` | Date | `1984-01` | first mapped month; the float boundary (§5) |
@@ -392,8 +412,8 @@ All in the existing `FX` group on `us-au-cross-border-toolset`.
 | `fxReplayFallbackModel` | Enum | `MEAN_REVERTING` | only read when `fxReplayExhausted = MODEL` |
 | `fxBootstrapBlockMonths` | Number | 12 | mean geometric block length |
 | `fxBootstrapDemean` | Boolean | true | §5 |
-| `fxVolatility` | Number | 0.06 | **gate** `visibleWhen` a stochastic model; refuse as an MC axis under replay |
-| `fxReversionSpeed` | Number | 0.5 | same gating |
+| `fxVolatility` | Number | **0.1133** | calibrated post-float (§14 Q6, BUILT). **gate** `visibleWhen` a stochastic model; refuse as an MC axis under replay |
+| `fxReversionSpeed` | Number | **0.296** | calibrated post-float (§14 Q6, BUILT); same gating |
 
 `mc`/`opt` flags: the replay window fields are `mc: false, opt: false`. A window is a
 scenario-authoring choice, and an optimizer allowed to search over historical start dates
@@ -410,7 +430,9 @@ trap 5 wearing new clothes, and it is how the §988 debt leg was mis-verified on
   outside. Loud is right: the repo's recurring bug shape is an absent value read as a
   benign one ([[destination-key-absent-guard]], [[config-field-in-state-is-not-read]]).
   With a 1984-start window there is over 40 years of coverage, so most realistic
-  horizons never see this.
+  horizons never see this. **The check runs at CONFIG time**, in
+  `FxService.getContributions()` against `context.startDate`/`endDate` — not on the tick
+  that falls off the end, which would surface deep inside an MC iteration (§14 Q2).
 - **`HOLD`** — freeze `fxDeviation` at its last overlaid value. Honest only if the run
   reports it; a frozen FX rate for the back half of a horizon is a material assumption.
 - **`MODEL`** — hand over to `fxReplayFallbackModel` and continue stochastically. The
@@ -503,25 +525,115 @@ is committed, so they are hermetic):
    context extension, discard-the-draw, exhaustion handling, provenance fields.
 4. **`LEVEL` anchoring + the tick-zero guard** — unlocks the backtest.
 5. **`HISTORICAL_LOOP`** — the seam rule, returns-only.
-6. **`HISTORICAL_SAMPLED`** — one line on top of 3, plus the per-iteration offset draw.
-7. **`HISTORICAL_BOOTSTRAP`** — the only genuinely new stochastic process.
+6. ~~**`HISTORICAL_SAMPLED`**~~ — **cut** (§14 Q4).
+7. **`HISTORICAL_BOOTSTRAP`** — the only genuinely new stochastic process, and now the
+   only historical MC mode.
 
-Steps 1–2 are worth doing regardless of whether 3–7 are ever built.
+Steps 1–2 are worth doing regardless of whether 3–7 are ever built. **They are done**
+(§15); 3–7 are deferred pending experience with the calibrated `MEAN_REVERTING`.
 
 ---
 
-## 14. Decisions needed before building
+## 14. Decisions — LOCKED 2026-08-18
 
-1. **Is the default window really the post-float period (1984-01→)?** It is the
-   defensible choice statistically (§5) and it throws away 13 years of data.
-2. **Is `ERROR` the right exhaustion default**, or should long-horizon convenience win
-   and make it `MODEL`? `ERROR` follows this repo's pattern of preferring loud absence;
-   `MODEL` is what a 40-year projection actually wants.
-3. **Does `LEVEL` need to exist before the backtest does?** If the backtest (87 §13.6
-   step 3) is not imminent, steps 4 and 5 can be dropped and the surface shrinks
-   materially.
-4. **Should `HISTORICAL_SAMPLED` be the recommended MC mode over `HISTORICAL_BOOTSTRAP`?**
-   Sampled paths are genuinely observed but few and heavily overlapping; bootstrap paths
-   are unlimited but synthetic. This determines whether step 7 is needed.
-5. **Does anything besides USD/AUD need this?** If not, `fxSeriesId` can be dropped and
-   the packaged module referenced directly — one fewer indirection.
+1. **Default window: post-float, 1984-01→.** Confirmed. It costs 13 years of data and is
+   the defensible choice: σ̂ barely moves across windows (0.109 whole-series, 0.113
+   post-float, 0.119 post-2000) but k̂ **halves** when the managed float is included
+   (0.296 → 0.111, a half-life of 2.3 years against 6.2). A pegged currency is not a draw
+   from the same process, and the estimate says so.
+
+2. **Exhaustion default: `ERROR`, checked at CONFIG time.** Keeps the repo's
+   loud-absence pattern, but the doc as first written threw on tick ~400, inside an MC
+   iteration — an expensive place to learn a window is too short. `context.startDate` /
+   `context.endDate` already reach the toolsets (`au-tax-toolset.js:170` uses them), so
+   the window-versus-horizon check belongs in `FxService.getContributions()` and fails
+   before the run starts. With a 1984 window there is 42 years of coverage, so a
+   realistic horizon rarely reaches the boundary at all.
+
+3. **`LEVEL` waits for the backtest.** Deferred with steps 3–7; the surface shrinks
+   materially in the meantime. Revisit when 87 §13.6 step 3 is actually imminent.
+
+4. **`HISTORICAL_SAMPLED` is CUT.** The numbers decide this rather than taste. The
+   post-float window is 511 months, so distinct start offsets are 511 − horizon: **151**
+   at a 30-year horizon, **91** at 35 years, **31** at 40 years — and adjacent starts
+   share 419 of 420 months. That is on the order of *one* effectively independent path.
+   It would present as a working MC axis and report near-zero FX dispersion, which is
+   exactly the inert-lever failure §6.2 warns about
+   ([[mpc-lever-tests-scenario-shaped]], [[dead-spouse-growth-params]]). If historical
+   dispersion is wanted, `HISTORICAL_BOOTSTRAP` is the only mode that supplies it.
+   A handful of authored "era" arms is just `HISTORICAL_REPLAY` with a chosen start and
+   needs no enum value of its own.
+
+5. **`fxSeriesId` stays.** More pairs are planned, so the indirection is kept from the
+   start rather than retrofitted. One option exists today.
+
+6. **The shipped defaults are now calibrated, not guessed.** `fxVolatility` 0.06 →
+   **0.1133** and `fxReversionSpeed` 0.5 → **0.296**. This was not in the original
+   document and is the largest behavioural change in steps 1–2: the old default ran the
+   currency at roughly **half** its observed volatility, and every `MEAN_REVERTING`
+   scenario inherited that. Golden fixtures use `NONE` and did not move; any scenario
+   setting the values explicitly is unaffected.
+
+---
+
+## 15. What was built (steps 1–2)
+
+| file | what it is |
+|---|---|
+| `scripts/dev/build-fx-series.mjs` | generator; `--check` re-renders and diffs (`npm run build:fx-series`) |
+| `src/finance/fx/data/usd-aud-h10-monthly.js` | generated, committed: 667 months 1971-01 → 2026-07, `audPerUsd` |
+| `scripts/lib/fx-calibration.mjs` | the estimator, pure over arrays so it can be verified against a synthetic path |
+| `scripts/lab/calibrate-fx.mjs` | window selection + presentation (`npm run calibrate:fx -- --compare`) |
+| `tests/unit/fx-series-package.test.mjs` | FXS-1…6: generator sync, direction, contiguity, provenance, downsample rule, no invented trailing month |
+| `tests/unit/fx-calibration.test.mjs` | FXC-1…6: parameter recovery, working detector, drift isolation, refusal, defaults-in-sync |
+
+**No engine change.** `FX_PROCESS_MODELS`, `FxTickHandler`, `FxProcessReducer` and the
+step-function signature are untouched, so §2.1's context extension and §10's provenance
+fields remain unbuilt and unneeded. The full suite passes (5212 tests).
+
+### 15.1 Two things worth carrying into step 3
+
+- **A plausibility band cannot test the direction.** The obvious guard — assert every
+  packaged value looks like ~1.42 rather than ~0.70 — does not work for this pair. The
+  AUD has traded on both sides of parity (1.4875 USD in 1974, 0.4881 in 2001), so the
+  true `audPerUsd` range 0.67–2.05 overlaps the inverted range 0.49–1.49 almost entirely.
+  Only hand-transcribed fixed points discriminate, and they must straddle parity so no
+  single global flip satisfies them all. FXS-2 does this; the first draft of it did not,
+  and passed for the wrong reason until a 1971 value failed the band.
+
+- **An estimator only ever run on real data is unverified.** It returns a
+  plausible-looking number for any input. The calibration is therefore split: the
+  estimator is pure over arrays (`scripts/lib/fx-calibration.mjs`) so FXC-1 can drive it
+  with a synthetic OU path of known σ and k — built from *the engine's own* step function
+  — and check recovery. FXC-2 is the working-detector control that stops FXC-1 passing
+  for an estimator that returns a near-constant.
+
+### 15.2 What the FX study changed (18 Aug 2026)
+
+A spending study on a real 44-year cross-border plan (`scenarios/fx-study/`) revisited
+this document's step 3–7 question and answered **no**, with two corrections to what
+steps 1–2 shipped:
+
+- **`fxReversionSpeed` 0.296 → 0.114** (§8.1 note above). The k estimator this document
+  specified was the wrong fit target.
+- **`fxVolatility` 0.1133 → 0.1142** — the same number to within noise; σ was always fine.
+
+On steps 3–7: over horizons the data can speak to (≤10y) a correctly-fitted OU fits about
+as well as the best block bootstrap (RMSE 0.037 vs 0.028), and beyond 10 years neither is
+validatable — the post-float window holds 0–1 independent 44-year observations.
+`HISTORICAL_REPLAY` additionally cannot cover a 528-month horizon from a 511-month
+window. §5's warning that a replay window is a currency view was confirmed and is if
+anything understated: the drift lever outweighs the entire volatility process on that plan.
+
+The study's own largest finding was **not** about design 92 at all — it was that
+`monthlyExpensesCurrency` defaults to USD, which makes real consumption FX-invariant by
+construction for a household living in Australia on a USD portfolio (0% spending
+dispersion against 36% once the target is denominated in AUD).
+
+### 15.3 The refresh obligation
+
+`rates/README.md` now documents it: a FRED refresh means update the retrieval date,
+`npm run build:fx-series`, then `npm run calibrate:fx` and **decide**. FXS-1 fails while
+the generated module is stale; FXC-6 fails when a revision moves σ̂ or k̂ outside tolerance
+of the shipped defaults. The second failure is the point — it forces a deliberate
+re-decision instead of letting a default quietly stop describing its own source.

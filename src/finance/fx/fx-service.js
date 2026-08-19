@@ -18,10 +18,27 @@ import { FxStepApplyReducer }     from './fx-step-apply-reducer.js';
 import { FxProcessReducer }       from './fx-process-reducer.js';
 import { EventSeries }            from '../../simulation-framework/events/event-series.js';
 
-/** Default per-step FX volatility (annualized log-vol) when a process model is active. */
-const DEFAULT_FX_VOLATILITY = 0.06;
-/** Default mean-reversion speed (per year) for the MEAN_REVERTING model. */
-const DEFAULT_FX_REVERSION  = 0.5;
+/**
+ * Default per-step FX volatility (annualized log-vol) when a process model is active.
+ *
+ * Calibrated, not guessed (design 92 §8.1): fitted to the observed TERM STRUCTURE of
+ * USD/AUD dispersion over the post-float window 1984-01 → 2026-07. Reproduce with
+ * `node scripts/lab/calibrate-fx.mjs --compare`. The original 0.06 was a placeholder and
+ * ran the currency at roughly half its observed volatility.
+ */
+const DEFAULT_FX_VOLATILITY = 0.1142;
+/**
+ * Default mean-reversion speed (per year) for the MEAN_REVERTING model — a half-life of
+ * about 6.1 years.
+ *
+ * Fitted to the term structure, NOT to the lag-1 autocorrelation. The lag-1 AR(1)
+ * estimator design 92 §8.1 originally specified returns 0.296 (half-life 2.3y) on this
+ * same window, which over-reverts: it reproduces the observed 1-year dispersion and then
+ * flattens, understating 10-year dispersion by a third and 44-year dispersion by ~40%.
+ * The variance ratio makes the same point — at 10 years the history gives 0.650, this
+ * value gives 0.634, and the AR(1) value gives 0.370. See `fitFxTermStructure`.
+ */
+const DEFAULT_FX_REVERSION  = 0.114;
 /** Default FX tick interval in years (monthly). */
 const FX_TICK_DT            = 1 / 12;
 

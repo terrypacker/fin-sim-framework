@@ -398,6 +398,22 @@ export const US_RETIREMENT = {
         description: 'Monthly household expenses drawn from savings',
       },
       {
+        key: 'monthlyExpensesCurrency', label: 'Expense Denomination',
+        type: 'Enum', group: 'Spending', mc: false, opt: false,
+        options: ['RESIDENCE', 'USD', 'AUD'],
+        defaultValue: 'RESIDENCE',
+        description: 'What currency the Monthly Expenses figure is a price IN. '
+          + 'RESIDENCE (default) treats it as the cost of living in the country you live in: '
+          + 'the figure is re-based once into the residence currency at the scenario anchor rate '
+          + 'on a move, then indexed to that country’s CPI, and the exchange rate moves the '
+          + 'COST OF FUNDING it rather than the standard of living. USD/AUD pin the figure to one '
+          + 'currency and convert at spot each month, which for a household that moves country is '
+          + 'inconsistent with the CPI indexation and reports far too little FX risk '
+          + '(measured: 1.5% spending dispersion under USD vs 36% under RESIDENCE on a '
+          + '44-year US→AU plan). Pin to a fixed currency only when the costs really are '
+          + 'denominated there regardless of where you live.',
+      },
+      {
         key: 'inflationAdjust', label: 'Inflation-Adjust Expenses',
         type: 'Boolean', group: 'Spending', mc: false, opt: true,
         defaultValue: true,
@@ -906,7 +922,7 @@ export const US_RETIREMENT = {
     const expensesHandler = new MonthlyExpensesHandler({
       stateRegistry:    sr,
       monthlyExpenses:  p.monthlyExpenses,
-      expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+      expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
       usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
       auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
     });
@@ -1235,7 +1251,7 @@ export const US_RETIREMENT = {
       if (expEvents.length > 0) {
         const expH = new ExpenseEventHandler({
           stateRegistry: sr,
-          expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+          expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
           usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
           auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
         });

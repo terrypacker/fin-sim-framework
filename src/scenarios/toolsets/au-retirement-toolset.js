@@ -471,7 +471,7 @@ export const AU_RETIREMENT = {
       const expHandler = new MonthlyExpensesHandler({
         stateRegistry:    sr,
         monthlyExpenses:  p.monthlyExpenses,
-        expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+        expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
         usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
         auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
       });
@@ -631,7 +631,7 @@ export const AU_RETIREMENT = {
         if (expEvents.length > 0) {
           const expH = new ExpenseEventHandler({
             stateRegistry: sr,
-            expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+            expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
             usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
             auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
           });
