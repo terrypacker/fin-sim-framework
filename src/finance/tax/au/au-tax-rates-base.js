@@ -556,6 +556,15 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         } else {
           const without = this._assessResidentPreFito({
             ...state,
+            // Marks the counterfactual so `AuTaxRates2027._cgtRelief` leaves its
+            // indexation partition invariant unenforced here. This pass subtracts two
+            // removal sets that a broken classifier can make inconsistent, and the
+            // resulting degenerate limit is a DETECTOR (FITO-D) rather than a defect to
+            // repair: clamping it would silently paper over the missing
+            // `usSourceRealCapGainsAudYTD` signal, which is the one failure mode this
+            // whole "without" pass was built to expose. Nothing assessed on a return is
+            // computed from this pass — it only sizes a limit.
+            _fitoCounterfactual: true,
             auOrdinaryIncomeYTD: (state.auOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryAudYTD ?? 0),
             auCapitalGainsYTD:   (state.auCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsAudYTD ?? 0),
             // FY2027+ assesses the *real* (indexed) bucket, so the "without" pass

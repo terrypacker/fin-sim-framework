@@ -29,6 +29,7 @@ import assert   from 'node:assert/strict';
 
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
 import { AuTaxModule2027 } from '../../src/finance/tax/au/au-tax-module-2027.js';
+import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { InflationAdjustedAuTaxRates } from '../../src/finance/tax/inflation-adjusted-tax-rates.js';
 import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
@@ -264,4 +265,98 @@ test('STRADDLE: pre-2027 AU-resident lot sold post-2027 assesses the FULL indexe
   assert.strictEqual(tax.discountedCapitalGains, 90_000, 'full indexed gain assessable (no 50% discount)');
   assert.ok(tax.cgtMinimumTaxTopUp > 0, '30% minimum tax floor applies to the whole gain');
   assert.match(tax.lineItems.find(l => l.amount === -tax.cgtDiscount)?.label ?? '', /Discount Removed/);
+});
+
+// ─── F5: the two CGT buckets must be a partition of the SAME disposals ────────
+//
+// au-house-sale F5. An AU-resident FY2031-32 return showed gross capital gains
+// A$421,934 against an indexed ("real") gain of A$422,330 — the real bucket A$396
+// LARGER than the nominal one it is a slice of, so `reliefAmount = gross − real` went
+// negative and the return printed a "Cost-Base Indexation Relief" line that ADDED
+// assessable income.
+//
+// The cause was not rounding. `COLLECTIBLE_SALE_TAX` is classified twice: the US
+// module books the AU nominal buckets, the FY2027 AU module books the real one. The US
+// module measured its AU booking on `action.gain` — the US-measured gain, from the
+// original basis — while the AU module measured the real bucket on `action.auGain` /
+// `auIndexedGain`, which are measured from Australia's own basis (the s855-45 step-up
+// at the move, design 72 §3). Bullion held through a move has a HIGHER AU gain than US
+// gain, so the real bucket outgrew the nominal one on every disposal. Every sibling
+// classifier already derived `auGain ?? gain` for this; only the collectible one did not.
+
+const US_FNS = new UsTaxModule2026().getReducerFns();
+
+test('F5: COLLECTIBLE_SALE_TAX books the AU-measured gain into the AU nominal bucket', () => {
+  const fn = US_FNS.get('COLLECTIBLE_SALE_TAX');
+  // AU's basis is lower than the US one (post-move step-up), so auGain > gain — the
+  // au-house-sale shape. No FX rate in state ⇒ 1:1, so the AUD figures are the USD ones.
+  const s1 = fn({ usCollectibleGainsYTD: 0, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0 },
+    { residency: 'AU', isGold: true, gain: 497.05, auGain: 588.89, auIndexedGain: 588.89,
+      auShortTermGain: 588.89, auLongTermGain: 0 });
+
+  assert.strictEqual(s1.usCollectibleGainsYTD, 497.05, 'US bucket keeps the US-measured gain');
+  assert.strictEqual(s1.auCapitalGainsYTD, 588.89, 'AU bucket takes the AU-measured gain');
+  // The split is degenerate here (the stamped character is all short), but it must be
+  // taken against the AU gain: `long = auGain − auShort = 0`. Measured against the US
+  // gain it came out as `497.05 − 588.89 = −91.84`, a NEGATIVE discountable slice that
+  // reduced the household's Div 115 base on every gold disposal.
+  assert.strictEqual(s1.auDiscountableGainsYTD, 0,
+    'the discountable slice is the AU gain less the AU short slice, never negative');
+});
+
+test('F5: the collectible pair leaves real ≤ nominal, so the relief is never negative', () => {
+  const usFn = US_FNS.get('COLLECTIBLE_SALE_TAX');
+  const auFn = getFn(new AuTaxModule2027(), 'COLLECTIBLE_SALE_TAX');
+  const action = { residency: 'AU', isGold: true, gain: 497.05, auGain: 588.89,
+    auIndexedGain: 588.89, auShortTermGain: 588.89, auLongTermGain: 0 };
+
+  const s0 = { usCollectibleGainsYTD: 0, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+    auRealCapitalGainsYTD: 0 };
+  const s1 = auFn(usFn(s0, action), action);
+
+  assert.ok(s1.auRealCapitalGainsYTD <= s1.auCapitalGainsYTD + 0.01,
+    `real ${s1.auRealCapitalGainsYTD} exceeds nominal ${s1.auCapitalGainsYTD}`);
+  const { reliefAmount } = new AuTaxRates2027()._cgtRelief(s1, s1.auCapitalGainsYTD);
+  assert.ok(reliefAmount >= 0, `indexation relief printed negative: ${reliefAmount}`);
+});
+
+test('F5: a real bucket larger than the nominal one is a hard error in dev/test', () => {
+  const rates = new AuTaxRates2027();
+  assert.throws(
+    () => rates._cgtRelief({ auCapitalGainsYTD: 421_934, auRealCapitalGainsYTD: 422_330 }, 421_934),
+    /indexation partition violated/,
+    'the F5 state must not pass silently',
+  );
+  // Float noise is not a violation.
+  assert.doesNotThrow(() => rates._cgtRelief({ auRealCapitalGainsYTD: 100_000.005 }, 100_000));
+});
+
+test('F5: a production build clamps to the nominal gain rather than failing the run', () => {
+  const prev = process.env.AU_INDEXATION_STRICT;
+  const warnings = [];
+  const realWarn = console.warn;
+  console.warn = (m) => warnings.push(m);
+  process.env.AU_INDEXATION_STRICT = 'off';
+  try {
+    const r = new AuTaxRates2027()._cgtRelief({ auRealCapitalGainsYTD: 422_330 }, 421_934);
+    assert.strictEqual(r.netTaxableGain, 421_934, 'assess the nominal gain, not the impossible real one');
+    assert.strictEqual(r.reliefAmount, 0, 'relief clamps to zero instead of going negative');
+    assert.equal(warnings.length, 1, 'the violation is still reported');
+  } finally {
+    console.warn = realWarn;
+    if (prev === undefined) delete process.env.AU_INDEXATION_STRICT;
+    else process.env.AU_INDEXATION_STRICT = prev;
+  }
+});
+
+test('F5: the FITO counterfactual is exempt — its degenerate limit is a detector', () => {
+  // design 57 Part 2 D / FITO-D: when a classifier fails to stamp the US-source REAL
+  // slice, the "without US-source" pass empties the nominal bucket and leaves the real
+  // one whole. Clamping there would repair the symptom and hide the missing signal.
+  const rates = new AuTaxRates2027();
+  assert.doesNotThrow(() => {
+    const r = rates._cgtRelief(
+      { _fitoCounterfactual: true, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 100_000 }, 0);
+    assert.strictEqual(r.netTaxableGain, 100_000, 'left untouched, so FITO-D still observes the collapse');
+  });
 });

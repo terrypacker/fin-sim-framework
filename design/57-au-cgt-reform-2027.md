@@ -326,10 +326,80 @@ all nine settled years. `test:unit` 5190 + `test:viz` 1038 GREEN, with a new
 gate, the no-downward-ratchet rule, the assessable-gain composition, the loss case, both dwelling
 paths, and the purchase stamp.
 
-**Still open after this:** F5 (the indexation-relief line prints as a negative on the "Income"
-section, a presentation question) and the un-gated 12-month test on the *company equity* and
-*bullion* scalar paths, which compute their factor inline and never check the Division 115 clock.
-Both are independent of this change.
+**Still open after this:** F5 (the indexation-relief line prints as a negative) — **read as a
+presentation question here, and that reading was wrong; see Part 5** — and the un-gated 12-month
+test on the *company equity* and *bullion* scalar paths, which compute their factor inline and
+never check the Division 115 clock. Both are independent of this change.
+
+---
+
+### ✅ Part 5 (2026-08-18) — the two CGT buckets were partitions of different quantities
+
+Found by the `au-house-sale` study (F5). An AU-resident FY2031-32 return printed an indexed
+(real) gain *larger* than the gross nominal gain it derives from, so `reliefAmount = gross − real`
+came out **negative** and the "Cost-Base Indexation Relief" line **added** assessable income. Part
+4 filed this as a presentation defect. It is not: indexation raises the cost base, so the real
+gain is a slice of the nominal one and can never exceed it. A negative relief line is a partition
+violation surfacing, not a sign convention.
+
+**The cause.** `COLLECTIBLE_SALE_TAX` is classified **twice** — `UsTaxModule2026` books the AU
+*nominal* buckets (§6.5's cross-border lockstep), `AuTaxModule2027` books the *real* one. The two
+measured the same disposal with different rulers:
+
+| | booked | measured from |
+|---|---|---|
+| `UsTaxModule2026` | `auCapitalGainsYTD`, `auDiscountableGainsYTD` | `action.gain` — the **US** gain, from the original basis |
+| `AuTaxModule2027` | `auRealCapitalGainsYTD` | `action.auIndexedGain ?? auGain` — the **AU** gain, from the s855-45 step-up |
+
+Bullion held through a move has a *higher* AU gain than US gain, because Australia's basis is the
+step-up at the move rather than the original cost. So the real bucket outgrew the nominal one on
+every gold disposal, by the difference between the two bases. Every sibling classifier already
+derived `const auGainUsd = action.auGain ?? gain;` first — `STOCK_WITHDRAWAL_TAX`,
+`COMPANY_SALE_TAX`, `US_HOUSE_SALE_TAX`, and the tax-document registry all do. Only the
+collectible one read the US gain, and it did so in *three* places at once: the character split,
+the nominal booking, and `usSourceCapGainsAudYTD` — the Art. 22(2) removal set that must be the
+same measure as the bucket it is subtracted from.
+
+**A second symptom from the same line.** `characterizeAuCapitalGain` derives the discount-eligible
+slice as `long = auTaxableGain − short`. With `auTaxableGain` the US gain and `short` the stamped
+**AU** short-term slice, the subtraction crossed rulers and `long` came out **negative** — a gold
+disposal *reduced* the household's Division 115 base. Under FY2027+ that bucket is not assessed,
+so it cost nothing here; under FY2026 rates it is a straight understatement of the discount.
+
+**Cash effect: none, in the measured run.** FY2027+ assesses the *real* bucket, and the real
+bucket was already right — only the nominal one (a display figure, plus the FITO removal set's
+denominator) was wrong. The defect's whole cost was a return that did not foot.
+
+**Built:**
+
+1. **`us-tax-module-2026.js` `COLLECTIBLE_SALE_TAX`** derives `auGainUsd` and measures the AU
+   character split, the AU nominal booking, and the AUD US-source slice on it.
+2. **The invariant, asserted** — `AuTaxRates2027._cgtRelief` now refuses a real gain that exceeds
+   the nominal gain it is a slice of. Strict (throw) in dev/test, `AU_INDEXATION_STRICT=off` or a
+   production build downgrades it to a warning plus a clamp to the nominal gain, so a user's run
+   survives with a zero relief line rather than a negative one and the return still foots.
+3. **Not enforced on the FITO counterfactual.** `computeTax` stamps `_fitoCounterfactual` on the
+   "without US-source" state. That pass subtracts `usSourceCapGainsAudYTD` from one bucket and
+   `usSourceRealCapGainsAudYTD` from the other; when a classifier fails to stamp the real slice,
+   the counterfactual's real bucket stays whole while its nominal one empties and the limit's CG
+   component collapses. That collapse is the **detector** for Part 2 Item D (`FITO-D`) — clamping
+   it would hide the missing signal, which is exactly what the `_applyCapitalLosses` comment on
+   the real bucket already refuses to do for the same reason.
+4. **A static reader-side rule** in `disposal-tax-payload-parity.test.mjs`: every
+   `characterizeAuCapitalGain(action, …)` call site must measure on an AU gain. The existing tests
+   in that file check emitters *stamp* `auGain`; this checks the tax modules then *use* it.
+
+**Why the aggregate assertion is not enough on its own, and the static rule is the real guard.**
+The violation is per-disposal, but `_cgtRelief` only ever sees a year's totals. In the study run
+the house sale's genuine indexation relief was far larger than the gold disposals' excess, so the
+*sum* stayed the right way round and the assertion never fired — the negative relief only surfaced
+on an arm where the two happened to be close. An invariant checked on a sum catches a defect only
+once it grows big enough to flip the sum; the static scan catches it at the line. Both are kept:
+the assertion is the backstop for a classifier the scan does not know about.
+
+**Verified:** `test:unit` 5195 + `test:viz` 1038 GREEN; no golden moved (the reference plan has no
+AU-resident collectible disposal, which is why this survived to be found by a study). Reverting the
+one-line measure change makes the static rule fail, naming the file and line.
 
 ---
 

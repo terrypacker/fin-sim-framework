@@ -82,9 +82,10 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
    * minimum-tax floor applies to the real gain.
    */
   _cgtRelief(state, auCapitalGainsYTD) {
-    const realGain = state != null && 'auRealCapitalGainsYTD' in state
+    const rawReal = state != null && 'auRealCapitalGainsYTD' in state
       ? (state.auRealCapitalGainsYTD ?? 0)
       : auCapitalGainsYTD;
+    const realGain = _assertIndexationPartition(state, auCapitalGainsYTD, rawReal);
     // Age Pension / JobSeeker recipients are exempt from the 30% minimum tax
     // (design 57 §6.6) — they still pay marginal-rate CGT on the real gain, just
     // no floor. auMinTaxExempt is stamped per-person by computeAuTaxPerPerson.
@@ -99,4 +100,77 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
   _cgtReliefLabel() {
     return 'CGT Discount Removed (FY2027+)';
   }
+}
+
+/** Tolerance for the indexation partition invariant, in AUD. Float noise only. */
+const INDEXATION_INVARIANT_EPSILON = 0.01;
+
+/**
+ * True in dev/test, false in a production build — mirrors `_ftcStrict` in
+ * us-tax-rates-base.js and `AU_ATTRIBUTION_STRICT` in tax-settle-service.js. A real
+ * bucket that outgrew its nominal one is a classifier bug being introduced right now
+ * and is worth failing on at the point of introduction; a user's run should survive it.
+ */
+function _indexationStrict() {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.AU_INDEXATION_STRICT === 'off') return false;
+      if (process.env.AU_INDEXATION_STRICT === 'on')  return true;
+      if (process.env.NODE_ENV === 'production') return false;
+    }
+  } catch { /* no process (browser) */ }
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) return false;
+  } catch { /* import.meta.env absent */ }
+  return true;
+}
+
+/**
+ * **The real gain is a slice of the nominal gain, never more than all of it.**
+ *
+ * `auRealCapitalGainsYTD` is the same disposals as `auCapitalGainsYTD`, measured
+ * against a cost base that indexation can only ever RAISE (Div 114 / design 57 Part 3),
+ * so `real ≤ nominal` for every item and therefore for the sum. `reliefAmount` is
+ * `nominal − real`; when the invariant breaks, that difference goes negative and the
+ * return prints an indexation *relief* that ADDS assessable income — the au-house-sale
+ * F5 finding, where the collectible classifier booked the US-measured gain into the
+ * nominal bucket while the FY2027 module booked the AU-measured indexed gain into the
+ * real one, so the two buckets were partitions of different quantities.
+ *
+ * **Not enforced on the FITO counterfactual** (`_fitoCounterfactual`, stamped by
+ * `computeTax`). That pass subtracts `usSourceCapGainsAudYTD` from one bucket and
+ * `usSourceRealCapGainsAudYTD` from the other; when a classifier fails to stamp the
+ * real slice, the counterfactual's real bucket stays whole while its nominal one
+ * empties, and the FITO limit's CG component collapses to ~0. That collapse is a
+ * DETECTOR, not a defect to repair — it is what `tax-cross-border-relief.test.mjs`
+ * FITO-D exists to observe, and what the `_applyCapitalLosses` comment on the real
+ * bucket refuses to paper over for the same reason. Clamping there would hide the
+ * missing signal; nothing on an actual return is computed from that pass anyway.
+ *
+ * Both figures reach here already netted for capital losses and floored at zero by
+ * `_applyCapitalLosses`, so a negative nominal gain is not a case that arises.
+ *
+ * Returns the gain to assess: the real one, clamped to the nominal. Clamping is the
+ * conservative repair — it makes the relief exactly zero rather than negative — and it
+ * keeps the return footing (`Gross Gains − Relief = Net Taxable Gain`) when the strict
+ * gate is off.
+ */
+function _assertIndexationPartition(state, nominalGain, realGain) {
+  if (!(realGain > nominalGain + INDEXATION_INVARIANT_EPSILON)) return realGain;
+  if (state?._fitoCounterfactual) return realGain;
+
+  const message =
+      `FY2027+ indexation partition violated — the real (indexed) capital gain `
+    + `${realGain.toFixed(2)} exceeds the nominal gain ${nominalGain.toFixed(2)} it is a `
+    + `slice of, by ${(realGain - nominalGain).toFixed(2)}. Indexation raises the cost `
+    + `base, so it can only ever REDUCE a gain; a negative reliefAmount would print on `
+    + `the return as relief that adds assessable income. Some disposal classifier is `
+    + `measuring auRealCapitalGainsYTD on a different basis (or in a different currency) `
+    + `from the auCapitalGainsYTD it booked alongside it — design 57 §6.5 requires the `
+    + `two to be stamped in lockstep, per disposal. `
+    + `US-source slices: nominal ${(state?.usSourceCapGainsAudYTD ?? 0).toFixed(2)}, `
+    + `real ${(state?.usSourceRealCapGainsAudYTD ?? 0).toFixed(2)}.`;
+  if (_indexationStrict()) throw new Error(message);
+  console.warn(message);
+  return nominalGain;
 }

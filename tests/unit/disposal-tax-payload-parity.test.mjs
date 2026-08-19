@@ -229,3 +229,76 @@ test('4.11: INDEXATION_EXEMPT has not gone stale', () => {
     }
   }
 });
+
+// ─── F5: the READER side — an AU bucket is measured on the AU gain ───────────
+//
+// The tests above check that emitters STAMP `auGain`. This one checks that the tax
+// modules then USE it. au-house-sale F5: the collectible classifier stamped `auGain`
+// correctly and the FY2027 module read it, but the FY2026 module's AU booking was
+// measured on `action.gain` — the US-measured gain from the original basis. Bullion
+// held through a move has a higher AU gain than US gain (Australia's basis is the
+// s855-45 step-up), so `auRealCapitalGainsYTD` outgrew the `auCapitalGainsYTD` it is a
+// slice of, and the FY2027 return printed a negative indexation relief: a "relief" line
+// that ADDED assessable income. The character split went negative in the same stroke,
+// because `long` is derived as `auTaxableGain − short` and the two ends came off
+// different rulers.
+//
+// Static, for the reason the whole file is static: five classifiers do this, and a
+// dynamic pass only reaches the ones a test scenario happens to sell into. The rule is
+// deliberately syntactic and blunt — the second argument's source text must mention an
+// AU gain — because the alternative is to re-derive each classifier's arithmetic here
+// and get the same thing wrong twice.
+
+/** Source files whose `characterizeAuCapitalGain` calls this rule scans. */
+const AU_CHARACTER_FILES = [
+  'src/finance/tax/us/us-tax-module-2026.js',
+  'src/finance/tax/au/au-tax-module-2026.js',
+  'src/finance/tax/tax-document-registry.js',
+];
+
+function scanAuCharacterCalls() {
+  const out = [];
+  for (const rel of AU_CHARACTER_FILES) {
+    const file = path.join(ROOT, rel);
+    const src  = fs.readFileSync(file, 'utf8');
+    const ast  = parse(src, { sourceType: 'module', plugins: ['classProperties'] });
+    walkAst(ast.program, (node) => {
+      if (node.type !== 'CallExpression') return;
+      if (node.callee?.name !== 'characterizeAuCapitalGain') return;
+      const arg = node.arguments[1];
+      out.push({
+        file: rel,
+        line: node.loc.start.line,
+        arg:  arg ? src.slice(arg.start, arg.end) : '(missing)',
+      });
+    });
+  }
+  return out;
+}
+
+const AU_CHARACTER_CALLS = scanAuCharacterCalls();
+
+test('F5: the characterizeAuCapitalGain call sites are actually found', () => {
+  assert.ok(AU_CHARACTER_CALLS.length >= 5,
+    `expected ≥5 characterizeAuCapitalGain call sites across ${AU_CHARACTER_FILES.join(', ')}, ` +
+    `found ${AU_CHARACTER_CALLS.length}. If a classifier moved, teach the scan about it ` +
+    'rather than lowering the floor — a blind scan passes for the wrong reason.');
+});
+
+test('F5: every AU capital-gain split is measured on the AU gain, never the US one', () => {
+  const failures = AU_CHARACTER_CALLS
+    .filter(c => !/auGain/i.test(c.arg))
+    .map(c => `${c.file}:${c.line}  characterizeAuCapitalGain(action, ${c.arg})`);
+
+  assert.deepEqual(failures, [],
+    'These classifiers split an AU capital gain against a gain that is not the AU one.\n' +
+    'Australia measures from its own cost base (the s855-45 step-up at the move,\n' +
+    'design 72 §3), so `gain` and `auGain` are different quantities on the same\n' +
+    'disposal. Booking one into auCapitalGainsYTD while the FY2027 module books the\n' +
+    'other into auRealCapitalGainsYTD makes the two buckets partitions of different\n' +
+    'things — au-house-sale F5, where the real gain came out LARGER than the nominal\n' +
+    'gain it derives from and the indexation relief printed negative.\n' +
+    'Derive `const auGainUsd = action.auGain ?? gain;` first, as the sibling\n' +
+    'classifiers do, and measure everything AU-bound on that:\n  ' +
+    failures.join('\n  '));
+});

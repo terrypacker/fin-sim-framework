@@ -1000,9 +1000,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
           usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + char.short + char.long,
         };
         if (isAuResident) {
-          const audGain = toAUD(gain, 'USD', state);
+          // AU measures this gain from its OWN cost base — the s855-45 step-up at the
+          // move (design 72 §3), and for bullion the FY2027 indexed base — while the US
+          // taxes the full gain from the original basis. The two differ, and everything
+          // below that lands in an AU bucket has to be measured on the AU one. Booking
+          // the US `gain` into `auCapitalGainsYTD` while `au-tax-module-2027` booked the
+          // AU-measured indexed gain into `auRealCapitalGainsYTD` split one partition
+          // across two rulers, and produced a *real* gain larger than the nominal gain it
+          // derives from — an indexation "relief" that added assessable income
+          // (au-house-sale F5). Every sibling classifier already derives this; only this
+          // one did not. Falls back to `gain` when no AU basis was stamped.
+          const auGainUsd = action.auGain ?? gain;
+          const audGain = toAUD(auGainUsd, 'USD', state);
           // Design 90 §5 — signed AU split (USD; converted at the booking below).
-          const auChar = characterizeAuCapitalGain(action, gain);
+          const auChar = characterizeAuCapitalGain(action, auGainUsd);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's
           // residence, so for an AU-resident US citizen this gain is FOREIGN source,
           // not US-source, whatever the account's domicile. It therefore books as
