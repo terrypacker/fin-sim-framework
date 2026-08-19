@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
+import { projectPeople } from '../../finance/state/person-projection.js';
 import { OneOffEvent }                from '../../simulation-framework/events/one-off-event.js';
 import { ChangeResidencyHandler }     from '../../finance/handlers/change-residency-handler.js';
 import { ChangeResidencyApplyReducer }
@@ -224,31 +225,7 @@ export const US_AU_CROSS_BORDER = {
     // Because _mergeStatePatches does a shallow (key-level) merge for 'people', we must
     // emit the complete person entries here; a partial { residency } object would discard
     // fields set by US_RETIREMENT / AU_RETIREMENT.
-    const people = {};
-    for (const person of context.people) {
-      people[person.id] = {
-        id:                    person.id,
-        name:                  person.name,
-        birthDate:             person.birthDate,
-        monthlyWage:           person.monthlyWage           ?? 0,
-        // Self-employment flag (design 69) — routes monthlyWage through the SE path.
-        selfEmployed:          person.selfEmployed          ?? false,
-        // Native currency of the wage (design 50) — drives MonthlyWagesHandler's
-        // US vs AU routing. MUST be projected here or every wage reads as USD.
-        wageCurrency:          person.wageCurrency          ?? 'USD',
-        // Where the employment is exercised (design 73 Gap 1) — the attribute that
-        // actually determines the source of employment income. null ⇒ the earner
-        // works where they live, resolved per accrual so it tracks a mid-sim move.
-        workCountry:           person.workCountry           ?? null,
-        retirementDate:        person.retirementDate        ?? null,
-        socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
-        lifeExpectancy:        person.lifeExpectancy        ?? 90,
-        citizen:               person.citizen               ?? ['US'],
-        residency:             startingResidency,
-        residencyState:        person.residencyState         ?? null,  // US state of residency (design 34)
-        incomeSupportRecipient: person.incomeSupportRecipient ?? false, // AU CGT 30% min-tax exemption (design 57 §6.6)
-      };
-    }
+    const people = projectPeople(context.people, { residency: startingResidency });
 
     // FX state patches: initialise base and effective rate/fee maps plus legacy flat fields.
     const fxPatches = _getFxService(context)

@@ -19,6 +19,8 @@
 
 import { WorkbenchApp }            from './workbench-app.js';
 import { IntlRetirementScenario } from '../scenarios/intl-retirement-scenario.js';
+import { UsSingleHomeownerScenario } from '../scenarios/us-single-homeowner-scenario.js';
+import { AuSingleHomeownerScenario } from '../scenarios/au-single-homeowner-scenario.js';
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -40,6 +42,26 @@ const PREBUILT_SCENARIOS = [
     active:   true,
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  },
+  {
+    // Runs to age 85. Long on purpose: the twenty working years, the mortgage term
+    // and the RMD age all have to fall inside the window or the scenario's own
+    // subject matter never happens.
+    cls:      UsSingleHomeownerScenario,
+    order:    2,
+    active:   false,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2066, 0, 1)),
+  },
+  {
+    // Same window as its US sibling, deliberately: the two are meant to be read
+    // side by side, and a different horizon would make every terminal figure
+    // incomparable for a reason that has nothing to do with the tax systems.
+    cls:      AuSingleHomeownerScenario,
+    order:    3,
+    active:   false,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2066, 0, 1)),
   },
 ];
 

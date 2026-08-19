@@ -343,7 +343,10 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
 
     const taxActions = [
       // Design 76 Gap B: attribute the AU gain to the account's owner.
-      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
+      // `currency`: this reducer is the US brokerage path, so always USD — stated
+      // rather than left to the consumer's assumption, because the service drawdown
+      // path emits the same action type for an AU-domiciled account.
+      { type: 'STOCK_WITHDRAWAL_TAX', currency: 'USD', gain, auGain, auIndexedGain, auDiscountableGain, residency, usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key, stateKey: key },
     ];
     // Widened from `collectibleGain > 0` for the reason the sibling drawdown path
     // documents: a gold sleeve sold below basis emitted NO action at all, so the loss

@@ -99,8 +99,12 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     // design 57 §6.3), stepped-up auGain, else the US gain — converted to AUD.
     fns.set('STOCK_WITHDRAWAL_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainUsd = this._realGain(action, action.auGain ?? action.gain ?? 0);
-      const realGainAud = toAUD(realGainUsd, 'USD', state);
+      const realGainNative = this._realGain(action, action.auGain ?? action.gain ?? 0);
+      // The drawn account's own currency. The service drawdown path emits this same
+      // action type for an AU-DOMICILED brokerage, whose figures are already AUD;
+      // converting those as USD overstated the gain by the exchange rate. `?? 'USD'`
+      // leaves every US-domiciled disposal exactly as it was.
+      const realGainAud = toAUD(realGainNative, action.currency ?? 'USD', state);
       return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud);
     });
 
@@ -133,9 +137,13 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // A true collectible is not indexed under the reform (Part 2, Q3), so its real
       // amount is simply its nominal one — but it still has to travel through the same
       // s960-275 / slice rules, or a collectible LOSS reaches the two buckets differently.
-      const auGainUsd = action.auGain ?? action.gain ?? 0;
-      const realGainUsd = this._realGain(action, auGainUsd, action.isGold === true);
-      const realGainAud = toAUD(realGainUsd, 'USD', state);
+      const auGainNative = action.auGain ?? action.gain ?? 0;
+      const realGainNative = this._realGain(action, auGainNative, action.isGold === true);
+      // In the collectible's OWN currency: a US-domiciled one states USD, an
+      // AU-domiciled one AUD. Converting an AUD figure as though it were USD is how
+      // an Australian's classic car would be assessed at the exchange rate times its
+      // real gain. `?? 'USD'` keeps every pre-existing (US) disposal unchanged.
+      const realGainAud = toAUD(realGainNative, action.currency ?? 'USD', state);
       return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 

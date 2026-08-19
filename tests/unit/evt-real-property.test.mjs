@@ -42,6 +42,20 @@ function loadToolsetScenario(config) {
   return { scenario, sim: scenario.sim };
 }
 
+/**
+ * Declare the fixture household married-filing-jointly.
+ *
+ * The §121 exclusion cap is $500k MFJ / $250k single, and both house fixtures hold
+ * ONE person, so they auto-detect as single filers. The tests below that name the
+ * $500k cap were nonetheless passing, because `UsPeriodAdvanceReducer` used to
+ * re-derive the filing status from the death rule alone on every 1 Jan and reset a
+ * single filer to MFJ — and these sales all land in 2027, after that boundary. With
+ * the status now preserved, a fixture that wants the MFJ cap has to say so.
+ */
+function asMfj(config) {
+  return { ...config, parameters: { ...config.parameters, usFilingSingle: false } };
+}
+
 const US_HOUSE_JSON = {
   toolsets: ['US_RETIREMENT', 'US_REAL_PROPERTY'],
   simStart: '2026-01-01',
@@ -285,7 +299,7 @@ test('EVT-33: §121 is location-blind — an AU principal residence gets the exc
   // investment-property fixture above is the control — same gain, no exclusion — so the
   // pair pins that the relief turns on the USE HISTORY and not on the property being
   // Australian.
-  const config = structuredClone(AU_HOUSE_JSON);
+  const config = asMfj(structuredClone(AU_HOUSE_JSON));
   config.realProperties[0].isPrimaryResidence = true;
   const { sim } = loadToolsetScenario(config);
   assert.doesNotThrow(() => sim.stepTo(Q1_2028));
@@ -405,7 +419,7 @@ test('EVT-34: US house sale credits full sale proceeds to savings', () => {
 });
 
 test('EVT-34: US house sale applies $500K primary residence exemption to capital gain', () => {
-  const config = structuredClone(US_HOUSE_JSON);
+  const config = asMfj(structuredClone(US_HOUSE_JSON));
   config.realProperties[0].costBasis = config.realProperties[0].value - 600_000;
   const { sim } = loadToolsetScenario(config);
   //Step past planned sale year: 2027
@@ -559,7 +573,7 @@ test('EVT-34: US house sale records the loan payoff into its metric series (char
 });
 
 test('EVT-34: US house sale taxable gain is unaffected by mortgage payoff', () => {
-  const config = structuredClone(US_HOUSE_JSON);
+  const config = asMfj(structuredClone(US_HOUSE_JSON));
   config.realProperties[0].costBasis       = config.realProperties[0].value - 600_000;
   config.realProperties[0].mortgageBalance = 250_000;
   const { sim } = loadToolsetScenario(config);

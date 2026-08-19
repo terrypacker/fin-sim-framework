@@ -146,6 +146,7 @@ import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
+import { UsRetirementContributionHandler, AuSuperGuaranteeHandler } from './finance/handlers/retirement-contribution-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
@@ -267,6 +268,7 @@ import { CATEGORY_ORDER, buildSpendingSeries, bySpendingTier, intentVsRealized }
 import { CATEGORY_COLOR, CATEGORY_COLOR_DARK, colorForCategory } from './finance/spending-reporting/spending-palette.js';
 import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
+import { projectPerson, projectPeople } from './finance/state/person-projection.js';
 import { StateTaxService } from './finance/state-tax-service.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
 import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
@@ -334,6 +336,7 @@ import { GraphQueryApi } from './graph/graph-query-api.js';
 import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
+import { AU_SINGLE_HOMEOWNER_DEFAULTS, AU_SINGLE_HOMEOWNER_PARAM_SCHEMA, AuSingleHomeownerScenario } from './scenarios/au-single-homeowner-scenario.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
@@ -366,6 +369,7 @@ import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
 import { BRACKET_BASE_YEAR, retargetRothConversionEvents, US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
 import { US_STATE_TAX } from './scenarios/toolsets/us-state-tax-toolset.js';
 import { US_TAX } from './scenarios/toolsets/us-tax-toolset.js';
+import { US_SINGLE_HOMEOWNER_DEFAULTS, US_SINGLE_HOMEOWNER_PARAM_SCHEMA, UsSingleHomeownerScenario } from './scenarios/us-single-homeowner-scenario.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
 import { EVENT_CLASSES, EventService } from './services/event-service.js';
@@ -959,6 +963,8 @@ export const Finance = {
   MortalityHandler,
   OutOfFundsHandler,
   RealPropertyRepairTickHandler,
+  UsRetirementContributionHandler,
+  AuSuperGuaranteeHandler,
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
@@ -1283,6 +1289,8 @@ export const Finance = {
   ACCOUNT_ROLES,
   INHERITED_RETIREMENT_ROLES,
   InternationalRetirementFinancialState,
+  projectPerson,
+  projectPeople,
   StateTaxService,
   AuTaxDocument2024,
   AuTaxDocument2025,
@@ -1503,6 +1511,9 @@ export const Engine = {
 };
 
 export const Scenarios = {
+  AU_SINGLE_HOMEOWNER_DEFAULTS,
+  AU_SINGLE_HOMEOWNER_PARAM_SCHEMA,
+  AuSingleHomeownerScenario,
   BaseScenario,
   BlankScenario,
   DRAWDOWN_STRATEGIES,
@@ -1588,6 +1599,9 @@ export const Scenarios = {
   US_ROTH_CONVERSION,
   US_STATE_TAX,
   US_TAX,
+  US_SINGLE_HOMEOWNER_DEFAULTS,
+  US_SINGLE_HOMEOWNER_PARAM_SCHEMA,
+  UsSingleHomeownerScenario,
 };
 
 export const Services = {

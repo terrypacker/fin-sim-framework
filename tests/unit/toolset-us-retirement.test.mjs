@@ -478,6 +478,44 @@ test('toolset: 2 persons → usFilingSingle is false (auto-detect)', () => {
     'two persons in config should auto-detect as married filing jointly');
 });
 
+// A year boundary is the interesting moment: UsPeriodAdvanceReducer OWNS
+// usFilingSingle from the first 1 Jan onward, so the configured status has to
+// survive it. It did not — the reducer re-derived the status from the death rule
+// alone, and a single filer silently moved to MFJ brackets, MFJ standard
+// deduction, the MFJ NIIT threshold and the MFJ §121 exclusion for every tax year
+// but the first. Two people are the control: their status must NOT become single.
+test('filing status: a single filer stays single across a year boundary', () => {
+  const { sim } = loadToolsetScenario(CUSTOM_JSON);
+  assert.strictEqual(sim.state.usFilingSingle, true, 'precondition: starts single');
+  sim.stepTo(new Date(Date.UTC(2027, 5, 30)));   // past the 2027-01-01 US period advance
+  assert.strictEqual(sim.state.usFilingSingle, true,
+    'the 1 Jan period advance must not discard the configured single filing status');
+});
+
+test('filing status: a two-person household stays MFJ across a year boundary', () => {
+  const twoPersonConfig = {
+    ...CUSTOM_JSON,
+    persons: [
+      ...CUSTOM_JSON.persons,
+      {
+        __type:                'Person',
+        id:                    'spouse',
+        name:                  'Spouse',
+        birthDate:             '1980-06-01',
+        citizen:               ['US'],
+        lifeExpectancy:        88,
+        socialSecurityMonthly: 1_500,
+        monthlyWage:           0,
+        retirementDate:        '2040-01-01',
+      },
+    ],
+  };
+  const { sim } = loadToolsetScenario(twoPersonConfig);
+  sim.stepTo(new Date(Date.UTC(2027, 5, 30)));
+  assert.strictEqual(sim.state.usFilingSingle, false,
+    'nobody has died, so the household still files jointly');
+});
+
 test('toolset: parameters.usFilingSingle=false overrides auto-detect for 1 person', () => {
   const config = {
     ...CUSTOM_JSON,
@@ -713,7 +751,6 @@ test('EVT-40: IRA RMD fires at year-end when person turns 73', () => {
 
 test('EVT-40: IRA RMD credits US savings account', () => {
   const iraBalance     = 500_000;
-  const savingsStart   = 1_000_000;
   const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
   const { sim } = loadToolsetScenario(config);
   const savingsBefore  = sim.state.usSavingsAccount.balance;
@@ -721,8 +758,18 @@ test('EVT-40: IRA RMD credits US savings account', () => {
   sim.stepTo(endOf2033);
 
   const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
-  assert.strictEqual(sim.state.usSavingsAccount.balance, savingsBefore + expectedRmd,
-    'RMD proceeds should be credited to US savings account');
+  // The year-end settle runs after the RMD in the same tick and debits the tax from
+  // this same cash pool, so the gross credit is only recoverable net of tax paid.
+  // Until the filing-status fix this config paid NO tax — the RMD sat under the MFJ
+  // standard deduction because the 1 Jan period advance had quietly re-flagged this
+  // one-person household as married. On single-filer brackets the same RMD clears
+  // the smaller standard deduction and is taxed, which is the correct return.
+  assert.ok(sim.state.cumulativeTaxesPaid > 0,
+    'a single filer\'s RMD exceeds the single standard deduction, so tax is due');
+  assert.strictEqual(
+    sim.state.usSavingsAccount.balance,
+    savingsBefore + expectedRmd - sim.state.cumulativeTaxesPaid,
+    'RMD proceeds should be credited to US savings account, net of the tax settled on them');
 });
 
 test('EVT-40: IRA RMD amount is taxable as ordinary income', () => {

@@ -62,8 +62,15 @@ export const US_BROKERAGE = {
       // AUD": the emitter works in the asset's currency and the consumer converts, e.g.
       // `toAUD(auGain, 'USD', state)` in us-tax-module-2026. Typing auGain as AUD would
       // be precisely the error this declaration exists to prevent.
+      // `currency` names the DRAWN ACCOUNT's denomination. The service drawdown path
+      // emits this action for an AU-domiciled brokerage too, whose money fields are
+      // AUD; consumers read this field rather than assuming USD. The static
+      // `currency('USD')` declarations below stay right for the US-domiciled case the
+      // manifest can express — it has no way to say "whatever this row's currency
+      // field says" — so an AU-domiciled disposal is mislabelled in the journal's
+      // display layer while every computation on it is correct.
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), auDiscountableGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text(), proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() , stateKey: ValueType.text()} },
+        fields: { currency: ValueType.text(), gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), auDiscountableGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text(), proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'FIXED_INCOME_EARNINGS_TAX',
         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
     ],

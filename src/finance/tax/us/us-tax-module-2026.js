@@ -493,8 +493,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
             : {}),
         };
         if (isAuResident) {
-          const audGain = toAUD(auGain, 'USD', state);
-          const audDiscountableGain = toAUD(auDiscountableGain, 'USD', state);
+          // The drawn account's own currency (see account-service's emitter). USD for
+          // every US-domiciled disposal, which is all this module saw before an
+          // AU-domiciled brokerage could be drawn down.
+          const disposalCcy = action.currency ?? 'USD';
+          const audGain = toAUD(auGain, disposalCcy, state);
+          const audDiscountableGain = toAUD(auDiscountableGain, disposalCcy, state);
           // Design 90 §5 — signed AU split (USD here; converted at the booking below).
           const auChar = characterizeAuCapitalGain(action, auGain);
           // Design 83 G10 — §865(a) sources personal-property gain by the SELLER's

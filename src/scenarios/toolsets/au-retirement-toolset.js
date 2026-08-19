@@ -20,6 +20,8 @@ import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expen
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
 import { MonthlyWagesHandler }        from '../../finance/handlers/monthly-wages-handler.js';
+import { AuSuperGuaranteeHandler }    from '../../finance/handlers/retirement-contribution-handler.js';
+import { projectPeople }             from '../../finance/state/person-projection.js';
 import { MonthlySocialSecurityHandler }
   from '../../finance/handlers/monthly-social-security-handler.js';
 import {
@@ -82,6 +84,7 @@ export const AU_RETIREMENT = {
       SuperContributionHandler, SuperWithdrawalContributionsHandler,
       SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler, SuperEarningsHandler,
       IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+      AuSuperGuaranteeHandler,
     ],
     reducers: [
       ExpenseDebitReducer, ReplenishSavingsReducer,
@@ -117,7 +120,11 @@ export const AU_RETIREMENT = {
       // `section988` — design 87 §14.4 item 3. The AUD leaving the cash pool is disposed
       // of; the super account it funds is outside this design (§5), so there is no
       // carryover leg. Stamped by the reducer, which resolves the AU cash key.
+      // stateKey names the member's fund; employerFunded marks a Super Guarantee
+      // contribution, which skips the cash debit and the §988 disposal with it.
       { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD'),
+                                                             stateKey: ValueType.text(),
+                                                             employerFunded: ValueType.boolean(),
                                                              section988: ValueType.any() } },
       { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       // `blocked` marks a withdrawal the preservation rules refused. It is the only
@@ -161,6 +168,21 @@ export const AU_RETIREMENT = {
 
   paramSchema(context) {
     return [
+      // ── Superannuation Guarantee (the working years) ─────────────────────────
+      // 0 default ⇒ no event is scheduled, so a scenario that does not opt in is
+      // byte-identical to one built before the feature existed.
+      {
+        key: 'superGuaranteePct', label: 'Super Guarantee Rate',
+        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'Employer Superannuation Guarantee as a fraction of annual pay (0.12 = 12%). Employer-funded: it is on top of the quoted salary, never debits the member\'s cash and is outside their assessable income \u2014 only the fund\'s 15% Div 295 contributions tax applies. A scenario assumption, NOT a legislated schedule; this model carries no SG rate table.',
+      },
+      {
+        key: 'superGuaranteeAnnualCap', label: 'Super Guarantee Annual Cap',
+        type: 'Money', group: 'Contributions', mc: false, opt: false,
+        defaultValue: null, defaultCurrency: 'AUD',
+        description: 'Annual cap on the employer contribution; empty means uncapped. A scenario assumption, not the indexed concessional cap.',
+      },
       {
         key: 'superGrowthRate', label: 'Super Growth Rate',
         type: 'Number', group: 'AU Retirement', mc: true, opt: true,
@@ -264,22 +286,9 @@ export const AU_RETIREMENT = {
     context._auSharedDelegated = sharedAlreadySetup;
 
     const people = {};
-    for (const person of context.people) {
-      people[person.id] = {
-        id:                    person.id,
-        name:                  person.name,
-        birthDate:             person.birthDate,
-        monthlyWage:           person.monthlyWage           ?? 0,
-        selfEmployed:          person.selfEmployed          ?? false, // design 69
-        wageCurrency:          person.wageCurrency          ?? 'AUD',
-        workCountry:           person.workCountry           ?? null, // design 73 Gap 1
-        retirementDate:        person.retirementDate        ?? null,
-        socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
-        lifeExpectancy:        person.lifeExpectancy        ?? 90,
-        citizen:               person.citizen               ?? ['AU'],
-        residency:             'AU',
-      };
-    }
+    Object.assign(people, projectPeople(context.people, {
+      residency: 'AU', defaultWageCurrency: 'AUD', defaultCitizen: 'AU',
+    }));
 
     const patches = {
       inflationRates:          { AU: p.inflationRate },
@@ -353,6 +362,19 @@ export const AU_RETIREMENT = {
         EventBuilder.eventSeries()
           .name('Super Earnings').type('INTL_SUPER_EARNINGS')
           .interval('year-end').startOffset(0).enabled(true).color('#9C27B0').build()
+      );
+    }
+
+    // Employer Super Guarantee. `order(1)`: after wages and expenses on the same
+    // month-end, matching the US contribution stream so the two countries' payroll
+    // contributions sit at the same point in a month.
+    if (superAccts.length > 0
+        && (context.parameters?.superGuaranteePct ?? 0) > 0
+        && people.some(pe => (pe.monthlyWage ?? 0) > 0)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Super Guarantee').type('AU_SUPER_GUARANTEE')
+          .interval('month-end').order(1).enabled(true).color('#00897B').build()
       );
     }
 
@@ -485,6 +507,20 @@ export const AU_RETIREMENT = {
       handlers.push(new OutOfFundsHandler());
     }
 
+    // Employer Super Guarantee — wired off the schedule, so it is absent unless the
+    // rate is set. Not inside the `_auSharedDelegated` guard above: the SG stream is
+    // AU-owned and has no US counterpart to have already registered it.
+    const sgEvent = context.schedulesById['AU_SUPER_GUARANTEE'];
+    if (sgEvent) {
+      const sgHandler = new AuSuperGuaranteeHandler({
+        stateRegistry: sr,
+        guaranteePct:  p.superGuaranteePct        ?? 0,
+        annualCap:     p.superGuaranteeAnnualCap  ?? null,
+      });
+      sgHandler.handledEvents.push(sgEvent);
+      handlers.push(sgHandler);
+    }
+
     // Social Security / AU Age Pension
     if (withSS.length > 0 && !context._auSharedDelegated) {
       const ssHandler = new MonthlySocialSecurityHandler({ stateRegistry: sr });
@@ -508,6 +544,7 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.SUPER,
           ownerId:       acct.ownerId,
+          stateKey:      acct.stateKey,
           defaultRate:   acct.growthRate ?? p.superGrowthRate,
         });
         h.handledEvents.push(superEvent);
@@ -524,6 +561,10 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.AU_STOCK,
           ownerId:       acct.ownerId,
+          // Pin the account: one handler is wired PER ACCOUNT, so without this every
+          // handler resolves role+owner to the same first au-stock account — the one
+          // that then earns twice while an inherited brokerage earns nothing.
+          stateKey:      acct.stateKey,
           growthRate:    acct.growthRate ?? p.auStockGrowthRate,
         });
         earningsH.handledEvents.push(stockEvent);
@@ -533,6 +574,7 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.AU_STOCK,
           ownerId:       acct.ownerId,
+          stateKey:      acct.stateKey,
           dividendRate:  acct.dividendRate ?? p.auStockDividendRate,
         });
         divH.handledEvents.push(divEvent);

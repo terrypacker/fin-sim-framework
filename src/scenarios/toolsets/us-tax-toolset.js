@@ -95,6 +95,21 @@ export const US_TAX = {
       usSeEarningsYTD:     0,
       usSsWagesYTD:        0,
       usFilingSingle:      filingSingle,
+      // Does anyone here file a US return at all? A US citizen (wherever resident)
+      // or a US resident does. Stamped once, from the configured persons, so a death
+      // mid-run cannot change the answer — see UsTaxSettleHandler for why that matters
+      // and for the limitation this gate carries.
+      usPersonHousehold:   context.people.some(
+        pe => (pe.citizen ?? ['US']).includes('US') || (pe.residency ?? 'US') === 'US'),
+      // The CONFIGURED filing status, which nothing but a config edit changes.
+      // `usFilingSingle` above is the *effective* status for the current tax year,
+      // and UsPeriodAdvanceReducer recomputes it every 1 Jan from the death rule
+      // (a survivor files single from the following year). Before this field
+      // existed that recomputation had nothing to fall back on, so it re-derived
+      // the status as `deceased is non-empty` alone — silently flipping a genuinely
+      // single filer to MFJ brackets, standard deduction, NIIT and §121 thresholds
+      // from the second tax year of every single-person scenario onward.
+      usFilingSingleBase:  filingSingle,
       // Cross-border relief accumulators (design 52) — initialised so the runtime
       // state (and the journal state-diff) always carries them, matching
       // IntlRetirementState. §904 numerators + FITO removal set + carryforward pools.

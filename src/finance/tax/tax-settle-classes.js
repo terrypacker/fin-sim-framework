@@ -193,6 +193,26 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
   static description      = 'Computes end-of-year US tax liability and emits US_TAX_SETTLE_APPLY + RECORD_BALANCE.';
 
   call({ state }) {
+    // No US person in this household ⇒ no US return. `usPersonHousehold` is stamped
+    // once at compile time from the configured persons (US_TAX.state()), NOT read
+    // from live `state.people`, because a year-of-death settle runs after the
+    // decedent has been dropped from that map and must still be lodged.
+    //
+    // The narrow reason this gate exists: every AU classifier books its income into
+    // `usOrdinaryIncomeYTD` unconditionally, on the stated assumption that "the
+    // model's earners are US citizens" (au-tax-module-2026, bookAuPersonalServicesIncome).
+    // That held while every scenario was a US household. It stopped holding with the
+    // AU single-homeowner scenario, where it produced a full US return — and an
+    // unfundable US tax bill — for an Australian with no US connection at all.
+    //
+    // LIMITATION, stated because the gate is broader than the defect: a nonresident
+    // alien with genuine US-SOURCE income does owe US tax, and this suppresses that
+    // too. No scenario reaches it today (US-source income only arises here from US
+    // accounts, which only US households hold). Narrowing it means gating each
+    // classifier on the earner instead, which is the thirteen-site change this one
+    // is standing in for.
+    if (state.usPersonHousehold === false) return [];
+
     const taxDetail = this._settleService.computeUsTax(state);
 
     // Design 52 §4.6 — fund the AU FITO. Measure the *marginal* US tax caused by

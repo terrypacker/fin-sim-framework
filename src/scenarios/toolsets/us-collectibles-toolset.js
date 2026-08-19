@@ -51,14 +51,22 @@ export const US_COLLECTIBLES = {
       // collectible; the au* pair carries the AU-resident assessment of the same
       // disposal. All three are emitted by the gold sleeve inside a brokerage
       // account as well as by a standalone collectible.
-      // Currency on the disposal money (design 91 §8). Every money field here is USD —
-      // the `au*` ones INCLUDED. The prefix means "measured on the AU basis" (the
-      // s855-45 stepped-up cost base, the 12-month discount test), NOT "denominated in
-      // AUD": the emitter works in the asset's currency and the consumer converts, e.g.
-      // `toAUD(auGain, 'USD', state)` in us-tax-module-2026. Typing auGain as AUD would
-      // be precisely the error this declaration exists to prevent.
+      // Currency on the disposal money (design 91 §8). Every money field here is the
+      // COLLECTIBLE'S OWN currency — the `au*` ones INCLUDED. The prefix means
+      // "measured on the AU basis" (the s855-45 stepped-up cost base, the 12-month
+      // discount test), NOT "denominated in AUD": the emitter works in the asset's
+      // currency and the consumer converts, e.g. `toAUD(auGain, action.currency, state)`
+      // in us-tax-module-2026. Typing auGain as AUD would be precisely the error this
+      // declaration exists to prevent.
+      //
+      // The static `currency('USD')` below is right for a US-domiciled collectible and
+      // is what every collectible was until an AU-domiciled one became expressible. The
+      // `currency` FIELD carries the actual denomination for consumers; the manifest has
+      // no way to say "whatever this row's currency field says", so an AU-domiciled
+      // disposal is mislabelled USD in the journal's display layer while every
+      // computation on it is correct.
       { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
+        fields: { gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), isGold: ValueType.boolean(), currency: ValueType.text(), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text(), ownershipType: ValueType.text(), ownerId: ValueType.text(), owners: ValueType.any(),
                   proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'),
                   // Form 8949 column (a). The gold-sleeve emitters live inside a
                   // brokerage account, so without a name the disposal register falls back

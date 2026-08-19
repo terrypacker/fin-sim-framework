@@ -319,9 +319,15 @@ export const US_RETIREMENT = {
 4. Warns on duplicate `EventSeries` types.
 5. Patches `sim.state` (via `structuredClone`), then registers everything with the services.
 
-### `IntlRetirementScenario`
+### Prebuilt scenarios
 
-The production scenario. Combines all US + AU + cross-border toolsets, exposes ~50 typed parameters via `getParamSchema()`, and seeds defaults in `INTL_RETIREMENT_DEFAULTS`. See `src/scenarios/intl-retirement-scenario.js`.
+Three, registered in `PREBUILT_SCENARIOS` (`src/apps/simulation-workbench.js`) and in `SCENARIO_CLASS_BY_ID` (`scenario-loader.js`). All three are also golden fixtures — see *Golden scenarios* below.
+
+- **`IntlRetirementScenario`** — the reference scenario. A married couple emigrating US→AU: all US + AU + cross-border toolsets, ~50 typed parameters via `getParamSchema()`, defaults in `INTL_RETIREMENT_DEFAULTS`. `src/scenarios/intl-retirement-scenario.js`.
+- **`UsSingleHomeownerScenario`** — one US person, age 45 to 85, deliberately the reference scenario's opposite in every dimension: single rather than married, single-country, accumulating rather than decumulating. Twenty working years of wages and payroll contributions, a mortgaged primary residence, Nebraska state income and inheritance tax, a non-gold collectible. `src/scenarios/us-single-homeowner-scenario.js`.
+- **`AuSingleHomeownerScenario`** — the same person in Australia, every figure in AUD, so the pair isolates the two tax systems rather than two different people. Superannuation Guarantee and Div 295 fund tax, a variable-rate mortgage tracking RBA cash + spread, franked resident dividends, and a classic car sold mid-run — the only AU-resident disposal of a true (non-gold) collectible in the suite. It is also the only household with no US person in it. `src/scenarios/au-single-homeowner-scenario.js`.
+
+A new scenario class is one file: `scenarioId/scenarioName/getParamSchema/getToolsets/buildDefaultConfig`, plus an entry in each of those two registries. Per-record params (balances, property values, mortgage fields, sale years, the bequest year) are GENERATED from the records by `ScenarioParamGenerator`, so `getParamSchema()` should carry only what no single record owns.
 
 ### Serialization
 
@@ -431,7 +437,7 @@ The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT
 
 - `BaseApp` (`base-app.js`) — composition root. Instantiates presenters / views / controllers, wires the scenario lifecycle (`initScenario` / `destroyScenario`), and bridges sim-bus events to the workbench runtime.
 - `WorkbenchApp` (`workbench-app.js`) — replaces the legacy static DOM with `WorkbenchShell`-based layout; adds workspace-template handling and bus-bridging.
-- `SimulationWorkbench` (`simulation-workbench.js`) — the production entry point. Registers prebuilt scenarios (currently just `IntlRetirementScenario`) and the chart series.
+- `SimulationWorkbench` (`simulation-workbench.js`) — the production entry point. Registers the prebuilt scenarios (`IntlRetirementScenario`, `UsSingleHomeownerScenario`) and the chart series.
 
 ---
 
@@ -469,6 +475,17 @@ Notable suites:
 | Toolsets / scenarios | `toolset-compiler.test.mjs`, `toolset-us-retirement.test.mjs`, `toolset-au-retirement.test.mjs`, `toolset-cross-border.test.mjs`, `toolset-joe-retirement.test.mjs`, `toolset-mortgage-payment.test.mjs`, `intl-retirement-scenario.test.mjs`, `intl-retirement-mc-runner.test.mjs`, `intl-retirement-optimizer.test.mjs` |
 | Services / serialization | `service-registry.test.mjs`, `base-scenario.test.mjs`, `scenario-loader.test.mjs`, `scenario-serializer.test.mjs`, `scenario-roundtrip.test.mjs`, `serializer-finance-roundtrip.test.mjs`, `serializer-framework-execution.test.mjs`, `state-registry.test.mjs`, `type-registries.test.mjs` |
 | Graph / viz | `graph-geometry.test.mjs`, `graph-query-api.test.mjs`, `orthogonal-edge-router.test.mjs`, `column-layout.test.mjs`, `collision-detector.test.mjs`, `simulation-animator.test.mjs` |
+
+### Golden scenarios
+
+`tests/helpers/golden-specs.js` registers whole-scenario runs whose **entire final state** is pinned to a committed fixture in `tests/fixtures/`. A spec is `{ name, cls, description, simStart, simEnd, params?, mutateCfg? }`; `cls` defaults to `IntlRetirementScenario`. Two tests consume them:
+
+- `golden-scenarios.test.mjs` — the fixture comparison. A failure names the fields that moved. Regold deliberately, then **read the diff**:
+  ```sh
+  REGOLD=1 node --test tests/unit/golden-scenarios.test.mjs
+  git diff tests/fixtures/
+  ```
+- `golden-coverage-gate.test.mjs` — asserts `golden-coverage-manifest.js` is an exact partition of the action-type universe. A new action type lands in neither `COVERED` nor `KNOWN_GAPS` and fails the gate until it is covered by a golden or waived with a note. Each `KNOWN_GAPS` block says which scenario would clear it.
 
 `scripts/dev/check-requirements.js` (`npm run requirements`) cross-references the JP Spec xlsx against `EVT-X:` test names.
 

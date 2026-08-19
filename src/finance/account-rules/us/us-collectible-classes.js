@@ -51,12 +51,20 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   reduce(state, action, date) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
-    const destKey = resolveDestinationCashKey(this.stateRegistry, 'US', state, destinationKey);
-    const { transfer: fxLeg } = creditSaleProceeds(
-      this.accountService, state, destKey, salePrice, 'USD', stateKey, null);
-    const stateUpdate = {};
     const key = stateKey ?? 'collectibleAccount';
     const col = state[key];
+    // Domicile, not an assumption. This reducer used to hardcode 'US' and 'USD' —
+    // correct for the reference scenario's gold, and wrong for any collectible
+    // actually held abroad: the proceeds of an Australian's Australian asset were
+    // routed to a US cash pool that an AU-only scenario does not have, and its AUD
+    // sale price was then read as USD by every downstream consumer, inflating the
+    // assessable gain by the exchange rate. The record already carries both fields.
+    const country  = col?.country ?? 'US';
+    const currency = col?.currency?.code ?? (country === 'AU' ? 'AUD' : 'USD');
+    const destKey = resolveDestinationCashKey(this.stateRegistry, country, state, destinationKey);
+    const { transfer: fxLeg } = creditSaleProceeds(
+      this.accountService, state, destKey, salePrice, currency, stateKey, null);
+    const stateUpdate = {};
     if (col != null) {
       stateUpdate[key] = { ...col, value: 0 };
     }
@@ -102,10 +110,13 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
       // _extractAuDisposals skips any entry without proceeds, so until design 91 §8.9 an
       // AU resident's collectible sale was assessed (it feeds auCapitalGainsYTD and is
       // taxed) yet appeared on no worksheet row — the return footed, the working that
-      // justifies it silently omitted the asset. Both are USD, as declared: this is a
-      // US-domiciled collectible, and the AU return converts on the way in.
+      // justifies it silently omitted the asset. Every money field below is in
+      // `currency`, the collectible's own — the `au*` ones INCLUDED, exactly as design
+      // 91 §8 types a disposal: the prefix says which BASIS measured the gain, never
+      // which currency states it. Consumers convert on the way in, which is why the
+      // currency has to travel with the action rather than being assumed.
       [...(fxLeg ? [fxLeg] : []),
-       { type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency,
+       { type: 'COLLECTIBLE_SALE_TAX', gain, auGain, auIndexedGain, isGold, residency, currency,
         usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
         proceeds: salePrice, costBasis,
         ownershipType: col?.ownershipType, ownerId: col?.ownerId, owners: col?.owners }]

@@ -63,10 +63,13 @@ export class RothContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
-    const ra         = state.rothAccount;
+    // Per-account (design 55 §7): honour a handler-stamped stateKey so a household
+    // with two Roths credits the right member's; canonical key otherwise.
+    const key        = action.stateKey ?? 'rothAccount';
+    const ra         = state[key];
     const newBalance = ra.balance + action.amount;
     return this.newState(state, {
-      rothAccount: {
+      [key]: {
         ...ra,
         balance:           newBalance,
         contributionBasis: ra.contributionBasis + action.amount,

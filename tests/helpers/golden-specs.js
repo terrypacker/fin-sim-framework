@@ -46,6 +46,9 @@
  *    future reader needs when a fixture diff lands on their desk.
  */
 
+import { UsSingleHomeownerScenario } from '../../src/scenarios/us-single-homeowner-scenario.js';
+import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
+
 /** @type {import('./golden-harness.js').GoldenSpec[]} */
 export const GOLDEN_SPECS = [
   {
@@ -111,6 +114,42 @@ export const GOLDEN_SPECS = [
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2032, 0, 1)),
     mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },
+  },
+  {
+    name:        'us-single-homeowner',
+    cls:         UsSingleHomeownerScenario,
+    description:
+      'The second prebuilt scenario, run whole: one US person from age 45 to 85. Its '
+      + 'subject is everything the cross-border reference cannot reach — twenty years of '
+      + 'WAGES funding payroll contributions (401(k) deferral, employer match, IRA and '
+      + 'Roth), a mortgaged primary residence amortising a linked Loan to discharge in its '
+      + 'maturity year (54, 86), Nebraska STATE income tax every year plus its inheritance '
+      + 'tax on the age-55 bequest (34, 63), the 401(k)-to-IRA rollover at retirement, and '
+      + 'IRA RMDs from 73. It is also the only golden holding a non-gold collectible, the '
+      + 'other branch of the 28%-rate / AU-indexation split (57, 91 §8.10), and the only '
+      + 'one where a single filer is single for the whole run rather than only its first '
+      + 'tax year.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2066, 0, 1)),
+  },
+  {
+    name:        'au-single-homeowner',
+    cls:         AuSingleHomeownerScenario,
+    description:
+      'The US single homeowner\'s Australian twin — same person, same age, same '
+      + 'salary, same house, all in AUD — so the pair isolates the two tax systems '
+      + 'rather than two different people. Holds what only an AU-resident plan '
+      + 'reaches: the employer Super Guarantee and the fund\'s Div 295 contributions '
+      + 'tax, super decumulation after preservation age, a VARIABLE-rate mortgage '
+      + 'tracking RBA cash + spread rather than a fixed coupon (56 Phase 3), franked '
+      + 'resident dividends, and the AU CGT discount on a drawn-down AU brokerage. '
+      + 'The classic car sells in 2040: the only AU-resident disposal of a TRUE '
+      + '(non-gold) collectible anywhere in the suite, which is the un-indexed branch '
+      + 'of design 57 Part 2 Q3. It is also the first scenario with no US person in '
+      + 'it, and therefore the one that guards the `usPersonHousehold` gate — without '
+      + 'which the US module taxes an Australian\'s Australian salary.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2066, 0, 1)),
   },
 ];
 

@@ -17,6 +17,8 @@ import { HouseRunningCostHandler }      from '../../finance/handlers/house-runni
 import { RealPropertyRepairTickHandler } from '../../finance/handlers/real-property-repair-tick-handler.js';
 import { HouseRepairApplyReducer }      from '../../finance/reducers/house-repair-apply-reducer.js';
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
+import { UsRetirementContributionHandler } from '../../finance/handlers/retirement-contribution-handler.js';
+import { projectPeople }                from '../../finance/state/person-projection.js';
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
 import { BondCouponScheduledHandler }   from '../../finance/handlers/bond-coupon-handler.js';
@@ -181,6 +183,22 @@ function _hasHouseRepairs(realProperties) {
  *                inflationAccumulator, metrics, people, per-account state entries
  *   Reads: us* keys from US_TAX; US_SAVINGS_INTEREST_MONTHLY from US_BANKING
  */
+/**
+ * Does this scenario contribute anything to a US retirement wrapper during the run?
+ *
+ * Gates the whole payroll-contribution path: with every rate and amount left at its
+ * 0 default, no event is scheduled and no handler is wired, so a scenario that does
+ * not opt in is byte-identical to one built before the feature existed. Someone has
+ * to still be earning, too — contributing a percentage of a wage nobody draws would
+ * schedule a monthly event that can only ever emit nothing.
+ */
+function _hasPayrollContributions(context) {
+  const p = context.parameters ?? {};
+  const any = (p.k401DeferralPct ?? 0) > 0 || (p.k401EmployerMatchPct ?? 0) > 0
+           || (p.iraAnnualContribution ?? 0) > 0 || (p.rothAnnualContribution ?? 0) > 0;
+  return any && (context.people ?? []).some(pe => (pe.monthlyWage ?? 0) > 0);
+}
+
 export const US_RETIREMENT = {
   id: 'US_RETIREMENT',
   capabilities: ['retirement'],
@@ -189,6 +207,7 @@ export const US_RETIREMENT = {
   types: {
     handlers: [
       MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      UsRetirementContributionHandler,
       DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
@@ -260,7 +279,7 @@ export const US_RETIREMENT = {
       { type: 'CASH_SLEEVE_INTEREST_APPLY',             fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'BOND_SLEEVE_COUPON_APPLY',               fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'BOND_ACCRETION_APPLY',                   fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
-      { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       // The WITHDRAWAL family's apply actions carry `penaltyAmount` (the §72(t) 10%)
       // and `residency` alongside `amount`; both were declared only on the paired *_TAX
@@ -281,7 +300,7 @@ export const US_RETIREMENT = {
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'IRA_CONTRIBUTION_TAX',                   fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_TAX',     fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
@@ -292,7 +311,11 @@ export const US_RETIREMENT = {
       { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'IRA_RMD_TAX',                    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
-      { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
+      // stateKey routes the credit to one member's 401(k); employerFunded marks a
+      // match, which skips both the cash debit and the pre-tax deduction. Both must be
+      // declared here or pickPayload drops them and the journal cannot tell a match
+      // from a deferral.
+      { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), employerFunded: ValueType.boolean() } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
@@ -386,6 +409,39 @@ export const US_RETIREMENT = {
         type: 'Number', group: 'US Retirement', mc: true, opt: true,
         defaultValue: 0.04,
         description: 'Annual interest rate for fixed income accounts',
+      },
+      // ── Payroll retirement contributions (the working years) ─────────────────
+      // All default to 0 / null, so every pre-existing scenario schedules no
+      // contribution event at all and is byte-identical.
+      {
+        key: 'k401DeferralPct', label: '401(k) Employee Deferral',
+        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'Employee 401(k) deferral as a fraction of annual pay (0.10 = 10%). Pre-tax: it leaves the cash pool and reduces taxable income. Applies to every employed person until their retirement date.',
+      },
+      {
+        key: 'k401EmployerMatchPct', label: '401(k) Employer Match',
+        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'Employer 401(k) match as a fraction of annual pay. Employer-funded: it never debits the household cash pool and is not the employee\'s deduction.',
+      },
+      {
+        key: 'k401AnnualCap', label: '401(k) Annual Cap',
+        type: 'Money', group: 'Contributions', mc: false, opt: false,
+        defaultValue: null, defaultCurrency: 'USD',
+        description: 'Annual dollar cap applied to the deferral and to the match separately; empty means uncapped. A scenario-level assumption, NOT an indexed statutory limit \u2014 this model carries no \u00a7402(g) schedule.',
+      },
+      {
+        key: 'iraAnnualContribution', label: 'IRA Annual Contribution',
+        type: 'Money', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0, defaultCurrency: 'USD',
+        description: 'Deductible Traditional IRA contribution per employed person per year, paid in twelfths from the cash pool.',
+      },
+      {
+        key: 'rothAnnualContribution', label: 'Roth Annual Contribution',
+        type: 'Money', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0, defaultCurrency: 'USD',
+        description: 'After-tax Roth contribution per employed person per year, paid in twelfths from the cash pool. No income phase-out is modelled.',
       },
       {
         key: 'monthlyExpenses', label: 'Monthly Expenses',
@@ -507,24 +563,12 @@ export const US_RETIREMENT = {
   state(context) {
     const p = context.parameters;
 
-    // Build people map (same shape as UsRetirementToolset.setup())
-    const people = {};
-    for (const person of context.people) {
-      people[person.id] = {
-        id:                    person.id,
-        name:                  person.name,
-        birthDate:             person.birthDate,
-        monthlyWage:           person.monthlyWage           ?? 0,
-        selfEmployed:          person.selfEmployed          ?? false, // design 69
-        wageCurrency:          person.wageCurrency          ?? 'USD',
-        workCountry:           person.workCountry           ?? null, // design 73 Gap 1
-        retirementDate:        person.retirementDate        ?? null,
-        socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
-        lifeExpectancy:        person.lifeExpectancy        ?? 90,
-        citizen:               person.citizen               ?? ['US'],
-        residency:             person.residency             ?? person.citizen?.[0] ?? 'US',
-      };
-    }
+    // One shared projector (see person-projection.js): this map used to be built
+    // here field by field and had drifted from the cross-border toolset's copy,
+    // silently dropping `residencyState` and taking US state income tax with it.
+    const people = projectPeople(context.people, {
+      defaultWageCurrency: 'USD', defaultCitizen: 'US',
+    });
 
     const metrics = {};
     const monthlyExpenses       = p.monthlyExpenses;
@@ -655,6 +699,18 @@ export const US_RETIREMENT = {
         EventBuilder.eventSeries()
           .name('Monthly Social Security').type('MONTHLY_SS_INCOME')
           .interval('month-end').enabled(true).color('#3F51B5').build()
+      );
+    }
+
+    // Payroll retirement contributions. `order(1)` puts them after wages AND expenses
+    // (both order 0) on the same month-end: a deferral taken before the month's
+    // spending can overdraw the cash pool and escalate into the drawdown cascade,
+    // liquidating assets to fund a contribution.
+    if (_hasPayrollContributions(context)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('US Retirement Contributions').type('US_RETIREMENT_CONTRIBUTION')
+          .interval('month-end').order(1).enabled(true).color('#00897B').build()
       );
     }
 
@@ -967,6 +1023,21 @@ export const US_RETIREMENT = {
     const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
     wagesHandler.handledEvents.push(context.schedulesById['MONTHLY_WAGES']);
     handlers.push(wagesHandler);
+
+    // Payroll retirement contributions (401k deferral + employer match, IRA, Roth)
+    const contribEvent = context.schedulesById['US_RETIREMENT_CONTRIBUTION'];
+    if (contribEvent) {
+      const contribHandler = new UsRetirementContributionHandler({
+        stateRegistry:          sr,
+        k401DeferralPct:        p.k401DeferralPct        ?? 0,
+        k401EmployerMatchPct:   p.k401EmployerMatchPct   ?? 0,
+        k401AnnualCap:          p.k401AnnualCap          ?? null,
+        iraAnnualContribution:  p.iraAnnualContribution  ?? 0,
+        rothAnnualContribution: p.rothAnnualContribution ?? 0,
+      });
+      contribHandler.handledEvents.push(contribEvent);
+      handlers.push(contribHandler);
+    }
 
     // Social Security
     if (personsWithSS.length > 0) {

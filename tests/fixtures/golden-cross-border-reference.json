@@ -1374,6 +1374,7 @@
  "usCollectibleGainsYTD": 0,
  "usFeieElected": false,
  "usFilingSingle": false,
+ "usFilingSingleBase": false,
  "usHouseProperty": {
   "accumulatedDepreciation": 0,
   "acquisitionDate": null,
@@ -1437,6 +1438,7 @@
  "usOrdinaryIncomeYTD": 0,
  "usPassiveLossCarryforward": 0,
  "usPenaltyYTD": 0,
+ "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
   "balance": 1634790.30864,

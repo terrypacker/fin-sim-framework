@@ -61,6 +61,8 @@ export const COVERED = [
   'AU_STOCK_EARNINGS_APPLY',
   'AU_TAX_PAYMENT_DEBIT',
   'AU_TAX_SETTLE_APPLY',
+  'AU_WAGES_INCOME_APPLY',
+  'AU_WAGES_INCOME_TAX',
   'BOND_COUPON_CASH_APPLY',
   'BOND_COUPON_TAX',
   'BOND_SLEEVE_COUPON_APPLY',
@@ -74,21 +76,39 @@ export const COVERED = [
   'FIXED_INCOME_EARNINGS_APPLY',
   'FIXED_INCOME_EARNINGS_TAX',
   'HOLDING_TRANSACT',
+  'INHERIT_APPLY',
   'INTL_TRANSFER_RECORD',
+  'IRA_CONTRIBUTION_APPLY',
+  'IRA_CONTRIBUTION_TAX',
   'IRA_EARNINGS_APPLY',
+  'IRA_RMD_APPLY',
+  'IRA_RMD_TAX',
+  'IRA_WITHDRAWAL_CONTRIB_TAX',
+  'IRA_WITHDRAWAL_EARNINGS_TAX',
+  'K401_CONTRIBUTION_APPLY',
+  'K401_CONTRIBUTION_TAX',
   'K401_EARNINGS_APPLY',
   'K401_TO_IRA_CONVERSION_APPLY',
+  'LOAN_PAYMENT_APPLY',
+  'NE_INHERITANCE_TAX',
   'RECORD_BALANCE',
   'RECORD_METRIC',
   'REPLENISH_SAVINGS',
+  'ROTH_CONTRIBUTION_APPLY',
   'ROTH_EARNINGS_APPLY',
   'SS_INCOME_APPLY',
   'SS_INCOME_TAX',
+  'STATE_TAX_PAYMENT_DEBIT',
+  'STATE_TAX_SETTLE_APPLY',
   'STOCK_DIVIDEND_CASH_APPLY',
   'STOCK_DIVIDEND_TAX',
   'STOCK_EARNINGS_APPLY',
+  'STOCK_WITHDRAWAL_TAX',
+  'SUPER_CONTRIBUTION_APPLY',
+  'SUPER_CONTRIBUTION_TAX',
   'SUPER_EARNINGS_APPLY',
   'SUPER_EARNINGS_TAX',
+  'SUPER_WITHDRAWAL_EARNINGS_TAX',
   'US_HOUSE_SALE_APPLY',
   'US_HOUSE_SALE_TAX',
   'US_PERIOD_ADVANCE',
@@ -108,37 +128,40 @@ export const COVERED = [
  */
 export const KNOWN_GAPS = [
   // ── Loans, mortgages and leveraged property (designs 54, 86)
-  // One golden: a plan holding a mortgaged rental. Reaches the amortisation schedule,
-  // the offset account, and the two interest-deduction regimes (AU s8-1 unquarantined
-  // vs US §163(d) pooled) that design 86 G3 added.
+  // us-single-homeowner cleared LOAN_PAYMENT_APPLY: it holds a mortgaged primary
+  // residence and amortises the linked Loan to discharge. What is left is what an
+  // OWNER-OCCUPIER never reaches — a rental's income and the two interest-deduction
+  // regimes (AU s8-1 unquarantined vs US §163(d) pooled, design 86 G3) — plus the
+  // stochastic repair tick, which needs a property carrying a repair model.
+  // One golden clears the rest: a plan holding a mortgaged INVESTMENT property.
   'AU_INVESTMENT_INTEREST_DEDUCTION',
   'AU_RENTAL_INCOME_TAX',
   'HOUSE_REPAIR_APPLY',
-  'LOAN_PAYMENT_APPLY',
   'US_INVESTMENT_INTEREST_DEDUCTION',
   'US_RENTAL_INCOME_TAX',
 
   // ── Retirement contributions, withdrawals and RMDs (design 53)
-  // The reference golden accumulates but barely decumulates — it ends with $12M, so the
-  // drawdown ladder never reaches the wrappers. Needs a DECUMULATION golden: a smaller
-  // balance sheet spending into its wrappers, old enough to hit RMD age.
-  'IRA_CONTRIBUTION_APPLY',
-  'IRA_CONTRIBUTION_TAX',
-  'IRA_RMD_APPLY',
-  'IRA_RMD_TAX',
+  // us-single-homeowner cleared the CONTRIBUTION half (401k deferral + match, IRA,
+  // Roth) and the IRA RMD, because it runs twenty working years and then to age 85.
+  // The WITHDRAWAL half is still open, and for the original reason: no golden
+  // decumulates. Both goldens end rich — the reference at \$12M, this one at \$7M — so
+  // the drawdown ladder never reaches past cash and taxable brokerage into the
+  // wrappers. Needs a golden with a smaller balance sheet spending into them.
+  // K401_RMD_* has a second, structural reason: `k401ToIraConversionEnabled` defaults
+  // ON, so a 401(k) is rolled into the owner's IRA at retirement and is empty by RMD
+  // age. Reaching it means a golden that turns the rollover OFF.
+  // au-single-homeowner then cleared the super CONTRIBUTION pair (employer Super
+  // Guarantee) and SUPER_WITHDRAWAL_EARNINGS_TAX, since it decumulates its fund after
+  // preservation age. SUPER_WITHDRAWAL_CONTRIB_APPLY is still open: that plan's super
+  // is nearly all earnings, so the drawdown never reaches the contribution tranche.
   'IRA_ROLLOVER_WITHDRAWAL_APPLY',
   'IRA_ROLLOVER_WITHDRAWAL_TAX',
   'IRA_WITHDRAWAL_CONTRIB_APPLY',
-  'IRA_WITHDRAWAL_CONTRIB_TAX',
   'IRA_WITHDRAWAL_EARNINGS_APPLY',
-  'IRA_WITHDRAWAL_EARNINGS_TAX',
-  'K401_CONTRIBUTION_APPLY',
-  'K401_CONTRIBUTION_TAX',
   'K401_RMD_APPLY',
   'K401_RMD_TAX',
   'K401_WITHDRAWAL_APPLY',
   'K401_WITHDRAWAL_TAX',
-  'ROTH_CONTRIBUTION_APPLY',
   'ROTH_ROLLOVER_CONTRIBUTION_APPLY',
   'ROTH_ROLLOVER_EARNINGS_APPLY',
   'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',
@@ -148,11 +171,8 @@ export const KNOWN_GAPS = [
   'ROTH_WITHDRAWAL_CONTRIB_APPLY',
   'ROTH_WITHDRAWAL_EARNINGS_APPLY',
   'ROTH_WITHDRAWAL_EARNINGS_TAX',
-  'SUPER_CONTRIBUTION_APPLY',
-  'SUPER_CONTRIBUTION_TAX',
   'SUPER_WITHDRAWAL_CONTRIB_APPLY',
   'SUPER_WITHDRAWAL_EARNINGS_APPLY',
-  'SUPER_WITHDRAWAL_EARNINGS_TAX',
 
   // ── Roth conversion and early-withdrawal decant (designs 45, 84)
   // Pairs naturally with the decumulation golden: a conversion ladder in the low-income
@@ -162,21 +182,26 @@ export const KNOWN_GAPS = [
   'SCHEDULED_EARLY_WITHDRAWAL_APPLY',
 
   // ── Death, survivorship and bequest (designs 63, 68)
-  // One short golden ending in a death year. Guards the terminal settle flush, the AU
-  // per-person key drop, the survivor SS step, and inherited-account taxation.
+  // us-single-homeowner cleared INHERIT_APPLY and NE_INHERITANCE_TAX by taking a
+  // Nebraska bequest at age 55. What is left is the DECEDENT side — this golden
+  // inherits, nobody in it dies. One short golden ending in a death year guards the
+  // terminal settle flush, the AU per-person key drop and the survivor SS step.
+  // INHERITED_RA_DISTRIBUTION_TAX needs an inherited RETIREMENT account (the SECURE
+  // 10-year stream); the bequest here is a property and a taxable brokerage.
   'INHERITED_RA_DISTRIBUTION_TAX',
-  'NE_INHERITANCE_TAX',
   'PERSON_DIED_APPLY',
   'SOCIAL_SECURITY_SURVIVOR_APPLY',
   'SUPER_DEATH_BENEFIT_APPLY',
   'SUPER_DEATH_BENEFIT_TAX',
 
-  // ── US state income tax and state residency change (design 71 §11.3)
-  // Cheap to reach — set residencyState and move states mid-run. Measured to move the
-  // reference golden's net worth by only -0.50%, i.e. inside the old ±1% band.
+  // ── US state residency change (design 71 §11.3)
+  // State income tax itself is now covered: us-single-homeowner is a Nebraska
+  // resident for all forty years and settles a state return in each of them. Worth
+  // noting what that cost — wiring it up moved that scenario's terminal net worth by
+  // −20%, because `residencyState` had been dropped from two of the three
+  // `state.people` projections and the state module had therefore never run at all
+  // (see person-projection.js). The MOVE is what remains: set stateMoveYear.
   'CHANGE_STATE_RESIDENCY_APPLY',
-  'STATE_TAX_PAYMENT_DEBIT',
-  'STATE_TAX_SETTLE_APPLY',
 
   // ── Foreign-currency basis pools and cross-border transfers (designs 51, 87)
   // §988 needs an authored fxBasisRate to come alive at all; until a golden does that,
@@ -217,8 +242,9 @@ export const KNOWN_GAPS = [
   'COLLECTIBLE_VALUE_CHANGE_APPLY',
 
   // ── Taxable brokerage disposals and AU dividends
-  // STOCK_WITHDRAWAL_TAX fires heavily in the live research plan while
-  // STOCK_WITHDRAWAL_APPLY never fires there. That is NOT a dead parallel path: no
+  // STOCK_WITHDRAWAL_TAX now fires in us-single-homeowner (its taxable brokerage is
+  // drawn down to fund the working-years shortfall) while
+  // STOCK_WITHDRAWAL_APPLY still never fires. That is NOT a dead parallel path: no
   // toolset schedules a STOCK_WITHDRAWAL event, because drawdown is demand-driven, so
   // nothing *plans* a stock sale. The handler/reducer pair is reachable by wiring one
   // in the ConfigBuilder (and is the deferred taxable branch of PanicSellReducer). A
@@ -235,14 +261,14 @@ export const KNOWN_GAPS = [
   'AU_STOCK_WITHDRAWAL_TAX',
   'STOCK_DIVIDEND_APPLY',
   'STOCK_WITHDRAWAL_APPLY',
-  'STOCK_WITHDRAWAL_TAX',
 
-  // ── Employment, self-employment and bonus income (designs 69, 73, 76)
-  // The reference retiree has no wages after simStart. A pre-retirement golden with an
-  // explicit workCountry would reach SECA, AU wages and NR withholding.
+  // ── Self-employment and bonus income (designs 69, 73, 76)
+  // Employment income is covered now: us-single-homeowner and au-single-homeowner both
+  // work twenty years with an explicit `workCountry`, which cleared the US and AU wage
+  // paths. What is left needs a different EARNER, not a longer run — someone flagged
+  // `selfEmployed` (SECA / AU SE income), someone paid a bonus, and a non-resident
+  // whose wage is withheld at source.
   'AU_SE_INCOME_TAX',
-  'AU_WAGES_INCOME_APPLY',
-  'AU_WAGES_INCOME_TAX',
   'BONUS_APPLY',
   'BONUS_TAX',
   'SE_INCOME_AU_APPLY',

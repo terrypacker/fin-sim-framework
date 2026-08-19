@@ -32,21 +32,30 @@ class PeriodAdvanceReducerBase extends Reducer {
 
 /**
  * Updates state.currentPeriods.US when a US_PERIOD_ADVANCE action fires.
- * Also sets state.usFilingSingle based on state.deceased: once any person has
- * died the surviving spouse files single starting the following tax year
- * (design/27 §7 / Step 19).
+ * Also sets state.usFilingSingle: the household files single once ANY person has
+ * died (the survivor files single from the following tax year — design/27 §7 /
+ * Step 19) OR when the scenario was configured single in the first place.
  * Runs at PRE_PROCESS priority so the correct period and filing status are in
  * state before any tax or cash-flow reducers run on the same step.
+ *
+ * The `usFilingSingleBase` half is not redundant. This reducer OWNS the field from
+ * the first year boundary onward, so deriving the status from the death rule alone
+ * — which is what it did before — discarded the configured status every 1 Jan and
+ * put a genuinely single filer on MFJ brackets for every year but the first. The
+ * base is seeded by US_TAX's state(); `?? false` keeps a pre-existing saved state
+ * (which carries no base) on exactly the old behaviour, and a survivor's state is
+ * unaffected either way because `deceased` is non-empty for them.
  */
 export class UsPeriodAdvanceReducer extends PeriodAdvanceReducerBase {
   static type       = 'UsPeriodAdvanceReducer';
   static category   = 'reducer';
   static cc         = 'US';
   static actionType = 'US_PERIOD_ADVANCE';
-  static description = 'Updates state.currentPeriods.US to the new period when a US_PERIOD_ADVANCE action fires at a year boundary. Sets usFilingSingle=true when state.deceased is non-empty.';
+  static description = 'Updates state.currentPeriods.US to the new period when a US_PERIOD_ADVANCE action fires at a year boundary. Sets usFilingSingle=true when the scenario is configured single (usFilingSingleBase) or state.deceased is non-empty.';
 
   reduce(state, action) {
-    const usFilingSingle = Object.keys(state.deceased ?? {}).length > 0;
+    const usFilingSingle = (state.usFilingSingleBase ?? false)
+      || Object.keys(state.deceased ?? {}).length > 0;
     return this.newState(state, {
       currentPeriods: { ...state.currentPeriods, [this.constructor.cc]: action.period },
       usFilingSingle,

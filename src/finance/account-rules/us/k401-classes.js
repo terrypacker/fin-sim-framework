@@ -34,7 +34,7 @@ function getAgeDecimal(birthDate, asOfDate) {
  */
 export class K401ContributionApplyReducer extends AccountServiceReducer {
   static type        = 'K401ContributionApplyReducer';
-  static description = 'Debits the US cash pool and credits 401k contributionBasis; chains K401_CONTRIBUTION_TAX.';
+  static description = 'Debits the US cash pool and credits 401k contributionBasis; chains K401_CONTRIBUTION_TAX. An employerFunded contribution (a match) does neither — it is not the member\'s money and not their deduction.';
   static actionType  = 'K401_CONTRIBUTION_APPLY';
 
   constructor({ accountService, stateRegistry }) {
@@ -46,20 +46,30 @@ export class K401ContributionApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
-    const ka         = state.k401Account;
+    // An employer match never passed through the member's paycheque, so it neither
+    // leaves their cash pool nor earns them the pre-tax deduction below. An employee
+    // deferral does both, which is the pre-existing behaviour and stays exact.
+    const employerFunded = action.employerFunded === true;
+    if (!employerFunded) {
+      this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
+    }
+    // Per-account (design 55 §7): honour a handler-stamped stateKey so a household
+    // with two 401(k)s credits the right member's. Falls back to the canonical key
+    // for the legacy single-account dispatchers.
+    const key        = action.stateKey ?? 'k401Account';
+    const ka         = state[key];
     const newBalance = ka.balance + action.amount;
     return this.newState(
       state,
       {
-        k401Account: {
+        [key]: {
           ...ka,
           balance:           newBalance,
           contributionBasis: ka.contributionBasis + action.amount,
           holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
       },
-      [{ type: 'K401_CONTRIBUTION_TAX', amount: action.amount }]
+      employerFunded ? [] : [{ type: 'K401_CONTRIBUTION_TAX', amount: action.amount }]
     );
   }
 }

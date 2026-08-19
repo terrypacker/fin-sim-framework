@@ -1412,6 +1412,11 @@ export class AccountService extends AssetService {
           disposalTermFields(brokerageFifo.realizedGainByCountryAndTerm);
         account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
+          // The SOURCE account's currency. Every money field on this action is native
+          // to the account drawn (see the method comment above), so a consumer that
+          // assumes USD reads an AUD gain as USD and converts it a second time —
+          // overstating an AU-domiciled brokerage disposal by the exchange rate.
+          currency: account.currency?.code ?? (account.country === 'AU' ? 'AUD' : 'USD'),
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, auDiscountableGain, residency,
           usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,

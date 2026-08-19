@@ -45,7 +45,7 @@ function getAge(birthDate, asOfDate) {
  */
 export class SuperContributionApplyReducer extends AccountServiceReducer {
   static type        = 'SuperContributionApplyReducer';
-  static description = 'Debits the AU cash pool for the gross contribution, credits superAccount with the amount net of the 15% Div 295 contributions tax; chains SUPER_CONTRIBUTION_TAX.';
+  static description = 'Debits the AU cash pool for the gross contribution, credits superAccount with the amount net of the 15% Div 295 contributions tax; chains SUPER_CONTRIBUTION_TAX. An employerFunded contribution (Super Guarantee) skips the cash debit — it never reached the member.';
   static actionType  = 'SUPER_CONTRIBUTION_APPLY';
 
   constructor({ accountService, stateRegistry }) {
@@ -57,8 +57,15 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
+    // The Superannuation Guarantee is an EMPLOYER charge on top of the quoted salary:
+    // it never reaches the member's cash pool, so it cannot be debited from it, and
+    // it is outside their assessable income (only the fund's Div 295 tax below
+    // applies). A member's own contribution is the pre-existing path and unchanged.
+    const employerFunded = action.employerFunded === true;
     const auCashKey = resolveCashKey(this.stateRegistry, 'AU', state);
-    this.accountService.transaction(state[auCashKey], -action.amount, null);
+    if (!employerFunded) {
+      this.accountService.transaction(state[auCashKey], -action.amount, null);
+    }
     // Design 87 §14.4 item 3 — the AUD leaving the cash pool is disposed of, and the
     // super account it funds is NOT the other half of a same-currency transfer: design 87
     // §5 puts super outside this design entirely (a super interest is a pension/trust
@@ -77,7 +84,12 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
     // the retirement provisions rather than from §212. So this falls to the capital
     // branch with the \$200 exclusion — the over-disallowing direction the rest of this
     // design takes when the answer is arguable.
-    action.section988 = { kind: 'DISPOSE', accountKey: auCashKey, businessFraction: 0 };
+    // …and only when AUD actually left the pool. An employer contribution disposes of
+    // nothing the member held, so stamping it would realize a phantom §988 gain on
+    // currency that was never theirs.
+    if (!employerFunded) {
+      action.section988 = { kind: 'DISPOSE', accountKey: auCashKey, businessFraction: 0 };
+    }
     // Per-account (design 55 §7 / 76 Gap C): honor a handler-stamped stateKey so a
     // household with two super accounts credits — and taxes — the right member's.
     // Falls back to the canonical key for legacy dispatchers and pre-stateKey saves.

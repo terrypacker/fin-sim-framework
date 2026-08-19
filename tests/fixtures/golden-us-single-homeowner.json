@@ -1,0 +1,808 @@
+{
+ "activeRegimes": [],
+ "artCollectible": {
+  "acquisitionDateByCountry": null,
+  "acquisitionPriceLevel": null,
+  "appreciationRate": 0.03,
+  "appreciationSchedule": null,
+  "costBaseByCountry": null,
+  "costBasis": 90000,
+  "country": "US",
+  "isGold": false,
+  "kind": "collectible",
+  "ownerId": "primary",
+  "owners": [],
+  "ownershipType": "sole",
+  "plannedSaleYear": null,
+  "stateKey": "artCollectible",
+  "value": 489305.63
+ },
+ "auCapitalGainsYTD": 0,
+ "auCgtEffectiveRate": null,
+ "auDiscountAllowanceYTD": 0,
+ "auDiscountApportionedBaseYTD": 0,
+ "auDiscountableGainsYTD": 0,
+ "auFrankingCreditYTD": 0,
+ "auNonResidentWithholdingYTD": 0,
+ "auNrWithholdingInterestYTD": 0,
+ "auNrWithholdingUnfrankedDividendYTD": 0,
+ "auOrdinaryIncomeYTD": 0,
+ "auPersonCapitalGainsYTD": {
+  "primary": 0
+ },
+ "auPersonDiscountAllowanceYTD": {
+  "primary": 0
+ },
+ "auPersonDiscountApportionedBaseYTD": {
+  "primary": 0
+ },
+ "auPersonDiscountableGainsYTD": {
+  "primary": 0
+ },
+ "auPersonEarnedIncomeYTD": {
+  "primary": 0
+ },
+ "auPersonFrankingCreditYTD": {
+  "primary": 0
+ },
+ "auPersonNonResidentWithholdingYTD": {
+  "primary": 0
+ },
+ "auPersonNrWithholdingInterestYTD": {
+  "primary": 0
+ },
+ "auPersonNrWithholdingUnfrankedDividendYTD": {
+  "primary": 0
+ },
+ "auPersonOrdinaryIncomeYTD": {
+  "primary": 0
+ },
+ "auPersonRealCapitalGainsYTD": {
+  "primary": 0
+ },
+ "auPersonSuperTaxYTD": {
+  "primary": 0
+ },
+ "auPersonUsSourceCapGainsAudYTD": {
+  "primary": 0
+ },
+ "auPersonUsSourceOrdinaryAudYTD": {
+  "primary": 0
+ },
+ "auPersonUsSourceRealCapGainsAudYTD": {
+  "primary": 0
+ },
+ "auRealCapitalGainsYTD": 0,
+ "auSuperDeathTaxYTD": 0,
+ "auSuperTaxYTD": 0,
+ "baseAppreciationRates": {},
+ "baseGrowthRates": {
+  "EQUITY_AU": 0.06,
+  "EQUITY_INTL_EX_AU": 0.07,
+  "EQUITY_INTL_EX_US": 0.07,
+  "EQUITY_INTL_EX_US::inheritedBrokerageAccount": 0.06,
+  "EQUITY_INTL_EX_US::iraAccount": 0.07,
+  "EQUITY_INTL_EX_US::k401Account": 0.07,
+  "EQUITY_INTL_EX_US::rothAccount": 0.07,
+  "EQUITY_INTL_EX_US::usStockAccount": 0.06,
+  "EQUITY_US": 0.07,
+  "EQUITY_US::inheritedBrokerageAccount": 0.06,
+  "EQUITY_US::iraAccount": 0.07,
+  "EQUITY_US::k401Account": 0.07,
+  "EQUITY_US::rothAccount": 0.07,
+  "EQUITY_US::usStockAccount": 0.06,
+  "GOLD": 0.05
+ },
+ "baseInflationRates": {
+  "AU": 0.03,
+  "US": 0.03
+ },
+ "baseInterestRates": {
+  "FIXED_INCOME_AU": 0.04,
+  "FIXED_INCOME_US": 0.04,
+  "PRIME_AU": 0.0435,
+  "PRIME_US": 0.045,
+  "SAVINGS_AU": 0.045,
+  "SAVINGS_US": 0.035,
+  "SAVINGS_US::checkingAccount": 0,
+  "SAVINGS_US::usSavingsAccount": 0.035
+ },
+ "baseYieldCurve": {
+  "AU": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ],
+  "US": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ]
+ },
+ "checkingAccount": {
+  "allowsEarlyWithdrawal": false,
+  "balance": 122750.999238,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "drawdownPriority": 0,
+  "holdings": [
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": null,
+    "allocation": "CASH",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 125750.999238,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "fxBasisRate": null,
+    "id": "hld1",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "",
+    "marketValue": 125750.999238,
+    "maturityDate": null,
+    "purchaseDate": null,
+    "rateKey": "SAVINGS_US",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "zeroCoupon": false
+   }
+  ],
+  "minimumBalance": 5000,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "us-savings",
+  "stateKey": "checkingAccount",
+  "type": "savings"
+ },
+ "cpiAccumulator": {
+  "AU": 3.262037792,
+  "US": 3.262037792
+ },
+ "cpiRates": {},
+ "crossBorderDrawdown": "LOCAL_FIRST",
+ "cumulativeConsumption": 3360000,
+ "cumulativeConsumptionMarginalUtility": 0.000819585332115,
+ "cumulativeConsumptionUtility": 948.52580535,
+ "cumulativeConsumptionUtilityCount": 480,
+ "cumulativeDeficit": 0,
+ "cumulativeTaxesPaid": 1397292.42221,
+ "currentPeriods": {
+  "AU": {
+   "endMs": 3045168000000,
+   "id": "AU-2065-2066",
+   "name": "2065-2066",
+   "startMs": 3013632000000,
+   "type": "YEAR_AU"
+  },
+  "US": {
+   "endMs": 3061065600000,
+   "id": "US-2066",
+   "name": "2066",
+   "startMs": 3029529600000,
+   "type": "YEAR_US"
+  }
+ },
+ "deficitMonths": 0,
+ "discretionarySharePct": 0.3,
+ "drawdownLotStrategy": "FIFO",
+ "drawdownMode": "ORDERED",
+ "drawdownRebalanceWeight": 0,
+ "drawdownSleeveOrder": "FIFO",
+ "drawdownSleeveWeights": null,
+ "earlyWithdrawalBeforeBrokerage": false,
+ "effectiveAppreciationRates": {},
+ "effectiveDividendAdjustments": {},
+ "effectiveGrowthRates": {
+  "EQUITY_AU": 0.06,
+  "EQUITY_INTL_EX_AU": 0.07,
+  "EQUITY_INTL_EX_US": 0.07,
+  "EQUITY_INTL_EX_US::inheritedBrokerageAccount": 0.06,
+  "EQUITY_INTL_EX_US::iraAccount": 0.07,
+  "EQUITY_INTL_EX_US::k401Account": 0.07,
+  "EQUITY_INTL_EX_US::rothAccount": 0.07,
+  "EQUITY_INTL_EX_US::usStockAccount": 0.06,
+  "EQUITY_US": 0.07,
+  "EQUITY_US::inheritedBrokerageAccount": 0.06,
+  "EQUITY_US::iraAccount": 0.07,
+  "EQUITY_US::k401Account": 0.07,
+  "EQUITY_US::rothAccount": 0.07,
+  "EQUITY_US::usStockAccount": 0.06,
+  "GOLD": 0.05
+ },
+ "effectiveInflationRates": {
+  "AU": 0.03,
+  "US": 0.03
+ },
+ "effectiveInterestRates": {
+  "FIXED_INCOME_AU": 0.04,
+  "FIXED_INCOME_US": 0.04,
+  "PRIME_AU": 0.0435,
+  "PRIME_US": 0.045,
+  "SAVINGS_AU": 0.045,
+  "SAVINGS_US": 0.035,
+  "SAVINGS_US::checkingAccount": 0,
+  "SAVINGS_US::usSavingsAccount": 0.035
+ },
+ "equityReturnDev": {},
+ "equityReturnDriftComp": {},
+ "equityReturnMarketDev": 0,
+ "expenses": {
+  "discretionary": 6850.2793632,
+  "essential": 15983.9851808
+ },
+ "foreignGeneralIncomeYTD": 0,
+ "foreignPassiveIncomeYTD": 0,
+ "ftcCurrentForeignTax": 0,
+ "ftcCurrentGeneral": 0,
+ "ftcCurrentPassive": 0,
+ "ftcCurrentResourced": 0,
+ "ftcPoolGeneral": {},
+ "ftcPoolPassive": {},
+ "ftcPoolResourced": {},
+ "inflationAccumulator": {
+  "AU": 3.262037792,
+  "US": 3.262037792
+ },
+ "inflationRates": {
+  "US": 0.03
+ },
+ "inheritedBrokerageAccount": {
+  "allowsEarlyWithdrawal": true,
+  "balance": 12830.3,
+  "bequestId": "estateBequest",
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "drawdownPriority": 2,
+  "holdings": [
+   {
+    "allocation": "EQUITY",
+    "costBasis": 2233.88,
+    "id": "inheritedBrokerageAccount-inherited-lot",
+    "label": "Inherited Brokerage",
+    "marketValue": 12830.3,
+    "purchaseDate": 2083968000000
+   }
+  ],
+  "inherited": true,
+  "minimumBalance": 0,
+  "name": "Inherited Brokerage",
+  "ownerId": "primary",
+  "role": "us-stock",
+  "stateKey": "inheritedBrokerageAccount",
+  "type": "brokerage"
+ },
+ "inheritedHomeProperty": {
+  "bequestId": "estateBequest",
+  "costBasis": 250000,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "inherited": true,
+  "kind": "real-property",
+  "mortgageBalance": 0,
+  "name": "Inherited Home",
+  "ownerId": "primary",
+  "stateKey": "inheritedHomeProperty",
+  "value": 810849.4
+ },
+ "iraAccount": {
+  "allowsEarlyWithdrawal": true,
+  "balance": 2635676.36,
+  "balanceAtResidencyChange": null,
+  "contributionBasis": 0,
+  "costBaseStepUpByCountry": null,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "derivedIncomeBasis": 1163694.09,
+  "drawdownPriority": 2,
+  "earningsBasis": 2635676.43035,
+  "holdings": [
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": null,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 176011.27,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "fxBasisRate": null,
+    "id": "hld5",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "",
+    "marketValue": 2635676.36,
+    "maturityDate": null,
+    "purchaseDate": null,
+    "rateKey": "EQUITY_US",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "zeroCoupon": false
+   }
+  ],
+  "loanBalance": 0,
+  "minimumAge": 60,
+  "minimumBalance": 0,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "ira",
+  "stateKey": "iraAccount",
+  "type": "ira"
+ },
+ "k401Account": {
+  "allowsEarlyWithdrawal": true,
+  "balance": 0,
+  "balanceAtResidencyChange": null,
+  "contributionBasis": 0,
+  "costBaseStepUpByCountry": null,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "derivedIncomeBasis": 396911.59,
+  "drawdownPriority": 3,
+  "earningsBasis": 2.32830643654e-9,
+  "holdings": [
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": null,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 0,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "fxBasisRate": null,
+    "id": "hld4",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "",
+    "marketValue": 0,
+    "maturityDate": null,
+    "purchaseDate": null,
+    "rateKey": "EQUITY_US",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "zeroCoupon": false
+   }
+  ],
+  "loanBalance": 0,
+  "minimumAge": 59.5,
+  "minimumBalance": 0,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "k401",
+  "stateKey": "k401Account",
+  "type": "401k"
+ },
+ "metrics": {
+  "checkingAccount": 5000,
+  "dividends": 256.61,
+  "inheritedBrokerageAccount": 12830.3,
+  "iraAccount": 2635676.36,
+  "ira_earnings": 183340.55,
+  "k401Account": 0,
+  "k401_earnings": 141187.89,
+  "monthly_expenses": 22169.1888777,
+  "netLiquidity": 3824207.69,
+  "netWorth": 7103992.53,
+  "offsetAppliedCapacity": 0,
+  "offsetIdleCapacity": 0,
+  "rothAccount": 1042950.03,
+  "roth_earnings": 68230.38,
+  "usHousePropertyLoan": 0,
+  "usSavingsAccount": 10000,
+  "usStockAccount": 0,
+  "us_savings_interest": 29.25,
+  "us_stock_earnings": 726.24
+ },
+ "monthlyExpenses": 22834.264544,
+ "neInheritanceTaxYTD": 0,
+ "outOfFundsDate": null,
+ "people": {
+  "primary": {
+   "birthDate": "1981-07-01T00:00:00.000Z",
+   "citizen": [
+    "US"
+   ],
+   "id": "primary",
+   "incomeSupportRecipient": false,
+   "lifeExpectancy": 90,
+   "monthlyWage": 32620.37792,
+   "name": "Primary",
+   "residency": "US",
+   "residencyState": "NE",
+   "retirementDate": "2046-07-01T00:00:00.000Z",
+   "selfEmployed": false,
+   "socialSecurityMonthly": 9133.7058176,
+   "wageCurrency": "USD",
+   "workCountry": "US"
+  }
+ },
+ "personBirthDate": "1981-07-01T00:00:00.000Z",
+ "primeLinks": [
+  {
+   "primeKey": "PRIME_US",
+   "savKey": "SAVINGS_US",
+   "spread": -0.045,
+   "stateKey": "checkingAccount"
+  },
+  {
+   "primeKey": "PRIME_US",
+   "savKey": "SAVINGS_US",
+   "spread": -0.01,
+   "stateKey": "usSavingsAccount"
+  }
+ ],
+ "priorMarkCurve": {
+  "AU": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ],
+  "US": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ]
+ },
+ "priorMarkMs": 3029529600000,
+ "priorMarkRates": {
+  "FIXED_INCOME_AU": 0.04,
+  "FIXED_INCOME_US": 0.04,
+  "PRIME_AU": 0.0435,
+  "PRIME_US": 0.045,
+  "SAVINGS_AU": 0.045,
+  "SAVINGS_US": 0.035,
+  "SAVINGS_US::checkingAccount": 0,
+  "SAVINGS_US::usSavingsAccount": 0.035
+ },
+ "propertyReturnDev": {},
+ "propertyReturnDriftComp": {},
+ "propertyReturnMarketDev": 0,
+ "rothAccount": {
+  "allowsEarlyWithdrawal": true,
+  "balance": 1042950.03,
+  "balanceAtResidencyChange": null,
+  "contributionBasis": 61859.4475415,
+  "costBaseStepUpByCountry": null,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "derivedIncomeBasis": 291025.92,
+  "drawdownPriority": 4,
+  "earningsBasis": 981090.59,
+  "holdings": [
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": null,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 69648.45,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "fxBasisRate": null,
+    "id": "hld6",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "",
+    "marketValue": 1042950.03,
+    "maturityDate": null,
+    "purchaseDate": null,
+    "rateKey": "EQUITY_US",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "zeroCoupon": false
+   }
+  ],
+  "loanBalance": 0,
+  "minimumAge": 59.5,
+  "minimumBalance": 0,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "roth-ira",
+  "stateKey": "rothAccount",
+  "type": "roth"
+ },
+ "scenarioFailed": false,
+ "stateCapitalGainsYTD": 0,
+ "stateOrdinaryIncomeYTD": 0,
+ "statePensionIncomeYTD": 0,
+ "stateSsIncomeYTD": 0,
+ "usCapitalGainsYTD": 0,
+ "usCollectibleGainsYTD": 0,
+ "usFilingSingle": true,
+ "usFilingSingleBase": true,
+ "usHouseProperty": {
+  "accumulatedDepreciation": 0,
+  "acquisitionDate": null,
+  "acquisitionDateByCountry": null,
+  "acquisitionPriceLevel": null,
+  "annualDepreciationOverride": null,
+  "annualRunningCost": 0,
+  "appreciationRate": 0.035,
+  "appreciationSchedule": null,
+  "capitalizeRepairs": 0,
+  "capitalizedImprovements": 0,
+  "claimDownsizerContribution": false,
+  "costBaseByCountry": null,
+  "costBasis": 380000,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "isPrimaryResidence": true,
+  "kind": "real-property",
+  "landValueRatio": 0.2,
+  "mainResidenceFrom": null,
+  "mainResidenceUntil": null,
+  "market": null,
+  "monthlyMortgage": 0,
+  "monthlyRent": 0,
+  "mortgageBalance": 0,
+  "mortgageInterestRate": 0.065,
+  "occupancyRate": 0.95,
+  "ownerId": "primary",
+  "owners": [],
+  "ownershipType": "sole",
+  "plannedSaleYear": null,
+  "purchaseFundFrom": null,
+  "purchasePrice": null,
+  "purchasePriceIsNominal": false,
+  "purchaseYear": null,
+  "rentalEnabled": false,
+  "rentalExpenseRatio": 0.25,
+  "repairLambda": 0,
+  "repairMedian": 0,
+  "repairModel": "NONE",
+  "repairProb": 0,
+  "repairSigma": 0.6,
+  "repairValuePct": 0,
+  "runningCostGrowth": 0,
+  "runningCostValuePct": 0,
+  "stateKey": "usHouseProperty",
+  "value": 1979629.81
+ },
+ "usHousePropertyLoan": {
+  "balance": 0,
+  "bookingFxRate": null,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "deductibleFraction": null,
+  "drawdownPriority": null,
+  "holdings": [],
+  "interestOnly": false,
+  "interestOnlyUntilYear": null,
+  "interestRate": 0.065,
+  "kind": "account",
+  "linkedPropertyKey": "usHouseProperty",
+  "maturityYear": 2046,
+  "minimumBalance": 0,
+  "monthlyPayment": 2385.66,
+  "name": "Home Loan",
+  "postIoPrincipal": null,
+  "primeSpread": null,
+  "stateKey": "usHousePropertyLoan",
+  "type": "loan"
+ },
+ "usInvestmentInterestCarryforward": 0,
+ "usLongTermCapitalLossCarryforward": 0,
+ "usNegativeIncomeYTD": 0,
+ "usNetInvestmentIncomeYTD": 0,
+ "usOrdinaryIncomeYTD": 0,
+ "usPassiveLossCarryforward": 0,
+ "usPenaltyYTD": 0,
+ "usPersonHousehold": true,
+ "usSavingsAccount": {
+  "allowsEarlyWithdrawal": false,
+  "balance": 10000,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "drawdownPriority": 0,
+  "holdings": [
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": null,
+    "allocation": "CASH",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 10000,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "fxBasisRate": null,
+    "id": "hld2",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "",
+    "marketValue": 10000,
+    "maturityDate": null,
+    "purchaseDate": null,
+    "rateKey": "SAVINGS_US",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "zeroCoupon": false
+   }
+  ],
+  "minimumBalance": 10000,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "us-savings",
+  "stateKey": "usSavingsAccount",
+  "type": "savings"
+ },
+ "usSeEarningsYTD": 0,
+ "usShortTermCapitalGainsYTD": 0,
+ "usShortTermCapitalLossCarryforward": 0,
+ "usSourceCapGainsAudYTD": 0,
+ "usSourceCapGainsUsdYTD": 0,
+ "usSourceDividendsUsdYTD": 0,
+ "usSourceGeneralUsdYTD": 0,
+ "usSourceInterestUsdYTD": 0,
+ "usSourceOrdinaryAudYTD": 0,
+ "usSourceOrdinaryUsdYTD": 0,
+ "usSourcePassiveUsdYTD": 0,
+ "usSourceRealCapGainsAudYTD": 0,
+ "usSsWagesYTD": 0,
+ "usStockAccount": {
+  "allowsEarlyWithdrawal": false,
+  "balance": 0,
+  "country": "US",
+  "currency": {
+   "code": "USD",
+   "symbol": "$"
+  },
+  "drawdownPriority": 1,
+  "holdings": [],
+  "minimumBalance": 0,
+  "ownerId": "primary",
+  "ownershipType": "sole",
+  "role": "us-stock",
+  "stateKey": "usStockAccount",
+  "type": "brokerage"
+ },
+ "usTaxPaidOnUsSourceAud": 0,
+ "withinTierDraw": "SEQUENTIAL",
+ "yieldCurve": {
+  "AU": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ],
+  "US": [
+   {
+    "spread": -0.01,
+    "tenor": 1
+   },
+   {
+    "spread": 0,
+    "tenor": 5
+   },
+   {
+    "spread": 0.006,
+    "tenor": 10
+   },
+   {
+    "spread": 0.012,
+    "tenor": 30
+   }
+  ]
+ },
+ "yieldCurveLevelDev": {
+  "AU": 0,
+  "US": 0
+ }
+}

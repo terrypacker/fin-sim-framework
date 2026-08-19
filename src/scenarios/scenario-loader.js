@@ -15,6 +15,8 @@ import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } 
 import { StateRegistry }          from '../finance/services/state-registry.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { BlankScenario }           from './blank-scenario.js';
+import { UsSingleHomeownerScenario } from './us-single-homeowner-scenario.js';
+import { AuSingleHomeownerScenario } from './au-single-homeowner-scenario.js';
 import { US_BANKING }         from './toolsets/us-banking-toolset.js';
 import { US_TAX }             from './toolsets/us-tax-toolset.js';
 import { US_STATE_TAX }       from './toolsets/us-state-tax-toolset.js';
@@ -54,6 +56,8 @@ const RETIREMENT_ROLES = new Set([
 const SCENARIO_CLASS_BY_ID = new Map([
   [IntlRetirementScenario.scenarioId(), IntlRetirementScenario],
   [BlankScenario.scenarioId(),          BlankScenario],
+  [UsSingleHomeownerScenario.scenarioId(), UsSingleHomeownerScenario],
+  [AuSingleHomeownerScenario.scenarioId(), AuSingleHomeownerScenario],
 ]);
 
 const BUILT_IN_TOOLSETS = [

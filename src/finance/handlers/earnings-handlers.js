@@ -245,13 +245,13 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.05 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? 0.05 });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -278,34 +278,53 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
  * Computes annual unrealized capital appreciation as: balance × growthRate.
  * Dispatches AU_STOCK_EARNINGS_APPLY (no tax — unrealized gain stays in account).
  */
+/*
+ * `stateKey` on the three handlers below: PIN the account rather than resolving it
+ * from role + owner at call time.
+ *
+ * Role+owner resolution returns ONE account, so when a person holds two accounts in
+ * the same role — which is ordinary the moment a bequest is hoisted into
+ * `cfg.accounts`, since an inherited AU brokerage carries the same `au-stock` role —
+ * the toolset wires one handler PER ACCOUNT and every one of them resolves to the
+ * same first account. The first account then earns N times over and the others earn
+ * nothing at all. Measured on the AU single-homeowner scenario: 21.5% annual growth
+ * on a 6%-growth + 4%-dividend account (each applied twice: 1.1024² = 1.2153), while
+ * the inherited brokerage sat at its opening balance for forty years.
+ *
+ * The US siblings (IntlUsStockEarningsHandler, DividendScheduledHandler) already
+ * took a stateKey; the AU ones had not been given one. It is also serialized here —
+ * without that, a saved scenario reloads with the pin gone and silently returns to
+ * the role-resolved behaviour.
+ */
 export class IntlAuStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the AU stock account (balance × growthRate) and dispatches AU_STOCK_EARNINGS_APPLY.';
   static type        = 'IntlAuStockEarningsHandler';
   static eventType   = 'INTL_AU_STOCK_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.06, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.06, rateKey = null } = {}) {
     super(null, 'AU Stock Earnings');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
+    this._stateKeyFixed = stateKey;
     this.growthRate    = growthRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.06 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? 0.06 });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, growthRate: this.growthRate };
   }
 
   call({ state }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.growthRate,
@@ -336,11 +355,12 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   static eventType   = 'INTL_AU_STOCK_DIVIDEND';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.04, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.04, rateKey = null } = {}) {
     super(null, 'AU Stock Dividend');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
+    this._stateKeyFixed = stateKey;
     this.dividendRate  = dividendRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = [
@@ -352,17 +372,17 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.04, rateKey: d.rateKey ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? 0.04, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, rateKey: this.rateKey };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, dividendRate: this.dividendRate, rateKey: this.rateKey };
   }
 
   call({ state }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     // Per-holding dividends: each sleeve pays holding.dividendYield (falling back
     // to the account-level dividendRate), scaled by the active regime's dividend
     // adjustment for its rate key (design 28 §7). Reinvested into the sleeves via
@@ -602,28 +622,29 @@ export class SuperEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_SUPER_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, defaultRate = 0.07, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, defaultRate = 0.07, rateKey = null } = {}) {
     super(null, 'Super Earnings');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
+    this._stateKeyFixed = stateKey;
     this.defaultRate   = defaultRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, defaultRate: d.defaultRate ?? 0.07 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, defaultRate: d.defaultRate ?? 0.07 });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, defaultRate: this.defaultRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, defaultRate: this.defaultRate };
   }
 
   call({ data, state, date }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const growthArgs = {
       state, stateKey,
       // data.rate is a one-off override that bypasses the effective-rate map.

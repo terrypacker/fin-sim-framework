@@ -60,13 +60,15 @@ export class DividendScheduledHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false, rateKey: d.rateKey ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, reinvest: this.reinvest, rateKey: this.rateKey };
+    // stateKey pins the account (see earnings-handlers.js): without it in the
+    // serialized form, a saved scenario reloads resolving by role+owner again.
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, dividendRate: this.dividendRate, reinvest: this.reinvest, rateKey: this.rateKey };
   }
 
   call({ data, state }) {

@@ -50,12 +50,15 @@ export class IraContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
-    const ia         = state.iraAccount;
+    // Per-account (design 55 §7): honour a handler-stamped stateKey so a household
+    // with two IRAs credits the right member's; canonical key otherwise.
+    const key        = action.stateKey ?? 'iraAccount';
+    const ia         = state[key];
     const newBalance = ia.balance + action.amount;
     return this.newState(
       state,
       {
-        iraAccount: {
+        [key]: {
           ...ia,
           balance:           newBalance,
           contributionBasis: ia.contributionBasis + action.amount,

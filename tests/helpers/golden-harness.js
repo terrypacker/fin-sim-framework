@@ -108,6 +108,7 @@ export function normalizeState(value) {
  * @typedef  {object} GoldenSpec
  * @property {string}   name        fixture basename — tests/fixtures/golden-<name>.json
  * @property {string}   description what this golden is FOR (which features it exercises)
+ * @property {Function} [cls]       scenario class; defaults to IntlRetirementScenario
  * @property {Date}     simStart
  * @property {Date}     simEnd
  * @property {object}   [params]    scenario + toolset params handed to buildDefaultConfig
@@ -129,7 +130,10 @@ export function normalizeState(value) {
 export function runGolden(spec) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
-  const cfg = IntlRetirementScenario.buildDefaultConfig(
+  // Defaulted rather than required: every golden predating the second prebuilt
+  // scenario is an IntlRetirementScenario run and says so by omission.
+  const ScenarioCls = spec.cls ?? IntlRetirementScenario;
+  const cfg = ScenarioCls.buildDefaultConfig(
     spec.params ?? {}, spec.simStart, spec.simEnd);
   spec.mutateCfg?.(cfg);
 
