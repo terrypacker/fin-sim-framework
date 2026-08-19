@@ -54,6 +54,16 @@ function runDefaultIntlRetirement() {
   const scenario = registry.scenarioService.createActiveScenario();
   scenario.buildSim();
   const cfg = registry.scenarioService.getActive();
+  // FX pinned, overriding the scenario's MEAN_REVERTING default. This is a
+  // lock-in on §904 FTC / FITO relief and on ending net worth; with a stochastic
+  // rate both figures would move with the RNG rather than with the tax code, and
+  // the ±1% band would be measuring a draw. The prebuilt path has no params hook,
+  // so the override goes onto the cfg between getActive() and load() — which is
+  // where the compiler reads it. Its sibling whole-state golden pins FX the same
+  // way, in tests/helpers/golden-harness.js.
+  cfg.parameters = { ...(cfg.parameters ?? {}), fxProcessModel: 'NONE' };
+  const fxParam = cfg.params?.find(p => p.name === 'fxProcessModel');
+  if (fxParam) fxParam.value = 'NONE';
   new ScenarioLoader().load(cfg, registry);
 
   const { log, warn } = console;

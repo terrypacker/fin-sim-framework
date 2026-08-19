@@ -25,11 +25,18 @@ import assert             from 'node:assert/strict';
 
 import { IntlRetirementMcRunner, computePathShape } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 // A short-horizon MC runner with every default scalar variable disabled, so the ONLY
 // source of per-iteration variation is the in-loop sim.rng path (isolates the seed fix).
 function seedOnlyRunner(n = 4) {
-  const runner = new IntlRetirementMcRunner({ n, simEnd: new Date(Date.UTC(2036, 0, 1)) });
+  // FX pinned on the template: these tests isolate the EQUITY return path, and
+  // "stochastic OFF ⇒ seed variation is inert" is only true of a run with no other
+  // stochastic consumer. The scenario default now supplies one.
+  const simEnd = new Date(Date.UTC(2036, 0, 1));
+  const cfgTemplate = IntlRetirementScenario.buildDefaultConfig(
+    { fxProcessModel: 'NONE' }, undefined, simEnd);
+  const runner = new IntlRetirementMcRunner({ n, simEnd, cfgTemplate });
   for (const v of IntlRetirementMcConfig.contributors[0]()) {
     runner.mcConfig.applyOverride(v.paramKey, { enabled: false });
   }

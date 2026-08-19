@@ -67,7 +67,13 @@ export function loadScenarioSim({ params = {}, mutateCfg, simStart, simEnd, step
                                   samplerCadence = 'interval' } = {}) {
   ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
-  const cfg = IntlRetirementScenario.buildDefaultConfig(params, simStart, simEnd);
+  // FX is PINNED unless the caller asks otherwise, overriding the scenario's
+  // MEAN_REVERTING default. These are mechanism tests: an assertion about a
+  // conversion, a drawdown or a tax figure wants a known rate, not one drawn from
+  // the RNG. A test whose subject IS the FX process passes `fxProcessModel`
+  // explicitly (see evt-fx-process.test.mjs).
+  const cfg = IntlRetirementScenario.buildDefaultConfig(
+    { fxProcessModel: 'NONE', ...params }, simStart, simEnd);
   if (mutateCfg) mutateCfg(cfg);
   const scenario = new BaseScenario({
     context:      services.simulationContext,

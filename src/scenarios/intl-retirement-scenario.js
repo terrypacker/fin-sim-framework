@@ -605,6 +605,21 @@ export const INTL_RETIREMENT_DEFAULTS = {
   exchangeRateUsdToAud: 1.55,  // 1 USD = 1.55 AUD
   intlTransferFeeUsd:   15,    // fixed fee per transfer in USD
 
+  // FX process (design 92). This plan moves to Australia in `moveYear` and stays
+  // there while the wealth remains USD-denominated, so the currency mismatch runs
+  // the full horizon rather than ending at the house sale — see the fx-study
+  // writeup. A pinned rate is therefore not a neutral default here, it is a
+  // no-FX-risk assumption on the one scenario whose defining feature is FX risk.
+  // Measured on this scenario over its 2026-2050 default window, 60 FX seeds:
+  // MEAN_REVERTING widens the p10-p90 terminal wealth band from $0.00M to $1.22M
+  // (p50 $12.3M), so the rate is now a risk the plan carries rather than one it
+  // assumes away. Set 'NONE' to pin it — which the golden fixtures and the shared
+  // test harnesses do, so they keep guarding tax mechanics and not an RNG path.
+  // fxVolatility / fxReversionSpeed are deliberately left to the
+  // US_AU_CROSS_BORDER schema, which already carries the post-float calibration
+  // (sigma 0.1142, k 0.114 — the term-structure fit, not the lag-1 AR(1) one).
+  fxProcessModel:       'MEAN_REVERTING',
+
   // Expenses (local currency: USD pre-move, AUD post-move)
   monthlyExpenses:       6_000,
   discretionarySharePct: 0.30,
@@ -1279,6 +1294,7 @@ export class IntlRetirementScenario extends BaseScenario {
       moveYear:                 p.moveYear,
       exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
       intlTransferFeeUsd:       p.intlTransferFeeUsd,
+      fxProcessModel:           p.fxProcessModel,
       startingResidency:        'US',
       // US_ROTH_CONVERSION
       rothConversionEnabled:    p.rothConversionEnabled,

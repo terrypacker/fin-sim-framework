@@ -32,7 +32,14 @@ const SIM_END   = new Date(Date.UTC(2028, 1, 1));
 const N         = 5;
 
 function makeRunner(opts = {}) {
-  return new IntlRetirementMcRunner({ n: N, simStart: SIM_START, simEnd: SIM_END, ...opts });
+  // FX pinned by default. This file's subject is the PARAMETER SAMPLER — several
+  // tests assert that a constant-only or all-disabled config yields n identical
+  // runs, which holds only when nothing else varies per iteration. The scenario's
+  // MEAN_REVERTING default is exactly such a per-iteration consumer. Callers that
+  // pass their own cfgTemplate keep whatever it carries.
+  const cfgTemplate = opts.cfgTemplate
+    ?? IntlRetirementScenario.buildDefaultConfig({ fxProcessModel: 'NONE' }, SIM_START, SIM_END);
+  return new IntlRetirementMcRunner({ n: N, simStart: SIM_START, simEnd: SIM_END, ...opts, cfgTemplate });
 }
 
 // ─── Smoke test ───────────────────────────────────────────────────────────────

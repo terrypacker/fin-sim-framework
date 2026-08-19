@@ -133,8 +133,14 @@ export function runGolden(spec) {
   // Defaulted rather than required: every golden predating the second prebuilt
   // scenario is an IntlRetirementScenario run and says so by omission.
   const ScenarioCls = spec.cls ?? IntlRetirementScenario;
+  // FX is PINNED for every golden, overriding the scenario default. The goldens
+  // exist to guard tax and account mechanics; with a stochastic FX process the
+  // exchange rate becomes an input drawn from the RNG, and every fixture field
+  // downstream of a conversion would move whenever an unrelated change shifted
+  // draw ordering. That turns a fixture diff from evidence into noise. A spec may
+  // still opt in via `params.fxProcessModel` if its subject IS the FX path.
   const cfg = ScenarioCls.buildDefaultConfig(
-    spec.params ?? {}, spec.simStart, spec.simEnd);
+    { fxProcessModel: 'NONE', ...(spec.params ?? {}) }, spec.simStart, spec.simEnd);
   spec.mutateCfg?.(cfg);
 
   const scenario = new BaseScenario({

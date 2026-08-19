@@ -297,7 +297,12 @@ describe('stochastic seed sweep — the §904 invariant on paths that form pools
       ServiceRegistry.resetAll();
       const services = ServiceRegistry.getInstance();
       const cfg = IntlRetirementScenario.buildDefaultConfig(
-        { equityReturnStochastic: true, equityReturnVol: 0.30, monthlyExpenses: 25_000, randomSeed },
+        // FX pinned: the sweep's subject is the EQUITY draw forming a capital-loss
+        // pool on every seed. A stochastic rate is a second consumer of the same RNG
+        // and moves which seeds pool at all, which would make this sweep's own
+        // "or it is testing nothing" guard fail for a reason unrelated to §904.
+        { fxProcessModel: 'NONE',
+          equityReturnStochastic: true, equityReturnVol: 0.30, monthlyExpenses: 25_000, randomSeed },
         simStart, simEnd);
       const scenario = new BaseScenario({
         context: services.simulationContext, initialState: cfg.initialState ?? {}, simStart, simEnd });
