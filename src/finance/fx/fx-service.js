@@ -18,10 +18,23 @@ import { FxStepApplyReducer }     from './fx-step-apply-reducer.js';
 import { FxProcessReducer }       from './fx-process-reducer.js';
 import { EventSeries }            from '../../simulation-framework/events/event-series.js';
 
-/** Default per-step FX volatility (annualized log-vol) when a process model is active. */
-const DEFAULT_FX_VOLATILITY = 0.06;
-/** Default mean-reversion speed (per year) for the MEAN_REVERTING model. */
-const DEFAULT_FX_REVERSION  = 0.5;
+/**
+ * Default per-step FX volatility (annualized log-vol) when a process model is active.
+ *
+ * Calibrated, not guessed (design 92 §8.1): the sd of monthly USD/AUD log returns over
+ * the post-float window 1984-01 → 2026-07, annualized. Reproduce with
+ * `node scripts/lab/calibrate-fx.mjs --compare`. The previous 0.06 was a placeholder and
+ * ran the currency at roughly half its observed volatility.
+ */
+const DEFAULT_FX_VOLATILITY = 0.1133;
+/**
+ * Default mean-reversion speed (per year) for the MEAN_REVERTING model.
+ *
+ * `−12·ln(ρ̂₁)` from an AR(1) fit of the log level about its window mean, same window —
+ * a half-life of about 2.3 years. The previous 0.5 implied 1.4 years, a faster pull back
+ * to the anchor than the series supports.
+ */
+const DEFAULT_FX_REVERSION  = 0.296;
 /** Default FX tick interval in years (monthly). */
 const FX_TICK_DT            = 1 / 12;
 

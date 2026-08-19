@@ -193,14 +193,22 @@ export const US_AU_CROSS_BORDER = {
       {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.06,
-        description: 'Annualized log-volatility of the FX rate when a process model is active.',
+        defaultValue: 0.1133,
+        description: 'Annualized log-volatility of the FX rate when a process model is active. '
+          + 'Default is calibrated from the published USD/AUD series over the post-float window '
+          + '1984-01 onward (design 92 §8.1), not assumed — reproduce it with '
+          + 'scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.109 and '
+          + '0.119, so this is not sensitive to the window; the previous 0.06 default was.',
       },
       {
         key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
         type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.5,
-        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model.',
+        defaultValue: 0.296,
+        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model. '
+          + 'Default is an AR(1) fit over the same post-float window — a half-life of about '
+          + '2.3 years. Unlike volatility this IS window-sensitive: including the pre-1984 '
+          + 'managed-float era more than halves it, because a pegged currency is not a draw '
+          + 'from the same process.',
       },
     ];
   },

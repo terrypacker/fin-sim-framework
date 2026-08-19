@@ -115,6 +115,7 @@ import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-ti
 import { countryOfRateKey, interpolateSpread, resolveYield, composeYieldCurve, shapeDelta } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
+import { USD_AUD_H10_MONTHLY } from './finance/fx/data/usd-aud-h10-monthly.js';
 import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
 import { fxRate, fxFeeIn, convertNetOfFee, grossUpForTarget } from './finance/fx/fx-conversion.js';
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
@@ -286,7 +287,7 @@ import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBands, flatRateBand } from './finance/tax/bracket-schedule.js';
-import { characterizeCapitalGain, characterizeAuCapitalGain, basketCapGainPatch } from './finance/tax/capital-gain-character.js';
+import { characterizeCapitalGain, characterizeAuCapitalGain, signedAuCapitalGain, auRealCapitalGain, basketCapGainPatch } from './finance/tax/capital-gain-character.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { FxTimeline, convertAtRate } from './finance/tax/fx-timeline.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
@@ -909,6 +910,7 @@ export const Finance = {
   SHOCK_LIBRARY,
   SHOCK_PRESET_OPTIONS,
   CurrencyConverter,
+  USD_AUD_H10_MONTHLY,
   convertExpenseToAccount,
   fxRate,
   fxFeeIn,
@@ -1310,6 +1312,8 @@ export const Finance = {
   flatRateBand,
   characterizeCapitalGain,
   characterizeAuCapitalGain,
+  signedAuCapitalGain,
+  auRealCapitalGain,
   basketCapGainPatch,
   DynamicTaxReducer,
   FxTimeline,

@@ -103,6 +103,25 @@ Confirms an MPC/optimizer lever actually moves the simulation. A zero delta usua
 means the *scenario* is inert for that lever (it never exercises the code path), not
 that the lever is broken — check the scenario shape before hunting for a bug.
 
+### `calibrate-fx.mjs` — estimate the FX process from history instead of guessing
+
+```bash
+npm run calibrate:fx -- --compare
+node scripts/lab/calibrate-fx.mjs --from 2000-01 --json
+```
+
+Fits `fxVolatility` (σ̂) and `fxReversionSpeed` (k̂) to the packaged USD/AUD monthly
+series (design 92 §8.1). Takes no scenario — it reads only the published data.
+
+The **window is the whole argument**, which is why the tool prints it beside every
+number. σ̂ is stable across windows (0.109–0.119); k̂ is not, and roughly halves once the
+pre-1984 managed float is included, because a pegged currency is not a draw from the same
+process. The defaults ship from the post-float window.
+
+μ̂ (realised drift) is **reported and never applied**. Choosing a window is choosing a
+currency view; drift belongs in `exchangeRateUsdToAud` or the regime FX lever, where it
+is visible and authored, not folded into a number labelled "volatility".
+
 ---
 
 ## montecarlo/
@@ -297,6 +316,15 @@ characterised. On a solvent plan the gap is exactly zero.
 `build-index.js` (`npm run build:index`) regenerates the auto-generated
 `src/index.js`. `check-requirements.js` (`npm run requirements`) cross-references the
 requirements spec against `EVT-X:` test names.
+
+`build-fx-series.mjs` (`npm run build:fx-series`) derives the engine-readable monthly FX
+module `src/finance/fx/data/usd-aud-h10-monthly.js` from the pinned daily
+`rates/DEXUSAL-daily.csv` (design 92 §7). It exists because the engine also runs in the
+browser and cannot read `rates/`. It **inverts direction exactly once** — the published
+series is USD per AUD, the engine wants AUD per USD — and downsamples with the same
+carry-forward rule the daily table uses, never an average. `--check` re-renders and diffs
+without writing; `tests/unit/fx-series-package.test.mjs` runs it, so a generated file that
+drifts from its source fails the suite rather than being discovered later.
 
 ---
 

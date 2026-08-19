@@ -32,6 +32,15 @@ annual-average rates are not available and daily rates are required.
 |---|---|---|---|
 | `DEXUSAL-daily.csv` | `DEXUSAL` | **US dollars per 1 Australian dollar**, noon buying rate, daily | H.10 via FRED (Federal Reserve Bank of St. Louis) |
 
+There is also a **derived** monthly module, `src/finance/fx/data/usd-aud-h10-monthly.js`,
+generated from this file by `scripts/dev/build-fx-series.mjs` (design 92 §7). It exists
+because the engine runs in the browser and cannot read this directory. It holds
+**AUD per USD** — the inverse — and is downsampled by the same carry-forward rule
+described below. The daily file here stays the source of truth for tax reconciliation;
+the derived monthly file is the source of truth for the engine. **Do not cross them**: a
+monthly rate applied to a §988 disposition changes the answer, because each disposition
+carries its own rate, holding period and \$200 test.
+
 Retrieved **2026-08-08**; the file then covered 1971-01-04 → 2026-07-31.
 
 ### Direction — read this before using it
@@ -63,3 +72,17 @@ node scripts/tax/fetch-fx-rates.mjs --check  # fetch and diff, write nothing
 Refreshing **revises history**: FRED restates recent observations as the Fed finalises
 them. Re-run any §988 figures after a refresh rather than assuming they still hold, and
 commit the rate change and the recomputed figures together so the pair stays auditable.
+
+A refresh has three follow-on steps, and a test fails until each is done:
+
+```bash
+# 1. update the "Retrieved **YYYY-MM-DD**" date above — the generator parses it
+npm run build:fx-series      # 2. regenerate the derived monthly module
+npm run calibrate:fx          # 3. re-estimate sigma and k, then decide
+```
+
+Step 3 is a decision, not a formality. `fxVolatility` and `fxReversionSpeed` ship as the
+post-float estimates from this series, and `tests/unit/fx-calibration.test.mjs` (FXC-6)
+fails if a revision moves them outside tolerance. That failure is the prompt to re-run
+the calibration and update the defaults deliberately, rather than letting a shipped
+default quietly stop describing the data it was derived from.
