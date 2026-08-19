@@ -11,6 +11,7 @@
 import { AuTaxModule2026 } from './au-tax-module-2026.js';
 import { accumulateByOwnership, resolveAttributionAsset, resolveAttributionFractions } from '../../ownership-utils.js';
 import { toAUD } from '../tax-fx.js';
+import { signedAuCapitalGain, auRealCapitalGain } from '../capital-gain-character.js';
 
 /**
  * AuTaxModule2027 — AU tax classification for FY starting July 2027.
@@ -58,7 +59,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     fns.set('AU_STOCK_WITHDRAWAL_TAX', (state, action) => {
       const next = baseStock(state, action);
       if (action.residency !== 'AU') return next;   // real bucket for residents only
-      const realGain = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
+      const realGain = this._realGain(action, action.auGain ?? action.gain ?? 0);
       // Design 76 Gap C: resolve the same account the parent's gross-bucket path
       // resolved, so the real bucket slices identically (see _recordRealGain).
       return this._recordRealGain(next, state, realGain, resolveAttributionAsset(state, action, 'auStockAccount'));
@@ -82,7 +83,8 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       // indexation deferred to §6.4", meaning the Phase-4 deemed-reset work would deliver
       // it, and Part 2 Item B then deleted the deemed reset without revisiting property.
       // The fallback stays for a replayed action emitted before the field existed.
-      const realGain = action.auIndexedGain ?? AuTaxModule2026.auAssessableHouseGain(action);
+      const realGain = auRealCapitalGain(
+        AuTaxModule2026.auAssessableHouseGain(action), action.auIndexedGain);
       const asset = { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners };
       return this._recordRealGain(next, state, realGain, asset);
     });
@@ -97,7 +99,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     // design 57 §6.3), stepped-up auGain, else the US gain — converted to AUD.
     fns.set('STOCK_WITHDRAWAL_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
+      const realGainUsd = this._realGain(action, action.auGain ?? action.gain ?? 0);
       const realGainAud = toAUD(realGainUsd, 'USD', state);
       return this._recordUsSourceReal(state, action, 'usStockAccount', realGainAud);
     });
@@ -109,7 +111,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     // when no step-up was stamped (pre-move sale, or no move in the scenario).
     fns.set('COMPANY_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
+      const realGainUsd = this._realGain(action, action.auGain ?? action.gain ?? 0);
       const realGainAud = toAUD(realGainUsd, 'USD', state);
       return this._recordUsSourceReal(state, action, null, realGainAud);
     });
@@ -120,7 +122,7 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     // level stamped at the move (design 57 §6.3). Matches AU_HOUSE_SALE_TAX.
     fns.set('US_HOUSE_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainAud = toAUD(action.auIndexedGain ?? action.auGain ?? 0, 'USD', state);
+      const realGainAud = toAUD(this._realGain(action, action.auGain ?? 0), 'USD', state);
       return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
@@ -128,14 +130,43 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     // equity; true collectibles are NOT indexed under the reform (design 57 Part 2, Q3).
     fns.set('COLLECTIBLE_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainUsd = action.isGold
-        ? (action.auIndexedGain ?? action.auGain ?? action.gain ?? 0)
-        : (action.auGain ?? action.gain ?? 0);
+      // A true collectible is not indexed under the reform (Part 2, Q3), so its real
+      // amount is simply its nominal one — but it still has to travel through the same
+      // s960-275 / slice rules, or a collectible LOSS reaches the two buckets differently.
+      const auGainUsd = action.auGain ?? action.gain ?? 0;
+      const realGainUsd = this._realGain(action, auGainUsd, action.isGold === true);
       const realGainAud = toAUD(realGainUsd, 'USD', state);
       return this._recordUsSourceReal(state, action, null, realGainAud);
     });
 
     return fns;
+  }
+
+  /**
+   * The signed amount this disposal contributes to `auRealCapitalGainsYTD`.
+   *
+   * The FY2027 real bucket and the nominal `auCapitalGainsYTD` are booked by two
+   * different modules from the same action (§6.5), and they are only meaningful as a
+   * pair: `_cgtRelief` assesses the real one and prints `nominal − real` as the
+   * indexation relief. So the real amount is derived FROM the nominal amount its
+   * sibling booked — `signedAuCapitalGain` returns exactly what
+   * `characterizeAuCapitalGain`'s caller added — rather than recomputed from the
+   * payload a second time. Recomputing is what let them come apart (au-house-sale F5),
+   * and `auRealCapitalGain` then applies the two rules that keep them a partition:
+   * s960-275 for a loss, and real ≤ nominal for a gain.
+   *
+   * `AU_HOUSE_SALE_TAX` is the exception that calls `auRealCapitalGain` directly: its
+   * nominal side is the s118-185 exemption-applied `auAssessableHouseGain`, not the
+   * character split, so it supplies its own nominal.
+   *
+   * @param {object} action
+   * @param {number} auGain    the AU-measured gain, in the action's currency
+   * @param {boolean} indexable  false for a true collectible (Part 2, Q3), which the
+   *   reform does not index — its real amount is its nominal one
+   */
+  _realGain(action, auGain, indexable = true) {
+    const nominal = signedAuCapitalGain(action, auGain);
+    return auRealCapitalGain(nominal, indexable ? action.auIndexedGain : nominal);
   }
 
   /**

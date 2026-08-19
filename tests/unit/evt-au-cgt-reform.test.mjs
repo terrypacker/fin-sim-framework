@@ -360,3 +360,132 @@ test('F5: the FITO counterfactual is exempt — its degenerate limit is a detect
     assert.strictEqual(r.netTaxableGain, 100_000, 'left untouched, so FITO-D still observes the collapse');
   });
 });
+
+// ─── Part 6: a capital LOSS must move both buckets by the same amount ────────
+//
+// The nominal `auCapitalGainsYTD` and the reform's `auRealCapitalGainsYTD` are booked
+// per disposal by two different modules (§6.5) and are only meaningful as a pair:
+// `_cgtRelief` assesses the real one and prints `nominal − real` as the indexation
+// relief. Indexation cannot create or increase a capital loss (ITAA97 s960-275), so a
+// LOSS carries no relief at all and must reach both buckets identically.
+//
+// Most emitters stamp `auIndexedGain = Math.max(0, …)`, which does not mean "no
+// indexation on a loss" — it means the loss never reached the real bucket. That was
+// invisible because `_applyCapitalLosses` rediscovers a current-year loss from a
+// *bucket* that came out negative and subtracts it; a loss sitting beside a larger gain
+// in the SAME bucket leaves every bucket positive, so nothing was subtracted and the
+// FY2027 return assessed the gross indexed gain. The AU house — the one emitter that
+// signs `auIndexedGain` correctly — had the opposite defect: its loss was in the real
+// bucket AND subtracted again.
+
+const US_FNS_2026 = new UsTaxModule2026().getReducerFns();
+const AU_FNS_2027 = new AuTaxModule2027().getReducerFns();
+
+/** Both buckets, summed across the household scalar and any per-person map. */
+const buckets = (s) => {
+  const tot = (scalar, map) =>
+    (s[scalar] ?? 0) + Object.values(s[map] ?? {}).reduce((a, b) => a + b, 0);
+  return {
+    nominal: +tot('auCapitalGainsYTD',     'auPersonCapitalGainsYTD').toFixed(2),
+    real:    +tot('auRealCapitalGainsYTD', 'auPersonRealCapitalGainsYTD').toFixed(2),
+  };
+};
+
+/**
+ * Every disposal type that feeds the FY2027 real bucket, with a LOSS payload. `gain`
+ * and `auGain` are signed; `auIndexedGain` is floored the way the emitters floor it,
+ * which is exactly the input the classifier has to be robust to.
+ */
+const LOSS_CASES = [
+  { type: 'AU_STOCK_WITHDRAWAL_TAX', us: false,
+    action: { residency: 'AU', gain: -400, auGain: -400, auIndexedGain: 0,
+      auDiscountableGain: -400, auShortTermGain: 0, auLongTermGain: -400,
+      stateKey: 'auStockAccount' } },
+  { type: 'AU_HOUSE_SALE_TAX', us: false,
+    action: { residency: 'AU', gain: -50_000, auGain: -50_000, auIndexedGain: -50_000,
+      auTaxableFraction: 1, auShortTermGain: 0, auLongTermGain: -50_000,
+      stateKey: 'auHouseProperty' } },
+  { type: 'STOCK_WITHDRAWAL_TAX', us: true,
+    action: { residency: 'AU', gain: -400, auGain: -400, auIndexedGain: 0,
+      auDiscountableGain: -400, auShortTermGain: 0, auLongTermGain: -400,
+      stateKey: 'usStockAccount' } },
+  { type: 'COMPANY_SALE_TAX', us: true,
+    action: { residency: 'AU', gain: -9_000, auGain: 0, auIndexedGain: 0,
+      auShortTermGain: 0, auLongTermGain: -9_000 } },
+  { type: 'COLLECTIBLE_SALE_TAX', us: true,
+    action: { residency: 'AU', isGold: true, gain: -700, auGain: 0, auIndexedGain: 0,
+      auShortTermGain: 0, auLongTermGain: -700 } },
+  { type: 'COLLECTIBLE_SALE_TAX (true collectible, never indexed)', reducer: 'COLLECTIBLE_SALE_TAX', us: true,
+    action: { residency: 'AU', gain: -700, auGain: 0, auIndexedGain: 0,
+      auShortTermGain: 0, auLongTermGain: -700 } },
+  { type: 'US_HOUSE_SALE_TAX', us: true,
+    action: { residency: 'AU', gain: -50_000, auGain: 0, auIndexedGain: 0,
+      auShortTermGain: 0, auLongTermGain: -50_000 } },
+];
+
+test('Part 6: a capital loss reaches the nominal and real buckets identically', () => {
+  const failures = [];
+  for (const { type, reducer, us, action } of LOSS_CASES) {
+    const name = reducer ?? type;
+    const s0 = { people: null, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+      auRealCapitalGainsYTD: 0, usCapitalGainsYTD: 0, usCollectibleGainsYTD: 0 };
+    let s = s0;
+    if (us) s = US_FNS_2026.get(name)(s, action);   // nominal side
+    s = AU_FNS_2027.get(name)(s, action);           // real side (+ nominal, for AU-native)
+
+    const b = buckets(s);
+    if (b.real !== b.nominal) {
+      failures.push(`${type}: nominal ${b.nominal} but real ${b.real}`);
+    }
+    if (!(b.nominal < 0)) failures.push(`${type}: the loss never reached the buckets at all`);
+  }
+  assert.deepEqual(failures, [],
+    'A capital loss carries no indexation (s960-275), so it must reduce both buckets by\n' +
+    'the same amount. Where it does not, `_cgtRelief` prints a relief line on a loss and\n' +
+    '`_applyCapitalLosses` can only rediscover the loss when a whole bucket goes\n' +
+    'negative — so a loss beside a larger gain in the same bucket is silently dropped\n' +
+    'from the FY2027 assessment:\n  ' + failures.join('\n  '));
+});
+
+test('Part 6: a loss beside a larger gain in the SAME bucket still nets the real gain', () => {
+  const stock = AU_FNS_2027.get('AU_STOCK_WITHDRAWAL_TAX');
+  const disp = (nominal, indexed) => ({ residency: 'AU', gain: nominal, auGain: nominal,
+    auIndexedGain: Math.max(0, indexed), auDiscountableGain: nominal,
+    auShortTermGain: 0, auLongTermGain: nominal, stateKey: 'auStockAccount' });
+
+  let s = { people: null, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+    auRealCapitalGainsYTD: 0, auCapitalLossPool: 0, auStockAccount: {} };
+  s = stock(s, disp(1_000, 600));   // nominal 1,000, indexed 600
+  s = stock(s, disp(-400, 0));      // a loss in the same discountable bucket
+
+  // Every bucket stays positive, so `_applyCapitalLosses` finds no current-year loss to
+  // apply — which is correct precisely because the accumulators already netted it.
+  const c = new AuTaxRates2027()._applyCapitalLosses(s);
+  assert.strictEqual(c.applied, 0, 'nothing to re-apply: the accumulators already netted');
+  assert.strictEqual(c.total, 600, 'nominal net capital gain');
+  assert.strictEqual(c.real, 200, 'real net capital gain = 600 indexed − 400 loss');
+});
+
+test('Part 6: the prior-year pool still comes off the real bucket, and only once', () => {
+  const stock = AU_FNS_2027.get('AU_STOCK_WITHDRAWAL_TAX');
+  const base = () => ({ people: null, auCapitalGainsYTD: 0, auDiscountableGainsYTD: 0,
+    auRealCapitalGainsYTD: 0, auStockAccount: {} });
+  const gain = { residency: 'AU', gain: 1_000, auGain: 1_000, auIndexedGain: 600,
+    auDiscountableGain: 1_000, auShortTermGain: 0, auLongTermGain: 1_000,
+    stateKey: 'auStockAccount' };
+  const loss = { residency: 'AU', gain: -400, auGain: -400, auIndexedGain: 0,
+    auDiscountableGain: 0, auShortTermGain: -400, auLongTermGain: 0,
+    stateKey: 'auStockAccount' };
+  const rates = new AuTaxRates2027();
+
+  // A carried-forward loss lives OUTSIDE the year's accumulators, so it must be applied.
+  const poolOnly = rates._applyCapitalLosses({ ...stock(base(), gain), auCapitalLossPool: 150 });
+  assert.strictEqual(poolOnly.real, 450, '600 indexed − 150 carried-forward');
+
+  // With a current-year loss in the OTHER bucket as well, the pool is applied and the
+  // current-year loss is not — it is already inside the real accumulator.
+  const both = rates._applyCapitalLosses({
+    ...stock(stock(base(), gain), loss), auCapitalLossPool: 150 });
+  assert.strictEqual(both.applied, 550, 'the nominal worksheet still reports both steps');
+  assert.strictEqual(both.real, 50, '600 indexed − 400 current-year − 150 carried-forward');
+});

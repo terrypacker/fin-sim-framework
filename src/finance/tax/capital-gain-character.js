@@ -89,6 +89,53 @@ export function characterizeAuCapitalGain(action, auTaxableGain) {
 }
 
 /**
+ * The exact signed amount `characterizeAuCapitalGain`'s caller books into
+ * `auCapitalGainsYTD` — the two slices added back together.
+ *
+ * Derived from the split rather than restated, because it exists to be compared
+ * against it: the FY2027 real bucket is a slice of this figure, and the two are booked
+ * by DIFFERENT modules from the same action (design 57 §6.5). Recomputing the nominal
+ * total independently is how they came apart in the first place (au-house-sale F5).
+ *
+ * @param {object} action
+ * @param {number} auTaxableGain   the AU-assessable gain the classifier books today
+ * @returns {number} the signed AU capital result, in the action's currency
+ */
+export function signedAuCapitalGain(action, auTaxableGain) {
+  const { short, long } = characterizeAuCapitalGain(action, auTaxableGain);
+  return +(short + long).toFixed(2);
+}
+
+/**
+ * The FY2027 **real** (post-indexation) amount for one disposal, given the signed
+ * nominal amount its classifier booked and the emitter's indexed candidate.
+ *
+ * Two rules, both of which the per-emitter code got wrong in opposite directions:
+ *
+ * 1. **ITAA97 s960-275 — indexation can neither create nor increase a capital loss.**
+ *    A disposal already under water takes its un-indexed figure, SIGNED. Most emitters
+ *    floor `auIndexedGain` at zero instead, which does not mean "no indexation" — it
+ *    means the loss never reaches the real bucket at all. `_applyCapitalLosses` only
+ *    rediscovers a current-year loss when a whole *bucket* goes negative, so a loss
+ *    sitting beside a larger gain in the same bucket was silently dropped from the
+ *    FY2027 assessment while reducing the nominal one (design 57 Part 6).
+ *
+ * 2. **The real amount is a slice of the nominal one, never more.** Indexation raises
+ *    the cost base, so `real ≤ nominal` per disposal — the au-house-sale F5 invariant,
+ *    enforced here at the disposal rather than left to `AuTaxRates2027._cgtRelief` to
+ *    notice on a year's totals, where one asset's genuine relief can hide another's
+ *    excess.
+ *
+ * @param {number} nominal   the signed nominal amount booked into auCapitalGainsYTD
+ * @param {number|null|undefined} indexed  the emitter's `auIndexedGain`, if any
+ * @returns {number} the signed amount for auRealCapitalGainsYTD
+ */
+export function auRealCapitalGain(nominal, indexed) {
+  if (!(nominal > 0)) return nominal;              // s960-275
+  return Math.min(indexed ?? nominal, nominal);
+}
+
+/**
  * Design 90 §4.5 — accumulate a capital gain into one of the §904 basket capital-gain
  * slices, returning a patch fragment to spread.
  *

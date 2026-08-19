@@ -211,28 +211,39 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const applied     = takeN + takeD;
 
     // FY2027+ replaces the discount with CPI indexation, so the reform module assesses
-    // a REAL gain rather than the nominal one. The loss comes off it as an ABSOLUTE
-    // amount, not as a ratio of the nominal reduction.
+    // a REAL gain rather than the nominal one. Only the PRIOR-YEAR pool comes off it.
     //
-    // That distinction is load-bearing and was got wrong first time. Scaling the real
-    // bucket by `netted / gross` couples it to *every* reduction in the nominal figure,
+    // Both reductions are absolute amounts, not a ratio of the nominal reduction. That
+    // distinction is load-bearing and was got wrong first time. Scaling the real bucket
+    // by `netted / gross` couples it to *every* reduction in the nominal figure,
     // including ones that have nothing to do with capital losses — most importantly the
     // FITO counterfactual, which strips US-source gain from the nominal bucket and
     // relies on a SEPARATE signal (`usSourceRealCapGainsAudYTD`) to strip the real one.
     // Under a ratio, the real bucket would shrink on its own and silently paper over a
     // missing signal, which is precisely the design 57 Part 2 D defect
-    // `tax-cross-border-relief.test.mjs` FITO-D exists to detect. Subtracting the
-    // applied loss keeps the two reductions independent.
+    // `tax-cross-border-relief.test.mjs` FITO-D exists to detect.
     //
-    // A capital loss carries no indexation of its own — it is a nominal figure, and the
-    // Act gives it none — so applying it at face value against the real gain is also
-    // the straightforward reading.
-    const rawReal = Math.max(0, state?.auRealCapitalGainsYTD ?? 0);
+    // ─── why the CURRENT-year loss is NOT subtracted here (design 57 Part 6) ─────
+    // It is already inside `auRealCapitalGainsYTD`. Both accumulators are signed and
+    // booked per disposal from the same action, and `auRealCapitalGain` gives a loss its
+    // un-indexed figure under s960-275 — so a capital loss reduces the real bucket by
+    // exactly what it reduced the nominal one by, as it happens. `currentYearLosses`
+    // above is not new information: it is that same loss RECONSTRUCTED from a bucket
+    // that came out negative, re-applied to the floored positives so `nettedTotal`
+    // re-derives a figure the accumulator already held. Subtracting it from the real
+    // bucket as well took the loss twice.
+    //
+    // The prior-year pool is different in kind: it lives outside the year's
+    // accumulators, so it has to be applied to both. A carried-forward loss carries no
+    // indexation of its own — the Act gives it none — so it comes off the real gain at
+    // face value.
+    const pyApplied = pyN + pyD;
+    const rawReal   = Math.max(0, state?.auRealCapitalGainsYTD ?? 0);
 
     return {
       total:        +nettedTotal.toFixed(2),
       discountable: +dGain.toFixed(2),
-      real:         +Math.max(0, rawReal - applied).toFixed(2),
+      real:         +Math.max(0, rawReal - pyApplied).toFixed(2),
       apportionedBase:      +(Math.max(0, state?.auDiscountApportionedBaseYTD ?? 0) * dScale).toFixed(2),
       apportionedAllowance: +(Math.max(0, state?.auDiscountAllowanceYTD ?? 0) * dScale).toFixed(2),
       opening,

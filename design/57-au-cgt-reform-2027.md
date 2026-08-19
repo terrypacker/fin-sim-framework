@@ -403,6 +403,65 @@ one-line measure change makes the static rule fail, naming the file and line.
 
 ---
 
+### ✅ Part 6 (2026-08-18) — a capital LOSS reached the two buckets differently
+
+Part 5 left a note about a suspected double count in `_applyCapitalLosses`. It is real, and
+chasing it turned up a **larger** defect with the same root cause: the nominal and real buckets
+did not agree on whether a capital loss exists.
+
+**ITAA97 s960-275 — indexation can neither create nor increase a capital loss.** So a loss carries
+no relief at all: it must reduce `auRealCapitalGainsYTD` by exactly what it reduces
+`auCapitalGainsYTD` by. Two conventions were in the tree at once:
+
+- **Five emitters floor it** — `auIndexedGain = Math.max(0, proceeds − indexedBasis)`. That does
+  not express "no indexation on a loss"; it means the loss **never reaches the real bucket**.
+- **`AU_HOUSE_SALE_TAX` signs it** — `auSignedIndexedGain = auSignedGain <= 0 ? auSignedGain : …`,
+  citing s960-275 in as many words. Correct, and the odd one out.
+
+`_applyCapitalLosses` was written against the first convention: it re-derives the year's
+current-year losses from a *bucket* that came out negative and subtracts that from the real gain.
+Which produces the wrong answer for both conventions, in opposite directions:
+
+| | what happens | effect on the FY2027 assessment |
+|---|---|---|
+| floored emitter, loss beside a larger gain **in the same bucket** | no bucket goes negative, so nothing is reconstructed and nothing is subtracted — and the loss was never in the real bucket either | the loss is **silently dropped**; a A\$1,000 gain indexed to A\$600 sold beside a A\$400 loss assessed **A\$600 instead of A\$200** |
+| signed emitter (AU house), loss in a bucket that **does** go negative | the loss is inside the real bucket *and* reconstructed and subtracted again | assessed gain understated by the loss, **counted twice** |
+
+The nominal side was right throughout — `nettedTotal` re-applies the reconstructed loss to the
+floored positives, which reproduces the figure the signed accumulator already held. Only the real
+bucket, which is not re-derived that way, took it twice or not at all.
+
+**Built:**
+
+1. **`auRealCapitalGain(nominal, indexed)`** in `capital-gain-character.js` — the per-disposal
+   rule, in one place: s960-275 for a loss (take the signed nominal), and `real ≤ nominal` for a
+   gain. The second half enforces the **Part 5 invariant per disposal**, which is what turns
+   `_cgtRelief`'s year-total assertion into a genuine backstop rather than the only check.
+2. **`signedAuCapitalGain(action, auGain)`** beside it — the exact figure
+   `characterizeAuCapitalGain`'s caller books into the nominal bucket, *derived from the split
+   rather than restated*. `AuTaxModule2027._realGain` measures the real amount against that, so
+   the pair cannot drift the way Part 5 found them drifted. `AU_HOUSE_SALE_TAX` supplies its own
+   nominal (`auAssessableHouseGain`, exemption-applied) and calls the rule directly.
+3. **`_applyCapitalLosses` subtracts only the PRIOR-YEAR pool from the real bucket.** With the
+   real accumulator signed, the current-year loss is already inside it; the reconstruction above
+   is not new information. The carried-forward pool genuinely lives outside the year's
+   accumulators, so it still comes off both — at face value, since the Act gives a carried-forward
+   loss no indexation either. The nominal worksheet still reports both s102-5 steps in `applied`.
+
+**Measured: no cash effect anywhere in the suite or the study.** Neither the reference plan nor
+any `au-house-sale` arm books an AU-resident disposal at a loss — under design 90 §4 all equity
+sleeves are one draw × beta, so a loss is structurally unreachable — which is exactly why both
+defects survived. The fix is latent until equity fidelity makes losses reachable, and it is worth
+having in place before that rather than after.
+
+**Verified:** `test:unit` 5200 + `test:viz` 1038 GREEN, no golden moved. Three new tests in
+`evt-au-cgt-reform.test.mjs`: a table-driven pass asserting every one of the six disposal types
+moves both buckets identically on a loss; the same-bucket case; and the prior-year pool. Reverting
+either half of the fix fails them — the module rule fails all three, the `pyApplied` change fails
+the pool test with the double-counted figure.
+
+---
+
 #### 📋 Original Part 2 plan (kept for provenance)
 
 **Part 1 (the two coupled bugs) is committed on a branch.** Part 2 makes the reform *accurate*:
