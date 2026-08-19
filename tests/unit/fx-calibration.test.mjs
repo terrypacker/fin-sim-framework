@@ -25,12 +25,24 @@
  * FXC-6  The shipped defaults match the packaged series' post-float calibration. FRED
  *        revises history, so this is what forces a re-decision after a rate refresh
  *        instead of letting the defaults quietly go stale (design 92 §7).
+ * FXC-7  The term-structure fit recovers a known OU's parameters from a synthetic path,
+ *        and the analytic `ouChangeSd` it fits against agrees with the ENGINE's own step
+ *        function. Fitting against a formula the simulation does not implement would
+ *        calibrate the wrong process.
+ * FXC-8  `estimableHorizons` excludes horizons with too few independent windows. This is
+ *        the filter that decides the answer: including the post-float 20-year point
+ *        (~2 independent windows, and lower than its own 10-year figure, which no
+ *        diffusion can produce) reverses the conclusion about k.
+ * FXC-9  On the packaged series the term-structure fit and the lag-1 AR(1) fit DISAGREE,
+ *        with AR(1) reverting faster. A working detector: if these ever coincide, one of
+ *        the two estimators has stopped doing what it claims.
  */
 
 import { test }   from 'node:test';
 import assert     from 'node:assert/strict';
 
-import { estimateFxProcess, calibrateWindow, POST_FLOAT_MONTH, MIN_MONTHS }
+import { estimateFxProcess, calibrateWindow, fitFxTermStructure, ouChangeSd,
+         estimableHorizons, empiricalTermStructure, POST_FLOAT_MONTH, MIN_MONTHS }
   from '../../scripts/lib/fx-calibration.mjs';
 import { USD_AUD_H10_MONTHLY } from '../../src/finance/fx/data/usd-aud-h10-monthly.js';
 import { FX_PROCESS_MODELS, gaussianFrom } from '../../src/finance/fx/fx-process-models.js';
@@ -133,6 +145,10 @@ test('FXC-5 refuses a window too short to fit', () => {
 
 test('FXC-6 shipped defaults match the post-float calibration of the packaged series', async () => {
   const r = calibrateWindow(USD_AUD_H10_MONTHLY, POST_FLOAT_MONTH, null);
+  // `calibrateWindow` promotes the TERM-STRUCTURE estimates into the primary fields;
+  // the shipped defaults must track those, not the lag-1 AR(1) ones.
+  assert.ok(r.term, 'post-float window should support a term-structure fit');
+  assert.equal(r.reversionSpeed, r.term.reversionSpeed);
 
   const { US_AU_CROSS_BORDER } = await import(
     '../../src/scenarios/toolsets/us-au-cross-border-toolset.js'
@@ -164,4 +180,70 @@ test('FXC-6 shipped defaults match the post-float calibration of the packaged se
   const tick = handlers.find((h) => h.constructor.type === 'FxTickHandler');
   assert.ok(tick, 'expected an FxTickHandler when a stochastic model is active');
   assert.equal(tick.reversionSpeed, byKey.fxReversionSpeed.defaultValue);
+});
+
+test('FXC-7 term-structure fit recovers a known OU, and matches the engine step function', () => {
+  // 1. The analytic formula the fit minimises against must describe the process the
+  //    simulation actually runs. Compare it to FX_PROCESS_MODELS.MEAN_REVERTING directly.
+  const sigma = 0.114;
+  const k     = 0.113;
+  const dt    = 1 / 12;
+  const step  = FX_PROCESS_MODELS.MEAN_REVERTING;
+  for (const h of [1, 5, 10]) {
+    const diffs = [];
+    for (let s = 1; s <= 1500; s++) {
+      const rng = seededRng(s);
+      let dev = 0;
+      for (let i = 0; i < 600; i++) dev = step(dev, { sigma, dt, k, z: gaussianFrom(rng) });
+      const start = dev;
+      for (let i = 0; i < h * 12; i++) dev = step(dev, { sigma, dt, k, z: gaussianFrom(rng) });
+      diffs.push(dev - start);
+    }
+    const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+    const emp  = Math.sqrt(diffs.reduce((a, b) => a + (b - mean) ** 2, 0) / (diffs.length - 1));
+    const analytic = ouChangeSd(sigma, k, h);
+    assert.ok(Math.abs(Math.log(emp / analytic)) < 0.10,
+      `${h}y: engine ${emp.toFixed(4)} vs analytic ${analytic.toFixed(4)}`);
+  }
+
+  // 2. Recovery from a synthetic path built with the engine's own step function.
+  const levels = synthPath({ sigma, k, months: 6000, seed: 11 });
+  const fit = fitFxTermStructure(levels, { horizonsYears: [1, 2, 3, 5, 7, 10] });
+  assert.ok(Math.abs(fit.sigmaAnnual - sigma) < 0.015,
+    `sigma: expected ~${sigma}, got ${fit.sigmaAnnual.toFixed(4)}`);
+  assert.ok(Math.abs(fit.reversionSpeed - k) < 0.05,
+    `k: expected ~${k}, got ${fit.reversionSpeed.toFixed(4)}`);
+});
+
+test('FXC-8 estimableHorizons drops horizons with too few independent windows', () => {
+  // 511 post-float months: 20y gives floor(511/240) = 2 independent windows, so it is out;
+  // 10y gives 4 and stays. Including the 20y point is what reverses the conclusion on k.
+  assert.deepEqual(estimableHorizons(511), [1, 2, 3, 5, 7, 10]);
+  assert.ok(!estimableHorizons(511).includes(20));
+  assert.deepEqual(estimableHorizons(1200), [1, 2, 3, 5, 7, 10, 15, 20]);
+
+  // And the reason it matters, stated as an assertion on the real data: the post-float
+  // 20-year dispersion comes out BELOW its own 10-year figure, which no diffusion can do.
+  const i0 = USD_AUD_H10_MONTHLY.months.findIndex((m) => m >= POST_FLOAT_MONTH);
+  const levels = USD_AUD_H10_MONTHLY.audPerUsd.slice(i0);
+  const [tenY, twentyY] = empiricalTermStructure(levels, [10, 20]);
+  assert.ok(twentyY < tenY,
+    'the artefact this filter exists for should still be present in the data '
+    + `(10y=${tenY.toFixed(4)}, 20y=${twentyY.toFixed(4)})`);
+});
+
+test('FXC-9 term-structure and lag-1 estimates disagree, with AR(1) reverting faster', () => {
+  const r = calibrateWindow(USD_AUD_H10_MONTHLY, POST_FLOAT_MONTH, null);
+  assert.ok(r.term.reversionSpeed < r.ar1ReversionSpeed * 0.6,
+    `expected the lag-1 estimate to revert materially faster: term=${r.term.reversionSpeed.toFixed(3)} `
+    + `vs ar1=${r.ar1ReversionSpeed.toFixed(3)}`);
+  // sigma is NOT where the two disagree — that half of the calibration was always right.
+  const i0     = USD_AUD_H10_MONTHLY.months.findIndex((m) => m >= POST_FLOAT_MONTH);
+  const levels = USD_AUD_H10_MONTHLY.audPerUsd.slice(i0);
+  const ar1Sigma = estimateFxProcess(levels).sigmaAnnual;
+  assert.ok(Math.abs(r.term.sigmaAnnual - ar1Sigma) < 0.01,
+    `sigma should agree between the two estimators: term=${r.term.sigmaAnnual.toFixed(4)} `
+    + `vs ar1=${ar1Sigma.toFixed(4)}`);
+  assert.ok(r.term.halfLifeYears > 4 && r.term.halfLifeYears < 9,
+    `post-float half-life should be ~6 years, got ${r.term.halfLifeYears.toFixed(1)}`);
 });

@@ -193,22 +193,24 @@ export const US_AU_CROSS_BORDER = {
       {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.1133,
+        defaultValue: 0.1142,
         description: 'Annualized log-volatility of the FX rate when a process model is active. '
           + 'Default is calibrated from the published USD/AUD series over the post-float window '
           + '1984-01 onward (design 92 §8.1), not assumed — reproduce it with '
-          + 'scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.109 and '
-          + '0.119, so this is not sensitive to the window; the previous 0.06 default was.',
+          + 'scripts/lab/calibrate-fx.mjs. The whole series and the post-2000 era give 0.111 and '
+          + '0.120, so this is not sensitive to the window; the original 0.06 default was.',
       },
       {
         key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
         type: 'Number', group: 'FX', mc: true, opt: false,
-        defaultValue: 0.296,
-        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model. '
-          + 'Default is an AR(1) fit over the same post-float window — a half-life of about '
-          + '2.3 years. Unlike volatility this IS window-sensitive: including the pre-1984 '
-          + 'managed-float era more than halves it, because a pegged currency is not a draw '
-          + 'from the same process.',
+        defaultValue: 0.114,
+        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model — '
+          + 'a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX '
+          + 'dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 '
+          + 'AR(1) estimate on the same data is 0.296, which reproduces 1-year moves and then '
+          + 'flattens, understating 10-year dispersion by a third. Still the more '
+          + 'window-sensitive of the two knobs (whole series 0.072, post-2000 0.104), so it is '
+          + 'worth running as a sensitivity axis rather than trusted as a constant.',
       },
     ];
   },

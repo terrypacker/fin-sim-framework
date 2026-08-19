@@ -346,6 +346,20 @@ k̂  = −12 · ln( ρ̂₁ )        from an AR(1) fit of log deviation about it
 μ̂  = mean( monthly log returns ) × 12          # reported, never silently applied
 ```
 
+> **SUPERSEDED (18 Aug 2026) — the k̂ estimator above is wrong for this purpose.**
+> `−12·ln(ρ̂₁)` is the MLE *if the series really is an OU*. FX is not, and under that
+> misspecification the lag-1 statistic is the worst available target: most sensitive to
+> month-to-month noise, least informative about the multi-year behaviour a retirement
+> projection exists to model. On the post-float window it returns k=0.296 (half-life
+> 2.3y), which reproduces the observed 1-year dispersion and then flattens — understating
+> 10-year dispersion by a third and 44-year dispersion by ~40%.
+>
+> What shipped instead is `fitFxTermStructure`, which fits (σ, k) to the observed **term
+> structure of dispersion** across horizons with ≥4 non-overlapping windows: post-float
+> σ=0.1142, **k=0.114**, half-life 6.1 years. The variance ratio agrees (at 10y: history
+> 0.650, term-structure fit 0.634, lag-1 fit 0.370). σ̂ and μ̂ above are unaffected — only
+> k̂ moves. See `scenarios/fx-study/fx-study.md` §5.
+
 This adds **no** enum value, **no** new code path in the loop, and **no** new failure
 mode. It makes the two knobs that already exist honest, and it is the cheapest way to get
 most of the value of this whole document. Ship it as `scripts/lab/calibrate-fx.mjs` plus
@@ -594,7 +608,29 @@ fields remain unbuilt and unneeded. The full suite passes (5212 tests).
   — and check recovery. FXC-2 is the working-detector control that stops FXC-1 passing
   for an estimator that returns a near-constant.
 
-### 15.2 The refresh obligation
+### 15.2 What the FX study changed (18 Aug 2026)
+
+A spending study on a real 44-year cross-border plan (`scenarios/fx-study/`) revisited
+this document's step 3–7 question and answered **no**, with two corrections to what
+steps 1–2 shipped:
+
+- **`fxReversionSpeed` 0.296 → 0.114** (§8.1 note above). The k estimator this document
+  specified was the wrong fit target.
+- **`fxVolatility` 0.1133 → 0.1142** — the same number to within noise; σ was always fine.
+
+On steps 3–7: over horizons the data can speak to (≤10y) a correctly-fitted OU fits about
+as well as the best block bootstrap (RMSE 0.037 vs 0.028), and beyond 10 years neither is
+validatable — the post-float window holds 0–1 independent 44-year observations.
+`HISTORICAL_REPLAY` additionally cannot cover a 528-month horizon from a 511-month
+window. §5's warning that a replay window is a currency view was confirmed and is if
+anything understated: the drift lever outweighs the entire volatility process on that plan.
+
+The study's own largest finding was **not** about design 92 at all — it was that
+`monthlyExpensesCurrency` defaults to USD, which makes real consumption FX-invariant by
+construction for a household living in Australia on a USD portfolio (0% spending
+dispersion against 36% once the target is denominated in AUD).
+
+### 15.3 The refresh obligation
 
 `rates/README.md` now documents it: a FRED refresh means update the retrieval date,
 `npm run build:fx-series`, then `npm run calibrate:fx` and **decide**. FXS-1 fails while

@@ -80,11 +80,32 @@ function report(rows) {
       + `${(r.halfLifeYears == null ? 'n/a' : `${r.halfLifeYears.toFixed(1)} yr`).padStart(14)}`
       + `${pct(r.driftAnnual).padStart(13)}`,
     );
-    console.log(`  ${''.padEnd(22)}${r.from} → ${r.to}`);
+    console.log(
+      `  ${''.padEnd(22)}${r.from} → ${r.to}`
+      + `   [lag-1 AR(1) k would be ${num(r.ar1ReversionSpeed, 3)}`
+      + `, half-life ${r.ar1HalfLifeYears == null ? 'n/a' : `${r.ar1HalfLifeYears.toFixed(1)} yr`}]`,
+    );
+  }
+
+  // The fit that produced k, horizon by horizon. Printed because the whole argument for
+  // this estimator is visible here and nowhere else: if `fitted` tracks `observed`, the
+  // process will reproduce multi-year FX dispersion; if it does not, k is wrong however
+  // confident the single number above looks.
+  for (const { label, r } of rows) {
+    if (!r.term) { console.log(`\n  ${label}: window too short for a term-structure fit.`); continue; }
+    const t = r.term;
+    console.log(`\n  ${label} — term-structure fit (RMSE ${t.rmse.toFixed(4)}), horizons with 4+ independent windows:`);
+    console.log('    horizon ' + t.horizonsYears.map((h) => `${h}y`.padStart(9)).join(''));
+    console.log('    observed' + t.empirical.map((v) => v.toFixed(4).padStart(9)).join(''));
+    console.log('    fitted  ' + t.fitted.map((v) => v.toFixed(4).padStart(9)).join(''));
   }
 
   console.log(
-    '\n  σ̂ and k̂ are the estimates for fxVolatility and fxReversionSpeed.'
+    '\n  k̂ is fitted to the TERM STRUCTURE of dispersion, not to the lag-1 autocorrelation'
+    + '\n  (design 92 §8.1 specified the latter; it over-reverts and understates 44-year FX'
+    + '\n  dispersion by ~40%). Horizons with fewer than 4 non-overlapping windows are excluded'
+    + '\n  — an overlapping 20-year estimate is one observation wearing a decimal point.'
+    + '\n'
     + '\n  μ̂ is REPORTED ONLY. It is the window\'s realised drift in AUD per USD — positive'
     + '\n  means the AUD weakened against the USD over the window. Choosing a window is'
     + '\n  choosing a currency view (design 92 §5); put drift in the anchor'

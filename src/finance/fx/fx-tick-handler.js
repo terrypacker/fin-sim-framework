@@ -28,8 +28,9 @@ export class FxTickHandler extends HandlerEntry {
   static eventType   = 'FX_TICK';
 
   // reversionSpeed default matches FxService.DEFAULT_FX_REVERSION — the post-float
-  // AR(1) estimate (design 92 §8.1), not a guess. See scripts/lab/calibrate-fx.mjs.
-  constructor({ model = 'MEAN_REVERTING', reversionSpeed = 0.296, dt = 1 / 12, pairs = ['USD_AUD'] } = {}) {
+  // TERM-STRUCTURE fit (design 92 §8.1), not a guess and not the lag-1 AR(1) value.
+  // See scripts/lab/calibrate-fx.mjs.
+  constructor({ model = 'MEAN_REVERTING', reversionSpeed = 0.114, dt = 1 / 12, pairs = ['USD_AUD'] } = {}) {
     super(null, 'FX Tick');
     this.model                = model;
     this.reversionSpeed       = reversionSpeed;
