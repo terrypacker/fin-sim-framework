@@ -19,8 +19,20 @@ import { applyCashBasisInvariant } from './holding.js';
  */
 function _syncBalance(account) {
   if (!account || !Array.isArray(account.holdings)) return account;
-  const sum = account.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
-  return { ...account, balance: +sum.toFixed(2) };
+  // GHOST PAR. `faceValue` is a parallel field, and not every path that moves value out
+  // of a holding maintains it — a cross-border transfer that sweeps an account leaves its
+  // bond lots at zero market value still carrying full par. Par is authoritative for
+  // BOTH pull-to-par and redemption, so a zero-value lot with live par is money waiting to
+  // be minted. Normalizing it here catches every mutation path at once, because this runs
+  // after all of them. Only the exactly-empty case is touched: a lot with any units left
+  // keeps whatever par it has, so a legitimate deep discount is not "repaired" away.
+  let holdings = account.holdings;
+  if (holdings.some(h => h?.faceValue > 0 && (h?.marketValue ?? 0) <= 0.005)) {
+    holdings = holdings.map(h =>
+      (h?.faceValue > 0 && (h?.marketValue ?? 0) <= 0.005) ? { ...h, faceValue: 0 } : h);
+  }
+  const sum = holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  return { ...account, holdings, balance: +sum.toFixed(2) };
 }
 
 /**

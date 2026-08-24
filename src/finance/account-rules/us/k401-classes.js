@@ -382,13 +382,8 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
       contributionBasis: k401.contributionBasis - fromContrib,
       earningsBasis:     k401.earningsBasis     - fromEarnings,
     };
-    if (Array.isArray(k401.holdings) && k401.holdings.length > 0) {
-      newK401.holdings = k401.holdings.map(h => ({
-        ...h,
-        marketValue: +((h.marketValue ?? 0) * (1 - transferRatio)).toFixed(2),
-        costBasis:   +((h.costBasis   ?? 0) * (1 - transferRatio)).toFixed(2),
-      }));
-    }
+    // Same helper as every other value move, so par scales with the position.
+    newK401.holdings = scaleHoldings(k401.holdings, k401.balance, k401.balance - amount);
 
     const newIra = {
       ...ira,
@@ -401,22 +396,7 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
         ? { derivedIncomeBasis: +((ira.derivedIncomeBasis + Math.min(fromEarnings, k401.derivedIncomeBasis ?? fromEarnings))).toFixed(2) }
         : {}),
     };
-    if (Array.isArray(ira.holdings) && ira.holdings.length > 0) {
-      if (ira.balance > 0) {
-        const iraFactor = (ira.balance + amount) / ira.balance;
-        newIra.holdings = ira.holdings.map(h => ({
-          ...h,
-          marketValue: +((h.marketValue ?? 0) * iraFactor).toFixed(2),
-          costBasis:   +((h.costBasis   ?? 0) * iraFactor).toFixed(2),
-        }));
-      } else {
-        // IRA was at zero; set the first (bootstrap) holding to the rollover amount.
-        newIra.holdings = ira.holdings.map((h, i) => i === 0
-          ? { ...h, marketValue: +amount.toFixed(2), costBasis: +amount.toFixed(2) }
-          : h
-        );
-      }
-    }
+    newIra.holdings = scaleHoldings(ira.holdings, ira.balance, ira.balance + amount);
 
     return this.newState(state, { [k401Key]: newK401, [iraKey]: newIra });
   }

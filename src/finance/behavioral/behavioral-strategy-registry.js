@@ -315,20 +315,32 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     handlers: (_context) => [],
     reducers: (context) => {
       const p = context.parameters;
-      const role = p.bondLadderRole ?? ACCOUNT_ROLES.US_STOCK;
-      const acct = (context.accounts ?? []).find(a => a.role === role)
-                ?? (context.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.US_STOCK);
-      if (!acct) return []; // no account to ladder ⇒ inert
-      return [
-        new BondLadderReducer({
-          stateKey:     acct.stateKey,
-          country:      countryForRole(acct.role),
-          targetRungs:  p.bondLadderRungs        ?? 5,
-          spacingYears: p.bondLadderSpacingYears ?? 1,
-          roll:         p.bondLadderRoll         ?? true,
-          taxExemption: p.bondLadderTaxTreatment ?? 'state',
-        }),
-      ];
+      // `bondLadderRole` is a role, a LIST of roles, or 'ALL'. Every account whose role
+      // matches gets its own ladder — not just the first. A household routinely holds
+      // several accounts in one role (five `us-stock` accounts is ordinary), and a
+      // single `.find` laddered exactly one of them while every other bond sleeve
+      // stayed a perpetual fund. Same class of defect as the earnings handlers that
+      // resolved a role to one account (design 55 §13).
+      const want  = p.bondLadderRole ?? ACCOUNT_ROLES.US_STOCK;
+      const roles = want === 'ALL' ? null
+        : new Set(Array.isArray(want) ? want : [want]);
+      let accts = (context.accounts ?? []).filter(a => roles == null || roles.has(a.role));
+      // Back-compat: a role that matches nothing falls back to the taxable brokerage,
+      // exactly as before, so an existing scenario naming an absent role is unchanged.
+      if (!accts.length && roles != null) {
+        accts = (context.accounts ?? []).filter(a => a.role === ACCOUNT_ROLES.US_STOCK);
+      }
+      if (!accts.length) return []; // no account to ladder ⇒ inert
+      return accts.map(acct => new BondLadderReducer({
+        stateKey:        acct.stateKey,
+        country:         countryForRole(acct.role),
+        targetRungs:     p.bondLadderRungs        ?? 5,
+        spacingYears:    p.bondLadderSpacingYears ?? 1,
+        roll:            p.bondLadderRoll         ?? true,
+        taxExemption:    p.bondLadderTaxTreatment ?? 'state',
+        inflationLinked: p.bondLadderInflationLinked ?? false,
+        couponRate:      p.bondLadderCouponRate ?? null,
+      }));
     },
     paramSchema: () => [
       {
@@ -338,6 +350,34 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'Number of rungs in the bond ladder the strategy maintains (design 66 §G8). ' +
           'Longer ladder = more duration/yield + rate risk; shorter = more liquidity + reinvestment drag. ' +
           'Searchable by the optimizer and tunable online in the MPC cockpit.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderRole', label: 'Bond Ladder — Account Role(s)',
+        type: 'Text', group: 'Allocation', mc: false, opt: false,
+        defaultValue: ACCOUNT_ROLES.US_STOCK,
+        description: 'Which accounts the strategy ladders: one ACCOUNT_ROLES value, a list of them, or ' +
+          '"ALL" for every account that holds bonds. EVERY account matching the role is laddered, not just ' +
+          'the first — a household commonly holds several accounts in one role.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderInflationLinked', label: 'Bond Ladder — TIPS (inflation-linked)',
+        type: 'Boolean', group: 'Allocation', mc: false, opt: false,
+        defaultValue: false,
+        description: 'ON = every rung is a TIPS / inflation-linked bond (design 66 §G5): principal indexes ' +
+          'to CPI, the accretion is imputed ordinary income, the coupon pays on the adjusted principal and ' +
+          'redemption carries the deflation floor. Set `bondLadderCouponRate` to the REAL yield when ON — ' +
+          'leaving it null stamps the NOMINAL market yield on top of CPI indexation, which pays twice for ' +
+          'inflation.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderCouponRate', label: 'Bond Ladder — Coupon Rate (blank = market)',
+        type: 'Number', group: 'Allocation', mc: false, opt: false,
+        min: 0, max: 0.15, step: 0.0005, defaultValue: null,
+        description: 'Fixed coupon stamped on every rung at build. Blank (default) = the prevailing ' +
+          'curve yield at each rung\'s own tenor. For a TIPS ladder this is the REAL yield.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {

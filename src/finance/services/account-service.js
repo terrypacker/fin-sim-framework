@@ -359,10 +359,18 @@ export class AccountService extends AssetService {
           : Math.min(mv, toRemove * (mv / totalMv));
         removed += sold;
         const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
+        // Par leaves with the units. `faceValue` drives BOTH pull-to-par and redemption,
+        // so a bond lot drained here while keeping full par is money waiting to be minted:
+        // the next mark drags price back up toward a par no longer behind it. Same rule
+        // the sell path already applies (holdings-fifo, design 87 G9) and that
+        // `scaleHoldings._scaleOne` applies on the deposit side.
+        const faceShare = (h.faceValue == null || mv <= 0) ? null
+          : Math.max(0, (h.faceValue ?? 0) * (1 - sold / mv));
         return {
           ...h,
           marketValue: Math.max(0, mv - sold),
           costBasis:   Math.max(0, (h.costBasis ?? 0) - basisShare),
+          ...(faceShare == null ? {} : { faceValue: +faceShare.toFixed(2) }),
         };
       });
     } else {
@@ -381,10 +389,15 @@ export class AccountService extends AssetService {
         const mv    = Math.max(0, h.marketValue ?? 0);
         const share = i === last ? amount - added : amount * (mv / totalMv);
         added += share;
+        // Par scales with the position on the way in too, so the lot's price-to-par
+        // ratio is untouched by a credit that merely made the position bigger.
+        const faceUp = (h.faceValue == null || mv <= 0) ? null
+          : (h.faceValue ?? 0) * ((mv + share) / mv);
         return {
           ...h,
           marketValue: (h.marketValue ?? 0) + share,
           costBasis:   (h.costBasis   ?? 0) + share,
+          ...(faceUp == null ? {} : { faceValue: +faceUp.toFixed(2) }),
         };
       });
     }

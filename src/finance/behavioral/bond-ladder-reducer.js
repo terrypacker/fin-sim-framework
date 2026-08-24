@@ -56,9 +56,16 @@ export class BondLadderReducer extends Reducer {
    * @param {number}  [opts.spacingYears=1]    - years between adjacent maturities
    * @param {boolean} [opts.roll=true]         - roll each maturing rung to the tail (self-perpetuate)
    * @param {string}  [opts.taxExemption='state'] - Holding.taxExemption for every rung (default Treasury)
+   * @param {boolean} [opts.inflationLinked=false] - every rung is a TIPS (design 66 §G5): CPI-indexed
+   *   principal, imputed accretion income, coupon on the adjusted principal. Pair with `couponRate`
+   *   set to the REAL yield — the market anchor is a NOMINAL yield and stamping it on a CPI-indexed
+   *   principal pays for inflation twice.
+   * @param {number|null} [opts.couponRate=null] - fixed coupon for every rung; null ⇒ the curve yield
+   *   at each rung's own tenor.
    */
   constructor({ stateKey, country = 'US', targetRungs = 5, spacingYears = 1,
-                roll = true, taxExemption = 'state' } = {}) {
+                roll = true, taxExemption = 'state',
+                inflationLinked = false, couponRate = null } = {}) {
     super('Bond Ladder', PRIORITY.PRE_PROCESS + 5); // after maturity (+3) and rebalance detect (+4)
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.stateKey     = stateKey;
@@ -67,6 +74,8 @@ export class BondLadderReducer extends Reducer {
     this.spacingYears = spacingYears;
     this.roll         = roll;
     this.taxExemption = taxExemption;
+    this.inflationLinked = inflationLinked;
+    this.couponRate      = couponRate;
   }
 
   reduce(state, action) {
@@ -83,10 +92,29 @@ export class BondLadderReducer extends Reducer {
     const bondValue    = +bondHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     if (bondValue <= 0.01) return this.newState(state); // nothing to ladder ⇒ inert
 
-    // Already laddered at this length ⇒ let the Phase-A roll self-maintain it. This
-    // makes the reducer fire the (re)materialization exactly once at bootstrap and
+    // Already laddered at this length ⇒ let the Phase-A roll self-maintain the spacing.
+    // This makes the reducer fire the (re)materialization exactly once at bootstrap and
     // once per lever change, not every period (no journal churn, no basis reset drift).
-    if (account._bondLadderRungs === N) return this.newState(state);
+    //
+    // The one thing the roll CANNOT self-maintain is new money. When design 61 rebalances
+    // INTO bonds it grows the existing sleeves pro rata, but drawdown consumes rungs, and
+    // an account whose rungs have all been spent takes its next bond buy as a fresh
+    // PERPETUAL FUND sleeve (`_newSleeve`). Left alone those funds accumulate until the
+    // "ladder" is a minority of the account's bonds — measured at 100% of the taxable
+    // brokerage's $1.29M by year 20. Absorbing them into the standing rungs is the crude
+    // form of design 66 §10.5's buy-side tail routing: it keeps every bond dollar inside a
+    // dated rung without resetting the maturity spacing a full rebuild would destroy.
+    const standingRungs = bondHoldings.filter(h => h?.maturityDate != null);
+    if (account._bondLadderRungs === N && standingRungs.length > 0) {
+      const funds = bondHoldings.filter(h => h?.maturityDate == null);
+      const fundValue = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+      if (fundValue <= 0.01) return this.newState(state);
+      const absorbed = absorbIntoRungs(standingRungs, funds);
+      const others   = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
+      return this.newState(state, {
+        [this.stateKey]: _syncBalance({ ...account, holdings: [...others, ...absorbed] }),
+      });
+    }
 
     const rateKey = resolveRateKey(this.country === 'AU' ? 'AU' : 'US', ALLOCATION.BOND, null);
     // The AU CPI level is the indexation base wherever the ladder lives — only AU
@@ -96,10 +124,15 @@ export class BondLadderReducer extends Reducer {
       bondValue, rungs: N, spacingYears: this.spacingYears ?? 1, asOfMs,
       roll: this.roll !== false, taxExemption: this.taxExemption ?? 'state',
       stateKey: this.stateKey, rateKey,
-      couponRate: (rateKey != null ? state.effectiveInterestRates?.[rateKey] : null) ?? null,
+      inflationLinked: this.inflationLinked === true,
+      couponRate: this.couponRate
+        ?? ((rateKey != null ? state.effectiveInterestRates?.[rateKey] : null) ?? null),
       // design 67 — price each rung along the yield curve at ITS OWN tenor, so a
       // freshly built ladder earns the term premium (flat curve ⇒ every rung == anchor).
-      couponForTenor: (tenorYears) => resolveYield(state, { rateKey, tenorYears }),
+      // A pinned `couponRate` (a contracted real yield, typically) overrides the curve.
+      couponForTenor: this.couponRate != null
+        ? null
+        : (tenorYears) => resolveYield(state, { rateKey, tenorYears }),
       priceLevel: auLevel,
       // design 62 §9.5 follow-up — the rebuild REPLACES existing lots, so it must carry
       // their tax attributes across instead of re-basing the sleeve at market value.
@@ -132,7 +165,8 @@ export class BondLadderReducer extends Reducer {
 export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
                                     roll = true, taxExemption = 'state',
                                     stateKey = 'ladder', rateKey = null, couponRate = null,
-                                    couponForTenor = null, priceLevel = null, carry = null }) {
+                                    couponForTenor = null, priceLevel = null, carry = null,
+                                    inflationLinked = false }) {
   const n        = Math.max(1, Math.round(rungs));
   const spacing  = spacingYears > 0 ? spacingYears : 1;
   const ladderTermYears = +(n * spacing).toFixed(4);
@@ -181,7 +215,7 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
       rollAtMaturity: roll,
       rollTermYears:  roll ? ladderTermYears : null,
       zeroCoupon:      false,
-      inflationLinked: false,
+      inflationLinked: inflationLinked === true,
     });
   }
   return out;
@@ -303,6 +337,101 @@ function _carrySplitter(carry, bondValue, n) {
     allocated.set(field, +((allocated.get(field) ?? 0) + share).toFixed(2));
     return share;
   };
+}
+
+/**
+ * Fold un-laddered BOND *fund* sleeves into the standing rungs, pro rata by rung
+ * `faceValue`, and return the replacement rung list (the funds are dropped by the
+ * caller, which rebuilds the account's holdings from this).
+ *
+ * The crude form of design 66 §10.5's buy-side tail routing. It exists because the
+ * design-61 rebalancer spawns a perpetual fund sleeve whenever it buys bonds into an
+ * account that currently holds none — which happens routinely once drawdown has eaten
+ * an account's rungs — and nothing else ever converts one back into a dated rung.
+ *
+ * Conservation. `marketValue`, `costBasis` and each `costBaseByCountry` entry are moved
+ * across in full: the last rung absorbs the rounding remainder, exactly as `faceValue`
+ * splitting does in `materializeLadder`. NOT a taxable event — no lot is disposed of,
+ * the money simply changes which lot carries it.
+ *
+ * The approximation worth naming: `faceValue` grows by the absorbed MARKET value, so a
+ * rung that is currently trading away from par has its par redemption amount moved by
+ * the market price of the new money rather than by its own par. The error is bounded by
+ * the rung's discount/premium (small — an individual bond pulls to par as it ages) and it
+ * washes out at the next maturity, where the whole rung redeems at the blended face.
+ *
+ * @param {Array<object>} rungs - BOND holdings carrying a maturityDate (at least one)
+ * @param {Array<object>} funds - BOND holdings with no maturityDate
+ * @returns {Array<object>} the rungs, grown
+ */
+function absorbIntoRungs(rungs, funds) {
+  const totalFace = rungs.reduce((s, h) => s + (h?.faceValue ?? h?.marketValue ?? 0), 0);
+  if (!(totalFace > 0)) return rungs;
+
+  const addMv    = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+  const addBasis = +funds.reduce((s, h) => s + (h?.costBasis   ?? 0), 0).toFixed(2);
+  const addByCountry = {};
+  for (const f of funds) {
+    for (const [c, v] of Object.entries(f?.costBaseByCountry ?? {})) {
+      addByCountry[c] = +((addByCountry[c] ?? 0) + (v ?? 0)).toFixed(2);
+    }
+  }
+
+  const n = rungs.length;
+  const taken = new Map();
+  // Truncated shares with the last rung taking the remainder — the same rule
+  // `_carrySplitter` uses, so nothing is created or destroyed in the rounding.
+  const share = (field, total, k, w) => {
+    if (!(total > 0)) return 0;
+    if (k === n - 1) return +(total - (taken.get(field) ?? 0)).toFixed(2);
+    const v = Math.floor(total * w * 100) / 100;
+    taken.set(field, +((taken.get(field) ?? 0) + v).toFixed(2));
+    return v;
+  };
+
+  return rungs.map((h, k) => {
+    const w  = (h?.faceValue ?? h?.marketValue ?? 0) / totalFace;
+    const mv = share('mv', addMv, k, w);
+    if (mv === 0 && addBasis === 0) return h;
+    const cb = share('cb', addBasis, k, w);
+    const mvBefore = h.marketValue ?? 0;
+    const mvAfter  = +(mvBefore + mv).toFixed(2);
+    const next = {
+      ...h,
+      marketValue: mvAfter,
+      costBasis:   +((h.costBasis ?? 0) + cb).toFixed(2),
+      // Par grows differently for the two instruments, because `faceValue` MEANS
+      // something different in each.
+      //
+      // A nominal rung: par is what it redeems for, and its price-to-par RATIO is what
+      // pull-to-par reads. Scale par with the position so absorption leaves the ratio
+      // alone; adding market value to par 1:1 would re-price the rung and hand
+      // pull-to-par a target no purchase set.
+      //
+      // A TIPS rung: par is the ORIGINAL issue face, held only as the deflation FLOOR
+      // (`redeem` takes `max(indexed principal, face)`), while the indexed principal
+      // lives in marketValue and is already well above it after years of CPI accretion.
+      // Scaling that floor by the mv ratio inflates it by the accretion — and since the
+      // floor then becomes the redemption value, every roll ratchets the position up to
+      // an ever-higher floor. New money makes it worse, so the runaway grew with equity
+      // weight (clean at 0% equity; 266 of 1750 paths past $1e12 at 75%, one reaching
+      // 1e+63). New money buys TIPS AT PAR today, so it contributes its own cash amount
+      // to the floor and nothing more.
+      faceValue:   (h.faceValue == null || mvBefore <= 0)
+        ? h.faceValue
+        : h.inflationLinked
+          ? +((h.faceValue ?? 0) + mv).toFixed(2)
+          : +(h.faceValue * (mvAfter / mvBefore)).toFixed(2),
+    };
+    if (h.costBaseByCountry || Object.keys(addByCountry).length) {
+      const merged = { ...(h.costBaseByCountry ?? {}) };
+      for (const [c, total] of Object.entries(addByCountry)) {
+        merged[c] = +((merged[c] ?? 0) + share(`cbc.${c}`, total, k, w)).toFixed(2);
+      }
+      next.costBaseByCountry = merged;
+    }
+    return next;
+  });
 }
 
 /** Milliseconds of a lot's purchaseDate, or null when it carries none / an invalid one. */

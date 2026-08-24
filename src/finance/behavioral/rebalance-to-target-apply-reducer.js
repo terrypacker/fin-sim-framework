@@ -318,11 +318,13 @@ export function _sweepDust(holdings) {
   // vanish the value.
   if (keep.length === 0) return holdings;
 
-  let mv = 0, basis = 0;
+  let mv = 0, basis = 0, face = 0;
+  let anyFace = false;
   for (const h of holdings) {
     if (!isDust(h)) continue;
     mv    += h.marketValue ?? 0;
     basis += h.costBasis   ?? 0;
+    if (h.faceValue != null) { face += h.faceValue; anyFace = true; }
   }
 
   let biggest = 0;
@@ -331,7 +333,11 @@ export function _sweepDust(holdings) {
   }
   return keep.map((h, i) => (i === biggest
     ? { ...h, marketValue: +((h.marketValue ?? 0) + mv).toFixed(2),
-               costBasis:   +((h.costBasis   ?? 0) + basis).toFixed(2) }
+               costBasis:   +((h.costBasis   ?? 0) + basis).toFixed(2),
+               // Par is conserved by the sweep like every other value field; a dust lot
+               // folded in without its par leaves the survivor redeeming for less than
+               // it holds.
+               ...(h.faceValue == null && !anyFace ? {} : { faceValue: +((h.faceValue ?? 0) + face).toFixed(2) }) }
     : h));
 }
 
@@ -344,9 +350,16 @@ function _reduceProRata(holdings, allocation, amount) {
     if (h.allocation !== allocation) return h;
     const fraction = totalMv > 0 ? (h.marketValue / totalMv) : 0;
     const mv    = +(h.marketValue - amount * fraction).toFixed(2);
-    const basis = +((h.costBasis ?? 0) * (mv / Math.max(h.marketValue, 0.001))).toFixed(2);
+    const ratio = mv / Math.max(h.marketValue, 0.001);
+    const basis = +((h.costBasis ?? 0) * ratio).toFixed(2);
     if (mv < 0.001) return null;
-    return { ...h, marketValue: mv, costBasis: basis };
+    // Par leaves with the units. Without this, selling an individual bond is a MONEY
+    // PUMP: the value goes out, `faceValue` stays, and BondPriceAdjustReducer's
+    // pull-to-par regenerates almost exactly what was sold on the next mark — measured
+    // at -$1,375,173 sold against +$1,270,813 regenerated over one horizon, which is
+    // most of why a nominal ladder looked untouchable next to the same book in funds.
+    const face  = h.faceValue == null ? null : +((h.faceValue ?? 0) * ratio).toFixed(2);
+    return { ...h, marketValue: mv, costBasis: basis, ...(face == null ? {} : { faceValue: face }) };
   }).filter(Boolean);
 }
 
@@ -552,10 +565,12 @@ export function _compactSeasonedLots(holdings, asOfMs) {
       if (_purchaseTs(holdings[i]) < _purchaseTs(holdings[keep])) keep = i;
     }
     let mv = 0, basis = 0, couponMv = 0, durationMv = 0, basisOverLevel = 0;
+    let faceSum = 0, anyFace = false;
     for (const i of idxs) {
       const h = holdings[i];
       mv         += h.marketValue ?? 0;
       basis      += h.costBasis   ?? 0;
+      if (h.faceValue != null) { faceSum += h.faceValue; anyFace = true; }
       couponMv   += (h.couponRate ?? 0) * (h.marketValue ?? 0);
       durationMv += (h.duration   ?? 0) * (h.marketValue ?? 0);
       if (h.acquisitionPriceLevel > 0) basisOverLevel += (h.costBasis ?? 0) / h.acquisitionPriceLevel;
@@ -566,6 +581,8 @@ export function _compactSeasonedLots(holdings, asOfMs) {
       ...base,
       marketValue: +mv.toFixed(2),
       costBasis:   +basis.toFixed(2),
+      // Par is conserved by the merge, like marketValue and costBasis above it.
+      ...(base.faceValue == null && !anyFace ? {} : { faceValue: +faceSum.toFixed(2) }),
       couponRate:  base.couponRate == null || mv <= 0 ? base.couponRate : +(couponMv / mv).toFixed(6),
       duration:    base.duration   == null || mv <= 0 ? base.duration   : +(durationMv / mv).toFixed(4),
       // Basis-weighted harmonic mean — see the doc above. Falls back to the survivor's

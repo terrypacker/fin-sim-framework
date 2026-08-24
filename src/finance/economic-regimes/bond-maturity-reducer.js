@@ -135,6 +135,17 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
   // when no faceValue is stamped.
+  // A position that holds NOTHING redeems for nothing, whatever par it still claims.
+  // `faceValue` is a parallel field that not every value-move path maintains, so a rung
+  // drained to zero market value (a cross-border transfer sweeping the account, say) can
+  // reach maturity still carrying its original par. Redeeming that par — especially
+  // through the TIPS deflation floor below, which takes the MAXIMUM — mints money from a
+  // position with no units in it, and `rollAtMaturity` then compounds the invention:
+  // measured at $556,636 conjured across 14 empty rungs, and gross income of 1e+66 by the
+  // end of the run. The floor protects the original principal of units still held; it is
+  // not a claim on units already spent.
+  if ((h.marketValue ?? 0) <= 0.005) return { ...h, marketValue: 0, faceValue: 0 };
+
   const par = h.inflationLinked
     ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
     : (h.faceValue ?? h.marketValue ?? 0);
@@ -158,23 +169,45 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
     // so a rung rolling into an N-year ladder bond earns the curve's N-year term premium.
     // resolveYield returns null when the anchor is absent ⇒ keep the prior couponRate.
     const rollTenorYears = termMs / YEAR_MS;
-    const newCoupon = resolveYield(
-      { effectiveInterestRates: effectiveRates, yieldCurve },
-      { rateKey: h.rateKey, tenorYears: rollTenorYears },
-    ) ?? h.couponRate ?? null;
+    // A LADDER rung (design 66 §G8 — `rollTermYears` set) that is inflation-linked rolls
+    // into another TIPS. A TIPS ladder whose rungs came back as nominal bonds would stop
+    // being a TIPS ladder within one ladder length — the opposite of §10.3's "the ladder
+    // self-perpetuates" — and it is not what the instrument means. A LONE inflation-linked
+    // bond keeps the pre-existing behavior (roll into a plain par bond), which is what the
+    // §G5 note below is about.
+    const rollsAsTips = h.inflationLinked === true && h.rollTermYears != null;
+    // A rolling TIPS re-issues at the CONTRACTED REAL yield it already carries. The engine
+    // models a nominal curve only (design 67), so `resolveYield` would hand a TIPS the
+    // NOMINAL yield and pay it on a principal that also indexes to CPI — compensating for
+    // inflation twice. Holding the real yield flat is the neutral assumption in the absence
+    // of a real-yield curve, and it is what makes a TIPS ladder the risk-free leg it is
+    // supposed to be.
+    const newCoupon = rollsAsTips
+      ? (h.couponRate ?? null)
+      : (resolveYield(
+          { effectiveInterestRates: effectiveRates, yieldCurve },
+          { rateKey: h.rateKey, tenorYears: rollTenorYears },
+        ) ?? h.couponRate ?? null);
     return {
       ...h,
       marketValue:  par,
+      // The new bond is issued at what was actually redeemed. For a nominal bond that is
+      // `faceValue` already; for a TIPS it is the INDEXED principal, so the face has to
+      // move with it or the next redemption's deflation floor would be measured against a
+      // decades-stale original face.
+      ...(rollsAsTips ? { faceValue: par } : {}),
       // Carried, not re-based at par — see the class doc. `?? par` keeps the original
       // behavior for a bond that never carried a basis at all.
       costBasis:    h.costBasis ?? par,
       couponRate:   newCoupon,           // lock in the current yield at re-issue (G1)
       purchaseDate: new Date(matMs),     // the roll date is the new acquisition date
       maturityDate: new Date(matMs + termMs),
-      // Roll into a fresh plain (cash-coupon) par bond — an accreting instrument is
-      // not re-issued as one (design 66 §G5/§G6).
+      // Roll into a fresh plain (cash-coupon) par bond — a LONE accreting instrument is
+      // not re-issued as one (design 66 §G5/§G6). A ladder rung is the exception: see
+      // `rollsAsTips` above. Zeros are never re-issued as zeros either way, because a
+      // fresh zero would have to be priced at a discount and the roll issues at par.
       zeroCoupon:      false,
-      inflationLinked: false,
+      inflationLinked: rollsAsTips,
       // Design 87 G9 — RE-STAMP the §988 basis at the roll rate. `Reg. §1.988-2(b)(5)`
       // makes an instrument's principal amount "the holder's purchase price in units of
       // nonfunctional currency", and the roll IS a purchase: the matured principal was

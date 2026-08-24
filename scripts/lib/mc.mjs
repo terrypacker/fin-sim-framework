@@ -163,6 +163,14 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     oof:    r.outOfFundsDate ? new Date(r.outOfFundsDate).toISOString().slice(0, 10) : null,
     // sampled long-run mean — the headline explanatory variable for failure
     growth: r.params?.brokerageGrowthRate ?? null,
+    // The OTHER sampled axes, carried for the same reason `growth` is: they are the
+    // explanatory variables for any failure that equity returns do NOT explain. On an
+    // all-bond arm `growth` moves nothing at all, and without these a report can only
+    // say how many paths failed, never which draw sank them.
+    fx:         r.params?.exchangeRateUsdToAud    ?? null,
+    inflation:  r.params?.inflationRate           ?? null,
+    auInflation: r.params?.auInflationRate        ?? null,
+    bondYield:  r.params?.fixedIncomeInterestRate ?? null,
     shockDate: r.params?.shocks?.[0]?.startDate ? String(r.params.shocks[0].startDate).slice(0, 10) : null,
     shockSev:  r.params?.shocks?.[0]?.severity ?? null,
     // realized path shape (populated only when stochastic paths are on)

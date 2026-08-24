@@ -256,3 +256,92 @@ describe('BondMaturityReducer — ladder roll-to-tail (§G8)', () => {
     assert.equal(rolled.costBasis, 20_000, 'falls back to par when there is no basis to carry');
   });
 });
+
+// ─── TIPS ladder rungs roll as TIPS (§G5 × §G8) ────────────────────────────────
+
+describe('BondMaturityReducer — an inflation-linked LADDER rung rolls as a TIPS', () => {
+  let reducer;
+  beforeEach(() => { reducer = new BondMaturityReducer(); });
+
+  // The roll used to hard-set `inflationLinked: false` on every rolled bond. That is
+  // right for a LONE accreting instrument (it is not re-issued as one), but on a ladder
+  // it silently converted a TIPS ladder into a NOMINAL ladder within one ladder length —
+  // the direct opposite of §10.3's "the ladder self-perpetuates", and it re-locked the
+  // rung at the NOMINAL curve yield while the principal went on indexing to CPI, paying
+  // for inflation twice.
+  test('a rolling TIPS rung stays inflation-linked and keeps its REAL coupon', () => {
+    const rung = bond({
+      marketValue: 26_000,          // principal has indexed up from 20,000
+      faceValue: 20_000, costBasis: 26_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      couponRate: 0.01,             // a contracted REAL yield
+      rollAtMaturity: true, rollTermYears: 8, inflationLinked: true,
+    });
+    const next = reducer.reduce(stateWith(rung, { asOfY: 2030, effectiveRate: 0.05 }), { type: 'US_PERIOD_ADVANCE' });
+    const rolled = next.acct.holdings[0];
+    assert.equal(rolled.inflationLinked, true, 'still a TIPS after the roll');
+    assert.equal(rolled.couponRate, 0.01, 'keeps the real yield — NOT re-locked at the 5% nominal curve');
+    assert.equal(rolled.maturityDate.getTime(), ms(2038), 'rolls to the ladder tail like any rung');
+    assert.equal(rolled.marketValue, 26_000, 'reinvests the INDEXED principal, not the original face');
+    assert.equal(rolled.faceValue, 26_000, 'face moves to the indexed principal so the next deflation floor is current');
+  });
+
+  test('a LONE inflation-linked bond still rolls into a plain nominal bond (back-compat)', () => {
+    const lone = bond({
+      marketValue: 26_000, faceValue: 20_000, costBasis: 26_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      couponRate: 0.01, rollAtMaturity: true, inflationLinked: true,   // no rollTermYears ⇒ not a rung
+    });
+    const next = reducer.reduce(stateWith(lone, { asOfY: 2030, effectiveRate: 0.05 }), { type: 'US_PERIOD_ADVANCE' });
+    const rolled = next.acct.holdings[0];
+    assert.equal(rolled.inflationLinked, false, 'unchanged §G5 behavior for a bond that is not a ladder rung');
+    assert.equal(rolled.couponRate, 0.05, 're-locks at the nominal curve, as before');
+  });
+});
+
+// ─── Ghost par: a drained lot redeems for nothing ──────────────────────────────
+
+describe('BondMaturityReducer — a zero-value rung cannot redeem its stale par', () => {
+  let reducer;
+  beforeEach(() => { reducer = new BondMaturityReducer(); });
+
+  // `faceValue` is a parallel field and not every value-move path maintains it. A
+  // cross-border transfer sweeping an account leaves its bond lots at zero market value
+  // holding full par; redeeming that par mints money from units already spent, and
+  // `rollAtMaturity` compounds the invention (measured: $556,636 across 14 empty rungs,
+  // and gross income of 1e+66 by the end of a 48-year run).
+  test('a nominal rung drained to zero redeems at zero, not at its old face', () => {
+    const drained = bond({
+      marketValue: 0, faceValue: 41_563, costBasis: 0,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      rollAtMaturity: true, rollTermYears: 14,
+    });
+    const h = reducer.reduce(stateWith(drained, { asOfY: 2030 }), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+    assert.equal(h.marketValue, 0);
+    assert.equal(h.faceValue, 0, 'the stale par is cleared, not redeemed');
+  });
+
+  test('a drained TIPS rung does not mint money through the deflation floor', () => {
+    // The floor takes max(marketValue, faceValue), so an empty TIPS rung is the worst
+    // case: it redeems at FULL original par with nothing behind it.
+    const drained = bond({
+      marketValue: 0, faceValue: 41_563, costBasis: 0,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      rollAtMaturity: true, rollTermYears: 14, inflationLinked: true,
+    });
+    const h = reducer.reduce(stateWith(drained, { asOfY: 2030 }), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+    assert.equal(h.marketValue, 0, 'the deflation floor protects units still held — not units already spent');
+    assert.equal(h.faceValue, 0);
+  });
+
+  test('a rung with units left is untouched by the guard', () => {
+    const live = bond({
+      marketValue: 20_000, faceValue: 20_000, costBasis: 20_000,
+      purchaseDate: new Date(ms(2025)), maturityDate: new Date(ms(2030)),
+      rollAtMaturity: true, rollTermYears: 8, couponRate: 0.03,
+    });
+    const h = reducer.reduce(stateWith(live, { asOfY: 2030, effectiveRate: 0.05 }), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+    assert.equal(h.marketValue, 20_000, 'a live rung still rolls at par');
+    assert.equal(h.maturityDate.getTime(), ms(2038));
+  });
+});

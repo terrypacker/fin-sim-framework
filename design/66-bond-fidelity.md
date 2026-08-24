@@ -345,7 +345,9 @@ G2 ─┘                                    │
 ## 10. G8 — Bond ladders (detailed design)
 
 > Status: **Phases A / B (drawdown) / C IMPLEMENTED** (2026-07-17; §10.4, §10.9,
-> §10.6). Only the buy-side inflow-aware tail extension (§10.5) + barbells remain.
+> §10.6), plus **portfolio-wide + TIPS ladders and fund-sleeve absorption IMPLEMENTED**
+> (§10.6b). Only true inflow-aware TAIL extension (§10.5), barbells, and a
+> spending-schedule-shaped (defeasance) ladder remain.
 > Fleshes out the Tier-3 §4 stub into an implementable plan and, in particular, nails
 > down the *user-facing* surface.
 >
@@ -528,11 +530,59 @@ the lever together**, since the lever needs a maintained ladder to turn:
   (materialize/re-shape/idempotence/inert + strategy·opt·MPC wiring + a **full-sim e2e**
   that ladders the real brokerage bonds). 3600 unit + 874 viz green; golden unmoved.
 
-**Still open (Phase B buy-side routing proper):** when the design-61 allocation lever
-pumps NEW money into bonds, route it to *extend the ladder's tail* rather than spawn a
-fund sleeve (§10.5). The current reducer re-ladders the account's whole bond value on a
-rung-count change, which covers the lever; continuous inflow-aware tail extension is the
-remaining refinement. Barbell shape (§G8 "barbells") also remains a follow-on.
+### 10.6b Portfolio-wide and inflation-linked ladders — **IMPLEMENTED**
+
+Three defects surfaced the first time a ladder was asked to carry a whole portfolio
+rather than one brokerage sleeve. Each of them made the ladder quietly stop being a
+ladder, none of them errored, and all three are fixed.
+
+1. **One account per role, not all of them.** `BOND_LADDER.reducers` resolved its target
+   with `.find(a => a.role === role)`. A household routinely holds several accounts in
+   one role — five `us-stock` accounts is ordinary — so exactly one was laddered and
+   every other bond sleeve stayed a perpetual fund. Worse, when the allocation policy
+   puts BOND somewhere other than the taxable brokerage, the strategy could be *selected
+   and completely inert*. `bondLadderRole` now takes a role, a LIST of roles, or `'ALL'`,
+   and builds one reducer per matching account. A role matching nothing still falls back
+   to the taxable brokerage, so an existing scenario is unchanged. Same class of defect
+   as the earnings handlers that resolved a role to a single account (design 55 §13).
+
+2. **A TIPS ladder decayed into a nominal one.** `BondMaturityReducer.redeem()` hard-set
+   `inflationLinked: false` on every rolled bond. That is right for a LONE accreting
+   instrument — §G5's "not re-issued as one" — but on a ladder it converted a TIPS ladder
+   into a nominal ladder within one ladder length, and re-locked each rung at the NOMINAL
+   curve yield while the principal went on indexing to CPI, compensating for inflation
+   twice. A rung (`rollTermYears != null`) that is inflation-linked now rolls as a TIPS,
+   keeps its contracted REAL coupon (the engine models a nominal curve only, so holding
+   the real yield flat is the neutral assumption), and re-faces at the indexed principal
+   so the next deflation floor is measured against a current number.
+
+3. **New bond money escaped the ladder (this is §10.5's buy-side gap, in its crude
+   form).** The design-61 rebalancer grows existing bond sleeves pro rata, but drawdown
+   consumes rungs, and the next bond buy into an account holding none spawns a perpetual
+   fund sleeve. Nothing converted one back. Measured over a 48-year horizon the "ladder"
+   became a minority of the account's bonds and reached 0% of the taxable brokerage's
+   $1.29M by year 20. `BondLadderReducer` now ABSORBS undated bond sleeves into the
+   standing rungs pro rata by face — conserving market value, cost basis and each
+   `costBaseByCountry` entry to the cent, and leaving the maturity spacing untouched,
+   which a full rebuild would destroy. It is not a disposal: no lot is sold, the money
+   changes which lot carries it. The bounded approximation: `faceValue` grows by the
+   absorbed MARKET value, so a rung trading away from par moves its par redemption by
+   the price of the new money rather than by its own par. The error is bounded by the
+   rung's discount/premium (small — an individual bond pulls to par as it ages) and
+   washes out at the next maturity, where the whole rung redeems at the blended face.
+
+New params: `bondLadderRole` (role | role[] | `'ALL'`), `bondLadderInflationLinked`,
+`bondLadderCouponRate` (blank ⇒ the curve yield at each rung's own tenor; for a TIPS
+ladder this is the REAL yield). Tests: `bond-ladder-reducer` (absorption conserves value
+and basis and preserves spacing; no-fund is still a no-op; TIPS rungs at a pinned real
+yield; the five account-resolution cases) and `bond-maturity` (a rolling TIPS stays a
+TIPS and keeps its real coupon; a lone one still rolls plain). 5261 unit + 1038 viz
+green; **golden unmoved** — the default scenario selects no ladder.
+
+**Still open:** true inflow-aware TAIL extension (absorption grows every rung evenly
+rather than seeding the tail, which is §10.5's "acceptable" fallback, not its intent).
+Barbell shape (§G8 "barbells") also remains a follow-on. A ladder whose rungs are sized
+to a spending SCHEDULE rather than equally — the defeasance shape — is a third.
 
 ### 10.7 Golden & testing
 

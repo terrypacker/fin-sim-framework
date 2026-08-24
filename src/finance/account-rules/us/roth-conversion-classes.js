@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer }  from '../../../simulation-f
 import { HandlerEntry }                              from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction }     from '../../../simulation-framework/actions.js';
 import { debitIra, proRataIraSplit }                 from './ira-rollover-classes.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /**
  * Roth Conversion — EVT-52
@@ -109,22 +110,12 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
       // right — the assessable leg went to `rolloverEarningsBasis` instead.
       rolloverConversions:  [ ...(roth.rolloverConversions ?? []), { amount: fromContrib, conversionMs, taxableAmount: 0 } ],
     };
-    if (Array.isArray(roth.holdings) && roth.holdings.length > 0) {
-      if (roth.balance > 0) {
-        const rothFactor = (roth.balance + amount) / roth.balance;
-        newRoth.holdings = roth.holdings.map(h => ({
-          ...h,
-          marketValue: +((h.marketValue ?? 0) * rothFactor).toFixed(2),
-          costBasis:   +((h.costBasis   ?? 0) * rothFactor).toFixed(2),
-        }));
-      } else {
-        // Roth was at zero; set the first (bootstrap) holding to the conversion amount.
-        newRoth.holdings = roth.holdings.map((h, i) => i === 0
-          ? { ...h, marketValue: +amount.toFixed(2), costBasis: +amount.toFixed(2) }
-          : h
-        );
-      }
-    }
+    // `scaleHoldings`, not a local copy of it. This WAS a hand-inlined duplicate of the
+    // same factor scaling, which is how it missed the rule that par scales with the
+    // position: a conversion into a Roth holding dated bonds added market value against
+    // an unchanged `faceValue`, and BondPriceAdjustReducer then pulled the price toward
+    // the pre-conversion par for the rest of the run.
+    newRoth.holdings = scaleHoldings(roth.holdings, roth.balance, roth.balance + amount);
 
     return this.newState(
       state,

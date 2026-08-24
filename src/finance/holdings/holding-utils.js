@@ -26,16 +26,48 @@ export function scaleHoldings(holdings, oldBalance, newBalance) {
   if (oldBalance <= 0) {
     if (newBalance <= 0) return holdings;
     return holdings.map((h, i) => i === 0
-      ? { ...h, marketValue: +newBalance.toFixed(2), costBasis: +newBalance.toFixed(2) }
+      ? { ...h, marketValue: +newBalance.toFixed(2), costBasis: +newBalance.toFixed(2),
+          ...(h.faceValue == null ? {} : { faceValue: +newBalance.toFixed(2) }) }
       : h
     );
   }
   const factor = newBalance / oldBalance;
-  return holdings.map(h => ({
+  return holdings.map(h => _scaleOne(h, factor));
+}
+
+/**
+ * Scale ONE holding's value fields by `factor` — the money-moved-in-or-out rescale.
+ *
+ * `faceValue` scales with the rest, and leaving it out was a silent wealth leak. Par is
+ * a property of the POSITION, not a constant: a bond position twice the size has twice
+ * the par. Every deposit into an IRA/401(k)/Roth — a contribution, a rollover, a Roth
+ * CONVERSION — comes through `scaleHoldings`, so an account holding dated bonds took the
+ * new money as market value against an unchanged par.
+ *
+ * That is not a cosmetic mismatch, because `faceValue` is authoritative twice over:
+ * `BondPriceAdjustReducer` pulls a bond's price TO it every period, and
+ * `BondMaturityReducer` redeems AT it. A conversion that doubled an account's market
+ * value therefore left pull-to-par dragging the position back toward the pre-conversion
+ * par indefinitely — measured at $8k–19k destroyed per period on a $240k sleeve — and in
+ * the mirror case (money leaving, or par inflated relative to price) the same mechanism
+ * CREATES value out of nothing. Which way it runs depends only on the sign of the drift.
+ *
+ * The sell side already conserved principal this way (`holdings-fifo`, design 87 G9:
+ * `partial.faceValue = h.faceValue * (remainingMv / mv)`). This is the same rule on the
+ * deposit side, which was never given it.
+ *
+ * NOT applied to price movement: a rate mark, a shock revaluation and TIPS accretion all
+ * move `marketValue` while par legitimately stands still, and each of those runs through
+ * `_patchHolding` / `HoldingTransactReducer` rather than here.
+ */
+function _scaleOne(h, factor) {
+  const out = {
     ...h,
     marketValue: +((h.marketValue ?? 0) * factor).toFixed(2),
     costBasis:   +((h.costBasis   ?? 0) * factor).toFixed(2),
-  }));
+  };
+  if (h.faceValue != null) out.faceValue = +((h.faceValue ?? 0) * factor).toFixed(2);
+  return out;
 }
 
 /**
@@ -78,15 +110,13 @@ export function rescaleHoldingsToBalance(holdings, targetBalance) {
       ...h,
       marketValue: i === 0 ? target : 0,
       costBasis:   i === 0 ? target : 0,
+      // Par follows the position here too — see `_scaleOne`.
+      ...(h.faceValue == null ? {} : { faceValue: i === 0 ? target : 0 }),
     }));
   }
 
   const factor = target / curSum;
-  const scaled = holdings.map(h => ({
-    ...h,
-    marketValue: +((h.marketValue ?? 0) * factor).toFixed(2),
-    costBasis:   +((h.costBasis   ?? 0) * factor).toFixed(2),
-  }));
+  const scaled = holdings.map(h => _scaleOne(h, factor));
 
   // Absorb rounding drift into the largest-marketValue holding.
   const newSum = +scaled.reduce((s, h) => s + (h.marketValue ?? 0), 0).toFixed(2);
@@ -122,7 +152,11 @@ export function distributeHoldingsCredit(holdings, amount) {
   if (total <= 0) {
     // No market value to weight against — land the whole credit in the first holding.
     return holdings.map((h, i) => i === 0
-      ? { ...h, marketValue: +((h.marketValue ?? 0) + amount).toFixed(2), costBasis: +((h.costBasis ?? 0) + amount).toFixed(2) }
+      ? { ...h, marketValue: +((h.marketValue ?? 0) + amount).toFixed(2),
+                costBasis:   +((h.costBasis   ?? 0) + amount).toFixed(2),
+                // Zero market value to weight against ⇒ the credit IS the position, so
+                // par is the credit (see the main branch for why par must move at all).
+                ...(h.faceValue == null ? {} : { faceValue: +((h.faceValue ?? 0) + amount).toFixed(2) }) }
       : h);
   }
   let distributed = 0;
@@ -132,10 +166,22 @@ export function distributeHoldingsCredit(holdings, amount) {
       ? +(amount - distributed).toFixed(2)
       : +(amount * ((h.marketValue ?? 0) / total)).toFixed(2);
     distributed += share;
+    const mvBefore = h.marketValue ?? 0;
     return {
       ...h,
-      marketValue: +((h.marketValue ?? 0) + share).toFixed(2),
+      marketValue: +(mvBefore + share).toFixed(2),
       costBasis:   +((h.costBasis   ?? 0) + share).toFixed(2),
+      // Par grows with the position — a reinvested dividend or coupon buys more of the
+      // instrument, and a bond lot whose market value grew while `faceValue` stood still
+      // is one that pull-to-par will drag back DOWN toward a par that no longer describes
+      // it. TIPS are the exception: their `faceValue` is the original issue face held as
+      // a deflation FLOOR, and the new money buys at par today, so it adds its own cash
+      // amount rather than scaling a floor that already excludes the accretion.
+      ...(h.faceValue == null || mvBefore <= 0 ? {} : {
+        faceValue: h.inflationLinked
+          ? +((h.faceValue ?? 0) + share).toFixed(2)
+          : +((h.faceValue ?? 0) * ((mvBefore + share) / mvBefore)).toFixed(2),
+      }),
     };
   });
   return out;

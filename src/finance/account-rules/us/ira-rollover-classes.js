@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -65,13 +66,9 @@ export function debitIra(ia, amount, { proRata = false } = {}) {
     earningsBasis:     ia.earningsBasis     - fromEarnings,
   };
 
-  if (Array.isArray(ia.holdings) && ia.holdings.length > 0 && ia.balance > 0) {
-    const keepRatio = ia.balance > 0 ? newBalance / ia.balance : 0;
-    result.holdings = ia.holdings.map(h => ({
-      ...h,
-      marketValue: +((h.marketValue ?? 0) * keepRatio).toFixed(2),
-      costBasis:   +((h.costBasis   ?? 0) * keepRatio).toFixed(2),
-    }));
+  if (ia.balance > 0) {
+    // Same helper as every other value move, so par scales with the position.
+    result.holdings = scaleHoldings(ia.holdings, ia.balance, newBalance);
   }
 
   return result;

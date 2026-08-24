@@ -331,3 +331,158 @@ test('LADDER-E2E: selecting BOND_LADDER materializes the brokerage bonds into a 
   // Equity sleeve survived (the ladder only touches the bond sleeve).
   assert.ok(acct.holdings.some(h => h.allocation === 'EQUITY'), 'equity sleeve preserved');
 });
+
+// ─── Absorbing un-laddered fund sleeves (§10.5, crude form) ────────────────────
+
+describe('BondLadderReducer — absorbs new bond FUND sleeves into the standing rungs', () => {
+  // Drawdown eats an account's rungs; the design-61 rebalancer's next bond buy into an
+  // account holding no bonds spawns a PERPETUAL FUND sleeve (`_newSleeve`), and nothing
+  // converted one back into a dated rung. Over a long horizon the "ladder" became a
+  // minority of the account's bonds. Absorbing keeps every bond dollar in a dated rung
+  // WITHOUT resetting the maturity spacing that a full rebuild would destroy.
+  const laddered = (asOfY = 2030, rungs = 4) => {
+    const acct = stockAccount([bondSleeve(100_000, 'seed')]);
+    const next = new BondLadderReducer({ stateKey: 'acct', targetRungs: rungs, spacingYears: 1 })
+      .reduce(stateWith(acct, { asOfY }), { type: 'US_PERIOD_ADVANCE' });
+    return next.acct;
+  };
+
+  test('a fund sleeve is folded into the rungs pro rata, conserving value and basis', () => {
+    const before = laddered();
+    const maturitiesBefore = before.holdings.map(h => new Date(h.maturityDate).getTime()).sort();
+
+    // A rebalance buy lands as an undated fund sleeve carrying a basis below its value.
+    const withFund = { ...before, holdings: [...before.holdings, { id: 'fund', allocation: ALLOCATION.BOND, marketValue: 40_000, costBasis: 30_000 }] };
+    const after = new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
+      .reduce(stateWith(withFund, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' }).acct;
+
+    const bonds = after.holdings.filter(h => h.allocation === ALLOCATION.BOND);
+    assert.equal(bonds.length, 4, 'the fund sleeve is gone — every bond dollar is in a rung');
+    assert.ok(bonds.every(h => h.maturityDate != null), 'no undated bond survives');
+    assert.equal(+bonds.reduce((s, h) => s + h.marketValue, 0).toFixed(2), 140_000, 'market value conserved');
+    assert.equal(+bonds.reduce((s, h) => s + h.costBasis,   0).toFixed(2), 130_000, 'cost basis conserved — NOT re-based at market');
+    assert.equal(+bonds.reduce((s, h) => s + h.faceValue,   0).toFixed(2), 140_000, 'par redemption grows with the absorbed money');
+    assert.deepEqual(
+      bonds.map(h => new Date(h.maturityDate).getTime()).sort(), maturitiesBefore,
+      'maturity spacing untouched — this is an absorption, not a rebuild');
+  });
+
+  test('no fund sleeve ⇒ still a no-op (the roll self-maintains the ladder)', () => {
+    const before = laddered();
+    const after = new BondLadderReducer({ stateKey: 'acct', targetRungs: 4, spacingYears: 1 })
+      .reduce(stateWith(before, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' }).acct;
+    assert.equal(after, before, 'unchanged state object — no churn');
+  });
+});
+
+// ─── TIPS ladders ──────────────────────────────────────────────────────────────
+
+describe('BondLadderReducer — TIPS rungs at a pinned real yield', () => {
+  test('inflationLinked + a pinned couponRate stamps every rung', () => {
+    const acct = stockAccount([bondSleeve(100_000)]);
+    const next = new BondLadderReducer({
+      stateKey: 'acct', targetRungs: 5, spacingYears: 1,
+      inflationLinked: true, couponRate: 0.01,
+    }).reduce(stateWith(acct, { asOfY: 2030, rate: 0.05 }), { type: 'US_PERIOD_ADVANCE' });
+    const rungs = next.acct.holdings;
+    assert.equal(rungs.length, 5);
+    assert.ok(rungs.every(h => h.inflationLinked === true), 'every rung is a TIPS');
+    assert.ok(rungs.every(h => h.couponRate === 0.01),
+      'the pinned REAL yield overrides the 5% nominal curve — a CPI-indexed principal paying the nominal yield compensates for inflation twice');
+  });
+
+  test('default is unchanged: nominal rungs priced off the curve', () => {
+    const acct = stockAccount([bondSleeve(100_000)]);
+    const next = new BondLadderReducer({ stateKey: 'acct', targetRungs: 5, spacingYears: 1 })
+      .reduce(stateWith(acct, { asOfY: 2030, rate: 0.05 }), { type: 'US_PERIOD_ADVANCE' });
+    assert.ok(next.acct.holdings.every(h => h.inflationLinked === false));
+    assert.ok(next.acct.holdings.every(h => h.couponRate === 0.05));
+  });
+});
+
+describe('BOND_LADDER account resolution — every matching account, not the first', () => {
+  const entry = BEHAVIORAL_STRATEGY_REGISTRY.BOND_LADDER;
+  // Five `us-stock` accounts is an ordinary household (his/hers brokerage, a shared one,
+  // two TreasuryDirect). The old `.find(a => a.role === role)` laddered exactly ONE of
+  // them and left every other bond sleeve a perpetual fund — the same class of defect as
+  // the earnings handlers that resolved a role to a single account.
+  const ACCOUNTS = [
+    { stateKey: 'usStockAccount',    role: 'us-stock' },
+    { stateKey: 'sharedBrokerage',   role: 'us-stock' },
+    { stateKey: 'treasuryDirect',    role: 'us-stock' },
+    { stateKey: 'iraAccount',        role: 'ira' },
+    { stateKey: 'superAccount',      role: 'super' },
+  ];
+
+  test('a single role ladders EVERY account carrying it', () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: 'us-stock' }, accounts: ACCOUNTS });
+    assert.deepEqual(reducers.map(r => r.stateKey), ['usStockAccount', 'sharedBrokerage', 'treasuryDirect']);
+  });
+
+  test('a LIST of roles ladders each of them', () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: ['ira', 'super'] }, accounts: ACCOUNTS });
+    assert.deepEqual(reducers.map(r => r.stateKey), ['iraAccount', 'superAccount']);
+    assert.equal(reducers[1].country, 'AU', 'the super ladder prices off the AU curve');
+  });
+
+  test("'ALL' ladders every account (the reducer is inert on those holding no bonds)", () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: 'ALL' }, accounts: ACCOUNTS });
+    assert.equal(reducers.length, 5);
+  });
+
+  test('a role matching nothing still falls back to the taxable brokerage (back-compat)', () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: 'roth-ira' }, accounts: ACCOUNTS });
+    assert.deepEqual(reducers.map(r => r.stateKey), ['usStockAccount', 'sharedBrokerage', 'treasuryDirect']);
+  });
+
+  test('TIPS + coupon params reach every constructed reducer', () => {
+    const reducers = entry.reducers({
+      parameters: { bondLadderRole: 'ALL', bondLadderInflationLinked: true, bondLadderCouponRate: 0.01 },
+      accounts:   ACCOUNTS,
+    });
+    assert.ok(reducers.every(r => r.inflationLinked === true && r.couponRate === 0.01));
+  });
+});
+
+describe('BondLadderReducer — absorbing into a TIPS rung respects the deflation floor', () => {
+  // `faceValue` means different things in the two instruments, and treating them alike
+  // is a runaway. On a TIPS it is the ORIGINAL issue face, held only as the deflation
+  // floor that `redeem` takes a max() against; the indexed principal is in marketValue
+  // and sits well above it after years of CPI accretion. Scaling the floor by the mv
+  // ratio therefore folds the accretion INTO the floor, and because the floor becomes the
+  // redemption value, each roll ratchets the position higher. New money accelerated it,
+  // so the runaway grew with equity weight — clean at 0% equity, 266 of 1750 paths past
+  // $1e12 at 75%, one path reaching 1e+63.
+  const rung = (mv, face, tips) => ({
+    id: 'r1', allocation: ALLOCATION.BOND, marketValue: mv, costBasis: mv, faceValue: face,
+    maturityDate: new Date(ms(2035)), inflationLinked: tips, rollAtMaturity: true, rollTermYears: 5,
+  });
+  const absorbInto = (h) => {
+    const acct = stockAccount([h, bondSleeve(20_000, 'fund')], { _bondLadderRungs: 2 });
+    return new BondLadderReducer({ stateKey: 'acct', targetRungs: 2, spacingYears: 1 })
+      .reduce(stateWith(acct, { asOfY: 2031 }), { type: 'US_PERIOD_ADVANCE' })
+      .acct.holdings.find(x => x.id === 'r1');
+  };
+
+  test('a TIPS rung takes the new money at PAR — the floor grows by cash, not by ratio', () => {
+    // Principal has indexed 130 against an original face of 100. Absorbing 20 of new
+    // money must lift the floor to 120, not to 100 x (150/130) = 115.4 ... and above all
+    // never to something that embeds the 30 of accretion.
+    const h = absorbInto(rung(130_000, 100_000, true));
+    assert.equal(h.marketValue, 150_000);
+    assert.equal(h.faceValue,   120_000, 'floor = original face + the cash added at par');
+  });
+
+  test('a NOMINAL rung still scales par with the position, preserving its price-to-par ratio', () => {
+    const h = absorbInto(rung(90_000, 100_000, false));
+    assert.equal(h.marketValue, 110_000);
+    assert.equal(h.faceValue,   +(100_000 * (110_000 / 90_000)).toFixed(2));
+    assert.equal(+(h.marketValue / h.faceValue).toFixed(4), 0.9, 'ratio untouched');
+  });
+
+  test('the TIPS floor never exceeds the indexed principal it is a floor for', () => {
+    const h = absorbInto(rung(130_000, 100_000, true));
+    assert.ok(h.faceValue <= h.marketValue,
+      'a floor above the principal turns redeem()\'s max() into a ratchet');
+  });
+});
