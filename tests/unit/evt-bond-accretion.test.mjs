@@ -31,6 +31,7 @@ import { computeHoldingsAccretion } from '../../src/finance/holdings/holdings-ea
 import { BondAccretionApplyReducer } from '../../src/finance/reducers/bond-accretion-apply-reducer.js';
 import { BondPriceAdjustReducer }    from '../../src/finance/economic-regimes/bond-price-adjust-reducer.js';
 import { BondMaturityReducer }       from '../../src/finance/economic-regimes/bond-maturity-reducer.js';
+import { HoldingTransactReducer }     from '../../src/finance/holdings/holding-reducers.js';
 
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { BaseScenario }           from '../../src/scenarios/base-scenario.js';
@@ -219,6 +220,113 @@ test('ACC-10: BondMaturityReducer redeems a TIPS at max(adjustedPrincipal, faceV
   // Deflation: adjusted principal 9500 < par → deflation floor at par 10000.
   const defl = new BondMaturityReducer().reduce(mkState(9500), { type: 'US_PERIOD_ADVANCE' });
   assert.strictEqual(defl.acct.holdings[0].marketValue, 10000, 'deflation floor pays par');
+});
+
+// ── design 93 §5b / §5.3: the UNITISED TIPS ──────────────────────────────────
+//
+// ACC-2 and ACC-10 above pin the SCALAR path, which is still supported (§6.2 mode 2) and
+// is what an un-promoted holding takes. These pin the unitised one, which is what every
+// dated bond inside a simulation is once `projectHoldingsToState` has run — so without
+// them §5.3's fix and the accretion re-base are asserted by nothing.
+
+test('ACC-U1: a unitised TIPS accretes off its INDEXED PRINCIPAL, not its cost basis', () => {
+  // The two agree for a bond bought at par and held clean — basis is stepped by each
+  // year's accretion, so it compounds the same way. They diverge wherever basis carries
+  // something that is not principal. A ladder rebuild's carryover basis (design 62 §9.5)
+  // is the everyday case: this rung holds 100 units of $100 par indexed to 1.20, so its
+  // principal is 12,000, while its basis was carried across at 9,000.
+  const rung = {
+    id: 't1', allocation: 'BOND', marketValue: 12_000, costBasis: 9_000, faceValue: 10_000,
+    units: 100, parPerUnit: 100, pricePerUnit: 120, cpiIndexRatio: 1.20,
+    maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true,
+  };
+  const r = computeHoldingsAccretion({ state: { acct: { holdings: [rung] } }, stateKey: 'acct', cpiRate: 0.03 });
+
+  assert.strictEqual(r.amount, 360, 'accretion = indexed principal 12,000 × 3%, not basis 9,000 × 3% = 270');
+  const a = r.holdingActions[0];
+  assert.strictEqual(a.marketValueDelta, 360, 'the price follows the principal');
+  assert.strictEqual(a.costBasisDelta,   360, 'basis still steps up — no double tax at redemption');
+  assert.strictEqual(a.cpiIndexRatioFactor, 1.03, 'and the indexation itself moves, on the same action');
+});
+
+test('ACC-U2: HoldingTransactReducer applies the accretion as a PRICE move plus an indexation', () => {
+  // The unit count must not move: a TIPS accretes by being worth more per unit, not by
+  // the holder acquiring more of it. If `units` moved instead, the deflation floor
+  // (units × parPerUnit) would grow with the accretion — which is defect #4, the ratchet.
+  const rung = {
+    id: 't1', allocation: 'BOND', marketValue: 12_000, costBasis: 9_000, faceValue: 10_000,
+    units: 100, parPerUnit: 100, pricePerUnit: 120, cpiIndexRatio: 1.20,
+    maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true,
+  };
+  const state = { acct: { balance: 12_000, holdings: [rung] } };
+  const out = new HoldingTransactReducer().reduce(state, {
+    type: 'HOLDING_TRANSACT', stateKey: 'acct', holdingId: 't1',
+    marketValueDelta: 360, costBasisDelta: 360, cpiIndexRatioFactor: 1.03,
+  });
+  const h = out.acct.holdings[0];
+  assert.strictEqual(h.units,         100,     'the unit count is untouched');
+  assert.strictEqual(h.parPerUnit,    100,     'original issue par is a constant of the instrument');
+  assert.strictEqual(h.pricePerUnit,  123.6,   'the price carries the indexation: 12,360 / 100');
+  assert.strictEqual(h.marketValue,   12_360);
+  assert.strictEqual(h.faceValue,     10_000,  'the deflation FLOOR does not move with the accretion');
+  assert.strictEqual(h.cpiIndexRatio, 1.236,   '1.20 × 1.03');
+});
+
+test('ACC-U3: a unitised TIPS redeems off its index ratio and IGNORES its market price', () => {
+  // design 93 §5.3. TIPS are excluded from pull-to-par (design 66 §G5), so the rate marks
+  // in `marketValue` never wash out — redeeming at max(marketValue, faceValue) paid out
+  // years of accumulated rate noise as if it were principal.
+  const asOf = Date.UTC(2035, 0, 2);
+  const mkState = (pricePerUnit, ratio) => ({
+    currentPeriods: { US: { startMs: asOf } },
+    effectiveInterestRates: {},
+    acct: { balance: 100 * pricePerUnit, holdings: [
+      { id: 't', allocation: 'BOND', marketValue: 100 * pricePerUnit, costBasis: 10_000,
+        faceValue: 10_000, units: 100, parPerUnit: 100, pricePerUnit, cpiIndexRatio: ratio,
+        maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true, rateKey: 'FIXED_INCOME_US' },
+    ] },
+  });
+
+  // Principal indexed to 1.20 ⇒ 12,000. The price says 12,900 because rate marks are
+  // sitting in it. The old rule paid 12,900; the instrument pays 12,000.
+  const hot = new BondMaturityReducer().reduce(mkState(129, 1.20), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+  assert.strictEqual(hot.allocation,  'CASH', 'redeemed to cash');
+  assert.strictEqual(hot.marketValue, 12_000, 'redeems at the indexed principal, not at the marked price');
+
+  // The floor is a floor in BOTH directions: a price BELOW the indexed principal does not
+  // reduce the payout either.
+  const cold = new BondMaturityReducer().reduce(mkState(111, 1.20), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+  assert.strictEqual(cold.marketValue, 12_000, 'a marked-down price does not reduce the principal repaid');
+
+  // Deflation: the ratio below 1 must not take redemption below original par.
+  const defl = new BondMaturityReducer().reduce(mkState(94, 0.94), { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+  assert.strictEqual(defl.marketValue, 10_000, 'the Treasury deflation floor pays original par');
+});
+
+test('ACC-U4: a rolled TIPS rung starts its indexation over, at the principal it just repaid', () => {
+  // The roll IS a purchase (design 87 G9 re-stamps the §988 basis on the same reasoning),
+  // so the new units are bought at today's indexed principal and are themselves
+  // un-indexed. Carrying the old ratio forward would index the same inflation twice —
+  // and since the floor becomes the next redemption value, every roll would ratchet.
+  const asOf = Date.UTC(2035, 0, 2);
+  const rolled = new BondMaturityReducer().reduce({
+    currentPeriods: { US: { startMs: asOf } },
+    effectiveInterestRates: {},
+    acct: { balance: 12_000, holdings: [
+      { id: 't', allocation: 'BOND', marketValue: 12_000, costBasis: 10_000, faceValue: 10_000,
+        units: 100, parPerUnit: 100, pricePerUnit: 120, cpiIndexRatio: 1.20,
+        maturityDate: new Date(Date.UTC(2035, 0, 1)), purchaseDate: new Date(Date.UTC(2030, 0, 1)),
+        inflationLinked: true, rollAtMaturity: true, rollTermYears: 5, rateKey: 'FIXED_INCOME_US' },
+    ] },
+  }, { type: 'US_PERIOD_ADVANCE' }).acct.holdings[0];
+
+  assert.strictEqual(rolled.inflationLinked, true, 'a ladder rung rolls as a TIPS');
+  assert.strictEqual(rolled.marketValue,   12_000, 'issued at what was redeemed');
+  assert.strictEqual(rolled.faceValue,     12_000, 'the new deflation floor is the principal actually repaid');
+  assert.strictEqual(rolled.units,            120, '12,000 of par at 100 per unit');
+  assert.strictEqual(rolled.parPerUnit,       100, 'still the instrument-level par');
+  assert.strictEqual(rolled.cpiIndexRatio,      1, 'indexation restarts — the old inflation is now principal');
+  assert.strictEqual(rolled.costBasis,     10_000, 'basis is carried, not re-based (design 62 §9.5)');
 });
 
 // ── Integration: a brokerage zero grows + is taxed end-to-end ────────────────

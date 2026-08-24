@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { resize, addValue } from '../holdings/holding-utils.js';
 
 /**
  * OpportunisticRebalanceApplyReducer — applies within-account HOLDING_TRANSACT
@@ -59,7 +60,10 @@ export class OpportunisticRebalanceApplyReducer extends Reducer {
           ? +((h.costBasis ?? 0) + delta * fraction).toFixed(2)  // buying: basis tracks market
           : +((h.costBasis ?? 0) * (mv / Math.max(h.marketValue, 0.001))).toFixed(2);  // selling: pro-rata basis
         if (mv < 0.001) return null;
-        return { ...h, marketValue: mv, costBasis: basis };
+        // design 93 §4: a value move is a UNIT change and must carry par with it.
+        return mv > (h.marketValue ?? 0)
+          ? addValue(h, mv - (h.marketValue ?? 0))
+          : resize(h, mv / Math.max(h.marketValue ?? 0, 0.001));
       }).filter(Boolean);
     }
 

@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { resize, addValue } from '../holdings/holding-utils.js';
 
 /**
  * AssetLocationRebalanceApplyReducer — applies a cross-account holding swap
@@ -56,21 +57,14 @@ export class AssetLocationRebalanceApplyReducer extends Reducer {
     // Update source holding
     const newFromHoldings = fromAcct.holdings.map(h => {
       if (h.id !== fromHoldingId) return h;
-      return {
-        ...h,
-        marketValue: +(h.marketValue - amount).toFixed(2),
-        costBasis:   +((h.costBasis ?? 0) - fromBasisShare).toFixed(2),
-      };
+      // A UNIT change (design 93 §4): value leaving carries its par and per-country bases.
+      return resize(h, Math.max(0, (h.marketValue ?? 0) - amount) / Math.max(h.marketValue ?? 0, 0.001));
     }).filter(h => h.marketValue > 0.001);
 
     // Update target holding (basis resets to market value for the received amount)
     const newToHoldings = toAcct.holdings.map(h => {
       if (h.id !== toHoldingId) return h;
-      return {
-        ...h,
-        marketValue: +(h.marketValue + amount).toFixed(2),
-        costBasis:   +((h.costBasis ?? 0) + amount).toFixed(2),
-      };
+      return addValue(h, amount);
     });
 
     const fromBalance = +newFromHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);

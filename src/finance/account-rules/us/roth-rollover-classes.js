@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
-import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { computeConversionRecapture, PENALTY_RATE, AGE_THRESHOLD } from './roth-conversion-lots.js';
 
@@ -72,7 +72,7 @@ export class RothRolloverContributionApplyReducer extends AccountServiceReducer 
         ...ra,
         balance:              newBalance,
         rolloverContribBasis: (ra.rolloverContribBasis ?? 0) + action.amount,
-        holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
+        holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
       },
     });
   }
@@ -137,7 +137,7 @@ export class RothRolloverWithdrawalContribApplyReducer extends AccountServiceRed
       ...ra,
       balance:              newBalance,
       rolloverContribBasis: (ra.rolloverContribBasis ?? 0) - amount,
-      holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
+      holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
     };
     if (rolloverConversions !== undefined) rothAccount.rolloverConversions = rolloverConversions;
     const auAssessable = residency === 'AU' ? auAssessableAmount : 0;
@@ -183,7 +183,7 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
           ...ra,
           balance:               newBalance,
           rolloverEarningsBasis: (ra.rolloverEarningsBasis ?? 0) - amount,
-          holdings:              scaleHoldings(ra.holdings, ra.balance, newBalance),
+          holdings:              scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.

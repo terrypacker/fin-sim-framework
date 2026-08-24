@@ -12,6 +12,7 @@ import { HoldingTransactAction }    from './holding-actions.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
 import { primaryResidencyState }    from '../residency-utils.js';
 import { resolveYield }             from '../economic-regimes/yield-curve.js';
+import { addValue, isUnitised } from './holding-utils.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -500,10 +501,10 @@ export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailin
       const curRate = cur.couponRate ?? prevailingRate ?? 0;
       const blended = prevailingRate == null ? curRate
         : +(((curMv * curRate) + (amount * prevailingRate)) / newMv).toFixed(6);
+      // `addValue` owns the money and the par rule; this call only overrides the
+      // instrument fields the blend changes (design 93 §4).
       const merged = {
-        ...cur,
-        marketValue: newMv,
-        costBasis:   +((cur.costBasis ?? 0) + amount).toFixed(2),
+        ...addValue(cur, amount),
         couponRate:  blended,
       };
       // Every per-country base rises by the same money — see the doc above. Written only
@@ -605,6 +606,7 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
     if (!h || h.allocation !== 'BOND') continue;
     const basis = h.costBasis ?? 0;
     let accretion = 0;
+    let indexRatioFactor = null;
 
     if (h.zeroCoupon) {
       // Constant-yield OID off the adjusted basis; requires a maturity + a par above
@@ -620,7 +622,22 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
       }
     } else if (h.inflationLinked) {
       // Principal indexes to CPI (may be negative under deflation).
-      accretion = +(basis * cpiRate).toFixed(2);
+      //
+      // design 93 §5b — for a UNITISED TIPS the base is the INDEXED PRINCIPAL,
+      // `units x parPerUnit x cpiIndexRatio`, not the cost basis. The two agree for a
+      // bond bought at par and held clean, which is why the basis proxy survived: basis
+      // is stepped by each year's accretion, so it compounds the same way. They diverge
+      // wherever basis carries something that is not principal — a ladder rebuild's
+      // carryover basis (design 62 §9.5), an absorbed lot's basis, a partial sale, a roll
+      // that kept a below-par basis, a premium or discount. There the basis proxy indexed
+      // the wrong quantity, and the phantom income of a TIPS is its principal indexation,
+      // not the history of what was paid for it.
+      //
+      // A scalar TIPS keeps the basis proxy: it has no principal to read.
+      indexRatioFactor = 1 + cpiRate;
+      accretion = isUnitised(h) && h.parPerUnit != null
+        ? +(h.units * h.parPerUnit * (h.cpiIndexRatio ?? 1) * cpiRate).toFixed(2)
+        : +(basis * cpiRate).toFixed(2);
     } else {
       continue;  // plain coupon bond / fund — no accretion
     }
@@ -635,6 +652,9 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
       holdingId:        h.id,
       marketValueDelta: accretion,
       costBasisDelta:   accretion,   // basis step-up: no double-tax at redemption
+      // The indexation itself. Carried on the same action as the value and basis moves
+      // so a replay cannot apply two of the three (see HoldingTransactAction).
+      cpiIndexRatioFactor: indexRatioFactor,
     }));
   }
   return {

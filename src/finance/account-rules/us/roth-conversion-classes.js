@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer }  from '../../../simulation-f
 import { HandlerEntry }                              from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction }     from '../../../simulation-framework/actions.js';
 import { debitIra, proRataIraSplit }                 from './ira-rollover-classes.js';
-import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 
 /**
  * Roth Conversion — EVT-52
@@ -115,7 +115,7 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
     // position: a conversion into a Roth holding dated bonds added market value against
     // an unchanged `faceValue`, and BondPriceAdjustReducer then pulled the price toward
     // the pre-conversion par for the rest of the run.
-    newRoth.holdings = scaleHoldings(roth.holdings, roth.balance, roth.balance + amount);
+    newRoth.holdings = scaleHoldings(roth.holdings, roth.balance, roth.balance + amount, lotVintage(state, roth));
 
     return this.newState(
       state,

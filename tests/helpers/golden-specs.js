@@ -116,6 +116,109 @@ export const GOLDEN_SPECS = [
     mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },
   },
   {
+    name:        'bond-par-conservation',
+    description:
+      'Design 93 §7. The golden that the eight par defects of design 66 §10.6b could '
+      + 'not have survived. Every one of them was invisible to a green suite for one '
+      + 'reason: the default scenario\'s bonds are perpetual FUNDS, which carry no '
+      + '`faceValue`, so no par-handling path can reach them. This golden puts '
+      + 'INSTRUMENTS in the book — a rolling multi-account ladder of dated rungs — and '
+      + 'then drives the three path families that corrupted par: a '
+      + 'Roth CONVERSION depositing into an account that holds rungs (the unit-change '
+      + 'path, defect 1), a TARGET_ALLOCATION rebalance selling and buying across them '
+      + '(defects 5-7), and coupon/dividend reinvestment (defect 8). Short on purpose: '
+      + 'eight years is two full rolls of a four-rung ladder. Paired with '
+      + 'bond-par-conservation.test.mjs, which asserts the invariant directly rather '
+      + 'than only pinning the end state. Deliberately NOMINAL throughout: its '
+      + 'inflation-linked twin is `tips-ladder-conservation`, which differs from it in '
+      + 'exactly two parameters, so a diff between the pair isolates the instrument '
+      + 'rather than the plan.',
+    params: {
+      behavioralStrategies:      ['BOND_LADDER', 'TARGET_ALLOCATION'],
+      allocationStrategy:        'STATIC',
+      allocationSchedule:        'STATIC',
+      rebalanceTargetAllocation: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 },
+      // 'ALL', not the default single role — the resolution bug that left the ladder
+      // inert in a real plan was invisible precisely because one account still laddered.
+      // TWO accounts laddered, so the single-account resolution bug cannot hide here —
+      // it stayed invisible in a real plan precisely because one account still laddered.
+      // The taxable brokerage is deliberately left OUT, because a ladder materialisation
+      // replaces every bond holding in its account and the brokerage has to keep both a
+      // perpetual FUND and the TIPS rung below.
+      bondLadderRole:            ['k401', 'ira'],
+
+      bondLadderRungs:           4,
+      bondLadderSpacingYears:    1,
+      bondLadderRoll:            true,
+      // The conversion is the deposit path that froze par against a doubled market
+      // value. Cleared schedule so the bracket form is the live one (design 66 §10.4
+      // documents that trap).
+      rothConversionEnabled:     true,
+      rothConversionSchedule:    [],
+      // 24%, not 12%: at the lower ceiling the household's ordinary income already
+      // fills the bracket and the policy converts nothing at all.
+      rothConversionMaxBracket:  0.24,
+      rothConversionOwner:       'both',
+      rothConversionStartYear:   2028,
+      rothConversionEndYear:     2032,
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2034, 0, 1)),
+    mutateCfg: (cfg) => {
+      // The IRA starts empty in the default scenario, which would leave both the ladder
+      // and the conversion with nothing to act on. Set on the account, not via the
+      // `iraBalance` MC alias, which does not resolve through a golden's `params`.
+      const ira = cfg.accounts.find(a => a.stateKey === 'iraAccount');
+      ira.balance = 300000;
+    },
+  },
+  {
+    name:        'tips-ladder-conservation',
+    description:
+      'Design 93 §5.3 and §5b. The inflation-linked twin of `bond-par-conservation`: the '
+      + 'SAME plan, differing in exactly two parameters (`bondLadderInflationLinked`, and '
+      + 'a pinned REAL coupon), so a diff between the pair isolates the instrument rather '
+      + 'than the household. It exists because a TIPS is the one instrument where '
+      + '`faceValue` does not mean "what this redeems for" — it is the ORIGINAL issue par, '
+      + 'held only as the Treasury deflation floor, while the indexed principal lives '
+      + 'elsewhere. That overload was defect #8, and scaling the floor by a value ratio was '
+      + 'defect #4, the ratchet that reached 1e+63. §7 could not hold one because accretion '
+      + 'lived inside `marketValue` with nothing to observe; §5b gives it an explicit '
+      + '`cpiIndexRatio`, and this golden is what puts the whole path under CI rather than '
+      + 'under unit tests alone: CPI accretion stepping the ratio, the price following the '
+      + 'principal while the floor stands still, redemption reading the ratio instead of a '
+      + 'price polluted by rate marks TIPS never wash out, and a roll re-issuing at the '
+      + 'principal it just repaid with its indexation restarted.',
+    params: {
+      behavioralStrategies:      ['BOND_LADDER', 'TARGET_ALLOCATION'],
+      allocationStrategy:        'STATIC',
+      allocationSchedule:        'STATIC',
+      rebalanceTargetAllocation: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 },
+      bondLadderRole:            ['k401', 'ira'],
+      bondLadderRungs:           4,
+      bondLadderSpacingYears:    1,
+      bondLadderRoll:            true,
+      // The two parameters that make this golden different from its twin. The coupon is
+      // PINNED to a real yield: the engine models a nominal curve only (design 67), so
+      // stamping the market anchor on a principal that also indexes to CPI would pay for
+      // inflation twice.
+      bondLadderInflationLinked: true,
+      bondLadderCouponRate:      0.01,
+      rothConversionEnabled:     true,
+      rothConversionSchedule:    [],
+      rothConversionMaxBracket:  0.24,
+      rothConversionOwner:       'both',
+      rothConversionStartYear:   2028,
+      rothConversionEndYear:     2032,
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2034, 0, 1)),
+    mutateCfg: (cfg) => {
+      const ira = cfg.accounts.find(a => a.stateKey === 'iraAccount');
+      ira.balance = 300000;
+    },
+  },
+  {
     name:        'us-single-homeowner',
     cls:         UsSingleHomeownerScenario,
     description:

@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
@@ -17,6 +17,7 @@ import { Account, USD }       from '../../src/finance/assets/account.js';
 import { BrokerageAccount }   from '../../src/finance/assets/investment-account.js';
 import { Holding }            from '../../src/finance/holdings/holding.js';
 import { ALLOCATION }         from '../../src/finance/holdings/allocation.js';
+import { promoteToUnitised, syncHolding, indexedRedemptionValue, split } from '../../src/finance/holdings/holding-utils.js';
 
 function makeStockAccount() {
   return new BrokerageAccount(25_000, {   // 12k + 8k equity + 5k bond = Σ marketValue
@@ -130,4 +131,133 @@ test('Holdings round-trip: missing holdings field triggers default-holding boots
   assert.equal(restored.holdings.length, 1);
   assert.equal(restored.holdings[0].marketValue, 50_000);
   assert.equal(restored.holdings[0].allocation, 'EQUITY');  // role=us-stock
+});
+
+// ─── The unitised representation (design 93 §5a) ───────────────────────────────
+
+describe('Holding — unitised fields (design 93 §5)', () => {
+  // The five fields are ASSIGNED ONLY WHEN PRESENT, and that is load-bearing rather than
+  // tidy: `normalizeState` keeps explicit nulls, so defaulting them would add five fields
+  // to every holding in every golden fixture and make an unrelated diff on every future
+  // change. This test is what stops someone "simplifying" that away.
+  test('a scalar holding gains no unitised fields at all', () => {
+    const h = new Holding({ allocation: 'EQUITY', marketValue: 1000, costBasis: 900 });
+    for (const f of ['units', 'parPerUnit', 'pricePerUnit', 'cpiIndexRatio', 'securityId']) {
+      assert.ok(!(f in h), `scalar holding must not carry '${f}' — an explicit null moves every fixture`);
+      assert.ok(!(f in h.toJSON()), `toJSON must omit '${f}' when absent`);
+    }
+  });
+
+  test('the unitised fields round-trip when present', () => {
+    const h = new Holding({
+      allocation: 'BOND', marketValue: 980, costBasis: 1000, faceValue: 1000,
+      maturityDate: new Date(Date.UTC(2035, 0, 1)),
+      units: 10, parPerUnit: 100, pricePerUnit: 98, cpiIndexRatio: 1.07,
+    });
+    const back = Holding.fromJSON(JSON.parse(JSON.stringify(h.toJSON())));
+    assert.equal(back.units, 10);
+    assert.equal(back.parPerUnit, 100);
+    assert.equal(back.pricePerUnit, 98);
+    assert.equal(back.cpiIndexRatio, 1.07);
+  });
+
+  test('promoteToUnitised is value-preserving, and only promotes individual bonds', () => {
+    const bond = { allocation: 'BOND', marketValue: 980, costBasis: 1000, faceValue: 1000,
+                   maturityDate: new Date(Date.UTC(2035, 0, 1)) };
+    const up = promoteToUnitised(bond);
+    // design 93 §5b — `parPerUnit` is INSTRUMENT-level (§6.2), so it is the standard 100
+    // and the position's size lives in `units`. A par equal to the whole face would be
+    // position-scaled and could never move onto a shared `Security` under Option C.
+    assert.equal(up.units, 10);
+    assert.equal(up.parPerUnit, 100);
+    assert.equal(up.pricePerUnit, 98);
+    // The whole point: syncHolding must reproduce the numbers that were already there.
+    const synced = syncHolding(up);
+    assert.equal(synced.marketValue, 980, 'promotion must not move market value');
+    assert.equal(synced.faceValue,   1000, 'promotion must not move par');
+
+    // A bond FUND has no maturity and no par, so there is nothing to count units of.
+    const fund = { allocation: 'BOND', marketValue: 500, costBasis: 500 };
+    assert.equal(promoteToUnitised(fund), fund, 'a fund is left scalar');
+    const eq = { allocation: 'EQUITY', marketValue: 500, costBasis: 500 };
+    assert.equal(promoteToUnitised(eq), eq, 'equity is left scalar under Option A');
+  });
+
+  test('promoting a seasoned TIPS recovers its indexation from the price it was carrying', () => {
+    // design 93 §5b. Under the scalar convention a TIPS's accretion was added to
+    // `marketValue`, so the stored price IS the indexed principal. Promoting at a flat
+    // ratio of 1 would redeem a seasoned TIPS at its ORIGINAL par and destroy every dollar
+    // of indexation it had earned — a migration that loses money is not a migration.
+    const seasoned = promoteToUnitised({
+      allocation: 'BOND', marketValue: 12_000, costBasis: 11_000, faceValue: 10_000,
+      maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true,
+    });
+    assert.equal(seasoned.cpiIndexRatio, 1.2, '12,000 of principal against 10,000 of par');
+    assert.equal(indexedRedemptionValue(seasoned), 12_000,
+      'promotion reproduces the pre-93 max(marketValue, faceValue) exactly at the moment it happens');
+
+    // Marked BELOW original par, the ratio floors at 1: the instrument is sitting on its
+    // deflation floor, which is where the Treasury actually puts it.
+    const marked = promoteToUnitised({
+      allocation: 'BOND', marketValue: 9_500, costBasis: 10_000, faceValue: 10_000,
+      maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true,
+    });
+    assert.equal(marked.cpiIndexRatio, 1);
+    assert.equal(indexedRedemptionValue(marked), 10_000, 'the floor pays original par');
+  });
+
+  test('split() moves units and price inversely and leaves every dollar total alone', () => {
+    // design 93 §6.2 item 5, and its history is the point. §4 tried to write this against
+    // {marketValue, costBasis, faceValue} and found it UNREPRESENTABLE — twice the units at
+    // half the price is a literal no-op on dollar totals, so there was nothing to write.
+    // That negative result was the argument for storing units. This is the same operation
+    // against the unitised representation, and it is the cheapest proof the substrate can
+    // express what Option C exists for.
+    const lot = promoteToUnitised({
+      allocation: 'BOND', marketValue: 12_000, costBasis: 9_000, faceValue: 10_000,
+      maturityDate: new Date(Date.UTC(2035, 0, 1)),
+    });
+    const two = split(lot, 2);
+    assert.equal(two.units,        200, 'twice the units');
+    assert.equal(two.pricePerUnit,  60, 'at half the price');
+    assert.equal(two.parPerUnit,    50, 'and half the par per unit — par is PER UNIT');
+    assert.equal(two.marketValue, 12_000, 'value unchanged');
+    assert.equal(two.faceValue,   10_000, 'and so is the principal the position stands for');
+    assert.equal(two.costBasis,    9_000, 'a split is not a disposal — basis does not move');
+
+    // Reverse splits are the same operation with ratio < 1.
+    const rev = split(lot, 0.1);
+    assert.equal(rev.units,          10);
+    assert.equal(rev.pricePerUnit, 1_200);
+    assert.equal(rev.marketValue, 12_000);
+
+    // A SCALAR holding is still a no-op, and correctly so: there is no count to double.
+    // That is §4's finding, now confined to the mode that has no units rather than being
+    // true of the whole model.
+    const scalar = { allocation: 'EQUITY', marketValue: 100, costBasis: 80 };
+    assert.equal(split(scalar, 2), scalar, 'unchanged object — nothing to write');
+  });
+
+  test('a TIPS redeems off its index ratio, never off its market price', () => {
+    // design 93 §5.3: the live bug. marketValue carries rate marks that never wash out
+    // for a TIPS (they are excluded from pull-to-par), so redemption read off the price
+    // pays out accumulated noise. 7% CPI accretion on 1,000 of par is 1,070 — whatever
+    // the market happens to say.
+    const tips = syncHolding(promoteToUnitised({
+      allocation: 'BOND', marketValue: 1_040, costBasis: 1_070, faceValue: 1_000,
+      maturityDate: new Date(Date.UTC(2035, 0, 1)), inflationLinked: true,
+    }));
+    const withRatio = { ...tips, cpiIndexRatio: 1.07 };
+    assert.equal(indexedRedemptionValue(withRatio), 1_070);
+
+    // Deflation floor: the ratio below 1 must not reduce redemption below original par.
+    assert.equal(indexedRedemptionValue({ ...tips, cpiIndexRatio: 0.94 }), 1_000);
+  });
+
+  test('securityId is reserved and stays null under Option A', () => {
+    const h = new Holding({ allocation: 'BOND', marketValue: 100, securityId: 'sec-1' });
+    assert.equal(h.securityId, 'sec-1', 'the field carries a value when one is given');
+    const plain = new Holding({ allocation: 'BOND', marketValue: 100 });
+    assert.ok(!('securityId' in plain), 'but is absent by default — Option C is not on yet');
+  });
 });

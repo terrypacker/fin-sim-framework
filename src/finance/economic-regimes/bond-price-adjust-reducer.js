@@ -14,6 +14,7 @@ import { RATE_KEY_META }      from './rate-keys.js';
 import { interpolateSpread, countryOfRateKey } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { revalueLedger }     from '../assets/investment-account.js';
+import { reprice }        from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -148,7 +149,9 @@ export class BondPriceAdjustReducer extends Reducer {
 
         if (!touched) return h;
         holdingsTouched = true;
-        return { ...h, marketValue: mv };
+        // Both effects above are PRICE, not units: par is right to stand still, and
+        // `reprice` is what says so out loud (design 93 §4).
+        return reprice(h, mv);
       });
 
       if (holdingsTouched) {

@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HOLDING_ACTION_TYPES } from './holding-actions.js';
 import { applyCashBasisInvariant } from './holding.js';
+import { isUnitised, reprice }     from './holding-utils.js';
 
 /**
  * Sum holdings → balance with currency-precision rounding.
@@ -45,6 +46,17 @@ function _syncBalance(account) {
  * lot on the way in.
  */
 function _patchHolding(holding, patch) {
+  // design 93 §5b — a `marketValue` patch on a UNITISED holding has to say which of the
+  // two primitives it is, and every caller that reaches here is a PRICE move: the
+  // dividend, growth and cash-interest streams touch scalar sleeves only, and the one
+  // stream that reaches a dated bond (accretion) is a change in what a unit is worth, not
+  // in how many are held. Routing it through `reprice` puts the move on `pricePerUnit` so
+  // the derived market value and par cannot drift apart — the same reason the write gate
+  // exists, one layer down where the reducers actually write.
+  if (isUnitised(holding) && patch && 'marketValue' in patch) {
+    const { marketValue, ...rest } = patch;
+    return applyCashBasisInvariant({ ...reprice(holding, marketValue), ...rest });
+  }
   return applyCashBasisInvariant({ ...holding, ...patch });
 }
 
@@ -87,7 +99,8 @@ export class HoldingTransactReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { stateKey, holdingId, marketValueDelta = 0, costBasisDelta = 0 } = action;
+    const { stateKey, holdingId, marketValueDelta = 0, costBasisDelta = 0,
+            cpiIndexRatioFactor = null } = action;
     const account = state?.[stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
@@ -97,9 +110,19 @@ export class HoldingTransactReducer extends Reducer {
     // Floor both at zero: a withdrawal delta must never drive a position (or its
     // basis) negative. account.balance is re-synced to Σ marketValue below, so
     // the §4.4 invariant is preserved after the floor.
+    // par-reviewed: builds a PATCH, not a holding — the only spread is the conditional
+    // index-ratio field. `_patchHolding` is the choke point that applies it, and it routes
+    // a marketValue patch on a unitised lot through `reprice` so par cannot fall behind.
     const patched = _patchHolding(target, {
       marketValue: Math.max(0, (target.marketValue ?? 0) + marketValueDelta),
       costBasis:   Math.max(0, (target.costBasis   ?? 0) + costBasisDelta),
+      // design 93 §5b — a TIPS accretion indexes the PRINCIPAL, and the index ratio is
+      // where that lives. The `marketValue` delta above then lands on `pricePerUnit`
+      // (the price follows the principal) via `_patchHolding`, leaving the unit count
+      // alone. Both must move on the same action, which is why it is one action.
+      ...(cpiIndexRatioFactor == null || target.cpiIndexRatio == null
+        ? {}
+        : { cpiIndexRatio: +(target.cpiIndexRatio * cpiIndexRatioFactor).toFixed(12) }),
     });
     const nextHoldings = _replaceHolding(account.holdings, holdingId, patched);
     const nextAccount  = _syncBalance({ ...account, holdings: nextHoldings });

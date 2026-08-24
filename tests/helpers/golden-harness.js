@@ -127,9 +127,13 @@ export function normalizeState(value) {
  * @returns {{ sim, state, snapshot: object, firedActionTypes: Set<string>,
  *             wiredActionTypes: Set<string>, cfg: object }}
  */
-export function runGolden(spec) {
-  ServiceRegistry.resetAll();
-  const services = ServiceRegistry.getInstance();
+/**
+ * The cfg a golden runs, built exactly once here so that any OTHER test wanting to drive
+ * the same scenario (bond-par-conservation.test.mjs instruments its reducers) gets a
+ * byte-identical configuration rather than a near-copy. A near-copy that missed the FX
+ * pin below would measure a different world and report a difference as a defect.
+ */
+export function buildGoldenCfg(spec) {
   // Defaulted rather than required: every golden predating the second prebuilt
   // scenario is an IntlRetirementScenario run and says so by omission.
   const ScenarioCls = spec.cls ?? IntlRetirementScenario;
@@ -142,6 +146,13 @@ export function runGolden(spec) {
   const cfg = ScenarioCls.buildDefaultConfig(
     { fxProcessModel: 'NONE', ...(spec.params ?? {}) }, spec.simStart, spec.simEnd);
   spec.mutateCfg?.(cfg);
+  return cfg;
+}
+
+export function runGolden(spec) {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const cfg = buildGoldenCfg(spec);
 
   const scenario = new BaseScenario({
     context:      services.simulationContext,

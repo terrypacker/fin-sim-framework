@@ -13,6 +13,8 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { resolveRateKey }     from '../holdings/default-allocations.js';
 import { resolveYield }       from '../economic-regimes/yield-curve.js';
+import { unitiseBond, addValue } from '../holdings/holding-utils.js';
+import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -109,10 +111,25 @@ export class BondLadderReducer extends Reducer {
       const funds = bondHoldings.filter(h => h?.maturityDate == null);
       const fundValue = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
       if (fundValue <= 0.01) return this.newState(state);
-      const absorbed = absorbIntoRungs(standingRungs, funds);
+      const spacing = this.spacingYears > 0 ? this.spacingYears : 1;
+      const ladderTermYears = +(N * spacing).toFixed(4);
+      const rateKeyA = resolveRateKey(this.country === 'AU' ? 'AU' : 'US', ALLOCATION.BOND, null);
+      const absorbed = absorbAsTailRung(standingRungs, funds, {
+        asOfMs, ladderTermYears, stateKey: this.stateKey, rateKey: rateKeyA,
+        roll: this.roll !== false,
+        taxExemption: this.taxExemption ?? 'state',
+        inflationLinked: this.inflationLinked === true,
+        couponRate: this.couponRate
+          ?? resolveYield(state, { rateKey: rateKeyA, tenorYears: ladderTermYears })
+          ?? null,
+        levelNow: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
+      });
       const others   = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
       return this.newState(state, {
-        [this.stateKey]: _syncBalance({ ...account, holdings: [...others, ...absorbed] }),
+        [this.stateKey]: _syncBalance({
+          ...account,
+          holdings: [...others, ..._compactLadderLots(absorbed, asOfMs)],
+        }),
       });
     }
 
@@ -186,6 +203,10 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
     // design 67 — the rung's own-tenor coupon (curve-priced); falls back to the flat
     // couponRate when no resolver is supplied (the UI builder path) or the anchor is absent.
     const rungCoupon = couponForTenor ? (couponForTenor(yearsOut) ?? couponRate) : couponRate;
+    // par-reviewed: CONSTRUCTS a rung. The spread is `unitiseBond`'s derived unit fields,
+    // which set par and price FOR this market value rather than carrying a stale one — a
+    // fresh lot has no par to fall out of step with, and the one field that could is
+    // written by the same call.
     out.push({
       id:             `ladder-${stateKey}-${k}`,
       allocation:     ALLOCATION.BOND,
@@ -216,6 +237,10 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
       rollTermYears:  roll ? ladderTermYears : null,
       zeroCoupon:      false,
       inflationLinked: inflationLinked === true,
+      // design 93 §5b — a rung is ISSUED, so it is unitised from birth rather than
+      // promoted later. A par bond at build, so `pricePerUnit` lands on PAR_PER_UNIT and
+      // `units x parPerUnit` reproduces `face` exactly (face is 2dp, units 4dp).
+      ...unitiseBond({ faceValue: face, inflationLinked: inflationLinked === true }),
     });
   }
   return out;
@@ -340,98 +365,136 @@ function _carrySplitter(carry, bondValue, n) {
 }
 
 /**
- * Fold un-laddered BOND *fund* sleeves into the standing rungs, pro rata by rung
- * `faceValue`, and return the replacement rung list (the funds are dropped by the
- * caller, which rebuilds the account's holdings from this).
+ * Convert un-laddered BOND *fund* sleeves into a NEW rung at the ladder tail, and return
+ * the replacement rung list (the funds are dropped by the caller, which rebuilds the
+ * account's holdings from this).
  *
  * The crude form of design 66 §10.5's buy-side tail routing. It exists because the
  * design-61 rebalancer spawns a perpetual fund sleeve whenever it buys bonds into an
  * account that currently holds none — which happens routinely once drawdown has eaten
  * an account's rungs — and nothing else ever converts one back into a dated rung.
  *
- * Conservation. `marketValue`, `costBasis` and each `costBaseByCountry` entry are moved
- * across in full: the last rung absorbs the rounding remainder, exactly as `faceValue`
- * splitting does in `materializeLadder`. NOT a taxable event — no lot is disposed of,
- * the money simply changes which lot carries it.
+ * **This used to fold the money INTO the standing rungs, and design 93 §5.0a is why it no
+ * longer does.** A lot is the unit of tax accounting: it has one purchase date, one basis
+ * and — once par is per-unit — one `parPerUnit`. Blending new money into an existing rung
+ * made the absorbed dollars inherit that rung's acquisition date, and it forced a choice
+ * about what par the blend carries which has no good answer (§5.0's three withdrawn
+ * options). Design 62 §9 already settled the rule for the rebalancer's buy leg — *"a buy
+ * is what it actually is: a purchase made TODAY, in its own lot"* — and never reached the
+ * other money-in paths. This is that migration finished.
  *
- * The approximation worth naming: `faceValue` grows by the absorbed MARKET value, so a
- * rung that is currently trading away from par has its par redemption amount moved by
- * the market price of the new money rather than by its own par. The error is bounded by
- * the rung's discount/premium (small — an individual bond pulls to par as it ages) and it
- * washes out at the next maturity, where the whole rung redeems at the blended face.
+ * Opening a lot rather than blending also deletes the approximation the old form had to
+ * document: it grew each rung's `faceValue` by the MARKET value of the absorbed money, so
+ * a rung trading away from par had its redemption amount moved by a price no purchase set.
+ * A fresh rung is issued at par, so nothing is approximated.
+ *
+ * **Vintage, not per-firing.** The new rung's id keys on the tail's maturity YEAR, so
+ * repeated absorptions that target the same tail merge into the same lot — one added rung
+ * per year at worst, the same bound `mergeCouponReinvestLots` uses for coupon vintages.
+ * Merging within a vintage is not the blend the rule forbids: same instrument, same
+ * maturity, same year, so no holding-period test can tell the halves apart.
+ *
+ * **Basis is CARRIED, not re-based.** No lot is disposed of — the money simply changes
+ * which lot holds it — so the new rung takes the funds' aggregate `costBasis`, per-country
+ * bases, latest acquisition dates and blended indexation level, exactly as `ladderCarryover`
+ * defines them for a rebuild. Re-basing at market would be a step-up with no disposal.
  *
  * @param {Array<object>} rungs - BOND holdings carrying a maturityDate (at least one)
  * @param {Array<object>} funds - BOND holdings with no maturityDate
- * @returns {Array<object>} the rungs, grown
+ * @param {object} opts
+ * @returns {Array<object>} the rungs, plus (or merged into) the tail rung
  */
-function absorbIntoRungs(rungs, funds) {
-  const totalFace = rungs.reduce((s, h) => s + (h?.faceValue ?? h?.marketValue ?? 0), 0);
-  if (!(totalFace > 0)) return rungs;
+export function absorbAsTailRung(rungs, funds, {
+  asOfMs, ladderTermYears, stateKey = 'ladder', rateKey = null, roll = true,
+  taxExemption = 'state', inflationLinked = false, couponRate = null, levelNow = 1,
+} = {}) {
+  const addMv = +(funds ?? []).reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+  if (!(addMv > 0.005)) return rungs;
 
-  const addMv    = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-  const addBasis = +funds.reduce((s, h) => s + (h?.costBasis   ?? 0), 0).toFixed(2);
-  const addByCountry = {};
-  for (const f of funds) {
-    for (const [c, v] of Object.entries(f?.costBaseByCountry ?? {})) {
-      addByCountry[c] = +((addByCountry[c] ?? 0) + (v ?? 0)).toFixed(2);
+  const carry     = ladderCarryover(funds, levelNow) ?? {};
+  const maturity  = new Date(asOfMs + ladderTermYears * YEAR_MS);
+  const lotId     = `ladder-${stateKey}-absorb-${maturity.getUTCFullYear()}`;
+  const idx       = rungs.findIndex(h => h?.id === lotId);
+
+  if (idx >= 0) {
+    // Same vintage, same instrument — more units of the bond this lot already holds.
+    // `addValue` owns the money-and-par rule; the carried basis replaces the basis it
+    // would have assumed (absorbed money brings its OWN basis, not the cash it is worth).
+    const cur    = rungs[idx];
+    const merged = addValue(cur, addMv);
+    const next   = {
+      ...merged,
+      costBasis: +((cur.costBasis ?? 0) + (carry.costBasis ?? addMv)).toFixed(2),
+    };
+    if (cur.costBaseByCountry || carry.costBaseByCountry) {
+      const bases = { ...(cur.costBaseByCountry ?? {}) };
+      for (const [c, v] of Object.entries(carry.costBaseByCountry ?? {})) {
+        bases[c] = +((bases[c] ?? cur.costBasis ?? 0) + (v ?? 0)).toFixed(2);
+      }
+      next.costBaseByCountry = bases;
     }
+    return rungs.map((h, i) => (i === idx ? next : h));
   }
 
-  const n = rungs.length;
-  const taken = new Map();
-  // Truncated shares with the last rung taking the remainder — the same rule
-  // `_carrySplitter` uses, so nothing is created or destroyed in the rounding.
-  const share = (field, total, k, w) => {
-    if (!(total > 0)) return 0;
-    if (k === n - 1) return +(total - (taken.get(field) ?? 0)).toFixed(2);
-    const v = Math.floor(total * w * 100) / 100;
-    taken.set(field, +((taken.get(field) ?? 0) + v).toFixed(2));
-    return v;
-  };
+  // par-reviewed: CONSTRUCTS the tail rung. As `materializeLadder` above — the spread is
+  // `unitiseBond`'s derived fields, issued at par for this exact market value.
+  return [...rungs, {
+    id:             lotId,
+    allocation:     ALLOCATION.BOND,
+    marketValue:    addMv,
+    costBasis:      +(carry.costBasis ?? addMv).toFixed(2),
+    costBaseByCountry: carry.costBaseByCountry ?? null,
+    // The absorbed money's OWN vintage, not today: it was already invested, and the
+    // latest-wins rule is `ladderCarryover`'s (never credits a ≥12-month holding period
+    // to money demonstrably bought later).
+    purchaseDate:   carry.purchaseMs != null ? new Date(carry.purchaseMs) : new Date(asOfMs),
+    acquisitionPriceLevel:    carry.priceLevel ?? levelNow,
+    acquisitionDateByCountry: carry.acquisitionDateByCountry ?? null,
+    rateKey,
+    label:          `Ladder tail ${maturity.getUTCFullYear()}`,
+    dividendYield:  null,
+    couponRate,
+    appreciationSchedule: null,
+    duration:       +ladderTermYears.toFixed(2),
+    taxLossPartner: null,
+    taxExemption,
+    issuingState:   null,
+    maturityDate:   maturity,
+    faceValue:      addMv,
+    rollAtMaturity: roll,
+    rollTermYears:  roll ? ladderTermYears : null,
+    zeroCoupon:      false,
+    inflationLinked: inflationLinked === true,
+    // Issued at par today, like every other rung (design 93 §5b).
+    ...unitiseBond({ faceValue: addMv, inflationLinked: inflationLinked === true }),
+  }];
+}
 
-  return rungs.map((h, k) => {
-    const w  = (h?.faceValue ?? h?.marketValue ?? 0) / totalFace;
-    const mv = share('mv', addMv, k, w);
-    if (mv === 0 && addBasis === 0) return h;
-    const cb = share('cb', addBasis, k, w);
-    const mvBefore = h.marketValue ?? 0;
-    const mvAfter  = +(mvBefore + mv).toFixed(2);
-    const next = {
-      ...h,
-      marketValue: mvAfter,
-      costBasis:   +((h.costBasis ?? 0) + cb).toFixed(2),
-      // Par grows differently for the two instruments, because `faceValue` MEANS
-      // something different in each.
-      //
-      // A nominal rung: par is what it redeems for, and its price-to-par RATIO is what
-      // pull-to-par reads. Scale par with the position so absorption leaves the ratio
-      // alone; adding market value to par 1:1 would re-price the rung and hand
-      // pull-to-par a target no purchase set.
-      //
-      // A TIPS rung: par is the ORIGINAL issue face, held only as the deflation FLOOR
-      // (`redeem` takes `max(indexed principal, face)`), while the indexed principal
-      // lives in marketValue and is already well above it after years of CPI accretion.
-      // Scaling that floor by the mv ratio inflates it by the accretion — and since the
-      // floor then becomes the redemption value, every roll ratchets the position up to
-      // an ever-higher floor. New money makes it worse, so the runaway grew with equity
-      // weight (clean at 0% equity; 266 of 1750 paths past $1e12 at 75%, one reaching
-      // 1e+63). New money buys TIPS AT PAR today, so it contributes its own cash amount
-      // to the floor and nothing more.
-      faceValue:   (h.faceValue == null || mvBefore <= 0)
-        ? h.faceValue
-        : h.inflationLinked
-          ? +((h.faceValue ?? 0) + mv).toFixed(2)
-          : +(h.faceValue * (mvAfter / mvBefore)).toFixed(2),
-    };
-    if (h.costBaseByCountry || Object.keys(addByCountry).length) {
-      const merged = { ...(h.costBaseByCountry ?? {}) };
-      for (const [c, total] of Object.entries(addByCountry)) {
-        merged[c] = +((merged[c] ?? 0) + share(`cbc.${c}`, total, k, w)).toFixed(2);
-      }
-      next.costBaseByCountry = merged;
-    }
-    return next;
-  });
+/**
+ * Collapse ladder rungs that have become the SAME instrument, so absorption's lot growth
+ * has a ceiling (design 93 §5.4 item 3).
+ *
+ * Absorption opens one rung per year, and nothing else ever merges them: design 61's
+ * `_compactSeasonedLots` deliberately touches only the rebalancer's own `reb-` lots — *"an
+ * authored scenario lot, a bond ladder rung or a coupon-reinvestment lot is left exactly
+ * where it is"* — and that boundary is worth keeping, so the ladder compacts its own.
+ *
+ * **Why this binds at all, given every absorption rung has a distinct maturity.** It does
+ * not merge them when they are created; it merges them after they ROLL. A rung absorbed in
+ * year Y matures at Y+N and rolls to Y+2N; a rung absorbed in year Y+N is issued maturing
+ * at Y+2N. At that point the two are the same bond — same maturity, same tenor, so the same
+ * re-locked coupon, both re-issued at par, and a rolled TIPS has had its index ratio reset
+ * to 1. The ceiling is therefore about N lots rather than one per year forever.
+ *
+ * The mechanics are `LOT_POLICIES.LADDER` in `lot-compaction.js`; what is specific to the
+ * ladder is only that per-country bases are SUMMED rather than keyed, because a rebuild's
+ * carryover (`ladderCarryover`) legitimately produces rungs differing only in how a
+ * step-up was apportioned across them.
+ *
+ * Exported for direct testing.
+ */
+export function _compactLadderLots(rungs, asOfMs) {
+  return compactLots(rungs, { asOfMs, policy: LOT_POLICIES.LADDER });
 }
 
 /** Milliseconds of a lot's purchaseDate, or null when it carries none / an invalid one. */

@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
-import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
 
@@ -62,7 +62,7 @@ export class IraContributionApplyReducer extends AccountServiceReducer {
           ...ia,
           balance:           newBalance,
           contributionBasis: ia.contributionBasis + action.amount,
-          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance),
+          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance, lotVintage(state, ia)),
         },
       },
       [{ type: 'IRA_CONTRIBUTION_TAX', amount: action.amount }]
@@ -99,7 +99,7 @@ export class IraWithdrawalContribApplyReducer extends AccountServiceReducer {
           ...ia,
           balance:           newBalance,
           contributionBasis: ia.contributionBasis - amount,
-          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance),
+          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance, lotVintage(state, ia)),
         },
       },
       [{ type: 'IRA_WITHDRAWAL_CONTRIB_TAX', amount, penaltyAmount }]
@@ -142,7 +142,7 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: ia.earningsBasis - amount,
           // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
           ...drawDerivedProRata(ia, amount),
-          holdings:      scaleHoldings(ia.holdings, ia.balance, newBalance),
+          holdings:      scaleHoldings(ia.holdings, ia.balance, newBalance, lotVintage(state, ia)),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.

@@ -1471,12 +1471,15 @@
     "label": "US Treasury",
     "marketValue": 24000,
     "maturityDate": "2035-01-01T00:00:00.000Z",
+    "parPerUnit": 100,
+    "pricePerUnit": 100,
     "purchaseDate": null,
     "rateKey": "FIXED_INCOME_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
     "taxExemption": "state",
     "taxLossPartner": null,
+    "units": 240,
     "zeroCoupon": false
    },
    {

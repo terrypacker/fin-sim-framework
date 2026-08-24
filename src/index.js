@@ -65,7 +65,7 @@ import { DEFAULT_LOCATION_POLICY, GOLD_PREFERENCE_BY_RESIDENCY, resolveLocationP
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
-import { BondLadderReducer, materializeLadder, ladderCarryover } from './finance/behavioral/bond-ladder-reducer.js';
+import { BondLadderReducer, materializeLadder, ladderCarryover, absorbAsTailRung, _compactLadderLots } from './finance/behavioral/bond-ladder-reducer.js';
 import { CashBucketDrawdownReducer } from './finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from './finance/behavioral/contribution-suspension-toggle-reducer.js';
 import { DownturnRothConversionReducer } from './finance/behavioral/downturn-roth-conversion-reducer.js';
@@ -156,7 +156,7 @@ import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, Ho
 import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
-import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
+import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
 import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
@@ -813,6 +813,8 @@ export const Finance = {
   BondLadderReducer,
   materializeLadder,
   ladderCarryover,
+  absorbAsTailRung,
+  _compactLadderLots,
   CashBucketDrawdownReducer,
   ContributionSuspensionToggleReducer,
   DownturnRothConversionReducer,
@@ -1010,10 +1012,26 @@ export const Finance = {
   HoldingRetitleReducer,
   HOLDING_REDUCER_CLASSES,
   _syncBalance,
+  instrumentOf,
+  isUnitised,
+  PAR_PER_UNIT,
+  unitiseBond,
+  syncHolding,
+  indexedRedemptionValue,
+  promoteToUnitised,
+  projectHoldingsToState,
+  resize,
+  addValue,
+  reprice,
+  split,
+  establish,
   scaleHoldings,
   rescaleHoldingsToBalance,
+  lotVintage,
   distributeHoldingsCredit,
   holdingsOutOfSync,
+  LOT_POLICIES,
+  compactLots,
   applyCashBasisInvariant,
   Holding,
   couponFederalExempt,

@@ -359,18 +359,31 @@ export class AccountService extends AssetService {
           : Math.min(mv, toRemove * (mv / totalMv));
         removed += sold;
         const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
-        // Par leaves with the units. `faceValue` drives BOTH pull-to-par and redemption,
-        // so a bond lot drained here while keeping full par is money waiting to be minted:
-        // the next mark drags price back up toward a par no longer behind it. Same rule
-        // the sell path already applies (holdings-fifo, design 87 G9) and that
-        // `scaleHoldings._scaleOne` applies on the deposit side.
+        // par-reviewed: par scales by the same ratio as the units, by hand rather than via
+        // `resize`, because this loop's arithmetic is deliberately UNROUNDED — `sold` is
+        // apportioned with a last-lot remainder so the parts sum to the requested amount
+        // exactly, and rounding each lot to cents here shifts whole-portfolio totals by
+        // ~20c over a long run. Converting it was tried and reverted for that reason; the
+        // rounding inconsistency between this path and the primitives is real and is
+        // recorded as its own decision in design 93 §9.
+        //
+        // `units` scales by that SAME ratio (design 93 §5b), and it is not optional: a
+        // unitised lot derives its value from the count, so a raw `marketValue` write that
+        // leaves the count behind is undone by the next `syncHolding` — measured at 40% of
+        // a 401(k) evaporating on the bond golden when this one loop was left out. Left
+        // unrounded like everything else here, which keeps `units x pricePerUnit` equal to
+        // the value this loop apportions rather than to a re-rounded version of it.
+        const ratio     = mv > 0 ? Math.max(0, 1 - sold / mv) : 0;
         const faceShare = (h.faceValue == null || mv <= 0) ? null
-          : Math.max(0, (h.faceValue ?? 0) * (1 - sold / mv));
+          : Math.max(0, (h.faceValue ?? 0) * ratio);
+        // par-reviewed: par AND units both scale by the same ratio the position moved by,
+        // by hand rather than via `resize` for the unrounded-arithmetic reason above.
         return {
           ...h,
           marketValue: Math.max(0, mv - sold),
           costBasis:   Math.max(0, (h.costBasis ?? 0) - basisShare),
           ...(faceShare == null ? {} : { faceValue: +faceShare.toFixed(2) }),
+          ...(h.units == null ? {} : { units: h.units * ratio }),
         };
       });
     } else {
@@ -379,9 +392,31 @@ export class AccountService extends AssetService {
       // market value. With no market value to weight against, land the whole
       // credit in the first sleeve.
       if (totalMv <= 0) {
-        account.holdings = holdings.map((h, i) => i === 0
-          ? { ...h, marketValue: (h.marketValue ?? 0) + amount, costBasis: (h.costBasis ?? 0) + amount }
-          : h);
+        account.holdings = holdings.map((h, i) => {
+          if (i !== 0) return h;
+          const value = (h.marketValue ?? 0) + amount;
+          // Zero market value to weight against — the credit BECOMES the position, which
+          // is `establish`'s statement (design 93 §5b). Spelled out rather than delegated
+          // because `establish` rounds to cents and this loop deliberately does not: `sold`
+          // and `share` are apportioned with a last-lot remainder so the parts sum to the
+          // requested amount exactly. Rounding here moved every golden's cash sleeve by a
+          // few thousandths of a cent — harmless, but it is the §9.5 inconsistency and
+          // this path is the side of it that stays unrounded.
+          // par-reviewed: there are no units to scale, so the money IS the position; units
+          // are established at the going price (par for a lot whose price is stale) and par
+          // follows the count, so nothing can fall out of step.
+          const price = (h.pricePerUnit ?? 0) > 0 ? h.pricePerUnit : (h.parPerUnit ?? 0);
+          const units = h.units == null ? null : (price > 0 ? value / price : 0);
+          return {
+            ...h,
+            marketValue: value,
+            costBasis:   (h.costBasis ?? 0) + amount,
+            ...(units == null ? {} : { units }),
+            ...(units == null || h.parPerUnit == null
+              ? {}
+              : { faceValue: +(units * h.parPerUnit).toFixed(2) }),
+          };
+        });
         return;
       }
       let added = 0;
@@ -389,15 +424,16 @@ export class AccountService extends AssetService {
         const mv    = Math.max(0, h.marketValue ?? 0);
         const share = i === last ? amount - added : amount * (mv / totalMv);
         added += share;
-        // Par scales with the position on the way in too, so the lot's price-to-par
-        // ratio is untouched by a credit that merely made the position bigger.
-        const faceUp = (h.faceValue == null || mv <= 0) ? null
-          : (h.faceValue ?? 0) * ((mv + share) / mv);
+        // par-reviewed: as the debit branch above — unrounded on purpose, par and units
+        // both scaled by the same value ratio the position moved by.
+        const ratio  = mv > 0 ? (mv + share) / mv : 1;
+        const faceUp = (h.faceValue == null || mv <= 0) ? null : (h.faceValue ?? 0) * ratio;
         return {
           ...h,
           marketValue: (h.marketValue ?? 0) + share,
           costBasis:   (h.costBasis   ?? 0) + share,
           ...(faceUp == null ? {} : { faceValue: +faceUp.toFixed(2) }),
+          ...(h.units == null ? {} : { units: h.units * ratio }),
         };
       });
     }

@@ -56,6 +56,7 @@ import { SuperDeathBenefitApplyReducer }         from '../../finance/reducers/su
 import { ScenarioCompleteReducer }               from '../../finance/reducers/scenario-complete-reducer.js';
 import { LateLifeCareHandler }                  from '../../finance/spending/strategies/late-life-care-handler.js';
 import { LateLifeCareApplyReducer }             from '../../finance/spending/strategies/late-life-care-apply-reducer.js';
+import { projectHoldingsToState }             from '../../finance/holdings/holding-utils.js';
 
 /**
  * AU_RETIREMENT toolset — AU retirement/superannuation scenario wiring.
@@ -790,8 +791,10 @@ function _accountToStatePlain(account) {
     minimumBalance:        account.minimumBalance        ?? 0,
     drawdownPriority:      account.drawdownPriority      ?? null,
     allowsEarlyWithdrawal: account.allowsEarlyWithdrawal ?? false,
-    // Holdings — plain-data array (no methods), structuredClone-safe.
-    holdings:              (account.holdings ?? []).map(h => ({ ...h })),
+    // Holdings — plain-data array (no methods), structuredClone-safe. This is also the
+    // config→run boundary where a scalar individual bond is PROMOTED to the unitised
+    // representation (design 93 §5b); the account record on disk is never rewritten.
+    holdings:              projectHoldingsToState(account.holdings),
   };
   // OffsetAccount link (design 53 §3 / 54 P3): carry the property key into runtime
   // state so offsetBalanceForLoan() can find it — otherwise the offset is invisible.

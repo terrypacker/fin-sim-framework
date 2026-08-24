@@ -289,6 +289,9 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     remaining     -= take;
     const remainingMv = mv - take;
     if (remainingMv > 0.001) {
+      // par-reviewed: the FIFO partial depletes each per-country cost base by the consumed
+      // fraction and re-asserts the CASH basis invariant. Par IS scaled here (design 87 G9) -
+      // this was the one path that always got it right.
       const partial = {
         ...h,
         marketValue: +remainingMv.toFixed(2),
@@ -301,7 +304,16 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       // Carrying the whole `faceValue` through the spread — which is what happened before
       // design 87 G9 went looking — would redeem the full original par at maturity after
       // half of it had already been sold, and would double-count the same units' §988.
-      if (h.faceValue != null && mv > 0) {
+      //
+      // design 93 §5b — on a UNITISED lot the same sentence is "it keeps the units that
+      // were not sold", and par follows because `parPerUnit` never moved. `units` is set
+      // from the surviving market value at the lot's own price rather than scaled by a
+      // ratio, so the remainder's stored `marketValue` stays EXACTLY the proceeds
+      // arithmetic's remainder and the §4.4 balance invariant is untouched by rounding.
+      if (h.units != null && (h.pricePerUnit ?? 0) > 0) {
+        partial.units = +(remainingMv / h.pricePerUnit).toFixed(8);
+        partial.faceValue = +(partial.units * (h.parPerUnit ?? 0)).toFixed(2);
+      } else if (h.faceValue != null && mv > 0) {
         partial.faceValue = +(h.faceValue * (remainingMv / mv)).toFixed(2);
       }
       // Deplete each per-country cost base by the same consumed fraction.

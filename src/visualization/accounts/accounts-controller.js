@@ -256,6 +256,7 @@ export class AccountsController {
       if (n.holdings.length === 0) {
         delete n.holdings; // preserve existing holdings when form clears (shouldn't happen)
       } else {
+        // par-reviewed: UI normalisation of user-entered numbers, same as the account editor.
         n.holdings = n.holdings.map(h => ({
           ...h,
           marketValue: Number(h.marketValue) || 0,

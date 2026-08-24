@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { resolveRateKey }    from '../holdings/default-allocations.js';
 import { revalueLedger }     from '../assets/investment-account.js';
+import { reprice } from '../holdings/holding-utils.js';
 
 /**
  * RevalueAssetReducer — applies a shock's instantaneous level effect.
@@ -71,7 +72,8 @@ export class RevalueAssetReducer extends Reducer {
         // account is untouched by a jurisdiction shock.
         if (resolveRateKey(entry.country, h.allocation, null) !== rateKey) return h;
         hit = true;
-        return { ...h, marketValue: shock(h.marketValue) };
+        // A shock is a PRICE change: par is correct to stand still (design 93 §4).
+        return reprice(h, shock(h.marketValue));
       });
       if (!hit) continue;
 

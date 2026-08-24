@@ -13,7 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 import { getBirthDate } from '../../residency-utils.js';
-import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
 
@@ -66,7 +66,7 @@ export class K401ContributionApplyReducer extends AccountServiceReducer {
           ...ka,
           balance:           newBalance,
           contributionBasis: ka.contributionBasis + action.amount,
-          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance, lotVintage(state, ka)),
         },
       },
       employerFunded ? [] : [{ type: 'K401_CONTRIBUTION_TAX', amount: action.amount }]
@@ -149,7 +149,7 @@ export class K401WithdrawalApplyReducer extends AccountServiceReducer {
           // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
           ...drawDerivedProRata(ka, fromEarnings),
           contributionBasis: ka.contributionBasis - fromContrib,
-          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance, lotVintage(state, ka)),
         },
       },
       [{ type: 'K401_WITHDRAWAL_TAX', amount, penaltyAmount }]
@@ -259,7 +259,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
           // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
           ...drawDerivedProRata(ka, fromEarnings),
           contributionBasis: ka.contributionBasis - fromContrib,
-          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance, lotVintage(state, ka)),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
@@ -383,7 +383,7 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
       earningsBasis:     k401.earningsBasis     - fromEarnings,
     };
     // Same helper as every other value move, so par scales with the position.
-    newK401.holdings = scaleHoldings(k401.holdings, k401.balance, k401.balance - amount);
+    newK401.holdings = scaleHoldings(k401.holdings, k401.balance, k401.balance - amount, lotVintage(state, k401));
 
     const newIra = {
       ...ira,
@@ -396,7 +396,7 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
         ? { derivedIncomeBasis: +((ira.derivedIncomeBasis + Math.min(fromEarnings, k401.derivedIncomeBasis ?? fromEarnings))).toFixed(2) }
         : {}),
     };
-    newIra.holdings = scaleHoldings(ira.holdings, ira.balance, ira.balance + amount);
+    newIra.holdings = scaleHoldings(ira.holdings, ira.balance, ira.balance + amount, lotVintage(state, ira));
 
     return this.newState(state, { [k401Key]: newK401, [iraKey]: newIra });
   }

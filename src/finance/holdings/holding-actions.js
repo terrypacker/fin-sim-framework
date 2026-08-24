@@ -33,12 +33,13 @@ export const HOLDING_ACTION_ENTRIES = Object.freeze([
     type:        HOLDING_ACTION_TYPES.HOLDING_TRANSACT,
     family:      'HOLDING',
     cc:          null,
-    description: 'Net change to a single holding\'s marketValue and costBasis (contribution, withdrawal, dividend reinvest, appreciation).',
+    description: 'Net change to a single holding\'s marketValue and costBasis (contribution, withdrawal, dividend reinvest, appreciation); cpiIndexRatioFactor also steps an inflation-linked bond\'s indexation.',
     fields:      {
-      stateKey:         {},
-      holdingId:        {},
-      marketValueDelta: {},
-      costBasisDelta:   {},
+      stateKey:            {},
+      holdingId:           {},
+      marketValueDelta:    {},
+      costBasisDelta:      {},
+      cpiIndexRatioFactor: {},
     },
   },
   {
@@ -106,12 +107,23 @@ export class HoldingTransactAction extends Action {
   static type        = 'HoldingTransactAction';
   static description = 'Holding net-change: marketValue and costBasis deltas on one holding.';
 
-  constructor({ stateKey = null, holdingId = null, marketValueDelta = 0, costBasisDelta = 0, name = null } = {}) {
+  /**
+   * `cpiIndexRatioFactor` (design 93 §5b) is the ONE thing on this action that is not a
+   * dollar delta, and it is here rather than in a separate action type because a TIPS
+   * accretion is a single event: the principal indexes, the price follows it and the basis
+   * steps up with it. Splitting them would let a replay apply two of the three.
+   *
+   * Null (the default) on every other path, which is every path but accretion, so no
+   * existing payload gains a field.
+   */
+  constructor({ stateKey = null, holdingId = null, marketValueDelta = 0, costBasisDelta = 0,
+                cpiIndexRatioFactor = null, name = null } = {}) {
     super(HOLDING_ACTION_TYPES.HOLDING_TRANSACT, name ?? `Holding ${holdingId ?? '?'} transact`);
     this.stateKey         = stateKey;
     this.holdingId        = holdingId;
     this.marketValueDelta = marketValueDelta;
     this.costBasisDelta   = costBasisDelta;
+    if (cpiIndexRatioFactor != null) this.cpiIndexRatioFactor = cpiIndexRatioFactor;
   }
 
   toJSON() {
@@ -121,6 +133,9 @@ export class HoldingTransactAction extends Action {
       holdingId:        this.holdingId,
       marketValueDelta: this.marketValueDelta,
       costBasisDelta:   this.costBasisDelta,
+      // Emitted only when set — an explicit null on every non-accretion action would put a
+      // new field in every journal payload and every fixture (design 93 §5a's discipline).
+      ...(this.cpiIndexRatioFactor == null ? {} : { cpiIndexRatioFactor: this.cpiIndexRatioFactor }),
     };
   }
 
@@ -130,6 +145,7 @@ export class HoldingTransactAction extends Action {
       holdingId:        d.holdingId,
       marketValueDelta: d.marketValueDelta ?? 0,
       costBasisDelta:   d.costBasisDelta   ?? 0,
+      cpiIndexRatioFactor: d.cpiIndexRatioFactor ?? null,
       name:             d.name,
     });
     a.id = d.id;

@@ -88,6 +88,7 @@ import {
   RothRolloverContributionHandler, RothRolloverEarningsHandler,
   RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
 } from '../../finance/account-rules/us/roth-rollover-classes.js';
+import { projectHoldingsToState }             from '../../finance/holdings/holding-utils.js';
 
 function _accountToStatePlain(account) {
   const plain = {
@@ -107,8 +108,10 @@ function _accountToStatePlain(account) {
     minimumBalance:        account.minimumBalance        ?? 0,
     drawdownPriority:      account.drawdownPriority      ?? null,
     allowsEarlyWithdrawal: account.allowsEarlyWithdrawal ?? false,
-    // Holdings — plain-data array (no methods), structuredClone-safe.
-    holdings:              (account.holdings ?? []).map(h => ({ ...h })),
+    // Holdings — plain-data array (no methods), structuredClone-safe. This is also the
+    // config→run boundary where a scalar individual bond is PROMOTED to the unitised
+    // representation (design 93 §5b); the account record on disk is never rewritten.
+    holdings:              projectHoldingsToState(account.holdings),
   };
   // OffsetAccount link (design 53 §3 / 54 P3): carry the property key into runtime
   // state so offsetBalanceForLoan() can find it — otherwise the offset is invisible.

@@ -13,6 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield }       from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { section988ForRedemption } from '../account-rules/bond-currency-basis.js';
+import { unitiseBond, indexedRedemptionValue } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -144,13 +145,40 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
   // measured at $556,636 conjured across 14 empty rungs, and gross income of 1e+66 by the
   // end of the run. The floor protects the original principal of units still held; it is
   // not a claim on units already spent.
-  if ((h.marketValue ?? 0) <= 0.005) return { ...h, marketValue: 0, faceValue: 0 };
+  // par-reviewed: clears a drained lot. Sets BOTH marketValue and faceValue to 0, so par
+  // cannot survive units that are gone - this IS the fix, not a bypass of it. Under the
+  // unitised representation (design 93 §5b) the same statement is `units: 0`, and both
+  // are written so the derived and stored views agree.
+  if ((h.marketValue ?? 0) <= 0.005) {
+    return { ...h, marketValue: 0, faceValue: 0, ...(h.units != null ? { units: 0 } : {}) };
+  }
 
-  const par = h.inflationLinked
+  // design 93 §5.3 — the live bug, fixed by the representation rather than by a patch.
+  //
+  // A TIPS used to redeem at `max(marketValue, faceValue)`. Its `marketValue` carries
+  // accumulated rate marks, and TIPS are deliberately excluded from pull-to-par (design
+  // 66 §G5), so those marks NEVER wash out: the instrument redeemed for its indexed
+  // principal plus whatever rate noise happened to be sitting in its price. It also
+  // overloaded `faceValue` — "redemption amount" for a nominal bond, "deflation floor"
+  // for a TIPS — which is defect #8.
+  //
+  // Under units the principal is tracked explicitly (`parPerUnit x cpiIndexRatio`) and
+  // the floor compares two quantities that are both par-like. Market price does not
+  // appear. `indexedRedemptionValue` returns null for a scalar holding, which keeps the
+  // old expression for a bond that was never promoted — a UI preview, a unit test —
+  // rather than silently redeeming it at un-indexed par.
+  const par = indexedRedemptionValue(h) ?? (h.inflationLinked
     ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
-    : (h.faceValue ?? h.marketValue ?? 0);
+    : (h.faceValue ?? h.marketValue ?? 0));
 
   if (h.rollAtMaturity) {
+    // A LONE inflation-linked bond re-issues as a plain par bond (`rollsAsTips` below), so
+    // its index ratio has to go with the instrument it belonged to. Carrying it through the
+    // spread would park a stale 1.2 on a nominal bond — inert today, because
+    // `indexedRedemptionValue` reads it only when `inflationLinked`, and exactly the kind
+    // of field that stops being inert when someone later reads it. Dropped rather than
+    // nulled, so a bond that never had one does not gain a key (design 93 §5a).
+    const { cpiIndexRatio: _stale, ...rolling } = h;
     const matMs      = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
     const purchaseMs = h.purchaseDate
       ? (h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime())
@@ -188,14 +216,26 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
           { effectiveInterestRates: effectiveRates, yieldCurve },
           { rateKey: h.rateKey, tenorYears: rollTenorYears },
         ) ?? h.couponRate ?? null);
+    // par-reviewed: the ROLL issues a different instrument: new maturity, new purchase date,
+    // re-locked coupon and (for a TIPS) a re-faced par. No ratio on the old position
+    // describes that.
     return {
-      ...h,
+      ...rolling,
       marketValue:  par,
       // The new bond is issued at what was actually redeemed. For a nominal bond that is
       // `faceValue` already; for a TIPS it is the INDEXED principal, so the face has to
       // move with it or the next redemption's deflation floor would be measured against a
       // decades-stale original face.
       ...(rollsAsTips ? { faceValue: par } : {}),
+      // design 93 §5b — the roll IS a purchase (the class doc says so, and design 87 G9
+      // re-stamps the §988 basis on exactly that reasoning), so it re-issues at par: a
+      // fresh unit count against a fresh `cpiIndexRatio` of 1. That is what retires the
+      // TIPS ratchet at the source rather than repairing the face afterwards — the
+      // indexation earned by the OLD units was realized at redemption and is now
+      // principal, so the new units start un-indexed.
+      ...(h.units != null
+        ? unitiseBond({ faceValue: par, inflationLinked: rollsAsTips })
+        : {}),
       // Carried, not re-based at par — see the class doc. `?? par` keeps the original
       // behavior for a bond that never carried a basis at all.
       costBasis:    h.costBasis ?? par,
@@ -223,8 +263,17 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
 
   // Redeem to cash (return of principal). Clear all bond-specific fields so the
   // sleeve is a plain CASH position going forward.
+  //
+  // design 93 §5b — the unit fields are DROPPED rather than nulled. CASH is a scalar
+  // sleeve (§6.2 mode 2), and leaving a unit count behind would let `syncHolding`
+  // re-derive a cash balance from a bond's units for the rest of the run. Dropping (not
+  // `: null`) because §5a's fields are assigned only when present: writing explicit nulls
+  // would put four new keys on every redeemed sleeve in every fixture.
+  const { units: _u, parPerUnit: _p, pricePerUnit: _pp, cpiIndexRatio: _cpi, ...scalar } = h;
+  // par-reviewed: redemption to CASH changes the allocation and clears every bond field
+  // including faceValue, so there is no par left to desynchronise.
   return {
-    ...h,
+    ...scalar,
     allocation:     ALLOCATION.CASH,
     marketValue:    par,
     costBasis:      par,

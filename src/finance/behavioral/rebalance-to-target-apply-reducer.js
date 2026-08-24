@@ -12,12 +12,14 @@ import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
 import { disposalTermFields }   from '../holdings/holding-period.js';
+import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
 import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
 import { toMs } from '../account-rules/main-residence.js';
+import { addValue, resize } from '../holdings/holding-utils.js';
 
 /**
  * RebalanceToTargetApplyReducer — design 61 Lever C (Phase 2). Executes the
@@ -332,6 +334,8 @@ export function _sweepDust(holdings) {
     if ((keep[i].marketValue ?? 0) > (keep[biggest].marketValue ?? 0)) biggest = i;
   }
   return keep.map((h, i) => (i === biggest
+    // par-reviewed: a MERGE, not a resize: N dust lots fold into one survivor, so no single
+    // ratio describes it. Par is summed explicitly above.
     ? { ...h, marketValue: +((h.marketValue ?? 0) + mv).toFixed(2),
                costBasis:   +((h.costBasis   ?? 0) + basis).toFixed(2),
                // Par is conserved by the sweep like every other value field; a dust lot
@@ -358,8 +362,7 @@ function _reduceProRata(holdings, allocation, amount) {
     // pull-to-par regenerates almost exactly what was sold on the next mark — measured
     // at -$1,375,173 sold against +$1,270,813 regenerated over one horizon, which is
     // most of why a nominal ladder looked untouchable next to the same book in funds.
-    const face  = h.faceValue == null ? null : +((h.faceValue ?? 0) * ratio).toFixed(2);
-    return { ...h, marketValue: mv, costBasis: basis, ...(face == null ? {} : { faceValue: face }) };
+    return resize(h, ratio);   // design 93 §4 — one ratio, every value field
   }).filter(Boolean);
 }
 
@@ -376,11 +379,7 @@ function _addProRata(holdings, allocation, amount) {
   return holdings.map(h => {
     if (h.allocation !== allocation) return h;
     const fraction = totalMv > 0 ? (h.marketValue / totalMv) : (1 / matching.length);
-    return {
-      ...h,
-      marketValue: +(h.marketValue + amount * fraction).toFixed(2),
-      costBasis:   +((h.costBasis ?? 0) + amount * fraction).toFixed(2),
-    };
+    return addValue(h, amount * fraction);
   });
 }
 
@@ -504,119 +503,25 @@ function _stampCouponRate(state, stateKey, rateKey) {
  */
 const REB_LOT_PREFIX = 'reb-';
 
-const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
-
-/**
- * Fields that do NOT have to match for two lots to be merged: identity, the two amounts
- * that are summed, the date that is taken from the older lot, and the two quantities
- * blended by market value below. Everything else is part of the fungibility key, so a
- * field added to Holding later automatically *prevents* a merge rather than being
- * silently averaged away.
- */
-const MERGEABLE_FIELDS = new Set(['id', 'marketValue', 'costBasis', 'purchaseDate', 'couponRate',
-                                  'duration', 'acquisitionPriceLevel']);
 
 /**
  * Collapse this reducer's own seasoned lots so the holdings array stays bounded over a
- * long run (see the class doc). Two lots merge only when ALL of:
+ * long run (see the class doc).
  *
- *   - both were established by this reducer (`reb-` id) and hold value;
- *   - both are already ≥12 months old at `asOfMs`, so no holding-period rule — the AU
- *     Division 115 gate, the post-2027 indexation clock, a future US short/long-term
- *     split — can distinguish them, now or ever after;
- *   - every other field matches exactly, including `costBaseByCountry` and
- *     `acquisitionDateByCountry`, so a residency step-up is never blended across lots.
+ * The rules — own lots only, both seasoned past twelve months, every unhandled field
+ * equal, coupon and duration blended by market value, `acquisitionPriceLevel` as the
+ * basis-weighted harmonic mean, survivor keeps the earliest date and id — now live in
+ * `lot-compaction.js` as `LOT_POLICIES.REBALANCE`, because two more families grew the
+ * same function afterwards (design 93 §5.5) and the copies had already drifted on what
+ * "twelve months" means.
  *
- * `couponRate` and `duration` are blended by market value (the convention
- * `mergeCouponReinvestLots` already uses): mv × rate and mv × duration are what the
- * coupon and price-sensitivity paths consume, so the blend is exact at merge time.
- *
- * `acquisitionPriceLevel` is blended as the **basis-weighted harmonic mean**, which is
- * exact rather than approximate. The AU indexed cost base is `Σ basisᵢ × (levelₙₒw /
- * levelᵢ)`; setting the merged level to `Σbasisᵢ / Σ(basisᵢ / levelᵢ)` reproduces that
- * sum precisely from the merged lot's single basis and level. Blending it arithmetically
- * — or leaving it in the fungibility key, where a per-vintage CPI level would make every
- * lot unique and stop compaction dead — would not.
- *
- * The NULL-ness of all three is part of the key: a lot whose coupon floats never merges
- * with one that locked a rate, and an un-indexed lot never merges with an indexed one.
- *
- * The survivor keeps the earliest `purchaseDate` and that lot's id, so FIFO order across
- * the boundary is unchanged and replay stays deterministic.
- *
- * Exported for direct testing.
+ * Kept as a named export because that is what the tests and `src/index.js` reference, and
+ * because the reducer owning a name for its own policy is the point of the prefix.
  */
 export function _compactSeasonedLots(holdings, asOfMs) {
-  const groups = new Map();
-  holdings.forEach((h, i) => {
-    const key = _fungibleKey(h, asOfMs);
-    if (key == null) return;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(i);
-  });
-
-  const survivors = new Map();   // index → merged lot
-  const absorbed  = new Set();   // indices folded away
-  for (const idxs of groups.values()) {
-    if (idxs.length < 2) continue;
-    // Earliest purchaseDate wins; index order breaks a tie so the choice is deterministic.
-    let keep = idxs[0];
-    for (const i of idxs) {
-      if (_purchaseTs(holdings[i]) < _purchaseTs(holdings[keep])) keep = i;
-    }
-    let mv = 0, basis = 0, couponMv = 0, durationMv = 0, basisOverLevel = 0;
-    let faceSum = 0, anyFace = false;
-    for (const i of idxs) {
-      const h = holdings[i];
-      mv         += h.marketValue ?? 0;
-      basis      += h.costBasis   ?? 0;
-      if (h.faceValue != null) { faceSum += h.faceValue; anyFace = true; }
-      couponMv   += (h.couponRate ?? 0) * (h.marketValue ?? 0);
-      durationMv += (h.duration   ?? 0) * (h.marketValue ?? 0);
-      if (h.acquisitionPriceLevel > 0) basisOverLevel += (h.costBasis ?? 0) / h.acquisitionPriceLevel;
-      if (i !== keep) absorbed.add(i);
-    }
-    const base = holdings[keep];
-    survivors.set(keep, {
-      ...base,
-      marketValue: +mv.toFixed(2),
-      costBasis:   +basis.toFixed(2),
-      // Par is conserved by the merge, like marketValue and costBasis above it.
-      ...(base.faceValue == null && !anyFace ? {} : { faceValue: +faceSum.toFixed(2) }),
-      couponRate:  base.couponRate == null || mv <= 0 ? base.couponRate : +(couponMv / mv).toFixed(6),
-      duration:    base.duration   == null || mv <= 0 ? base.duration   : +(durationMv / mv).toFixed(4),
-      // Basis-weighted harmonic mean — see the doc above. Falls back to the survivor's
-      // own level when there is no basis to weight by (nothing to index either way).
-      acquisitionPriceLevel: base.acquisitionPriceLevel == null || basisOverLevel <= 0
-        ? base.acquisitionPriceLevel
-        : +(basis / basisOverLevel).toFixed(11),
-    });
-  }
-  if (absorbed.size === 0) return holdings;
-
-  const out = [];
-  holdings.forEach((h, i) => {
-    if (absorbed.has(i)) return;
-    out.push(survivors.get(i) ?? h);
-  });
-  return out;
+  return compactLots(holdings, { asOfMs, policy: LOT_POLICIES.REBALANCE });
 }
 
-/**
- * The merge key for `_compactSeasonedLots`, or null when the lot may not be merged at
- * all (not ours, worthless, or not yet seasoned).
- */
-function _fungibleKey(h, asOfMs) {
-  if (!h || typeof h.id !== 'string' || !h.id.startsWith(REB_LOT_PREFIX)) return null;
-  if ((h.marketValue ?? 0) <= 0) return null;
-  if (asOfMs - _purchaseTs(h) < TWELVE_MONTHS_MS) return null;
-  const fields = Object.keys(h).filter(k => !MERGEABLE_FIELDS.has(k)).sort();
-  return JSON.stringify([
-    ...fields.map(k => [k, h[k]]),
-    ['couponRate:null', h.couponRate == null],
-    ['duration:null',   h.duration   == null],
-  ]);
-}
 
 /** Milliseconds of a lot's purchaseDate; 0 (oldest) when it carries none. */
 function _purchaseTs(h) {

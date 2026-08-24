@@ -16,6 +16,7 @@ import { disposalTermFields } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
+import { lotVintage }              from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { section988ForBondPrincipal } from '../bond-currency-basis.js';
 import { toMs } from '../main-residence.js';
@@ -126,6 +127,7 @@ export class StockContributionApplyReducer extends AccountServiceReducer {
   }
 }
 
+
 /**
  * EVT-13: Stock dividend — stays in account (reinvested into holdings).
  * Chains STOCK_DIVIDEND_TAX (US ordinary income, AU ordinary if resident).
@@ -155,7 +157,11 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
           // balance credit (§4.4 invariant). Without this the scalar balance
           // credit desyncs from holdings and is discarded by the next earnings
           // _syncBalance. (Brokerage basis is no longer tracked — design 53 P1.)
-          holdings: distributeHoldingsCredit(sa.holdings, amount),
+          // design 93 §5.0a — the reinvestment opens THIS year's vintage lot in each
+          // sleeve bucket rather than blending into lots it was never bought with.
+          holdings: distributeHoldingsCredit(sa.holdings, amount, {
+            stateKey: key, ...lotVintage(state, sa), label: 'Reinvested dividends',
+          }),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.
@@ -194,7 +200,10 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
           year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
           priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
         })
-      : distributeHoldingsCredit(sa.holdings, amount);   // pre-G10b fallback
+      // pre-G10b fallback — still a purchase, so still its own vintage lot (§5.0a).
+      : distributeHoldingsCredit(sa.holdings, amount, {
+          stateKey: key, ...lotVintage(state, sa), label: 'Reinvested coupons',
+        });
     return this.newState(
       state,
       {

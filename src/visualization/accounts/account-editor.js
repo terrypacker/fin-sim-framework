@@ -886,6 +886,8 @@ export class AccountEditor extends BaseComponent {
   // ─── Form read ──────────────────────────────────────────────────────────────
 
   _readForm(el) {
+    // par-reviewed: UI normalisation of user-entered numbers on the editor form, before
+    // anything is committed to state.
     const holdings = this._holdings.map(h => ({
       ...h,
       marketValue:    Number(h.marketValue)  || 0,

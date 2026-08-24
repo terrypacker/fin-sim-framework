@@ -1668,6 +1668,8 @@ function _stockHoldings(p) {
   const treasuryMv = +((bond * 0.40).toFixed(2));
   const muniMv     = +((bond * 0.25).toFixed(2));
   const corpMv     = +((bond - treasuryMv - muniMv).toFixed(2));
+  // par-reviewed: CONSTRUCTS a Holding; the spread is an `extra` overrides bag, not an
+  // existing position.
   const bondSleeve = (id, label, mv, taxExemption, issuingState = null, extra = {}) => new Holding({
     id, label, allocation: ALLOCATION.BOND, rateKey: RATE_KEYS.FIXED_INCOME_US,
     marketValue: mv, costBasis: mv,                    // bond basis = market (§5.3.4)

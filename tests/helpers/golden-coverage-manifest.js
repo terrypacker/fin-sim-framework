@@ -63,6 +63,9 @@ export const COVERED = [
   'AU_TAX_SETTLE_APPLY',
   'AU_WAGES_INCOME_APPLY',
   'AU_WAGES_INCOME_TAX',
+  // design 93 §5.4 — closed by `tips-ladder-conservation`, which is the first golden to
+  // hold an inflation-linked instrument at all.
+  'BOND_ACCRETION_APPLY',
   'BOND_COUPON_CASH_APPLY',
   'BOND_COUPON_TAX',
   'BOND_SLEEVE_COUPON_APPLY',
@@ -117,6 +120,15 @@ export const COVERED = [
   'US_TAX_SETTLE_APPLY',
   'WAGES_INCOME_APPLY',
   'WAGES_INCOME_TAX',
+
+  // ── Roth conversion (designs 45, 84) — cleared by `bond-par-conservation` (93 §7)
+  'ROTH_CONVERSION_APPLY',
+  'ROTH_CONVERSION_TAX',
+
+  // ── Target-allocation rebalancing (design 61) — also cleared by
+  // `bond-par-conservation`, which needs a rebalance running across dated bonds because
+  // the sell leg is where par was silently left behind (design 93 §2.3).
+  'REBALANCE_TO_TARGET_APPLY',
 ];
 
 /**
@@ -175,10 +187,12 @@ export const KNOWN_GAPS = [
   'SUPER_WITHDRAWAL_EARNINGS_APPLY',
 
   // ── Roth conversion and early-withdrawal decant (designs 45, 84)
-  // Pairs naturally with the decumulation golden: a conversion ladder in the low-income
-  // years between retirement and RMD age, priced across the residency change (84 G1).
-  'ROTH_CONVERSION_APPLY',
-  'ROTH_CONVERSION_TAX',
+  // ROTH_CONVERSION_APPLY / _TAX were cleared by `bond-par-conservation` (design 93 §7),
+  // which needed a conversion for its own reasons — it is the deposit path that froze par
+  // against a doubled market value — and cleared these on the way past. The conversion
+  // LADDER those two lines originally imagined (a ramp through the low-income years
+  // between retirement and RMD age, priced across the residency change, 84 G1) is still
+  // unbuilt; what is covered today is a 24%-bracket window over five years.
   'SCHEDULED_EARLY_WITHDRAWAL_APPLY',
 
   // ── Death, survivorship and bequest (designs 63, 68)
@@ -226,7 +240,6 @@ export const KNOWN_GAPS = [
   // The reference golden holds a static mix and never rebalances. A glidepath golden
   // would reach the drift bands, the ladder roll, accretion and the holding ops.
   'ACCOUNT_RETITLE_APPLY',
-  'BOND_ACCRETION_APPLY',
   'BOND_COUPON_APPLY',
   'FIXED_INCOME_CONTRIBUTION_APPLY',
   'FIXED_INCOME_WITHDRAWAL_APPLY',

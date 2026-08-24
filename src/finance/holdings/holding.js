@@ -251,6 +251,26 @@ export class Holding {
     zeroCoupon           = false,
     inflationLinked      = false,
     fxBasisRate          = null,
+    // ── design 93 §5 (Option A): the UNITISED representation, bonds first ──────────
+    // Present only on an individual bond. When `units` is non-null the holding is
+    // UNITISED and its value flows from a count times a per-unit quantity; when it is
+    // absent the holding is SCALAR and `marketValue` is the stored primary, which is
+    // every equity sleeve and every bond FUND. Both modes are first-class (design 93
+    // §6.2 item 2) — Option C is exactly "flip equity from scalar to unitised", so
+    // scalar must never become a legacy branch.
+    units                = null,
+    parPerUnit           = null,
+    pricePerUnit         = null,
+    // TIPS only: the CPI index ratio, 1.0 at issue. Today the inflation adjustment is
+    // buried inside `marketValue`, which is why redemption pays out accumulated rate
+    // noise (design 93 §5.3). Tracking it explicitly is what lets the deflation floor
+    // compare two par-like quantities instead of comparing par against a market price.
+    cpiIndexRatio        = null,
+    // RESERVED, always null under Option A. Under Option C a holding names the security
+    // it is a position in and the instrument-level fields move behind that reference;
+    // carrying the field from day one means C never has to touch the serializer, the
+    // schema registry or the round-trip tests (design 93 §6.2 item 4).
+    securityId           = null,
   } = {}) {
     assertValidAllocation(allocation, id);
     assertValidRateKey(rateKey, id);
@@ -283,9 +303,21 @@ export class Holding {
     this.zeroCoupon           = zeroCoupon;
     this.inflationLinked      = inflationLinked;
     this.fxBasisRate          = fxBasisRate;
+    // ASSIGNED ONLY WHEN PRESENT. `normalizeState` keeps explicit nulls, so defaulting
+    // these to null would add five fields to every holding in every golden fixture and
+    // make an unrelated diff on every future change. Same discipline as
+    // `costBaseByCountry` (design 84 G8).
+    if (units         != null) this.units         = units;
+    if (parPerUnit    != null) this.parPerUnit    = parPerUnit;
+    if (pricePerUnit  != null) this.pricePerUnit  = pricePerUnit;
+    if (cpiIndexRatio != null) this.cpiIndexRatio = cpiIndexRatio;
+    if (securityId    != null) this.securityId    = securityId;
   }
 
   toJSON() {
+    // par-reviewed: SERIALIZATION, not mutation. This builds a plain JSON record from a
+    // Holding; the spreads are conditional field emission, not a copy of a live position,
+    // so there is no par to fall out of step with.
     return {
       __type:              this.constructor.type,
       id:                  this.id,
@@ -320,6 +352,13 @@ export class Holding {
       zeroCoupon:          this.zeroCoupon,
       inflationLinked:     this.inflationLinked,
       fxBasisRate:         this.fxBasisRate,
+      // design 93 §5 — omitted entirely when absent so a scalar holding round-trips to
+      // exactly the bytes it did before this field existed.
+      ...(this.units         != null ? { units:         this.units }         : {}),
+      ...(this.parPerUnit    != null ? { parPerUnit:    this.parPerUnit }    : {}),
+      ...(this.pricePerUnit  != null ? { pricePerUnit:  this.pricePerUnit }  : {}),
+      ...(this.cpiIndexRatio != null ? { cpiIndexRatio: this.cpiIndexRatio } : {}),
+      ...(this.securityId    != null ? { securityId:    this.securityId }    : {}),
     };
   }
 
@@ -359,6 +398,15 @@ export class Holding {
       zeroCoupon:     d.zeroCoupon ?? false,
       inflationLinked: d.inflationLinked ?? false,
       fxBasisRate:     d.fxBasisRate     ?? null,
+      // design 93 §5. Absent on every save written before the unitised representation
+      // existed, which is the whole corpus — a scalar holding stays scalar, and the
+      // promotion to unitised is a deliberate act (`promoteToUnitised`), never a silent
+      // side effect of loading.
+      units:           d.units           ?? null,
+      parPerUnit:      d.parPerUnit      ?? null,
+      pricePerUnit:    d.pricePerUnit    ?? null,
+      cpiIndexRatio:   d.cpiIndexRatio   ?? null,
+      securityId:      d.securityId      ?? null,
     });
   }
 }

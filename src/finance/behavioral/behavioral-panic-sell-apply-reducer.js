@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ALLOCATION }        from '../holdings/allocation.js';
+import { resize, addValue } from '../holdings/holding-utils.js';
 
 /**
  * BehavioralPanicSellApplyReducer — applies an equity-to-cash rotation within
@@ -55,9 +56,8 @@ export class BehavioralPanicSellApplyReducer extends Reducer {
     let holdings = account.holdings.map((h, i) => {
       if (i !== sourceIdx) return h;
       const mv    = +(h.marketValue   - consume).toFixed(2);
-      const basis = +((h.costBasis ?? 0) - basisShare).toFixed(2);
       if (mv < 0.001) return null;
-      return { ...h, marketValue: mv, costBasis: basis };
+      return resize(h, mv / Math.max(h.marketValue ?? 0, 0.001));   // design 93 §4
     }).filter(Boolean);
 
     // Find or create a CASH holding
@@ -65,11 +65,7 @@ export class BehavioralPanicSellApplyReducer extends Reducer {
     if (cashIdx >= 0) {
       holdings = holdings.map((h, i) => {
         if (i !== cashIdx) return h;
-        return {
-          ...h,
-          marketValue: +(h.marketValue + consume).toFixed(2),
-          costBasis:   +((h.costBasis ?? 0) + consume).toFixed(2),
-        };
+        return addValue(h, consume);
       });
     } else {
       // Create new CASH holding

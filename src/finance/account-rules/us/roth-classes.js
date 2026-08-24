@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
-import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { debitLedgerForLoss, drawDerivedProRata } from '../../assets/investment-account.js';
 
@@ -73,7 +73,7 @@ export class RothContributionApplyReducer extends AccountServiceReducer {
         ...ra,
         balance:           newBalance,
         contributionBasis: ra.contributionBasis + action.amount,
-        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance),
+        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
       },
     });
   }
@@ -104,7 +104,7 @@ export class RothWithdrawalContribApplyReducer extends AccountServiceReducer {
         ...ra,
         balance:           newBalance,
         contributionBasis: ra.contributionBasis - action.amount,
-        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance),
+        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
       },
     });
   }
@@ -146,7 +146,7 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: ra.earningsBasis - amount,
           // Design 84 G2 — the derived pool leaves with the earnings, pro-rata.
           ...drawDerivedProRata(ra, amount),
-          holdings:      scaleHoldings(ra.holdings, ra.balance, newBalance),
+          holdings:      scaleHoldings(ra.holdings, ra.balance, newBalance, lotVintage(state, ra)),
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.

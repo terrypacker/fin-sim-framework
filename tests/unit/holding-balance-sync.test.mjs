@@ -19,7 +19,7 @@
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
-import { rescaleHoldingsToBalance, holdingsOutOfSync, distributeHoldingsCredit } from '../../src/finance/holdings/holding-utils.js';
+import { rescaleHoldingsToBalance, holdingsOutOfSync, distributeHoldingsCredit, scaleHoldings } from '../../src/finance/holdings/holding-utils.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 
@@ -95,6 +95,10 @@ test('rescale is a no-op for empty / missing holdings', () => {
 
 // ── distributeHoldingsCredit (dividend reinvest) ─────────────────────────────
 
+// The two tests below pass no `year`, which is the pre-design-93 pro-rata BLEND — kept
+// for a caller that cannot say what year it is (a UI preview, a unit test), which in the
+// simulation is none of them. The vintage-lot tests further down are the live path.
+
 test('distributeHoldingsCredit adds the full credit to market value AND basis, weighted by mv', () => {
   const holdings = [
     { id: 'a', marketValue: 75_000, costBasis: 50_000 }, // 75% weight
@@ -114,6 +118,136 @@ test('distributeHoldingsCredit lands the whole credit in the first holding when 
   assert.equal(out[0].marketValue, 500);
   assert.equal(out[0].costBasis, 500);
   assert.equal(out[1].marketValue, 0);
+});
+
+// ── distributeHoldingsCredit — the vintage lot (design 93 §5.0a) ─────────────
+//
+// Reinvested income is a PURCHASE: it buys more of the thing at today's price with its own
+// basis. Spreading it into the existing lots made those dollars inherit an acquisition date
+// they were never bought on — which is what FIFO, HIFO, the AU Division 115 twelve-month
+// gate, the post-2027 indexation clock and the residency step-up all key off.
+
+test('a reinvested dividend opens its OWN lot and leaves the paying sleeves untouched', () => {
+  const holdings = [
+    { id: 'a', allocation: 'EQUITY', marketValue: 75_000, costBasis: 50_000, rateKey: 'EQ',
+      purchaseDate: new Date(Date.UTC(2020, 0, 1)) },
+    { id: 'b', allocation: 'EQUITY', marketValue: 25_000, costBasis: 25_000, rateKey: 'EQ',
+      purchaseDate: new Date(Date.UTC(2020, 0, 1)) },
+  ];
+  const out = distributeHoldingsCredit(holdings, 1_000, {
+    stateKey: 'usStockAccount', year: 2031, purchaseMs: Date.UTC(2031, 5, 30), priceLevel: 1.12,
+  });
+
+  assert.equal(sumMv(out), 101_000, 'Σ market value still rises by exactly the credit');
+  // The whole point: nothing happened to the lots that paid the dividend.
+  assert.deepEqual(out[0], holdings[0], 'paying sleeve a is byte-identical');
+  assert.deepEqual(out[1], holdings[1], 'paying sleeve b is byte-identical');
+
+  const lot = out[2];
+  assert.equal(out.length, 3, 'one new lot for the bucket, not one per paying sleeve');
+  assert.equal(lot.marketValue, 1_000);
+  assert.equal(lot.costBasis,   1_000, 'reinvested cash carries basis equal to its value');
+  assert.equal(lot.allocation,  'EQUITY', 'allocation inherited from the sleeves that paid');
+  assert.equal(lot.purchaseDate.getTime(), Date.UTC(2031, 5, 30), 'bought today, not in 2020');
+  assert.equal(lot.acquisitionPriceLevel, 1.12, 'indexed from its own acquisition (design 57 §6.3)');
+  assert.equal(lot.maturityDate, null, 'a fund position — no maturity, no par, no units');
+  assert.equal(lot.faceValue,    null);
+  assert.equal(lot.units,        undefined, 'and therefore nothing that could blend a par');
+});
+
+test('a second payment in the same year merges into that year\'s lot; a new year opens a new one', () => {
+  // Bounded: one lot per bucket per year, not one per payment. Merging within a vintage is
+  // not the blend the rule forbids — no holding-period test can distinguish the halves.
+  let hs = [{ id: 'a', allocation: 'EQUITY', marketValue: 100_000, costBasis: 100_000, rateKey: 'EQ' }];
+  const credit = (amount, year) => distributeHoldingsCredit(hs, amount, { stateKey: 'acct', year });
+
+  hs = credit(1_000, 2031);
+  hs = credit(1_000, 2031);
+  assert.equal(hs.length, 2, 'both 2031 payments share one lot');
+  assert.equal(hs[1].marketValue, 2_000);
+  assert.equal(hs[1].costBasis,   2_000);
+
+  hs = credit(1_000, 2032);
+  assert.equal(hs.length, 3, '2032 is a different vintage');
+  assert.equal(hs[2].marketValue, 1_000);
+});
+
+test('the credit is split across sleeve BUCKETS by market value, so allocation drift is unchanged', () => {
+  // The rejected alternative — one lot per account per payment — had to pick a single
+  // allocation for the whole credit, which moves the mix. Bucketing keeps each allocation's
+  // share of the credit equal to its share of the value that earned it.
+  const holdings = [
+    { id: 'e', allocation: 'EQUITY', marketValue: 60_000, costBasis: 60_000, rateKey: 'EQ' },
+    { id: 'o', allocation: 'OTHER',  marketValue: 40_000, costBasis: 40_000, rateKey: 'OT' },
+  ];
+  const out = distributeHoldingsCredit(holdings, 1_000, { stateKey: 'acct', year: 2031 });
+  const share = (alloc) => out.filter(h => h.allocation === alloc)
+                              .reduce((s, h) => s + h.marketValue, 0);
+  assert.equal(out.length, 4, 'one new lot per bucket');
+  assert.equal(share('EQUITY'), 60_600, '60% of the value earned 60% of the credit');
+  assert.equal(share('OTHER'),  40_400);
+});
+
+test('a reinvested coupon buys BOND exposure, never more of the rung that paid it', () => {
+  // design 66 §G10b's reinvestment-risk point, and design 93 §5b's par point: the vintage
+  // lot is a FUND, so a coupon can never grow a dated rung's par or unit count.
+  const rung = { id: 'r', allocation: 'BOND', marketValue: 100_000, costBasis: 100_000,
+                 faceValue: 100_000, units: 1_000, parPerUnit: 100, pricePerUnit: 100,
+                 maturityDate: new Date(Date.UTC(2035, 0, 1)), rateKey: 'FI', taxExemption: 'state' };
+  const out = distributeHoldingsCredit([rung], 4_000, { stateKey: 'acct', year: 2031 });
+
+  assert.deepEqual(out[0], rung, 'the rung is not written to at all');
+  assert.equal(out[1].allocation,   'BOND');
+  assert.equal(out[1].taxExemption, 'state', 'the tax identity of the sleeve that paid is inherited');
+  assert.equal(out[1].maturityDate, null,    'but not its maturity');
+  assert.equal(out[1].faceValue,    null,    'and not its par');
+});
+
+// ── scaleHoldings — the two directions are different operations (design 93 §5.0a) ──
+
+test('a DEBIT scales every lot proportionally — a withdrawal is a proportional sell', () => {
+  const holdings = [
+    { id: 'a', allocation: 'EQUITY', marketValue: 60_000, costBasis: 30_000 },
+    { id: 'b', allocation: 'EQUITY', marketValue: 40_000, costBasis: 40_000 },
+  ];
+  const out = scaleHoldings(holdings, 100_000, 80_000, { year: 2031, purchaseMs: Date.UTC(2031, 0, 1) });
+  assert.equal(out.length, 2, 'a sell opens no lots');
+  assert.equal(out[0].marketValue, 48_000);
+  assert.equal(out[0].costBasis,   24_000, 'basis leaves with the units, pro rata');
+  assert.equal(out[1].marketValue, 32_000);
+});
+
+test('a CREDIT opens a lot and gives the new money its FULL basis', () => {
+  // Two bugs in one: scaling on the way in made the deposited dollars inherit the
+  // destination lots' acquisition dates (the design 62 §9 defect), and it scaled BASIS by
+  // the value ratio — which under-adds basis whenever the position carries a gain. Here
+  // the account holds a 30k unrealized gain, so the old form credited only ~14k of basis
+  // for a 20k deposit.
+  const holdings = [
+    { id: 'a', allocation: 'EQUITY', marketValue: 60_000, costBasis: 30_000, rateKey: 'EQ',
+      purchaseDate: new Date(Date.UTC(2015, 0, 1)) },
+    { id: 'b', allocation: 'EQUITY', marketValue: 40_000, costBasis: 40_000, rateKey: 'EQ',
+      purchaseDate: new Date(Date.UTC(2015, 0, 1)) },
+  ];
+  const out = scaleHoldings(holdings, 100_000, 120_000, { year: 2031, purchaseMs: Date.UTC(2031, 0, 1) });
+
+  assert.equal(sumMv(out), 120_000, 'Σ market value still ties to the new balance');
+  assert.deepEqual(out.slice(0, 2), holdings, 'the existing lots are byte-identical');
+  assert.equal(out.length, 3, 'the deposit is its own lot');
+  assert.equal(out[2].marketValue, 20_000);
+  assert.equal(out[2].costBasis,   20_000, 'the full deposit, not 20,000 x (basis/value)');
+  assert.equal(out[2].purchaseDate.getTime(), Date.UTC(2031, 0, 1), 'bought in 2031, not 2015');
+});
+
+test('scaleHoldings with NO vintage keeps the old proportional scale in both directions', () => {
+  // For the UI and for unit tests, which have no clock. Every simulation caller passes
+  // `lotVintage(state, account)`; a caller that forgets simply gets the pre-93 behaviour
+  // rather than a half-applied rule.
+  const holdings = [{ id: 'a', allocation: 'EQUITY', marketValue: 100_000, costBasis: 50_000 }];
+  const out = scaleHoldings(holdings, 100_000, 120_000);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].marketValue, 120_000);
+  assert.equal(out[0].costBasis,    60_000, 'basis scaled by the ratio — the old under-add');
 });
 
 // ── holdingsOutOfSync ────────────────────────────────────────────────────────

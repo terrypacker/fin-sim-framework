@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { singleAssetTermFields } from '../holdings/holding-period.js';
 import { toMs } from '../account-rules/main-residence.js';
+import { resize, addValue } from '../holdings/holding-utils.js';
 
 /**
  * StockHarvestApplyReducer — dedicated sell+rebuy path for tax-loss and tax-gain
@@ -103,9 +104,10 @@ export class StockHarvestApplyReducer extends Reducer {
     const afterSell = holdings.map(h => {
       if (h.id !== sourceHoldingId) return h;
       const remainingMv    = +(h.marketValue - consume).toFixed(2);
-      const remainingBasis = +((h.costBasis ?? 0) - basisShare).toFixed(2);
       if (remainingMv < 0.001) return null; // fully consumed
-      return { ...h, marketValue: remainingMv, costBasis: remainingBasis };
+      // A UNIT change — see design 93 §4. `resize` carries basis, par and every
+      // per-country cost base by the same ratio; the hand-rolled version carried basis only.
+      return resize(h, remainingMv / Math.max(h.marketValue ?? 0, 0.001));
     }).filter(Boolean);
 
     // Rebuy substitute: add proceeds to its marketValue and costBasis
@@ -118,11 +120,8 @@ export class StockHarvestApplyReducer extends Reducer {
     let afterRebuy = afterSell.map(h => {
       if (h.id !== substituteHoldingId) return h;
       substituteFound = true;
-      return {
-        ...h,
-        marketValue: +(h.marketValue + consume).toFixed(2),
-        costBasis:   +(h.costBasis   + consume).toFixed(2),
-      };
+      // New money into an existing lot: basis rises by the full amount (design 93 §4).
+      return addValue(h, consume);
     });
 
     if (!substituteFound) {
@@ -130,6 +129,8 @@ export class StockHarvestApplyReducer extends Reducer {
         // Source was fully consumed; rebuy it with a fresh cost basis at market price
         afterRebuy = [
           ...afterSell,
+          // par-reviewed: CREATES a new lot using an existing one as a template. A fresh lot has no
+          // par to fall out of step with; the spread copies traits, it does not mutate a position.
           {
             ...source,
             marketValue: consume,

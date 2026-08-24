@@ -67,7 +67,9 @@ export function debitIra(ia, amount, { proRata = false } = {}) {
   };
 
   if (ia.balance > 0) {
-    // Same helper as every other value move, so par scales with the position.
+    // Same helper as every other value move, so par scales with the position. No vintage:
+    // this helper only ever DEBITS (`newBalance = ia.balance - amount`), which is a
+    // proportional sell — there is no new money here to open a lot for (design 93 §5.0a).
     result.holdings = scaleHoldings(ia.holdings, ia.balance, newBalance);
   }
 
