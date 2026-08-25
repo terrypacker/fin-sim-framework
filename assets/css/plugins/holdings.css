@@ -44,6 +44,40 @@
   padding: 4px 0 8px;
 }
 
+/* ── Mix charts ─────────────────────────────────────────────────────────────
+   Two charts on one row, wrapping to stacked below ~440px of panel width. A
+   docked panel can be narrow, and two 200px charts side by side are two charts
+   nobody can read. */
+.hld-charts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hld-chart-cell {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin: 0;
+}
+
+.hld-chart-title {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 2px;
+}
+
+/* ECharts needs a resolved height on its host; it cannot infer one from a flex
+   parent, and a 0px host draws nothing at all. */
+.hld-chart {
+  height: 132px;
+  width: 100%;
+}
+
 .hld-section-head {
   display: flex;
   align-items: center;

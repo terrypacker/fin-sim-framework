@@ -26,6 +26,14 @@
  * one code path covers all holding-capable accounts.
  */
 
+import { ALLOCATION_VALUES } from './allocation.js';
+
+/**
+ * Bucket for a holding carrying no allocation. Deliberately the reporting taxonomy's
+ * UNKNOWN, not a new word: it is the key the shared palette already paints grey.
+ */
+export const UNALLOCATED = 'UNKNOWN';
+
 // Action types whose holding changes are market moves (appreciation, dividend
 // reinvest, mark-to-market) rather than discretionary buys/sells. Matched
 // case-insensitively against the journal entry's actionType.
@@ -69,6 +77,56 @@ export function totalSnapshot(rows) {
     acc.unrealized  += r.unrealized;
     return acc;
   }, { marketValue: 0, costBasis: 0, unrealized: 0 });
+}
+
+/**
+ * Roll a snapshot up to one row per ALLOCATION class.
+ *
+ * The charts group by class rather than by holding for a structural reason: a bond
+ * ladder is one holding PER RUNG (see bond-ladder-reducer), so a per-holding pie of a
+ * laddered account is twenty unreadable slivers that all mean "bonds". The class is
+ * also the vocabulary the rest of the app's charts already use, so the same hue means
+ * the same thing here as in the allocation panel.
+ *
+ * Ordering follows ALLOCATION_VALUES, not size, so a class does not jump position
+ * between two sim steps as the mix drifts — a legend that reorders itself under the
+ * reader is how a colour stops being an identity.
+ *
+ * A holding whose allocation is missing lands in UNKNOWN rather than being dropped:
+ * the constructor rejects an unknown allocation, but `snapshotHoldings` also reads
+ * plain state objects (tests, older persisted state) where the field can be absent,
+ * and a slice silently missing from a mix chart is worse than one labelled UNKNOWN.
+ *
+ * Classes with no position at all are omitted; a class held at exactly zero market
+ * value but carrying an unrealized figure is kept, because that is a real (and
+ * usually surprising) fact about the account, not dust.
+ *
+ * @param {Array<{allocation,marketValue,costBasis,unrealized}>} rows - snapshotHoldings() output
+ * @returns {Array<{allocation,marketValue,costBasis,unrealized,count}>}
+ */
+export function groupSnapshotByAllocation(rows) {
+  const groups = new Map();
+  for (const r of rows ?? []) {
+    const key = r?.allocation ?? UNALLOCATED;
+    const g = groups.get(key) ??
+      { allocation: key, marketValue: 0, costBasis: 0, unrealized: 0, count: 0 };
+    g.marketValue += r?.marketValue ?? 0;
+    g.costBasis   += r?.costBasis   ?? 0;
+    g.unrealized  += r?.unrealized  ?? 0;
+    g.count       += 1;
+    groups.set(key, g);
+  }
+
+  const order = [...ALLOCATION_VALUES, UNALLOCATED];
+  return [...groups.values()]
+    .filter(g => Math.abs(g.marketValue) > 0.005 || Math.abs(g.unrealized) > 0.005)
+    .map(g => ({ ...g, unrealized: +g.unrealized.toFixed(2) }))
+    .sort((a, b) => {
+      const ia = order.indexOf(a.allocation), ib = order.indexOf(b.allocation);
+      // An allocation outside the enum (neither a legal value nor absent) sorts after
+      // the known ones rather than to the front, which is where indexOf's -1 puts it.
+      return (ia < 0 ? order.length : ia) - (ib < 0 ? order.length : ib);
+    });
 }
 
 /**
