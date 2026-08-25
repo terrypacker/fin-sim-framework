@@ -2,6 +2,7 @@
  "activeRegimes": [],
  "auCapitalGainsYTD": 0,
  "auCgtEffectiveRate": 0.385264414673,
+ "auDeductibleSuperYTD": 0,
  "auDiscountAllowanceYTD": 0,
  "auDiscountApportionedBaseYTD": 0,
  "auDiscountableGainsYTD": 0,
@@ -116,6 +117,10 @@
   "primary": 0,
   "spouse": 0
  },
+ "auPersonDeductibleSuperYTD": {
+  "primary": 0,
+  "spouse": 0
+ },
  "auPersonDiscountAllowanceYTD": {
   "primary": 0,
   "spouse": 0
@@ -149,8 +154,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 188032.631732,
-  "spouse": 65319.3927409
+  "primary": 185438.006732,
+  "spouse": 65341.7877409
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -169,7 +174,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 166265.611732,
+  "primary": 163648.591732,
   "spouse": 54204.9227409
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -179,7 +184,7 @@
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 943406.14,
+  "balance": 945423.26,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -187,7 +192,7 @@
   },
   "drawdownPriority": 0,
   "fxBasisRate": 1.55,
-  "fxBasisUsd": 608649.122581,
+  "fxBasisUsd": 609950.490323,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -195,7 +200,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 943406.144235,
+    "costBasis": 945423.264305,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -206,7 +211,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 943406.144235,
+    "marketValue": 945423.264305,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -272,6 +277,38 @@
   "role": "au-stock",
   "stateKey": "auStockAccount",
   "type": "brokerage"
+ },
+ "auSuperCapsByPerson": {
+  "primary": {
+   "bringForward": null,
+   "concessionalYTD": 0,
+   "nonConcessionalYTD": 0,
+   "qualifyingEarningsYTD": 0,
+   "sgYTD": 0,
+   "tsbAtFyStart": 472118.01,
+   "unusedByFy": {
+    "2032": 37500,
+    "2033": 37500,
+    "2034": 40000,
+    "2035": 40000,
+    "2036": 42500
+   }
+  },
+  "spouse": {
+   "bringForward": null,
+   "concessionalYTD": 0,
+   "nonConcessionalYTD": 0,
+   "qualifyingEarningsYTD": 0,
+   "sgYTD": 0,
+   "tsbAtFyStart": 236059.02,
+   "unusedByFy": {
+    "2032": 37500,
+    "2033": 37500,
+    "2034": 40000,
+    "2035": 40000,
+    "2036": 42500
+   }
+  }
  },
  "auSuperTaxYTD": 0,
  "baseAppreciationRates": {},
@@ -419,7 +456,7 @@
  "cumulativeConsumptionUtility": 284.26578966,
  "cumulativeConsumptionUtilityCount": 144,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 610067.574279,
+ "cumulativeTaxesPaid": 758850.457663,
  "currentPeriods": {
   "AU": {
    "endMs": 2161555200000,
@@ -878,12 +915,16 @@
   "stateKey": "k401Account",
   "type": "401k"
  },
+ "limitIndexAccumulator": {
+  "AU": 1.38423387072,
+  "US": 1.42576088685
+ },
  "metrics": {
   "auFixedIncomeAccount": 1614.76,
-  "auSavingsAccount": 943406.14,
+  "auSavingsAccount": 945423.26,
   "auStockAccount": 193295.5,
   "au_fixed_income_interest": 5.36,
-  "au_savings_interest": 3524.56,
+  "au_savings_interest": 3532.09,
   "au_stock_dividend": 7434.44,
   "au_stock_earnings": 10520.44,
   "bond_coupons": 720,
@@ -896,8 +937,8 @@
   "k401Account": 598406.85,
   "k401_earnings": 22100.95,
   "monthly_expenses": 8305.40322435,
-  "netLiquidity": 6791236.88,
-  "netWorth": 7275310.14,
+  "netLiquidity": 6613457.98,
+  "netWorth": 7097531.25,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
   "rothAccount": 180175.33,
@@ -908,9 +949,9 @@
   "spouseSuperAccount": 250104.53,
   "superAccount": 500209.03,
   "super_earnings": 14045.51,
-  "usSavingsAccount": 3833491.34789,
+  "usSavingsAccount": 3653459.35396,
   "usStockAccount": 223884.31,
-  "us_savings_interest": 9559.83,
+  "us_savings_interest": 9110.87,
   "us_stock_earnings": 7696.53
  },
  "monthlyExpenses": 8554.56532108,
@@ -923,6 +964,12 @@
    ],
    "id": "primary",
    "incomeSupportRecipient": false,
+   "iraAnnualContribution": null,
+   "k401AnnualCap": null,
+   "k401DeferralPct": null,
+   "k401EmployerMatchPct": null,
+   "k401MatchTiers": null,
+   "k401NonElectivePct": null,
    "lifeExpectancy": 90,
    "monthlyWage": 11406.0870948,
    "name": "Primary",
@@ -930,9 +977,16 @@
    "residencySinceMs": 1940630400000,
    "residencyState": null,
    "retirementDate": "2040-01-01T00:00:00.000Z",
+   "rothAnnualContribution": null,
    "selfEmployed": false,
    "socialSecurityMonthly": 2851.52177369,
+   "superAnnualCap": null,
+   "superGuaranteePct": null,
+   "superNonConcessionalContribution": null,
+   "superPersonalDeductibleContribution": null,
+   "superSalarySacrificePct": null,
    "wageCurrency": "USD",
+   "wageSplits": null,
    "workCountry": null
   },
   "spouse": {
@@ -942,6 +996,12 @@
    ],
    "id": "spouse",
    "incomeSupportRecipient": false,
+   "iraAnnualContribution": null,
+   "k401AnnualCap": null,
+   "k401DeferralPct": null,
+   "k401EmployerMatchPct": null,
+   "k401MatchTiers": null,
+   "k401NonElectivePct": null,
    "lifeExpectancy": 90,
    "monthlyWage": 5703.04354738,
    "name": "Spouse",
@@ -949,9 +1009,16 @@
    "residencySinceMs": 1940630400000,
    "residencyState": null,
    "retirementDate": "2040-01-01T00:00:00.000Z",
+   "rothAnnualContribution": null,
    "selfEmployed": false,
    "socialSecurityMonthly": 1425.76088685,
+   "superAnnualCap": null,
+   "superGuaranteePct": null,
+   "superNonConcessionalContribution": null,
+   "superPersonalDeductibleContribution": null,
+   "superSalarySacrificePct": null,
    "wageCurrency": "USD",
+   "wageSplits": null,
    "workCountry": null
   }
  },
@@ -1413,7 +1480,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 3821616.02881,
+  "balance": 3642535.76723,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1427,7 +1494,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 3821616.02881,
+    "costBasis": 3642535.76723,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1438,7 +1505,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 3821616.02881,
+    "marketValue": 3642535.76723,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1467,6 +1534,10 @@
  "usSourceOrdinaryUsdYTD": 0,
  "usSourcePassiveUsdYTD": 0,
  "usSourceRealCapGainsAudYTD": 0,
+ "usSsWagesByPersonYTD": {
+  "primary": 0,
+  "spouse": 0
+ },
  "usSsWagesYTD": 0,
  "usStockAccount": {
   "allowsEarlyWithdrawal": false,
@@ -1641,7 +1712,8 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 82716.4232188,
+ "usTaxPaidOnUsSourceAud": 80992.3224488,
+ "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {
   "AU": [

@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { creditPay } from '../../payroll/wage-splits.js';
 import { resolveCashKey, resolveDestinationCashKey, resolveSaleDestinationKey, creditSaleProceeds } from '../cash-routing.js';
 import { singleAssetTermFields } from '../../holdings/holding-period.js';
 import { toMs } from '../main-residence.js';
@@ -75,10 +76,12 @@ export class WagesIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey } = action;
+    const { amount, residency, personKey } = action;
     // Credit the transaction account the handler resolved; fall back to the single
     // US cash pool for legacy actions saved without a targetKey.
-    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    // Design 95 §6 phase 2 — honours `splits` when the handler stamped them,
+    // otherwise credits the single targetKey exactly as before.
+    creditPay(this.accountService, state, action, resolveCashKey(this.stateRegistry, 'US', state));
     return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, residency, personKey }]);
   }
 }
@@ -100,7 +103,14 @@ export class WagesWithheldApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
+    // Design 95 phase 5: when the payroll handler withheld at source, the wage was
+    // already credited NET — the money never entered the household's cash, so there
+    // is nothing to debit. Debiting anyway would take it twice: once by not crediting
+    // it, once again here. A hand-authored WAGES_WITHHELD event carries no flag and
+    // keeps the original debit-from-cash behaviour.
+    if (action.alreadyNetted !== true) {
+      this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
+    }
     return this.newState(state, {
       usWithheldYTD: (state.usWithheldYTD ?? 0) + action.amount,
     });
@@ -124,10 +134,12 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey } = action;
+    const { amount, residency, personKey } = action;
     // Credit the transaction account the handler resolved (design 69, parity with
     // wages); fall back to the single US cash pool for legacy actions.
-    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    // Design 95 §6 phase 2 — honours `splits` when the handler stamped them,
+    // otherwise credits the single targetKey exactly as before.
+    creditPay(this.accountService, state, action, resolveCashKey(this.stateRegistry, 'US', state));
     return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency, personKey }]);
   }
 }
@@ -324,7 +336,7 @@ export class SeIncomeUsHandler extends HandlerEntry {
   }
 }
 
-/** Whether `person` is drawing employment income on `date` (matches MonthlyWagesHandler). */
+/** Whether `person` is drawing employment income on `date` (matches PayrollHandler). */
 function _isEarning(person, date) {
   if ((person?.monthlyWage ?? 0) <= 0) return false;
   const retDate = person.retirementDate;

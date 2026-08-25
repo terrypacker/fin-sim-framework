@@ -206,6 +206,18 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
                   { label: 'Medicare portion (2.9%)',           amount: br.seca?.medicare?.tax,       flat: br.seca?.medicare,       sub: true },
                 ]
               : []),
+            // Employee FICA (design 95 phase 4). Inside grossTax like SECA, so it has
+            // to be LISTED here or the visible lines stop summing to the stated total
+            // — the cross-form footing check is the only test that spans two forms and
+            // it caught this immediately. The OASDI/Medicare split rides as sub-rows,
+            // exactly as SECA's does.
+            ...(taxDetail.ficaTax > 0
+              ? [
+                  { label: 'FICA \u2014 Employee (Form W-2)',  amount: taxDetail.ficaTax },
+                  { label: 'Social Security portion (6.2%)',  amount: taxDetail.ficaSsTax,       sub: true },
+                  { label: 'Medicare portion (1.45%)',        amount: taxDetail.ficaMedicareTax, sub: true },
+                ]
+              : []),
             ...(taxDetail.additionalMedicareTax > 0
               ? [{ label: 'Additional Medicare Tax (0.9%)', amount: taxDetail.additionalMedicareTax, flat: br.seca?.additionalMedicare }]
               : []),

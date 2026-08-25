@@ -14,7 +14,7 @@ import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au
 import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
-import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
+import { SuperContributionApplyReducer, SuperSacrificeApplyReducer, SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { bondPrincipalUnits, isForeignBondAccount, section988ForBondPrincipal, section988ForRedemption } from './finance/account-rules/bond-currency-basis.js';
@@ -142,18 +142,17 @@ import { HouseRunningCostHandler } from './finance/handlers/house-running-cost-h
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
-import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
+import { WITHHOLDING_METHOD, PAYROLL_STAGE, hasPayrollContributions, US_CONTRIBUTION_FIELDS, AU_CONTRIBUTION_FIELDS, computePayroll, PayrollHandler } from './finance/handlers/payroll-handler.js';
 import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
-import { UsRetirementContributionHandler, AuSuperGuaranteeHandler } from './finance/handlers/retirement-contribution-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
-import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingActivity } from './finance/holdings/holding-activity.js';
+import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
@@ -201,10 +200,15 @@ import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulat
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
-import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, paramSchemaDefaults, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { auFinancialYearOf, monthlyAuSuper } from './finance/payroll/au-super-caps.js';
+import { DEFAULT_MATCH_TIERS, matchedFraction, resolveMatchTiers, monthlyK401 } from './finance/payroll/k401-limits.js';
+import { WAGE_APPLY_TYPES, WITHHELD_TYPE, CONTRIBUTION_STREAMS, monthKeyOf, listPaycheques, buildPaycheque, buildContributionsByYear, buildSuperCapRows } from './finance/payroll/paycheque-report.js';
+import { ELECTION_KIND, PAYROLL_ELECTION_META, PAYROLL_ELECTION_META_BY_FIELD, householdParamFor, inheritedValue } from './finance/payroll/payroll-election-meta.js';
+import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, splitWage, creditPay } from './finance/payroll/wage-splits.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
-import { Person } from './finance/person.js';
+import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -270,6 +274,7 @@ import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from './finance/state/accou
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { projectPerson, projectPeople } from './finance/state/person-projection.js';
 import { StateTaxService } from './finance/state-tax-service.js';
+import { AU_CONCESSIONAL_CAP_BY_FY, AU_TRANSFER_BALANCE_CAP_BY_FY, SG_CHARGE_PERCENTAGE, CARRY_FORWARD_TSB_THRESHOLD, CARRY_FORWARD_YEARS, CARRY_FORWARD_FIRST_ACCRUAL_FY, BRING_FORWARD_MAX_AGE, FIRST_PUBLISHED_FY, LAST_PUBLISHED_FY, concessionalCap, generalNonConcessionalCap, transferBalanceCap, maxContributionsBase, countableQualifyingEarnings, superGuaranteeAmount, concessionalCapWithCarryForward, rollUnusedConcessionalCap, nonConcessionalCap } from './finance/tax/au/au-super-limits.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
 import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
 import { AuTaxDocument2026 } from './finance/tax/au/au-tax-document-2026.js';
@@ -283,6 +288,7 @@ import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from './finance/tax/au/au-tax-rates-2027.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
+import { DIV293_THRESHOLD_AUD, DIV293_RATE, div293 } from './finance/tax/au/div293.js';
 import { CORPORATE_TAX_RATE, DEFAULT_CORPORATE_TAX_RATE, frankingCreditOn } from './finance/tax/au/franking.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from './finance/tax/au/super-tax-rate.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
@@ -312,6 +318,7 @@ import { StateTaxDocumentReporter } from './finance/tax/state/state-tax-document
 import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from './finance/tax/state/state-tax-settle-classes.js';
 import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
 import { US_STATES, US_STATE_CODES, usStateName, usStateOptionPairs } from './finance/tax/state/us-states.js';
+import { indexLimit, ROUNDING } from './finance/tax/statutory-indexation.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
@@ -319,6 +326,8 @@ import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSet
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
+import { FICA_SS_RATE, FICA_MEDICARE_RATE, FICA_WAGE_BASE_BY_YEAR, ficaWageBase, ficaOnWage } from './finance/tax/us/fica-rates.js';
+import { US_CONTRIBUTION_LIMITS_BY_YEAR, FIRST_PUBLISHED_YEAR, LAST_PUBLISHED_YEAR, usContributionLimits, catchUpAllowance } from './finance/tax/us/us-contribution-limits.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
 import { UsTaxDocument2026 } from './finance/tax/us/us-tax-document-2026.js';
@@ -446,6 +455,7 @@ import { MapFilterMultiSelect } from './visualization/components/map-filter-mult
 import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { RenderScheduler } from './visualization/components/render-scheduler.js';
+import { buildRowListEditor, readRowList } from './visualization/components/row-list-editor.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
 import { DecisionGraphPresenter } from './visualization/decision-graph/decision-graph-presenter.js';
 import { DgConfigPanel } from './visualization/decision-graph/dg-config-panel.js';
@@ -476,6 +486,7 @@ import { OptRunsPanel } from './visualization/optimization/opt-runs-panel.js';
 import { OptimizationController } from './visualization/optimization/optimization-controller.js';
 import { OptimizationPresenter } from './visualization/optimization/optimization-presenter.js';
 import { OptimizationView } from './visualization/optimization/optimization-view.js';
+import { PayrollSection, electionFieldId, nullableNum } from './visualization/people/payroll-section.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PersonEditor } from './visualization/people/person-editor.js';
 import { CSV_SCALAR_TYPES, paramsToCsv, csvToParamUpdates, coerceParamValue } from './visualization/scenario/param-csv.js';
@@ -502,7 +513,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -559,6 +570,9 @@ export const Finance = {
   AuSavingsWithdrawalHandler,
   AuSavingsEarningsHandler,
   SuperContributionApplyReducer,
+  SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer,
+  AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer,
   SuperEarningsApplyReducer,
@@ -961,12 +975,16 @@ export const Finance = {
   IntlTransferToAuHandler,
   MonthlyExpensesHandler,
   MonthlySocialSecurityHandler,
-  MonthlyWagesHandler,
   MortalityHandler,
   OutOfFundsHandler,
+  WITHHOLDING_METHOD,
+  PAYROLL_STAGE,
+  hasPayrollContributions,
+  US_CONTRIBUTION_FIELDS,
+  AU_CONTRIBUTION_FIELDS,
+  computePayroll,
+  PayrollHandler,
   RealPropertyRepairTickHandler,
-  UsRetirementContributionHandler,
-  AuSuperGuaranteeHandler,
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
@@ -993,9 +1011,11 @@ export const Finance = {
   HoldingRetitleAction,
   HOLDING_ACTION_CLASSES,
   registerHoldingActionTypes,
+  UNALLOCATED,
   HOLDING_ACTIVITY_KIND,
   snapshotHoldings,
   totalSnapshot,
+  groupSnapshotByAllocation,
   buildHoldingActivity,
   YEAR_MS,
   LONG_TERM_TEST,
@@ -1179,9 +1199,35 @@ export const Finance = {
   visibleWhenControllers,
   controllableVariables,
   scenarioParamValues,
+  primeRatesOf,
   paramSchemaDefaults,
   indexParamSchema,
   resolveSweepVariables,
+  auFinancialYearOf,
+  monthlyAuSuper,
+  DEFAULT_MATCH_TIERS,
+  matchedFraction,
+  resolveMatchTiers,
+  monthlyK401,
+  WAGE_APPLY_TYPES,
+  WITHHELD_TYPE,
+  CONTRIBUTION_STREAMS,
+  monthKeyOf,
+  listPaycheques,
+  buildPaycheque,
+  buildContributionsByYear,
+  buildSuperCapRows,
+  ELECTION_KIND,
+  PAYROLL_ELECTION_META,
+  PAYROLL_ELECTION_META_BY_FIELD,
+  householdParamFor,
+  inheritedValue,
+  SPLIT_MODE,
+  DEPOSITABLE_ROLES,
+  isDepositable,
+  _resetSplitWarnings,
+  splitWage,
+  creditPay,
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
@@ -1190,6 +1236,7 @@ export const Finance = {
   PeriodRelationship,
   PeriodService,
   Person,
+  PAYROLL_ELECTION_FIELDS,
   AccountRetitleApplyReducer,
   AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
@@ -1310,6 +1357,24 @@ export const Finance = {
   projectPerson,
   projectPeople,
   StateTaxService,
+  AU_CONCESSIONAL_CAP_BY_FY,
+  AU_TRANSFER_BALANCE_CAP_BY_FY,
+  SG_CHARGE_PERCENTAGE,
+  CARRY_FORWARD_TSB_THRESHOLD,
+  CARRY_FORWARD_YEARS,
+  CARRY_FORWARD_FIRST_ACCRUAL_FY,
+  BRING_FORWARD_MAX_AGE,
+  FIRST_PUBLISHED_FY,
+  LAST_PUBLISHED_FY,
+  concessionalCap,
+  generalNonConcessionalCap,
+  transferBalanceCap,
+  maxContributionsBase,
+  countableQualifyingEarnings,
+  superGuaranteeAmount,
+  concessionalCapWithCarryForward,
+  rollUnusedConcessionalCap,
+  nonConcessionalCap,
   AuTaxDocument2024,
   AuTaxDocument2025,
   AuTaxDocument2026,
@@ -1323,6 +1388,9 @@ export const Finance = {
   AuTaxRates2026,
   AuTaxRates2027,
   AuTaxRatesBase,
+  DIV293_THRESHOLD_AUD,
+  DIV293_RATE,
+  div293,
   CORPORATE_TAX_RATE,
   DEFAULT_CORPORATE_TAX_RATE,
   frankingCreditOn,
@@ -1377,6 +1445,8 @@ export const Finance = {
   US_STATE_CODES,
   usStateName,
   usStateOptionPairs,
+  indexLimit,
+  ROUNDING,
   TaxDocumentRegistry,
   TaxEngine,
   toCcy,
@@ -1405,6 +1475,16 @@ export const Finance = {
   tableDocumentToCsv,
   taxYearLabel,
   auFyLabel,
+  FICA_SS_RATE,
+  FICA_MEDICARE_RATE,
+  FICA_WAGE_BASE_BY_YEAR,
+  ficaWageBase,
+  ficaOnWage,
+  US_CONTRIBUTION_LIMITS_BY_YEAR,
+  FIRST_PUBLISHED_YEAR,
+  LAST_PUBLISHED_YEAR,
+  usContributionLimits,
+  catchUpAllowance,
   UsTaxDocument2024,
   UsTaxDocument2025,
   UsTaxDocument2026,
@@ -1676,6 +1756,8 @@ export const Visualization = {
   NodeEditModal,
   ReducerEditor,
   RenderScheduler,
+  buildRowListEditor,
+  readRowList,
   ConfigurationListComponent,
   DecisionGraphPresenter,
   DgConfigPanel,
@@ -1730,6 +1812,9 @@ export const Visualization = {
   OptimizationController,
   OptimizationPresenter,
   OptimizationView,
+  PayrollSection,
+  electionFieldId,
+  nullableNum,
   PeopleController,
   PersonEditor,
   CSV_SCALAR_TYPES,
@@ -1804,6 +1889,8 @@ export const FinancePlugins = {
   CrossActionQueryPlugin,
   HoldingsPlugin,
   AllocationPlugin,
+  SpendingPlugin,
+  PaychequePlugin,
   MpcCockpitPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,

@@ -78,6 +78,7 @@ import {
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
 import { withBalances }             from '../finance/spending-reporting/account-flow-tie.js';
+import { scenarioParamValues, primeRatesOf } from '../finance/param-schema-utils.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
@@ -88,6 +89,11 @@ function _assetCurrency(code) {
   if (code === 'AUD') return AUD;
   if (code === 'USD') return USD;
   return null;
+}
+
+/** The active scenario's Prime rates, current rather than last-rebuilt. See `primeRatesOf`. */
+function _primeRates(registry) {
+  return primeRatesOf(registry?.scenarioService?.getActive?.());
 }
 
 // ── Built-in workspace templates ────────────────────────────────────────────
@@ -346,6 +352,18 @@ export class WorkbenchApp extends BaseComponent {
         const editor = new PersonEditor({
           container,
           node,
+          // Design 95 §17 phase 10. The payroll section shows each election's
+          // INHERITED household value as placeholder text, and offers the wage-split
+          // destinations from the sibling accounts.
+          // `scenarioParamValues` and NOT `getActive().parameters`: a scenario
+          // carries its params in TWO stores, and the flat bag alone reads "unset"
+          // for every toolset default on a freshly compiled scenario (230 typed
+          // params against 70 bag entries on the reference plan, with every
+          // design-95 election among the missing ones). Every "inherit 10%" hint
+          // would then degrade to "inherit (unset)" — a placeholder that is not
+          // wrong so much as silently useless.
+          householdParams: scenarioParamValues(registry.scenarioService.getActive()),
+          accounts:        registry.graphQueryApi.getByKind('account'),
           ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {
@@ -369,9 +387,8 @@ export class WorkbenchApp extends BaseComponent {
         const people = registry.graphQueryApi.getByKind('person');
         const realProperties = registry.graphQueryApi.getByKind('real-property');
         // Prime rates (design 56) — the cash rate field edits an absolute (Prime +
-        // spread) and stores the spread, so it needs the current per-country Prime.
-        const activeParams = registry.scenarioService.getActive()?.parameters ?? {};
-        const primeRates = { US: activeParams.usPrimeRate, AU: activeParams.auPrimeRate };
+        // spread) and stores the spread, so it needs the CURRENT per-country Prime.
+        const primeRates = _primeRates(registry);
         const editor = new AccountEditor({
           container,
           node,
@@ -410,9 +427,8 @@ export class WorkbenchApp extends BaseComponent {
         const people   = registry.graphQueryApi.getByKind('person');
         const accounts = registry.graphQueryApi.getByKind('account');
         // Prime rates (design 56) — the mortgage rate field edits an absolute (Prime +
-        // spread) and stores the spread, so it needs the current per-country Prime.
-        const activeParams = registry.scenarioService.getActive()?.parameters ?? {};
-        const primeRates = { US: activeParams.usPrimeRate, AU: activeParams.auPrimeRate };
+        // spread) and stores the spread, so it needs the CURRENT per-country Prime.
+        const primeRates = _primeRates(registry);
         const editor = new RealPropertyEditor({
           container,
           node,

@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { div293 } from './div293.js';
 import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
 import {
   applyBrackets as _applyBrackets,
@@ -57,6 +58,29 @@ const NR_WITHHOLDING_RATE = 0.15;
  *   auOrdinaryIncomeYTD, auCapitalGainsYTD, auNonResidentWithholdingYTD,
  *   auSuperTaxYTD, auFrankingCreditYTD, people[*].residency
  */
+/**
+ * The s290-150 personal super deduction, clamped by s26-55 (design 95 §9.1, 6b).
+ *
+ * s26-55(1)(d) puts the deduction on the limited list; s26-55(2) sets the limit at
+ * *assessable income less all your deductions except tax losses* (and s393-5 farm
+ * deposits, which this model has none of). So a deductible contribution can reduce
+ * taxable income to zero but **cannot create or increase a tax loss** — the excess
+ * is simply not deductible, and is not carried anywhere.
+ *
+ * That is the whole reason this is applied BEFORE the Div 36 loss pool and computed
+ * against income measured before it: s26-55(2)(a) names tax losses as the one thing
+ * NOT subtracted when working out the limit. Applying the two in the other order
+ * would let a loss-year contribution deduct against income the losses had already
+ * absorbed, and manufacture relief the Act denies twice over.
+ *
+ * @param {number} contributed  gross deductible contributions for the year
+ * @param {number} assessable   assessable income before tax losses
+ * @returns {number} the allowable deduction
+ */
+function _superDeductionAllowed(contributed, assessable) {
+  return Math.min(Math.max(0, contributed), Math.max(0, assessable));
+}
+
 export class AuTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'AU'; }
 
@@ -380,6 +404,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auSuperTaxYTD       = 0,
       auFrankingCreditYTD = 0,
       auTaxLossPool       = 0,
+      // Design 95 §9.1 phase 6b — s290-150 personal deductible super contributions
+      // for the year, GROSS of the fund's Div 295 tax. The member pays 15% inside
+      // the fund and deducts the whole contribution outside it; that gap is where
+      // the concession lives for anyone whose marginal rate exceeds 15%.
+      auDeductibleSuperYTD = 0,
     } = state;
 
     // s102-5 Steps 1–2 FIRST (design 90 §5): capital losses come off the GROSS gain,
@@ -424,14 +453,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // figure. Hoisting the deduction outside the split would let the counterfactual
     // claim the full deduction against reduced income and overstate the FITO limit.
     const grossDiscountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
+    // s290-150, limited by s26-55 — see `_superDeductionAllowed`. It comes off HERE,
+    // between assessable income and the loss pool, because the s26-55(2) limit is
+    // measured on income before tax losses and the deduction may not create one.
+    const superDeduction        = _superDeductionAllowed(auDeductibleSuperYTD, grossDiscountedIncome);
+    const incomeAfterSuperDed   = grossDiscountedIncome - superDeduction;
     const openingLossPool       = Math.max(0, auTaxLossPool);
-    const lossDeducted          = Math.min(openingLossPool, Math.max(0, grossDiscountedIncome));
+    const lossDeducted          = Math.min(openingLossPool, Math.max(0, incomeAfterSuperDed));
     // A loss year adds its own excess to the pool; deduction and creation are
     // mutually exclusive, since one needs positive income and the other negative.
-    const lossCreated           = Math.max(0, -grossDiscountedIncome);
+    const lossCreated           = Math.max(0, -incomeAfterSuperDed);
     const closingLossPool       = openingLossPool - lossDeducted + lossCreated;
 
-    const discountedIncome = grossDiscountedIncome - lossDeducted;
+    const discountedIncome = incomeAfterSuperDed - lossDeducted;
     const assessableIncome = Math.max(0, discountedIncome);
     // `.tax` is identical to the scalar applyBrackets these lines used before; the
     // bands ride along for the worksheet export (design 71 §8.4).
@@ -510,6 +544,12 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // Div 36 pool (design 86 G1) — reported on the return and, from the REAL pass
       // only, written back to state by the settle reducer.
       openingLossPool, lossDeducted, closingLossPool,
+      // s290-150 / s26-55 (design 95 §9.1 phase 6b). Both figures, not just the
+      // allowed one: a contribution the s26-55(2) limit cut down is exactly the case
+      // a reader needs to see, and `allowed < contributed` is the only place the
+      // return can say so.
+      superDeductionContributed: Math.max(0, auDeductibleSuperYTD),
+      superDeductionAllowed:     superDeduction,
       // s102-5 / s102-15 net capital losses (design 90 §5). A SEPARATE pool from the
       // Div 36 trio above — s102-10(2) bars a net capital loss from ever reducing
       // assessable income, so the two must never be summed.
@@ -541,6 +581,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auNonResidentWithholdingYTD = 0,
       auSuperTaxYTD               = 0,
       auFrankingCreditYTD         = 0,
+      // design 95 §9.1 — read here for the NON-RESIDENT branch; the resident branch
+      // destructures its own copy inside `_assessResidentPreFito`.
+      auDeductibleSuperYTD        = 0,
     } = state;
 
     // Resident if any person in state.people has residency === 'AU'
@@ -617,8 +660,25 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // The plain subtraction is what keeps "Gross Tax + credits = Net Tax Liability"
       // exact (design 71 §6) — the footing identity holds whether the result is
       // positive or negative, which is the whole reason it is stated as a subtraction.
-      const netLiability = a.baseTax + a.medicareLevy + a.minTaxTopUp
-                         - a.frankingOffset - fito;
+      const netLiabilityIncomeTax = a.baseTax + a.medicareLevy + a.minTaxTopUp
+                                  - a.frankingOffset - fito;
+
+      // ─── Division 293 (design 95 §9.4, phase 8) ─────────────────────────────
+      //
+      // Added AFTER the offsets, and that placement is the substantive decision on
+      // this line. Div 293 is imposed by its own Act on a base of its own — taxable
+      // CONTRIBUTIONS, not income — so it is not part of the income tax assessment
+      // that franking credits and the FITO reduce. Folding it in before them would
+      // let a refundable franking offset wipe out a liability it has no reach over,
+      // which is the same mistake design 84 G10 found in the CGT minimum-tax top-up,
+      // running the other way. `assessableIncome` is the model's name for TAXABLE
+      // income here — it is computed after the s290-150 deduction and after Div 36
+      // losses — which is exactly limb (a) of s293-20(1).
+      const d293 = div293({
+        taxableIncome:             a.assessableIncome,
+        concessionalContributions: state.auLowTaxContributionsYTD ?? 0,
+      });
+      const netLiability = netLiabilityIncomeTax + d293.tax;
 
       const totalGrossIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -674,6 +734,17 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         openingLossPool:          a.openingLossPool,
         lossDeducted:             a.lossDeducted,
         closingLossPool:          a.closingLossPool,
+        // s290-150 personal super deduction and what s26-55 actually allowed.
+        superDeductionContributed: a.superDeductionContributed ?? 0,
+        superDeductionAllowed:     a.superDeductionAllowed     ?? 0,
+        // Div 293 (design 95 §9.4). `div293Tax` is INSIDE netLiability and outside
+        // grossTax, because it is a separate imposition rather than part of the
+        // income tax the offsets reduce — the same treatment `superFundTax` gets for
+        // the opposite reason (that one is not the member's liability at all).
+        div293Tax:                 d293.tax,
+        div293TaxableContributions: d293.taxableContributions,
+        div293LowTaxContributions:  d293.lowTaxContributions,
+        div293Binding:              d293.binding,
         // design 90 §5 — `closingCapitalLossPool` is what the AU settle persists.
         openingCapitalLossPool:   a.capitalLoss?.opening ?? 0,
         capitalLossApplied:       a.capitalLoss?.applied ?? 0,
@@ -715,6 +786,20 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           { label: 'Capital Gains (before relief)', amount:  auCapitalGainsYTD },
           { label: this._cgtReliefLabel(),          amount: -a.cgtDiscount },
           { label: 'Net Capital Gains',             amount:  a.netTaxableGain },
+          // s290-150, before the loss lines because that is the order it is applied
+          // in — s26-55(2) measures its limit on income BEFORE tax losses. The second
+          // line appears only when the limit actually bit, so an ordinary return that
+          // deducts the whole contribution shows one line, not two.
+          ...(a.superDeductionContributed > 0
+            ? [
+                { label: 'Personal Super Contributions Deducted (s290-150)',
+                  amount: -a.superDeductionAllowed },
+                ...(a.superDeductionContributed > a.superDeductionAllowed
+                  ? [{ label: 'Deduction Denied by s26-55 Limit',
+                       amount: a.superDeductionContributed - a.superDeductionAllowed }]
+                  : []),
+              ]
+            : []),
           // Only shown when there is a pool to talk about, so an ordinary return is
           // unchanged. Three lines, mirroring how the §904 FTC baskets already print
           // (opening / used / remaining) — the two should read alike.
@@ -736,6 +821,24 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           ...(fito > 0
             ? [{ label: `Foreign Income Tax Offset${fitoDeMinimis ? ' (de-minimis)' : ''}`, amount: -fito }]
             : []),
+          // Div 293 (design 95 §9.4) — the member's OWN liability, on its own base.
+          // BELOW the two offset lines because neither reaches it, and ABOVE the Net
+          // Tax Liability line because it is INSIDE that total: the footing identity
+          // (design 71 §6) has to hold line by line, and a Div 293 printed under the
+          // total it is part of would leave the visible lines not summing to it.
+          //
+          // Shown only when it bites, so an ordinary return is unchanged. The second
+          // line names which limb of the s293-20(1) "lesser of" bound, because they
+          // mean different things to a reader deciding whether to sacrifice more:
+          // EXCESS is the phase-in band, where a dollar of income costs 15c;
+          // CONTRIBUTIONS is past it, where every concessional dollar costs 15c.
+          ...(d293.tax > 0
+            ? [
+                { label: 'Div 293 Taxable Contributions', amount: d293.taxableContributions },
+                { label: `Div 293 Tax (15%, bound by ${d293.binding === 'EXCESS'
+                    ? 'the $250,000 threshold' : 'contributions'})`, amount: d293.tax },
+              ]
+            : []),
           { label: 'Net Tax Liability',             amount:  netLiability },
           // Memo, below the liability line and deliberately outside every subtotal
           // above it: the fund's own Div 295 tax, already withheld from the member's
@@ -746,7 +849,14 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     } else {
       // Non-resident: no CGT discount; withholding income taxed at its own final
       // rate per income type (design 73 Gap 2), NOT at one pooled rate.
-      const totalIncome              = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      // s290-150 applies on this branch too (design 95 §9.1). Dropping it while the
+      // branch still charges Div 295 in the fund AND Div 293 below left a non-resident
+      // making a deductible contribution strictly WORSE OFF than making none — the
+      // 15% going in, possibly 15% again on top, and no deduction coming back.
+      // s26-55's limit is measured the same way: assessable income before tax losses.
+      const grossIncome              = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      const superDeduction           = _superDeductionAllowed(auDeductibleSuperYTD, grossIncome);
+      const totalIncome              = grossIncome - superDeduction;
       const assessableIncome         = Math.max(0, totalIncome);
       const nrSchedule               = applyBracketsDetailed(assessableIncome, this._nonResidentBrackets);
       const baseTax                  = nrSchedule.tax;
@@ -777,7 +887,21 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // Australian fund still pays Div 295 tax on its earnings, and it is still the
       // fund's liability, not theirs.
       const grossTax                 = Math.max(0, baseTax) + nonResidentWithholdingTax;
-      const netLiability             = grossTax;
+
+      // Div 293 applies to a NON-RESIDENT too (design 95 §9.4, phase 8). Nothing in
+      // s293-15 or s293-20 conditions the liability on residency — it attaches to
+      // taxable contributions, and a foreign resident working in Australia has an
+      // employer paying the Super Guarantee for them just the same. Their "income for
+      // surcharge purposes" is built on their taxable income, which on this branch is
+      // their Australian-source income alone; that is the correct reading rather than
+      // a simplification. Omitting it here would have let the US-resident spouse of a
+      // cross-border household escape it silently, which is exactly the shape of
+      // defect design 73 §6b was about.
+      const d293 = div293({
+        taxableIncome:             assessableIncome,
+        concessionalContributions: state.auLowTaxContributionsYTD ?? 0,
+      });
+      const netLiability             = grossTax + d293.tax;
 
       const totalGrossIncome   = totalIncome + withholdingIncome;
       const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -815,6 +939,12 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         nrWithholdingLines,
         grossTax,
         credits:                  0,
+        div293Tax:                  d293.tax,
+        div293TaxableContributions: d293.taxableContributions,
+        div293LowTaxContributions:  d293.lowTaxContributions,
+        div293Binding:              d293.binding,
+        superDeductionContributed:  Math.max(0, auDeductibleSuperYTD),
+        superDeductionAllowed:      superDeduction,
         netLiability,
         effectiveRate,
         marginalRate,
@@ -842,6 +972,21 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           { label: 'Total Assessable Income',                 amount:  assessableIncome },
           { label: 'Tax on Income (Non-Resident Brackets)',   amount:  baseTax },
           ...nrWithholdingLines,
+          // s290-150 — same placement as the resident branch: before the total, and
+          // before the tax lines it reduces.
+          ...(auDeductibleSuperYTD > 0
+            ? [{ label: 'Personal Super Contributions Deducted (s290-150)',
+                 amount: -superDeduction }]
+            : []),
+          // Div 293 — see the resident branch for why it sits below the offsets and
+          // above the total it is part of.
+          ...(d293.tax > 0
+            ? [
+                { label: 'Div 293 Taxable Contributions', amount: d293.taxableContributions },
+                { label: `Div 293 Tax (15%, bound by ${d293.binding === 'EXCESS'
+                    ? 'the $250,000 threshold' : 'contributions'})`, amount: d293.tax },
+              ]
+            : []),
           { label: 'Net Tax Liability',                       amount:  netLiability },
           { label: 'Memo: Super Fund Tax (withheld in fund)', amount:  auSuperTaxYTD, memo: true },
         ],

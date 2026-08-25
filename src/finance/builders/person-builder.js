@@ -36,6 +36,10 @@ class PersonBuilderInstance {
     this._monthlyWage           = 0;
     this._selfEmployed          = false;
     this._retirementDate        = new Date(Date.UTC(2040, 0, 1));
+    // Design 95 §7.1 phase 1 — per-person payroll elections. Undefined here rather
+    // than null so that `build()` can omit them entirely and let Person apply its
+    // own null default, keeping one definition of "unset".
+    this._elections             = {};
   }
 
   /** Pre-assign an id (normally left null so PersonService assigns one). */
@@ -51,6 +55,26 @@ class PersonBuilderInstance {
   selfEmployed(v)          { this._selfEmployed = v;          return this; }
   retirementDate(v)        { this._retirementDate = v;        return this; }
 
+  /**
+   * Set one or more payroll elections (design 95 §7.1). Merges, so successive
+   * calls accumulate rather than replace.
+   *
+   * `null` for a field means "inherit the household default"; `0` means "elect
+   * nothing". They are different, and the difference is the point.
+   *
+   * @param {{k401DeferralPct?: number, k401EmployerMatchPct?: number,
+   *          k401AnnualCap?: ?number, iraAnnualContribution?: number,
+   *          rothAnnualContribution?: number, superGuaranteePct?: number,
+   *          superAnnualCap?: ?number}} v
+   */
+  payroll(v)               { Object.assign(this._elections, v); return this; }
+
+  /**
+   * Direct-deposit allocation for this person's pay (design 95 §6).
+   * @param {Array<{destinationKey: string, mode: 'PERCENT'|'FIXED', value: number}>} v
+   */
+  wageSplits(v)            { this._elections.wageSplits = v;   return this; }
+
   build() {
     return new Person(this._id, this._birthDate, {
       name:                  this._name,
@@ -60,6 +84,7 @@ class PersonBuilderInstance {
       monthlyWage:           this._monthlyWage,
       selfEmployed:          this._selfEmployed,
       retirementDate:        this._retirementDate,
+      ...this._elections,
     });
   }
 }

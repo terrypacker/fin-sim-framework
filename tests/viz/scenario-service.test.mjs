@@ -448,8 +448,10 @@ test('newScenario: active config has correct content after compile', () => {
     'MonthlyExpensesHandler should be present');
   assert.ok(active.handlers.some(h => h.__type === 'UsPeriodAdvanceHandler' || h.__type === 'AuPeriodAdvanceHandler'),
     'PeriodAdvanceHandler should be present');
-  assert.ok(active.handlers.some(h => h.__type === 'MonthlyWagesHandler'),
-    'MonthlyWagesHandler should be present');
+  // Design 95 §P0: the compile now emits PayrollHandler, which superseded
+  // PayrollHandler as the stage-INCOME wage handler.
+  assert.ok(active.handlers.some(h => h.__type === 'PayrollHandler'),
+    'PayrollHandler should be present');
 
   // ── Reducers: populated from toolset compile ──────────────────────────────
   assert.ok(active.reducers.length > 0,             'reducers should be populated after compile');

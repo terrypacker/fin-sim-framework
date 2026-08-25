@@ -1,0 +1,226 @@
+/* ── Paycheque Plugin (design 95 §17 phase 10) ─────────────────────────────────
+ *
+ * Same skeleton as spending.css and allocation.css — thin toolbar, one scrolling
+ * body — but the body is a document rather than a chart. The payslip's whole job is
+ * to make §5's four stages read as reductions from the line above, so the layout is
+ * a label/value ledger with rules at the subtotals, not a grid of tiles.
+ */
+
+.pay-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.pay-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pay-spacer { flex: 1; }
+
+.pay-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pay-follow-btn,
+.pay-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.pay-follow-btn:hover,
+.pay-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+/* Lit while the payslip is tracking the run's cursor rather than a pinned month. */
+.pay-follow-btn.on {
+  background: var(--bg-active);
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+.pay-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.pay-placeholder {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 12px;
+  max-width: 60ch;
+}
+
+.pay-section { margin-bottom: 14px; }
+
+.pay-heading {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+}
+
+.pay-subhead {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 8px 0 3px;
+}
+
+.pay-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* ── The payslip ledger ───────────────────────────────────────────────────── */
+
+.pay-slip {
+  display: flex;
+  flex-direction: column;
+  max-width: 62ch;
+}
+
+.pay-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.pay-label { flex: 1; min-width: 0; }
+
+.pay-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A reduction. Muted, and indented, so the eye reads down the subtotals. */
+.pay-row.pay-less .pay-label { padding-left: 12px; color: var(--text-muted); }
+.pay-row.pay-less .pay-value { color: var(--text-muted); }
+
+/* A running subtotal, and the two ends of the pipeline. */
+.pay-row.pay-sub {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.pay-row.pay-total {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.pay-row.pay-split .pay-label { color: var(--text-muted); }
+
+/* Employer money sits beside the pay, never in it — a different colour is the
+ * cheapest way to keep it from being read as a deduction. */
+.pay-row.pay-employer .pay-value { color: var(--blue-text, #6ea8fe); }
+
+/* ── Clamp / relief badges ────────────────────────────────────────────────── */
+
+.pay-clamps { list-style: none; margin: 0; padding: 0; }
+.pay-clamp  { padding: 2px 0; color: var(--text-muted); }
+
+.pay-badge {
+  display: inline-block;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+/* `clamps` means what STOPPED a contribution; `carriedForward` is relief. Design 95
+ * §13.9 records the day these two shared a field and 363 actions announced a
+ * concession as a stoppage — they must never read alike again. */
+.pay-badge-clamp {
+  background: var(--amber-bg, rgba(224, 168, 0, 0.15));
+  color: var(--amber-text, #e0a800);
+}
+
+.pay-badge-relief {
+  background: var(--green-bg, rgba(64, 176, 112, 0.15));
+  color: var(--green-text, #40b070);
+}
+
+/* ── Tables (contributions by year, the cap ring) ─────────────────────────── */
+
+.pay-table {
+  border-collapse: collapse;
+  font-size: 11px;
+  width: 100%;
+}
+
+.pay-table th {
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  padding: 3px 8px 3px 0;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pay-table td {
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.15));
+  padding: 3px 8px 3px 0;
+  vertical-align: top;
+}
+
+.pay-table .pay-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pay-table-tight { max-width: 40ch; }
+
+.pay-cell-employer { color: var(--blue-text, #6ea8fe); }
+.pay-cell-member   { color: var(--text-muted); }
+
+/* ── Key/value block (the cap summary) ────────────────────────────────────── */
+
+.pay-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2px 16px;
+  max-width: 80ch;
+}
+
+.pay-kv > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.pay-kv span { color: var(--text-muted); }
+.pay-kv b    { font-variant-numeric: tabular-nums; font-weight: 500; }

@@ -333,8 +333,24 @@ function runDefaultIntlRetirement() {
 // that make this one safe are `_assertFtcInvariants` (running under JOURNAL_STRICT at
 // every settle) and RS-10 in ftc-us-source-resourcing.test.mjs, which asserts across
 // this very run that the credit never exceeds the tax it offsets.
-const EXPECTED_LIFETIME_TAX = 630_228;
-const EXPECTED_NET_WORTH     = 12_320_962;
+//
+// MOVED by design 95 phase 4 (employee FICA, IRC §3101), which is the first time this
+// model has charged a W-2 earner anything other than income tax. Both figures moved by
+// exactly the measured FICA impact on this run, which is why they were re-based rather
+// than investigated further:
+//
+//   lifetime tax   630,228 -> 800,974   (+170,746)
+//   net worth   12,320,962 -> 12,038,047 (-282,915)
+//
+// The household runs US wages of \$2,460,431 before the 2031 move, and the theoretical
+// FICA on those wages is \$183,572 (7.46% — under 7.65% because OASDI caps out in the
+// later years). The observed tax rise is \$12,828 LESS than that, which is the expected
+// second-order sign: a smaller cash pool earns less interest, so slightly less income
+// tax is due on it. A rise ABOVE the theoretical FICA would mean the extra cost had
+// escalated into the drawdown cascade and started realising taxable income, which is
+// what happens in `us-single-homeowner` and is legitimate there — see design 95 §13.5.
+const EXPECTED_LIFETIME_TAX = 800_974;
+const EXPECTED_NET_WORTH     = 12_038_047;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

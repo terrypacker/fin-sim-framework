@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { creditPay } from '../../payroll/wage-splits.js';
 import { resolveCashKey } from '../cash-routing.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
@@ -28,7 +29,7 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
  * not its source, so it forwards `workCountry` — where the services are actually
  * performed — to the tax action. Before §6b it destructured four fields and rebuilt
  * the tax action from those alone, dropping the source attribute one hop after
- * MonthlyWagesHandler computed it.
+ * PayrollHandler computed it.
  */
 export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   static type        = 'AuSeIncomeApplyReducer';
@@ -44,10 +45,12 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey, workCountry } = action;
+    const { amount, residency, personKey, workCountry } = action;
     // Credit the transaction account the handler resolved (design 69, parity with
     // AU wages); fall back to the single AU cash pool for legacy actions.
-    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
+    // Design 95 §6 phase 2 — honours `splits` when the handler stamped them,
+    // otherwise credits the single targetKey exactly as before.
+    creditPay(this.accountService, state, action, resolveCashKey(this.stateRegistry, 'AU', state));
     // `workCountry` is absent on actions saved before design 73 §6b and on the bare
     // SE_INCOME_AU event path; the tax reducer falls back to residency, which is the
     // pre-73 assumption for a resident earner.
@@ -59,7 +62,7 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
  * Design 50: Wages **paid in AUD** — credit AU cash pool (native AUD), chain
  * AU_WAGES_INCOME_TAX.
  *
- * Fired by MonthlyWagesHandler for any person whose `wageCurrency` is AUD, so an
+ * Fired by PayrollHandler for any person whose `wageCurrency` is AUD, so an
  * AU-denominated wage lands in the AUD savings account as AUD (not coerced into
  * USD in the US pool).
  *
@@ -86,10 +89,12 @@ export class AuWagesIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey, targetKey, workCountry } = action;
+    const { amount, residency, personKey, workCountry } = action;
     // Credit the transaction account the handler resolved; fall back to the single
     // AU cash pool for legacy actions saved without a targetKey.
-    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
+    // Design 95 §6 phase 2 — honours `splits` when the handler stamped them,
+    // otherwise credits the single targetKey exactly as before.
+    creditPay(this.accountService, state, action, resolveCashKey(this.stateRegistry, 'AU', state));
     // `workCountry` is absent on actions saved before design 73; the tax reducer
     // falls back to residency, which is the pre-73 assumption for a resident earner.
     return this.newState(state, {}, [{ type: 'AU_WAGES_INCOME_TAX', amount, residency, personKey, workCountry }]);

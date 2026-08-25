@@ -8,6 +8,30 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { PAYROLL_ELECTION_FIELDS } from '../../finance/person.js';
+
+/**
+ * Carry the per-person payroll elections (design 95 §7.1) through from the editor.
+ *
+ * Whitelisted rather than spread, because `create()` builds an explicit shape and a
+ * field absent from it is silently dropped — which is precisely how a payroll
+ * election ends up "written, saved, shown in the UI, consumed by nothing" (the
+ * phase-1 defect, design 95 §13.2). Driven off the exported field list so this is
+ * not a sixth place to keep in sync by hand.
+ *
+ * **`??`, not `||`.** `undefined` (the editor did not send the field at all — it is
+ * param-owned) means leave the Person's value alone; `null` means "inherit the
+ * household default"; `0` means "elect nothing". Coercing here with `||` would turn
+ * every explicit opt-out back into the household rate.
+ */
+function _elections(data) {
+  const out = {};
+  for (const f of PAYROLL_ELECTION_FIELDS) {
+    if (data?.[f] !== undefined) out[f] = data[f];
+  }
+  return out;
+}
+
 /**
  * PeopleController — pure domain layer for Person CRUD.
  * No DOM, no bus, no globals — all dependencies injected.
@@ -38,6 +62,8 @@ export class PeopleController {
       wageCurrency:          data.wageCurrency,
       workCountry:           data.workCountry ?? null,  // design 73 Gap 1
       ssCurrency:            data.ssCurrency,
+      // Payroll elections (design 95 §17 phase 10) — null-preserving; see `_elections`.
+      ..._elections(data),
     });
   }
 

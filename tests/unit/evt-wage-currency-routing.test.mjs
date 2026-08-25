@@ -28,7 +28,7 @@
  *
  *   WCR-1: the compiled scenario carries state.people.<id>.wageCurrency
  *   WCR-2: an AUD-wage spouse is paid into their AU account, not US savings
- *   WCR-3: MonthlyWagesHandler routes by wageCurrency (unit — AUD→AU, USD→US)
+ *   WCR-3: PayrollHandler routes by wageCurrency (unit — AUD→AU, USD→US)
  *   WCR-4: a US-resident's AUD wage for US-performed work is not AU income at all
  *   WCR-5: ...and stays out of the §904 general basket numerator
  *   WCR-6: the same earner working IN Australia IS assessed there, at NR rates
@@ -42,7 +42,7 @@ import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scen
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
-import { MonthlyWagesHandler }    from '../../src/finance/handlers/monthly-wages-handler.js';
+import { PayrollHandler, PAYROLL_STAGE } from '../../src/finance/handlers/payroll-handler.js';
 
 const SS = new Date(Date.UTC(2026, 0, 1));
 const SE = new Date(Date.UTC(2026, 5, 1)); // 5 months — before any move / retirement
@@ -86,7 +86,7 @@ test('WCR-2: an AUD-wage spouse is paid into their AU account, not US savings', 
     `the AUD wage must land in the spouse's AU account (got ${Math.round(state.spouseAuSavingsAccount?.balance ?? 0)})`);
 });
 
-test('WCR-3: MonthlyWagesHandler routes by wageCurrency (AUD→AU, USD→US)', () => {
+test('WCR-3: PayrollHandler routes by wageCurrency (AUD→AU, USD→US)', () => {
   const stateRegistry = {
     resolveTransactionAccountKey: () => null, // nothing flagged → SAVINGS-role fallback
     getStateKey: (role, ownerId) => {
@@ -101,7 +101,10 @@ test('WCR-3: MonthlyWagesHandler routes by wageCurrency (AUD→AU, USD→US)', (
       spouse:  { name: 'S', monthlyWage: 4000, wageCurrency: 'AUD' },
     },
   };
-  const actions = new MonthlyWagesHandler({ stateRegistry }).call({ date: SS, state });
+  // Design 95 phase 6 — the wage-routing rule moved to PayrollHandler's INCOME
+  // stage when MonthlyWagesHandler was retired; the rule itself is unchanged.
+  const actions = new PayrollHandler({ stateRegistry, stage: PAYROLL_STAGE.INCOME })
+    .call({ date: SS, state });
 
   const us = actions.find(a => a?.type === 'WAGES_INCOME_APPLY');
   const au = actions.find(a => a?.type === 'AU_WAGES_INCOME_APPLY');
@@ -173,7 +176,7 @@ test('WCR-8: the same is true of self-employment income (design 73 §6b)', () =>
   // was assessed nowhere; and separately, `AuSeIncomeApplyReducer` dropped
   // `workCountry` when it rebuilt the tax action, so the attribute never reached the
   // classifier to be branched on. This exercises both halves through the real chain:
-  // MonthlyWagesHandler → SE_INCOME_AU_APPLY → AU_SE_INCOME_TAX. The unit matrix in
+  // PayrollHandler → SE_INCOME_AU_APPLY → AU_SE_INCOME_TAX. The unit matrix in
   // personal-services-income-source.test.mjs covers the other three cells.
   const state = runAudSpouse({ workCountry: 'AU', selfEmployed: true });
 

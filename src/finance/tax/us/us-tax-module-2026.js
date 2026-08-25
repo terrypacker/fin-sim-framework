@@ -836,6 +836,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
           ...state,
           usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
           usSsWagesYTD:        (state.usSsWagesYTD ?? 0) + amount,
+          // Per-person too (design 95 phase 4): the §3121(a)(1) wage base is per
+          // EMPLOYEE. Absent a personKey nothing is keyed and computeTax falls back
+          // to the household total, which is the single-earner answer.
+          usSsWagesByPersonYTD: personKey == null ? state.usSsWagesByPersonYTD : {
+            ...(state.usSsWagesByPersonYTD ?? {}),
+            [personKey]: ((state.usSsWagesByPersonYTD ?? {})[personKey] ?? 0) + amount,
+          },
         };
         if (isAuResident) {
           const audAmount = toAUD(amount, 'USD', state);
@@ -891,13 +898,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-50: bonus — US-source ordinary income; AU ordinary income if resident,
       //         relieved by FITO.
       ['BONUS_TAX', (state, action) => {
-        const { amount, residency } = action;
+        const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
         // Design 69: a bonus is W-2 wages — Social-Security-covered, fills the base.
         let next = {
           ...state,
           usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
           usSsWagesYTD:        (state.usSsWagesYTD ?? 0) + amount,
+          // Per-person too (design 95 phase 4): the §3121(a)(1) wage base is per
+          // EMPLOYEE. Absent a personKey nothing is keyed and computeTax falls back
+          // to the household total, which is the single-earner answer.
+          usSsWagesByPersonYTD: personKey == null ? state.usSsWagesByPersonYTD : {
+            ...(state.usSsWagesByPersonYTD ?? {}),
+            [personKey]: ((state.usSsWagesByPersonYTD ?? {})[personKey] ?? 0) + amount,
+          },
         };
         if (isAuResident) {
           const aud = toAUD(amount, 'USD', state);

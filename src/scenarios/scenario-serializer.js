@@ -15,7 +15,7 @@ import {
   Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
 } from '../simulation-framework/actions.js';
 import { ACCOUNT_ROLES }  from '../finance/state/account-roles.js';
-import { Person }         from '../finance/person.js';
+import { Person, PAYROLL_ELECTION_FIELDS } from '../finance/person.js';
 import { Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../finance/assets/account.js';
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
@@ -46,7 +46,7 @@ import { MonthlyExpensesHandler }                       from '../finance/handler
 import { HouseRunningCostHandler }                      from '../finance/handlers/house-running-cost-handler.js';
 import { RealPropertyRepairTickHandler }                from '../finance/handlers/real-property-repair-tick-handler.js';
 import { HouseRepairApplyReducer }                      from '../finance/reducers/house-repair-apply-reducer.js';
-import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
+import { PayrollHandler }                               from '../finance/handlers/payroll-handler.js';
 // IntlTransferToUsHandler / IntlTransferToAuHandler kept for deserializing saved scenarios.
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
 import { FxTransferToHandler }       from '../finance/fx/fx-transfer-handler.js';
@@ -188,7 +188,9 @@ import {
 import {
   SuperContributionHandler, SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
-  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperContributionApplyReducer, SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
+  SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
 } from '../finance/account-rules/au/au-super-classes.js';
 import {
@@ -239,7 +241,8 @@ const _ALL_CLASSES = [
   FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer,
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
-  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, HouseRepairApplyReducer, MonthlyWagesHandler,
+  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, HouseRepairApplyReducer,
+  PayrollHandler,
   IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler, FxTickHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -309,7 +312,9 @@ const _ALL_CLASSES = [
   ScheduledEarlyWithdrawalApplyReducer,
   AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
   AuFixedIncomeEarningsApplyReducer,
-  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperContributionApplyReducer, SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
+  SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
@@ -364,6 +369,34 @@ function _populateRegistry(typeRegistry) {
 
 function _lookupCtor(typeName, services) {
   return services?.typeRegistry?.get(typeName) ?? _getFallbackMap().get(typeName) ?? null;
+}
+
+/**
+ * Classes that once existed, were persisted into saved scenarios, and have since
+ * been deleted — with the reason and the way out. Design 95 phase 6 retired the
+ * three payroll handlers `PayrollHandler` replaced.
+ *
+ * Only the GRAPH-RESTORE branch of ScenarioLoader can reach these: a scenario that
+ * carries a `toolsets` array is recompiled from the toolsets and its persisted
+ * handler nodes are never deserialized, which is why every export written since the
+ * toolsets shipped keeps loading. A pre-toolsets export still names them, and the
+ * honest outcome there is a loud failure that says what happened — NOT a silent
+ * skip, which on this particular set of handlers would drop the household's wages
+ * and read as a scenario that simply earns nothing.
+ */
+const _RETIRED_TYPES = new Map([
+  ['MonthlyWagesHandler',            'PayrollHandler (stage INCOME)'],
+  ['UsRetirementContributionHandler','PayrollHandler (stage CONTRIBUTIONS)'],
+  ['AuSuperGuaranteeHandler',        'PayrollHandler (stage CONTRIBUTIONS)'],
+]);
+
+function _retiredTypeError(kind, typeName) {
+  const replacement = _RETIRED_TYPES.get(typeName);
+  if (!replacement) return new Error(`Unknown ${kind} type: ${typeName}`);
+  return new Error(
+    `Retired ${kind} type: ${typeName} (design 95 phase 6 — replaced by ${replacement}). ` +
+    `This scenario predates the toolset compiler; open it in the workbench and use Rebuild, ` +
+    `or add its toolsets, so the graph is compiled rather than restored.`);
 }
 
 /**
@@ -1091,6 +1124,12 @@ export class ScenarioSerializer {
       workCountry:           person.workCountry  ?? null,
       ssCurrency:            person.ssCurrency   ?? null,
       incomeSupportRecipient: person.incomeSupportRecipient ?? false,
+      // Design 95 §7.1 phase 1 — per-person payroll elections. Written from the
+      // shared field list so this half cannot drift from _makePerson's. `null` is
+      // meaningful here (inherit the household default) and is NOT the same as 0
+      // (elect nothing), so it is preserved rather than defaulted away.
+      ...Object.fromEntries(
+        PAYROLL_ELECTION_FIELDS.map(f => [f, person[f] ?? null])),
     };
   }
 
@@ -1141,7 +1180,7 @@ export class ScenarioSerializer {
 
   static _makeHandler(d, services) {
     const ctor = _lookupCtor(d.__type, services);
-    if (!ctor) throw new Error(`Unknown handler type: ${d.__type}`);
+    if (!ctor) throw _retiredTypeError('handler', d.__type);
     return ctor.fromJSON(d, services);
   }
 
@@ -1270,6 +1309,9 @@ export class ScenarioSerializer {
       workCountry:           d.workCountry  ?? null,
       ssCurrency:            d.ssCurrency   ?? undefined,
       incomeSupportRecipient: d.incomeSupportRecipient ?? false,
+      // Design 95 §7.1 phase 1 — the other half of the election round-trip.
+      ...Object.fromEntries(
+        PAYROLL_ELECTION_FIELDS.map(f => [f, d[f] ?? null])),
     });
     return person;
   }

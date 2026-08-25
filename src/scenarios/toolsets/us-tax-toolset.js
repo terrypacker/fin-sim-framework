@@ -52,7 +52,7 @@ export const US_TAX = {
         // from the journal even though the run used it. AUD, deliberately: it is
         // already converted at the settle-date rate, and the declaration keeps
         // report-currency normalisation from re-reading it as USD.
-        fields: { tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number(),
+        fields: { withheld: ValueType.currency('USD'), tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number(),
                   usTaxPaidOnUsSourceAud: ValueType.currency('AUD') } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the

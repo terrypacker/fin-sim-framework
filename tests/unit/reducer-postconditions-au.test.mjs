@@ -31,7 +31,9 @@ import {
   AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
 } from '../../src/finance/account-rules/au/au-savings-classes.js';
 import {
-  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperContributionApplyReducer, SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
+  SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
 } from '../../src/finance/account-rules/au/au-super-classes.js';
 import {
@@ -95,6 +97,82 @@ test('SuperContribution: auCash → super (+basis), synced + conserved net of fu
   // Basis takes the same net figure, so balance === contributionBasis + earningsBasis
   // survives the withholding.
   assert.equal(next.superAccount.contributionBasis, 55100);
+});
+
+/**
+ * Design 95 §9.1 phase 6b — the three member streams differ on exactly two axes, and
+ * these two tests pin both. Salary sacrifice: no cash debit, 15% to the fund.
+ * Non-concessional: cash debit, and NOTHING to the fund.
+ *
+ * They are written against the same opening state and the same \$6,000 so the pair
+ * reads as a contrast rather than as two unrelated assertions — the whole difference
+ * between the streams is visible in the two `fee` arguments and the two closing
+ * balances.
+ */
+test('SuperSacrifice: no cash debit, fund still takes Div 295 (I3/I5)', () => {
+  const state = { auSavingsAccount: acct('auSavingsAccount', 20000), superAccount: acct('superAccount', 50000, 'AUD', { contributionBasis: 50000, earningsBasis: 0 }) };
+  const { next } = runAcct(new SuperSacrificeApplyReducer(makeServices()), state,
+    { type: 'SUPER_SACRIFICE_APPLY', amount: 6000, personKey: 'primary' },
+    { conserve: ['auSavingsAccount', 'superAccount'], fee: -5100 });
+  // The wage was reduced at source by PayrollHandler, so no AU cash moves here.
+  // Debiting would take the sacrifice twice: once by never being paid it, once again
+  // on the way into the fund.
+  assert.equal(next.auSavingsAccount.balance, 20000, 'sacrifice never touches the member\'s cash');
+  assert.equal(next.superAccount.balance, 55100, 'Div 295 still applies: 6,000 less 900');
+  assert.equal(next.superAccount.contributionBasis, 55100);
+});
+
+test('SuperNonConcessional: cash debit, and the fund takes nothing (I3/I5)', () => {
+  const state = { auSavingsAccount: acct('auSavingsAccount', 20000), superAccount: acct('superAccount', 50000, 'AUD', { contributionBasis: 50000, earningsBasis: 0 }) };
+  const { next } = runAcct(new SuperNonConcessionalApplyReducer(makeServices()), state,
+    { type: 'SUPER_NON_CONCESSIONAL_APPLY', amount: 6000, personKey: 'primary' },
+    { conserve: ['auSavingsAccount', 'superAccount'], fee: 0 });
+  assert.equal(next.auSavingsAccount.balance, 14000);
+  // IN FULL — no 15% shave. Money already taxed at the member's marginal rate is not
+  // taxed again on the way in, which is the single fact that stops this riding on
+  // SuperContributionApplyReducer.
+  assert.equal(next.superAccount.balance, 56000);
+  assert.equal(next.superAccount.contributionBasis, 56000);
+});
+
+/**
+ * Design 95 phase 7 — the caps accumulator. It moves no money, so the postcondition
+ * that matters is a different one: every stream that consumes a cap must reach the
+ * right running total, and a contribution that cannot say whose it is must reach
+ * none of them.
+ */
+test('AuSuperCapsAccumulate: each stream feeds the total it consumes (I1)', () => {
+  const r = new AuSuperCapsAccumulateReducer();
+  const key = 'primary';
+  let state = { auSuperCapsByPerson: { [key]: {} } };
+
+  const feed = [
+    { type: 'SUPER_CONTRIBUTION_APPLY',     amount: 1_200, personKey: key, employerFunded: true },
+    { type: 'SUPER_SACRIFICE_APPLY',        amount:   500, personKey: key },
+    { type: 'SUPER_CONTRIBUTION_APPLY',     amount:   400, personKey: key, deductible: true },
+    { type: 'SUPER_NON_CONCESSIONAL_APPLY', amount: 1_000, personKey: key },
+    { type: 'AU_QUALIFYING_EARNINGS_APPLY', amount: 10_000, personKey: key },
+  ];
+  for (const a of feed) state = r.reduce(state, a);
+  const rec = state.auSuperCapsByPerson[key];
+
+  // All three concessional streams share ONE pool — that is what Div 291 rations.
+  assert.equal(rec.concessionalYTD, 2_100, 'SG + sacrifice + deductible');
+  // …and the SG also has its own, because `superGuaranteeAnnualCap` is a cap on the
+  // EMPLOYER's contribution and must not be eaten by the member's own streams.
+  assert.equal(rec.sgYTD, 1_200);
+  assert.equal(rec.nonConcessionalYTD, 1_000, 'a separate pool, Div 292\'s');
+  assert.equal(rec.qualifyingEarningsYTD, 10_000);
+});
+
+test('AuSuperCapsAccumulate: a contribution with no personKey is ignored, not guessed', () => {
+  // The standalone SuperContributionHandler (EVT-20, hand-authored) emits one. The
+  // caps are per-INDIVIDUAL, so attributing it to somebody would ration one member's
+  // cap against another's money.
+  const r = new AuSuperCapsAccumulateReducer();
+  const state = { auSuperCapsByPerson: { primary: { concessionalYTD: 5_000 } } };
+  const next = r.reduce(state, { type: 'SUPER_CONTRIBUTION_APPLY', amount: 9_999 });
+  assert.equal(next.auSuperCapsByPerson.primary.concessionalYTD, 5_000, 'untouched');
 });
 
 for (const [label, Reducer, type] of [

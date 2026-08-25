@@ -9,6 +9,7 @@
  */
 
 import { UsTaxRatesBase } from './us-tax-rates-base.js';
+import { ficaWageBase } from './fica-rates.js';
 
 // `usBracketGrossIncomeCeiling` used to live here, hard-pinned to the 2025 tables.
 // It now resolves the year's registered statutory module and is exported from
@@ -66,7 +67,7 @@ export class UsTaxRates2025 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 15_000;
-    this._ficaWageBase        = 176_100; // IRS Social Security wage base 2025
+    this._ficaWageBase        = ficaWageBase(2025);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 130_000; // Foreign Earned Income Exclusion cap 2025 (IRC §911)
   }
 }

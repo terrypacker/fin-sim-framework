@@ -19,8 +19,8 @@ import { BondAccretionHandler }       from '../../finance/handlers/bond-accretio
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
-import { MonthlyWagesHandler }        from '../../finance/handlers/monthly-wages-handler.js';
-import { AuSuperGuaranteeHandler }    from '../../finance/handlers/retirement-contribution-handler.js';
+import { PayrollHandler, PAYROLL_STAGE, hasPayrollContributions, AU_CONTRIBUTION_FIELDS }
+  from '../../finance/handlers/payroll-handler.js';
 import { projectPeople }             from '../../finance/state/person-projection.js';
 import { MonthlySocialSecurityHandler }
   from '../../finance/handlers/monthly-social-security-handler.js';
@@ -43,7 +43,9 @@ import { SpendingStrategyApplyReducer }   from '../../finance/spending/spending-
 import { SPENDING_STRATEGY_REGISTRY }     from '../../finance/spending/spending-strategy-registry.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import {
-  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperContributionApplyReducer, SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
+  SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
   SuperContributionHandler, SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
@@ -80,17 +82,19 @@ export const AU_RETIREMENT = {
 
   types: {
     handlers: [
-      MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      MonthlyExpensesHandler, MonthlySocialSecurityHandler,
       OutOfFundsHandler,
       SuperContributionHandler, SuperWithdrawalContributionsHandler,
       SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler, SuperEarningsHandler,
       IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-      AuSuperGuaranteeHandler,
+      PayrollHandler,
     ],
     reducers: [
       ExpenseDebitReducer, ReplenishSavingsReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
-      SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+      SuperContributionApplyReducer, SuperSacrificeApplyReducer,
+  SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
+  SuperWithdrawalContribApplyReducer,
       SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
     ],
     actions: [
@@ -123,11 +127,48 @@ export const AU_RETIREMENT = {
       // carryover leg. Stamped by the reducer, which resolves the AU cash key.
       // stateKey names the member's fund; employerFunded marks a Super Guarantee
       // contribution, which skips the cash debit and the §988 disposal with it.
+      // `deductible` + `personKey` — design 95 §9.1 phase 6b. `deductible` marks a
+      // s290-150 personal contribution, which takes the same cash and Div 295 path as
+      // any member contribution but ALSO chains SUPER_PERSONAL_DEDUCTION; `personKey`
+      // says whose deduction it is. Undeclared, pickPayload strips both and the
+      // journal cannot explain a return whose income dropped.
       { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD'),
                                                              stateKey: ValueType.text(),
                                                              employerFunded: ValueType.boolean(),
+                                                             deductible: ValueType.boolean(),
+                                                             personKey: ValueType.text(),
+                                                             clamps: ValueType.any(),
+                                                             carriedForward: ValueType.currency('AUD'),
                                                              section988: ValueType.any() } },
       { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      // Design 95 §9.1 phase 6b — the two member streams that could not ride on
+      // SUPER_CONTRIBUTION_APPLY. Sacrifice: no cash debit (PayrollHandler already
+      // reduced the wage) and no §988 leg, but Div 295 applies. Non-concessional:
+      // cash debit and a §988 disposal, and NO Div 295 at all.
+      { type: 'SUPER_SACRIFICE_APPLY',             fields: { amount: ValueType.currency('AUD'),
+                                                             stateKey: ValueType.text(),
+                                                             personKey: ValueType.text(),
+                                                             clamps: ValueType.any(),
+                                                             carriedForward: ValueType.currency('AUD') } },
+      { type: 'SUPER_NON_CONCESSIONAL_APPLY',      fields: { amount: ValueType.currency('AUD'),
+                                                             stateKey: ValueType.text(),
+                                                             personKey: ValueType.text(),
+                                                             clamps: ValueType.any(),
+                                                             carriedForward: ValueType.currency('AUD'),
+                                                             section988: ValueType.any() } },
+      // Design 95 §9.2 phase 7 — this month's qualifying earnings AFTER the s10A(5)
+      // truncation. It carries no money: its only job is to advance the accumulator
+      // the maximum contributions base is measured against, which has to keep running
+      // even in a month where every contribution was clamped to nothing.
+      { type: 'AU_QUALIFYING_EARNINGS_APPLY',      fields: { amount: ValueType.currency('AUD'),
+                                                             personKey: ValueType.text(),
+                                                             clamps: ValueType.any(),
+                                                             carriedForward: ValueType.currency('AUD') } },
+      // The s290-150 deduction leg. Classified by AuTaxModule2026 into
+      // auPersonDeductibleSuperYTD; carries no money of its own.
+      { type: 'SUPER_PERSONAL_DEDUCTION',          fields: { amount: ValueType.currency('AUD'),
+                                                             stateKey: ValueType.text(),
+                                                             personKey: ValueType.text() } },
       // `blocked` marks a withdrawal the preservation rules refused. It is the only
       // record that the attempt happened at all — a refused withdrawal moves no state,
       // so it leaves no diff to infer it from.
@@ -176,13 +217,38 @@ export const AU_RETIREMENT = {
         key: 'superGuaranteePct', label: 'Super Guarantee Rate',
         type: 'Number', group: 'Contributions', mc: false, opt: true,
         defaultValue: 0,
-        description: 'Employer Superannuation Guarantee as a fraction of annual pay (0.12 = 12%). Employer-funded: it is on top of the quoted salary, never debits the member\'s cash and is outside their assessable income \u2014 only the fund\'s 15% Div 295 contributions tax applies. A scenario assumption, NOT a legislated schedule; this model carries no SG rate table.',
+        description: 'HOUSEHOLD DEFAULT for the employer Superannuation Guarantee, as a fraction of annual pay (0.12 = 12%); a Person\'s own election overrides it. Employer-funded: it is on top of the quoted salary, never debits the member\'s cash and is outside their assessable income \u2014 only the fund\'s 15% Div 295 contributions tax applies. A scenario assumption, NOT a legislated schedule; this model carries no SG rate table.',
       },
       {
         key: 'superGuaranteeAnnualCap', label: 'Super Guarantee Annual Cap',
         type: 'Money', group: 'Contributions', mc: false, opt: false,
         defaultValue: null, defaultCurrency: 'AUD',
-        description: 'Annual cap on the employer contribution; empty means uncapped. A scenario assumption, not the indexed concessional cap.',
+        description: 'HOUSEHOLD DEFAULT annual cap on the employer contribution, overridden by a Person\'s own cap; empty means uncapped. A scenario assumption, not the SGAA s10A(5) maximum contributions base — that arrives in design 95 phase 7.',
+      },
+      // ── The member's own three streams (design 95 §9.1, phase 6b) ───────────
+      //
+      // UNCAPPED in this phase. Div 291 (concessional), Div 292 (non-concessional)
+      // and the s10A(5) contributions base all arrive in phase 7, so nothing here
+      // stops a scenario contributing more than the law allows. That matters most
+      // for an OPTIMIZER: a sweep over these keys will find that shovelling money
+      // into super minimises tax, because in this phase it does.
+      {
+        key: 'superSalarySacrificePct', label: 'Salary Sacrifice Rate',
+        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'HOUSEHOLD DEFAULT salary sacrifice into super, as a fraction of annual pay (0.05 = 5%); a Person\'s own election overrides it. PRE-TAX: the employer diverts it before paying, so it reduces both the cash received and assessable income, and the fund takes the 15% Div 295 tax on the way in. It does NOT reduce the Super Guarantee — SGAA s10A(1)(h) counts a sacrificed reduction as qualifying earnings. Employees only; a self-employed person uses the personal deductible contribution instead. UNCAPPED until design 95 phase 7 adds Div 291.',
+      },
+      {
+        key: 'superPersonalDeductibleContribution', label: 'Personal Deductible Super Contribution',
+        type: 'Money', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0, defaultCurrency: 'AUD',
+        description: 'HOUSEHOLD DEFAULT annual personal super contribution claimed as a deduction under ITAA97 s290-150, spread evenly across the year; a Person\'s own election overrides it. Paid from AFTER-TAX AU cash, taxed 15% in the fund, and deducted on the member\'s return — so it reaches nearly the same place as salary sacrifice but up to a year later in cash-flow terms. The deduction is limited by s26-55 to assessable income before tax losses: it can reduce taxable income to zero but cannot create a loss, and any excess is lost rather than carried. UNCAPPED until design 95 phase 7 adds Div 291.',
+      },
+      {
+        key: 'superNonConcessionalContribution', label: 'Non-Concessional Super Contribution',
+        type: 'Money', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0, defaultCurrency: 'AUD',
+        description: 'HOUSEHOLD DEFAULT annual non-concessional super contribution, spread evenly across the year; a Person\'s own election overrides it. Paid from AFTER-TAX AU cash and arriving in the fund IN FULL — no 15% Div 295 tax and no deduction. Money already taxed at the member\'s marginal rate is not taxed again on the way in. UNCAPPED until design 95 phase 7 adds Div 292 and the transfer-balance-cap stop.',
       },
       {
         key: 'superGrowthRate', label: 'Super Growth Rate',
@@ -294,6 +360,9 @@ export const AU_RETIREMENT = {
     const patches = {
       inflationRates:          { AU: p.inflationRate },
       inflationAccumulator:    { AU: 1.0 },
+      // design 95 §10 phase 9 — 1.0 until the run passes the last published
+      // contribution-limit year, then compounds the same effective inflation rate.
+      limitIndexAccumulator:   { AU: 1.0 },
       superWithdrawalBlocked:  false,
     };
 
@@ -342,10 +411,13 @@ export const AU_RETIREMENT = {
           .interval('month-end').enabled(true).color('#F44336').build()
       );
     }
-    if (!context.schedulesById['MONTHLY_WAGES']) {
+    // Design 95 §P0 — `PAYROLL` supersedes `MONTHLY_WAGES`. The US toolset attaches
+    // the stage-INCOME handler for both countries, so this only ensures the event
+    // exists when AU is the sole retirement toolset in play.
+    if (!context.schedulesById['PAYROLL']) {
       schedules.push(
         EventBuilder.eventSeries()
-          .name('Monthly Wages').type('MONTHLY_WAGES')
+          .name('Payroll').type('PAYROLL')
           .interval('month-end').enabled(true).color('#4CAF50').build()
       );
     }
@@ -369,14 +441,16 @@ export const AU_RETIREMENT = {
     // Employer Super Guarantee. `order(1)`: after wages and expenses on the same
     // month-end, matching the US contribution stream so the two countries' payroll
     // contributions sit at the same point in a month.
+    // Design 95 §7.1 phase 1 — household default OR any person's own SG election.
     if (superAccts.length > 0
-        && (context.parameters?.superGuaranteePct ?? 0) > 0
-        && people.some(pe => (pe.monthlyWage ?? 0) > 0)) {
-      schedules.push(
-        EventBuilder.eventSeries()
-          .name('Super Guarantee').type('AU_SUPER_GUARANTEE')
-          .interval('month-end').order(1).enabled(true).color('#00897B').build()
-      );
+        && hasPayrollContributions(people, context.parameters ?? {}, AU_CONTRIBUTION_FIELDS)) {
+      if (!context.schedulesById['PAYROLL_CONTRIBUTIONS']) {
+        schedules.push(
+          EventBuilder.eventSeries()
+            .name('Payroll Contributions').type('PAYROLL_CONTRIBUTIONS')
+            .interval('month-end').order(1).enabled(true).color('#00897B').build()
+        );
+      }
     }
 
     if (auStockAccts.length > 0) {
@@ -501,8 +575,30 @@ export const AU_RETIREMENT = {
       expHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
       handlers.push(expHandler);
 
-      const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
-      wagesHandler.handledEvents.push(context.schedulesById['MONTHLY_WAGES']);
+      // Payroll, stage INCOME (design 95 §P0). Attached here for an AU-only
+      // household — a cross-border scenario has US_RETIREMENT do it, which is what
+      // the `_auSharedDelegated` guard around this block is for.
+      const wagesHandler = new PayrollHandler({
+        stateRegistry: sr, stage: PAYROLL_STAGE.INCOME,
+        // Design 95 §9.1 phase 6b — salary sacrifice is the ONE stream that spans
+        // both stages: it reduces the wage here and lands in the fund at
+        // CONTRIBUTIONS. So the income-stage instance needs the rate too, or the
+        // member is paid in full AND the sacrifice arrives in super — the money
+        // counted twice, with the assessable income never reduced.
+        // Design 95 §9.1 — the FULL AU election set, not just the sacrifice rate.
+        // Sacrifice is rationed against the Div 291 cap ALONGSIDE the SG and the
+        // personal deductible contribution, so an instance that knows only the
+        // sacrifice rate rations it against an empty pool and arrives at a different
+        // figure from the one the contributions stage will actually credit. The wage
+        // was then reduced by one number and the fund credited with another, and the
+        // difference simply vanished. Both stages must ration from the same inputs.
+        superGuaranteePct:              p.superGuaranteePct                   ?? 0,
+        superAnnualCap:                 p.superGuaranteeAnnualCap             ?? null,
+        salarySacrificePct:             p.superSalarySacrificePct             ?? 0,
+        personalDeductibleContribution: p.superPersonalDeductibleContribution ?? 0,
+        nonConcessionalContribution:    p.superNonConcessionalContribution    ?? 0,
+      });
+      wagesHandler.handledEvents.push(context.schedulesById['PAYROLL']);
       handlers.push(wagesHandler);
 
       handlers.push(new OutOfFundsHandler());
@@ -511,12 +607,26 @@ export const AU_RETIREMENT = {
     // Employer Super Guarantee — wired off the schedule, so it is absent unless the
     // rate is set. Not inside the `_auSharedDelegated` guard above: the SG stream is
     // AU-owned and has no US counterpart to have already registered it.
-    const sgEvent = context.schedulesById['AU_SUPER_GUARANTEE'];
-    if (sgEvent) {
-      const sgHandler = new AuSuperGuaranteeHandler({
-        stateRegistry: sr,
-        guaranteePct:  p.superGuaranteePct        ?? 0,
-        annualCap:     p.superGuaranteeAnnualCap  ?? null,
+    // Design 95 §P0: a SECOND PayrollHandler instance on the SAME event as the US
+    // stream, carrying only the AU election. Each instance computes the whole
+    // pipeline and emits only its own non-zero slice — the AU instance's 401(k)
+    // params are zero so it contributes nothing there, and vice versa. That keeps
+    // each country's parameters owned by its own toolset, exactly as the two
+    // separate events did, without either toolset knowing the other's params.
+    const sgEvent = context.schedulesById['PAYROLL_CONTRIBUTIONS'];
+    if (sgEvent && hasPayrollContributions(people, p, AU_CONTRIBUTION_FIELDS)) {
+      const sgHandler = new PayrollHandler({
+        stateRegistry:     sr,
+        stage:             PAYROLL_STAGE.CONTRIBUTIONS,
+        superGuaranteePct: p.superGuaranteePct        ?? 0,
+        superAnnualCap:    p.superGuaranteeAnnualCap  ?? null,
+        // Design 95 §9.1 phase 6b — the member's three streams as household
+        // defaults, each overridable per Person. Phase 3's lesson applies here in
+        // full: a field that reaches Person and the projection but has no
+        // paramSchema entry is silently dropped, and the golden stays green.
+        salarySacrificePct:              p.superSalarySacrificePct             ?? 0,
+        personalDeductibleContribution:  p.superPersonalDeductibleContribution ?? 0,
+        nonConcessionalContribution:     p.superNonConcessionalContribution    ?? 0,
       });
       sgHandler.handledEvents.push(sgEvent);
       handlers.push(sgHandler);
@@ -749,6 +859,9 @@ export const AU_RETIREMENT = {
     const superAccts = context.accounts.filter(a => a.role === ACCOUNT_ROLES.SUPER);
     if (superAccts.length > 0) reducers.push(
       new SuperContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperSacrificeApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperNonConcessionalApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new AuSuperCapsAccumulateReducer(),
       new SuperWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),

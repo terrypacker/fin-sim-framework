@@ -10,6 +10,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
+import { PayrollSection } from './payroll-section.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { usStateOptionPairs } from '../../finance/tax/state/us-states.js';
 
@@ -32,7 +33,8 @@ export class PersonEditor extends BaseComponent {
    * }}
    */
   constructor({ parent, container, node, onSave, onDelete,
-                links = null, onParamChange = null, onOpenParam = null }) {
+                links = null, onParamChange = null, onOpenParam = null,
+                householdParams = null, accounts = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -42,6 +44,13 @@ export class PersonEditor extends BaseComponent {
     this.onParamChange = onParamChange ?? null;
     this.onOpenParam   = onOpenParam   ?? null;
     this._linkedFields = new Set();
+    // Design 95 §17 phase 10. The household parameter BAG (`cfg.parameters`, not
+    // the typed `cfg.params` list — the two stores are easy to confuse and only one
+    // of them is keyed by plain param name) backs the "inherit …" placeholders; the
+    // sibling accounts back the wage-split destinations.
+    this._householdParams = householdParams ?? {};
+    this._accounts        = accounts ?? [];
+    this._payroll         = null;
   }
 
   render() {
@@ -95,6 +104,27 @@ export class PersonEditor extends BaseComponent {
     el.querySelector('[data-id="retirementDate"]').value =
       rd instanceof Date ? rd.toISOString().slice(0, 10)
                         : (rd ? String(rd).slice(0, 10) : '2040-01-01');
+
+    // ── Payroll elections (design 95 §17 phase 10) ──────────────────────────
+    // Rendered before the param links are bound below because the section binds
+    // its own linked fields and reports them back through `_linkedFields`, which
+    // `_readForm` uses to keep a param-owned field out of the service payload.
+    this._payroll = new PayrollSection({
+      container:       el.querySelector('[data-id="payrollBody"]'),
+      node:            this._node,
+      householdParams: this._householdParams,
+      accounts:        this._accounts,
+      links:           this._links,
+      onParamChange:   () => this.onParamChange?.(),
+      onOpenParam:     (p) => this.onOpenParam?.(p),
+      // Read LIVE rather than off the node: changing the wage currency has to
+      // re-offer the split destinations, since a cross-currency split is refused
+      // by `splitWage` and the editor must not be able to author one.
+      wageCurrency:    () => el.querySelector('[data-id="wageCurrency"]').value,
+    });
+    this._payroll.render();
+    this.listen(el.querySelector('[data-id="wageCurrency"]'), 'change',
+                () => this._payroll.refreshSplitDestinations());
 
     // Show Delete only when editing an existing person
     const deleteBtn = el.querySelector('[data-id="deleteBtn"]');
@@ -164,7 +194,13 @@ export class PersonEditor extends BaseComponent {
       // Person's default rather than carrying an empty string through the config.
       workCountry:           el.querySelector('[data-id="workCountry"]').value || null,
     };
-    // Param-backed fields are owned by their scenario param (design/32).
+    // Design 95 §17 phase 10. Blank stays `null` here — "inherit the household
+    // default" — and never becomes 0, which would opt the person out (§17.6).
+    Object.assign(data, this._payroll?.readElections() ?? {});
+    // Param-backed fields are owned by their scenario param (design/32). The
+    // payroll section reports its own linked elections, which land in the same set
+    // so one deletion loop covers both.
+    for (const f of (this._payroll?.linkedFields ?? [])) this._linkedFields.add(f);
     for (const f of this._linkedFields) delete data[f];
     return data;
   }

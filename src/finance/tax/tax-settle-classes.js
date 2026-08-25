@@ -14,6 +14,10 @@ import { TaxSettleService }    from '../tax-settle-service.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { toUSD, toAUD, taxFxRate } from './tax-fx.js';
+import { rollUnusedConcessionalCap, concessionalCapWithCarryForward, nonConcessionalCap }
+  from './au/au-super-limits.js';
+import { ageAt } from '../mpc/harvest.js';
+import { auFinancialYearOf } from '../payroll/au-super-caps.js';
 
 /** Sum the numeric values of a { key: number } map (per-person accumulators). */
 function _sumMap(map) {
@@ -46,6 +50,11 @@ const YTD_FIELDS = {
        'usInvestmentInterestYTD',
        // design 69 — self-employment tax (SECA) accumulators
        'usSeEarningsYTD', 'usSsWagesYTD',
+       // Design 95 phase 5 — payroll withholding, credited against the liability
+       // below and then reset with the rest. It was written by the wages reducer and
+       // read by NOTHING before this phase, and was not even in this list, so it
+       // accumulated monotonically for the life of the run.
+       'usWithheldYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
        // design 90 §4.5 — the capital-gain component of each basket. Per-year like the
        // baskets they slice; the §1212(b) POOLS above are the things that survive.
@@ -76,8 +85,28 @@ const YTD_FIELDS = {
        'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
        // design 63 §6.4 — AU super death-benefit tax (reporting bucket; withheld from the net lump sum)
-       'auSuperDeathTaxYTD'],
+       'auSuperDeathTaxYTD',
+       // design 95 §9.1 phase 6b — s290-150 deductible contributions. Deductible ONLY
+       // in the income year the contribution was made (s290-150(3)), so this resets
+       // with the FY and never carries: an unused deduction is lost, not banked.
+       'auDeductibleSuperYTD'],
 };
+
+/**
+ * Per-person US accumulator maps reset after each US settlement (design 95 §7.3).
+ *
+ * `k401ContributionsYTD` is `{ personKey: { deferral, additions } }` — §402(g) and
+ * §414(v) measure the employee's own deferrals, §415(c) measures all annual
+ * additions including the employer's. Both are per TAXABLE YEAR, so both die here.
+ *
+ * Without this reset the totals accumulate for the life of the run and §415(c)
+ * silently strangles every contribution once the balance passes the annual-additions
+ * limit — which is exactly what the golden caught on the first run of phase 3.
+ */
+const PER_PERSON_US_FIELDS = ['k401ContributionsYTD'];
+
+/** Per-person US accumulators that reset to a plain 0 rather than to an object. */
+const PER_PERSON_US_SCALAR_FIELDS = ['usSsWagesByPersonYTD'];
 
 // Per-person AU accumulator maps reset to zero after each AU settlement.
 const PER_PERSON_AU_FIELDS = [
@@ -96,6 +125,7 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonUsSourceOrdinaryAudYTD',
   'auPersonUsSourceCapGainsAudYTD',
   'auPersonUsSourceRealCapGainsAudYTD',
+  'auPersonDeductibleSuperYTD',
 ];
 
 /**
@@ -317,7 +347,11 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
       // behind its converted figures (see taxFxRate for what it does and does
       // not cover). Declared in the US_TAX toolset's action fields, so it
       // survives into `action.data` for the document modules and the CSV export.
-      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, usTaxPaidOnUsSourceAud,
+      // `tax` stays the full liability so `cumulativeTaxesPaid` keeps counting the
+      // tax the household actually bore. `withheld` is what payroll already took, and
+      // only the difference is debited from cash (design 95 §8.2).
+      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability,
+        withheld: +(state.usWithheldYTD ?? 0).toFixed(2), taxDetail, usTaxPaidOnUsSourceAud,
         fxRate: taxFxRate(state) },
       { type: 'RECORD_BALANCE' },
     ];
@@ -341,9 +375,22 @@ export class AuTaxSettleHandler extends TaxSettleHandlerBase {
   static eventType        = 'TAX_SETTLE_AU';
   static description      = 'Computes end-of-year AU tax liability and emits AU_TAX_SETTLE_APPLY + RECORD_BALANCE.';
 
-  call({ state }) {
+  call({ date, state }) {
     // Same rate on both AU paths as on the US settle — one household, one pair.
     const fxRate = taxFxRate(state);
+    // Design 95 §9.3 phase 7 — the financial year this settlement CLOSES. The
+    // reducer needs it to roll the unused-concessional-cap ring and cannot derive
+    // it: PERIOD_ADVANCE carries no date and a reducer never sees one, so the
+    // handler — the only participant holding the event date — stamps it. Absent
+    // (a hand-authored settle event), the roll no-ops rather than guessing a year
+    // and expiring the wrong vintage.
+    const fyStartYear = date != null ? auFinancialYearOf(date) : null;
+    // Design 95 §10 phase 9 — the limit index factor the year was ASSESSED under,
+    // stamped for the same reason `fyStartYear` is: the reducer rolls the unused-cap
+    // ring against a cap, and that cap must be the one payroll actually used all
+    // year. Reading the accumulator inside the reducer would take whatever it holds
+    // after the period advance, which is a different year's figure.
+    const limitIndexFactor = state.limitIndexAccumulator?.AU ?? 1;
 
     // Design 77 §5.4 — the Div 295 fund tax accrued this FY, in AUD. It is NOT part
     // of `tax` (that is the member's own liability, and the only thing
@@ -358,14 +405,14 @@ export class AuTaxSettleHandler extends TaxSettleHandlerBase {
       if (personTaxDetails.length > 0) {
         const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
         return [
-          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails, fxRate, fundTax },
+          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails, fxRate, fundTax, fyStartYear, limitIndexFactor },
           { type: 'RECORD_BALANCE' },
         ];
       }
     }
     const taxDetail = this._settleService.computeAuTax(state);
     return [
-      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate, fundTax },
+      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, fxRate, fundTax, fyStartYear, limitIndexFactor },
       { type: 'RECORD_BALANCE' },
     ];
   }
@@ -392,6 +439,22 @@ class TaxSettleApplyReducerBase extends Reducer {
     for (const field of (YTD_FIELDS[cc] || [])) {
       if (field in state) resets[field] = 0;
     }
+    if (cc === 'US') {
+      // Reset each person's map to an empty entry rather than deleting the person:
+      // the shape stays stable across the year boundary, which keeps the state
+      // fixture's key set stable and makes a diff mean a value change.
+      for (const field of PER_PERSON_US_FIELDS) {
+        if (state[field]) {
+          resets[field] = Object.fromEntries(
+            Object.keys(state[field]).map(k => [k, { deferral: 0, additions: 0 }]));
+        }
+      }
+      for (const field of PER_PERSON_US_SCALAR_FIELDS) {
+        if (state[field]) {
+          resets[field] = Object.fromEntries(Object.keys(state[field]).map(k => [k, 0]));
+        }
+      }
+    }
     if (cc === 'AU') {
       // design/68 Gap 5: a deceased person's per-person keys must be *dropped*, not
       // just zeroed. computeAuTaxPerPerson already filed their final-year return
@@ -413,8 +476,23 @@ class TaxSettleApplyReducerBase extends Reducer {
       }
     }
     const extra = this._extraStatePatches(state, action);
-    if (tax > 0) {
-      return this.newState({ ...state, ...resets, ...extra }, {}, [{ type: this.constructor.debitActionType, amount: tax }]);
+    // Design 95 §8.2 — the true-up. Payroll already withheld part (or all) of this
+    // liability during the year, so only the BALANCE DUE leaves cash now. Withholding
+    // it and then debiting the whole liability again would charge it twice.
+    //
+    // `balanceDue` cannot go negative under the withholding methods phase 5 ships:
+    // FICA is always a component of the liability it is credited against. A method
+    // that CAN over-withhold needs a refund path, which the tax payment reducer —
+    // it debits and replenishes from investments when short — does not have. Clamped
+    // at zero regardless, so a future over-withholding is a visible no-refund rather
+    // than a negative debit doing something unpredictable.
+    const withheld   = Math.max(0, action.withheld ?? 0);
+    // NOT rounded. With nothing withheld this must be `tax` to the last bit, or every
+    // scenario that withholds nothing still moves by a fraction of a cent — which is
+    // exactly what a whole-state fixture is built to catch, and did.
+    const balanceDue = Math.max(0, tax - withheld);
+    if (balanceDue > 0) {
+      return this.newState({ ...state, ...resets, ...extra }, {}, [{ type: this.constructor.debitActionType, amount: balanceDue }]);
     }
     return this.newState({ ...state, ...resets, ...extra });
   }
@@ -559,7 +637,16 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
    * Design 77 §3.1 carries the reasoning.
    */
   _extraStatePatches(state, action) {
-    const auCreditable = Math.max(0, action.tax ?? 0);
+    // Design 95 §9.4 phase 8, review Q5 — Div 293 is TABLED as non-creditable and
+    // removed from the §904 base here. It is an Australian income tax on an
+    // individual, which points toward creditable under Art 22 / §901, but it is
+    // imposed on CONTRIBUTIONS rather than on income received, which is at least
+    // arguable. An uncredited Div 293 is the conservative reading, and turning the
+    // credit on later moves lifetime tax in a known direction. It IS inside
+    // `action.tax` — the member genuinely pays it, so it must be debited and must
+    // reach `cumulativeTaxesPaid` — which is exactly why it has to come out again
+    // here rather than simply never being added.
+    const auCreditable = Math.max(0, (action.tax ?? 0) - _auDiv293Total(action));
     // Design 83 G10 — carry this FY's realised AU rate on capital gains forward for
     // the §865(g)(2) test on the next US return. A one-settle lag is not a
     // compromise here, it is the real filing sequence: the AU FY ends 30 June and
@@ -571,8 +658,196 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
       ftcCurrentForeignTax: toUSD(auCreditable, 'AUD', state),
       ...(cgtRate != null ? { auCgtEffectiveRate: cgtRate } : {}),
       ..._auLossPoolPatch(state, action),
+      ..._auSuperCapsRoll(state, action),
     };
   }
+}
+
+/**
+ * The household's Division 293 tax for the year, summed across whoever owed it.
+ *
+ * Read off the same `taxDetail` the return was built from, so it can never disagree
+ * with the figure that was debited. Both settle shapes are handled: the per-person
+ * path (`personTaxDetails`) and the single-return fallback.
+ */
+function _auDiv293Total(action) {
+  const details = action.personTaxDetails;
+  if (details?.length) {
+    return details.reduce((sum, p) => sum + Math.max(0, p.taxDetail?.div293Tax ?? 0), 0);
+  }
+  return Math.max(0, action.taxDetail?.div293Tax ?? 0);
+}
+
+/**
+ * Roll `auSuperCapsByPerson` across the AU financial-year boundary (design 95 §9.3,
+ * phase 7).
+ *
+ * Four movements, and they have to happen together because each depends on the year
+ * that is ending:
+ *
+ *  1. **Accrue** this year's unused concessional cap (s291-20(6)), measured against
+ *     the BASIC cap — never the carried-forward one, or a member who spent old cap
+ *     would accrue new cap out of cap they had already used.
+ *  2. **Expire** anything now outside the five-year window (s291-20, and the ATO's
+ *     "a 2019-20 unused cap amount that isn't used by the end of 2024-25 will
+ *     expire").
+ *  3. **Snapshot** the total superannuation balance. s291-20(3)(b) and s292-85(2)(b)
+ *     both test it "just before the start of the financial year", and 30 June is
+ *     exactly that instant for the year about to begin — so the settle is the only
+ *     place in the run where the right number is on hand at the right moment.
+ *  4. **Reset** the three YTD totals, and advance any bring-forward arrangement.
+ *
+ * This sits OUTSIDE `PER_PERSON_AU_FIELDS` on purpose. That loop zeroes a map
+ * wholesale, and three of the six fields here must survive the boundary — the unused
+ * ring is the model's first genuinely multi-year accumulator, and zeroing it every
+ * June would quietly delete the entire carry-forward feature while leaving it
+ * looking wired.
+ *
+ * `applied` is not re-derived here: it is read off the same `concessionalCapWithCarryForward`
+ * result the year was assessed under, carried on the record by the payroll handler,
+ * so the ring decrements by exactly what was spent.
+ */
+function _auSuperCapsRoll(state, action) {
+  const all = state.auSuperCapsByPerson;
+  if (all == null) return {};
+
+  // The financial year that just ENDED. Stamped by the settle handler, which is the
+  // only participant that sees the event date.
+  const fy = action.fyStartYear;
+  if (!Number.isFinite(fy)) return {};
+  const indexFactor = action.limitIndexFactor ?? 1;
+
+  // design/68 Gap 5, same rule as the per-person reset above: a deceased person's
+  // keys are DROPPED, not zeroed. Their caps can never bind again, and a lingering
+  // record would let income mis-attributed to a dead key ration a live member's cap.
+  const people   = state.people ?? {};
+  const deadKeys = new Set(Object.keys(state.deceased ?? {}).filter(k => people[k] == null));
+
+  const next = {};
+  for (const [key, rec] of Object.entries(all)) {
+    if (deadKeys.has(key)) continue;
+    const concessional = Math.max(0, rec.concessionalYTD ?? 0);
+
+    // The member's balance at this instant IS "just before the start" of the year
+    // about to begin, which is what s291-20(3)(b) and s292-85(2)(b) both test.
+    const superKey = _auSuperKeyFor(state, key, rec);
+    const tsb = superKey != null ? Math.max(0, state[superKey]?.balance ?? 0)
+                                 : (rec.tsbAtFyStart ?? 0);
+
+    // ── The Div 292 bring-forward arrangement (s292-85(3)-(7)) ───────────────
+    //
+    // Three financial years from its first, and this is the ONLY place it is ever
+    // written. `monthlyAuSuper` reports that a year's contributions would trigger one,
+    // but a handler cannot start an arrangement: it runs twelve times a year and has
+    // nowhere to persist the decision. Without a writer here `bringForward` stayed
+    // null forever, s292-85(6)/(7)'s remainder branch was unreachable, and every year
+    // re-evaluated as a NEW first year — so a member contributing over the general cap
+    // got a 3x cap EVERY year instead of once per three.
+    const nonConcessional = Math.max(0, rec.nonConcessionalYTD ?? 0);
+    const bf = rec.bringForward ?? null;
+    let bringForward = null;
+    if (bf?.firstFy != null && fy < bf.firstFy + 2) {
+      // Years two and three: carry it, spending down what this year used.
+      bringForward = { ...bf, used: +((bf.used ?? 0) + nonConcessional).toFixed(2) };
+    } else if (bf == null) {
+      // No arrangement running. Did this year's contributions start one? Re-derived
+      // from what the year ACTUALLY contributed, on the same inputs the year was
+      // assessed under — `rec.tsbAtFyStart` is still the opening balance here, since
+      // the new snapshot is not assigned until below.
+      const started = nonConcessionalCap({
+        fyStartYear:   fy,
+        tsb:           Math.max(0, rec.tsbAtFyStart ?? 0),
+        age:           _ageAtFyEnd(state, key, fy),
+        contributions: nonConcessional,
+        indexFactor,
+      });
+      if (started.bringForwardTriggered) {
+        bringForward = { firstFy: fy, cap: started.bringForwardCap,
+                         used: +nonConcessional.toFixed(2) };
+      }
+    }
+
+    // What the carry-forward actually released this year, RE-DERIVED from the
+    // contributions the year really made rather than stored month by month.
+    //
+    // The ring is written nowhere but here, so `rec.unusedByFy` is still the year's
+    // OPENING ring and `rec.tsbAtFyStart` still the opening balance — the two inputs
+    // the year was assessed under. Re-deriving against the actual annual total is
+    // strictly better than recording the payroll handler's monthly view, which is
+    // sized on INTENDED contributions: a member who retires in March intended more
+    // than they contributed, and would otherwise have spent carry-forward cap on a
+    // contribution that never happened.
+    const spent = concessionalCapWithCarryForward({
+      fyStartYear:   fy,
+      contributions: concessional,
+      tsb:           Math.max(0, rec.tsbAtFyStart ?? 0),
+      unusedByFy:    rec.unusedByFy ?? {},
+      indexFactor,
+    });
+
+    next[key] = {
+      concessionalYTD:       0,
+      sgYTD:                 0,
+      nonConcessionalYTD:    0,
+      qualifyingEarningsYTD: 0,
+      unusedByFy: rollUnusedConcessionalCap({
+        fyStartYear:   fy,
+        contributions: concessional,
+        unusedByFy:    rec.unusedByFy ?? {},
+        applied:       spent.applied,
+        indexFactor,
+      }),
+      // The NEW snapshot, deliberately assigned after `spent` has read the old one.
+      tsbAtFyStart: +tsb.toFixed(2),
+      bringForward,
+    };
+  }
+  return { auSuperCapsByPerson: next };
+}
+
+/**
+ * The person's age at the END of the financial year — s292-85(3)(c) asks whether they
+ * were "under 75 years at any time in the first year", so the year-end age is the
+ * conservative reading of it. Null when no birth date is projected, which
+ * `nonConcessionalCap` treats as eligible rather than guessing.
+ */
+function _ageAtFyEnd(state, personKey, fyStartYear) {
+  const birth = state.people?.[personKey]?.birthDate;
+  if (birth == null) return null;
+  return ageAt(birth, new Date(Date.UTC(fyStartYear + 1, 5, 30)));
+}
+
+/**
+ * The SUPER account stateKey for one person, or null when they have no fund.
+ *
+ * Prefers the key the payroll handler actually resolved and the caps accumulator
+ * recorded — this reducer has no StateRegistry of its own, so that record is the only
+ * exact answer available to it. The convention fallbacks below are for a person who
+ * has a fund but has never contributed to it (a seeded balance in a run that starts
+ * at retirement), and the household `superAccount` is used ONLY in a single-person
+ * household: attributing one shared key to each of two people would snapshot the same
+ * balance as both of their total superannuation balances and mis-gate both.
+ */
+function _auSuperKeyFor(state, personKey, rec = null) {
+  // 1. The key the payroll handler actually resolved, recorded by the caps
+  //    accumulator. Exact, and the only answer that survives a renamed account.
+  if (rec?.superKey != null && state[rec.superKey] != null) return rec.superKey;
+  // 2. The person-prefixed convention — for someone with a seeded balance who has
+  //    never contributed, so step 1 has nothing recorded.
+  const direct = `${personKey}SuperAccount`;
+  if (state[direct] != null) return direct;
+  // 3. The household account, but ONLY when it is theirs. `ownerId` is carried on the
+  //    account in state, so ownership is a fact here rather than an inference: in a
+  //    two-person household `superAccount` belongs to one of them and
+  //    `spouseSuperAccount` to the other, and handing the same key to both would
+  //    snapshot one balance as BOTH their total superannuation balances and mis-gate
+  //    the carry-forward and the transfer-balance stop for both.
+  const shared = state.superAccount;
+  if (shared != null) {
+    if (shared.ownerId === personKey) return 'superAccount';
+    if (shared.ownerId == null && Object.keys(state.people ?? {}).length <= 1) return 'superAccount';
+  }
+  return null;
 }
 
 /**
