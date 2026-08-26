@@ -53,7 +53,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     this._renderQueued  = false;   // rAF debounce flag for step-driven re-renders
     this._pickerSig     = null;    // membership signature of the account <select>
     this._charts        = null;    // Map<hostName, echarts instance>, lazily built
-    this._ros           = null;    // ResizeObservers, one per chart host
+    this._ros           = null;    // Map<hostName, ResizeObserver>, one per chart host
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -503,19 +503,40 @@ export class HoldingsPlugin extends WorkbenchComponent {
 
     const host = this._q(name);
     if (!host) return null;
-    const chart = echarts.init(host, null, { renderer: 'canvas' });
-    this._charts.set(name, chart);
 
     // ECharts sizes its canvas once, at init, and this panel's box moves WITHOUT a
     // window resize: the section appears when the first account is picked, the pane is
     // draggable, and the two charts share a row that wraps. Observe the box, not the
     // window.
-    if (typeof ResizeObserver === 'function') {
-      const ro = new ResizeObserver(() => chart.resize());
-      ro.observe(host);
-      (this._ros ??= []).push(ro);
-    }
+    this._observeHost(name, host);
+
+    // A docked panel whose tab has never been activated is 0x0, and so is this host on
+    // the very first render after SCENARIO_READY. Initialising there makes ECharts warn
+    // and draw nothing, so wait: the observer above re-renders the moment the host has
+    // a real box.
+    if (!(host.clientWidth > 0 && host.clientHeight > 0)) return null;
+
+    const chart = echarts.init(host, null, { renderer: 'canvas' });
+    this._charts.set(name, chart);
     return chart;
+  }
+
+  /**
+   * One ResizeObserver per chart host, kept for the panel's lifetime. It does double
+   * duty: resize an existing chart, or — when the host was still 0x0 at init time —
+   * trigger the render that finally creates it.
+   */
+  _observeHost(name, host) {
+    if (typeof ResizeObserver !== 'function') return;
+    this._ros ??= new Map();
+    if (this._ros.has(name)) return;
+    const ro = new ResizeObserver(() => {
+      const chart = this._charts?.get(name);
+      if (chart) chart.resize();
+      else if (host.clientWidth > 0 && host.clientHeight > 0) this._scheduleRender();
+    });
+    ro.observe(host);
+    this._ros.set(name, ro);
   }
 
   _resizeCharts() { this._charts?.forEach(c => c.resize()); }
