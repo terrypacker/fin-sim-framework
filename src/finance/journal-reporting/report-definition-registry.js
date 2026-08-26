@@ -714,7 +714,7 @@ class DebitsFromAccountDef extends ReportDefinition {
 class TaxPaidByYearDef extends ReportDefinition {
   get id()          { return 'tax-paid-by-year'; }
   get title()       { return 'Tax Paid by Year'; }
-  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries, excluding cross-border escalated re-issues). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down. With Country left blank, AU payments are converted to USD at the run\'s recorded rate on the payment date, so the all-countries total is a single currency.'; }
+  get description() { return 'Tax paid by year — payments debited from cash (TAX_PAYMENT_DEBIT, excluding cross-border escalated re-issues) PLUS tax withheld at source (TAX_WITHHELD, e.g. FICA taken from a paycheque), which never becomes a debit because the settle only ever debits the balance due. The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down. With Country left blank, AU payments are converted to USD at the run\'s recorded rate on the payment date, so the all-countries total is a single currency.'; }
 
   // Each country's own currency when a country is picked — an AU return's
   // figures belong in AUD. Blank cc mixes the two families, so it must name one:
@@ -753,7 +753,20 @@ class TaxPaidByYearDef extends ReportDefinition {
     // and shares its date but has a higher seq. Seq-based bounds drop it from
     // the same-day window; the date-bounded tax-year window keeps it.
     const periodAst   = api.periodOfTaxYear(period);
-    const actionTypes = api.familyTypes('TAX_PAYMENT_DEBIT', { cc });
+    // Design 95 phase 6 — tax paid is the debit PLUS what payroll already took.
+    // FICA leaves the paycheque monthly as a TAX_WITHHELD action and is credited
+    // against the liability at settle, so the settle debits only the balance due:
+    // reading the debit family alone understated US federal tax by the year's
+    // withholding ($528k reported against $716k on the reference run). The two
+    // families partition the liability exactly — withheld + balance due — as long
+    // as withholding never exceeds it. It cannot today (FICA is always part of the
+    // liability it is credited against); if a method that can over-withhold ever
+    // ships, `balanceDue` is clamped at zero and this total would overstate by the
+    // un-refunded excess, which is the same no-refund gap §8.2 already names.
+    const actionTypes = [
+      ...api.familyTypes('TAX_PAYMENT_DEBIT', { cc }),
+      ...api.familyTypes('TAX_WITHHELD',      { cc }),
+    ];
     const conditions  = [
       periodAst,
       { op: 'in', field: 'actionType', value: actionTypes },

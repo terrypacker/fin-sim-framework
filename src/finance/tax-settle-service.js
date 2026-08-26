@@ -112,6 +112,16 @@ const AU_PER_PERSON_INCOME_FIELDS = [
  * For years beyond the highest registered year, the highest available module
  * is used as a forward-compatibility fallback.
  */
+/**
+ * Every person's concessional contributions for the financial year, summed — the
+ * s293-30 "low tax contributed amounts" for a return with no per-person split.
+ */
+function _sumConcessional(byPerson) {
+  if (byPerson == null) return 0;
+  return Object.values(byPerson)
+    .reduce((sum, rec) => sum + Math.max(0, rec?.concessionalYTD ?? 0), 0);
+}
+
 export class TaxSettleService {
   constructor() {
     /** @type {Record<string, import('./tax/base-tax-rates-module.js').BaseTaxRatesModule>} */
@@ -160,7 +170,17 @@ export class TaxSettleService {
    * @returns {TaxComputationResult} Structured result including line items, rates, netLiability, and taxYear
    */
   computeAuTax(state) {
-    const result = this._getModule('AU', state).computeTax(state);
+    // Design 95 §9.4 phase 8 — the household fallback path. `auLowTaxContributionsYTD`
+    // is written per person by `computeAuTaxPerPerson`; this branch never runs that
+    // loop, so without the aggregation here Div 293 was STRUCTURALLY zero on a
+    // peopleless or whole-household AU run, however high the income. Summed rather
+    // than apportioned: there is one notional taxpayer on this path, and Div 293 is
+    // charged on the contributions they made.
+    const result = this._getModule('AU', state).computeTax({
+      ...state,
+      auLowTaxContributionsYTD: state.auLowTaxContributionsYTD
+        ?? _sumConcessional(state.auSuperCapsByPerson),
+    });
     const period = state.currentPeriods?.AU;
     result.taxYear = period ? new Date(period.startMs).getUTCFullYear() : undefined;
     return result;
@@ -287,6 +307,16 @@ export class TaxSettleService {
         auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),
         auNrWithholdingUnfrankedDividendYTD: perPersonShare(state.auPersonNrWithholdingUnfrankedDividendYTD, state.auNrWithholdingUnfrankedDividendYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
+        // design 95 §9.1 phase 6b — the s290-150 deduction. The classifier attributes
+        // it to the contributor, so the map is normally the whole story; the shared
+        // term is the peopleless-run fallback and splits like every other one here.
+        auDeductibleSuperYTD:        perPersonShare(state.auPersonDeductibleSuperYTD,          state.auDeductibleSuperYTD),
+        // design 95 §9.4 phase 8 — s293-30 low tax contributed amounts, i.e. this
+        // person's CONCESSIONAL contributions for the financial year. Read straight
+        // off the phase-7 caps record and NOT through `perPersonShare`: Div 293 is a
+        // per-individual liability on their own contributions, and there is no
+        // household bucket that could sensibly be split between two members.
+        auLowTaxContributionsYTD:    state.auSuperCapsByPerson?.[key]?.concessionalYTD ?? 0,
         // Div 36 loss pool (design 86 G1). NOT a perPersonShare: there is no household
         // scalar to split, because a carried-forward loss belongs to one taxpayer and
         // splitting it would let one spouse's loss shelter the other's income.

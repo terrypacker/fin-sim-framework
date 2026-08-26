@@ -9,6 +9,7 @@
  */
 
 import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
+import { FICA_SS_RATE, FICA_MEDICARE_RATE } from './fica-rates.js';
 import { toUSD } from '../tax-fx.js';
 import {
   applyBrackets as _applyBrackets,
@@ -125,6 +126,29 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _seNetFactor              = 0.9235;
   _seSsRate                 = 0.124;
   _seMedicareRate           = 0.029;
+
+  /**
+   * EMPLOYEE FICA (Chapter 21) — design 95 phase 4.
+   *
+   * IRC §3101(a): 6.2% OASDI on wages up to the §3121(a)(1) contribution and
+   * benefit base (the same `_ficaWageBase` SECA already coordinates against).
+   * IRC §3101(b)(1): 1.45% HI, uncapped. §3101(b)(2)'s 0.9% Additional Medicare
+   * surtax is `_addlMedicareRate` above and is charged SEPARATELY — an employee
+   * over the threshold pays 1.45% + 0.9%, so this rate must stay at 1.45% or the
+   * surtax is double-counted.
+   *
+   * These are exactly half the SECA rates above, which is the point: a
+   * self-employed person pays both halves. The employER half of an employee's
+   * FICA is the employer's liability, not the household's, and is not modelled.
+   *
+   * Before phase 4 the model charged SECA and the 0.9% surtax but NO employee
+   * FICA at all, so a W-2 earner paid income tax and nothing else — overstating
+   * take-home by up to 7.65% of pay for every working year.
+   */
+  // Design 95 phase 5: taken from the leaf module the payroll WITHHOLDING also
+  // reads, so the monthly debit and the annual charge cannot use different rates.
+  _ficaSsRate               = FICA_SS_RATE;
+  _ficaMedicareRate         = FICA_MEDICARE_RATE;
   _addlMedicareRate         = 0.009;
   _addlMedicareThresholdMfj    = 250_000;
   _addlMedicareThresholdSingle = 200_000;
@@ -142,6 +166,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usPenaltyYTD           = 0,
       usSeEarningsYTD        = 0,
       usSsWagesYTD           = 0,
+      // Per-person SS-covered wages (design 95 phase 4). The §3121(a)(1) contribution
+      // and benefit base is per EMPLOYEE, so OASDI must be capped person by person;
+      // the household total above would let two earners share one base and under-pay.
+      // Empty ⇒ fall back to the household total, which is the single-earner answer
+      // and what every pre-phase-4 action replays as.
+      usSsWagesByPersonYTD   = null,
       usFilingSingle         = false,
       // §988 ordinary exchange LOSS on foreign-currency debt (design 86 G7 / P8),
       // stored positive. It is an above-the-line ordinary deduction, taken here
@@ -193,6 +223,32 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     const seMedicareTax  = seNet * this._seMedicareRate;
     const selfEmploymentTax = seSsTax + seMedicareTax;                  // regular SE tax (half deductible)
     const seDeduction    = selfEmploymentTax * 0.5;
+
+    // Employee FICA (IRC §3101) — design 95 phase 4. Charged on SS-covered WAGES,
+    // which `usSsWagesYTD` accumulates GROSS: §3121(a) defines wages for Chapter 21
+    // without the §402(g) exclusion, so an elective 401(k) deferral reduces income
+    // tax and does NOT reduce this base. That asymmetry is the single easiest thing
+    // in this design to get wrong, and it is structural here rather than asserted:
+    // `K401_CONTRIBUTION_TAX` writes only `usNegativeIncomeYTD`, never this.
+    //
+    // Unlike SECA there is no ½ deduction — §164(f) relieves the employer-half a
+    // self-employed person pays on their own behalf, which an employee never does.
+    //
+    // OASDI is capped PER PERSON: §3121(a)(1) applies the contribution and benefit
+    // base to each employee separately, so two earners each get a full base and a
+    // household with \$120k + \$120k pays OASDI on all \$240k. Pooling their wages
+    // against one base — which the household accumulator alone would do — silently
+    // under-charges every two-earner household from the moment their combined pay
+    // passes the base, which for a real couple is most of their career.
+    //
+    // Medicare is uncapped, so it is charged on the household total either way.
+    const perPerson = usSsWagesByPersonYTD && Object.keys(usSsWagesByPersonYTD).length > 0
+      ? Object.values(usSsWagesByPersonYTD)
+      : [ssWages];
+    const ficaSsTax = perPerson.reduce(
+      (acc, w) => acc + Math.min(Math.max(0, w), this._ficaWageBase) * this._ficaSsRate, 0);
+    const ficaMedicareTax = ssWages * this._ficaMedicareRate;
+    const ficaTax         = ficaSsTax + ficaMedicareTax;
 
     // Additional Medicare surtax (IRC §1401(b)(2)) — 0.9% on combined earned
     // income (Medicare wages + net SE earnings) over the statutory threshold.
@@ -492,9 +548,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // or §26(b)(2) taxes: not creditable by the FTC and outside the §904 limitation
     // base — added on top of net liability exactly like NIIT (design 69 §2.1.4,
     // design 83 G2).
-    const grossTax     = chapter1Tax + niitTax + selfEmploymentTax + additionalMedicareTax;
+    // FICA joins SECA and the surtax: a Chapter-21 tax, not creditable by the FTC
+    // and outside the §904 limitation base, so it is added on top of net liability
+    // rather than into the base the credit is measured against.
+    const grossTax     = chapter1Tax + niitTax + selfEmploymentTax + additionalMedicareTax + ficaTax;
     const netLiability = Math.max(0, regularTax - credits)
-      + penaltyTax + niitTax + selfEmploymentTax + additionalMedicareTax;
+      + penaltyTax + niitTax + selfEmploymentTax + additionalMedicareTax + ficaTax;
 
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
     const marginalRate     = _marginalBracketRate(taxableOrdinary, brackets);
@@ -549,6 +608,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       selfEmploymentTaxDeduction: seDeduction,
       seNetEarnings:              seNet,
       additionalMedicareTax,
+      ficaTax, ficaSsTax, ficaMedicareTax,
       // The §26(b)(1) regular tax — the §904 limitation base, and the only tax the
       // FTC may be credited against. `grossTax` is this plus the §26(b)(2)/Chapter-2A
       // taxes (§72(t) penalty, NIIT, SECA, Additional Medicare); design 83 G2.
@@ -653,6 +713,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         ...(selfEmploymentTax > 0
           ? [{ label: 'Self-Employment Tax (SECA)',       amount: selfEmploymentTax }]
+          : []),
+        ...(ficaTax > 0
+          ? [{ label: 'FICA \u2014 Social Security (6.2%)', amount: ficaSsTax },
+             { label: 'FICA \u2014 Medicare (1.45%)',       amount: ficaMedicareTax }]
           : []),
         ...(additionalMedicareTax > 0
           ? [{ label: 'Additional Medicare Tax (0.9%)',   amount: additionalMedicareTax }]

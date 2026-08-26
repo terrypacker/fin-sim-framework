@@ -46,8 +46,18 @@ export const AU_TAX = {
         // `fundTax` (design 77 §5.4) — AUD Div 295 super fund tax for the FY. Must be
         // declared: pickPayload keeps ONLY declared fields, so an undeclared field
         // never reaches the journal or the document modules.
+        // `fyStartYear` (design 95 §9.3 phase 7) — the financial year this settlement
+        // CLOSES, stamped by the handler because a reducer never sees a date. The
+        // unused-concessional-cap roll keys off it, and an undeclared field would be
+        // stripped from the journal, leaving the one number that explains which
+        // vintage expired invisible in the audit trail.
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any(),
-                  fxRate: ValueType.number(), fundTax: ValueType.currency('AUD') } },
+                  fxRate: ValueType.number(), fundTax: ValueType.currency('AUD'),
+                  fyStartYear: ValueType.number(),
+                  // `limitIndexFactor` (design 95 §10 phase 9) — the contribution-cap
+                  // index factor this year was assessed under. Declared so the journal
+                  // can explain a cap that differs from the published table.
+                  limitIndexFactor: ValueType.number() } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
         // `escalated` marks the re-issue that pays the part of the SAME bill the
         // first pass could not fund (see TaxPaymentDebitReducerBase). Must be
@@ -105,6 +115,10 @@ export const AU_TAX = {
       auNrWithholdingUnfrankedDividendYTD: 0,
       auSuperTaxYTD:                    0,
       auFrankingCreditYTD:              0,
+      // design 95 §9.1 phase 6b — s290-150 personal deductible super contributions,
+      // GROSS of Div 295. Deductible only in the year made (s290-150(3)), so it
+      // resets with the FY.
+      auDeductibleSuperYTD:             0,
       auPersonOrdinaryIncomeYTD:        {},
       auPersonCapitalGainsYTD:          {},
       auPersonDiscountableGainsYTD:     {},
@@ -115,6 +129,13 @@ export const AU_TAX = {
       auPersonNrWithholdingInterestYTD:          {},
       auPersonNrWithholdingUnfrankedDividendYTD: {},
       auPersonSuperTaxYTD:              {},
+      auPersonDeductibleSuperYTD:       {},
+      // design 95 §9.2-9.5 phase 7 — the contribution caps, one record per person:
+      // { concessionalYTD, sgYTD, nonConcessionalYTD, qualifyingEarningsYTD, unusedByFy,
+      //   tsbAtFyStart, bringForward }. The last three SURVIVE the financial year;
+      // that is why this sits outside PER_PERSON_AU_FIELDS, whose reset loop zeroes
+      // a map wholesale.
+      auSuperCapsByPerson:              {},
       auPersonFrankingCreditYTD:        {},
       auPersonEarnedIncomeYTD:          {},   // FEIE cap accumulator (design 52 §4.2)
       auPersonUsSourceOrdinaryAudYTD:            {},
@@ -137,6 +158,11 @@ export const AU_TAX = {
       state.auPersonUsSourceCapGainsAudYTD[p.id] = 0;
       state.auPersonUsSourceRealCapGainsAudYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;
+      state.auPersonDeductibleSuperYTD[p.id] = 0;
+      state.auSuperCapsByPerson[p.id] = {
+        concessionalYTD: 0, sgYTD: 0, nonConcessionalYTD: 0, qualifyingEarningsYTD: 0,
+        unusedByFy: {}, tsbAtFyStart: 0, bringForward: null,
+      };
       state.auPersonFrankingCreditYTD[p.id] = 0;
       state.auPersonEarnedIncomeYTD[p.id] = 0;
     })

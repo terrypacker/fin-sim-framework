@@ -88,6 +88,10 @@ export const COVERED = [
   'IRA_RMD_TAX',
   'IRA_WITHDRAWAL_CONTRIB_TAX',
   'IRA_WITHDRAWAL_EARNINGS_TAX',
+  // Design 95 phase 4 made this reachable: employee FICA drains the taxable
+  // brokerage sooner, so the drawdown cascade now reaches the 401(k) inside
+  // us-single-homeowner's run. Promoted from KNOWN_GAPS.
+  'K401_WITHDRAWAL_TAX',
   'K401_CONTRIBUTION_APPLY',
   'K401_CONTRIBUTION_TAX',
   'K401_EARNINGS_APPLY',
@@ -109,6 +113,13 @@ export const COVERED = [
   'STOCK_WITHDRAWAL_TAX',
   'SUPER_CONTRIBUTION_APPLY',
   'SUPER_CONTRIBUTION_TAX',
+  // design 95 §9.1 phase 6b — covered by the `au-super-streams` golden, which runs
+  // all four AU streams on one earner. `AU_QUALIFYING_EARNINGS_APPLY` is phase 7's
+  // s10A(6) accumulator, which the same golden advances every month.
+  'AU_QUALIFYING_EARNINGS_APPLY',
+  'SUPER_NON_CONCESSIONAL_APPLY',
+  'SUPER_PERSONAL_DEDUCTION',
+  'SUPER_SACRIFICE_APPLY',
   'SUPER_EARNINGS_APPLY',
   'SUPER_EARNINGS_TAX',
   'SUPER_WITHDRAWAL_EARNINGS_TAX',
@@ -118,6 +129,10 @@ export const COVERED = [
   'US_SAVINGS_INTEREST_CREDIT',
   'US_TAX_PAYMENT_DEBIT',
   'US_TAX_SETTLE_APPLY',
+  // Design 95 phase 5 made this reachable: FICA is now withheld from every US
+  // paycheque, so the action fires in every golden with a working earner.
+  // Promoted from KNOWN_GAPS, where it sat because nothing ever emitted it.
+  'WAGES_WITHHELD_APPLY',
   'WAGES_INCOME_APPLY',
   'WAGES_INCOME_TAX',
 
@@ -173,7 +188,6 @@ export const KNOWN_GAPS = [
   'K401_RMD_APPLY',
   'K401_RMD_TAX',
   'K401_WITHDRAWAL_APPLY',
-  'K401_WITHDRAWAL_TAX',
   'ROTH_ROLLOVER_CONTRIBUTION_APPLY',
   'ROTH_ROLLOVER_EARNINGS_APPLY',
   'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',
@@ -287,7 +301,6 @@ export const KNOWN_GAPS = [
   'SE_INCOME_AU_APPLY',
   'SE_INCOME_US_APPLY',
   'SE_INCOME_US_TAX',
-  'WAGES_WITHHELD_APPLY',
 
   // ── Insolvency, spending strategy and run termination
   // No golden ever runs out of money, so the whole failure path is unguarded — including

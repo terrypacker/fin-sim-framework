@@ -328,6 +328,7 @@ export class StateSchemaRegistry {
     this.register('auNrWithholdingInterestYTD',          ParameterValueType.currency('AUD'));
     this.register('auNrWithholdingUnfrankedDividendYTD', ParameterValueType.currency('AUD'));
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
+    this.register('auDeductibleSuperYTD',        ParameterValueType.currency('AUD'));
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
     // AU per-person YTD (design 10 §Phase 3) — jurisdiction-fixed AUD
@@ -340,6 +341,11 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonNrWithholdingInterestYTD.*',          ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNrWithholdingUnfrankedDividendYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonDeductibleSuperYTD.*',        ParameterValueType.currency('AUD'));
+    // design 95 phase 7 — the caps record. Money fields are AUD; `unusedByFy` keys are
+    // financial years and `bringForward` is a small object, both matched by the same
+    // prefix so nothing under the record reads as an untyped scalar.
+    this.registerPattern('auSuperCapsByPerson.*',               ParameterValueType.currency('AUD'));
     // design 86 G1 — Div 36 carried-forward tax losses, per person. Not a YTD field:
     // it deliberately survives the settle reset.
     this.registerPattern('auPersonTaxLossPool.*',               ParameterValueType.currency('AUD'));
@@ -379,6 +385,9 @@ export class StateSchemaRegistry {
     // Dedicated ATO CPI indexation series (design 57 Part 2, Item A) — unitless
     // price level + per-country rate for AU CGT cost-base indexation.
     this.register('cpiAccumulator',              ParameterValueType.decimal(4));
+    // design 95 §10 phase 9 — cumulative inflation SINCE each country's last published
+    // contribution-limit year. Unitless, like the two accumulators above.
+    this.register('limitIndexAccumulator',       ParameterValueType.decimal(4));
     this.registerPattern('cpiRates.*',           ParameterValueType.rate());
 
     // Bond mark-to-market snapshot (design 28 §5)

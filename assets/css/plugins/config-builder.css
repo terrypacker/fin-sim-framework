@@ -709,6 +709,77 @@
   margin-top: 2px;
 }
 
+/* ── Payroll elections section (design 95 §17 phase 10) ────────────────────
+   The person editor's collapsed "Payroll" block. Reuses the band-editor row grid
+   above for its two list elections (wage splits, 401(k) match tiers) so the two
+   surfaces read as one widget. */
+.payroll-section {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 4px;
+}
+
+.payroll-section > summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 0;
+  user-select: none;
+}
+
+.payroll-section > summary:hover { color: var(--text); }
+
+.payroll-group-heading {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-top: 8px;
+  padding-bottom: 2px;
+}
+
+.payroll-group-heading:first-of-type { margin-top: 2px; }
+
+/* The inherit rule, stated once where the fields are, because a blank field that
+   silently means something specific is exactly what §17.6 warns about. */
+.payroll-inherit-note {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  padding: 2px 0 4px;
+}
+
+/* An "inherit …" placeholder must not read like a value that was typed. */
+.payroll-section input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.65;
+  font-style: italic;
+}
+
+/* The list elections span the field column rather than sitting beside a label. */
+.payroll-list-field .row-list-editor { margin-top: 2px; }
+
+.row-list-empty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+/* The row grid's own controls, overriding `.node-field select` full-width flex. */
+.row-list-editor .age-band-input {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 /* ── ExpenseEventList param editor (design 86 G8; was HealthcareEventList) ── */
 .healthcare-event-list-editor {
   display: flex;

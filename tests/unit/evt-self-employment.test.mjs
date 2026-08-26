@@ -22,7 +22,7 @@
  *                    coordinated with SS wages + 2.9% uncapped Medicare on 92.35% of
  *                    net earnings), the 0.9% Additional Medicare surtax, and the
  *                    ½-SE-tax AGI deduction; SECA is outside the FTC.
- *   Routing        — MonthlyWagesHandler routes a self-employed person's monthlyWage
+ *   Routing        — PayrollHandler routes a self-employed person's monthlyWage
  *                    through the SE apply path (US or AU by wageCurrency).
  *   Model          — the selfEmployed flag survives a serialization round-trip.
  *
@@ -35,7 +35,7 @@ import assert   from 'node:assert/strict';
 import { UsTaxRates2025 }  from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
-import { MonthlyWagesHandler } from '../../src/finance/handlers/monthly-wages-handler.js';
+import { PayrollHandler, PAYROLL_STAGE } from '../../src/finance/handlers/payroll-handler.js';
 import { Person } from '../../src/finance/person.js';
 import { PersonBuilder } from '../../src/finance/builders/person-builder.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
@@ -180,9 +180,17 @@ test('SE-6: SECA and the surtax are outside the FTC and added on top of net liab
   }));
   const chapter1 = detail.ordinaryTax + detail.capitalGainsTax + detail.collectiblesTax + detail.penaltyTax;
   assert.ok(detail.selfEmploymentTax > 0);
-  assert.equal(detail.grossTax, chapter1 + detail.niitTax + detail.selfEmploymentTax + detail.additionalMedicareTax);
-  const surtaxes = detail.selfEmploymentTax + detail.additionalMedicareTax + detail.niitTax;
-  assert.ok(detail.netLiability >= surtaxes - 1e-6, 'FTC never reaches SECA/surtax');
+  // Employee FICA (design 95 phase 4) joins the identity: this state carries
+  // \$200,000 of W-2 wages alongside the SE income, so Chapter 21 is charged too.
+  // It is a Chapter-21 tax on the same footing as SECA — outside the §904
+  // limitation base and never reached by the credit.
+  assert.ok(detail.ficaTax > 0, 'control: wages in this state do attract FICA');
+  assert.equal(detail.grossTax,
+    chapter1 + detail.niitTax + detail.selfEmploymentTax + detail.additionalMedicareTax
+    + detail.ficaTax);
+  const surtaxes = detail.selfEmploymentTax + detail.additionalMedicareTax + detail.niitTax
+    + detail.ficaTax;
+  assert.ok(detail.netLiability >= surtaxes - 1e-6, 'FTC never reaches SECA/FICA/surtax');
 });
 
 test('SE-10: no SE income → SECA fields are zero (default golden path is inert)', () => {
@@ -193,7 +201,8 @@ test('SE-10: no SE income → SECA fields are zero (default golden path is inert
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SE-routing: MonthlyWagesHandler routes self-employed people through the SE path
+// SE-routing: PayrollHandler routes self-employed people through the SE path
+// (design 95 phase 6 — was MonthlyWagesHandler, retired once the pipeline owned this)
 // ══════════════════════════════════════════════════════════════════════════════
 
 function wagesState(person) {
@@ -202,7 +211,7 @@ function wagesState(person) {
 const findType = (actions, type) => actions.find(a => a?.type === type);
 
 test('SE-7: self-employed USD person → SE_INCOME_US_APPLY (not wages), credits transaction account', () => {
-  const h = new MonthlyWagesHandler();
+  const h = new PayrollHandler({ stage: PAYROLL_STAGE.INCOME });
   const actions = h.call({ date: new Date(Date.UTC(2030, 0, 1)),
     state: wagesState({ monthlyWage: 8_000, wageCurrency: 'USD', residency: 'US', selfEmployed: true }) });
   const se = findType(actions, 'SE_INCOME_US_APPLY');
@@ -214,7 +223,7 @@ test('SE-7: self-employed USD person → SE_INCOME_US_APPLY (not wages), credits
 });
 
 test('SE-8b: self-employed AUD person → SE_INCOME_AU_APPLY (not AU wages)', () => {
-  const h = new MonthlyWagesHandler();
+  const h = new PayrollHandler({ stage: PAYROLL_STAGE.INCOME });
   const actions = h.call({ date: new Date(Date.UTC(2030, 0, 1)),
     state: wagesState({ monthlyWage: 6_000, wageCurrency: 'AUD', residency: 'AU', selfEmployed: true }) });
   assert.ok(findType(actions, 'SE_INCOME_AU_APPLY'), 'emits SE_INCOME_AU_APPLY');
@@ -222,7 +231,7 @@ test('SE-8b: self-employed AUD person → SE_INCOME_AU_APPLY (not AU wages)', ()
 });
 
 test('SE-routing: a non-self-employed person still routes through the wages path', () => {
-  const h = new MonthlyWagesHandler();
+  const h = new PayrollHandler({ stage: PAYROLL_STAGE.INCOME });
   const actions = h.call({ date: new Date(Date.UTC(2030, 0, 1)),
     state: wagesState({ monthlyWage: 8_000, wageCurrency: 'USD', residency: 'US', selfEmployed: false }) });
   assert.ok(findType(actions, 'WAGES_INCOME_APPLY'), 'emits wages');

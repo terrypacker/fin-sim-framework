@@ -130,7 +130,12 @@ export function controllableVariables(entries = []) {
  *
  * A scenario cfg carries params in TWO stores and a sweep runner that reads only
  * one of them silently centers on the wrong world:
- *   - `cfg.parameters` — the plain bag the compiler reads. Always populated.
+ *   - `cfg.parameters` — the plain bag the compiler reads. Carries the scenario
+ *                        class's own defaults from `buildDefaultConfig`, but is
+ *                        refreshed from the list ONLY on load (`_normalizeParams`),
+ *                        so it is both incomplete (toolset-declared params are
+ *                        absent until a save+reload) and STALE (any edit since the
+ *                        last Rebuild is missing). Neither gap announces itself.
  *   - `cfg.params`     — the typed UI list (`{ name, value, type, … }`). Populated
  *                        once ScenarioLoader has materialized the schema; this is
  *                        what the scenario editor writes to, so it WINS on conflict.
@@ -147,6 +152,30 @@ export function scenarioParamValues(cfg) {
     if (p?.name != null && p.value !== undefined) out[p.name] = p.value;
   }
   return out;
+}
+
+/**
+ * The per-country central-bank "Prime" rates a scenario currently assumes (design 56).
+ *
+ * Read through {@link scenarioParamValues} rather than off `cfg.parameters`, and the
+ * difference is not cosmetic. The scenario panel writes an edited param to the typed
+ * `cfg.params` LIST; `ScenarioLoader._normalizeParams` copies the list into the flat
+ * bag, but **only on load — i.e. on Rebuild**. So between editing a Prime rate and
+ * rebuilding, the bag holds the OLD Prime while the plan is going to run the new one.
+ *
+ * An editor caught in that window does not merely display a stale number. The rate
+ * fields edit an ABSOLUTE rate and store `primeSpread = absolute − Prime`, so an
+ * absolute typed against the stale Prime is stored as a spread that resolves against
+ * the real one. Measured on the reference plan: with AU Prime edited 4.35% → 7% and no
+ * rebuild, a savings account set to "5%" stored a spread of 0.65% and the plan ran it
+ * at **7.65%**. The hint even named the wrong Prime ("= Prime (4.35%) + 0.15%").
+ *
+ * @param {object} cfg  the active scenario config
+ * @returns {{US: number|undefined, AU: number|undefined}} undefined where unconfigured
+ */
+export function primeRatesOf(cfg) {
+  const values = scenarioParamValues(cfg);
+  return { US: values.usPrimeRate, AU: values.auPrimeRate };
 }
 
 /**

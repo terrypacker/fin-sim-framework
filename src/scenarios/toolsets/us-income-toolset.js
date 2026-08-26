@@ -37,16 +37,28 @@ export const US_INCOME = {
       { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       { type: 'SS_INCOME_TAX',       fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },
       // workCountry — where the employment is EXERCISED (design 73 Gap 1), stamped by
-      // MonthlyWagesHandler on every wage/SE apply. It decides source, and source
+      // PayrollHandler on every wage/SE apply. It decides source, and source
       // decides FEIE/§904 basketing, so a "wages by source country" drill that cannot
       // see it silently reports every wage as domestic. Neither drift pass caught this
       // one: the handler picks the action type through a variable (invisible to the
       // static scan) and the field is null whenever workCountry falls back to an unset
       // residency (invisible to the dynamic pass, which skips null values).
-      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
+      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() , netAmount: ValueType.currency('USD'), splits: ValueType.any()} },
       { type: 'WAGES_INCOME_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
-      { type: 'WAGES_WITHHELD_APPLY', fields: { amount: ValueType.currency('USD') } },
-      { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() } },
+      // `alreadyNetted` (design 95 phase 5) records that the wage was credited NET,
+      // so this action accumulates usWithheldYTD WITHOUT debiting cash. Undeclared it
+      // is stripped from the journal payload, which leaves the audit trail unable to
+      // explain why a withholding moved no money.
+      // `family: 'TAX_WITHHELD'` (design 95 phase 6) is what puts withheld tax into
+      // "Tax Paid by Year". The report used to read the TAX_PAYMENT_DEBIT family alone,
+      // and withholding never becomes a debit — the settle debits only the balance due —
+      // so the report understated US federal tax by the whole year's withholding. A
+      // family of its own rather than TAX_PAYMENT_DEBIT: this action deliberately does
+      // NOT debit cash when `alreadyNetted`, and it is the one place P7 can hang AU PAYG.
+      { type: 'WAGES_WITHHELD_APPLY', family: 'TAX_WITHHELD', cc: 'US',
+        fields: { amount: ValueType.currency('USD'),
+        personKey: ValueType.text(), alreadyNetted: ValueType.boolean() } },
+      { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text(), workCountry: ValueType.text() , netAmount: ValueType.currency('USD'), splits: ValueType.any()} },
       { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , personKey: ValueType.text()} },

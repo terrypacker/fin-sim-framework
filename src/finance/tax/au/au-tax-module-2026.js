@@ -453,6 +453,35 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _superReducerFns() {
     return [
       // EVT-20: super contribution — AU super tax at 15%, no US tax
+      // Design 95 §9.1 phase 6b — the s290-150 deduction leg of a personal
+      // DEDUCTIBLE contribution. Chained by SuperContributionApplyReducer only when
+      // the action carries `deductible`, so the Super Guarantee and an ordinary
+      // after-tax member contribution book nothing here.
+      //
+      // GROSS of the fund's 15%, deliberately: the member deducts what they
+      // contributed, and the fund pays Div 295 on the same figure. That doubled base
+      // is not a mistake — it is the concession, and it is why sacrificing or
+      // deducting beats holding the money outside super for anyone whose marginal
+      // rate exceeds 15%.
+      ['SUPER_PERSONAL_DEDUCTION', (state, action) => {
+        const amount = action.amount ?? 0;
+        if (!(amount > 0)) return state;
+        // Attributed to the CONTRIBUTOR, never apportioned. A deduction belongs to
+        // the person who made the contribution and lodged the s290-170 notice, the
+        // same rule design 76 Gap B/D applies to personal services income. The
+        // household scalar is the fallback for a run with no `people` at all, where
+        // there is one notional taxpayer and nothing to attribute between.
+        const personKey = action.personKey ?? null;
+        const perPerson = personKey != null && state.people != null;
+        return perPerson
+          ? { ...state,
+              auPersonDeductibleSuperYTD: {
+                ...(state.auPersonDeductibleSuperYTD ?? {}),
+                [personKey]: ((state.auPersonDeductibleSuperYTD?.[personKey]) ?? 0) + amount,
+              } }
+          : { ...state, auDeductibleSuperYTD: (state.auDeductibleSuperYTD ?? 0) + amount };
+      }],
+
       ['SUPER_CONTRIBUTION_TAX', (state, action) => {
         const superTax = action.amount * SUPER_TAX_RATE;
         // Design 76 Gap C — contributions tax belongs to the MEMBER whose account

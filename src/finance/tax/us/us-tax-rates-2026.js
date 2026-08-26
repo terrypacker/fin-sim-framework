@@ -9,6 +9,7 @@
  */
 
 import { UsTaxRatesBase } from './us-tax-rates-base.js';
+import { ficaWageBase } from './fica-rates.js';
 
 /**
  * UsTaxRates2026 — US federal tax rates for tax year 2026.
@@ -63,7 +64,7 @@ export class UsTaxRates2026 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_single = 16_100;
-    this._ficaWageBase        = 184_500; // SSA Social Security wage base 2026
+    this._ficaWageBase        = ficaWageBase(2026);  // §3121(a)(1), from fica-rates.js
     this._feieCap             = 132_900; // Foreign Earned Income Exclusion cap 2026 (IRC §911)
   }
 }

@@ -611,6 +611,16 @@
           <input type="date" data-id="retirementDate"/>
         </div>
       </div>
+      <!-- Per-person payroll elections (design 95 §17 phase 10, U1). Collapsed by
+           default: they are properties of THIS person, but most households leave
+           every one of them inheriting the toolset default, and an expanded
+           thirteen-field block would bury Name and Wage. The contents are built by
+           PayrollSection from PAYROLL_ELECTION_META, so adding an election does not
+           mean editing this template. -->
+      <details class="payroll-section" data-id="payrollSection">
+        <summary data-id="payrollSummary">Payroll Elections</summary>
+        <div class="node-body" data-id="payrollBody"></div>
+      </details>
       <div class="node-buttons">
         <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
         <button class="btn btn-sm btn-warn" data-id="deleteBtn" style="display:none">Delete</button>

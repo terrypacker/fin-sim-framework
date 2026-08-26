@@ -80,6 +80,13 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   superGuaranteePct:       0.12,
   superGuaranteeAnnualCap: 30_000,
 
+  // ── The member's own streams (design 95 §9.1, phase 6b) ────────────────────
+  // All three default to zero, so a scenario that does not opt in behaves exactly
+  // as it did before they existed. UNCAPPED until phase 7 brings Div 291/292.
+  superSalarySacrificePct:             0,
+  superPersonalDeductibleContribution: 0,
+  superNonConcessionalContribution:    0,
+
   // ── The house ──────────────────────────────────────────────────────────────
   // VARIABLE rate, which is the Australian norm and the difference the user asked
   // for: `mortgagePrimeSpread` makes the loan track RBA cash + spread, so a Prime
@@ -209,6 +216,12 @@ export class AuSingleHomeownerScenario extends BaseScenario {
       // Superannuation Guarantee
       superGuaranteePct:       p.superGuaranteePct,
       superGuaranteeAnnualCap: p.superGuaranteeAnnualCap,
+      // The member's own three streams. Listed EXPLICITLY, not spread: a param that
+      // reaches Person and the projection but never the compiled cfg is silently
+      // inert, and phase 3 lost a whole golden's worth of clamps to exactly that.
+      superSalarySacrificePct:             p.superSalarySacrificePct,
+      superPersonalDeductibleContribution: p.superPersonalDeductibleContribution,
+      superNonConcessionalContribution:    p.superNonConcessionalContribution,
       // Everyone here is Australian; nothing starts on the US side.
       startingResidency:       'AU',
       people: {

@@ -119,6 +119,39 @@ export const PERSON_PARAM_TEMPLATE = [
     description: 'Gross monthly employment wage for this person, before tax, in their native currency.' },
   { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: true,
     description: 'Date this person stops earning wages (their last working month).' },
+
+  // ── Payroll elections (design 95 §7.1, phase 1) ────────────────────────────
+  // Every one is nullable, and the null is meaningful: EMPTY inherits the
+  // household default from the retirement toolset, while an explicit 0 elects
+  // nothing. Setting one of these to 0 is how a person opts out of a household
+  // rate — clearing it back to empty puts them back on the household default.
+  { field: 'k401DeferralPct', label: '401(k) Deferral', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'This person\'s 401(k) deferral as a fraction of annual pay (0.10 = 10%). Empty inherits the household rate; 0 means they defer nothing.' },
+  { field: 'k401EmployerMatchPct', label: '401(k) Employer Match', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'Employer match on this person\'s plan, as a fraction of annual pay. Employer-funded: never debits household cash and is not their deduction. Empty inherits the household rate.' },
+  { field: 'k401NonElectivePct', label: '401(k) Non-Elective', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'Employer contribution for this person as a fraction of annual pay that does not depend on them deferring anything (profit-sharing / safe-harbor non-elective). Not a match. Empty inherits the household rate.' },
+  // `k401MatchTiers` is deliberately NOT in this template: it is structured data
+  // ([{matchRate, uptoPctOfComp}]) and the record-param editor renders scalars. Set
+  // it on the Person record directly, or use the household-level match formula.
+  { field: 'k401AnnualCap', label: '401(k) Annual Cap', type: 'Number',
+    mc: false, opt: false, nullable: true,
+    description: 'Annual dollar cap applied to this person\'s deferral and match separately. Empty inherits the household cap. A scenario assumption, not a statutory limit — see design 95 phase 3.' },
+  { field: 'iraAnnualContribution', label: 'IRA Annual Contribution', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'Deductible Traditional IRA contribution per year for this person, paid in twelfths. Empty inherits the household amount.' },
+  { field: 'rothAnnualContribution', label: 'Roth Annual Contribution', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'After-tax Roth contribution per year for this person, paid in twelfths. Empty inherits the household amount. No income phase-out is modelled.' },
+  { field: 'superGuaranteePct', label: 'Super Guarantee Rate', type: 'Number',
+    mc: false, opt: true, nullable: true,
+    description: 'Employer Superannuation Guarantee for this person as a fraction of annual pay (0.12 = 12%). Employer-funded and on top of salary. Empty inherits the household rate.' },
+  { field: 'superAnnualCap', label: 'Super Annual Cap', type: 'Number',
+    mc: false, opt: false, nullable: true,
+    description: 'Annual cap on this person\'s employer Super contribution. Empty inherits the household cap.' },
 ];
 
 export const REAL_PROPERTY_PARAM_TEMPLATE = [

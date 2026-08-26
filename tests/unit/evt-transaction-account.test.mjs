@@ -14,7 +14,7 @@
  * Transaction-account flag (design 55 §7 / Phase 3).
  *
  * `isTransactionAccount` marks the cash hub for a country of residence.
- * MonthlyExpensesHandler (debits/replenish) and MonthlyWagesHandler (deposits)
+ * MonthlyExpensesHandler (debits/replenish) and PayrollHandler (deposits)
  * both resolve the target via StateRegistry.resolveTransactionAccountKey,
  * preferring the flagged account and falling back to the SAVINGS role when none
  * is flagged — so pre-flag scenarios are unchanged (design 55 §7, Phase 3 + 6a).

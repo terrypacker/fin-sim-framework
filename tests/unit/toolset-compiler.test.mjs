@@ -308,7 +308,6 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler }
   from '../../src/finance/account-rules/au/au-real-property-classes.js';
 import { UsSavingsInterestMonthlyHandler }  from '../../src/finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }           from '../../src/finance/handlers/monthly-expenses-handler.js';
-import { MonthlyWagesHandler }              from '../../src/finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler }     from '../../src/finance/handlers/monthly-social-security-handler.js';
 import {
   AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,

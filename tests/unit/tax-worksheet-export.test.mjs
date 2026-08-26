@@ -210,7 +210,12 @@ test('TWE-8: gross tax reconciles to its component lines', () => {
                      + get('Long-Term Capital Gains Tax')
                      + get('Collectibles Tax (28%)')
                      + get('Early Withdrawal Penalties')
-                     + get('Net Investment Income Tax (Form 8960, 3.8%)');
+                     + get('Net Investment Income Tax (Form 8960, 3.8%)')
+                     // Employee FICA (design 95 phase 4) is inside grossTax like SECA
+                     // and the surtax, so it belongs in this enumeration. Its OASDI /
+                     // Medicare split rides as `sub` rows and is excluded from footing
+                     // sums, so only the parent line is added here.
+                     + get('FICA \u2014 Employee (Form W-2)');
     assert.ok(
       Math.abs(components - get('Gross Tax')) < 1e-6,
       `year ${year}: components ${components} !== Gross Tax ${get('Gross Tax')}`,

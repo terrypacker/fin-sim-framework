@@ -9,6 +9,8 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { LAST_PUBLISHED_YEAR } from '../tax/us/us-contribution-limits.js';
+import { LAST_PUBLISHED_FY }   from '../tax/au/au-super-limits.js';
 
 /**
  * InflationAdjustReducer — applies annual inflation adjustments when a
@@ -28,6 +30,19 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * Runs at PRE_PROCESS + 1 so it executes after PeriodAdvanceReducer has
  * updated state.currentPeriods, but still in the pre-process phase.
  */
+/**
+ * The last financial/tax year each country's contribution limits are PUBLISHED for.
+ * Beyond it the limits are projected (design 95 §10); up to and including it they are
+ * transcribed, and must not be indexed.
+ *
+ * The AU key is a FINANCIAL year start and the US key a calendar year, matching what
+ * `currentPeriods[cc].startMs` yields for each — 1 July for AU, 1 January for US.
+ */
+const LIMIT_PUBLISHED_HORIZON = {
+  US: LAST_PUBLISHED_YEAR,
+  AU: LAST_PUBLISHED_FY,
+};
+
 export class InflationAdjustReducer extends Reducer {
   static description = 'Applies annual inflation to wages, Social Security, and expenses on each US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE; maintains state.inflationAccumulator per country.';
   static type        = 'InflationAdjustReducer';
@@ -61,7 +76,31 @@ export class InflationAdjustReducer extends Reducer {
       [cc]: ((state.cpiAccumulator?.[cc]) ?? 1.0) * cpiFactor,
     };
 
-    const updates = { inflationAccumulator, cpiAccumulator };
+    // ── Statutory contribution limits (design 95 §10, phase 9) ───────────────
+    //
+    // A THIRD accumulator, and it needs to be separate from the two above for one
+    // reason: its anchor. `inflationAccumulator` is 1.0 at SIM START, which is the
+    // right anchor for wages and expenses but the wrong one for a published limit —
+    // the authority has already published the figures up to its own horizon, and
+    // indexing those would double-count inflation the published number already
+    // contains. This one stays at 1.0 until the advancing period passes that
+    // country's last published year, and compounds only after it.
+    //
+    // Compounding the SAME effective rate the wages use is the point (§10): a run
+    // whose salaries grow at one rate while its contribution caps grow at another is
+    // measuring the gap between two assumptions rather than a policy outcome. That is
+    // also why this reads the realised per-year rate rather than projecting a constant
+    // — under an economic-regimes run the caps track the path the wages actually took.
+    const periodYear = new Date(state.currentPeriods?.[cc]?.startMs ?? NaN).getUTCFullYear();
+    const horizon    = LIMIT_PUBLISHED_HORIZON[cc];
+    const pastHorizon = Number.isFinite(periodYear) && horizon != null && periodYear > horizon;
+    const limitIndexAccumulator = pastHorizon
+      ? { ...(state.limitIndexAccumulator ?? {}),
+          [cc]: ((state.limitIndexAccumulator?.[cc]) ?? 1.0) * factor }
+      : state.limitIndexAccumulator;
+
+    const updates = { inflationAccumulator, cpiAccumulator,
+                      ...(pastHorizon ? { limitIndexAccumulator } : {}) };
 
     if (cc === 'US') {
       // Driven off the always-annual US advance. Social Security is a USD amount,

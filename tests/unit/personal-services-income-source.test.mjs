@@ -206,7 +206,7 @@ test('PSI-10: workCountry unset falls back to residency (pre-§6b behaviour pres
 test('PSI-11: AuSeIncomeApplyReducer forwards workCountry to AU_SE_INCOME_TAX', () => {
   // §6b's plumbing half: the reducer destructured four fields and rebuilt the tax
   // action from those alone, dropping the source attribute one hop after
-  // MonthlyWagesHandler computed it.
+  // PayrollHandler computed it.
   const state = { auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'h', marketValue: 10_000, costBasis: 10_000 }] }) };
   const out = new AuSeIncomeApplyReducer(makeServices()).reduce(state,
     { type: 'SE_INCOME_AU_APPLY', amount: 4000, residency: 'US', personKey: PERSON, workCountry: 'AU' },

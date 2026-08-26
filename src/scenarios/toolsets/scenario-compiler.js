@@ -231,6 +231,7 @@ function _frameworkSubstrateReducers(services) {
  *   currentPeriods     — US_TAX contributes { US }, AU_TAX contributes { AU }
  *   inflationRates     — US_RETIREMENT contributes { US }, AU_RETIREMENT { AU }, etc.
  *   inflationAccumulator — same pattern as inflationRates
+ *   limitIndexAccumulator — same pattern again (design 95 §10)
  *
  * @param {object} acc     — accumulator (mutated in place)
  * @param {object} patches — new patches from a single toolset
@@ -244,6 +245,10 @@ function _mergeStatePatches(acc, patches) {
     // other toolsets may contribute per-country entries; merge rather than clobber.
     'cpiRates',
     'cpiAccumulator',
+    // design 95 §10 phase 9 — the contribution-limit index factor, per country.
+    // Anchored at each country's last PUBLISHED limit year rather than at sim start,
+    // which is why it is a third accumulator and not a reuse of the two above.
+    'limitIndexAccumulator',
   ]);
   for (const [key, value] of Object.entries(patches)) {
     if (SHALLOW_MERGE_KEYS.has(key) && acc[key] != null && typeof acc[key] === 'object'

@@ -121,7 +121,6 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler }
   from '../../src/finance/account-rules/au/au-real-property-classes.js';
 import { UsSavingsInterestMonthlyHandler }  from '../../src/finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }           from '../../src/finance/handlers/monthly-expenses-handler.js';
-import { MonthlyWagesHandler }              from '../../src/finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler }     from '../../src/finance/handlers/monthly-social-security-handler.js';
 import {
   AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -152,7 +151,7 @@ import { Person } from '../../src/finance/person.js';
 
 /**
  * A minimal declarative scenario using the US_RETIREMENT toolset.
- * Person has wages so MonthlyWagesHandler produces income.
+ * Person has wages so PayrollHandler produces income.
  * US Savings starts at $30k with $6k/month expenses → should drop by ~$18k after 3 months
  * (before wages come in — wages of $8k/month should largely offset expenses).
  */

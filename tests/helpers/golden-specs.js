@@ -116,6 +116,38 @@ export const GOLDEN_SPECS = [
     mutateCfg: cfg => { cfg.companyEquities[0].speculative = true; },
   },
   {
+    name:        'payroll-limits',
+    description:
+      'Design 95 phase 3. The reference goldens defer 10% with a 4% match on a '
+      + '\$120,000 salary, which clears EVERY statutory limit by a wide margin — so '
+      + 'before this golden the whole of §401(a)(17), §402(g), §414(v) and §415(c) '
+      + 'was scenario-unguarded and a green suite said nothing about any of it. '
+      + 'This one puts a high earner in the plan and makes the limits bind: pay above '
+      + 'the §401(a)(17) compensation cap so both the deferral and the match are '
+      + 'computed on capped pay, a deferral rate that exhausts §402(g) partway '
+      + 'through each year, and a non-elective employer contribution large enough '
+      + 'that the three streams together reach §415(c). It also runs the earner '
+      + 'through the §414(v) catch-up boundaries — the plan starts at 48 and the run '
+      + 'crosses 50 and 60, so the ordinary and the SECURE 2.0 age-60-to-63 amounts '
+      + 'both take effect inside the fixture. Paired with k401-limits.test.mjs, which '
+      + 'asserts each limit in isolation; this holds them interacting, and holds the '
+      + 'YTD accumulator resetting correctly at each year boundary — the defect that '
+      + 'strangled every contribution when phase 3 first ran without a reset.',
+    params: {
+      primaryMonthlyWage:      40_000,   // \$480,000/yr — above the §401(a)(17) cap
+      k401DeferralPct:            0.25,  // exhausts §402(g) inside each year
+      k401EmployerMatchPct:       0.05,
+      k401NonElectivePct:         0.12,  // pushes the three streams into §415(c)
+      k401AnnualCap:              null,  // let the STATUTE bind, not an authored cap
+      iraAnnualContribution:         0,
+      rothAnnualContribution:        0,
+      primaryBirthDate:  new Date(Date.UTC(1978, 3, 15)),
+      primaryRetirementDate: new Date(Date.UTC(2044, 0, 1)),
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2032, 0, 1)),
+  },
+  {
     name:        'bond-par-conservation',
     description:
       'Design 93 §7. The golden that the eight par defects of design 66 §10.6b could '
@@ -253,6 +285,41 @@ export const GOLDEN_SPECS = [
       + 'which the US module taxes an Australian\'s Australian salary.',
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2066, 0, 1)),
+  },
+  {
+    name:        'au-super-streams',
+    cls:         AuSingleHomeownerScenario,
+    description:
+      'Design 95 §9.1 phase 6b. Every other AU golden contributes to super one way '
+      + 'only — the employer Super Guarantee — so the three MEMBER streams were '
+      + 'scenario-unguarded on arrival, and the three ways they differ from the SG '
+      + 'and from each other were visible to unit tests alone. This runs all four at '
+      + 'once on one earner, which is the only configuration where the differences '
+      + 'are observable as arithmetic rather than as assertions: salary sacrifice '
+      + 'reduces the wage at source (less cash, less assessable income, 15% Div 295 '
+      + 'in the fund) while leaving the SG computed on PRE-sacrifice pay, s290-150 '
+      + 'pays out of after-tax cash and takes the deduction back on the return a year '
+      + 'later, and the non-concessional stream pays out of after-tax cash and '
+      + 'reaches the fund IN FULL with no Div 295 at all. Four streams into one fund, '
+      + 'so the fixture also pins that they credit ONE balance record rather than '
+      + 'four. Short on purpose: seven years is enough to cross the AU financial-year '
+      + 'boundary six times, which is what the s290-150 deduction (available only in '
+      + 'the year the contribution is made) and its FY reset actually turn on. '
+      + 'Deliberately does NOT test the caps — Div 291, Div 292 and the s10A(5) '
+      + 'contributions base arrive in phase 7, and this fixture will move when they '
+      + 'do.',
+    params: {
+      // 5% sacrifice on A\$150,000, so both the sacrifice and its effect on the wage
+      // are large enough to read in the fixture rather than lost in rounding.
+      superSalarySacrificePct:              0.05,
+      superPersonalDeductibleContribution: 8_000,
+      superNonConcessionalContribution:   12_000,
+      primaryMonthlyWage:                 12_500,
+      // Working throughout, so every year of the fixture runs all four streams.
+      primaryRetirementDate: new Date(Date.UTC(2044, 0, 1)),
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2033, 0, 1)),
   },
 ];
 

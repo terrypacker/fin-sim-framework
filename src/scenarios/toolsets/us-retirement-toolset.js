@@ -16,8 +16,8 @@ import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-exp
 import { HouseRunningCostHandler }      from '../../finance/handlers/house-running-cost-handler.js';
 import { RealPropertyRepairTickHandler } from '../../finance/handlers/real-property-repair-tick-handler.js';
 import { HouseRepairApplyReducer }      from '../../finance/reducers/house-repair-apply-reducer.js';
-import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
-import { UsRetirementContributionHandler } from '../../finance/handlers/retirement-contribution-handler.js';
+import { PayrollHandler, PAYROLL_STAGE, WITHHOLDING_METHOD, hasPayrollContributions, US_CONTRIBUTION_FIELDS }
+  from '../../finance/handlers/payroll-handler.js';
 import { projectPeople }                from '../../finance/state/person-projection.js';
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
@@ -196,10 +196,11 @@ function _hasHouseRepairs(realProperties) {
  * schedule a monthly event that can only ever emit nothing.
  */
 function _hasPayrollContributions(context) {
-  const p = context.parameters ?? {};
-  const any = (p.k401DeferralPct ?? 0) > 0 || (p.k401EmployerMatchPct ?? 0) > 0
-           || (p.iraAnnualContribution ?? 0) > 0 || (p.rothAnnualContribution ?? 0) > 0;
-  return any && (context.people ?? []).some(pe => (pe.monthlyWage ?? 0) > 0);
+  // Design 95 §7.1 phase 1: reads BOTH the household defaults and each person's own
+  // election. Reading only the former left a per-person election inert whenever the
+  // household default was 0 — no event scheduled, so nothing consumed the field.
+  return hasPayrollContributions(
+    context.people ?? [], context.parameters ?? {}, US_CONTRIBUTION_FIELDS);
 }
 
 export const US_RETIREMENT = {
@@ -209,8 +210,7 @@ export const US_RETIREMENT = {
 
   types: {
     handlers: [
-      MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-      UsRetirementContributionHandler,
+      MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, PayrollHandler, MonthlySocialSecurityHandler,
       DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
@@ -318,7 +318,7 @@ export const US_RETIREMENT = {
       // match, which skips both the cash debit and the pre-tax deduction. Both must be
       // declared here or pickPayload drops them and the journal cannot tell a match
       // from a deferral.
-      { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), employerFunded: ValueType.boolean() } },
+      { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), employerFunded: ValueType.boolean(), personKey: ValueType.text(), nonElective: ValueType.boolean(), clamps: ValueType.any() } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), derivedAmount: ValueType.number() } },
       { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
@@ -420,31 +420,50 @@ export const US_RETIREMENT = {
         key: 'k401DeferralPct', label: '401(k) Employee Deferral',
         type: 'Number', group: 'Contributions', mc: false, opt: true,
         defaultValue: 0,
-        description: 'Employee 401(k) deferral as a fraction of annual pay (0.10 = 10%). Pre-tax: it leaves the cash pool and reduces taxable income. Applies to every employed person until their retirement date.',
+        description: 'HOUSEHOLD DEFAULT for the employee 401(k) deferral, as a fraction of annual pay (0.10 = 10%). A Person\'s own election overrides it, and an explicit 0 on a Person opts them out entirely (design 95 §7.1). Pre-tax: it leaves the cash pool and reduces taxable income. Applies to every employed person until their retirement date.',
       },
       {
         key: 'k401EmployerMatchPct', label: '401(k) Employer Match',
         type: 'Number', group: 'Contributions', mc: false, opt: true,
         defaultValue: 0,
-        description: 'Employer 401(k) match as a fraction of annual pay. Employer-funded: it never debits the household cash pool and is not the employee\'s deduction.',
+        description: 'HOUSEHOLD DEFAULT for the employer 401(k) match, as a fraction of annual pay; a Person\'s own election overrides it. Employer-funded: it never debits the household cash pool and is not the employee\'s deduction.',
+      },
+      {
+        key: 'withholdingMethod', label: 'Payroll Withholding',
+        type: 'Enum', group: 'Contributions', mc: false, opt: false,
+        options: ['FICA_ONLY', 'NONE'],
+        defaultValue: 'FICA_ONLY',
+        description: 'How much of a US paycheque is withheld before it reaches the household. FICA_ONLY withholds Social Security and Medicare exactly — they are a rate times a base, so no estimate is involved — and leaves income tax to settle annually with the withholding credited against it. NONE credits the wage gross and settles everything annually (pre-design-95 behaviour). Income-tax withholding is not modelled: real withholding follows the Form W-4 / Pub 15-T tables, which this model does not carry.',
+      },
+      {
+        key: 'k401MatchTiers', label: '401(k) Match Formula',
+        type: 'Json', group: 'Contributions', mc: false, opt: false,
+        defaultValue: null,
+        description: 'HOUSEHOLD DEFAULT match formula as tiers, e.g. [{"matchRate":1,"uptoPctOfComp":0.03},{"matchRate":0.5,"uptoPctOfComp":0.02}] for the safe-harbor basic match (100% of the first 3%, 50% of the next 2%). Tiers consume the deferral in order, so someone deferring less than the band is matched only what they deferred. Empty falls back to the 401(k) Employer Match rate read as a 100% match on that first N% of pay.',
+      },
+      {
+        key: 'k401NonElectivePct', label: '401(k) Non-Elective Contribution',
+        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'HOUSEHOLD DEFAULT employer contribution as a fraction of annual pay that does NOT depend on the employee deferring anything — a profit-sharing or safe-harbor non-elective contribution. This is not a match and is deliberately a separate field. Employer-funded, and it counts toward the §415(c) annual-additions limit.',
       },
       {
         key: 'k401AnnualCap', label: '401(k) Annual Cap',
         type: 'Money', group: 'Contributions', mc: false, opt: false,
         defaultValue: null, defaultCurrency: 'USD',
-        description: 'Annual dollar cap applied to the deferral and to the match separately; empty means uncapped. A scenario-level assumption, NOT an indexed statutory limit \u2014 this model carries no \u00a7402(g) schedule.',
+        description: 'HOUSEHOLD DEFAULT annual dollar cap, applied to the deferral and to the match separately; empty means uncapped. Overridden by a Person\'s own cap. A scenario-level assumption, NOT an indexed statutory limit \u2014 this model carries no \u00a7402(g) schedule.',
       },
       {
         key: 'iraAnnualContribution', label: 'IRA Annual Contribution',
         type: 'Money', group: 'Contributions', mc: false, opt: true,
         defaultValue: 0, defaultCurrency: 'USD',
-        description: 'Deductible Traditional IRA contribution per employed person per year, paid in twelfths from the cash pool.',
+        description: 'HOUSEHOLD DEFAULT deductible Traditional IRA contribution per employed person per year, overridden by a Person\'s own election; paid in twelfths from the cash pool.',
       },
       {
         key: 'rothAnnualContribution', label: 'Roth Annual Contribution',
         type: 'Money', group: 'Contributions', mc: false, opt: true,
         defaultValue: 0, defaultCurrency: 'USD',
-        description: 'After-tax Roth contribution per employed person per year, paid in twelfths from the cash pool. No income phase-out is modelled.',
+        description: 'HOUSEHOLD DEFAULT after-tax Roth contribution per employed person per year, overridden by a Person\'s own election; paid in twelfths from the cash pool. No income phase-out is modelled.',
       },
       {
         key: 'monthlyExpenses', label: 'Monthly Expenses',
@@ -586,6 +605,9 @@ export const US_RETIREMENT = {
       },
       inflationRates:       { US: p.inflationRate },
       inflationAccumulator: { US: 1.0 },
+      // design 95 §10 phase 9 — 1.0 until the run passes the last published
+      // contribution-limit year, then compounds the same effective inflation rate.
+      limitIndexAccumulator: { US: 1.0 },
       metrics,
       people,
       outOfFundsDate:       null,
@@ -692,8 +714,11 @@ export const US_RETIREMENT = {
       EventBuilder.eventSeries()
         .name('Monthly Expenses').type('MONTHLY_EXPENSES')
         .interval('month-end').enabled(true).color('#F44336').build(),
+      // Design 95 §P0. `PAYROLL` supersedes `MONTHLY_WAGES`: same queue position,
+      // same emission, but the handler behind it derives the whole month's payroll
+      // in one pass rather than re-deriving "who is earning" in three places.
       EventBuilder.eventSeries()
-        .name('Monthly Wages').type('MONTHLY_WAGES')
+        .name('Payroll').type('PAYROLL')
         .interval('month-end').enabled(true).color('#4CAF50').build(),
     ];
 
@@ -709,10 +734,14 @@ export const US_RETIREMENT = {
     // (both order 0) on the same month-end: a deferral taken before the month's
     // spending can overdraw the cash pool and escalate into the drawdown cascade,
     // liquidating assets to fund a contribution.
-    if (_hasPayrollContributions(context)) {
+    // Design 95 §P0: `PAYROLL_CONTRIBUTIONS` supersedes US_RETIREMENT_CONTRIBUTION
+    // and AU_SUPER_GUARANTEE — one event, one order, both countries' streams. The
+    // AU toolset attaches its own handler instance to this same event rather than
+    // scheduling a second one.
+    if (_hasPayrollContributions(context) && !context.schedulesById['PAYROLL_CONTRIBUTIONS']) {
       schedules.push(
         EventBuilder.eventSeries()
-          .name('US Retirement Contributions').type('US_RETIREMENT_CONTRIBUTION')
+          .name('Payroll Contributions').type('PAYROLL_CONTRIBUTIONS')
           .interval('month-end').order(1).enabled(true).color('#00897B').build()
       );
     }
@@ -1022,18 +1051,50 @@ export const US_RETIREMENT = {
       handlers.push(repairHandler);
     }
 
-    // Monthly Wages
-    const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
-    wagesHandler.handledEvents.push(context.schedulesById['MONTHLY_WAGES']);
+    // Payroll, stage INCOME (design 95 §P0) — the wage credits, at queue order 0.
+    const wagesHandler = new PayrollHandler({
+      stateRegistry: sr, stage: PAYROLL_STAGE.INCOME,
+      withholding: p.withholdingMethod ?? WITHHOLDING_METHOD.FICA_ONLY,
+      // Design 95 §9.1 phase 6b — yes, a US toolset reading an AU parameter, and it
+      // is deliberate. The INCOME stage is country-AGNOSTIC: this one handler credits
+      // both the USD and the AUD earners, and in a cross-border scenario it is the
+      // only income-stage instance there is (AU_RETIREMENT's is behind
+      // `_auSharedDelegated`). Salary sacrifice reduces an AUD wage at source, so
+      // whichever toolset owns the wage must carry the rate. Without it a
+      // cross-border household is paid in full and ALSO has the sacrifice land in
+      // super — the same money twice, and no reduction in assessable income.
+      //
+      // It carries the AU elections but emits no AU stream: `_incomeActions` produces
+      // wage credits only, and `_ownsAuStream` keeps the contribution stage's streams
+      // with whichever instance actually owns them.
+        // Design 95 §9.1 — the FULL AU election set, not just the sacrifice rate.
+        // Sacrifice is rationed against the Div 291 cap ALONGSIDE the SG and the
+        // personal deductible contribution, so an instance that knows only the
+        // sacrifice rate rations it against an empty pool and arrives at a different
+        // figure from the one the contributions stage will actually credit. The wage
+        // was then reduced by one number and the fund credited with another, and the
+        // difference simply vanished. Both stages must ration from the same inputs.
+        superGuaranteePct:              p.superGuaranteePct                   ?? 0,
+        superAnnualCap:                 p.superGuaranteeAnnualCap             ?? null,
+        salarySacrificePct:             p.superSalarySacrificePct             ?? 0,
+        personalDeductibleContribution: p.superPersonalDeductibleContribution ?? 0,
+        nonConcessionalContribution:    p.superNonConcessionalContribution    ?? 0,
+    });
+    wagesHandler.handledEvents.push(context.schedulesById['PAYROLL']);
     handlers.push(wagesHandler);
 
-    // Payroll retirement contributions (401k deferral + employer match, IRA, Roth)
-    const contribEvent = context.schedulesById['US_RETIREMENT_CONTRIBUTION'];
+    // Payroll, stage CONTRIBUTIONS — 401(k) deferral + employer match, IRA, Roth.
+    // Queue order 1, i.e. after expenses AND after the savings-interest credit, which
+    // reads the live balance. That ordering is load-bearing: see payroll-handler.js.
+    const contribEvent = context.schedulesById['PAYROLL_CONTRIBUTIONS'];
     if (contribEvent) {
-      const contribHandler = new UsRetirementContributionHandler({
+      const contribHandler = new PayrollHandler({
         stateRegistry:          sr,
+        stage:                  PAYROLL_STAGE.CONTRIBUTIONS,
         k401DeferralPct:        p.k401DeferralPct        ?? 0,
         k401EmployerMatchPct:   p.k401EmployerMatchPct   ?? 0,
+        k401MatchTiers:         p.k401MatchTiers         ?? null,
+        k401NonElectivePct:     p.k401NonElectivePct     ?? 0,
         k401AnnualCap:          p.k401AnnualCap          ?? null,
         iraAnnualContribution:  p.iraAnnualContribution  ?? 0,
         rothAnnualContribution: p.rothAnnualContribution ?? 0,

@@ -59,9 +59,34 @@ export class K401ContributionApplyReducer extends AccountServiceReducer {
     const key        = action.stateKey ?? 'k401Account';
     const ka         = state[key];
     const newBalance = ka.balance + action.amount;
+
+    // Design 95 §7.3, phase 3 — the per-person running totals the limits are
+    // measured against. `deferral` tracks §402(g)/§414(v) (employee money only);
+    // `additions` tracks §415(c), which is the sum of ALL streams including the
+    // employer's. Keyed by person because §402(g) is a per-INDIVIDUAL limit across
+    // every plan they participate in, not a household or per-account one.
+    //
+    // Absent a personKey — legacy bare-event dispatchers, and actions saved before
+    // phase 3 — nothing is accumulated. That is the honest failure mode: no total
+    // means the limit cannot bind, which reproduces pre-phase-3 behaviour exactly
+    // rather than silently attributing one person's deferral to another.
+    const ytdPatch = {};
+    if (action.personKey != null) {
+      const all  = state.k401ContributionsYTD ?? {};
+      const mine = all[action.personKey] ?? { deferral: 0, additions: 0 };
+      ytdPatch.k401ContributionsYTD = {
+        ...all,
+        [action.personKey]: {
+          deferral:  +(mine.deferral  + (employerFunded ? 0 : action.amount)).toFixed(2),
+          additions: +(mine.additions + action.amount).toFixed(2),
+        },
+      };
+    }
+
     return this.newState(
       state,
       {
+        ...ytdPatch,
         [key]: {
           ...ka,
           balance:           newBalance,

@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { PAYROLL_ELECTION_FIELDS } from '../person.js';
+
 /**
  * person-projection.js — the ONE projection of a `Person` record into `state.people`.
  *
@@ -70,7 +72,7 @@ export function projectPerson(person, {
     monthlyWage:           person.monthlyWage           ?? 0,
     // Self-employment flag (design 69) — routes monthlyWage through the SE path.
     selfEmployed:          person.selfEmployed          ?? false,
-    // Native currency of the wage (design 50) — drives MonthlyWagesHandler's US vs
+    // Native currency of the wage (design 50) — drives PayrollHandler's US vs
     // AU routing. MUST be projected or every wage reads as the default.
     wageCurrency:          person.wageCurrency          ?? defaultWageCurrency,
     // Where the employment is exercised (design 73 Gap 1) — the attribute that
@@ -87,6 +89,18 @@ export function projectPerson(person, {
     residencyState:        person.residencyState         ?? null,
     // AU CGT 30% minimum-tax exemption (design 57 §6.6).
     incomeSupportRecipient: person.incomeSupportRecipient ?? false,
+    // Payroll elections (design 95 §7.1, phase 1). `computePayroll` resolves each as
+    // `state.people[k][field] ?? householdDefault`, so an unprojected field would
+    // make every personal election silently inert — the person carries it, the
+    // toolset gate schedules the event on the strength of it, and then the handler
+    // reads `state.people` and cannot see it. Exactly the failure this module was
+    // extracted to prevent, and it happened here before the projection was updated.
+    //
+    // `?? null` and NOT `?? 0`: null means "inherit the household default" and 0
+    // means "elect nothing". Projecting a missing election as 0 would opt every
+    // existing person out of every household rate.
+    ...Object.fromEntries(
+      PAYROLL_ELECTION_FIELDS.map(f => [f, person[f] ?? null])),
   };
 }
 

@@ -31,6 +31,7 @@ import { JournalFxRates, normalizeAggregateCurrency, USD_AUD_PATH }
   from '../../src/finance/journal-reporting/report-currency.js';
 
 import { US_TAX }       from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_INCOME }    from '../../src/scenarios/toolsets/us-income-toolset.js';
 import { US_STATE_TAX } from '../../src/scenarios/toolsets/us-state-tax-toolset.js';
 import { AU_TAX }       from '../../src/scenarios/toolsets/au-tax-toolset.js';
 import { US_BANKING }   from '../../src/scenarios/toolsets/us-banking-toolset.js';
@@ -45,7 +46,7 @@ const WHOLE_SIM = { fromEntryId: null, toEntryId: null };
 
 function typeRegistry() {
   const reg = new TypeRegistry();
-  for (const t of [US_TAX, US_STATE_TAX, AU_TAX, US_BANKING, AU_BANKING,
+  for (const t of [US_TAX, US_INCOME, US_STATE_TAX, AU_TAX, US_BANKING, AU_BANKING,
                    US_BROKERAGE, AU_BROKERAGE]) reg.registerToolset(t);
   return reg;
 }
@@ -159,6 +160,41 @@ test('JournalFxRates: falls back to the live state rate when the journal records
 });
 
 // ─── The report ───────────────────────────────────────────────────────────────
+
+/**
+ * Design 95 phase 6 — the report must count tax WITHHELD as tax paid.
+ *
+ * The settle credits withholding against the liability and debits only the balance
+ * due, so a report reading the TAX_PAYMENT_DEBIT family alone reports the balance
+ * and calls it the tax. Three rows here: a debit, a withholding that was netted out
+ * of the paycheque, and a hand-authored withholding that debited cash. All three are
+ * tax the household paid, and all three must be in the total exactly once.
+ */
+test('tax-paid-by-year: withheld tax counts, netted or debited', async () => {
+  const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
+  const rows = [
+    entry({ date: new Date(Date.UTC(2026, 0, 31)), actionType: 'WAGES_WITHHELD_APPLY',
+            data: { amount: 400, alreadyNetted: true } }),
+    entry({ date: new Date(Date.UTC(2026, 1, 28)), actionType: 'WAGES_WITHHELD_APPLY',
+            data: { amount: 200 } }),
+    entry({ date: new Date(Date.UTC(2026, 11, 31)), actionType: 'US_TAX_PAYMENT_DEBIT',
+            data: { amount: 100 } }),
+  ];
+
+  const us = await runReport(def, { cc: 'US', period: WHOLE_SIM }, apisFor(rows));
+  assert.strictEqual(us.currency, 'USD');
+  assert.ok(Math.abs(us.grandTotal - 700) < 1e-9,
+    `withheld 400 + 200 plus a 100 balance due is 700, got ${us.grandTotal}`);
+
+  // Blank cc must pick the same rows up, not double them.
+  const all = await runReport(def, { cc: '', period: WHOLE_SIM }, apisFor(rows));
+  assert.ok(Math.abs(all.grandTotal - 700) < 1e-9,
+    `all-countries must agree with US-only when there is no AU row, got ${all.grandTotal}`);
+
+  // AU is a different country's return: US withholding is not on it.
+  const au = await runReport(def, { cc: 'AU', period: WHOLE_SIM }, apisFor(rows));
+  assert.strictEqual(au.grandTotal, 0, 'US withholding must not appear on the AU total');
+});
 
 test('tax-paid-by-year: an AUD row and a USD row do not sum raw', async () => {
   const def  = new ReportDefinitionRegistry().get('tax-paid-by-year');
@@ -409,11 +445,30 @@ test('e2e: a cross-border run reconciles with state.cumulativeTaxesPaid', async 
     if (d.fundTax) fundTaxUsd += d.fundTax / (d.fxRate ?? 1);
   }
 
+  // Design 95 phase 6 — payroll withholding is IN the total, and this is the check
+  // that says so. FICA leaves the paycheque monthly as WAGES_WITHHELD_APPLY and is
+  // credited against the liability at settle, so the settle debits only the BALANCE
+  // due: a report reading the TAX_PAYMENT_DEBIT family alone understated US federal
+  // tax by the whole year's withholding ($528k against $716k here). The report now
+  // unions the TAX_WITHHELD family, so it is NOT subtracted from the target — a
+  // regression on either side reopens a gap this test measures directly.
+  let withheldUsd = 0;
+  const seenWh = new Set();
+  for (const e of sim.journal.journal) {
+    if (e.action?.type !== 'WAGES_WITHHELD_APPLY') continue;
+    if (seenWh.has(e.action.instanceId)) continue;
+    seenWh.add(e.action.instanceId);
+    withheldUsd += e.action.data?.amount ?? 0;
+  }
+
   const target = (sim.state.cumulativeTaxesPaid ?? 0) - fundTaxUsd;
 
   assert.strictEqual(currency, 'USD');
   assert.ok(target > 0, 'the run must actually pay tax for this to check anything');
   assert.ok(fundTaxUsd > 0, 'and hold AU super, so the fundTax term is exercised');
+  assert.ok(withheldUsd > 0, 'and withhold FICA, so the withholding term is exercised');
+  assert.ok(withheldUsd / target > 0.1,
+    `withholding must be a material share of the total for this to bite, got ${withheldUsd} of ${target}`);
   assert.ok(Math.abs(grandTotal - target) < 0.01,
     `blank-cc total ${grandTotal} vs cumulativeTaxesPaid−fundTax ${target}`);
 });
