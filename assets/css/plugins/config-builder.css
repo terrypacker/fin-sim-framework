@@ -780,6 +780,68 @@
   font-size: 11px;
 }
 
+/* ── Structured param editors (MixList / Glidepath / RegimeTargets / YieldCurve) ──
+   These reuse the band-editor row grid above; what they add is the BLOCK — a banded
+   entry (an age anchor, a regime, a schedule year) whose payload is itself a small
+   table, which a single flat row cannot render legibly in a dock-width panel. */
+.mix-block {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 5px;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* A duplicate regime tag: the later row silently wins, so make it visible. */
+.mix-block-dup { border-color: var(--warn, #d29922); }
+
+/* The band key (Age / Regime / Year) sits on its own line above the payload. */
+.mix-block-head {
+  display: grid;
+  grid-template-columns: auto 1fr 26px;
+  gap: 6px;
+  align-items: center;
+}
+
+.mix-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Σ readout — the whole point of the grid over a textarea: a non-unit mix is
+   REJECTED at Rebuild, so it has to be visible while typing, not after. */
+.mix-sum {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  align-self: flex-end;
+  padding: 0 2px;
+}
+
+.mix-sum-ok  { color: var(--text-muted); }
+.mix-sum-bad { color: var(--danger, #e5534b); font-weight: 600; }
+
+/* Nested country shapes inside a yield-curve schedule year. */
+.yield-country { margin-top: 2px; }
+.yield-country .payroll-group-heading { margin-top: 4px; }
+
+/* Fixed-key maps (betas, idiosyncratic vols): the key is a label, not an input. */
+.rate-key-label {
+  align-self: center;
+  text-transform: none;      /* rate keys are already uppercase; keep the underscores */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rate-key-unknown { color: var(--warn, #d29922); }
+
+/* Move-up button in an order-is-the-datum row list (location policy). */
+.row-list-move { font-size: 10px; }
+.row-list-move:disabled { opacity: 0.35; cursor: default; }
+
 /* ── ExpenseEventList param editor (design 86 G8; was HealthcareEventList) ── */
 .healthcare-event-list-editor {
   display: flex;

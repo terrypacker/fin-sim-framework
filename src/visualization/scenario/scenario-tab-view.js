@@ -9,6 +9,11 @@
  */
 
 import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
+import {
+  buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
+  buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
+  buildRateKeyMapEditor,
+} from './structured-param-editors.js';
 
 export class ScenarioTabView {
   constructor() {
@@ -542,6 +547,20 @@ export class ScenarioTabView {
         valueInput = _buildEarlyWithdrawalScheduleListEditor(param);
       } else if (param.type === 'ExpenseEventList') {
         valueInput = _buildExpenseEventListEditor(param, this.personsProvider);
+      } else if (param.type === 'MixList') {
+        valueInput = buildMixListEditor(param);
+      } else if (param.type === 'AllocationGlidepath') {
+        valueInput = buildAllocationGlidepathEditor(param);
+      } else if (param.type === 'AllocationRegimeTargets') {
+        valueInput = buildAllocationRegimeTargetsEditor(param);
+      } else if (param.type === 'LocationPolicy') {
+        valueInput = buildLocationPolicyEditor(param);
+      } else if (param.type === 'YieldCurveShape') {
+        valueInput = buildYieldCurveShapeEditor(param);
+      } else if (param.type === 'YieldCurveSchedule') {
+        valueInput = buildYieldCurveScheduleEditor(param);
+      } else if (param.type === 'RateKeyMap') {
+        valueInput = buildRateKeyMapEditor(param);
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),
@@ -1629,7 +1648,13 @@ function _buildEnumMultiEditor(param, onChange) {
   const container = document.createElement('div');
   container.className = 'enum-multi-editor';
 
-  const selected = new Set(Array.isArray(param.value) ? param.value : []);
+  // A scalar value is one selection, not "nothing selected". A param retyped from
+  // Text/Enum to EnumMulti (e.g. `bondLadderRole`) arrives on already-saved scenarios
+  // as a bare string; reading that as [] would show every box unchecked and then
+  // DISCARD the user's real setting on the first click.
+  const selected = new Set(
+    Array.isArray(param.value) ? param.value
+      : (param.value == null || param.value === '') ? [] : [param.value]);
   const options  = Array.isArray(param.options) ? param.options : [];
 
   options.forEach(opt => {

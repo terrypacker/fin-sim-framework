@@ -121,7 +121,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'assetLocationPolicy', label: 'Asset Location Policy',
-        type: 'Object', group: 'Behavioral', mc: false, opt: true,
+        type: 'LocationPolicy', group: 'Behavioral', mc: false, opt: true,
         defaultValue: null,
         description: 'Map of allocation → preferred account roles for tax-advantaged placement. E.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira"]}. Null = use defaults.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'STRATEGIC_ASSET_LOCATION' },
@@ -151,7 +151,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'rebalanceTargetAllocation', label: 'Rebalance Target Allocation',
-        type: 'Object', group: 'Behavioral', mc: false, opt: true,
+        type: 'MixList', group: 'Behavioral', mc: false, opt: true,
         defaultValue: null,
         description: 'Target allocation fractions for opportunistic rebalance. E.g. {"EQUITY":0.60,"BOND":0.40}. Null = 60/40 default.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'OPPORTUNISTIC_REBALANCE' },
@@ -251,7 +251,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationGlidepath', label: 'Allocation Glidepath',
-        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        type: 'AllocationGlidepath', group: 'Allocation', mc: false, opt: true,
         defaultValue: null,
         description: 'GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. ' +
           '[{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. ' +
@@ -263,7 +263,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationRegimeTargets', label: 'Allocation Regime Targets',
-        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        type: 'AllocationRegimeTargets', group: 'Allocation', mc: false, opt: true,
         defaultValue: null,
         description: 'REGIME_CONDITIONED targets: a map of regime tag → mix, e.g. ' +
           '{"NORMAL":{"EQUITY":0.6,"BOND":0.4},"ECONOMIC_STRESS":{"EQUITY":0.3,"BOND":0.3,"CASH":0.2,"GOLD":0.2}}. ' +
@@ -288,7 +288,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationLocationPolicy', label: 'Allocation Location Policy',
-        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        type: 'LocationPolicy', group: 'Allocation', mc: false, opt: true,
         defaultValue: null,
         description: 'LOCATED placement policy: a map of allocation → preferred account roles (in order), ' +
           'e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when ' +
@@ -321,9 +321,15 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       // single `.find` laddered exactly one of them while every other bond sleeve
       // stayed a perpetual fund. Same class of defect as the earnings handlers that
       // resolved a role to one account (design 55 §13).
-      const want  = p.bondLadderRole ?? ACCOUNT_ROLES.US_STOCK;
-      const roles = want === 'ALL' ? null
-        : new Set(Array.isArray(want) ? want : [want]);
+      // `bondLadderRole` is 'ALL', one role, or a LIST of roles (the UI writes a list).
+      // 'ALL' anywhere in the list means all — a list is how the multi-select expresses
+      // itself, so `['ALL']` has to mean what the bare string 'ALL' means; reading it as
+      // a role named "ALL" matched nothing and silently laddered the default account
+      // instead. An EMPTY selection is the same as absent: the documented default role.
+      const want   = p.bondLadderRole ?? ACCOUNT_ROLES.US_STOCK;
+      const wanted = (Array.isArray(want) ? want : [want]).filter(r => r != null && r !== '');
+      const roles  = wanted.includes('ALL') ? null
+        : new Set(wanted.length ? wanted : [ACCOUNT_ROLES.US_STOCK]);
       let accts = (context.accounts ?? []).filter(a => roles == null || roles.has(a.role));
       // Back-compat: a role that matches nothing falls back to the taxable brokerage,
       // exactly as before, so an existing scenario naming an absent role is unchanged.
@@ -354,11 +360,15 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'bondLadderRole', label: 'Bond Ladder — Account Role(s)',
-        type: 'Text', group: 'Allocation', mc: false, opt: false,
-        defaultValue: ACCOUNT_ROLES.US_STOCK,
-        description: 'Which accounts the strategy ladders: one ACCOUNT_ROLES value, a list of them, or ' +
-          '"ALL" for every account that holds bonds. EVERY account matching the role is laddered, not just ' +
-          'the first — a household commonly holds several accounts in one role.',
+        type: 'EnumMulti', group: 'Allocation', mc: false, opt: false,
+        options: ['ALL', ...Object.values(ACCOUNT_ROLES)],
+        defaultValue: [ACCOUNT_ROLES.US_STOCK],
+        description: 'WHERE the ladder lives: tick the account roles to ladder, or ALL for every account ' +
+          'that holds bonds. EVERY account matching a ticked role is laddered, not just the first — a ' +
+          'household commonly holds several accounts in one role. Nothing ticked = the default (us-stock). ' +
+          'Note there is no SIZE lever here: a ladder is the account\'s whole BOND sleeve, restruck as N ' +
+          'individual bonds, so how much is in it is set by the allocation target (TARGET_ALLOCATION), not ' +
+          'by this strategy — this strategy only decides the SHAPE (rungs × spacing) and the LOCATION.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {

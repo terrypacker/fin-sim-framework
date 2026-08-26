@@ -388,7 +388,10 @@ describe('design 39 §13.5 — writing into the scenario', () => {
     });
     assert.deepEqual(res.created, ['allocationGlidepath']);
     assert.equal(scenario.params.length, 1);
-    assert.equal(scenario.params[0].type, 'Object');
+    // A harvested glidepath lands on the banded anchor editor, like the other
+    // schedule-shaped params below — it stopped being a JSON blob when the editor
+    // for it shipped.
+    assert.equal(scenario.params[0].type, 'AllocationGlidepath');
   });
 
   test('created schedule params get their table-editor type, not a JSON blob', () => {

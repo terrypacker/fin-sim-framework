@@ -47,21 +47,29 @@ const NO_OPTIONS = [];
  * @param {Array<{field: string, label: string, type?: 'number'|'select',
  *                step?: string, min?: string, max?: string,
  *                options?: Array<[value: string, label: string]>,
- *                placeholder?: string,
+ *                placeholder?: string, blankValue?: *,
  *                width?: string}>} opts.columns
  * @param {function(): object} opts.newRow  factory for the row "+ Add" appends
  * @param {string} [opts.addLabel='+ Add']
  * @param {function(): void} [opts.onChange] called after every edit/add/remove
  * @param {string} [opts.emptyText]         shown in place of the header when empty
+ * @param {function(object, object): number} [opts.sortBy] comparator; when given, the
+ *        list is re-sorted and re-rendered after any cell edit, so an ordering
+ *        invariant the consumer relies on (ascending year, ascending tenor) holds
+ *        for whatever the user types, not just for what they typed in order.
+ * @param {boolean} [opts.reorderable=false] add a "move up" button per row, for lists
+ *        whose ORDER is the datum (a preference ranking) rather than incidental.
  * @returns {HTMLElement}
  */
 export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
-                                     onChange = null, emptyText = null }) {
+                                     onChange = null, emptyText = null,
+                                     sortBy = null, reorderable = false }) {
   const container = document.createElement('div');
   container.className = 'age-band-list-editor row-list-editor';
 
   // The remove button's fixed 26px column is the shared band-editor convention.
-  const grid = [...columns.map(c => c.width ?? '1fr'), '26px'].join(' ');
+  const grid = [...columns.map(c => c.width ?? '1fr'),
+                ...(reorderable ? ['26px'] : []), '26px'].join(' ');
 
   const changed = () => { if (onChange) onChange(); };
 
@@ -83,6 +91,9 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
         h.textContent = label;
         header.appendChild(h);
       }
+      // One spacer per trailing button track (move-up, remove) so the header
+      // labels stay aligned over their own columns.
+      if (reorderable) header.appendChild(document.createElement('span'));
       header.appendChild(document.createElement('span'));  // spacer over remove
       container.appendChild(header);
     }
@@ -92,9 +103,29 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
       rowEl.className = 'age-band-row';
       rowEl.style.gridTemplateColumns = grid;
 
+      // A cell edit re-sorts and re-renders when the caller declared an ordering,
+      // so the row the user just retyped moves to where the consumer will read it.
+      const resort = sortBy ? () => { rows.sort(sortBy); render(); } : null;
       for (const col of columns) {
-        rowEl.appendChild(col.type === 'select' ? buildSelect(col, row, changed)
-                                                : buildNumber(col, row, changed));
+        rowEl.appendChild(col.type === 'select' ? buildSelect(col, row, changed, resort)
+                                                : buildNumber(col, row, changed, resort));
+      }
+
+      if (reorderable) {
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'btn age-band-remove row-list-move';
+        up.textContent = '\u25b2';
+        up.title = 'Move up';
+        up.dataset.id = 'moveRowUp';
+        up.disabled = idx === 0;
+        up.addEventListener('click', () => {
+          if (idx === 0) return;
+          [rows[idx - 1], rows[idx]] = [rows[idx], rows[idx - 1]];
+          render();
+          changed();
+        });
+        rowEl.appendChild(up);
       }
 
       const rm = document.createElement('button');
@@ -122,8 +153,13 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
   return container;
 }
 
-/** A numeric cell. Blank writes `null`, never 0 — see `readRowList`. */
-function buildNumber(col, row, changed) {
+/**
+ * A numeric cell. Blank writes `col.blankValue` — `null` by default, never 0 (see
+ * `readRowList`). A column whose consumer requires the key PRESENT (an allocation
+ * weight, where an absent key and a deliberate 0 mean different things) declares
+ * `blankValue: 0` instead.
+ */
+function buildNumber(col, row, changed, resort = null) {
   const input = document.createElement('input');
   input.type      = 'number';
   input.className = 'age-band-input';
@@ -135,14 +171,15 @@ function buildNumber(col, row, changed) {
   input.value = row[col.field] ?? '';
   input.addEventListener('change', () => {
     const raw = input.value.trim();
-    row[col.field] = raw === '' ? null : Number(raw);
+    row[col.field] = raw === '' ? (col.blankValue ?? null) : Number(raw);
     changed();
+    if (resort) resort();
   });
   return input;
 }
 
 /** A select cell over `[value, label]` pairs. */
-function buildSelect(col, row, changed) {
+function buildSelect(col, row, changed, resort = null) {
   const sel = document.createElement('select');
   sel.className   = 'age-band-input';
   sel.dataset.id  = col.field;
@@ -167,6 +204,7 @@ function buildSelect(col, row, changed) {
   sel.addEventListener('change', () => {
     row[col.field] = sel.value === '' ? null : sel.value;
     changed();
+    if (resort) resort();
   });
   return sel;
 }

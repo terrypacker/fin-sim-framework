@@ -918,6 +918,7 @@ export class ScenarioLoader {
       if (s.description) entry.description = s.description;
       if (s.node)        entry.node        = s.node;
       if (s.options)     entry.options     = s.options;
+      if (s.optionDefaults) entry.optionDefaults = s.optionDefaults;
       if (s.dynamicOptionsFrom) entry.dynamicOptionsFrom = s.dynamicOptionsFrom;
       if (s.visibleWhen) entry.visibleWhen = s.visibleWhen;
       if (s.hidden)      entry.hidden      = s.hidden;
@@ -982,6 +983,13 @@ export class ScenarioLoader {
       // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
       // added to spendingStrategy must surface on already-saved scenarios.
       if (s.options)                                         p.options     = s.options;
+      // optionDefaults rides with `options` for the RateKeyMap editors: `options` is the
+      // closed key list, `optionDefaults` the built-in fallback each blank cell resolves
+      // to. Both are schema-owned, so a re-calibrated default (say a property beta) must
+      // reach an already-persisted scenario — a stale table would quietly tell the user
+      // a blank cell means something it no longer means.
+      if (s.optionDefaults)      p.optionDefaults = s.optionDefaults;
+      else if (p.optionDefaults) delete p.optionDefaults;
       // dynamicOptionsFrom is schema-owned (names the sibling list param whose
       // entries extend this param's selectable options live in the UI).
       if (s.dynamicOptionsFrom)  p.dynamicOptionsFrom = s.dynamicOptionsFrom;

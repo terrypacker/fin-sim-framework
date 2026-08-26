@@ -810,3 +810,53 @@ test('_renderParamsList: equals condition matches a boolean controller', () => {
   boolSel.dispatchEvent(new Event('change'));
   assert.ok(rowLabels().includes('Knob'), 'shown after boolean controller flips true');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Structured param types — type dispatch away from the raw JSON textarea
+// ═════════════════════════════════════════════════════════════════════════════
+
+// The editors themselves are covered in structured-param-editors.test.mjs; what is
+// asserted here is only that _renderParamsList reaches them. A schema retype that the
+// panel does not dispatch on silently falls through to the JSON textarea, which looks
+// like nothing changed at all.
+const STRUCTURED_CASES = [
+  ['MixList',                 'rebalanceTargetAllocation', { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 }, '.mix-list-editor'],
+  ['AllocationGlidepath',     'allocationGlidepath',       [{ age: 50, weights: { EQUITY: 1, BOND: 0, CASH: 0, GOLD: 0 } }], '.glidepath-editor'],
+  ['AllocationRegimeTargets', 'allocationRegimeTargets',   { NORMAL: { EQUITY: 1, BOND: 0, CASH: 0, GOLD: 0 } }, '.regime-targets-editor'],
+  ['LocationPolicy',          'allocationLocationPolicy',  { BOND: ['ira'] }, '.row-list-editor'],
+  ['YieldCurveShape',         'usYieldCurveShape',         [{ tenor: 1, spread: -0.01 }], '.row-list-editor'],
+  ['YieldCurveSchedule',      'yieldCurveSchedule',        [{ year: 2030, US: [{ tenor: 1, spread: 0.01 }] }], '.yield-schedule-editor'],
+  ['RateKeyMap',              'equityReturnBeta',          { EQUITY_US: 1.1 }, '.rate-key-map-editor'],
+];
+
+for (const [type, name, value, selector] of STRUCTURED_CASES) {
+  test(`_renderParamsList: ${type} renders a structured editor, not a JSON textarea`, () => {
+    const view = new ScenarioTabView();
+    const scenario = { params: [{ name, label: name, type, value, options: ['EQUITY_US'] }] };
+    view._renderParamsList(scenario);
+    assert.ok(document.querySelector(`#paramsList ${selector}`), `expected ${selector}`);
+    assert.strictEqual(document.querySelector('#paramsList textarea.param-json'), null,
+      'the raw JSON textarea must not be the editor for a structured type');
+  });
+}
+
+test('_renderParamsList: an unrecognised structured type still falls back to the JSON textarea', () => {
+  // The fallback has to survive: `inferParamType` still emits 'Object' for a harvested
+  // value with no known shape, and a textarea beats no editor at all.
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'someMap', label: 'Some Map', type: 'Object', value: { a: 1 } }] };
+  view._renderParamsList(scenario);
+  assert.ok(document.querySelector('#paramsList textarea.param-json'));
+});
+
+test('_renderParamsList: EnumMulti reads a bare string value as one selection', () => {
+  // `bondLadderRole` was retyped Text → EnumMulti; scenarios saved before that carry a
+  // bare 'us-stock'. Reading it as [] would show every box unchecked and then discard
+  // the user's real setting on the first click.
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'bondLadderRole', label: 'Roles', type: 'EnumMulti',
+    value: 'us-stock', options: ['ALL', 'us-stock', 'ira'] }] };
+  view._renderParamsList(scenario);
+  const boxes = [...document.querySelectorAll('#paramsList .enum-multi-option input')];
+  assert.deepStrictEqual(boxes.map(b => b.checked), [false, true, false]);
+});

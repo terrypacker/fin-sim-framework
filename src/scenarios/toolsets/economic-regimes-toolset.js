@@ -12,7 +12,7 @@ import { OneOffEvent }                    from '../../simulation-framework/event
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { EQUITY_MARKETS_BY_COUNTRY } from '../../finance/holdings/default-allocations.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
@@ -170,6 +170,15 @@ function collectYieldCurves(p) {
  * (spread 0): shorter bonds yield less, longer bonds earn a term premium. Applied to
  * both countries unless a scenario overrides `usYieldCurveShape` / `auYieldCurveShape`.
  */
+/**
+ * Equity idiosyncratic vol has no per-sleeve default table — an absent key is a
+ * literal 0 (pure single-factor, design 74 §4). Stated explicitly so the param
+ * editor's blank-cell placeholder shows `0` rather than the word "default", which
+ * would imply a value lives somewhere else.
+ */
+const ZERO_EQUITY_IDIO = Object.freeze(
+  Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0])));
+
 const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
   { tenor: 1,  spread: -0.010 },
   { tenor: 5,  spread:  0.000 },
@@ -562,7 +571,7 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'usYieldCurveShape',
         label:        'US Yield Curve Shape',
-        type:         'Object',
+        type:         'YieldCurveShape',
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -572,7 +581,7 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'auYieldCurveShape',
         label:        'AU Yield Curve Shape',
-        type:         'Object',
+        type:         'YieldCurveShape',
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -582,7 +591,7 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'yieldCurveSchedule',
         label:        'Yield Curve Schedule',
-        type:         'Object',
+        type:         'YieldCurveSchedule',
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -663,7 +672,9 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'equityReturnBeta',
         label:        'Equity Return Betas',
-        type:         'Object',
+        type:         'RateKeyMap',
+        options:      EQUITY_SLEEVES,
+        optionDefaults: DEFAULT_EQUITY_BETA,
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -673,7 +684,9 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'equityReturnIdioVol',
         label:        'Equity Return Idiosyncratic Volatility',
-        type:         'Object',
+        type:         'RateKeyMap',
+        options:      EQUITY_SLEEVES,
+        optionDefaults: ZERO_EQUITY_IDIO,
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -704,7 +717,9 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'propertyReturnBeta',
         label:        'Property Return Betas',
-        type:         'Object',
+        type:         'RateKeyMap',
+        options:      PROPERTY_SLEEVES,
+        optionDefaults: DEFAULT_RE_BETA,
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
@@ -714,7 +729,9 @@ export const ECONOMIC_REGIMES = {
       {
         key:          'propertyReturnIdioVol',
         label:        'Property Return Idiosyncratic Volatility',
-        type:         'Object',
+        type:         'RateKeyMap',
+        options:      PROPERTY_SLEEVES,
+        optionDefaults: DEFAULT_RE_IDIO,
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,

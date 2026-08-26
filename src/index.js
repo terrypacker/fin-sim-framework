@@ -495,6 +495,7 @@ import { bindParamLinkedField } from './visualization/scenario/param-linked-fiel
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
+import { buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor, buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor, buildRateKeyMapEditor } from './visualization/scenario/structured-param-editors.js';
 import { ScenarioComparePresenter } from './visualization/scenario-compare/scenario-compare-presenter.js';
 import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
@@ -1826,6 +1827,13 @@ export const Visualization = {
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,
+  buildMixListEditor,
+  buildAllocationGlidepathEditor,
+  buildAllocationRegimeTargetsEditor,
+  buildLocationPolicyEditor,
+  buildYieldCurveShapeEditor,
+  buildYieldCurveScheduleEditor,
+  buildRateKeyMapEditor,
   ScenarioComparePresenter,
   DashCardsComponent,
   PlaybackProgressComponent,

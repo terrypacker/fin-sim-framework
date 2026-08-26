@@ -472,6 +472,25 @@ describe('BOND_LADDER account resolution — every matching account, not the fir
     assert.deepEqual(reducers.map(r => r.stateKey), ['usStockAccount', 'sharedBrokerage', 'treasuryDirect']);
   });
 
+  test("['ALL'] — the multi-select's own shape — means ALL, not a role named ALL", () => {
+    // `bondLadderRole` is an EnumMulti now, so the UI writes a LIST. Reading `['ALL']`
+    // as a role literally named "ALL" matched no account and fell through to the
+    // taxable-brokerage back-compat branch: the user ticked "every account" and got
+    // one, with no signal anywhere.
+    const reducers = entry.reducers({ parameters: { bondLadderRole: ['ALL'] }, accounts: ACCOUNTS });
+    assert.equal(reducers.length, 5);
+  });
+
+  test("'ALL' alongside other roles still means ALL", () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: ['ira', 'ALL'] }, accounts: ACCOUNTS });
+    assert.equal(reducers.length, 5);
+  });
+
+  test('an EMPTY selection is the same as absent — the documented default role', () => {
+    const reducers = entry.reducers({ parameters: { bondLadderRole: [] }, accounts: ACCOUNTS });
+    assert.deepEqual(reducers.map(r => r.stateKey), ['usStockAccount', 'sharedBrokerage', 'treasuryDirect']);
+  });
+
   test('TIPS + coupon params reach every constructed reducer', () => {
     const reducers = entry.reducers({
       parameters: { bondLadderRole: 'ALL', bondLadderInflationLinked: true, bondLadderCouponRate: 0.01 },

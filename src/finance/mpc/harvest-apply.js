@@ -150,8 +150,8 @@ export function inferParamType(paramKey, value) {
     spendingAgeBands:         'AgeBandList',
     rothConversionSchedule:   'RothScheduleList',
     earlyWithdrawalSchedule:  'EarlyWithdrawalScheduleList',
-    allocationGlidepath:      'Object',
-    allocationRegimeTargets:  'Object',
+    allocationGlidepath:      'AllocationGlidepath',
+    allocationRegimeTargets:  'AllocationRegimeTargets',
     spendingStrategy:         'EnumMulti',
     behavioralStrategies:     'EnumMulti',
   };
