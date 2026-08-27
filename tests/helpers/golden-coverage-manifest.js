@@ -75,6 +75,7 @@ export const COVERED = [
   'COLLECTIBLE_SALE_TAX',
   'COMPANY_SALE_APPLY',
   'COMPANY_SALE_TAX',
+  'EQUITY_RETURN_STEP_APPLY',
   'EXPENSE_DEBIT',
   'FIXED_INCOME_EARNINGS_APPLY',
   'FIXED_INCOME_EARNINGS_TAX',
@@ -239,11 +240,17 @@ export const KNOWN_GAPS = [
   'INTL_TRANSFER_APPLY',
   'SECTION_988_GAIN',
 
+  // ── design 94 §8.1l — the April filing of the prior US return. Reachable only from a
+  // scenario running TAX_LOSS_HARVEST with a §1091 window open, which no golden does: the
+  // harvester is not part of any fixture's plan. Covered by wash-sale.test.mjs end to end.
+  'US_TAX_FILE_APPLY',
+
   // ── Stochastic paths, economic regimes and shocks (designs 67, 74, 75)
   // Off by default, so nothing exercises them. A seeded golden is still deterministic
   // (one RNG, fixed seed) and would guard the shock-revaluation and regime-fan paths.
   'ADD_REGIME_APPLY',
-  'EQUITY_RETURN_STEP_APPLY',
+  // EQUITY_RETURN_STEP_APPLY left this list at design 94 step 5: `two-security-concentration`
+  // runs with `equityReturnStochastic` on, which is what the note above asked for.
   'PROPERTY_RETURN_STEP_APPLY',
   'RECOMPUTE_REGIMES',
   'REMOVE_REGIME_APPLY',

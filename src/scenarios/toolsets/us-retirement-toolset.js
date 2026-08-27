@@ -657,6 +657,16 @@ export const US_RETIREMENT = {
       drawdownSleeveWeights: sleeveWeightsFromParams(p),
       // Lever C (design 65 §4-C) rebalance-coupling weight; 0 = off (byte-identical).
       drawdownRebalanceWeight: Number.isFinite(p.drawdownRebalanceWeight) ? p.drawdownRebalanceWeight : 0,
+      // The SECURITY tier (design 94 step 6): security ids to sell out of first, in order.
+      // Ids are scenario data, so nothing here can validate them against a registry that is
+      // projected later at load — an id naming nothing simply ranks with the unlisted, which
+      // is the same degradation `sleeveOrder` gives an absent class. Empty ⇒ absent ⇒ the
+      // byte-identical FIFO path.
+      // Spread, not a `?? null`: a scenario that names no security must gain NO state key
+      // at all, so no whole-state fixture in the repo grows a line to say nothing (the same
+      // "absent is absent" rule the security registry itself follows, design 94 §4.1).
+      ...((Array.isArray(p.drawdownSecurityOrder) && p.drawdownSecurityOrder.length)
+        ? { drawdownSecurityOrder: [...p.drawdownSecurityOrder] } : {}),
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

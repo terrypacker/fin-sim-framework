@@ -13,7 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { resolveYield }       from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { section988ForRedemption } from '../account-rules/bond-currency-basis.js';
-import { unitiseBond, indexedRedemptionValue } from '../holdings/holding-utils.js';
+import { unitiseBond, indexedRedemptionValue, instrumentOf } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -90,12 +90,13 @@ export class BondMaturityReducer extends Reducer {
     const yieldCurve     = state.yieldCurve ?? {};
     const accountUpdates = {};
     const s988Actions    = [];
+    const securities     = state.securities ?? null;
 
     for (const key of Object.keys(state)) {
       const account = state[key];
       if (!account || !Array.isArray(account.holdings) || account.holdings.length === 0) continue;
 
-      const hasMatured = account.holdings.some(h => isMatured(h, asOfMs));
+      const hasMatured = account.holdings.some(h => isMatured(h, instrumentOf(h, securities), asOfMs));
       if (!hasMatured) continue;
 
       // Design 87 G9 — a foreign-currency bond is a DEBT INSTRUMENT (§988(c)(1)(B)(i)),
@@ -104,14 +105,21 @@ export class BondMaturityReducer extends Reducer {
       // mortgage leg uses). Collected before the map so the pre-redemption holding —
       // which still carries `fxBasisRate` — is the one measured.
       for (const h of account.holdings) {
-        if (isMatured(h, asOfMs)) s988Actions.push(...section988ForRedemption(state, key, account, h, asOfMs));
+        if (isMatured(h, instrumentOf(h, securities), asOfMs)) {
+          s988Actions.push(...section988ForRedemption(state, key, account, h, asOfMs));
+        }
       }
 
       // The spot the redeemed principal is translated at — and therefore the rate at
       // which a ROLL re-acquires. Passed in rather than read inside `redeem` so the
       // realization above and the re-stamp below cannot use different rates.
       const spot = state.effectiveExchangeRates?.USD_AUD ?? null;
-      const nextHoldings = account.holdings.map(h => isMatured(h, asOfMs) ? redeem(h, asOfMs, effectiveRates, yieldCurve, spot) : h);
+      const nextHoldings = account.holdings.map(h => {
+        const inst = instrumentOf(h, securities);
+        return isMatured(h, inst, asOfMs)
+          ? redeem(h, inst, asOfMs, effectiveRates, yieldCurve, spot, securities)
+          : h;
+      });
       accountUpdates[key] = _syncBalance({ ...account, holdings: nextHoldings });
     }
 
@@ -119,10 +127,15 @@ export class BondMaturityReducer extends Reducer {
   }
 }
 
-/** True when a holding is an individual bond that has reached maturity. */
-function isMatured(h, asOfMs) {
-  if (!h || h.allocation !== ALLOCATION.BOND || h.maturityDate == null) return false;
-  const matMs = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+/**
+ * True when a holding is an individual bond that has reached maturity.
+ *
+ * `allocation` is the POSITION's and `maturityDate` is the INSTRUMENT's (design 94 §5.1),
+ * so both have to be passed — the split runs right through this two-line predicate.
+ */
+function isMatured(h, inst, asOfMs) {
+  if (!h || h.allocation !== ALLOCATION.BOND || inst?.maturityDate == null) return false;
+  const matMs = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
   return Number.isFinite(matMs) && matMs <= asOfMs;
 }
 
@@ -131,7 +144,7 @@ function isMatured(h, asOfMs) {
  * at par to a CASH holding (default). `faceValue ?? marketValue` is the par
  * proceeds.
  */
-function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
+function redeem(h, inst, asOfMs, effectiveRates, yieldCurve = {}, spot = null, securities = null) {
   // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
   // marketValue) and the original face — the Treasury deflation floor (design 66
   // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
@@ -167,7 +180,7 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
   // appear. `indexedRedemptionValue` returns null for a scalar holding, which keeps the
   // old expression for a bond that was never promoted — a UI preview, a unit test —
   // rather than silently redeeming it at un-indexed par.
-  const par = indexedRedemptionValue(h) ?? (h.inflationLinked
+  const par = indexedRedemptionValue(h, securities) ?? (inst.inflationLinked
     ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
     : (h.faceValue ?? h.marketValue ?? 0));
 
@@ -179,7 +192,7 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
     // of field that stops being inert when someone later reads it. Dropped rather than
     // nulled, so a bond that never had one does not gain a key (design 93 §5a).
     const { cpiIndexRatio: _stale, ...rolling } = h;
-    const matMs      = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+    const matMs      = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
     const purchaseMs = h.purchaseDate
       ? (h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime())
       : null;
@@ -192,7 +205,7 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
       ? (h.rollTermYears * YEAR_MS)
       : (purchaseMs != null && matMs > purchaseMs)
         ? (matMs - purchaseMs)
-        : ((h.duration ?? 5) * YEAR_MS);
+        : ((inst.duration ?? 5) * YEAR_MS);
     // design 67 — re-lock at the yield for the ROLL TERM's tenor (not a flat 5y proxy),
     // so a rung rolling into an N-year ladder bond earns the curve's N-year term premium.
     // resolveYield returns null when the anchor is absent ⇒ keep the prior couponRate.
@@ -203,7 +216,7 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
     // self-perpetuates" — and it is not what the instrument means. A LONE inflation-linked
     // bond keeps the pre-existing behavior (roll into a plain par bond), which is what the
     // §G5 note below is about.
-    const rollsAsTips = h.inflationLinked === true && h.rollTermYears != null;
+    const rollsAsTips = inst.inflationLinked === true && h.rollTermYears != null;
     // A rolling TIPS re-issues at the CONTRACTED REAL yield it already carries. The engine
     // models a nominal curve only (design 67), so `resolveYield` would hand a TIPS the
     // NOMINAL yield and pay it on a principal that also indexes to CPI — compensating for
@@ -211,11 +224,11 @@ function redeem(h, asOfMs, effectiveRates, yieldCurve = {}, spot = null) {
     // of a real-yield curve, and it is what makes a TIPS ladder the risk-free leg it is
     // supposed to be.
     const newCoupon = rollsAsTips
-      ? (h.couponRate ?? null)
+      ? (inst.couponRate ?? null)
       : (resolveYield(
           { effectiveInterestRates: effectiveRates, yieldCurve },
-          { rateKey: h.rateKey, tenorYears: rollTenorYears },
-        ) ?? h.couponRate ?? null);
+          { rateKey: inst.rateKey, tenorYears: rollTenorYears },
+        ) ?? inst.couponRate ?? null);
     // par-reviewed: the ROLL issues a different instrument: new maturity, new purchase date,
     // re-locked coupon and (for a TIPS) a re-faced par. No ratio on the old position
     // describes that.

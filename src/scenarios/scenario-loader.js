@@ -9,6 +9,7 @@
  */
 
 import { ScenarioSerializer }     from './scenario-serializer.js';
+import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
@@ -28,6 +29,7 @@ import { US_AU_CROSS_BORDER } from './toolsets/us-au-cross-border-toolset.js';
 import { US_REAL_PROPERTY }   from './toolsets/us-real-property-toolset.js';
 import { AU_REAL_PROPERTY }   from './toolsets/au-real-property-toolset.js';
 import { US_COLLECTIBLES }    from './toolsets/us-collectibles-toolset.js';
+import { CORPORATE_ACTIONS }  from './toolsets/corporate-actions-toolset.js';
 import { US_ROTH_CONVERSION } from './toolsets/us-roth-conversion-toolset.js';
 import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { US_BROKERAGE }      from './toolsets/us-brokerage-toolset.js';
@@ -69,6 +71,7 @@ const BUILT_IN_TOOLSETS = [
   US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME, US_COMPANY_SALE,
   INHERITANCE,
   ECONOMIC_REGIMES,
+  CORPORATE_ACTIONS,
 ];
 
 /**
@@ -184,6 +187,9 @@ export class ScenarioLoader {
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
+    // Design 94 §4 — project the instrument registry into `state.securities`.
+    this._projectSecurities(cfg, services);
+
     // Design 72 §2: rewrite any `saleDestinationAccount` persisted as an account
     // *id* into that account's stateKey, before either load path reads it.
     this._normalizeSaleDestinations(cfg, services);
@@ -202,6 +208,39 @@ export class ScenarioLoader {
     }
 
     this._applyRandomSeed(cfg, services);
+  }
+
+  /**
+   * Project `cfg.securities` into `sim.state.securities` (design 94 §4).
+   *
+   * **Here, and not in `buildSim()`, for the same reason `_applyRandomSeed` is here**:
+   * `buildSim()` runs BEFORE the config is loaded, so at construction time the scenario does
+   * not yet know its own securities. A registry written into `cfg.initialState` would be
+   * read at a moment when it is not there yet — the "config field in state is not read"
+   * trap, which in this case would degrade silently to Option A rather than throwing.
+   *
+   * And here rather than in either branch below, because it must reach BOTH the toolset
+   * compile path and the serialized-graph path. `state.people` has had three drifted
+   * projections in this repo; one shared call site is how that stops happening again.
+   *
+   * The registry is FROZEN (`buildSecurityRegistry`), which is what makes `cloneState`'s
+   * by-reference sharing safe — see design 94 §6.4.
+   *
+   * @private
+   */
+  _projectSecurities(cfg, services) {
+    const sim = services?.simulationRegistry?.getPrimary?.();
+    if (!sim) return;
+    // Design 94 step 3 REVERSED step 2's "absent means absent" for this key, and the
+    // reversal is the migration itself: once every equity lot is a position in a security,
+    // there is no such thing as a scenario with no registry. The four synthetic market
+    // securities (§9.1) are always present — including markets the scenario does not hold
+    // at boot, because a lot born mid-run picks its market from `resolveRateKey`, not from
+    // the boot portfolio, and a lot naming an absent security is silently back on Option A.
+    //
+    // Authored securities come SECOND but may not collide: `buildSecurityRegistry` throws
+    // on a duplicate id, so the `sec-auto-` prefix is reserved rather than shadowable.
+    sim.state.securities = scenarioSecurityRegistry(cfg);
   }
 
   /**

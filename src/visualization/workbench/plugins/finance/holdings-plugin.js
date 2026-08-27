@@ -86,6 +86,12 @@ export class HoldingsPlugin extends WorkbenchComponent {
             <thead><tr>
               <th class="hld-th">Holding</th>
               <th class="hld-th">Alloc</th>
+              <!-- design 94 step 9: a position is a COUNT of an INSTRUMENT at a price.
+                   The Units pair is hidden for a book with no unitised lots rather than
+                   printed as a column of dashes. -->
+              <th class="hld-th">Security</th>
+              <th class="hld-th hld-th--num" data-hld="units-th">Units</th>
+              <th class="hld-th hld-th--num" data-hld="price-th">Price</th>
               <th class="hld-th hld-th--num">Market Value</th>
               <th class="hld-th hld-th--num">Cost Basis</th>
               <th class="hld-th hld-th--num">Unrealized G/L</th>
@@ -305,7 +311,11 @@ export class HoldingsPlugin extends WorkbenchComponent {
     }
 
     this._activeCurrency = this._currency();   // resolve once per render
-    const rows = snapshotHoldings(account);   // one read, shared by the charts and the table
+    // The registry reaches this call at step 9. Without it `rateKey` was read off the
+    // lot, so a position whose market lives on its security showed a blank column — the
+    // Option-A read that design 94 §5.2's gate removes everywhere except `src/visualization`,
+    // which the gate does not scan.
+    const rows = snapshotHoldings(account, this._sim?.state?.securities ?? null);
     this._renderCharts(rows);
     this._renderSnapshot(rows);
     this._renderActivity();
@@ -315,19 +325,39 @@ export class HoldingsPlugin extends WorkbenchComponent {
     const body = this._q('snap-body');
     const foot = this._q('snap-foot');
 
+    // A unit count and a per-unit price mean something only where a lot HAS them. Every
+    // equity and individual-bond position carries them under design 94; a bond fund and a
+    // cash sleeve are scalar by design (design 93 §5 — both modes are first-class), so the
+    // pair is hidden wholesale rather than shown as a column of em-dashes.
+    const showUnits = rows.some(r => r.units != null);
+    for (const key of ['units-th', 'price-th']) {
+      const th = this._q(key);
+      if (th) th.style.display = showUnits ? '' : 'none';
+    }
+    const unitCells = (r) => showUnits
+      ? `<td class="hld-td hld-td--num">${_fmtUnits(r.units)}</td>`
+        + `<td class="hld-td hld-td--num">${_fmtPrice(r.pricePerUnit)}</td>`
+      : '';
+    const COLS = showUnits ? 8 : 6;
+
     body.innerHTML = rows.map(r => `
       <tr>
         <td class="hld-td">${_esc(r.label)}</td>
         <td class="hld-td hld-alloc">${_esc(r.allocation ?? '—')}</td>
+        <td class="hld-td hld-sec" title="${_esc(r.securityId ?? '')}">${_esc(r.security ?? '—')}</td>
+        ${unitCells(r)}
         <td class="hld-td hld-td--num">${this._fmt(r.marketValue)}</td>
         <td class="hld-td hld-td--num">${this._fmt(r.costBasis)}</td>
         <td class="hld-td hld-td--num ${_signCls(r.unrealized)}">${this._fmtSigned(r.unrealized)}</td>
-      </tr>`).join('') || `<tr><td class="hld-td hld-empty" colspan="5">No holdings.</td></tr>`;
+      </tr>`).join('') || `<tr><td class="hld-td hld-empty" colspan="${COLS}">No holdings.</td></tr>`;
 
     const t = totalSnapshot(rows);
+    // Units are NOT totalled. Summing counts of different instruments produces a number
+    // that looks like a quantity and is not one — the same category error as adding a
+    // share of Acme to a share of SpinCo.
     foot.innerHTML = rows.length ? `
       <tr class="hld-total-row">
-        <td class="hld-td" colspan="2">Total</td>
+        <td class="hld-td" colspan="${COLS - 3}">Total</td>
         <td class="hld-td hld-td--num">${this._fmt(t.marketValue)}</td>
         <td class="hld-td hld-td--num">${this._fmt(t.costBasis)}</td>
         <td class="hld-td hld-td--num ${_signCls(t.unrealized)}">${this._fmtSigned(t.unrealized)}</td>
@@ -698,6 +728,27 @@ export class HoldingsPlugin extends WorkbenchComponent {
 function _signCls(n) { return n == null || n === 0 ? '' : n > 0 ? 'hld-amount--pos' : 'hld-amount--neg'; }
 function _esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+/**
+ * A unit count, shown to as many decimals as it actually needs, up to four.
+ *
+ * The engine's counts are genuinely fractional — the bond ladder splits a dollar total
+ * across rungs (design 93 §5b), and a spin-off distributes a fraction of a share — so
+ * rounding to whole units would print `0` for a real position. Trailing zeros are
+ * trimmed so a clean 600-share lot reads `600`, not `600.0000`.
+ */
+function _fmtUnits(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return String(+n.toFixed(4));
+}
+
+/** A per-unit price. Two decimals below 1,000, none above — a bond marks near par. */
+function _fmtPrice(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: n >= 1000 ? 0 : 2,
+    maximumFractionDigits: n >= 1000 ? 0 : 2,
+  });
 }
 function _fmtDateLocal(d) {
   if (!d) return '—';

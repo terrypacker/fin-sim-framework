@@ -9,6 +9,7 @@
  */
 
 import { ALLOCATION } from './allocation.js';
+import { instrumentOf } from './holding-utils.js';
 
 /**
  * ALLOCATION-AWARE HOLDING SELECTION (design 65).
@@ -135,11 +136,16 @@ export function sleeveWeightsFromParams(p) {
  * so the default scenario stays byte-identical to the pre-design-65 behavior.
  *
  * @param {{ sleeveOrderMode?: string, lotStrategy?: string,
- *           sleeveWeights?: Object<string,number>|null }} [fields={}]
+ *           sleeveWeights?: Object<string,number>|null,
+ *           securityOrder?: string[]|null }} [fields={}]
  * @returns {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, lotStrategy: string }|null}
  */
-export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy = 'FIFO', sleeveWeights = null, rebalanceWeight = 0 } = {}) {
+export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy = 'FIFO', sleeveWeights = null, rebalanceWeight = 0, securityOrder = null } = {}) {
   const lot  = LOT_STRATEGIES.includes(lotStrategy) ? lotStrategy : 'FIFO';
+  // design 94 step 6 — the security tier. An empty or absent list contributes nothing and,
+  // crucially, does not on its own make the policy non-null: a scenario that names no
+  // security stays on the byte-identical FIFO path.
+  const secOrder = (Array.isArray(securityOrder) && securityOrder.length) ? [...securityOrder] : null;
   const wMix = Number.isFinite(rebalanceWeight) && rebalanceWeight > 0 ? rebalanceWeight : 0;
   let sleeveOrder = null;
   let weights     = null;
@@ -153,11 +159,12 @@ export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy
   // No sleeve bias, plain FIFO lots, and no rebalance coupling ⇒ null (identical to
   // the historic FIFO path). Lever C (wMix > 0) forces a non-null policy so the
   // per-account coupling can engage in withRebalanceCoupling.
-  if (!sleeveOrder && !weights && lot === 'FIFO' && wMix === 0) return null;
+  if (!sleeveOrder && !weights && lot === 'FIFO' && wMix === 0 && !secOrder) return null;
   const selection = { lotStrategy: lot };
   if (sleeveOrder) selection.sleeveOrder     = sleeveOrder;
   if (weights)     selection.sleeveWeights   = weights;
   if (wMix > 0)    selection.rebalanceWeight = wMix;
+  if (secOrder)    selection.securityOrder   = secOrder;
   return selection;
 }
 
@@ -226,10 +233,15 @@ function unrealizedGain(h) {
   return (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
 }
 
-/** Milliseconds → a bond's maturity epoch; null when it is not an individual bond. */
-function maturityTs(h) {
-  if (h?.maturityDate == null) return null;
-  const t = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+/**
+ * Milliseconds → a bond's maturity epoch; null when it is not an individual bond.
+ *
+ * Takes the INSTRUMENT view (design 94 §5.1) — under Option A that is the holding itself,
+ * so a caller with no registry in hand may still pass a holding.
+ */
+function maturityTs(inst) {
+  if (inst?.maturityDate == null) return null;
+  const t = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
   return Number.isNaN(t) ? null : t;
 }
 
@@ -248,9 +260,9 @@ function maturityTs(h) {
  * has already grouped the allocations, so within the BOND sleeve this reduces to purely
  * nearest-maturity-first with funds last (the intended ladder ordering).
  */
-function ladderKey(h) {
+function ladderKey(h, securities = null) {
   if (h?.allocation === ALLOCATION.CASH) return Number.NEGATIVE_INFINITY;
-  const m = (h?.allocation === ALLOCATION.BOND) ? maturityTs(h) : null;
+  const m = (h?.allocation === ALLOCATION.BOND) ? maturityTs(instrumentOf(h, securities)) : null;
   return m == null ? Number.POSITIVE_INFINITY : m;
 }
 
@@ -285,8 +297,32 @@ function buildSleeveRanker(selection) {
   return () => 0;
 }
 
+/**
+ * Build a (holding) → rank function for the SECURITY tier (design 94 §10 item 3 / §8.3).
+ * Lower rank ⇒ sold first; a lot naming no listed security ranks last.
+ *
+ * A third axis, sitting between Lever A (which ASSET CLASS) and Lever B (which LOT), and
+ * it is the axis Option C makes expressible at all: "raise cash out of the employer stock
+ * before touching the index fund" is neither a class question nor a lot question. Under
+ * Option A every equity lot was the same undifferentiated thing, so the only way to say it
+ * was to arrange the account by hand.
+ *
+ * Deliberately an ORDER, not a filter. A filter would fail a draw the listed securities
+ * cannot cover; an order degrades — it exhausts the named ones and carries on — which is
+ * the same bargain `sleeveOrder` already strikes for classes.
+ *
+ * Reads `h.securityId`, not the instrument: this ranks what a position NAMES, and an
+ * unsecuritised lot has nothing to name.
+ */
+function buildSecurityRanker(selection) {
+  const order = selection?.securityOrder;
+  if (!Array.isArray(order) || order.length === 0) return null;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return (h) => rank.get(h?.securityId) ?? order.length;
+}
+
 /** Build a (a, b) lot comparator for Lever B (within a sleeve). */
-function buildLotComparator(lotStrategy) {
+function buildLotComparator(lotStrategy, securities = null) {
   switch (lotStrategy) {
     case LOT_STRATEGY.HIFO:
     case LOT_STRATEGY.MIN_GAIN:
@@ -298,7 +334,7 @@ function buildLotComparator(lotStrategy) {
       return (a, b) => unrealizedGain(a) - unrealizedGain(b);
     case LOT_STRATEGY.LADDER:
       // design 66 §G8: cash → nearest-maturity rung → funds/growth. Infinity-safe.
-      return (a, b) => cmpNum(ladderKey(a), ladderKey(b));
+      return (a, b) => cmpNum(ladderKey(a, securities), ladderKey(b, securities));
     case LOT_STRATEGY.FIFO:
     default:
       return (a, b) => purchaseTs(a) - purchaseTs(b);
@@ -319,13 +355,22 @@ function buildLotComparator(lotStrategy) {
  *           lotStrategy?: string }|null} [selection=null]
  * @returns {(a: object, b: object) => number}
  */
-export function buildHoldingsComparator(selection = null) {
+export function buildHoldingsComparator(selection = null, securities = null) {
   if (!selection) return (a, b) => purchaseTs(a) - purchaseTs(b);
   const sleeveRank = buildSleeveRanker(selection);
-  const lotCmp     = buildLotComparator(selection.lotStrategy);
+  const secRank    = buildSecurityRanker(selection);
+  const lotCmp     = buildLotComparator(selection.lotStrategy, securities);
   return (a, b) => {
     const sr = sleeveRank(a) - sleeveRank(b);
     if (sr !== 0) return sr;
+    // The security tier sits BELOW the class and ABOVE the lot: naming a security says
+    // which instrument to sell out of, and the lot strategy then says which units of it.
+    // Null (the default) when no order is given, so the two historic keys stay adjacent
+    // and every existing selection sorts exactly as it did.
+    if (secRank) {
+      const cr = secRank(a) - secRank(b);
+      if (cr !== 0) return cr;
+    }
     const lr = lotCmp(a, b);
     if (lr !== 0) return lr;
     return purchaseTs(a) - purchaseTs(b);

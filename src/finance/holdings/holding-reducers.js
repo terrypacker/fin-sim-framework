@@ -9,9 +9,9 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { HOLDING_ACTION_TYPES } from './holding-actions.js';
+import { HOLDING_ACTION_TYPES, VALUE_KIND } from './holding-actions.js';
 import { applyCashBasisInvariant } from './holding.js';
-import { isUnitised, reprice }     from './holding-utils.js';
+import { isUnitised, reprice, addValue, instrumentOf } from './holding-utils.js';
 
 /**
  * Sum holdings → balance with currency-precision rounding.
@@ -45,18 +45,37 @@ function _syncBalance(account) {
  * reopen the gap, and it reads the PATCHED allocation, so a Retitle into CASH heals the
  * lot on the way in.
  */
-function _patchHolding(holding, patch) {
+function _patchHolding(holding, patch, valueKind = VALUE_KIND.PRICE) {
   // design 93 §5b — a `marketValue` patch on a UNITISED holding has to say which of the
-  // two primitives it is, and every caller that reaches here is a PRICE move: the
-  // dividend, growth and cash-interest streams touch scalar sleeves only, and the one
-  // stream that reaches a dated bond (accretion) is a change in what a unit is worth, not
-  // in how many are held. Routing it through `reprice` puts the move on `pricePerUnit` so
-  // the derived market value and par cannot drift apart — the same reason the write gate
-  // exists, one layer down where the reducers actually write.
+  // two primitives it is. This function used to INFER that, by enumerating its callers and
+  // concluding they were all price moves ("the dividend, growth and cash-interest streams
+  // touch scalar sleeves only"). The enumeration was true, and it was true only while
+  // equity was scalar: `computeHoldingsDividends` reinvests into an EQUITY lot through
+  // this very path, so the moment design 94 step 3 unitises equity, inferring PRICE for it
+  // inflates the price of the units already held instead of buying more.
+  //
+  // Design 94 §9.5b ran exactly that: a position sat on the same 600 units for a 44-year
+  // run that reinvested a dividend into it every year, while its price absorbed the lot.
+  // Market value stayed right to the cent, so all 5,505 tests passed. That is what an
+  // inference is worth here — the emitter now DECLARES the kind (`VALUE_KIND`) and this
+  // routes on it.
   if (isUnitised(holding) && patch && 'marketValue' in patch) {
     const { marketValue, ...rest } = patch;
-    return applyCashBasisInvariant({ ...reprice(holding, marketValue), ...rest });
+    // The reducer already floored the absolute value at zero, so the difference against
+    // the holding's own (derived) market value is the delta that should actually be
+    // bought — recovering it here keeps the floor semantics identical for both kinds.
+    // Basis is NOT stepped by the credit: the action's own `costBasisDelta` is in `rest`
+    // and remains the single statement about basis (see `addValue`'s `basisDelta`).
+    const moved = valueKind === VALUE_KIND.UNITS
+      ? addValue(holding, marketValue - (holding.marketValue ?? 0), { basisDelta: 0 })
+      : reprice(holding, marketValue);
+    return applyCashBasisInvariant({ ...moved, ...rest });
   }
+  // SCALAR holdings: the two kinds are indistinguishable — there is no count to move, so
+  // both land on `marketValue` exactly as before. That is what makes step 2a
+  // behaviour-neutral ahead of step 3, and it is why this branch must NOT be "improved"
+  // into `addValue`: that would round the value to 2dp where today it is written raw, and
+  // move goldens for no reason.
   return applyCashBasisInvariant({ ...holding, ...patch });
 }
 
@@ -100,7 +119,7 @@ export class HoldingTransactReducer extends Reducer {
 
   reduce(state, action) {
     const { stateKey, holdingId, marketValueDelta = 0, costBasisDelta = 0,
-            cpiIndexRatioFactor = null } = action;
+            cpiIndexRatioFactor = null, valueKind = VALUE_KIND.PRICE } = action;
     const account = state?.[stateKey];
     if (!account || !Array.isArray(account.holdings)) return this.newState(state);
 
@@ -123,7 +142,7 @@ export class HoldingTransactReducer extends Reducer {
       ...(cpiIndexRatioFactor == null || target.cpiIndexRatio == null
         ? {}
         : { cpiIndexRatio: +(target.cpiIndexRatio * cpiIndexRatioFactor).toFixed(12) }),
-    });
+    }, valueKind);
     const nextHoldings = _replaceHolding(account.holdings, holdingId, patched);
     const nextAccount  = _syncBalance({ ...account, holdings: nextHoldings });
     return this.newState(state, { [stateKey]: nextAccount });
@@ -158,9 +177,10 @@ export class HoldingRevalueReducer extends Reducer {
     };
 
     let touched = false;
+    const securities = state.securities ?? null;
     const nextHoldings = account.holdings.map(h => {
       if (!h) return h;
-      const match = holdingId != null ? h.id === holdingId : h.rateKey === rateKey;
+      const match = holdingId != null ? h.id === holdingId : instrumentOf(h, securities).rateKey === rateKey;
       if (!match) return h;
       touched = true;
       return _patchHolding(h, { marketValue: Math.max(0, applyRevalue(h.marketValue ?? 0)) });
@@ -231,10 +251,24 @@ export class HoldingSplitReducer extends Reducer {
     // applyCashBasisInvariant: a CASH child's basis is its value regardless of what the
     // caller put in costBasisDelta (design 87 §11) — the split is the one path that
     // mints holdings without the Holding constructor's guard.
+    const securities = state.securities ?? null;
+    const targetInst = instrumentOf(target, securities);
+    // par-reviewed: this is a CONSTRUCTION, not a holding spread — every field is written
+    // from the split entry or the parent, and the only spread is a conditional
+    // `securityId`. It carries no `faceValue`, which is what it did before design 94 step 1
+    // added that spread and is why the shape is new but the par behaviour is not: a split
+    // child has never carried par, and `_syncBalance`'s ghost-par sweep is what covers the
+    // parent's. Splitting a BOND lot and preserving par is a real question and it belongs
+    // to design 66, not here.
     const replacements = splits.map((s, i) => applyCashBasisInvariant({
       id:           s.id ?? `${target.id}.${i}`,
       allocation:   s.allocation ?? target.allocation,
-      rateKey:      s.rateKey    ?? target.rateKey,
+      // A child of a split is a piece of the SAME instrument, so it inherits the parent's
+      // identity when there is one (design 94 §11's fourth walk: a position is a position
+      // IN something, and splitting it must not lose what). Inert under Option A, where
+      // `securityId` is always null, and load-bearing the moment step 2 populates it.
+      ...(target.securityId != null ? { securityId: target.securityId } : {}),
+      rateKey:      s.rateKey    ?? targetInst.rateKey,
       label:        s.label      ?? target.label ?? '',
       purchaseDate: s.purchaseDate ?? target.purchaseDate ?? null,
       marketValue:  +((s.marketValueDelta ?? 0)).toFixed(2),

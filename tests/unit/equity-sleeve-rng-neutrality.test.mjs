@@ -35,6 +35,7 @@ import assert   from 'node:assert/strict';
 
 import { EquityReturnTickHandler } from '../../src/finance/economic-regimes/equity-return-tick-handler.js';
 import { EQUITY_SLEEVES, RATE_KEYS } from '../../src/finance/economic-regimes/rate-keys.js';
+import { buildSecurityRegistry, syntheticEquitySecurities } from '../../src/finance/holdings/security.js';
 
 /** A counting RNG: uniform 0.5 forever, tallying how many draws were taken. */
 function countingRng() {
@@ -101,4 +102,121 @@ test('EQUITY_SLEEVES is stably sorted — the order matters the moment idio vol 
   // Sorted order is what makes the cursor reproducible ACROSS runs once draws resume.
   // Cheap to assert, and the alternative is discovering it from a diverged MC path.
   assert.deepEqual([...EQUITY_SLEEVES], [...EQUITY_SLEEVES].sort());
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// design 94 §6.2 / §11 — the same warning, extended to the SECURITY registry.
+//
+// Step 4 gives securities their own idiosyncratic draws, and they are taken from the same
+// cursor, after the sleeve loop. Everything above about sleeves now has to hold about
+// securities as well, plus one thing that has no sleeve analogue: the draw set is the
+// REGISTRY, not the portfolio.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+/** The migrated world: four synthetic market securities, every one of them the identity. */
+const IDENTITY_REGISTRY = buildSecurityRegistry(syntheticEquitySecurities());
+
+const tick = (rng, state = {}) =>
+  new EquityReturnTickHandler({ vol: 0.18 }).call({ sim: { rng }, state })[0];
+
+test('design 94 §6.2: a registry of identity securities consumes NO uniforms', () => {
+  // The migration's whole claim. Every migrated equity lot names one of these four, and
+  // if they drew, step 3's re-gold would have to be redone on every stochastic run.
+  const bare = countingRng();
+  tick(bare.rng);
+
+  const withReg = countingRng();
+  tick(withReg.rng, { securities: IDENTITY_REGISTRY });
+
+  assert.equal(withReg.state.draws, bare.state.draws,
+    'β=1 with σ_idio=0 is the identity — no draw, and therefore no re-based path');
+});
+
+test('design 94 §6.2: an identity security stores NOTHING — not even a zero', () => {
+  const out = tick(countingRng().rng, { securities: IDENTITY_REGISTRY });
+  // Absent, not empty and not zero-valued: a scenario whose registry is all identities
+  // must gain no action field, and downstream no state key.
+  assert.equal(out.securityDeviation, undefined);
+  assert.equal(out.securityDriftComp, undefined);
+});
+
+test('design 94 §6.2: a BETA-only security overlays but takes no draw', () => {
+  const registry = buildSecurityRegistry([
+    ...syntheticEquitySecurities(),
+    { id: 'sec-lev', rateKey: RATE_KEYS.EQUITY_US, beta: 1.5, idioVol: 0 },
+  ]);
+  const bare = countingRng();
+  tick(bare.rng);
+
+  const withBeta = countingRng();
+  const out = tick(withBeta.rng, { securities: registry });
+
+  assert.equal(withBeta.state.draws, bare.state.draws,
+    'the beta term is a multiple of a deviation already drawn — it needs no uniform of its own');
+  // Non-vacuous: it did produce an overlay, it just did not cost a draw.
+  assert.ok(Math.abs(out.securityDeviation['sec-lev']) > 0);
+  assert.ok(out.securityDriftComp['sec-lev'] > 0, '(β²−1)·Var > 0 at β = 1.5');
+});
+
+test('design 94 §6.2: the overlay is a DIFFERENCE from the sleeve, not an absolute rate', () => {
+  // (β−1)·sleeveDev, so a β=1.5 security adds half the sleeve's own move on top of it —
+  // and a β=1 security adds exactly none of it. This is the arithmetic that makes the
+  // overlay compose with design 90 §7.4's sleeve dispersion instead of racing it.
+  const registry = buildSecurityRegistry([
+    ...syntheticEquitySecurities(),
+    { id: 'sec-lev', rateKey: RATE_KEYS.EQUITY_US, beta: 1.5 },
+  ]);
+  const out = tick(countingRng().rng, { securities: registry });
+  assert.ok(Math.abs(out.securityDeviation['sec-lev'] - 0.5 * out.deviation[RATE_KEYS.EQUITY_US]) < 1e-12);
+});
+
+test('design 94 §6.2: a σ_idio > 0 security DOES draw — the skip is conditional here too', () => {
+  const registry = buildSecurityRegistry([
+    ...syntheticEquitySecurities(),
+    { id: 'sec-emp', rateKey: RATE_KEYS.EQUITY_US, beta: 1.0, idioVol: 0.30 },
+  ]);
+  const bare = countingRng();
+  tick(bare.rng);
+
+  const withIdio = countingRng();
+  tick(withIdio.rng, { securities: registry });
+
+  assert.ok(withIdio.state.draws > bare.state.draws,
+    'one concentrated position costs one extra uniform per year');
+});
+
+test('design 94 §6.2: the draw set is the REGISTRY, not the portfolio', () => {
+  // The decision this file exists to pin. `state` carries NO accounts and NO holdings at
+  // all, so nothing holds `sec-unheld` — and the cursor must move anyway. Conditioning
+  // the draw on holdings would make the random path a function of portfolio state, which
+  // changes under every MPC rollout, optimizer probe and replay branch.
+  const registry = buildSecurityRegistry([
+    ...syntheticEquitySecurities(),
+    { id: 'sec-unheld', rateKey: RATE_KEYS.EQUITY_AU, idioVol: 0.25 },
+  ]);
+  const bare = countingRng();
+  tick(bare.rng);
+
+  const unheld = countingRng();
+  tick(unheld.rng, { securities: registry });
+
+  assert.ok(unheld.state.draws > bare.state.draws,
+    'declaring an unheld security with idio vol perturbs the run — the documented price of determinism');
+});
+
+test('design 94 §6.2: securities are drawn in sorted `id` order', () => {
+  // Same reason EQUITY_SLEEVES is sorted: the cursor has to be reproducible ACROSS runs,
+  // and object key order is insertion order. Two registries built in opposite orders must
+  // produce the same draws for the same seed.
+  const specs = [
+    { id: 'sec-zzz', rateKey: RATE_KEYS.EQUITY_US, idioVol: 0.20 },
+    { id: 'sec-aaa', rateKey: RATE_KEYS.EQUITY_AU, idioVol: 0.40 },
+  ];
+  const seeded = () => { let i = 0; const xs = [0.11, 0.27, 0.63, 0.42, 0.88, 0.05]; return () => xs[i++ % xs.length]; };
+
+  const fwd = tick(seeded(), { securities: buildSecurityRegistry([...syntheticEquitySecurities(), ...specs]) });
+  const rev = tick(seeded(), { securities: buildSecurityRegistry([...syntheticEquitySecurities(), ...specs.slice().reverse()]) });
+
+  assert.deepEqual(fwd.securityDeviation, rev.securityDeviation,
+    'authoring order must not change which uniform each security consumes');
 });

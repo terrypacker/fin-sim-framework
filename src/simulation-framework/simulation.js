@@ -30,7 +30,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import { diffStates, MutationTracker, deepClone, snapshotForDiff } from "./state-utils.js";
+import { diffStates, MutationTracker, deepClone, cloneState, snapshotForDiff } from "./state-utils.js";
 import { buildExecutionId } from "./execution-utils.js";
 import { ExecutionGraph } from "./execution-graph.js";
 import { GraphRecorder } from "./graph-recorder.js";
@@ -174,7 +174,7 @@ export class Simulation {
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
 
-    this.state = deepClone(
+    this.state = cloneState(
       initialState instanceof SimulationState ? initialState.toPlain() : initialState
     );
 
@@ -586,7 +586,7 @@ export class Simulation {
     const stateBefore = this.silent
       ? null
       : (savedStateBefore
-          ?? (carry && carry.from === this.state ? carry.clone : deepClone(this.state)));
+          ?? (carry && carry.from === this.state ? carry.clone : cloneState(this.state)));
     this._carryStateSnapshot = null;
 
     let eventExecId;
@@ -763,7 +763,7 @@ export class Simulation {
 
     // Publish EXECUTION_END(EVENT) with full state snapshot + diff.
     if (!this.silent) {
-      const stateSnapshot = deepClone(this.state);
+      const stateSnapshot = cloneState(this.state);
       // Hand this clone to the next event in the same stepTo loop as its
       // `stateBefore` — nothing mutates state between two events, so cloning
       // again would produce an identical copy. See _carryStateSnapshot.
@@ -1424,7 +1424,7 @@ export class Simulation {
    * design/68 Gap 2 — on last-survivor termination, fire the current partial
    * fiscal year's pending tax settle for each country before the run loop
    * breaks. The settle series reschedules one occurrence at a time, so at most
-   * one TAX_SETTLE_US and one TAX_SETTLE_AU sit in the queue at any moment:
+   * one TAX_SETTLE_US, one TAX_SETTLE_AU and one TAX_FILE_US sit in the queue at any moment:
    * exactly the settles whose fiscal year contains the death, covering the
    * income accrued up to death. They are executed in date order against the live
    * state — currentPeriods is still the active period, since no PERIOD_ADVANCE
@@ -1434,7 +1434,10 @@ export class Simulation {
    * now-deceased's per-person return) and Gap 4 (super death benefit).
    */
   _flushTerminalTaxSettles() {
-    const SETTLE_TYPES = new Set(['TAX_SETTLE_US', 'TAX_SETTLE_AU']);
+    // TAX_FILE_US joins them (design 94 §8.1l): it is scheduled only when a §1091 amendment
+    // is outstanding, so a death before the April filing would otherwise lose the correction
+    // entirely. Inert when none is pending — nothing of that type is in the queue.
+    const SETTLE_TYPES = new Set(['TAX_SETTLE_US', 'TAX_SETTLE_AU', 'TAX_FILE_US']);
     // Earliest still-pending node per settle type (the current partial year).
     const earliest = new Map();
     for (const node of this.queue.data) {
@@ -1469,7 +1472,7 @@ export class Simulation {
     const snap = this.history.snapshots[this.history.snapshotCursor];
 
     clone.currentDate = new Date(snap.date);
-    clone.state = this.deepClone(snap.state);
+    clone.state = cloneState(snap.state);
     clone.rngState = snap.rngState;
 
     clone.queue.restoreData(snap.queue.map(e => ({

@@ -9,6 +9,7 @@
  */
 
 import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
+import { scenarioSecurityRegistry } from '../../finance/holdings/security.js';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
@@ -587,7 +588,8 @@ export class ScenarioTabView {
           this._maybeRerenderForController(param, scenario);
         });
       } else if (param.type === 'EnumMulti') {
-        valueInput = _buildEnumMultiEditor(param, () => this._maybeRerenderForController(param, scenario));
+        valueInput = _buildEnumMultiEditor(
+          param, () => this._maybeRerenderForController(param, scenario), scenario);
       } else if (param.type === 'Money') {
         // Numeric value + inline native-currency selector (design 10 §Phase 5).
         // The value stays numeric (the compiler reads it as-is); the chosen
@@ -1644,7 +1646,35 @@ function _buildDrawdownStrategyListEditor(param, onChange, siblingParams) {
  * @param {object} param  The param descriptor ({ value, options, ... })
  * @returns {HTMLElement}
  */
-function _buildEnumMultiEditor(param, onChange) {
+/**
+ * Options for an EnumMulti whose choices are SCENARIO DATA rather than an enum.
+ *
+ * Design 94 step 9. `drawdownSecurityOrder` shipped at step 6 with `options: []` and a
+ * comment saying the only honest fixed list is no list — the ids are whatever
+ * `cfg.securities` holds, so a hard-coded set would be wrong for every scenario but the
+ * one it was written against. This is the resolver that comment was waiting for.
+ *
+ * The four synthetic market securities are included, and deliberately: they are what
+ * every migrated equity lot names (design 94 §9.1), so "draw the international sleeve
+ * before the domestic one" is expressible on a plan that authored no instruments at all.
+ */
+function _dynamicEnumOptions(param, scenario) {
+  if (param.optionsFrom !== 'securities') return null;
+  try {
+    return Object.keys(scenarioSecurityRegistry(scenario));
+  } catch { return null; }   // a malformed cfg.securities must not break the params tab
+}
+
+/**
+ * ⚠️ ORDER is expressed by CHECK ORDER, which is a real limitation and is why it is
+ * written down. `selected` is seeded from the stored array in its stored order and a
+ * newly ticked box APPENDS, so the value keeps a meaningful sequence — but there is no
+ * way to re-order without unticking. For a set-valued param (`behavioralStrategies`)
+ * that is exactly right; for an order-valued one (`drawdownSecurityOrder`, design 94
+ * §10 item 3) it is a control that under-serves the parameter. A drag-orderable variant
+ * is the honest fix and is not step 9's.
+ */
+function _buildEnumMultiEditor(param, onChange, scenario = null) {
   const container = document.createElement('div');
   container.className = 'enum-multi-editor';
 
@@ -1655,7 +1685,15 @@ function _buildEnumMultiEditor(param, onChange) {
   const selected = new Set(
     Array.isArray(param.value) ? param.value
       : (param.value == null || param.value === '') ? [] : [param.value]);
-  const options  = Array.isArray(param.options) ? param.options : [];
+  const options  = _dynamicEnumOptions(param, scenario)
+    ?? (Array.isArray(param.options) ? param.options : []);
+
+  if (options.length === 0 && param.optionsFrom) {
+    const note = document.createElement('span');
+    note.className = 'enum-multi-empty';
+    note.textContent = 'no securities in this scenario';
+    container.appendChild(note);
+  }
 
   options.forEach(opt => {
     const label = document.createElement('label');

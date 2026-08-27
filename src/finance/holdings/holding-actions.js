@@ -23,6 +23,36 @@ export const HOLDING_ACTION_TYPES = Object.freeze({
 });
 
 /**
+ * What KIND of value change a HOLDING_TRANSACT carries (design 94 §9.4).
+ *
+ * Design 93 §4 made the distinction impossible to leave implicit at the primitive layer —
+ * `reprice` for a price move, `addValue` for new money — but the ACTION that reaches those
+ * primitives had no way to say which it was. `_patchHolding` inferred it, by enumerating
+ * its callers and concluding they were all price moves. That enumeration was true only
+ * while equity was scalar: a reinvested dividend is new money, and the moment equity is
+ * unitised (design 94 step 3) inferring "price" for it inflates the price of the units
+ * already held instead of buying more.
+ *
+ * The defect conserves money exactly, so no golden moves and no invariant fires — design
+ * 94 §9.5b measured it running under a spike, with a position holding the same 600 units
+ * for a 44-year run that reinvested dividends into it every year, and all 5,505 tests
+ * green. An inference that cannot be checked is the thing to remove; this is the
+ * discriminator that removes it.
+ *
+ *   PRICE  the per-unit price moved; the count did not — appreciation, a rate mark,
+ *          a TIPS accretion. The default, so every existing emitter is unchanged.
+ *   UNITS  money bought more of the instrument at its prevailing price — a reinvested
+ *          dividend or distribution.
+ *
+ * On a SCALAR holding the two are indistinguishable and both land on `marketValue`, which
+ * is why adding this is behaviour-neutral until equity is unitised.
+ */
+export const VALUE_KIND = Object.freeze({
+  PRICE: 'PRICE',
+  UNITS: 'UNITS',
+});
+
+/**
  * TypeRegistry ActionTypeEntries for the HOLDING family.
  * Registered via TypeRegistry.registerActionType so the workbench's action-
  * detail panel renders payloads correctly and the strict-mode payload picker
@@ -33,13 +63,17 @@ export const HOLDING_ACTION_ENTRIES = Object.freeze([
     type:        HOLDING_ACTION_TYPES.HOLDING_TRANSACT,
     family:      'HOLDING',
     cc:          null,
-    description: 'Net change to a single holding\'s marketValue and costBasis (contribution, withdrawal, dividend reinvest, appreciation); cpiIndexRatioFactor also steps an inflation-linked bond\'s indexation.',
+    description: 'Net change to a single holding\'s marketValue and costBasis (contribution, withdrawal, dividend reinvest, appreciation); valueKind says whether the move is a PRICE change or new money buying UNITS; cpiIndexRatioFactor also steps an inflation-linked bond\'s indexation.',
     fields:      {
       stateKey:            {},
       holdingId:           {},
       marketValueDelta:    {},
       costBasisDelta:      {},
       cpiIndexRatioFactor: {},
+      // Declared because `TypeRegistry.pickPayload` copies only the fields named here —
+      // an undeclared field is dropped from the journal silently, which is how payload
+      // manifests drift away from the actions they describe (design 91).
+      valueKind:           {},
     },
   },
   {
@@ -102,6 +136,10 @@ export const HOLDING_ACTION_ENTRIES = Object.freeze([
  *   - Earnings (unrealized): delta = +amount, 0   (appreciation doesn't add to basis)
  *   - Dividend cash payout:  delta = 0, 0          (cash flows elsewhere; no holding move)
  *   - Withdrawal:           delta = -amount, -consumedBasis
+ *
+ * `valueKind` says which of design 93 §4's two primitives the delta means — see
+ * `VALUE_KIND`. It is the emitter's statement about its own money, not something the
+ * reducer may infer.
  */
 export class HoldingTransactAction extends Action {
   static type        = 'HoldingTransactAction';
@@ -117,13 +155,18 @@ export class HoldingTransactAction extends Action {
    * existing payload gains a field.
    */
   constructor({ stateKey = null, holdingId = null, marketValueDelta = 0, costBasisDelta = 0,
-                cpiIndexRatioFactor = null, name = null } = {}) {
+                cpiIndexRatioFactor = null, valueKind = VALUE_KIND.PRICE, name = null } = {}) {
     super(HOLDING_ACTION_TYPES.HOLDING_TRANSACT, name ?? `Holding ${holdingId ?? '?'} transact`);
     this.stateKey         = stateKey;
     this.holdingId        = holdingId;
     this.marketValueDelta = marketValueDelta;
     this.costBasisDelta   = costBasisDelta;
     if (cpiIndexRatioFactor != null) this.cpiIndexRatioFactor = cpiIndexRatioFactor;
+    // Stored only when it is NOT the default, for the same reason `cpiIndexRatioFactor`
+    // is: an explicit 'PRICE' on every action would add a field to every journal payload
+    // and every whole-state fixture in the repo, for no information. The reducer defaults
+    // the same way, so an absent field and an explicit PRICE are one behaviour.
+    if (valueKind !== VALUE_KIND.PRICE) this.valueKind = valueKind;
   }
 
   toJSON() {
@@ -136,6 +179,7 @@ export class HoldingTransactAction extends Action {
       // Emitted only when set — an explicit null on every non-accretion action would put a
       // new field in every journal payload and every fixture (design 93 §5a's discipline).
       ...(this.cpiIndexRatioFactor == null ? {} : { cpiIndexRatioFactor: this.cpiIndexRatioFactor }),
+      ...(this.valueKind == null ? {} : { valueKind: this.valueKind }),
     };
   }
 
@@ -146,6 +190,7 @@ export class HoldingTransactAction extends Action {
       marketValueDelta: d.marketValueDelta ?? 0,
       costBasisDelta:   d.costBasisDelta   ?? 0,
       cpiIndexRatioFactor: d.cpiIndexRatioFactor ?? null,
+      valueKind:        d.valueKind ?? VALUE_KIND.PRICE,
       name:             d.name,
     });
     a.id = d.id;

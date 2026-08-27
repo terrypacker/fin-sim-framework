@@ -9,6 +9,7 @@
  */
 
 import { YEAR_MS as HOLDING_YEAR_MS } from './holding-period.js';
+import { syntheticSecurityId }         from './security.js';
 
 /**
  * ─── THE VALUE-CHANGE PRIMITIVES (design 93 §4) ───────────────────────────────
@@ -58,32 +59,44 @@ import { YEAR_MS as HOLDING_YEAR_MS } from './holding-period.js';
 /**
  * The INSTRUMENT-level view of a holding — the seam that makes Option C additive.
  *
- * Some fields on a holding describe the position (units, basis, acquisition dates) and
- * some describe the instrument the position is held IN (par, coupon, maturity, tax
- * treatment). Under Option A the instrument fields live inline on the holding. Under
- * Option C they move to a shared `Security` and the holding names it via `securityId`.
+ * Some fields on a holding describe the POSITION (units, basis, acquisition dates) and some
+ * describe the INSTRUMENT the position is held in (par, coupon, maturity, tax treatment,
+ * the market it tracks, its distribution yield). Under Option A the instrument fields live
+ * inline on the holding. Under Option C they move to a shared `Security` and the holding
+ * names it via `securityId` (design 94 §5.1 has the partition, field by field).
  *
- * Read them through here and that migration changes ONE function instead of every
- * consumer — the same device as design 87's phase-3 observer seam. Nothing yet depends on
- * it; it exists so that when C lands, the call sites already point at the right place.
+ * **It returns the holding ITSELF when there is no security to resolve**, and that is the
+ * design, not an optimisation:
+ *
+ *   - it makes the conversion of ~90 read sites (design 94 step 1) *provably* behaviour-
+ *     neutral rather than neutral-if-you-audited-every-default. `instrumentOf(h).couponRate`
+ *     is not merely equivalent to `h.couponRate`, it is the same property access on the same
+ *     object;
+ *   - it allocates nothing. `computeHoldingsGrowth` walks every holding of every account on
+ *     every tick, and a seam that mints an object per holding per tick to hand back fields
+ *     it already had would be a tax on the hot path forever;
+ *   - it keeps the DEFAULTS at the call sites, where they already are and where they are
+ *     visible, instead of hiding a second set inside the accessor that could drift from them.
+ *
+ * Read instrument fields through here and Option C changes nothing in the consumers: they
+ * already ask the right question, and the answer starts coming from a different place.
+ * `instrument-read-gate.test.mjs` is what keeps them asking it.
+ *
+ * ⚠️ The merge is `{ ...h, ...sec }` — the security wins, the holding fills gaps. Two things
+ * that are still design 94 step 2's to settle, flagged here because both have bitten this
+ * repo: an explicit `null` on the security OVERRIDES the holding's value (absent and null
+ * are different, and `??` does not save you — see the `destinationKey` guard), and design 94
+ * D11's dividend-yield chain (security → holding → account rate) depends on which of those
+ * a security carrying no yield is.
  *
  * @param {object} h - a holding
- * @returns {object} the instrument-level fields
+ * @param {Object<string,object>|null} [securities] - `state.securities`; absent ⇒ Option A
+ * @returns {object} the instrument-level view — the holding itself under Option A
  */
-export function instrumentOf(h) {
-  // Under Option C: `return securities[h.securityId] ?? _inlineInstrument(h);`
-  return {
-    parPerUnit:      h?.parPerUnit ?? null,
-    couponRate:      h?.couponRate ?? null,
-    couponFrequency: h?.couponFrequency ?? 2,
-    maturityDate:    h?.maturityDate ?? null,
-    duration:        h?.duration ?? null,
-    taxExemption:    h?.taxExemption ?? 'none',
-    issuingState:    h?.issuingState ?? null,
-    zeroCoupon:      h?.zeroCoupon === true,
-    inflationLinked: h?.inflationLinked === true,
-    rateKey:         h?.rateKey ?? null,
-  };
+export function instrumentOf(h, securities = null) {
+  if (!h || h.securityId == null || !securities) return h;
+  const sec = securities[h.securityId];
+  return sec ? { ...h, ...sec } : h;
 }
 
 /** True when a holding carries a unit count and so derives its value from it. */
@@ -135,6 +148,61 @@ export function unitiseBond({ faceValue, marketValue = null, inflationLinked = f
 }
 
 /**
+ * The unitised fields for an EQUITY position being established at a known market value.
+ *
+ * `units = marketValue / 100`, at the same `PAR_PER_UNIT` convention a bond uses — design
+ * 94 §9.2. Equity has no par, so **`parPerUnit` is deliberately absent**: `syncHolding`
+ * re-derives `faceValue` only when `parPerUnit` is present, and stamping one here would
+ * mint a face value on an instrument that has none and hand the pull-to-par and redemption
+ * paths a target to converge a share position onto.
+ *
+ * 100 rather than 1 for the same reason the bond convention is 100: the count is what a
+ * split, a per-share report and design 94 §8.3's specific identification read, and a unit
+ * price that starts at the position's own scale is position-scaled — the one shape design
+ * 93 §6.2 says a per-unit quantity must never have.
+ *
+ * Value-preserving: `units x 100` reproduces the stored market value exactly at any
+ * position size (design 94 §9.3 measured 0 divergences over 880,000 repricings). It is the
+ * unit-CHANGING paths that can land a cent apart, which is why step 3 lands with a re-gold.
+ *
+ * @param {object} opts
+ * @param {number} opts.marketValue - the position's current value
+ * @returns {object} `{ units, pricePerUnit }`
+ */
+export function unitiseEquity({ marketValue, pricePerUnit = PAR_PER_UNIT }) {
+  const mv    = +(marketValue ?? 0);
+  const price = (pricePerUnit ?? 0) > 0 ? _perUnit(pricePerUnit) : PAR_PER_UNIT;
+  return { units: _units(mv / price), pricePerUnit: price };
+}
+
+/**
+ * The price a lot BORN beside these ones joins at — value-weighted, `PAR_PER_UNIT` when
+ * none of them carries a price.
+ *
+ * A lot established mid-run buys at TODAY's price, not at the convention's 100. Getting
+ * this wrong is not cosmetic: a 2035 lot minted at 100 beside a boot lot standing at 380
+ * would be a fabricated unit count (the same money claiming 3.8x the shares), and design
+ * 94 §5.5's compaction — whose fungibility key includes the price — would never merge the
+ * two, so the lot count would grow without bound over a long run.
+ *
+ * Value-weighted rather than "the template's", because the caller's template is the
+ * biggest lot in a bucket and the bucket may hold several; weighting by value is the same
+ * rule the merge itself uses and cannot be thrown by a dust lot.
+ *
+ * @param {Array<object>} lots
+ * @returns {number}
+ */
+export function prevailingPrice(lots) {
+  let mv = 0, units = 0;
+  for (const h of lots ?? []) {
+    if (!h || h.units == null || !((h.pricePerUnit ?? 0) > 0)) continue;
+    mv    += h.units * h.pricePerUnit;
+    units += h.units;
+  }
+  return units > 0 ? _perUnit(mv / units) : PAR_PER_UNIT;
+}
+
+/**
  * Recompute the denormalized value fields of a UNITISED holding from its primitives.
  *
  * The holding-level twin of `_syncBalance`, and the same pattern design 25 chose for
@@ -170,18 +238,28 @@ export function syncHolding(h) {
  * whatever rate noise happened to be in its price. Deriving the principal from an explicit
  * `cpiIndexRatio` compares two par-like quantities and never consults the market price.
  *
+ * `units` and `cpiIndexRatio` are the POSITION's; `parPerUnit` and `inflationLinked` are
+ * the INSTRUMENT's (design 94 §5.1), so the registry has to reach here.
+ *
  * @param {object} h - a holding
+ * @param {Object<string,object>|null} [securities] - `state.securities`; absent ⇒ Option A
  * @returns {number|null} redemption value for the whole position, or null when not applicable
  */
-export function indexedRedemptionValue(h) {
-  if (!isUnitised(h) || h.parPerUnit == null) return null;
-  const ratio  = h.inflationLinked ? (h.cpiIndexRatio ?? 1) : 1;
-  const perUnit = Math.max(h.parPerUnit * ratio, h.parPerUnit);   // Treasury deflation floor
+export function indexedRedemptionValue(h, securities = null) {
+  const inst = instrumentOf(h, securities);
+  if (!isUnitised(h) || inst.parPerUnit == null) return null;
+  const ratio  = inst.inflationLinked ? (h.cpiIndexRatio ?? 1) : 1;
+  const perUnit = Math.max(inst.parPerUnit * ratio, inst.parPerUnit);   // Treasury deflation floor
   return +(h.units * perUnit).toFixed(2);
 }
 
 /**
- * Promote a SCALAR individual bond to the unitised representation, value-preserving.
+ * Promote a SCALAR position to the unitised representation, value-preserving.
+ *
+ * Two instruments reach here. An individual BOND (design 93 §5b) is unitised at its par;
+ * an EQUITY position (design 94 §9.1/§9.2) is unitised at the same convention and, in the
+ * same act, stamped with the synthetic market security it is a position in. Everything
+ * else — a bond FUND lot, cash, gold — has no unit count to recover and passes through.
  *
  * `units = faceValue / PAR_PER_UNIT` at the standard par, NOT one unit at the position's
  * own scale. 5a shipped the latter on the reasoning that a saved scenario has no integer
@@ -213,10 +291,37 @@ export function indexedRedemptionValue(h) {
  * config→run boundary instead (`projectHoldingsToState`).
  *
  * @param {object} h - a holding
- * @returns {object} the holding, unitised (unchanged if it is not an individual bond)
+ * @param {object} [opts]
+ * @param {number} [opts.price=PAR_PER_UNIT] - the price a newly-unitised EQUITY position
+ *   joins at. The config→run boundary leaves it at the convention, because at boot every
+ *   lot in the run is promoted at the same moment and they are therefore consistent with
+ *   each other. A BIRTH site mid-run must pass `prevailingPrice(siblings)` instead — see
+ *   that function for what minting at 100 beside a seasoned lot would do.
+ * @returns {object} the holding, unitised (unchanged when there is nothing to promote)
  */
-export function promoteToUnitised(h) {
-  if (!h || h.units != null) return h;
+export function promoteToUnitised(h, { price = PAR_PER_UNIT } = {}) {
+  if (!h) return h;
+  // EQUITY is the design 94 step 3 migration, and it is TWO stamps, not one: a unit count
+  // (§9.2) and the synthetic security the lot is a position IN (§9.1). They are separate
+  // conditions on purpose — a lot that already carries units still needs its `securityId`,
+  // and a lot with no resolvable market still needs its units — so neither early-returns
+  // past the other. Idempotent in both directions: an authored `securityId` is never
+  // overwritten (it may name a REAL security, not the market synthetic), and an existing
+  // unit count is left exactly as it is.
+  if (h.allocation === 'EQUITY') {
+    const needsUnits = h.units == null;
+    // Null for a rateKey that is not one of the four markets, so a lot whose market cannot
+    // be resolved stays honestly un-securitised rather than naming a security that is not
+    // in the registry.
+    const securityId = h.securityId == null ? syntheticSecurityId(h.rateKey) : null;
+    if (!needsUnits && securityId == null) return h;
+    return {
+      ...h,
+      ...(needsUnits      ? unitiseEquity({ marketValue: h.marketValue ?? 0, pricePerUnit: price }) : {}),
+      ...(securityId != null ? { securityId } : {}),
+    };
+  }
+  if (h.units != null) return h;
   if (h.allocation !== 'BOND' || h.maturityDate == null || h.faceValue == null) return h;
   if (!(h.faceValue > 0)) return h;   // a drained rung has no units to count
   const base = unitiseBond({
@@ -312,11 +417,21 @@ export function resize(h, factor) {
  *     the position higher. New money buys TIPS AT PAR today, so it adds its own cash
  *     amount to the floor and nothing more.
  *
+ * `basisDelta` defaults to `amount`, which is what new money into a lot normally means:
+ * you paid for it, so it is basis. It is separable because a **reinvested dividend** is
+ * not — the model books the dividend as income and steps no basis (`costBasisDelta: 0` on
+ * every dividend HOLDING_TRANSACT), so routing that credit through here with the default
+ * would silently start stepping basis and move every golden. Whether it SHOULD step is a
+ * real question, open as design 94 §9.4's follow-up F3; this parameter exists so that
+ * answering it stays a deliberate change rather than a side effect of design 94 step 2a.
+ *
  * @param {object} h      - a holding (not mutated)
  * @param {number} amount - cash added; may be 0
+ * @param {object} [opts]
+ * @param {number} [opts.basisDelta=amount] - basis to add; 0 for a credit that is income
  * @returns {object} a new holding
  */
-export function addValue(h, amount) {
+export function addValue(h, amount, { basisDelta = amount } = {}) {
   if (!h || !Number.isFinite(amount) || amount === 0) return h;
   // A UNITISED holding buys units at its own current price: `parPerUnit` is a constant of
   // the instrument, so par follows the count and the price-to-par ratio is untouched.
@@ -334,7 +449,7 @@ export function addValue(h, amount) {
       return syncHolding({
         ...h,
         units:     _units(h.units + amount / price),
-        costBasis: +((h.costBasis ?? 0) + amount).toFixed(2),
+        costBasis: +((h.costBasis ?? 0) + basisDelta).toFixed(2),
       });
     }
   }
@@ -343,7 +458,7 @@ export function addValue(h, amount) {
   const out = {
     ...h,
     marketValue: +(mvBefore + amount).toFixed(2),
-    costBasis:   +((h.costBasis ?? 0) + amount).toFixed(2),
+    costBasis:   +((h.costBasis ?? 0) + basisDelta).toFixed(2),
   };
   if (h.faceValue != null) {
     out.faceValue = (h.inflationLinked || mvBefore <= 0)
@@ -680,11 +795,15 @@ export function distributeHoldingsCredit(holdings, amount, {
 
   // Split by bucket, weighted by market value — so allocation drift is untouched — with
   // the last bucket taking the remainder so the parts sum to `amount` exactly.
-  const buckets = new Map();
+  const buckets   = new Map();
+  // The lots each bucket already holds, so a new vintage can be established at the price
+  // they are standing at rather than at the convention's 100 (`prevailingPrice`).
+  const bucketLots = new Map();
   for (const h of holdings) {
     if (!h || (h.marketValue ?? 0) <= 0) continue;
     const key = _incomeBucketKey(h);
-    if (!buckets.has(key)) buckets.set(key, { mv: 0, template: h });
+    if (!buckets.has(key)) { buckets.set(key, { mv: 0, template: h }); bucketLots.set(key, []); }
+    bucketLots.get(key).push(h);
     const b = buckets.get(key);
     b.mv += h.marketValue ?? 0;
     // The biggest lot in the bucket is the template the vintage lot copies its earnings
@@ -715,9 +834,21 @@ export function distributeHoldingsCredit(holdings, amount, {
       next[idx] = addValue(next[idx], share);
       return;
     }
-    next.push({
-      // A fresh SCALAR lot. Everything that makes it a position — id, vintage, basis —
-      // is set here; everything that makes it an instrument is copied from the template.
+    // `promoteToUnitised` is the BIRTH stamp, not just the boundary one (design 94 §9.5c).
+    // This is the largest runtime source of equity lots in the model — one per bucket per
+    // year from every reinvested dividend and wrapper deposit — and a lot born here without
+    // units is the mixed mode §9.5c measured: a booted lot unitised and a run-created lot
+    // still scalar, in one account, where `split()` cannot act and per-share reporting
+    // disagrees between lots. It is a no-op on the BOND-fund lots this same call opens.
+    // par-reviewed: a CONSTRUCTION of a fund position — `faceValue: null` is set right
+    // here alongside the value, so there is no par to desynchronise. It reads as the write
+    // shape only because of the conditional `...securityId` spread above.
+    next.push(promoteToUnitised({
+      // A fresh lot. Everything that makes it a position — id, vintage, basis — is set
+      // here; everything that makes it an instrument is copied from the template, INCLUDING
+      // which security it is a position in. Written conditionally so a lot in an
+      // un-securitised sleeve keeps the field absent rather than gaining an explicit null.
+      ...(template.securityId == null ? {} : { securityId: template.securityId }),
       id:                    lotId,
       allocation:            template.allocation,
       marketValue:           share,
@@ -743,7 +874,7 @@ export function distributeHoldingsCredit(holdings, amount, {
       rollTermYears:         null,
       zeroCoupon:            false,
       inflationLinked:       false,
-    });
+    }, { price: prevailingPrice(bucketLots.get(key)) }));
   });
   // design 93 §5.5 — compaction is the other half of the lot rule. This path opens one lot
   // per bucket per YEAR, from reinvested income and (since §5.4a) from every wrapper
@@ -906,6 +1037,15 @@ function _mergeableFields(policy) {
     'purchaseDate',            // the earliest
     'label',                   // cosmetic; the survivor's
     'units', 'marketValue', 'faceValue', 'costBasis',   // summed or derived
+    // `pricePerUnit` is DERIVED by the merge (Σvalue / Σunits), not matched. Design 94
+    // step 3 is why: under §4's per-position price two lots in the same security legitimately
+    // stand at different prices — each one was established at whatever price prevailed when
+    // it was born, and each is then repriced off its OWN rounded market value, so even two
+    // lots born together drift apart in the eighth decimal. Leaving the price in the
+    // fungibility key made compaction unreachable for every equity vintage lot, which is
+    // §5.5's unbounded-lot-count leak with a tax rationale. Merging on the value-weighted
+    // price conserves both the unit count and the money.
+    'pricePerUnit',
     'acquisitionPriceLevel',   // basis-weighted harmonic mean
   ]);
   for (const f of Object.keys(policy.blendByValue ?? {})) out.add(f);
@@ -995,7 +1135,10 @@ export function compactLots(holdings, { asOfMs, policy } = {}) {
     };
     if (isUnitised(base)) {
       // Value flows from the count; `syncHolding` re-derives marketValue and faceValue.
+      // The price comes with it: Σvalue / Σunits is the only price at which the merged
+      // position holds every absorbed lot's units AND every absorbed lot's dollars.
       merged.units = +units.toFixed(8);
+      if (units > 0) merged.pricePerUnit = _perUnit(mv / units);
     } else {
       merged.marketValue = +mv.toFixed(2);
       if (base.faceValue != null || anyFace) merged.faceValue = +faceSum.toFixed(2);

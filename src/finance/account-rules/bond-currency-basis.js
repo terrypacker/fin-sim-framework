@@ -51,6 +51,7 @@
  */
 
 import { ALLOCATION } from '../holdings/allocation.js';
+import { instrumentOf } from '../holdings/holding-utils.js';
 import { allocateGain, PERSONAL_CHARACTER } from './currency-lots.js';
 import { section988Residence } from './loan-classes.js';
 
@@ -63,9 +64,9 @@ const MS_PER_DAY = 86400000;
  * the same Treasury deflation floor `BondMaturityReducer.redeem` applies, so the amount
  * §988 measures and the amount actually received cannot disagree.
  */
-export function bondPrincipalUnits(holding) {
+export function bondPrincipalUnits(holding, securities = null) {
   if (!holding || holding.allocation !== ALLOCATION.BOND) return 0;
-  const par = holding.inflationLinked
+  const par = instrumentOf(holding, securities).inflationLinked
     ? Math.max(holding.marketValue ?? 0, holding.faceValue ?? 0)
     : (holding.faceValue ?? holding.marketValue ?? 0);
   return par > 0 ? par : 0;
@@ -153,7 +154,7 @@ export function section988ForBondPrincipal(state, accountKey, account, tally) {
 export function section988ForRedemption(state, accountKey, account, holding, asOfMs) {
   if (!holding || holding.allocation !== ALLOCATION.BOND) return [];
   if (!(holding.fxBasisRate > 0)) return [];
-  const principal = bondPrincipalUnits(holding);
+  const principal = bondPrincipalUnits(holding, state?.securities ?? null);
   if (!(principal > 0)) return [];
   return section988ForBondPrincipal(state, accountKey, account, {
     principal,

@@ -501,6 +501,10 @@ export const ECONOMIC_REGIMES = {
           sellAmount:          ValueType.number(),
           sourceHoldingId:     ValueType.text(),
           substituteHoldingId: ValueType.text(),
+          // design 94 §8.1h — a substitute the account does not hold yet. Declared because
+          // `pickPayload` keeps only declared fields, so an undeclared one never reaches the
+          // reducer that has to open the lot.
+          substituteSecurityId: ValueType.text(),
           purpose:             ValueType.text(),
           residency:           ValueType.text(),
         },

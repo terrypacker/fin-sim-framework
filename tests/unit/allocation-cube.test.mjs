@@ -416,3 +416,115 @@ test('assetClassForAllocation: total over the closed ALLOCATION enum', () => {
   }
   assert.equal(assetClassForAllocation('SOMETHING_NEW'), ASSET_CLASS.UNKNOWN);
 });
+
+// ── The security column (design 94 §3 item 6 / step 9) ───────────────────────
+
+/**
+ * `rateKey` names the MARKET a bucket tracks, and until Option C that was the finest
+ * thing the cube could say. It is not the same question as "what do I own": a plan with
+ * 40% in one employer's stock and a plan with 40% in a total-market fund produce the
+ * identical `rateKey` row, and concentration — the risk an allocation view exists to
+ * show — was invisible in it.
+ *
+ * The tests below pin the two halves of that: the column SPLITS where two instruments
+ * share a sleeve, and it splits NOWHERE ELSE — because every migrated equity lot names
+ * the synthetic security for its own market, so the new key adds no cardinality to any
+ * scenario in the repo.
+ */
+
+const SECURITIES = {
+  'sec-emp':  { id: 'sec-emp',  symbol: 'EMP', name: 'Employer stock', rateKey: RATE_KEYS.EQUITY_US },
+  'sec-idx':  { id: 'sec-idx',  name: 'Index fund (no ticker)',        rateKey: RATE_KEYS.EQUITY_US },
+  'sec-auto-EQUITY_US': { id: 'sec-auto-EQUITY_US', symbol: '', name: 'US market', rateKey: RATE_KEYS.EQUITY_US },
+};
+
+const SH = (securityId, marketValue, costBasis, over = {}) =>
+  ({ allocation: ALLOCATION.EQUITY, rateKey: RATE_KEYS.EQUITY_US, securityId, marketValue, costBasis, ...over });
+
+test('cube: two securities in ONE sleeve are two rows — the case rateKey alone cannot show', () => {
+  const rows = buildAllocationCube({
+    securities: SECURITIES,
+    brokerage: acct({ stateKey: 'brokerage',
+      holdings: [SH('sec-emp', 400, 100), SH('sec-idx', 600, 500)] }),
+  });
+  const equity = byClass(rows, ASSET_CLASS.EQUITY);
+  assert.equal(equity.length, 2);
+  assert.deepEqual(equity.map(r => r.security).sort(), ['EMP', 'Index fund (no ticker)']);
+  // Symbol, then name, then the id — an authored security without a ticker still gets a
+  // legend entry a reader can identify rather than an opaque key.
+  assert.equal(equity.find(r => r.securityId === 'sec-emp').security, 'EMP');
+  // …and the money is unchanged: this splits a row, it does not move a dollar.
+  assert.equal(total(equity), 1000);
+});
+
+test('cube: the security key adds NO cardinality to a migrated book', () => {
+  // Every lot names the synthetic for its market (design 94 §9.1), so
+  // `(EQUITY, EQUITY_US, sec-auto-EQUITY_US)` is the same partition as `(EQUITY, EQUITY_US)`.
+  // If this ever produced more rows than the pre-step-9 cube, every existing chart would
+  // have gained bands for a change that was supposed to be additive.
+  const holdings = [
+    SH('sec-auto-EQUITY_US', 300, 200),
+    SH('sec-auto-EQUITY_US', 200, 150),
+    H(ALLOCATION.BOND, 500, 500, RATE_KEYS.FIXED_INCOME_US),
+  ];
+  const rows = buildAllocationCube({ securities: SECURITIES, brokerage: acct({ stateKey: 'brokerage', holdings }) });
+  assert.equal(rows.length, 2);
+  const equity = byClass(rows, ASSET_CLASS.EQUITY)[0];
+  assert.equal(equity.holdingCount, 2);
+  assert.equal(equity.marketValue, 500);
+});
+
+test('cube: an un-securitised lot carries a null security rather than a made-up one', () => {
+  const rows = buildAllocationCube({
+    brokerage: acct({ stateKey: 'brokerage', holdings: [H(ALLOCATION.EQUITY, 100, 80, RATE_KEYS.EQUITY_US)] }),
+  });
+  assert.equal(rows[0].securityId, null);
+  assert.equal(rows[0].security, null);
+});
+
+test('cube: units are summed only when EVERY lot in the bucket has them', () => {
+  // A partial sum is worse than no number: it is an undercount presented as a count,
+  // which is the shape design 93 §5 spent eight defects on.
+  const mixed = buildAllocationCube({
+    securities: SECURITIES,
+    brokerage: acct({ stateKey: 'brokerage', holdings: [
+      SH('sec-emp', 400, 100, { units: 40, pricePerUnit: 10 }),
+      SH('sec-emp', 600, 500),                                    // scalar
+    ] }),
+  });
+  assert.equal(byClass(mixed, ASSET_CLASS.EQUITY)[0].units, null);
+
+  const allUnitised = buildAllocationCube({
+    securities: SECURITIES,
+    brokerage: acct({ stateKey: 'brokerage', holdings: [
+      SH('sec-emp', 400, 100, { units: 40, pricePerUnit: 10 }),
+      SH('sec-emp', 600, 500, { units: 60, pricePerUnit: 10 }),
+    ] }),
+  });
+  assert.equal(byClass(allUnitised, ASSET_CLASS.EQUITY)[0].units, 100);
+});
+
+test('cube: THE INVARIANT still holds once the security splits a bucket', () => {
+  // Σ rows === computeNetWorth is what makes every share on the chart trustworthy, and a
+  // change to the BUCKET KEY is exactly the kind that could double-count silently.
+  const state = {
+    securities: SECURITIES,
+    brokerage: acct({ stateKey: 'brokerage',
+      holdings: [SH('sec-emp', 400, 100), SH('sec-idx', 600, 500)] }),
+    savings: acct({ stateKey: 'savings', type: 'savings', role: 'us-savings',
+      holdings: [H(ALLOCATION.CASH, 250, 250, RATE_KEYS.SAVINGS_US)] }),
+  };
+  const rows = buildAllocationCube(state);
+  assert.equal(total(rows), +computeNetWorth(state).toFixed(2));
+});
+
+test('cube: row order is stable when two securities tie on every other key', () => {
+  // Without `securityId` in the sort these two rows tie on (stateKey, assetClass,
+  // rateKey) and fall back to insertion order — which is `Object.entries` order, the
+  // very thing the sort exists to remove.
+  const build = (first, second) => buildAllocationCube({
+    securities: SECURITIES,
+    brokerage: acct({ stateKey: 'brokerage', holdings: [SH(first, 100, 50), SH(second, 200, 150)] }),
+  }).map(r => r.securityId);
+  assert.deepEqual(build('sec-emp', 'sec-idx'), build('sec-idx', 'sec-emp'));
+});

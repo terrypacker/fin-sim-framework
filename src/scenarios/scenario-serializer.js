@@ -14,6 +14,7 @@ import {
   ActionDefinition,
   Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
 } from '../simulation-framework/actions.js';
+import { SECURITY_FIELDS } from '../finance/holdings/security.js';
 import { ACCOUNT_ROLES }  from '../finance/state/account-roles.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from '../finance/person.js';
 import { Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../finance/assets/account.js';
@@ -122,6 +123,7 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/han
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
+import { UsTaxFileHandler, UsTaxFileApplyReducer } from '../finance/tax/us/tax-file-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
 import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
 import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
@@ -252,7 +254,7 @@ const _ALL_CLASSES = [
   MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
-  UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler,
+  UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler, UsTaxFileHandler,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,
@@ -290,6 +292,7 @@ const _ALL_CLASSES = [
   SpendingStrategyApplyReducer, RegimeAwareSpendingReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
+  UsTaxFileApplyReducer,
   UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
   DynamicTaxReducer,
   StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateIncomeClassificationReducer,
@@ -456,6 +459,14 @@ export class ScenarioSerializer {
       realProperties: (scenario.realProperties ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       companyEquities: (scenario.companyEquities ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
+      // design 94 §4 — instrument definitions. Emitted only when the scenario has any, so
+      // every scenario saved before securities existed round-trips byte-for-byte and no
+      // fixture gains an empty key (design 93 §5a's discipline).
+      ...(scenario.securities?.length ? { securities: scenario.securities.map(n => ScenarioSerializer._serializeSecurity(n)) } : {}),
+      // design 94 §7 — dated corporate actions. Plain authored data (no class, no id
+      // graph), so it round-trips as itself; emitted only when present, so no scenario
+      // saved before step 8 gains a key.
+      ...(scenario.corporateActions?.length ? { corporateActions: scenario.corporateActions.map(a => ({ ...a })) } : {}),
       bequests:       (scenario.bequests ?? []).map(n => ScenarioSerializer._serializeBequest(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
@@ -929,6 +940,21 @@ export class ScenarioSerializer {
     // (defaults keep owned properties unchanged).
     applyInheritanceMeta(prop, d);
     return prop;
+  }
+
+  /**
+   * A Security serializes as exactly what it declares (design 94 §4, rule 2).
+   *
+   * No `?? default` normalisation, unlike every other `_serialize*` above, and that is the
+   * point rather than an omission: `instrumentOf` merges `{ ...holding, ...security }`, so a
+   * key PRESENT on a security overrides the lot — including a key holding a defaulted null.
+   * Writing `couponRate: c.couponRate ?? null` here would turn every equity security into a
+   * declaration that its lots pay no coupon, which is a different statement from silence.
+   */
+  static _serializeSecurity(c) {
+    const d = { __type: 'Security', id: c.id };
+    for (const f of SECURITY_FIELDS) if (f in c) d[f] = c[f];
+    return d;
   }
 
   static _serializeCollectible(c) {

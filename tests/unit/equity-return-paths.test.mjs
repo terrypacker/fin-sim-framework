@@ -32,6 +32,8 @@ import { EquityReturnStepReducer } from '../../src/finance/economic-regimes/equi
 import { EquityReturnReducer }     from '../../src/finance/economic-regimes/equity-return-reducer.js';
 import { RATE_KEYS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA } from '../../src/finance/economic-regimes/rate-keys.js';
 import { gaussianFrom }            from '../../src/finance/fx/fx-process-models.js';
+import { computeHoldingsGrowth }   from '../../src/finance/holdings/holdings-earnings.js';
+import { buildSecurityRegistry, syntheticEquitySecurities, syntheticSecurityId } from '../../src/finance/holdings/security.js';
 import { loadScenarioSim }         from '../helpers/scenario-harness.js';
 
 
@@ -356,5 +358,236 @@ describe('stochastic equity — e2e', () => {
     const off = loadSim({ simEnd: END, stepTo: END }).sim;
     assert.equal(nw(on1), nw(on2), 'same seed ⇒ same result (reproducible)');
     assert.notEqual(nw(on1), nw(off), 'a stochastic return path should perturb equity growth');
+  });
+});
+
+
+// ─── design 94 §6.2/§6.3 — the per-security overlay ──────────────────────────────
+//
+// The sleeve path above is unchanged by step 4. What is new is a SECOND, sparse layer
+// that a position picks up through its `securityId`: stored on state by the step reducer,
+// added to the holding's resolved rate by `computeHoldingsGrowth` — never folded onto
+// `effectiveGrowthRates`, which keeps its shape and its two-deep precedence.
+//
+// The RNG-cursor half of this lives in `equity-sleeve-rng-neutrality.test.mjs`.
+
+describe('per-security overlay — storage', () => {
+  let reducer;
+  beforeEach(() => { reducer = new EquityReturnStepReducer(); });
+
+  const apply = (extra) => reducer.reduce({}, {
+    type: 'EQUITY_RETURN_STEP_APPLY', marketDev: 0.03, deviation: { [US_MKT]: 0.03 }, ...extra,
+  });
+
+  test('an action with no security overlay leaves NO state key', () => {
+    const next = apply({});
+    assert.ok(!('securityReturnDev' in next), 'a scenario of identity securities gains no state key');
+    assert.ok(!('securityReturnDriftComp' in next));
+  });
+
+  test('the overlay is stored as its own pair, disjoint from the sleeve maps', () => {
+    const next = apply({ securityDeviation: { 'sec-emp': 0.12 }, securityDriftComp: { 'sec-emp': 0.045 } });
+    assert.deepEqual(next.securityReturnDev,       { 'sec-emp': 0.12 });
+    assert.deepEqual(next.securityReturnDriftComp, { 'sec-emp': 0.045 });
+    assert.deepEqual(next.equityReturnDev,         { [US_MKT]: 0.03 }, 'sleeve map untouched');
+  });
+
+  test('an EMPTY overlay CLEARS last year — it does not leave the stale one standing', () => {
+    // The reason the handler emits the pair every tick once it emits it at all. A
+    // security whose overlay evaluates to zero this year must not keep last year's.
+    const st   = { securityReturnDev: { 'sec-emp': 0.12 }, securityReturnDriftComp: { 'sec-emp': 0.045 } };
+    const next = reducer.reduce(st, {
+      type: 'EQUITY_RETURN_STEP_APPLY', marketDev: 0, deviation: { [US_MKT]: 0 },
+      securityDeviation: {}, securityDriftComp: {},
+    });
+    assert.deepEqual(next.securityReturnDev, {});
+  });
+});
+
+describe('per-security overlay — publication at the period boundary (§6.6)', () => {
+  let reducer;
+  beforeEach(() => { reducer = new EquityReturnReducer(); });
+
+  const advance = (st) => reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
+
+  test('the fold publishes `securityReturnOverlay` = dev + driftComp', () => {
+    const st = {
+      effectiveGrowthRates:    { [US_MKT]: 0.10 },
+      equityReturnDev:         { [US_MKT]: -0.05 },
+      securityReturnDev:       { 'sec-emp': 0.12 },
+      securityReturnDriftComp: { 'sec-emp': 0.045 },
+    };
+    assert.ok(Math.abs(advance(st).securityReturnOverlay['sec-emp'] - 0.165) < 1e-12);
+  });
+
+  test('it publishes even when the SLEEVE fold is a no-op', () => {
+    // A security can carry an overlay in a year the sleeves happen to net to zero, and the
+    // reducer's `hasDev` early-return used to swallow the whole pass.
+    const st = {
+      effectiveGrowthRates: { [US_MKT]: 0.10 },
+      equityReturnDev:      Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0])),
+      securityReturnDev:    { 'sec-emp': 0.12 },
+    };
+    assert.deepEqual(advance(st).securityReturnOverlay, { 'sec-emp': 0.12 });
+  });
+
+  test('nothing stored ⇒ still a byte-identical no-op', () => {
+    const st = { effectiveGrowthRates: { [US_MKT]: 0.10 } };
+    const next = advance(st);
+    assert.equal(next.effectiveGrowthRates, st.effectiveGrowthRates, 'same reference');
+    assert.ok(!('securityReturnOverlay' in next), 'no key for a run with no securities');
+  });
+
+  test('a security whose overlay nets to zero is not published', () => {
+    const st = {
+      effectiveGrowthRates:    { [US_MKT]: 0.10 },
+      securityReturnDev:       { 'sec-emp':  0.05 },
+      securityReturnDriftComp: { 'sec-emp': -0.05 },
+    };
+    assert.deepEqual(advance(st).securityReturnOverlay, {});
+  });
+});
+
+describe('per-security overlay — the growth path', () => {
+  const SEC_US = syntheticSecurityId(US_MKT);
+
+  /** One equity account, one lot, priced off the shared US market series. */
+  const stateWith = (overlay = null, holdingPatch = {}) => ({
+    securities:           buildSecurityRegistry(syntheticEquitySecurities()),
+    effectiveGrowthRates: { [US_MKT]: 0.10 },
+    ...(overlay ?? {}),
+    brokerage: {
+      balance: 1000,
+      holdings: [{
+        id: 'h1', allocation: 'US_STOCK', rateKey: US_MKT, securityId: SEC_US,
+        marketValue: 1000, units: 10, pricePerUnit: 100, ...holdingPatch,
+      }],
+    },
+  });
+
+  const growth = (state) => computeHoldingsGrowth({
+    state, stateKey: 'brokerage', fallbackRate: 0, fallbackRateKey: US_MKT,
+  }).amount;
+
+  test('no overlay on state ⇒ the sleeve rate alone (byte-identical to step 3)', () => {
+    assert.equal(growth(stateWith()), 100);      // 1000 x 0.10
+  });
+
+  test('an IDENTITY security contributes nothing even when the overlay map exists', () => {
+    // The migration's claim, checked at the point of arithmetic rather than at the draw:
+    // the four synthetic securities are never keys in the map, so the lookup misses.
+    const st = stateWith({ securityReturnOverlay: { 'sec-emp': 0.25 } });
+    assert.equal(growth(st), 100);
+  });
+
+  test('the RAW tick map is NOT what the growth path reads — §6.6', () => {
+    // The defect the step-5 golden found. `securityReturnDev` changes the instant the tick
+    // stores it, mid-year; the published map changes only at a period boundary. Reading the
+    // raw one put two accounts on two different years' draws depending on where their
+    // earnings events fell relative to the tick.
+    const st = stateWith({
+      securityReturnDev:       { [SEC_US]: 0.50 },
+      securityReturnDriftComp: { [SEC_US]: 0.10 },
+    });
+    assert.equal(growth(st), 100, 'the growth path must wait for EquityReturnReducer to publish');
+  });
+
+  test('the overlay is ADDED to the holding\'s resolved rate', () => {
+    const st = stateWith({ securityReturnOverlay: { [SEC_US]: -0.03 } });
+    assert.equal(growth(st), 70);                // 1000 x (0.10 - 0.04 + 0.01)
+  });
+
+  test('it stacks ON TOP of design 55 §8\'s per-account rate rather than replacing it', () => {
+    // F2 is the open question of whether a per-account override on a securitised holding
+    // still makes sense; what step 4 must not do is answer it by accident. The overlay is
+    // additive and orthogonal, so the per-account series still wins the base lookup.
+    const st = stateWith({ securityReturnOverlay: { [SEC_US]: 0.05 } });
+    st.effectiveGrowthRates[`${US_MKT}::brokerage`] = 0.20;
+    assert.equal(growth(st), 250);               // 1000 x (0.20 + 0.05)
+  });
+
+  test('an authored appreciationSchedule still OVERRIDES the stochastic path', () => {
+    // Applied before the schedule lookup, exactly as the sleeve deviation already is.
+    const st = stateWith(
+      { securityReturnOverlay: { [SEC_US]: 0.05 } },
+      { appreciationSchedule: [{ date: Date.UTC(2020, 0, 1), rate: 0.03 }] },
+    );
+    assert.equal(
+      computeHoldingsGrowth({
+        state: st, stateKey: 'brokerage', fallbackRate: 0, fallbackRateKey: US_MKT,
+        currentDate: new Date(Date.UTC(2030, 0, 1)),
+      }).amount,
+      30,
+    );
+  });
+
+  test('a security a lot does not name does not reach it', () => {
+    const st = stateWith({ securityReturnOverlay: { 'sec-other': 0.50 } });
+    assert.equal(growth(st), 100);
+  });
+});
+
+
+// ─── design 94 §6 — the overlay, e2e ─────────────────────────────────────────────
+//
+// Every test above drives the handler, the reducer or `computeHoldingsGrowth` directly.
+// These two drive a real run, because the chain they exercise — cfg.securities → the
+// registry in state → the handler's draw set → the step reducer → the growth path — is
+// exactly the chain a unit test cannot see broken.
+
+describe('per-security overlay — e2e', () => {
+  const END   = Date.UTC(2040, 0, 1);
+  const nw    = (sim) => Math.round(sim.state.metrics?.netWorth ?? 0);
+  const STOCH = { equityReturnStochastic: true, equityReturnVol: 0.18 };
+
+  test('an UNHELD security with idio vol perturbs the run — the draw set is the registry', () => {
+    // §6.2's documented price, at the level where it is actually paid. Nothing holds
+    // `sec-unheld`; it still consumes a uniform every year, and every subsequent draw in
+    // the run shifts behind it.
+    const base = loadSim({ params: STOCH, simEnd: END, stepTo: END }).sim;
+    const with_ = loadSim({
+      params: STOCH, simEnd: END, stepTo: END,
+      mutateCfg: (cfg) => { cfg.securities = [{ id: 'sec-unheld', rateKey: US_MKT, idioVol: 0.30 }]; },
+    }).sim;
+    assert.notEqual(nw(base), nw(with_));
+  });
+
+  test('an unheld BETA-only security does NOT perturb the run', () => {
+    // The control that makes the test above about the DRAW rather than about the mere
+    // presence of an extra registry entry. β ≠ 1 takes no uniform, and nothing holds it,
+    // so the run must land on the same cent.
+    const base = loadSim({ params: STOCH, simEnd: END, stepTo: END }).sim;
+    const with_ = loadSim({
+      params: STOCH, simEnd: END, stepTo: END,
+      mutateCfg: (cfg) => { cfg.securities = [{ id: 'sec-unheld', rateKey: US_MKT, beta: 1.6 }]; },
+    }).sim;
+    assert.equal(nw(base), nw(with_));
+  });
+
+  test('a HELD beta security changes the outcome on an unchanged RNG path', () => {
+    // The other half, and the cleanest possible pairing: β ≠ 1 with σ_idio = 0 draws
+    // nothing, so both runs consume the identical uniform stream and the ONLY difference
+    // is the overlay landing on the growth rate. If the state key never reached
+    // `computeHoldingsGrowth`, these two would be identical.
+    const run = (stamp) => {
+      const { sim } = loadSim({
+        params: STOCH, simEnd: END,
+        mutateCfg: (cfg) => { cfg.securities = [{ id: 'sec-lev', rateKey: US_MKT, beta: 2.0 }]; },
+      });
+      if (stamp) {
+        // Re-point every US-market equity lot at the leveraged security. Done on state
+        // rather than in cfg because this scenario's accounts declare balances, not lots —
+        // the lots are projected at load, which is the moment this test starts from.
+        for (const acct of Object.values(sim.state)) {
+          for (const h of (acct?.holdings ?? [])) {
+            if (h.allocation === 'EQUITY' && h.rateKey === US_MKT) h.securityId = 'sec-lev';
+          }
+        }
+      }
+      sim.stepTo(new Date(END));
+      return sim;
+    };
+    assert.notEqual(nw(run(true)), nw(run(false)),
+      'a β=2 position must not grow like a β=1 one');
   });
 });

@@ -97,7 +97,15 @@ export function resolveDefaultAllocation(account) {
  * asset class, which is what made a BOND sleeve in a `us-stock` brokerage resolve
  * to EQUITY_US and take equity shocks and equity duration handling.
  */
-const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
+/**
+ * The rate keys that belong to each ALLOCATION's class.
+ *
+ * Exported since design 94 step 2 so `Security`'s coherence check reuses this table rather
+ * than growing a second one. It is the guard that stops role from refining ACROSS classes
+ * here, and the same guard stops a BOND lot naming an equity security there — one table,
+ * both directions, which is the whole of design 94 D5's "no second classifier".
+ */
+export const CLASS_KEYS_BY_ALLOCATION = Object.freeze({
   // Design 90 §7.2 — all four MARKET keys live inside the EQUITY class, so a holding
   // may track any market while `resolveRateKey`'s containment rule keeps doing its
   // real job: stopping a BOND sleeve in a `us-stock` brokerage from resolving to an

@@ -1,0 +1,153 @@
+Part I
+
+
+Section 1091.—Loss from Wash Sales of Stock or Securities
+
+
+26 CFR 1.1091-1: Losses from wash sales of stock or securities.
+
+
+
+Rev. Rul. 2008-5
+
+
+ISSUE
+
+         If an individual sells stock or securities for a loss and causes his or her individual
+
+retirement account or Roth IRA to purchase substantially identical stock or securities
+
+within 30 days before or after the sale, is the loss on the sale of the stock or securities
+
+disallowed?
+
+FACTS
+
+         A, an individual, owns 100 shares of X Company stock with a basis of $1,000.
+
+On December 20, 2007, A sells the 100 shares of X Company stock for $600 (the
+
+“Sale”).
+
+         On December 21, 2007, A causes an individual retirement account (within the
+
+meaning of § 408) or a Roth IRA (within the meaning of § 408A), established for the
+
+exclusive benefit of A or A’s beneficiaries, to purchase 100 shares of X Company stock
+
+for its then fair market value (the “Purchase”).
+                                              2
+
+       A executes the Sale and the Purchase with different, unrelated market
+
+participants.
+
+       A is not a dealer in stock or securities.
+
+LAW AND ANALYSIS
+
+       Under § 408(a), the term “individual retirement account” means a trust created or
+
+organized in the United States for the exclusive benefit of an individual or his
+
+beneficiaries, but only if the written governing instrument creating the trust meets certain
+
+other requirements.
+
+       Under § 408(e)(1), generally, an individual retirement account is exempt from
+
+taxation.
+
+       Under §§ 408 and 72, any amount distributed from an individual retirement
+
+account is includible in the distributee’s gross income for the year of the distribution
+
+unless it is properly allocable to the account owner’s basis in the account. Under
+
+§ 408A, a similar income inclusion rule applies to nonqualified distributions from a Roth
+
+IRA. An individual has basis in an individual retirement account only to the extent that
+
+the account includes nondeductible contributions.
+
+       Section 1091(a) provides that in the case of any loss claimed to have been
+
+sustained from any sale or other disposition of shares of stock or securities where it
+
+appears that, within a period beginning 30 days before the date of such sale or
+
+disposition and ending 30 days after such date, the taxpayer has acquired (by purchase
+
+or by an exchange on which the entire amount of gain or loss was recognized by law),
+
+or has entered into a contract or option so to acquire, substantially identical stock or
+                                              3
+
+securities, then no deduction shall be allowed under § 165 unless the taxpayer is a
+
+dealer in stock or securities and the loss is sustained in a transaction made in the
+
+ordinary course of such business.
+
+       Section 1091(d) provides rules for determining the basis of stock or securities the
+
+acquisition of which resulted in the nondeductibility under § 1091 (or corresponding
+
+provisions of prior law) of the loss from the sale or other disposition of substantially
+
+identical stock or securities.
+
+       In Security First National Bank of Los Angeles, 28 BTA 289 (1933), the taxpayer
+
+sold bonds (at a market price) to a corporation of which the taxpayer was the sole
+
+shareholder. On the same day, in exchange for land, the corporation transferred the
+
+same bonds at the same price to a trust over which the taxpayer had absolute dominion
+
+and control. In finding that § 214(a)(5), the predecessor to § 1091(a), applied to
+
+disallow the loss, the court reasoned as follows:
+
+       The [taxpayer] did not personally reacquire substantially identical property and,
+       strictly construed, the language of section 214(a)(5), above referred to, might not
+       apply. However, the rule of strict construction should not be unduly pressed to
+       permit easy evasion of a taxing statute. Carbon Steel Co. v. Lewellyn, 251 U.S.
+       501. Unless the respondent is right, a trust like this one could be used
+       deliberately to accomplish the very thing which Congress intended to frustrate. ...
+       Although title to the bonds was acquired by the trust, actual command over the
+       property was still in the [taxpayer]. …The difference between acquisition by him
+       personally and acquisition by the trust amounts only to a refinement of title and
+       may be disregarded so far as section 214(a)(5) is concerned.
+
+Security First National Bank, 28 BTA at 314 - 315.
+
+       Applying this reasoning to the facts of this ruling, even though an individual
+
+retirement account is a tax-exempt trust, A has nevertheless acquired, for purposes of
+                                            4
+
+§ 1091(a), 100 shares of X Company stock on December 21, 2007, by virtue of the
+
+Purchase. See also Shoenberg v. Commissioner, 77 F. 2d 446 (8th Cir. 1935).
+
+HOLDING
+
+       The loss on the Sale of stock is disallowed under § 1091. A’s basis in the
+
+individual retirement account or Roth IRA is not increased by virtue of § 1091(d). This
+
+ruling does not address any issues other than those specifically addressed herein. In
+
+particular, this ruling does not address (and no inference should be drawn with respect
+
+to) any issue arising under § 4975.
+
+DRAFTING INFORMATION
+
+       The principal author of this revenue ruling is Roger E. Wade of the Office of
+
+Associate Chief Counsel (Financial Institutions & Products). For further information
+
+regarding this revenue ruling, contact Mr. Wade at (202) 622-3950 (not a toll-free call).
+

@@ -21,6 +21,21 @@ import { colorForSeriesKey }  from '../../../../finance/allocation-reporting/all
 import { ASSET_CLASS }        from '../../../../finance/allocation-reporting/asset-class.js';
 
 /**
+ * The cube columns the panel exports, in order.
+ *
+ * A named constant rather than an inline array because it is the fact table's contract:
+ * a column that exists on the row and not here is a number nobody can trace back to the
+ * lot it came from, and that is invisible to any test that only looks at the chart.
+ */
+export const ALLOCATION_CSV_COLUMNS = Object.freeze([
+  'date', 'stateKey', 'name', 'source', 'kind', 'role', 'type',
+  'domicileCountry', 'exposureCountry', 'currency', 'assetClass', 'allocation',
+  // design 94 step 9 — the instrument, and the position's size in it.
+  'rateKey', 'securityId', 'security', 'units', 'holdingCount',
+  'marketValueLocal', 'marketValue', 'costBasisLocal', 'costBasis', 'inferred',
+]);
+
+/**
  * AllocationPlugin — the realized asset mix over the whole plan (design 82 §6).
  *
  * The over-time sibling of HoldingsPlugin, which answers "what is in this account
@@ -92,6 +107,7 @@ export class AllocationPlugin extends WorkbenchComponent {
           <option value="exposure">By country (exposure)</option>
           <option value="account">By account</option>
           <option value="rateKey">By return series</option>
+          <option value="security">By security</option>
           <option value="role">By wrapper</option>
         </select>
         <select class="wb-select alloc-account" data-alloc="account" style="display:none"></select>
@@ -278,6 +294,17 @@ export class AllocationPlugin extends WorkbenchComponent {
       // collapse into one enormous `(none)` band that says nothing and buries the
       // diagnostic. They are covered by every other view.
       case 'rateKey':  return { by: ['rateKey'], filter: r => r.rateKey != null, normalize };
+      // Design 94 §3 item 6 / step 9. The one view that answers "what do I actually
+      // OWN", as against "what market am I exposed to" — which is the same question
+      // only until a plan holds one employer's stock instead of a total-market fund.
+      //
+      // Filtered like `rateKey` and for the same reason: a house, a company stake and a
+      // cash sleeve name no instrument, and collapsing them into one `(none)` band buries
+      // the diagnostic under the plan's largest number. They are covered by every other
+      // view. In a book with no authored securities every equity bucket reads
+      // `sec-auto-<MARKET>`, so this view degrades to the return-series view rather than
+      // to noise — which is the honest answer for a plan that holds index sleeves.
+      case 'security': return { by: ['security'], filter: r => r.securityId != null, normalize };
       case 'account':  return this._stateKey === '__all__'
         ? { by: ['name'], normalize }
         : { filter: r => r.stateKey === this._stateKey, normalize };
@@ -797,10 +824,7 @@ export class AllocationPlugin extends WorkbenchComponent {
   _downloadCsv() {
     const rows = this._rows();
     if (!rows.length) return;
-    const cols = ['date', 'stateKey', 'name', 'source', 'kind', 'role', 'type',
-      'domicileCountry', 'exposureCountry', 'currency', 'assetClass', 'allocation',
-      'rateKey', 'holdingCount', 'marketValueLocal', 'marketValue', 'costBasisLocal',
-      'costBasis', 'inferred'];
+    const cols = ALLOCATION_CSV_COLUMNS;
     const cell = (v) => {
       if (v == null) return '';
       const s = v instanceof Date ? v.toISOString().slice(0, 10) : String(v);

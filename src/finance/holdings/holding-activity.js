@@ -27,6 +27,7 @@
  */
 
 import { ALLOCATION_VALUES } from './allocation.js';
+import { instrumentOf }      from './holding-utils.js';
 
 /**
  * Bucket for a holding carrying no allocation. Deliberately the reporting taxonomy's
@@ -48,20 +49,40 @@ export const HOLDING_ACTIVITY_KIND = Object.freeze({
 
 /**
  * Build the current-position snapshot for one account.
+ *
+ * `security`, `units` and `pricePerUnit` are design 94 step 9: a POSITION is a count of
+ * an INSTRUMENT at a price, and until this the UI could show neither half. A snapshot
+ * that prints only a dollar figure cannot distinguish a position that doubled in price
+ * from one that doubled in size, which is the distinction the whole unitised
+ * representation exists to make (design 93 §4).
+ *
  * @param {object|null} account - a state account ({ holdings: [...] }) or null
- * @returns {Array<{id,label,allocation,rateKey,marketValue,costBasis,unrealized}>}
+ * @param {Object<string,object>|null} [securities] - `state.securities`; absent ⇒ Option A
+ * @returns {Array<{id,label,allocation,rateKey,securityId,security,units,pricePerUnit,marketValue,costBasis,unrealized}>}
  */
-export function snapshotHoldings(account) {
+export function snapshotHoldings(account, securities = null) {
   const holdings = account?.holdings;
   if (!Array.isArray(holdings)) return [];
   return holdings.map(h => {
     const marketValue = h?.marketValue ?? 0;
     const costBasis   = h?.costBasis   ?? 0;
+    const inst        = instrumentOf(h, securities);
     return {
       id:          h?.id ?? null,
       label:       h?.label || h?.id || '(unnamed)',
       allocation:  h?.allocation ?? null,
-      rateKey:     h?.rateKey ?? null,
+      rateKey:     inst?.rateKey ?? null,
+      securityId:  h?.securityId ?? null,
+      // Symbol, then name, then the id — the id last, so a security declaring neither
+      // prints as `sec-auto-EQUITY_US`, which is honest about being derived rather than
+      // dressing a migration artefact up as a ticker.
+      // `||`, not `??`, and the difference is load-bearing: `syntheticEquitySecurities`
+      // declares `symbol: ''` — an empty string is a real, deliberate value meaning "this
+      // instrument has no ticker", and `??` would let it win and print a blank cell. The
+      // nullish operator is right for a VALUE and wrong for a LABEL.
+      security:    h?.securityId == null ? null : (inst?.symbol || inst?.name || h.securityId),
+      units:        h?.units ?? null,
+      pricePerUnit: h?.pricePerUnit ?? null,
       marketValue,
       costBasis,
       unrealized:  +(marketValue - costBasis).toFixed(2),

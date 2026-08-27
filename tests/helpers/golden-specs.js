@@ -321,6 +321,74 @@ export const GOLDEN_SPECS = [
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2033, 0, 1)),
   },
+  {
+    name:        'two-security-concentration',
+    description:
+      'Design 94 §11, step 5. Every per-security path in the engine was UNREACHABLE from '
+      + 'the fixtures until this golden: the other ten hold nothing but the four synthetic '
+      + 'market securities, which are the identity (\u03b2 = 1, \u03c3_idio = 0) by construction, so '
+      + 'the whole of §6.2\'s price path evaluated to zero and a green suite said nothing '
+      + 'about it. This one authors two real instruments and puts them in the book. '
+      + '`sec-emp` is a CONCENTRATED position — \u03b2 1.35 with 35% idiosyncratic vol, so it '
+      + 'takes its own annual draw and its price genuinely separates from its sleeve\'s — '
+      + 'and it is held in TWO accounts, a taxable brokerage and a 401(k), which is what '
+      + 'makes §4\'s no-shared-price decision observable rather than theoretical: one '
+      + 'security, two positions, two bases, two prices, and each priced off its own '
+      + 'account\'s design 55 §8 rate. `sec-exus` is the other branch — \u03b2 0.90 with NO '
+      + 'idiosyncratic vol, which overlays without consuming a uniform. It also carries a '
+      + 'security-level `dividendYield`, so the fixture holds the instrument winning over '
+      + 'the lot\'s inline value (§12 D11) rather than only the return process. The AU '
+      + 'stock lot is deliberately left on its synthetic market security, so one fixture '
+      + 'holds both the migrated and the authored representation side by side. '
+      + 'STOCHASTIC ON, which no other golden is: the equity path is the subject here, and '
+      + 'that makes this fixture the tripwire for RNG-cursor order — a change to the DRAW '
+      + 'SEQUENCE re-bases it and nothing else in the repo. Short (8y), and it still '
+      + 'crosses the 2031 move, so it also pins that a residency change does not disturb '
+      + 'what a position is held IN.',
+    params: {
+      // The subject. Sleeve idio vol stays 0, so every uniform the run draws beyond the
+      // single market factor is drawn BY A SECURITY — which is what makes the cursor
+      // assertion in security-positions.test.mjs legible.
+      equityReturnStochastic: true,
+      equityReturnVol:        0.18,
+      // Design 94 step 6. The rebalancer is here for ONE reason: the two accounts give it
+      // the two cases D10 distinguishes, in the same run. `usStockAccount`'s equity sleeve
+      // holds two securities, so a buy there is a MIXED sleeve and must establish the
+      // generic market position; `k401Account`'s holds one, so a buy there must buy more of
+      // THAT security. Without a target mix neither branch is reachable from any fixture.
+      behavioralStrategies:      ['TARGET_ALLOCATION'],
+      allocationStrategy:        'STATIC',
+      allocationSchedule:        'STATIC',
+      rebalanceTargetAllocation: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2034, 0, 1)),
+    mutateCfg: (cfg) => {
+      cfg.securities = [
+        {
+          id: 'sec-emp', symbol: 'EMP', name: 'Employer stock (concentrated)',
+          rateKey: 'EQUITY_US',
+          beta: 1.35, idioVol: 0.35,
+          // Instrument-level, and LOWER than the account-level fallback the handler
+          // supplies — so a fixture diff shows the security winning the §12 D11 chain
+          // rather than the two agreeing by luck.
+          dividendYield: 0.006, qualifiedDividends: true,
+        },
+        {
+          id: 'sec-exus', symbol: 'EXUS', name: 'International index fund',
+          rateKey: 'EQUITY_INTL_EX_US',
+          // Beta only: overlays the growth rate every year, consumes no uniform ever.
+          beta: 0.90, idioVol: 0,
+        },
+      ];
+      const lot = (stateKey, id) =>
+        cfg.accounts.find(a => a.stateKey === stateKey).holdings.find(h => h.id === id);
+      // ONE security, TWO accounts — the point of the golden.
+      lot('usStockAccount', 'h-us-equity').securityId   = 'sec-emp';
+      lot('k401Account',    'h-401k-equity').securityId = 'sec-emp';
+      lot('usStockAccount', 'h-intl-equity').securityId = 'sec-exus';
+    },
+  },
 ];
 
 /** Look up a spec by name (throws rather than silently running nothing). */

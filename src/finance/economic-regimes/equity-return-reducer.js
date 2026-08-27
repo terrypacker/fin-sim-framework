@@ -49,9 +49,18 @@ export class EquityReturnReducer extends Reducer {
   reduce(state, _action, _date) {
     const dev  = state.equityReturnDev;
     const comp = state.equityReturnDriftComp ?? {};
-    if (!dev) return this.newState(state);
+    // The per-security overlay is PUBLISHED here rather than read live off the tick's own
+    // map, and the reason is latency (design 94 §6.6). A sleeve deviation drawn on 31 Dec
+    // does not reach any account until this fold runs at the next period advance, so every
+    // account in the run sees ONE rate for the year. Reading `securityReturnDev` directly
+    // in `computeHoldingsGrowth` gave the overlay a DIFFERENT latency: it went live the
+    // instant the step reducer stored it, so accounts whose earnings events sat either
+    // side of the tick on the same date took different years' draws — measured at ±45
+    // percentage points on one 31 Dec. Publishing it here puts it on the sleeve's clock.
+    const overlay = resolveSecurityOverlay(state);
+    if (!dev) return this.newState(state, overlay);
     const hasDev = EQUITY_SLEEVES.some(k => ((dev[k] ?? 0) + (comp[k] ?? 0)) !== 0);
-    if (!hasDev) return this.newState(state);   // no path ⇒ no-op
+    if (!hasDev) return this.newState(state, overlay);   // no sleeve path ⇒ overlay only
 
     const eff     = state.effectiveGrowthRates ?? {};
     const nextEff = { ...eff };
@@ -66,6 +75,29 @@ export class EquityReturnReducer extends Reducer {
         if (k.startsWith(prefix)) nextEff[k] = eff[k] + d;
       }
     }
-    return this.newState(state, { effectiveGrowthRates: nextEff });
+    return this.newState(state, { effectiveGrowthRates: nextEff, ...overlay });
   }
+}
+
+/**
+ * The per-security overlay the growth path reads: `securityId → dev + driftComp`, sparse.
+ *
+ * Returns an EMPTY patch — not a patch holding an empty map — when the run has no
+ * non-identity security, so a scenario whose registry is all synthetics gains no state key
+ * and `newState` still returns the same object it was given.
+ *
+ * Summed here rather than at the point of use for the same reason the sleeve fold sums
+ * `deviation + driftComp`: the two halves are separate only so the stochastic term stays
+ * pure mean-0 in state (design 74 §5.3), and everything downstream wants the total.
+ */
+function resolveSecurityOverlay(state) {
+  const dev = state.securityReturnDev;
+  if (dev == null) return {};
+  const comp = state.securityReturnDriftComp ?? {};
+  const out  = {};
+  for (const id of new Set([...Object.keys(dev), ...Object.keys(comp)])) {
+    const total = (dev[id] ?? 0) + (comp[id] ?? 0);
+    if (total !== 0) out[id] = total;
+  }
+  return { securityReturnOverlay: out };
 }

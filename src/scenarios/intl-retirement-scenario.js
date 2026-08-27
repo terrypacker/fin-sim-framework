@@ -649,6 +649,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // historic blind purchase-date order, so existing scenarios are byte-identical.
   drawdownSleeveOrder:   'FIFO',  // FIFO | TAX_COST | PRESERVE_GROWTH | WEIGHTED (Lever A)
   drawdownLotStrategy:   'FIFO',  // FIFO | HIFO | LOSS_FIRST | SPECIFIC | LADDER (Lever B; LADDER = design 66 §G8)
+  // The security tier (design 94 step 6): ids to sell out of first, in order. Empty = no
+  // security bias, and no state key at all — so every existing scenario is byte-identical.
+  drawdownSecurityOrder: [],
   // Lever C (design 65 §4-C) rebalance-coupling weight (w_mix). 0 = off (default);
   // >0 biases the sleeve sell order toward the design-61 over-weight class so a debit
   // doubles as a rebalance. Inert unless a TARGET_ALLOCATION strategy stamps targets.
@@ -893,6 +896,31 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands). ' +
       'LADDER draws a bond ladder the natural way — liquid cash first, then the ' +
       'nearest-maturity rung (≈ par, least mark-to-market deviation), sparing funds/equity (design 66 §G8).',
+  },
+  {
+    // The SECURITY tier (design 94 step 6, §10 item 3). Feeds state.drawdownSecurityOrder;
+    // the disposal primitive ranks lots by which security they name, between the ALLOCATION
+    // class (Lever A) and the lot strategy (Lever B).
+    //
+    // `options` stays empty and `optionsFrom` supplies them instead. The ids are scenario
+    // data — whatever `cfg.securities` holds, plus the four synthetic market securities
+    // every migrated equity lot names (§9.1) — so the only honest FIXED list is no list.
+    // Step 9 resolves them from the scenario record at render time
+    // (`scenarioSecurityRegistry`), which is the same composition the run itself uses.
+    //
+    // ⚠️ The EnumMulti control expresses order by CHECK ORDER (see
+    // `_buildEnumMultiEditor`): ticking appends. Workable, and under-serving a parameter
+    // that is an ORDER — a drag-orderable control is the honest fix.
+    key: 'drawdownSecurityOrder', label: 'Drawdown Security Order',
+    type: 'EnumMulti', group: 'Spending',
+    options: [], optionsFrom: 'securities',
+    mc: false, opt: false, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownSecurityOrder,
+    description: 'Which SECURITIES to raise cash out of first, in order, before the ones not '
+      + 'listed. Neither a class question nor a lot question: "sell the employer stock before '
+      + 'the index fund" is a statement about which INSTRUMENT to sell, and it only became '
+      + 'expressible once a position names one. An order, not a filter — once the listed '
+      + 'securities are exhausted the draw carries on through the rest, exactly as the sleeve '
+      + 'order does with an absent class. Empty = no security bias (the default).',
   },
   {
     // Lever C (design 65 §4-C) — rebalance coupling. Feeds state.drawdownRebalanceWeight;
@@ -1259,6 +1287,18 @@ export class IntlRetirementScenario extends BaseScenario {
       fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
       monthlyExpenses:          p.monthlyExpenses,
       inflationAdjust:          true,
+      // Allocation-aware drawdown (design 65 Levers A/B/C) and the design 94 step 6
+      // SECURITY tier. These are scenario-schema keys, and the toolset-forwarding loop at
+      // the bottom of this method deliberately skips those — so before this line a headless
+      // caller passing `drawdownLotStrategy: 'HIFO'` silently got FIFO. The UI path worked
+      // (the editor writes the value straight into a saved scenario's `parameters`), which
+      // is exactly why it went unnoticed: two param stores, one of them fed only by a
+      // human. Every default here is the historic no-op, so naming them changes nothing
+      // for a caller that does not pass them.
+      drawdownSleeveOrder:      p.drawdownSleeveOrder ?? undefined,
+      drawdownLotStrategy:      p.drawdownLotStrategy ?? undefined,
+      drawdownRebalanceWeight:  p.drawdownRebalanceWeight ?? undefined,
+      drawdownSecurityOrder:    p.drawdownSecurityOrder ?? undefined,
       // US_RETIREMENT — cross-border drawdown mode (design 58 Lever A). AUTO
       // default preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling.
       crossBorderDrawdown:      p.crossBorderDrawdown ?? 'AUTO',

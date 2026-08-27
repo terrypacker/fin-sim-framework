@@ -71,6 +71,58 @@ export function deepClone(v) {
 }
 
 /**
+ * Keys of `state` that are RUN-IMMUTABLE and are therefore shared by reference rather than
+ * copied when state is cloned (design 94 §6.4).
+ *
+ * There is exactly one, and adding a second needs the same argument this one had: a
+ * MEASUREMENT that it costs enough to matter, and a guarantee that nothing writes to it in
+ * place. Both are non-negotiable, because a shared reference that someone mutates does not
+ * corrupt one state — it retroactively rewrites every snapshot in the run.
+ */
+const SHARED_STATE_KEYS = Object.freeze(['securities']);
+
+/**
+ * Deep-clone a simulation STATE, sharing the run-immutable keys by reference.
+ *
+ * ─── why this exists ────────────────────────────────────────────────────────────────
+ *
+ * Reducers receive `(state, action, date)` and nothing else, so anything a reducer must
+ * read has to live in state. Design 94's `securities` registry is read by the bond and
+ * earnings reducers on every tick and never changes — but state is cloned per event, per
+ * untracked reducer and per history snapshot, and design 78 §3.2 measured those clones as
+ * the entire remaining batch overhead after every other optimization.
+ *
+ * Measured (design 94 §6.4, `probe-security-registry-clone-cost`): a 20-security registry
+ * makes each `deepClone` ~38% dearer on a real plan, which costs a whole run about +7% at
+ * `full` telemetry and +5% at `metrics`. This recovers it: what is left is one property
+ * assignment per clone.
+ *
+ * ─── why it is safe ─────────────────────────────────────────────────────────────────
+ *
+ * Copy-on-write, which is what `newState` already does one level up. Reducers never mutate
+ * in place, they build new objects, so a reducer that adds a security replaces the whole
+ * map and snapshots taken earlier keep pointing at the old one — which is CORRECT: they
+ * were taken before it existed. `buildSecurityRegistry` freezes the map and every record in
+ * it, so a violation of that discipline is a strict-mode `TypeError` at the write rather
+ * than a silent rewrite of history discovered months later.
+ *
+ * Deliberately NOT done as a general escape inside `deepClone` — an `Object.isFrozen` test
+ * or a marker property there would put a check on the hot path of every object in state to
+ * save one. Name the key.
+ *
+ * @param {object} state
+ * @returns {object} a deep copy, except for `SHARED_STATE_KEYS`
+ */
+export function cloneState(state) {
+  if (state === null || typeof state !== 'object') return state;
+  const out = {};
+  for (const k in state) {
+    out[k] = SHARED_STATE_KEYS.includes(k) ? state[k] : deepClone(state[k]);
+  }
+  return out;
+}
+
+/**
  * Snapshot state for the sole purpose of diffing it against itself after a
  * reducer runs (design 78 §5.5).
  *
@@ -102,7 +154,13 @@ export function snapshotForDiff(state) {
   const out = {};
   for (const k in state) {
     const v = state[k];
-    if (v !== null && typeof v === 'object') out[k] = Array.isArray(v) ? [...v] : { ...v };
+    // Run-immutable keys are shared, exactly as in `cloneState` — and here it buys more
+    // than the copy: `diffStates` short-circuits on reference identity, so a shallow copy
+    // of the registry would ALSO cost a walk of every security on every untracked reducer,
+    // each one comparing a pair of identical references. A reducer that genuinely changes
+    // the registry replaces the whole map, which a shared reference still detects.
+    if (SHARED_STATE_KEYS.includes(k)) out[k] = v;
+    else if (v !== null && typeof v === 'object') out[k] = Array.isArray(v) ? [...v] : { ...v };
     else out[k] = v;
   }
   return out;

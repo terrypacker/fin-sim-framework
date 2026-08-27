@@ -8,7 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { HoldingTransactAction }    from './holding-actions.js';
+import { HoldingTransactAction, VALUE_KIND } from './holding-actions.js';
+import { instrumentOf } from './holding-utils.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
 import { primaryResidencyState }    from '../residency-utils.js';
 import { resolveYield }             from '../economic-regimes/yield-curve.js';
@@ -20,11 +21,13 @@ import { addValue, isUnitised } from './holding-utils.js';
  * of 'federal' or 'both' marks a muni. Treasury ('state') and generic ('none')
  * coupons are federally taxable.
  *
- * @param {object} h - Holding
+ * Takes the INSTRUMENT view — see `couponStateExempt`.
+ *
+ * @param {object} inst - instrument view of a holding (`instrumentOf`)
  * @returns {boolean}
  */
-export function couponFederalExempt(h) {
-  return h?.taxExemption === 'federal' || h?.taxExemption === 'both';
+export function couponFederalExempt(inst) {
+  return inst?.taxExemption === 'federal' || inst?.taxExemption === 'both';
 }
 
 /**
@@ -39,15 +42,19 @@ export function couponFederalExempt(h) {
  *                          state-taxable;
  *   - 'none'            → state-taxable.
  *
- * @param {object} h              - Holding
+ * Takes the INSTRUMENT view (design 94 §5.1): tax exemption and issuing state are facts
+ * about the bond, not about anyone's position in it. Under Option A that view IS the
+ * holding, so passing a holding still works.
+ *
+ * @param {object} inst           - instrument view of a holding (`instrumentOf`)
  * @param {string|null} residentState - Resident's 2-letter state code (null = no state configured)
  * @returns {boolean}
  */
-export function couponStateExempt(h, residentState) {
-  const te = h?.taxExemption ?? 'none';
+export function couponStateExempt(inst, residentState) {
+  const te = inst?.taxExemption ?? 'none';
   if (te === 'state' || te === 'both') return true;
   if (te === 'federal') {
-    return h?.issuingState != null && residentState != null && h.issuingState === residentState;
+    return inst?.issuingState != null && residentState != null && inst.issuingState === residentState;
   }
   return false;
 }
@@ -111,9 +118,17 @@ export function computeHoldingsGrowth({
   currentDate  = null,
   dividendYield = null,
 }) {
-  const account  = state?.[stateKey];
-  const holdings = account?.holdings ?? [];
-  const ratesMap = state?.[rateSource] ?? {};
+  const account    = state?.[stateKey];
+  const holdings   = account?.holdings ?? [];
+  const ratesMap   = state?.[rateSource] ?? {};
+  const securities = state?.securities ?? null;
+  // The sparse per-security overlay (design 94 §6.3), `securityId → dev + driftComp`.
+  // Read from the map EquityReturnReducer PUBLISHES at the period boundary, not from the
+  // raw `securityReturnDev` the tick stores — §6.6: the raw map changes mid-year, so
+  // reading it here put two accounts on two different years' draws depending on where
+  // their earnings events fell relative to the tick. Absent on every scenario whose
+  // registry is all identities.
+  const secOverlayMap = state?.securityReturnOverlay ?? null;
   // Per-account rate key (design 55 §8): `<rateKey>::<stateKey>`. When the regime
   // toolset has seeded a per-account entry (from the account's own growth/interest
   // rate, regime-adjusted), it wins over the shared type-level key so two same-type
@@ -150,6 +165,7 @@ export function computeHoldingsGrowth({
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
+    const inst = instrumentOf(h, securities);
     // BOND and CASH holdings do NOT earn equity-style appreciation on the growth
     // path. A BOND's return is the coupon (computeHoldingsCoupons /
     // INTL_BOND_COUPON, design 59); its price only marks to market on rate moves
@@ -175,15 +191,32 @@ export function computeHoldingsGrowth({
     // at which point the bare-key hit starts winning and silently overrides every
     // account's own growth rate with the market's. Same precedence as the account
     // level: per-account first, shared series second.
-    const hPerAcctKey = (h.rateKey != null && stateKey != null) ? `${h.rateKey}::${stateKey}` : null;
+    const hPerAcctKey = (inst.rateKey != null && stateKey != null) ? `${inst.rateKey}::${stateKey}` : null;
     const baseRate = rateOverride
-      ?? (useCoupon ? (h.couponRate ?? undefined) : undefined)
+      ?? (useCoupon ? (inst.couponRate ?? undefined) : undefined)
       ?? (hPerAcctKey != null ? ratesMap[hPerAcctKey] : undefined)
-      ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined)
+      ?? (inst.rateKey != null ? ratesMap[inst.rateKey] : undefined)
       ?? fbRate;
+    // The per-security return overlay (design 94 §6.2/§6.3). An OVERLAY, not a rate:
+    // added to the holding's resolved rate directly, exactly as `AssetAppreciationHandler`
+    // adds `propertyReturnDev[<sleeve>]` (design 75 §4.2 A2), so `effectiveGrowthRates`
+    // keeps its shape and its two-deep precedence and design 55 §8's per-account override
+    // goes on working untouched — the overlay is additive and orthogonal to it.
+    //
+    // Applied BEFORE the `appreciationSchedule` lookup, so an authored schedule keeps
+    // overriding the stochastic path exactly as it already overrides the sleeve's. And
+    // skipped on the interest path: the overlay is an equity return, and a bond's coupon
+    // is contractual.
+    //
+    // Zero for every security at β=1 / σ_idio=0 — which is every synthetic market
+    // security, so a migrated lot's arithmetic is unchanged to the bit.
+    const secOverlay = (!useCoupon && h.securityId != null && secOverlayMap != null)
+      ? (secOverlayMap[h.securityId] ?? 0)
+      : 0;
+    const rate    = secOverlay !== 0 ? baseRate + secOverlay : baseRate;
     const hRate   = (currentDate && h.appreciationSchedule)
-      ? resolveScheduledRate(h.appreciationSchedule, currentDate, baseRate)
-      : baseRate;
+      ? resolveScheduledRate(h.appreciationSchedule, currentDate, rate)
+      : rate;
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
     // Design 84 G2 — carve the DERIVED slice out of the same return, without
@@ -196,7 +229,7 @@ export function computeHoldingsGrowth({
     // Deliberately NOT clamped to `growth`: a holding can pay its distribution in a
     // year its price fell, which is the real case where the two diverge — s99B
     // reaches the distribution regardless of the capital loss beside it.
-    const yld = h.dividendYield ?? dividendYield;
+    const yld = inst.dividendYield ?? dividendYield;
     if (yld) derived += +(mv * yld * factor).toFixed(2);
     if (growth !== 0) {
       holdingActions.push(new HoldingTransactAction({
@@ -204,6 +237,10 @@ export function computeHoldingsGrowth({
         holdingId:        h.id,
         marketValueDelta: growth,
         costBasisDelta:   0,
+        // Appreciation: the price moved, the count did not. Stated rather than defaulted
+        // because this is the emitter the dividend one is most easily confused with —
+        // both credit an equity lot with `costBasisDelta: 0` and they are opposite kinds.
+        valueKind:        VALUE_KIND.PRICE,
       }));
     }
   }
@@ -241,9 +278,10 @@ export function computeHoldingsGrowth({
  * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallbackRateKey }) {
-  const account  = state?.[stateKey];
-  const holdings = account?.holdings ?? [];
-  const adjMap   = state?.effectiveDividendAdjustments ?? {};
+  const account    = state?.[stateKey];
+  const holdings   = account?.holdings ?? [];
+  const adjMap     = state?.effectiveDividendAdjustments ?? {};
+  const securities = state?.securities ?? null;
 
   const effYield = (yld, rk) => Math.max(0, yld * (1 + (adjMap[rk] ?? 0)));
 
@@ -264,9 +302,13 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     //   - CASH income (if any) is interest on the effectiveInterestRates path, not a dividend;
     //   - GOLD is a non-income commodity — it appreciates (computeHoldingsGrowth) but yields nothing.
     if (h.allocation === 'BOND' || h.allocation === 'CASH' || h.allocation === 'GOLD') continue;
+    const inst = instrumentOf(h, securities);
     const mv  = h.marketValue ?? 0;
-    const yld = h.dividendYield ?? fallbackYield;
-    const rk  = h.rateKey ?? fallbackRateKey;
+    // design 94 D11 — the yield chain is instrument → account fallback, and it has to stay
+    // in that order: a security that names a yield wins, a lot that names one wins next,
+    // and the account rate is the floor.
+    const yld = inst.dividendYield ?? fallbackYield;
+    const rk  = inst.rateKey ?? fallbackRateKey;
     const div = +(mv * effYield(yld, rk)).toFixed(2);
     total += div;
     if (div !== 0) {
@@ -275,6 +317,12 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
         holdingId:        h.id,
         marketValueDelta: div,
         costBasisDelta:   0,
+        // A reinvested dividend is NEW MONEY: it buys more of the instrument at the
+        // prevailing price. It does not raise the price of the units already held, which
+        // is what the reducer used to infer (design 94 §9.4). Inert while equity is
+        // scalar — there is no unit count to move — and load-bearing the moment step 3
+        // unitises it. `costBasisDelta` stays 0: the basis question is F3, not this.
+        valueKind:        VALUE_KIND.UNITS,
       }));
     }
   }
@@ -331,8 +379,9 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  *   + rateKey + allocation) for the design 66 §G10b new-vintage reinvestment path.
  */
 export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIndex = 0, firingsPerYear = 1 }) {
-  const account  = state?.[stateKey];
-  const holdings = account?.holdings ?? [];
+  const account    = state?.[stateKey];
+  const holdings   = account?.holdings ?? [];
+  const securities = state?.securities ?? null;
   const residentState = primaryResidencyState(state);
 
   let total          = 0;
@@ -345,27 +394,33 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIn
   const bucketMap = new Map();
   for (const h of holdings) {
     if (!h || h.allocation !== 'BOND') continue;
-    const fraction = couponFiringFraction(h.couponFrequency, firingIndex, firingsPerYear);
+    const inst = instrumentOf(h, securities);
+    const fraction = couponFiringFraction(inst.couponFrequency, firingIndex, firingsPerYear);
     if (fraction === 0) continue;   // this holding pays nothing on this firing
     const mv     = h.marketValue ?? 0;
-    const rate   = h.couponRate ?? fallbackRate;
+    const rate   = inst.couponRate ?? fallbackRate;
     const coupon = +(mv * rate * fraction).toFixed(2);
     if (coupon === 0) continue;
     total += coupon;
-    if (!couponFederalExempt(h))              federalTaxable += coupon;  // munis are federally exempt
-    if (!couponStateExempt(h, residentState)) stateTaxable   += coupon;  // Treasury / in-state muni are state-exempt
+    if (!couponFederalExempt(inst))              federalTaxable += coupon;  // munis are federally exempt
+    if (!couponStateExempt(inst, residentState)) stateTaxable   += coupon;  // Treasury / in-state muni are state-exempt
+    // No `valueKind` here deliberately. BOTH callers of this function
+    // (`bond-coupon-handler`, `bond-sleeve-coupon-handler`) destructure `{ amount, ... }`
+    // and DISCARD `holdingActions` — a coupon is paid to cash, not retained in the lot —
+    // so no reducer ever sees these and any kind declared on them would be untestable.
+    // If a caller ever starts emitting them, a retained coupon is new money: UNITS.
     holdingActions.push(new HoldingTransactAction({
       stateKey,
       holdingId:        h.id,
       marketValueDelta: coupon,
       costBasisDelta:   0,
     }));
-    const te = h.taxExemption ?? 'none';
-    const bucketKey = `${te}|${h.issuingState ?? ''}|${h.rateKey ?? ''}`;
+    const te = inst.taxExemption ?? 'none';
+    const bucketKey = `${te}|${inst.issuingState ?? ''}|${inst.rateKey ?? ''}`;
     const b = bucketMap.get(bucketKey);
     if (b) b.amount += coupon;
     else bucketMap.set(bucketKey, {
-      taxExemption: te, issuingState: h.issuingState ?? null, rateKey: h.rateKey ?? null, amount: coupon,
+      taxExemption: te, issuingState: inst.issuingState ?? null, rateKey: inst.rateKey ?? null, amount: coupon,
     });
   }
   const reinvestBuckets = [...bucketMap.values()].map(b => ({ ...b, amount: +b.amount.toFixed(2) }));
@@ -481,9 +536,10 @@ export function resolvePrevailingCouponRate(state, stateKey, rateKey) {
  *   lot's `acquisitionPriceLevel` (design 57 §6.3 / design 62 §9.5) so a lot created during the
  *   simulation is CPI-indexed from its own acquisition rather than never indexed. The vintage
  *   lot keeps the level of the year's FIRST firing, matching how it keeps that firing's date.
+ * @param {Object<string,object>|null} [opts.securities] - `state.securities`, for `instrumentOf`
  * @returns {object[]} new holdings array
  */
-export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailingRate, year, purchaseMs = null, priceLevel = null }) {
+export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailingRate, year, purchaseMs = null, priceLevel = null, securities = null }) {
   if (!Array.isArray(holdings) || !Array.isArray(buckets) || buckets.length === 0) return holdings ?? [];
   const next = holdings.slice();
   for (const b of buckets) {
@@ -498,7 +554,7 @@ export function mergeCouponReinvestLots(holdings, { stateKey, buckets, prevailin
       const curMv = cur.marketValue ?? 0;
       const newMv = +(curMv + amount).toFixed(2);
       // mv-weighted blend of this vintage's coupon rate; null prevailing ⇒ keep current.
-      const curRate = cur.couponRate ?? prevailingRate ?? 0;
+      const curRate = instrumentOf(cur, securities).couponRate ?? prevailingRate ?? 0;
       const blended = prevailingRate == null ? curRate
         : +(((curMv * curRate) + (amount * prevailingRate)) / newMv).toFixed(6);
       // `addValue` owns the money and the par rule; this call only overrides the
@@ -592,8 +648,9 @@ const ACCRETION_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
  * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, currentDate = null }) {
-  const account  = state?.[stateKey];
-  const holdings = account?.holdings ?? [];
+  const account    = state?.[stateKey];
+  const holdings   = account?.holdings ?? [];
+  const securities = state?.securities ?? null;
   const residentState = primaryResidencyState(state);
   const asOfMs = currentDate == null ? null
     : (currentDate instanceof Date ? currentDate.getTime() : Number(currentDate));
@@ -604,23 +661,24 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
   const holdingActions = [];
   for (const h of holdings) {
     if (!h || h.allocation !== 'BOND') continue;
+    const inst  = instrumentOf(h, securities);
     const basis = h.costBasis ?? 0;
     let accretion = 0;
     let indexRatioFactor = null;
 
-    if (h.zeroCoupon) {
+    if (inst.zeroCoupon) {
       // Constant-yield OID off the adjusted basis; requires a maturity + a par above
       // the current basis (a discount bond) and a positive time remaining.
       const face = h.faceValue ?? 0;
-      const matMs = h.maturityDate == null ? null
-        : (h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime());
+      const matMs = inst.maturityDate == null ? null
+        : (inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime());
       const ttm = (matMs != null && asOfMs != null && Number.isFinite(matMs))
         ? Math.max(0, (matMs - asOfMs) / ACCRETION_YEAR_MS) : null;
       if (basis > 0 && face > basis && ttm != null && ttm > 0) {
         const y = Math.pow(face / basis, 1 / ttm) - 1;
         accretion = Math.min(+(basis * y).toFixed(2), +(face - basis).toFixed(2));
       }
-    } else if (h.inflationLinked) {
+    } else if (inst.inflationLinked) {
       // Principal indexes to CPI (may be negative under deflation).
       //
       // design 93 §5b — for a UNITISED TIPS the base is the INDEXED PRINCIPAL,
@@ -635,8 +693,11 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
       //
       // A scalar TIPS keeps the basis proxy: it has no principal to read.
       indexRatioFactor = 1 + cpiRate;
-      accretion = isUnitised(h) && h.parPerUnit != null
-        ? +(h.units * h.parPerUnit * (h.cpiIndexRatio ?? 1) * cpiRate).toFixed(2)
+      // `units` and `cpiIndexRatio` are the POSITION's; `parPerUnit` is the INSTRUMENT's
+      // (design 94 §5.1) — the one line in this file where both sides of the partition
+      // appear in a single expression, which is why it reads oddly and is correct.
+      accretion = isUnitised(h) && inst.parPerUnit != null
+        ? +(h.units * inst.parPerUnit * (h.cpiIndexRatio ?? 1) * cpiRate).toFixed(2)
         : +(basis * cpiRate).toFixed(2);
     } else {
       continue;  // plain coupon bond / fund — no accretion
@@ -645,13 +706,18 @@ export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, current
     accretion = +accretion.toFixed(2);
     if (accretion === 0) continue;
     total += accretion;
-    if (!couponFederalExempt(h))              federalTaxable += accretion;
-    if (!couponStateExempt(h, residentState)) stateTaxable   += accretion;
+    if (!couponFederalExempt(inst))              federalTaxable += accretion;
+    if (!couponStateExempt(inst, residentState)) stateTaxable   += accretion;
     holdingActions.push(new HoldingTransactAction({
       stateKey,
       holdingId:        h.id,
       marketValueDelta: accretion,
       costBasisDelta:   accretion,   // basis step-up: no double-tax at redemption
+      // A PRICE move, and the only one of the five emitters where that is not obvious:
+      // the principal indexes and the price follows it, but the holder's UNIT COUNT is
+      // unchanged — an accreting bond does not hand you more bonds. Design 93 §5b's
+      // reasoning, now stated on the action instead of inferred at the patch site.
+      valueKind:        VALUE_KIND.PRICE,
       // The indexation itself. Carried on the same action as the value and basis moves
       // so a replay cannot apply two of the three (see HoldingTransactAction).
       cpiIndexRatioFactor: indexRatioFactor,
@@ -720,6 +786,10 @@ export function computeHoldingsCashInterest({ state, stateKey, rateKey, fallback
     total += interest;
     holdingActions.push(new HoldingTransactAction({
       stateKey, holdingId: h.id, marketValueDelta: interest, costBasisDelta: interest,
+      // New money credited to the sleeve, so UNITS by nature. Inert today because CASH is
+      // never unitised (a currency unit has no price to buy at), and correct in advance if
+      // that ever changes — which is cheaper than leaving the next author to re-derive it.
+      valueKind: VALUE_KIND.UNITS,
     }));
   }
   return { amount: +total.toFixed(2), holdingActions };

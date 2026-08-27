@@ -1,0 +1,2490 @@
+                                                                                                     Taxation Ruling
+
+                                                                                         TR 2008/1
+                                Page status: legally binding                                             Page 1 of 47
+
+
+
+
+                                Taxation Ruling
+                                Income tax: application of Part IVA of the
+                                Income Tax Assessment Act 1936 to
+                                ‘wash sale’ arrangements
+
+Contents                 Para          This publication provides you with the following level of
+                                       protection:
+LEGALLY BINDING
+SECTION:                        This publication (excluding appendixes) is a public ruling for the purposes of
+                                the Taxation Administration Act 1953.
+What this Ruling is about 1
+                                A public ruling is an expression of the Commissioner’s opinion about the way
+Ruling                      9   in which a relevant provision applies, or would apply, to entities generally or
+                                to a class of entities in relation to a particular scheme or a class of schemes.
+Examples                  18
+                                If you rely on this ruling, we must apply the law to you in the way set out in
+Date of effect            68
+                                the ruling (unless we are satisfied that the ruling is incorrect and
+Previous Rulings          69    disadvantages you, in which case we may apply the law in a way that is
+                                more favourable for you – provided we are not prevented from doing so by a
+NOT LEGALLY BINDING
+                                time limit imposed by the law). You will be protected from having to pay any
+SECTION:
+                                underpaid tax, penalty or interest in respect of the matters covered by this
+Appendix 1:                     ruling if it turns out that it does not correctly state how the relevant provision
+                                applies to you.
+Explanation               70
+Appendix 2:
+Detailed contents list   146    What this Ruling is about
+                                1.     This Ruling considers the circumstances in which Part IVA of
+                                the Income Tax Assessment Act 1936 (ITAA 1936)1 might apply to
+                                ‘wash sale’ arrangements.
+
+
+                                Class of entity/arrangement
+                                2.      The term wash sale does not have any precise meaning. In
+                                commerce the term wash sale is used to describe the sale and
+                                purchase of the same, or substantially the same, asset within a short
+                                period of time of each other. The sale and purchase cancel each
+                                other out with the result that there is effectively no change in the
+                                economic exposure of the owner to the asset. More generally, the
+                                expression wash sale is used to describe arrangements where a
+                                disposition of an asset occurs without an intention of ceasing to hold
+                                an economic exposure to the asset. In this Ruling, however, the
+                                Commissioner is concerned with arrangements which have the effect
+                                of causing a disposition to happen which enables a taxpayer to incur
+                                a loss to offset against a gain already derived, or expected to be
+                                derived, in certain circumstances. These being where owing to the
+                                manner, substance and timing of the events it may be questioned
+
+                                1
+                                    All subsequent legislative references are to the ITAA 1936 unless otherwise
+                                    indicated.
+Taxation Ruling
+
+TR 2008/1
+Page 2 of 47                                     Page status: legally binding
+
+
+
+whether the loss making event is mainly to be explained by reference
+to the purpose of obtaining a tax benefit from the loss.
+3.      This Ruling is, therefore, concerned with arrangements under
+which a taxpayer disposes of, or otherwise deals with, a capital gains
+tax (CGT) asset (the asset) where in substance there is no significant
+change in the taxpayer’s economic exposure to, or interest in, the
+asset, or where that exposure or interest may be reinstated by the
+taxpayer (a wash sale), in order to apply a resulting capital loss or
+allowable deduction against a capital gain or assessable income
+already derived or expected to be derived.
+4.      Examples of wash sales where Part IVA might be in question
+for the purposes of this Ruling include the following. In each of the
+examples below the taxpayer disposes of or deals with the asset so
+that a CGT event happens and a capital loss or an allowable
+deduction is incurred (whichever is relevant). For instance, by selling
+the asset (CGT event A1)2, by creating a trust over the asset by
+settlement or declaration (CGT event E1)3, or by transferring a CGT
+asset to a trust (CGT event E2).4
+        (a)       the taxpayer disposes of, or deals with, the asset and
+                  at the same time, or within a short period after,
+                  acquires the same or substantially the same asset;
+        (b)       shortly prior to, or at the time of, disposing of, or
+                  dealing with, the asset the taxpayer acquires the same,
+                  or substantially the same, asset;
+        (c)       shortly prior to, at the time of, or shortly after disposing
+                  of or dealing with the asset the taxpayer enters into an
+                  arrangement to acquire the same, or substantially the
+                  same, asset at a future point in time at a price that is
+                  substantially the same as the sale proceeds received
+                  on disposal of the original asset and acquires that
+                  asset under the arrangement;
+        (d)       shortly prior to, at the time of, or shortly after disposing
+                  of, or dealing with, the asset the taxpayer enters into
+                  derivatives or financial instruments that substantially
+                  provide continued exposure to the risks and
+                  opportunities of the asset, as if the taxpayer had
+                  continued to hold the asset;
+        (e)       shortly prior to, at the time of, or shortly after disposing
+                  of, or dealing with, the asset the taxpayer enters into
+                  arrangements under which the taxpayer is entitled to,
+                  relative to the taxpayer’s prior interest, the future
+                  income produced by the asset and/or any capital
+                  appreciation in the asset, or to a reimbursement for
+                  any future income produced by, or capital appreciation
+                  in the asset;
+2
+  Section 104-10 of the Income Tax Assessment Act 1997 (ITAA 1997).
+3
+  Section 104-55 of the ITAA 1997.
+4
+  Section 104-60 of the ITAA 1997
+                                                          Taxation Ruling
+
+                                              TR 2008/1
+Page status: legally binding                                Page 3 of 47
+
+
+
+       (f)     the taxpayer disposes of or deals with the asset to a
+               company which the taxpayer is a member of, or to a
+               trustee of a trust the taxpayer is a beneficiary or an
+               object of, and the taxpayer controls or influences the
+               company or trustee, or is the trustee or appointor;
+       (g)     the taxpayer disposes of or deals with the asset to a
+               company which the taxpayer controls or has influence
+               over but is not a member of, or to a trustee of a trust
+               which the taxpayer controls or has influence over or is
+               the trustee, or appointor of, but is not a beneficiary or
+               an object of. The financial benefits of the asset are not
+               distributed to the members or beneficiaries/objects but
+               rather the company or trustee disposes of the asset to
+               the taxpayer or enters into arrangements to provide the
+               financial benefits of the asset to the taxpayer;
+       (h)     the taxpayer disposes of the asset or otherwise deals
+               with the asset in circumstances where there is a
+               significant overlap in the individuals who had direct or
+               indirect interests in the asset before and after the
+               disposal or dealing. For example, the asset is
+               transferred from one wholly owned company to
+               another, or between two trusts with the same trustee
+               and class of beneficiaries or objects; or
+       (i)     the taxpayer disposes of the asset to family members
+               and an arrangement or understanding exists between
+               the parties to the effect that the asset will be
+               re-acquired by the taxpayer, the future income
+               produced by the asset and/or any capital appreciation
+               in the asset will be provided to the taxpayer or applied
+               for the benefit of the taxpayer, or there is otherwise no
+               change in how the financial benefits produced by the
+               asset are utilised by the taxpayer when compared to
+               what occurred prior to the disposal.
+5.      An arrangement that achieves similar economic and tax
+effects through the use of similar techniques to those set out above
+may also be a wash sale for present purposes and therefore the
+subject of this Ruling.
+6.       An asset is substantially the same as the asset disposed of or
+dealt with if it is economically equivalent to, or fungible with, the
+original asset. An asset is also substantially the same as the original
+asset if there are immaterial differences between the two assets, such
+that in substance the assets are economically equivalent. Where a
+taxpayer disposes of shares in one company, and purchases shares
+in a competitor company that carries on a similar business, the
+shares in the two companies do not constitute substantially the same
+assets. There are material differences between the shares in two
+different companies, even if those companies operate in the same
+industry, such as scope or size of business, market performance, and
+returns.
+Taxation Ruling
+
+TR 2008/1
+Page 4 of 47                                           Page status: legally binding
+
+
+
+7.      The taxation benefit commonly obtained in connection with a
+wash sale is a capital loss. For this reason, this Ruling focuses on
+arrangements which realise a capital loss. However, a taxpayer may
+obtain an allowable deduction in connection with a wash sale if the
+asset is held on revenue account.
+8.     The class of persons to which this Ruling applies are all
+taxpayers that obtain a taxation benefit in the form of:
+           (i)      a capital loss; or
+           (ii)     an allowable deduction,
+in connection with a wash sale.
+
+
+
+Ruling
+9.     If Part IVA applies to a wash sale the Commissioner may make
+a determination to cancel tax benefits obtained in connection with it.
+The application of Part IVA to any particular wash sale arrangement
+depends on a careful weighing of all the relevant circumstances of the
+arrangement and the relative weight that should be attached to each of
+those circumstances. Therefore, in the absence of all relevant
+information, it is not possible to state definitively whether a particular
+wash sale scheme will attract Part IVA.
+10.     The scheme under section 177A would consist of the steps taken
+to effect the wash sale. Examples of the ways in which the scheme may
+be carried out are described in paragraph 4 of this Ruling. The scheme
+would broadly consist of those steps taken to dispose of or deal with the
+asset so that a capital loss or allowable deduction is incurred; those
+steps taken to continue the taxpayer’s economic exposure to, or interest
+in, the asset, or substantially the same asset, or enable the taxpayer to
+reinstate that exposure or interest; and the application of that capital loss
+or allowable deduction against a capital gain or assessable income,
+whether in that income year or a following income year.
+11.     Where a capital loss is incurred in connection with the wash
+sale and the counterfactual5 is established in the circumstances of the
+case, the taxpayer obtains a tax benefit in connection with the scheme
+under paragraph 177C(1)(ba). The counterfactual is that the taxpayer
+would not have disposed of or otherwise dealt with the asset but would,
+or could, be expected to have continued to beneficially own, or have an
+interest in, the asset during that income year. The objective features of
+the scheme, for instance that under the scheme the taxpayer acquires
+the same asset, or substantially the same asset, continues to enjoy the
+financial benefits of the asset or there is otherwise no significant
+change in the taxpayer’s economic exposure to, or interest in, the
+asset indicate that this is the relevant counterfactual. Thus, but for the
+scheme, a capital loss would not have been, or might reasonably be
+expected not to have been, incurred by the taxpayer.
+
+5
+    The term counterfactual is explained in paragraph 75 of this Ruling.
+                                                           Taxation Ruling
+
+                                                TR 2008/1
+Page status: legally binding                                  Page 5 of 47
+
+
+
+12.     For the same reasons, where an allowable deduction is
+obtained in connection with the wash sale and the counterfactual is
+established in the circumstances of the case, the taxpayer obtains a
+tax benefit in connection with the scheme under
+paragraph 177C(1)(b).
+13.     Whether section 177D is satisfied depends on all the facts and
+circumstances. However, if the following general observations are
+applicable to the wash sale it may be reasonable to conclude, having
+regard to the matters set out in section 177D, that the taxpayer or one
+of the persons who entered into or carried out the scheme did so for
+the sole, or dominant, purpose of enabling the taxpayer to obtain the
+tax benefit:
+       (a)     The manner in which the scheme is carried out is not
+               ordinary, is complicated or artificial or is explicable only
+               by reference to the tax benefit obtained, when
+               compared to the manner in which a disposal of an
+               asset to a third party is usually effected or to what
+               would have been expected had the counterfactual
+               occurred. Under the relevant counterfactual the
+               taxpayer continues to beneficially own or have an
+               interest in the asset and is not required to do anything
+               to the asset in order to ensure their continuing
+               beneficial ownership or interest. In contrast, under the
+               scheme the taxpayer enters into transactions which
+               effectively cancel each other, or otherwise provide the
+               taxpayer with continued economic exposure to the
+               asset, in order to achieve the same result as the
+               counterfactual but produce no benefit other than the
+               tax benefit.
+       (b)     The form of the scheme is the disposal of, or otherwise
+               ending of, the taxpayer’s beneficial ownership of or
+               interest in, the asset. The substance of the scheme is
+               that the taxpayer continues to economically own or
+               benefit from the same or substantially the same asset,
+               while creating a capital loss or allowable deduction for
+               tax purposes. The substance of the scheme is that the
+               taxpayer is left in materially the same economic
+               position with respect to the asset as they were in prior
+               to the scheme.
+       (c)     The period over which the scheme is carried out is
+               short, and the time at which the scheme was entered
+               into is proximate to the derivation of a capital gain or
+               assessable income, or the end of the income year.
+               Further, the timing of the scheme is not proximate to
+               any events that explain the disposal as being for
+               ordinary business or family reasons.
+Taxation Ruling
+
+TR 2008/1
+Page 6 of 47                                   Page status: legally binding
+
+
+
+       (d)        The result achieved by the scheme is the incurrence of
+                  a capital loss, and thus a reduction in income tax
+                  payable on any capital gains made by the taxpayer or
+                  the incurrence of an allowable deduction and, thus, a
+                  reduction in the income tax payable by the taxpayer,
+                  whether in that income year or a subsequent income
+                  year.
+       (e)        With the exception of transaction costs associated with
+                  the scheme and the increase in the taxpayer’s financial
+                  resources by reason of not having to pay tax, the
+                  taxpayer’s financial position remained essentially
+                  unchanged, or if it did change is offset by an inverse
+                  financial change of an associate.
+       (f)        If the asset is disposed of, or dealt with to an
+                  associate, the financial position of the associate
+                  remained essentially unchanged, or if it did change, is
+                  offset by an inverse financial change of the taxpayer.
+       (g)        The taxpayer does not forego further increases in the
+                  value of the asset disposed of, or any income
+                  produced by it, or continues to otherwise enjoy the
+                  financial benefits of the asset such that the person to
+                  whom it is disposed of does not benefit in substance
+                  from their ownership of, or interest in, the asset.
+       (h)        The persons to whom the taxpayer disposes of the
+                  asset or with whom the taxpayer deals with in
+                  implementing the scheme are controlled or influenced
+                  by the taxpayer, or have a family connection to the
+                  taxpayer.
+14.     The Commissioner is therefore likely in these circumstances
+to exercise his powers under subsection 177F(1) to cancel the tax
+benefit and determine that the whole or part of the capital loss or
+allowable deduction, whichever relevant, was not incurred by the
+taxpayer during the income year.
+15.     However, if the taxpayer disposes of, or deals with, the asset
+to an associate and the associate benefits in substance from the
+asset, or there are demonstrable non-tax advantages or objects,
+whether of a business or family nature, secured under the scheme,
+subject to the other factors, this would tend against the conclusion as
+to the dominant purpose such that Part IVA might be expected not to
+apply. By benefit in substance what is meant is that as a result of the
+disposal or dealing there has been a real change in how the financial
+benefits produced by the asset are utilised such that they are no
+longer utilised by the taxpayer and their dependents but are now
+substantially utilised by the associate.
+                                                        Taxation Ruling
+
+                                             TR 2008/1
+Page status: legally binding                               Page 7 of 47
+
+
+
+16.      If the asset disposed of or dealt with to an associate is
+worthless or near worthless, the associate is unlikely to financially
+benefit from it by virtue of its worthlessness, and this would suggest,
+subject to the other factors, that the dominant purpose of the scheme
+was to enable the taxpayer to incur a capital loss or allowable
+deduction. If the taxpayer has offset the capital loss or allowable
+deduction against capital gains or assessable income, and obtained a
+large and immediate financial advantage by reason of not having paid
+tax in the income year of disposal, this may outweigh any uncertain,
+and in some cases highly unlikely, chance of an improvement in the
+asset in the future that the associate may benefit from.
+17.      Where the Commissioner has determined that the whole or
+part of the capital loss or allowable deduction, whichever relevant,
+was not incurred by the taxpayer during the income year, he may, if in
+his opinion it is fair and reasonable, make another determination
+under subsection 177F(3), adjusting the taxation situation of any
+taxpayer. This determination is known as a ‘compensating
+adjustment’. Whether a compensating adjustment can, and should,
+be made in respect of a wash sale needs to be considered on the
+facts of each case and the requirements of subsection 177F(3) must
+be satisfied. The Commissioner will only be in a position to determine
+whether it is fair and reasonable that such an adjustment be made
+when the application of Part IVA is established.
+
+
+
+Examples
+Example 1: concurrent disposal and acquisition
+18.     Catherine owns a large share portfolio and land as a
+consequence of being named a beneficiary of her grandfather’s
+estate in the year ended 30 June 2001. Acting on professional
+financial advice from Simon, Catherine sells the land on 18 May 2007
+and makes a capital gain of $50,000 in the year ended 30 June 2007.
+That same day, Catherine discusses with Simon her impending
+income tax liability.
+19.     Simon reviews Catherine’s share portfolio and notes that she
+holds 100,000 shares in Beta Communications Ltd (Beta), a listed
+public company. Beta is currently trading at 51 cents per share.
+Catherine’s reduced cost base for her Beta shares is $1.00 per share.
+Simon advises Catherine that she is currently holding unrealised
+losses of $49,000 in Beta and proposes a strategy to realise those
+losses whilst allowing her to maintain her interest in Beta.
+20.    Catherine acts on this advice and on 20 May 2007 Simon, on
+Catherine’s behalf, instructs an arm’s length stockbroker to undertake
+concurrent and contingent sell and buy contracts (that is, to sell all
+Catherine’s existing Beta shares prior to purchasing any new ones)
+on the Beta stock. Under this arrangement, on the same day
+Catherine sells 100,000 Beta shares for 51 cents each and then buys
+100,000 shares in Beta at a price of 51 cents each. The sale and
+Taxation Ruling
+
+TR 2008/1
+Page 8 of 47                                  Page status: legally binding
+
+
+
+purchase are not referable to any contemporaneous change in the
+performance of Beta or any other matters that might cause a
+reasonable investor to change their view regarding the stock.
+21.     Simon charges Catherine $1,000 for transaction costs
+associated with the concurrent and contingent buy and sell
+arrangement. CGT event A1 happens upon the sale of the shares.
+Catherine’s capital proceeds from the transaction are $51,000, and her
+reduced cost base is $101,000 (including the $1,000 transaction
+costs), giving her a capital loss of $50,000. Catherine offsets the
+capital loss against the $50,000 capital gain when preparing her
+income tax return for the year ended 30 June 2007.
+22.      The scheme, for the purposes of subsection 177A(1), includes
+all the steps leading to, the entering into, and the implementation of,
+the sell and buy transactions, the incurrence of the capital loss and
+the offsetting of the $50,000 capital loss against the $50,000 capital
+gain by Catherine.
+23.      The objective circumstances of the scheme, in particular the
+offsetting nature of the transactions, indicate that the relevant
+counterfactual is that there would have been no change in Catherine’s
+beneficial ownership of the Beta shares. As the scheme had no effect or
+outcome on Catherine’s economic exposure to the stock it is reasonable
+to conclude that nothing would have happened if the scheme had not
+been entered into or carried out. Thus, for the purposes of
+paragraph 177C(1)(ba), the tax benefit obtained by Catherine is the
+capital loss of $50,000 incurred during the 2006-2007 income year.
+24.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •          The manner in which the scheme was entered into or
+                  carried out (subparagraph 177D(b)(i)) is not consistent
+                  with the way a normal investor holds and realises
+                  investments. Ordinarily, an investor would not sell
+                  shares in a company and immediately apply the
+                  proceeds of sale to acquire the same number of shares
+                  in the same company. The manner in which the
+                  scheme was conducted, when compared to the
+                  relevant counterfactual, points to the conclusion that
+                  the scheme was entered into or carried out for the
+                  dominant purpose of realising the capital loss. Under
+                  the counterfactual Catherine would not have carried
+                  out the transactions and maintained her existing
+                  shareholding. In contrast, Catherine has entered into
+                  an artificial, self-cancelling arrangement and incurred
+                  transaction costs in order to achieve the same result as
+                  under the counterfactual for no benefit other than the
+                  tax benefit of the capital loss.
+                                                           Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                                  Page 9 of 47
+
+
+
+
+       •       There is a discrepancy between the form and substance
+               of the scheme (subparagraph 177D(b)(ii)). In form
+               Catherine disposed of her beneficial ownership of the
+               shares, but the effect of the concurrent and contingent
+               sale and purchase is such that, in substance,
+               Catherine’s position with respect to the shares has not
+               materially changed. Catherine suffered no economic
+               loss under the scheme. Under the counterfactual the
+               form and substance coincide, with Catherine continuing
+               to own and benefit from the shares. This factor points
+               towards a dominant purpose of incurring a capital loss.
+       •       The timing (subparagraph 177D(b)(iii)) of the scheme
+               also suggests the requisite dominant purpose of
+               obtaining a tax benefit. The scheme lasted a day with
+               the sale and purchase occurring concurrently on
+               20 May 2007 which, is proximate to the derivation of
+               the $50,000 capital gain from the sale of land on the
+               18 May 2007, and is not referable to any
+               contemporaneous change in market sentiment or
+               performance of the company.
+       •       The tax results achieved (but for Part IVA)
+               (subparagraph 177D(b)(iv)) is the incurrence of the
+               $50,000 capital loss that reduces the separate $50,000
+               capital gain and the amount of tax payable by Catherine
+               for the 2006-2007 income year. This was the only
+               benefit obtained by Catherine under the scheme, as the
+               sale proceeds were substantially used to purchase the
+               same amount of shares in the company. There has been
+               no material change in Catherine’s financial position as a
+               result of the scheme (subparagraph 177D(b)(v)), other
+               than an increase in her financial resources from not
+               having to pay tax on the capital gain derived on the sale
+               of the land. Catherine has incurred transaction costs for
+               no benefit other than the tax benefit obtained in
+               connection with the scheme.
+       •       There has been no change in the financial position of
+               any parties associated with Catherine
+               (subparagraph 177D(b)(vi)) but this is because no such
+               parties were involved in the scheme and therefore this
+               factor is neutral. There are no other consequences as
+               Catherine continues to hold equivalent shares in Beta
+               (subparagraph 177D(b)(vii)). This factor supports the
+               conclusion that the scheme was entered into to incur the
+               capital loss. The only connection between Catherine, the
+               financial advisor and the stockbroker arises from
+               commercial or professional relationships; namely for the
+               giving of financial advice, and as facilitator in selling and
+               buying the shares (subparagraph 177D(b)(viii)). Thus,
+               this factor is neutral as to the dominant purpose.
+Taxation Ruling
+
+TR 2008/1
+Page 10 of 47                                Page status: legally binding
+
+
+
+25.     Upon weighing up the eight matters it would be concluded that
+the dominant purpose of Catherine in entering into and carrying out
+the scheme was to obtain a tax benefit in the form of a capital loss. In
+particular the manner, form and substance, timing, tax effects and
+financial consequences for Catherine arising from the scheme
+support this conclusion. Accordingly, the Commissioner may make a
+determination under section 177F to cancel the tax benefit.
+
+
+Example 2: 24 hours between disposal and acquisition
+26.     Kelly maintains a large share portfolio. She sells a parcel of
+Alpha shares from her portfolio on 20 March 2007 and makes a
+capital gain of $62,000 in the year ended 30 June 2007.
+27.     On 5 June 2007, Kelly receives a financial booklet discussing
+various end of year income tax saving strategies. As a result of what
+she reads, she reviews her share portfolio and notes that she holds
+60,000 shares in Echo Ltd (Echo), a listed public company. Echo is a
+medium sized public company, whose shares are readily traded.
+Echo has not performed well for the last two years due to increased
+competition to its business, and its share price has not moved much
+since its last announcement of a dividend in March. According to the
+newspapers Echo is currently trading at $1.20 per share. Kelly’s
+reduced cost base for her Echo shares is $2.42 per share. Acting on
+one of the strategies outlined in the booklet she devises a plan which
+would allow her to crystallise the unrealised loss and maintain her
+interest in Echo. In view of this she contacts Bruce, her broker, on the
+same day to obtain information on the market and the current
+expectations as to the price of the Echo shares. Bruce assures her
+that there have been no relevant market announcements and that he
+expects, based on the information available to him, that there will be
+no significant movements in the price of the Echo shares over the
+next couple of days.
+28.     Acting on Bruce’s advice she places with him a sell order for
+the 50,000 shares and the next day instructs him to buy 50,000 Echo
+shares. The price of the stock has moved up by 1 cent during that
+interval.
+29.     Bruce charges Kelly $1,000 for transaction costs associated
+with the sell and buy orders. CGT event A1 happens upon the sale of
+the shares. Kelly’s capital proceeds from the transaction are $60,000
+and her reduced cost base is $122,000 (including the $1,000
+transaction costs), giving her a capital loss of $62,000. Kelly offsets
+the capital loss against the $62,000 capital gain when preparing her
+income tax return for the year ended 30 June 2007.
+30.     The price of the Echo shares does not improve much during
+subsequent years but Kelly holds the Echo shares until July 2010
+when she sells part of her portfolio, including the Echo shares, in
+order to pay a deposit on the purchase of a house.
+                                                         Taxation Ruling
+
+                                              TR 2008/1
+Page status: legally binding                               Page 11 of 47
+
+
+
+31.      The scheme, for the purposes of subsection 177A(1), includes
+all the steps leading to, the entering into and the implementation of
+the planned sell and buy transactions, the incurrence of a $62,000
+capital loss and the offsetting of that capital loss against the $62,000
+capital gain by Kelly. It does not include the subsequent sale of the
+shares in July 2010, as it has no connection with the planned disposal
+and acquisition that occurred in June 2007. The facts surrounding the
+entry into the scheme, including the adoption of the strategy in the
+financial booklet and the advice received on the expectations as to
+price suggest, that Kelly planned to purchase back the same number
+of Echo shares shortly after she sold them. Accordingly, the disposal
+and acquisition of the shares 24 hours later constitute a scheme
+within the meaning of subsection 177A(1).
+32.      The objective circumstances of the scheme, in particular the
+strategy acted on, the offsetting nature of the transactions, the short
+period of time between them and the nature and market for the stock;
+indicate that the relevant counterfactual is that there would have been
+no change in Kelly’s beneficial ownership of the Echo shares.
+Although Kelly did not hold any Echo shares for 24 hours, the scheme
+had no real effect or outcome on her economic exposure to the stock
+and it is reasonable to conclude that nothing would have happened if
+the scheme had not been entered into or carried out. Thus, for the
+purposes of paragraph 177C(1)(ba), the tax benefit obtained by Kelly
+is the capital loss of $62,000 incurred during the 2006-2007 year.
+33.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •       The manner in which the scheme was entered into
+               or carried out (subparagraph 177D(b)(i)), in
+               particular the short period of time between the
+               disposal and acquisition coupled with the obtaining
+               of advice to confirm suitable market conditions may
+               objectively be taken to indicate that Kelly sold her
+               shares without any real intention of ceasing to hold
+               an economic exposure to Echo. There is no
+               evidence of any matter that might cause a
+               reasonable investor to undergo a change of view
+               with respect to the stock. Further, Kelly sold the
+               precise number of shares in Echo to incur a loss
+               that exactly offset the expected capital gain. The
+               manner in which the scheme was conducted, when
+               compared to the relevant counterfactual, points to
+               the conclusion that the scheme was entered into or
+               carried out for the dominant purpose of realising the
+               capital loss. Under the counterfactual Kelly would
+               not have carried out the transactions and
+               maintained her existing shareholding. In contrast,
+Taxation Ruling
+
+TR 2008/1
+Page 12 of 47                                   Page status: legally binding
+
+
+
+                  Kelly has entered into a self-cancelling arrangement
+                  and incurred transaction costs in order to achieve a
+                  similar result as under the counterfactual (as she
+                  had to outlay $500 extra to purchase back the Echo
+                  shares) for no benefit other than the tax benefit of
+                  the capital loss.
+       •          There is a discrepancy between the form and
+                  substance of the scheme (subparagraph 177D(b)(ii)).
+                  In form Kelly has disposed of her beneficial ownership
+                  of the shares, however the overall result of the scheme
+                  is that, in substance, Kelly’s position with respect to the
+                  shares has not materially changed. Although Kelly was
+                  at risk of an adverse economic outcome from a change
+                  in price of the Echo shares, and this is consistent with
+                  her having disposed of those shares the market
+                  conditions and short period of time out of the market
+                  limited her exposure to that risk. Further, she did not
+                  suffer a significant cost from that risk as the change in
+                  price was small (in accordance with the advice she
+                  received) and the cost was more than outweighed by
+                  the tax savings she secured by entering into the
+                  scheme.
+       •          The timing (subparagraph 177D(b)(iii)) of the scheme
+                  also suggests the requisite dominant purpose of
+                  obtaining a tax benefit. The scheme lasted over
+                  24 hours with the sale occurring on the 5 June 2007
+                  and the purchase occurring the next day which, is
+                  proximate to the year end, and is not referable to any
+                  contemporaneous change in market sentiment or
+                  performance of the company.
+       •          The tax results achieved (but for Part IVA)
+                  (subparagraph 177D(b)(iv)) is the incurrence of the
+                  $62,000 capital loss that reduces the separate $62,000
+                  capital gain and the amount of tax payable otherwise
+                  by Kelly for the 2006-2007 income year. This was the
+                  only benefit obtained by Kelly under the scheme. There
+                  has been no material change in Kelly’s financial
+                  position as a result of the scheme
+                  (subparagraph 177D(b)(v)), other than a net increase
+                  in her financial resources from not having to pay tax on
+                  the capital gain derived on the sale of the Echo shares.
+                  Kelly has incurred transaction costs for no benefit other
+                  than the tax benefit obtained in connection with the
+                  scheme. Kelly did have to pay an additional $500 to
+                  purchase the same number of Echo shares but this is
+                  more than outweighed by the tax savings.
+                                                            Taxation Ruling
+
+                                                TR 2008/1
+Page status: legally binding                                 Page 13 of 47
+
+
+
+
+       •       There has been no change in the financial position of
+               any parties associated with Kelly
+               (subparagraph 177D(b)(vi)) but this is because no such
+               parties were involved in the scheme and therefore this
+               factor is neutral. There are no other consequences as
+               Kelly continues to hold equivalent shares in Echo
+               (subparagraph 177D(b)(vii)). This factor supports the
+               conclusion that the scheme was entered into to incur
+               the capital loss. The only connection between Kelly
+               and the stockbroker arises from commercial or
+               professional relationships; namely for the provision of
+               financial advice, and as facilitator in selling and buying
+               the shares (subparagraph 177D(b)(viii)). Thus, this
+               factor is neutral as to the dominant purpose.
+34.     Upon weighing up the eight matters it would be concluded that
+the dominant purpose of Kelly in entering into and carrying out the
+scheme was to obtain a tax benefit in the form of a capital loss. In
+particular the manner, form and substance, timing, tax effects and
+financial consequences for Kelly arising from the scheme support this
+conclusion. Accordingly, the Commissioner may make a
+determination under section 177F to cancel the tax benefit.
+
+
+Example 3: transfer between two trusts
+35.     Oscar is the sole trustee and a general beneficiary, together
+with his family, of a discretionary trust (Trust 1). Trust 1 was settled in
+March 1992. As trustee, during the 2003-2004 income year Oscar
+purchased 1,000,000 shares in the publicly listed ABC Ltd (ABC) at
+$1 per share. The purchase was financed by an interest only loan
+from a third party, secured on other assets of the trust under which
+market rates of interest are payable. On 11 June 2007 Oscar, as
+trustee of Trust 1, sold shares held in another company, XYZ Ltd and
+generated a capital gain of $255,000.
+36.     On 12 June 2007, a second discretionary trust (Trust 2) was
+settled with Oscar as the sole trustee. The terms of Trust 1 and
+Trust 2 are very similar, but not the same. Both trusts are under the
+sole control of Oscar, and their objects are the same. On that same
+day, Oscar as trustee for Trust 1 transferred 500,000 shares in
+ABC to himself as trustee of Trust 2 for a consideration of $250,000.
+Oscar signed and executed a share sale agreement in his capacities
+as trustee of Trust 1 and Trust 2. The purchase price was paid by
+Trust 1 providing an interest only loan to Trust 2 on an unsecured
+basis with interest owing on the amount outstanding payable based
+on the same rates as the original loan from the third party. There was
+no loan agreement.
+Taxation Ruling
+
+TR 2008/1
+Page 14 of 47                                   Page status: legally binding
+
+
+
+37.     CGT event E2 happens upon the transfer of the ABC shares
+to Trust 2. Trust 1 incurred a capital loss of $250,000. The capital loss
+was calculated on a reduced cost base of $1.00 per share and capital
+proceeds of 50 cents, the closing market price of the shares on
+12 June 2007. The capital loss of $250,000 incurred by Trust 1 was
+applied against the capital gain of $255,000 resulting in a net capital
+gain of $5,000. The net capital gain of $5,000 was distributed to
+Oscar and included in his assessable income for the year ended
+30 June 2007.
+38.      The scheme, for the purposes of subsection 177A(1), consists
+of all the steps leading to, entering into, and the implementation of the
+transfer of the shares to Trust 2, including the creation of Trust 2 on
+12 June 2007, the transfer of 500,000 ABC shares by Trust 1 to Trust
+2 on 12 June 2007, the incurrence by Trust 1 of a capital loss of
+$250,000 from the transfer, the offsetting of the $250,000 capital loss
+against Trust 1’s capital gains for the year ended 30 June 2007, and
+the distribution by Oscar, as trustee of Trust 1, to himself as a
+beneficiary of Trust 1, the net capital gain of Trust 1 for the income
+year ended 30 June 2007.
+39.     The objective circumstances of the scheme, in particular the
+transfer of shares from Trust 1 to Trust 2 which are very similar, have
+the same objects and are under the sole control of Oscar, indicate
+that the relevant counterfactual is that the transaction would not have
+occurred and that Oscar in his capacity as trustee for Trust 1 would
+have remained the registered owner of the ABC shares. As the
+scheme had no effect or outcome on Oscar’s legal title, or the objects’
+economic exposure to the asset, it is reasonable to conclude that
+nothing would have happened if the scheme had not been entered
+into or carried out. Thus, for the purposes of paragraph 177C(1)(ba),
+the tax benefit obtained by Oscar as trustee of Trust 1 is the capital
+loss of $250,000 incurred during the 2006-2007 income year.
+40.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •          The manner in which the scheme was entered into or
+                  carried out (subparagraph 177D(b)(i)) is not straight
+                  forward. It involved the settling of a trust, the transfer of
+                  shares and a loan all occurring on the same day. The
+                  terms of the trusts are very similar and the vendor and
+                  purchaser was the same person, acting in different
+                  capacities. The manner of the scheme, when compared
+                  to the counterfactual, points to the conclusion that the
+                  scheme was entered into or carried out for the dominant
+                  purpose of incurring the capital loss. Under the
+                  counterfactual Oscar as trustee of Trust 1 would not
+                  have entered into the arrangement and remained the
+                  registered owner of the shares. Also, the same objects
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                               Page 15 of 47
+
+
+
+               would have continued to have a comparable equitable
+               interest in the shares. In contrast, Oscar has entered
+               into a contrived arrangement for no benefit other than
+               creating a capital loss to reduce the net capital gain that
+               Trust 1 would otherwise have distributed to Oscar in his
+               personal capacity.
+       •       There is a discrepancy between the form and substance
+               of the scheme (subparagraph 177D(b)(ii)). In form there
+               is a sale from Trust 1 to Trust 2 but in substance the
+               beneficial ownership of the shares remained under the
+               sole and complete control of Oscar, subject to the
+               equitable obligation imposed under the terms of Trust 2
+               that was very similar to the previous obligation imposed
+               under Trust 1. There was no change in the objects’
+               economic interests in the ABC shares, as the objects
+               under Trust 2 were the same as the objects under
+               Trust 1. Thus, no economic loss was suffered as a result
+               of the scheme. Under the counterfactual the form and
+               substance coincides, Oscar continues to legally own and
+               may benefit from the shares if he exercises his
+               unfettered discretion in his favour.
+       •       The timing (subparagraph 177D(b)(iii)) of the scheme
+               also suggests the requisite purpose of obtaining a tax
+               benefit. The scheme lasted only one day. Trust 2 was
+               established on 12 June 2007 and the transfer of ABC
+               shares took place on that day. Furthermore, the
+               transfer was proximate to the capital gain derived the
+               day before and to the end of the financial year.
+       •       The tax result achieved (but for Part IVA)
+               (subparagraph 177D(b)(iv)) is the making of the capital
+               loss of $250,000 that was applied against the capital
+               gain of $255,000 in the year ended 30 June 2007,
+               reducing the trustee’s net capital gain for that year, and
+               thus the tax payable on that gain that was distributed to
+               Oscar in his personal capacity.
+       •       Although Trust 1 has disposed of assets, these have
+               been replaced with the loan to Trust 2 and are offset by
+               the inverse change of financial position of Trust 2
+               (subparagraph 177D(b)(v)). There has been no
+               material change in Oscar’s financial position under the
+               scheme other than the increase in his financial
+               resources from not having to pay tax
+               (subparagraph 177D(b)(vi)). As a beneficiary of Trust 1
+               he benefited from the capital loss which reduced his
+               trust distribution from a net capital gain of $255,000 to
+               $5,000. As trustee of Trust 2 he remains the registered
+               owner and controls, in his discretion, who may benefit
+               from the ABC shares. Thus, these factors point
+               towards the requisite dominant purpose.
+Taxation Ruling
+
+TR 2008/1
+Page 16 of 47                                 Page status: legally binding
+
+
+
+
+       •          There are no other consequences
+                  (subparagraph 177D(b)(vii)) as Trust 2 substantially
+                  replicates for both the trustee and objects their legal and
+                  economic positions with respect to the shares.
+                  No substantive family or business advantages have been
+                  secured by entering into the scheme. The connection
+                  between the parties (subparagraph 177D(b)(viii)) is one of
+                  associates, in respect of which Oscar has sole control of
+                  both trusts allowing Oscar to cause Trust 1 to incur a
+                  capital loss while retaining legal title and the ability to
+                  benefit from control of the shares, which points towards
+                  the dominant purpose.
+41.     Upon weighing up the eight matters it would be concluded that
+the dominant purpose of Oscar as trustee of Trust 1 in entering into
+and carrying out the scheme was to obtain a tax benefit in the form of
+a capital loss. In particular, the manner, form and substance, timing,
+tax effects, the financial consequences for Oscar and the connection
+between Oscar, Trust 1 and Trust 2 would lead to this conclusion.
+Accordingly, the Commissioner may make a determination under
+section 177F to cancel the tax benefit. See also Cumins v. FC of T
+[2007] FCAFC 21; 2007 ATC 4303; 66 ATR 57.
+
+
+Example 4: transfer to a discretionary trust
+42.      Liam Lewis holds a number of investments, including rental
+properties and shares in listed public companies. His investment
+activities do not constitute the carrying on of a business. Liam is also
+the trustee and appointer of the Lewis Maintenance Trust (the Trust)
+under which Liam has the discretion to hold and apply the assets and
+income of the trust for the maintenance and education of his children,
+according to their needs and requirements. The beneficiaries of the
+Trust are his four school aged children. Liam is the default
+beneficiary. As trustee, Liam holds shares and interests in managed
+investment funds.
+43.     On the 17 August 2006 Liam derives a $20,000 capital gain
+from the sale of some of his shares. On 15 June 2007, Liam meets
+with his financial adviser to review the current income tax and
+financial position of himself and the Trust.
+44.     Whilst reviewing his share portfolio, Liam and his adviser
+examine his interests in Orion Metals Ltd (Orion), a listed public
+company. Liam holds 14,000 shares in Orion and its current share
+price is $3.75. Liam’s cost base and reduced cost base in Orion is
+$4.55. Liam is advised that, notwithstanding the current poor
+performance of Orion’s share price, Orion has recently undertaken a
+strategic review of its operations and that it will be expanding its
+operations in anticipation of growing demand for the commodities it
+produces which should lead to a higher share price in the medium to
+long term and that the shares should be retained. However, as the
+Trust requires further capital to meet his children’s education needs
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                                Page 17 of 47
+
+
+
+he is advised that he should gift the shares to the Trust as a source of
+further investment capital and to reduce his income tax liability.
+45.     Liam acts on the advice and transfers the shares for no
+consideration to the Trust on 15 June 2007. The documentation
+associated with the transfer is prepared by Liam’s solicitor.
+CGT event E2 happens upon the transfer of the shares to the Trust.
+After taking into account market value substitution rules Liam makes
+a capital loss of $11,200 on the transfer that reduces his $20,000
+capital gain, resulting in a net capital gain of $8,800 which is included
+in his assessable income for the year ended 30 June 2007.
+46.      The Orion shares pay high yielding and reliable franked
+dividends. Prior to the transfer these dividends were received and
+applied by Liam against the living expenses of himself and his family.
+After the transfer the dividends are distributed to Liam’s four children
+or accumulated as necessary to provide for the children’s education.
+Liam as trustee for the Trust sells the Orion shares for a substantial
+profit in January 2009 and distributes the net capital gain to one of his
+children, who has recently turned 18 and requires money for
+university.
+47.      The scheme, for the purposes of subsection 177A(1), includes
+all the steps leading to, the entering into, and the implementation of
+the arrangement to gift the Orion shares to the Trust; the realisation
+of the capital loss of $11,200; and the offsetting of the capital loss
+against part of the $20,000 capital gain in Liam’s income tax return for
+the year ended 30 June 2007. It does not include the subsequent
+disposal of the shares in January 2009, as it is not connected with the
+transfer of the shares to the Trust that occurred on the 15 June 2007.
+48.      The objective circumstances of the scheme, including that
+Liam remains the registered owner of the shares (although now in his
+capacity as trustee), continues to control who benefits from the
+shares subject to the equitable obligations imposed under the terms
+of the Trust, and is a default beneficiary of the Trust, indicate that
+under a reasonable counterfactual the share transfer would not have
+occurred and Liam would have retained beneficial ownership of the
+shares. As the scheme had no effect or outcome on Liam’s legal title,
+and he retains an economic exposure to the asset as an object of the
+Trust it may be reasonable to conclude that nothing would have
+happened if the scheme had not been entered into or carried out.
+Liam could, in his discretion, transfer the shares back to himself at
+anytime. Thus, for the purposes of paragraph 177C(1)(ba), the tax
+benefit obtained by Liam is the capital loss of $11,200 incurred during
+the 2006-2007 income year.
+Taxation Ruling
+
+TR 2008/1
+Page 18 of 47                                  Page status: legally binding
+
+
+
+49.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •          The manner in which the scheme was entered into or
+                  carried out (subparagraph 177D(b)(i)) is consistent with
+                  an ordinary family dealing. Liam has divested himself
+                  of the Orion shares in order to provide for the
+                  education and maintenance of his four children but
+                  maintains control to ensure against dissipation of the
+                  fund. The fact that the shares were disposed of for no
+                  consideration is consistent with this purpose and this
+                  aspect tends against the conclusion as to dominant
+                  purpose. However, the act of transferring the particular
+                  Orion shares, which were in loss, to the Trust as
+                  opposed to Liam’s other more profitable assets may
+                  impact on this conclusion. In this regard, Liam
+                  transferred the Orion shares on the advice of his
+                  financial advisor. It could be argued that this was done
+                  to reduce his income tax liability. However, the trust
+                  required further capital, and the advice was to effect
+                  that the Orion shares would become a profitable
+                  investment in the years to come.
+       •          There is no discrepancy between the form and
+                  substance of the scheme (subparagraph 177D(b)(ii)).
+                  Although Liam remains the legal owner of the shares,
+                  is a default beneficiary and has sole control over how
+                  the capital or income of the shares is distributed; the
+                  equitable obligation that they be applied for the
+                  maintenance and education of his children is
+                  substantive and real. His discretion to distribute income
+                  has always been exercised in favour of his children.
+                  The income produced by the shares is now applied or
+                  accumulated for the benefit of his four children. Thus,
+                  Liam’s four children substantively benefit from the
+                  arrangement. However, it is also noted that prior to the
+                  transfer Liam’s four children could be said to have
+                  economically benefited from the Orion shares as they
+                  are financially dependent upon Liam.
+       •          The timing (subparagraph 177D(b)(iii)) of the scheme
+                  suggests the requisite dominant purpose of obtaining a
+                  tax benefit. The scheme lasted only a few days, with
+                  the disposal of the loss making shares occurring
+                  proximate to year end.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                                Page 19 of 47
+
+
+
+
+       •       The tax results achieved (but for Part IVA)
+               (subparagraph 177D(b)(iv)) is the realisation of the
+               $11,200 capital loss that was partially applied against
+               the $20,000 capital gain, thus reducing Liam’s liability
+               for capital gains tax. This was the only financial benefit
+               obtained by Liam under the scheme. In addition to the
+               tax savings obtained from the reduction of the capital
+               gain there has been a material change in Liam’s
+               financial position (amounting to the parting with
+               $52,500 which is the current value of the shares) as a
+               result of the scheme (subparagraph 177D(b)(v)), as he
+               now holds the Orion shares subject to the equitable
+               obligation under the trust deed that they be applied
+               towards the maintenance and education of his children,
+               and the income has been applied in the past for that
+               purpose. However, this change in Liam’s financial
+               position is offset by the improved financial position of
+               his four children. This factor is accordingly neutral as to
+               the required purpose.
+       •       The financial positions of Liam’s four children have
+               been improved as they now benefit from the Orion
+               shares (subparagraph 177D(b)(vi)), however this factor
+               is neutral as to purpose as it is offset by the inverse
+               financial change of Liam. Although Liam is a default
+               beneficiary the manner in which the trust is used
+               suggests that substantively he no longer benefits from
+               the dividends or any capital appreciation in the shares
+               (subparagraph 177D(b)(vii)). This factor points away
+               from the required purpose. Liam is the trustee of the
+               Trust and father of the beneficiaries of the Trust
+               (subparagraph 177D(b)(viii)). Thus, this familial
+               connection explains why the transfer occurred and no
+               consideration was received for it, and points away from
+               the dominant purpose.
+50.     Upon weighing up the eight matters it would be concluded that
+none of the parties to the scheme had the dominant purpose of
+obtaining a tax benefit in the form of a capital loss. The purpose of
+Liam entering into and carrying out the scheme was to provide for the
+maintenance and education of his children without fear of dissipation.
+In particular, the manner, form and substance, financial
+consequences and the nature of the connection between the parties
+would support this conclusion. Accordingly, Part IVA does not apply.
+Taxation Ruling
+
+TR 2008/1
+Page 20 of 47                               Page status: legally binding
+
+
+
+Example 5: transfer to a discretionary trust
+51.     Stephen Bartlet holds a number of investments, including
+rental properties and shares in listed public companies. Stephen
+derives regular rents and dividends from most of these investments.
+His investment activities do not constitute the carrying on of a
+business. Stephen is also the trustee and appointer of the Bartlet
+Family Trust (the Trust) under which Stephen has a wide range of
+discretionary powers. The discretionary objects of the Trust include
+Stephen, his spouse and dependent children. As trustee, Stephen
+holds shares and interests in managed investment funds.
+52.     On the 5 February 2007 Stephen derives a $40,000 capital
+gain from the sale of shares. Stephen does not want to pay tax on the
+$40,000 capital gain. He meets with his financial adviser on
+15 June 2007 who recommends that they review his share portfolio,
+and determine whether he has any unrealised capital losses that
+could be crystallised and set off against the capital gain.
+53.     His adviser notes that he holds 4,000 shares in Davros
+Industries Ltd (Davros), a listed public company. The last time Davros
+was traded on the stock exchange was over 6 months ago at $0.05.
+Stephen’s reduced cost base in Davros is $10.55. Davros has
+experienced a number of spectacular corporate misadventures over
+the last 2 years which has seen its profits turn into significant losses
+and its stock price plummet from a high of $20.00 per share. Stephen
+is advised that it is highly unlikely that Davros’ share price will ever
+improve. Furthermore, he is advised that if he wishes to crystallise a
+capital loss he should gift the shares to the Trust, as it is highly
+unlikely that he will be able to sell the shares on the market.
+54.     Acting on the advice, Stephen transfers the shares for no
+consideration to the Trust on 15 June 2007. The documentation
+associated with the transfer is prepared by Stephen’s solicitor, at a
+cost of $500. CGT event E2 happens upon the transfer of the shares
+to the Trust. After taking into account market value substitution rules
+Stephen incurs a capital loss of $42,500 that he applies to reduce his
+$40,000 capital gain, giving him a net capital loss of $2,500 for the
+year ended 30 June 2007.
+55.     Prior to the problems that beset Davros, its shares paid high
+yielding and reliable franked dividends. In previous years these
+dividends were received and applied by Stephen to provide for his
+and his family’s everyday expenses. The Davros shares have not
+paid dividends for almost two years.
+56.     Stephen continued to hold the shares in his capacity as
+trustee for the Trust until Davros was wound up in insolvency during
+2008. None of the ordinary shareholders of Davros, including
+Stephen, received a return on winding up. Davros was dissolved and
+the shares cancelled in October 2008.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                                Page 21 of 47
+
+
+
+57.      The scheme, for the purposes of subsection 177A(1), includes
+all the steps leading to, the entering into, and the implementation of
+the arrangement to gift the Davros shares to the Trust; the incurrence
+of the capital loss of $42,500 and the application of the capital loss
+against the $40,000 capital gain so that it was reduced to zero
+resulting in a net capital loss of $2,500 to Stephen for the year ended
+30 June 2007.
+58.     The objective circumstances of the scheme, in particular that
+Stephen remains the registered owner of the shares (although now in
+his capacity as trustee), has control over who benefits from the
+shares as trustee in his unfettered discretion and, thus, also the ability
+as an object to still benefit from, or otherwise reinstate his beneficial
+ownership of, the shares, indicate that under a reasonable
+counterfactual the share transfer would not have occurred and
+Stephen would have retained beneficial ownership of the shares. As
+the scheme had no effect or outcome on Stephen’s legal title, and he
+retains an economic exposure to the asset as an object of the Trust it
+is reasonable to conclude that nothing would have happened if the
+scheme had not been entered into or carried out. Thus, for the
+purposes of paragraph 177C(1)(ba), the tax benefit obtained by
+Stephen is the capital loss of $42,500 incurred during the 2006-2007
+income year.
+59.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •       The manner in which the scheme was entered into or
+               carried out (subparagraph 177D(b)(i)) although
+               straightforward, is more complicated than the
+               counterfactual and is not entirely in accordance with an
+               ordinary business or family dealing. Stephen entered
+               into the scheme on the advice of his financial advisor
+               as a strategy to reduce his tax liability. Although the
+               shares were disposed of for no consideration and this
+               aspect is consistent with a dealing of a familial nature,
+               the decision to transfer the Davros shares, which carry
+               little prospect of producing financial benefits for the
+               beneficiaries of the Trust over Stephen’s other more
+               profitable assets points towards the required dominant
+               purpose of obtaining a tax benefit. The beneficiaries
+               are unlikely to benefit in substance from the
+               arrangement; an outcome that is contradictory to the
+               notion of a gift to, or otherwise providing for, one’s
+               family.
+Taxation Ruling
+
+TR 2008/1
+Page 22 of 47                                  Page status: legally binding
+
+
+
+
+       •          There is a discrepancy between the form and
+                  substance of the scheme (subparagraph 177D(b)(ii)).
+                  In form the scheme is a gift of an asset to Stephen’s
+                  family. The substance of the scheme is that the shares
+                  have been transferred to the trust to crystallise a loss.
+                  Although Stephen’s family in form may potentially
+                  benefit from the Davros shares, the circumstances and
+                  prospects of the Davros shares suggest that this is
+                  unlikely to occur in this instance and that the trust is
+                  being used simply to hold worthless shares. Further,
+                  Stephen remains the legal owner of the shares as
+                  trustee, is an object of the trust and has sole control
+                  over how the capital or income of the trust is applied.
+                  Stephen could re-transfer the shares to himself at any
+                  time, or distribute to himself any financial benefits
+                  produced by the shares, in the unlikely event that
+                  Davros’ position improved.
+       •          The timing (subparagraph 177D(b)(iii)) of the scheme
+                  suggests the requisite dominant purpose of obtaining a
+                  tax benefit. The scheme lasted only a few days, with
+                  the disposal of the loss making shares occurring
+                  proximate to year end. Stephen realised a capital gain
+                  earlier in that income year and consideration was only
+                  given to disposing of the Davros shares when it
+                  became apparent that Stephen would be assessable
+                  on this capital gain.
+       •          The tax results achieved (but for Part IVA)
+                  (subparagraph 177D(b)(iv)) is the incurrence of a
+                  $42,500 capital loss that entirely reduced the tax
+                  Stephen would otherwise have had to pay on the
+                  $40,000 capital gain he derived earlier in the year. This
+                  was the only financial benefit obtained by Stephen
+                  under the scheme. In addition to the tax savings and
+                  transaction costs there has been a change in
+                  Stephen’s financial position as a result of the scheme
+                  (subparagraph 177D(b)(v)), as he now holds the
+                  Davros shares subject to the equitable obligations of
+                  the Trust under which both he and his family may
+                  potentially benefit. However, this change in position is
+                  offset by an inverse change of an associate, by reason
+                  of a corresponding change in the financial positions of
+                  Stephen in his capacity as trustee of the Trust and of
+                  Stephen’s family as potential beneficiaries under the
+                  trust (subparagraph 177D(b)(vi)). The relationship
+                  between these parties must be taken into account
+                  (subparagraph 177D(b)(viii)). Thus, these factors either
+                  favour, or are neutral to, the required dominant
+                  purpose.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: legally binding                                Page 23 of 47
+
+
+
+
+       •       Stephen in his capacity as trustee has acquired an asset,
+               and his family have the opportunity to benefit from that
+               asset (subparagraph 177D(b)(vi)). However, Stephen’s
+               family will only be capable of benefiting from the transfer if
+               the shares recover in value. There has been no real
+               change in Stephen’s or his family’s positions as there is
+               no value in the shares; nor is there any likelihood of an
+               improvement in the value of the shares having regard to
+               the information of the time (subparagraph 177D(b)(vii)).
+               Stephen is the trustee of the Trust, father and spouse of
+               the beneficiaries of the Trust and a beneficiary himself
+               (subparagraph 177D(b)(viii)). Notwithstanding this familial
+               connection to explain the transfer for no consideration;
+               given the nature and prospects of the Davros shares, the
+               transfer could not be regarded as a substantive gift. The
+               large and immediate financial benefit obtained by Stephen
+               through saving tax on the otherwise taxable $40,000
+               capital gain outweighs any uncertain and unlikely chance
+               of a recovery in Davros’ fortunes.
+60.     Upon weighing up the eight matters it would be concluded that
+the dominant purpose of Stephen in entering into and carrying out the
+scheme was to obtain a tax benefit in the form of a capital loss. In
+particular, the manner, form and substance, timing, financial and
+other consequences and the nature of the connection between the
+parties would support this conclusion. Accordingly, the Commissioner
+may make a determination under section 177F to cancel the tax
+benefit.
+
+
+Example 6: period of time between disposal and acquisition
+61.     David, a plumber by trade, has a keen interest in the share
+market and maintains an online trading account. David holds a
+diversified portfolio in a number of large publicly listed companies, but
+on occasion David likes to gamble on certain speculative stocks that
+attract his attention. His investment activities do not constitute the
+carrying on of a business.
+62.      One such speculative stock is the listed, widely traded and
+highly volatile technology based stock IT Ltd (IT). Following a recent
+rally, IT goes into ‘free fall’ in September 2006. Over the last weekend
+of September 2006, David reviews his portfolio, researches the
+company’s financial position, the views held by commentators, and
+follows the discussion in various share market chat rooms. Following
+his research, David decides that he should sell his stake in IT, which
+has a reduced cost base of $2.88, in order to minimise further losses.
+Taxation Ruling
+
+TR 2008/1
+Page 24 of 47                                  Page status: legally binding
+
+
+
+63.      On 2 October 2006, David sells his entire holding in IT, being
+30,000 shares at a price of $1.50 per share. CGT Event A1 happens
+upon the sale of the shares and David incurs a capital loss of
+$41,400. On 2 and 3 October David actively investigates potential
+companies to invest the proceeds he received from the sale of IT.
+During the course of those investigations he notices that the
+sentiment of certain investors towards IT has changed, that there has
+been a relative increase in the volume of IT shares traded and that
+the IT share price is climbing again. David continues to monitor IT
+whilst trying to decide what company he should invest the surplus
+funds. As he is unable to decide on a suitable investment, and IT’s
+price has continued to climb, David decides to purchase shares in IT.
+On 5 October 2006 David purchases 27,000 shares at the prevailing
+market rate of $1.67 per share. On the 6 April 2007 David sells some
+other shares and makes a capital gain of $35,000. The $41,400
+capital loss is applied against this capital gain, giving David a net
+capital loss of $6,400 for the 2006-2007 income year.
+64.      The scheme, for the purposes of subsection 177A(1), includes
+all the steps leading to (including the objective research undertaken
+by David) the entering into, and the implementation of the sale and
+the subsequent purchase of IT shares; the making of the $41,400
+capital loss and the application of the capital loss against the $35,000
+capital gain so that it was reduced to zero resulting in a net capital
+loss of $6,400 to David for the year ended 30 June 2007.
+65.      The objective circumstances of the scheme, in particular the
+offsetting nature of the transactions which occurred within 3 days of
+each other, may indicate that it is unreasonable to expect that David
+would have incurred the capital loss of $41,400 had the scheme not
+been carried out and, thus, that a tax benefit within the meaning of
+paragraph 177C(1)(ba) has been obtained, being the $41,400 capital
+loss. As the scheme had no material effect or outcome on David’s
+economic exposure to the asset it is reasonable to conclude that nothing
+would have happened if the scheme had not been entered into or carried
+out. Alternatively, the length of time between the sale and purchase,
+which coincides with changes in the market performance of IT, may
+suggest that the sale and purchase are not part of the same scheme,
+and that David would have disposed of the IT shares, regardless of the
+scheme. If this is the case, David may not have obtained a tax benefit.
+66.       Section 177D provides that Part IVA applies to a scheme in
+connection with which the taxpayer has obtained a tax benefit if, after
+having regard to the eight specified factors, it would be concluded
+that a person who entered into or carried out the scheme, or any part
+of it, did so for the purpose of enabling the taxpayer to obtain the tax
+benefit. Having regard to the eight specified factors:
+       •          The manner in which the scheme was entered into or
+                  carried out (subparagraph 177D(b)(i)), in particular the
+                  short period of time between the disposal and
+                  acquisition, may objectively be taken to indicate that
+                  David sold the shares without any intention of ceasing
+                  to hold an economic exposure to IT. However, the fact
+                                                        Taxation Ruling
+
+                                             TR 2008/1
+Page status: legally binding                              Page 25 of 47
+
+
+
+               that the disposal and acquisition are explicable by
+               reference to market changes, for instance the
+               improvement in share price and demand for the stock
+               may also be regarded as consistent with the way in
+               which taxpayers usually hold and realise investments.
+               The coincidence with market changes may lead a
+               reasonable person to infer that the sale and purchase
+               of the IT shares within a short time was the result of
+               independent investment decisions to sell and buy for
+               commercial reasons. Overall, this factor points away
+               from the conclusion as to dominant purpose.
+       •       There is no discrepancy between the form and
+               substance of the scheme (subparagraph 177D(b)(ii)).
+               In form, David has changed his beneficial ownership of
+               the shares. The fact that David was at risk of (having
+               regard to the widely held, actively traded and volatile
+               nature of IT shares), and suffered, an adverse
+               economic outcome from the change in the market
+               value of the IT shares is consistent with David in
+               substance disposing of his IT holding. The risk is
+               material having regard to the market conditions of the
+               time.
+       •       The timing (subparagraph 177D(b)(iii)) of the scheme,
+               in particular of the purchase, being referable to a
+               change in investor sentiment and market activity tends
+               against the dominant purpose of obtaining a tax
+               benefit. The loss was incurred prior to the capital gain
+               against which it was applied. However, there is nothing
+               in the facts and circumstances to suggest that this gain
+               was predictable or expected.
+       •       The tax results achieved (but for Part IVA)
+               (subparagraph 177D(b)(iv)) is the incurrence of the
+               $41,400 capital loss that entirely reduced the tax David
+               would otherwise have had to pay on the $35,000
+               capital gain he derived later in the year. This was the
+               only material benefit obtained, as the sale proceeds he
+               received were used to purchase shares in IT on
+               5 October 2006. There has been no material change in
+               David’s financial position as a result of the scheme
+               (subparagraph 177D(b)(v)). Other than the increase in
+               his financial resources from not having to pay tax on
+               the capital gain David acquired materially the same
+               value of shares as he disposed of, just a smaller
+               number.
+Taxation Ruling
+
+TR 2008/1
+Page 26 of 47                                 Page status: legally binding
+
+
+
+
+       •          There has been no change in the financial position of
+                  any parties associated with David
+                  (subparagraph 177D(b)(vi)), but this is because no such
+                  parties were involved in the scheme. David missed out
+                  on the increase in the market value of the IT shares
+                  whilst not holding them (subparagraph 177D(b)(vii)).
+                  Furthermore, David had to pay more to acquire each IT
+                  share than he received on disposal and, thus, could only
+                  purchase a smaller number of IT shares. Thus, David
+                  has suffered an economic loss in comparison to the
+                  counterfactual. If the counterfactual had occurred David
+                  would have continued to hold 30,000 IT shares, rather
+                  than 27,000 IT shares under the scheme. This loss of
+                  $5,100 is material when compared with the tax saving
+                  obtained. The only connection between David and the
+                  stockbroker arises from commercial or professional
+                  relationships (subparagraph 177D(b)(viii)). Thus, these
+                  factors are neutral, or tend against the conclusion as to
+                  the dominant purpose.
+67.     Upon weighing the eight matters it would be concluded that
+the dominant purpose of David in entering into and carrying out the
+scheme was not to obtain a tax benefit in the form of a capital loss. In
+particular the manner in which the sale and purchase were entered
+into, the form and substance of the scheme, the timing and other
+consequences of the scheme support this conclusion. Accordingly,
+Part IVA does not apply.
+
+
+
+Date of effect
+68.     This Ruling applies both before and after its date of issue.
+However, the Ruling will not apply to taxpayers to the extent that it
+conflicts with the terms of settlement of a dispute agreed to before the
+date of issue of the Ruling (see paragraphs 75 and 76 of Taxation
+Ruling TR 2006/10).
+
+
+
+Previous Rulings
+69.    Taxation Ruling IT 2643 and the second sentence of
+paragraph 4(viii) and the whole of paragraph 96 of Taxation Ruling
+TR 96/14 were withdrawn from the issue of the draft version of this
+Ruling on 11 July 2007. To the extent that the views expressed in
+those Rulings still apply, they have been incorporated in this Ruling.
+
+
+
+
+Commissioner of Taxation
+16 January 2008
+                                                                Taxation Ruling
+
+                                                   TR 2008/1
+Page status: not legally binding                                 Page 27 of 47
+
+
+
+
+Appendix 1 – Explanation
+       This Appendix is provided as information to help you
+understand how the Commissioner’s view has been reached. It does
+not form part of the binding public ruling.
+
+General overview of Part IVA
+70.    Part IVA is a general anti-avoidance provision that gives the
+Commissioner the discretion to cancel all or part of a ‘tax benefit’ that
+has been obtained, or would, but for section 177F, be obtained, by a
+taxpayer in connection with a scheme to which Part IVA applies.
+71.    Before the Commissioner can exercise the discretion in
+subsection 177F(1), the requirements of Part IVA must be satisfied.
+These requirements are that:
+        (i)     a ‘tax benefit’, as identified in section 177C, was or
+                would, but for subsection 177F(1), have been obtained;
+        (ii)    the tax benefit was or would have been obtained in
+                connection with a ‘scheme’ as defined in section 177A;
+                and
+        (iii)   having regard to section 177D, the scheme is one to
+                which Part IVA applies.
+72.    Further, general guidance on the application of Part IVA can
+be found in Law Administration Practice Statement PS LA 2005/24
+Application of General Anti-Avoidance Rules.
+
+
+Scheme
+73.     For Part IVA to apply, the identified scheme must fall within
+the definition of ‘scheme’ in subsection 177A(1).6 That definition is
+very broad, and is capable of constituting the taking of but one step.7
+However, the identified scheme must be one in connection with which
+a taxpayer has obtained a tax benefit.8
+
+
+
+
+6
+  Further discussion on the meaning of scheme under Part IVA can be found at
+  paragraphs 54 to 60 of PS LA 2005/24.
+7
+  FC of T v. Hart (2004) 217 CLR 216; [2004] HCA 26; 2004 ATC 4599; (2004)
+  55 ATR 712 at [43] per Gummow and Hayne JJ.
+8
+  FC of T v. Hart (2004) 217 CLR 216; [2004] HCA 26; 2004 ATC 4599; (2004)
+  55 ATR 712 at [47] per Gummow and Hayne JJ, and at [9] per Gleeson CJ and
+  McHugh J.
+Taxation Ruling
+
+TR 2008/1
+Page 28 of 47                                    Page status: not legally binding
+
+
+
+74.     The precise formulation of the scheme for the purposes of
+subsection 177A(1) will depend on the facts of the particular case.
+However, the tax benefit in question must be sufficiently connected
+with the scheme as identified. In the context of wash sales, the
+scheme would usually consist of the steps taken to dispose of or deal
+with the asset, for instance the happening of a CGT event, the capital
+loss or allowable deduction incurred as a result, and any
+arrangements or transactions entered into or carried out with the
+effect that in substance there is no significant change in the
+taxpayer’s economic exposure to, or interest in, the asset. It may
+include the obtaining of or benefiting from financial, taxation or legal
+advice, the incorporation, acquisition, or the control of a company or
+the declaration or settlement of a trust, if these are relevant. It may
+also include an understanding or arrangement which enables the
+taxpayer to financially benefit from the asset disposed of.
+
+
+Tax benefit
+75.     Broadly, subsection 177C(1) provides that a tax benefit exists
+for the purposes of Part IVA where it might reasonably be expected
+that an amount would be included in assessable income, a deduction
+would not be allowable, a capital loss would not be incurred, or a
+foreign tax credit would not be allowable to the taxpayer in a year of
+income, if the scheme had not been entered into or carried out.9
+Determining whether this is the case depends on the facts and
+involves ‘a prediction as to events which would have taken place if
+the relevant scheme had not been entered into or carried out and the
+prediction must be sufficiently reliable for it to be regarded as
+reasonable’.10 This prediction is often referred to as the
+‘counterfactual’.11
+76.     Usually, in the case of wash sales, a relevant tax benefit will
+arise in connection with the scheme because a capital loss is incurred
+by the taxpayer as a result of one of the CGT events listed in
+section 104-5 of the ITAA 1997 happening, being a capital loss that
+might reasonably be expected not to have been incurred by the
+taxpayer in that year of income if the scheme had not been entered
+into or carried out: paragraph 177C(1)(ba) of the ITAA 1936.
+
+
+
+
+9
+   Further discussion on the meaning of tax benefit under Part IVA can be found at
+   paragraphs 61 to 78 of PS LA 2005/24.
+10
+    FC of T v. Peabody (1994) 181 CLR 359 at 385; 94 ATC 4663 at 4671; (1994)
+   28 ATR 334 at 353.
+11
+   This is the terminology used to describe the prediction or alternative hypothesis in
+   PS LA 2005/24 at paragraphs 69 to 78.
+                                                         Taxation Ruling
+
+                                              TR 2008/1
+Page status: not legally binding                          Page 29 of 47
+
+
+
+77.      While this matter is dependent on the facts of each case, it is
+likely that, but for the scheme, the asset would not have been
+disposed of or dealt with so that a CGT event happens in relation to
+the asset in that income year. Rather, the objective circumstances of
+the scheme, in particular the arrangements that ensure that there is
+no real change in the taxpayer’s economic exposure to, or interest in,
+the asset or enable the taxpayer to reinstate that exposure or interest,
+suggest that it is unreasonable to expect that the taxpayer would
+have incurred the capital loss during that year of income had the
+scheme not been entered into or carried out. Notwithstanding the
+disposal, objectively, such arrangements suggest that the taxpayer
+never intended to cease to hold an economic exposure to, or interest
+in, the asset.
+78.     If an allowable deduction is incurred by the taxpayer in
+connection with the wash sale, for similar reasons, ordinarily the
+objective circumstances of the scheme will suggest that it is
+unreasonable to expect that the deduction would have been allowable
+to the taxpayer in relation to that year of income had the scheme not
+been entered into or carried out.
+79.      If there is a difference between the amounts of the asset
+disposed of or dealt with, and acquired, this may impact on the
+reasonable counterfactual and the extent of the tax benefit obtained.
+Whether this is the case or not will depend on the facts. If the
+difference between the amounts disposed of and acquired is relatively
+insignificant this may have no affect on the counterfactual. If the
+difference is material this may affect the formulation of the
+counterfactual and, thus, the amount of the tax benefit obtained.
+80.      Where the difference is substantial the reasonable
+counterfactual may be that the taxpayer would have disposed of or
+dealt with the assets regardless of the scheme and there would be no
+tax benefit under section 177C. Alternatively, the circumstances may
+be such as to suggest that the relevant counterfactual consists of two
+transactions, being the disposal of a certain amount of assets with the
+result that a capital loss or deduction would have been incurred by
+the taxpayer in the year of income even if the scheme had not been
+carried out, and a wash sale. In such a case, the relevant tax benefit
+is only that amount of the capital loss or allowable deduction
+attributable to the wash sale.
+81.     For example, a difference in the numbers of shares disposed
+of and acquired, for instance 1,000 shares are disposed of and
+600 shares are acquired, may indicate that the reasonable
+counterfactual is that the taxpayer would have sold 400 shares
+regardless of the scheme. Therefore the tax benefit is the capital loss
+on the 600 shares, and not the 1,000 shares. However, on the other
+hand, if the difference between the amount of shares sold and
+purchased is minor, for instance 1000 shares are disposed of and
+950 shares acquired, the circumstances may indicate that the
+difference in shares is an attempt to disguise the link between the two
+transactions or fund the transaction costs. In such a case, the
+reasonable counterfactual should be identified as being that the
+Taxation Ruling
+
+TR 2008/1
+Page 30 of 47                                 Page status: not legally binding
+
+
+
+taxpayer would have done nothing and that the tax benefit is the
+entire capital loss incurred on the sale of all the shares.
+
+
+Dominant purpose
+82.     Part IVA will only apply to a scheme in connection with which
+the taxpayer has obtained a tax benefit if, after having regard to eight
+specified factors, it would be concluded that a person who entered
+into or carried out the scheme, or any part of it, did so for the purpose
+of enabling the taxpayer to obtain the tax benefit: section 177D.
+Where there are two or more purposes, the purpose of obtaining a tax
+benefit must be the dominant purpose: subsection 177A(5).
+83.     It is possible for Part IVA to apply notwithstanding that the
+dominant purpose of obtaining the tax benefit was consistent with the
+pursuit of a commercial gain. Furthermore, the fact that a particular
+course of action is both ‘tax driven’ and bears the character of a
+rational commercial decision does not determine whether a person
+has entered into or carried out a scheme for the dominant purpose of
+enabling the taxpayer to obtain a tax benefit.12
+84.      The conclusion about the requisite purpose is drawn by
+having regard to the eight objective matters listed in
+subparagraphs 177D(b)(i) to (viii) in turn. These matters do not
+require any inquiry into the subjective motives of the relevant
+taxpayer or persons who entered into or carried out the scheme or
+any part of it.13 Therefore, section 177D requires an objective
+conclusion as to purpose to be reached having regard to objective
+facts.14
+
+
+The eight factors in paragraph 177D(b)
+85.       The eight factors listed in paragraph 177D(b) encompass a
+range of matters which, taken individually or collectively, will reveal
+whether or not the requisite purpose exists. Some factors may be of
+little or no weight in ascertaining whether or not that purpose exists.15
+However, all eight factors must be taken into account to determine
+whether they point towards, point against or are neutral as to the
+conclusion of a purpose of enabling the relevant taxpayer to obtain a
+tax benefit. Some general observations follow regarding the
+relevance of each of these matters in the context of wash sales.
+
+
+
+12
+   FC of T v. Spotless Services Ltd (1996) 186 CLR 404 at 415 and 416; 96 ATC 5201
+   at 5206; (1996) 34 ATR 183 at 187 and 188.
+13
+   FC of T v. Spotless Services Ltd (1996) 186 CLR 404 at 421; 96 ATC 5201 at 5210;
+   (1996) 34 ATR 183 at 192 and FC of T v. Hart (2004) 217 CLR 216; [2004] HCA 26;
+   2004 ATC 4599; (2004) 55 ATR 712 at [65] per Gummow and Hayne JJ.
+14
+   Further discussion on the meaning of dominant purpose under Part IVA can be
+   found at paragraphs 79 to 91 of PS LA 2005/24.
+15
+   FC of T v. Hart (2004) 217 CLR 216; [2004] HCA 26; 2004 ATC 4599; (2004)
+   55 ATR 712 at [92] per Callinan J.
+                                                          Taxation Ruling
+
+                                              TR 2008/1
+Page status: not legally binding                           Page 31 of 47
+
+
+
+Subparagraph 177D(b)(i) – the manner in which the scheme was
+entered into or carried out
+86.     Subparagraph 177D(b)(i) requires that consideration be given
+to the decisions, steps and events that combine to make up the
+scheme. It enables contrivance and artificiality to be identified by
+comparing the manner in which the scheme was entered into or
+carried out with the manner in which the counterfactual would have
+been implemented. If a scheme is entered into and carried out in the
+manner in which ordinary business or family dealings are conducted,
+the manner of the scheme will not indicate the purpose of obtaining
+the tax benefit.
+87.      The essence of a wash sale is that there is no significant
+change in the taxpayer’s economic exposure to, or interest in, the
+asset. Consequently, the taxpayer obtains no benefit from carrying
+out the scheme, other than the tax benefit obtained in connection with
+it. For instance, the steps or transactions may effectively cancel each
+other out such that there is no benefit to the taxpayer from the
+scheme, other than the tax benefit. If the wash sale involves the
+taxpayer disposing of the asset to an associate and then re-acquiring
+it or an arrangement under which the associate provides the financial
+benefits of the asset to the taxpayer, the associate does not benefit,
+and there is no benefit to the taxpayer other than the tax benefit
+obtained.
+88.     Rather, the manner in which a wash sale is conducted, when
+compared to the counterfactual, being that there would have been no
+change in the beneficial ownership of, or interest in, the asset, points
+to the conclusion that the wash sale was entered into or carried out
+for the dominant purpose of incurring the capital loss or allowable
+deduction.
+89.      If the counterfactual had occurred the taxpayer would not
+have had to do anything to the asset in order to continue to
+beneficially own, or have an interest in, the asset. By contrast, a wash
+sale involves a number of contrived or artificial steps unnecessary for
+the taxpayer to maintain beneficial ownership of the asset and that
+either substantively cancel each other out, or have the effect that, in
+substance, there is no significant change in the taxpayer’s economic
+exposure to, or interest in, the asset. The manner in which a wash
+sale is formulated and, thus, entered into or carried out is generally
+explicable only by reference to its taxation consequences.
+Taxation Ruling
+
+TR 2008/1
+Page 32 of 47                           Page status: not legally binding
+
+
+
+90.     This type of dealing is not consistent with the way in which
+taxpayers normally hold and realise investments. Ordinarily, a
+taxpayer who wishes to sell an asset to an arm’s length party for
+market value would not then apply the proceeds of the sale to acquire
+the same or substantially the same asset. Similarly, a taxpayer would
+not sell an asset whilst planning to purchase the same or substantially
+the same asset a short while later. A taxpayer who wishes to give an
+asset to a family member for no consideration (that is, as a gift) would
+not then enter into arrangements to either re-acquire it, or financially
+benefit from it, so that the family member does not benefit in
+substance from it.
+91.     In determining whether the scheme was entered into and
+carried out in the manner in which ordinary business or family
+dealings are conducted, it is not a matter of whether the arrangement
+is common place or frequently entered into by a taxpayer. Rather, this
+factor examines whether the means adopted is consistent with the
+means ordinarily used to achieve the relevant commercial or family
+objective. There may be particular features of the way in which the
+taxpayer conducts its business or family affairs that explain why the
+arrangement was entered into in the way it was, and if this is the case
+this factor will weigh against a conclusion as to the dominant purpose.
+92.     Evidence as to the investment strategies followed by the
+taxpayer, or that the taxpayer entered into the scheme on the basis of
+financial or tax advice and the nature of that advice are also relevant
+under this factor. Advice that is relevant would include the
+circumstance of obtaining expert opinion regarding market conditions,
+or expectations as to movements in the price of an asset. If the facts
+and circumstances, including the obtaining of advice, surrounding the
+entry into the scheme demonstrate that the scheme was entered into
+pursuant to a regular or recognised investment strategy, this would
+weigh against a conclusion as to dominant purpose. Conversely, if
+the nature of the advice is inconsistent with such strategies, or is
+otherwise suggestive of a tax purpose, this factor will point towards
+the requisite purpose. Past conduct, for instance if the taxpayer has
+entered into this type of transaction at year end in prior years may
+also be relevant.
+93.     This factor also has regard to the extent of the period between
+the disposal and acquisition of the same or substantially the same
+asset. A significant period of time between the disposal and
+acquisition would be consistent with the way in which taxpayers
+usually hold and realise investments.
+94.     The nature and extent of differences between the assets
+disposed of and acquired are relevant to this factor. Material
+differences between the assets disposed of and acquired may
+indicate that the taxpayer sold the asset in order to change their
+investment exposure, particularly if there is a difference in the market
+performance or risk profile of the original and replacement assets, or
+in response to market changes or expectations, all of which are
+consistent with ordinary commercial dealings.
+                                                        Taxation Ruling
+
+                                             TR 2008/1
+Page status: not legally binding                          Page 33 of 47
+
+
+
+95.      Whether the asset was disposed of for its market value
+impacts on the manner in which the wash sale was entered into or
+carried out. Its relevance depends on whether the transactions in
+question were conducted between arm’s length parties or the parties
+are otherwise dealing at arm’s length. If the taxpayer disposes of the
+asset to arm’s length or unrelated parties, and it is disposed of for
+less than its market value this aspect would be inconsistent with the
+ordinary manner of such dealings. By contrast, if the taxpayer
+disposes of the asset to a family member, and the asset is disposed
+of for less than its worth, or for no consideration, this may be
+consistent with an ordinary family dealing, for instance a gift, or a
+partial gift.
+96.     The manner of the scheme also has regard to the
+characteristics of the assets sold including whether the taxpayer only
+disposed of those assets with unrealised losses, and whether the
+number of assets disposed of is that number necessary to produce a
+capital loss or allowable deduction which offsets, respectively, a
+capital gain or assessable income already derived or expected to be
+derived.
+
+
+Subparagraph 177D(b)(ii) – the form and substance of the
+scheme
+97.     Subparagraph 177D(b)(ii) directs attention to whether there is
+a discrepancy between the form of the scheme and its substance,
+meaning its commercial and economic substance. A discrepancy
+between the business and practical effect of a scheme on the one
+hand, and its legal form on the other, may indicate that the scheme
+was implemented in a particular form as the means by which to obtain
+a tax benefit if the substance of the scheme may be achieved or
+available by some other more straightforward or commercial
+transaction or dealing.
+98.     The form of a wash sale may involve a legal disposal of the
+asset, or some other act which realises or ends the taxpayer’s
+beneficial ownership of the asset, for example, CGT event A1. It may
+also, depending on the circumstances, involve a legal purchase of
+substantially the same asset, the purchase and exercise of a call
+option to acquire substantially the same asset at substantially the
+same price at which it was sold, or arrangements under which the
+taxpayer obtains a proportion of the income generated by that asset
+and/or any profit made on the subsequent disposal of that asset.
+Taxation Ruling
+
+TR 2008/1
+Page 34 of 47                           Page status: not legally binding
+
+
+
+99.     Whilst a wash sale involves in form a change in the beneficial
+ownership of the asset, essentially the overall result of the scheme is
+that the taxpayer is left in the same or, substantially the same,
+economic position they were in prior to carrying it out. Thus, the legal
+effect of the scheme is different from its substance. A comparison
+between the form and substance of the scheme with the form and
+substance of what would have happened had the counterfactual
+occurred, being that there would have been no change in the
+beneficial ownership of the asset, highlights this. Under the
+counterfactual the form and substance coincide – the taxpayer
+continues to legally and economically benefit from the asset.
+100. The timing of the disposal of, or dealing with the asset, and
+the acquisition of the same, or substantially the same, asset has
+bearing on the substance of the arrangement. The shorter the period
+between the two the more likely it is that in substance there has been
+no real change in the taxpayer’s economic exposure to, or interest in,
+the asset. In contrast, the longer the period between the disposal and
+acquisition the more likely it is that in substance, as well as in form,
+the taxpayer has ended their ownership of, or interest in, the asset.
+101. Also of relevance, where there is a period of time between the
+disposal and acquisition, is whether the taxpayer suffered, or was at
+risk of an adverse economic outcome, from a change in the market
+value of the asset. In other words, from having to pay more to acquire
+the replacement asset than was received on disposal, by reason of
+being ‘out of the market’. The relative weight accorded to this aspect
+depends on the degree of risk the taxpayer was exposed to and, in
+particular, on the nature of the asset and its market.
+102. If an active secondary market exists for the asset, as is the
+case for shares that are traded on a stock exchange, whether the
+taxpayer is exposed to risk of an adverse economic outcome may be
+accorded some weight. The weight accorded will depend on the
+nature of the market for that asset, in particular aspects such as
+volatility, liquidity and volume, or whether the transaction has been
+timed to take advantage of how the market usually behaves. It will
+also depend on whether the circumstances suggest that the taxpayer
+planned to expose themselves to this risk in the expectation that any
+adverse cost resulting from it would be small, or otherwise more than
+outweighed by the tax savings achieved by entering into the scheme.
+If no active secondary market exists for the asset, or the asset is
+otherwise not traded on a secondary market, the risk of an adverse
+economic outcome is reduced and, thus, any exposure to that risk
+may be of limited relevance.
+                                                         Taxation Ruling
+
+                                              TR 2008/1
+Page status: not legally binding                           Page 35 of 47
+
+
+
+103. Derivatives or financial instruments may be used to replicate
+the economic position the taxpayer had whilst holding the asset, or to
+create a synthetic asset exposure. The issue is whether the financial
+instrument provides the taxpayer with an economic equivalent asset
+or benefit to that represented by the disposed asset. For example, an
+equity swap involves a contractual agreement to exchange payments
+linked to the performance of either an equity index or the shares in a
+specific company. Such swaps can be used to acquire exposure to
+the share price movement of a specific company to synthesise a
+share purchase. Thus, an equity swap may allow a taxpayer who has
+disposed of shares to continue to benefit from the economic
+performance of those shares without actually having an interest in
+them.
+
+
+Subparagraph 177D(b)(iii) – the time in which the scheme was
+entered into and the length of the period during which the
+scheme was carried out
+104. Subparagraph 177D(b)(iii) draws attention to particular ‘timing’
+aspects of the manner in which a scheme is entered into or carried
+out. It requires consideration of the time that the scheme, or any part
+of it, was entered into or carried out, and the length of the period
+during which it was carried out. In particular, it enables consideration
+of the extent to which the timing and duration of the scheme go
+towards delivering the relevant tax benefit or are related to
+commercial or familial opportunities and requirements.
+105. This factor requires that the Commissioner have regard to the
+length of time, if any, between the disposal of the asset and the
+acquisition of the replacement asset or other arrangements that
+provide the taxpayer with the financial benefits that the taxpayer
+would otherwise have received from the asset if they had continued to
+hold it. The longer the passage of time between the transactions, the
+more this factor would tend against the required dominant purpose.
+106. However, if the scheme contains other steps that provide a
+link between the disposal and acquisition, then the length of time
+between the two events may be of less relevance. This will
+particularly be the case if these steps mitigate the risks of the
+taxpayer suffering adverse economic consequences from changes in
+the market value of the asset (typically by the use of derivatives)
+whilst not holding the asset during that period. For instance, a call
+option that allows the taxpayer to acquire shares in the same
+company at substantially the same price as it was disposed for
+removes the risk of price variation. When exercised, the effect of the
+arrangement is that there is economically no change in ownership.
+Taxation Ruling
+
+TR 2008/1
+Page 36 of 47                            Page status: not legally binding
+
+
+
+107. As observed above, this factor also requires that the timing of
+the wash sale scheme be considered. If the scheme is proximate to
+the derivation of a capital gain or other assessable income this may
+point towards the requisite purpose. Similarly, if the scheme occurs in
+proximity to the end of the income year this may also point towards
+the requisite purpose. However, if the wash sale does not occur in
+proximity to year end this may not by itself be enough to cause this
+factor to be neutral or point away from the requisite purpose. Of
+relevance is whether the taxpayer had previously derived a capital
+gain during that income year, which is offset by the capital loss. The
+sale of the precise number of shares necessary to produce a capital
+loss, which exactly offsets a capital gain derived in the income year,
+would strongly point to a link between the two. By contrast, if the
+incurred capital loss is substantially smaller than the realised capital
+gain this may suggest no connection.
+108. Where the capital loss has been incurred before the derivation
+of the capital gain it is necessary to consider such matters as the
+length of time between the incurring of the loss and the making of the
+gain, and the degree to which the subsequent gain was predictable. If
+it is certain, or highly probable, that a capital gain will be made, then
+the fact that the loss is incurred prior to the gain will not of itself
+prevent an inference being drawn that the loss was incurred in order
+to offset the gain.
+109. By contrast, if the elements of the scheme are proximate to
+commercial events that ordinarily constitute matters that are taken
+into account by investors in deciding whether to hold onto an asset or
+otherwise, for example, a profit downgrading of a company and then
+a later improvement, or an investment strategy, this factor would
+weigh against the requisite dominant purpose.
+
+
+Subparagraph 177D(b)(iv) – the result in relation to the operation
+of this Act that, but for this Part, would be achieved by the
+scheme
+110. Subparagraph 177D(b)(iv) requires that consideration be
+given to the taxation outcomes, including the tax benefit and any
+other tax consequence arising from the wash sale scheme but for the
+application of Part IVA.
+111. Generally, the result but for the application of Part IVA under a
+wash sale is the incurrence by the taxpayer of a capital loss, or an
+allowable deduction, which is then available to be offset against a
+capital gain or other assessable income (as relevant), whether
+already made or reliably expected to be made. However, any other
+tax result of the scheme for the other parties to the scheme may also
+be relevant. The extent of relevance will depend on the nature of the
+connection between the persons involved.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: not legally binding                            Page 37 of 47
+
+
+
+Subparagraph 177D(b)(v) – any change in the financial position
+of the relevant taxpayer that has resulted, will result, or may
+reasonably be expected to result from the scheme
+112. Subparagraph 177D(b)(v) directs attention to any change in
+the financial position of the taxpayer that results, will result or may
+reasonably be expected to result from the wash sale scheme.
+Financial position refers to the financial situation of the taxpayer and
+whether there has been any increase or decrease to it as a result of
+the scheme in this regard.
+113. The financial result for a taxpayer of disposing of, or otherwise
+ending their beneficial ownership of, or interest in, an asset is that
+their financial resources decrease by the value of the asset disposed
+of, and they may receive consideration, often cash, in return equal to
+the value of the asset disposed of. Accordingly, the taxpayer has
+divested the value constituted by the asset and if full consideration is
+received, converted it into cash. The taxpayer is no longer entitled to
+any further increases in value to that asset, or to any income
+produced by it (this is further discussed under
+subparagraph 177D(b)(vii)).
+114. If the taxpayer disposes of the asset to an associate, for
+instance to a family member as a gift, the taxpayer may not receive
+market value consideration or even any consideration. In this case
+the financial result for the taxpayer is that their financial resources
+decrease by the value of the asset disposed of.
+115. However, under a wash sale arrangement, other than any
+increase in the taxpayer’s financial resources resulting from the
+taxpayer not having to pay tax on the capital gain which is offset by
+the realised capital loss, or by not having to pay tax on income offset
+by the incurred allowable deduction, the taxpayer’s financial position
+may not materially change. If the wash sale involves transactions that
+offset or cancel each other the consideration received on disposal is
+offset by the cost of acquisition. There is no net change in the
+financial position of the taxpayer. The financial effects of a wash sale,
+other than those resulting from the tax benefit obtained, are
+consistent with there being no effective change in the taxpayer’s
+economic exposure to the asset.
+116. The taxpayer may also incur transaction costs (for example,
+stamp duty or brokerage fees) or advisory fees in implementing a
+wash sale scheme. However, these costs will have been incurred for
+no overall economic advantage as the taxpayer ends up in materially
+the same economic situation with respect to the asset as they were
+before the transactions occurred. Furthermore, the materiality of such
+costs needs to be weighed against the tax benefit and, in particular,
+the tax savings obtained by the taxpayer in carrying out the wash
+sale.
+Taxation Ruling
+
+TR 2008/1
+Page 38 of 47                            Page status: not legally binding
+
+
+
+117. In the case where a taxpayer disposes of the asset to an
+associate, although the taxpayer’s financial position may have
+changed, the inverse change in the financial position of the related
+entity and the relationship between the parties must also be taken
+into account under subparagraphs 177D(b)(vi) and (viii).
+
+
+Subparagraph 177D(b)(vi) – any change in the financial position
+of any person who has, or has had, any connection (whether of a
+business, family or other nature) with the relevant taxpayer,
+being a change that has resulted, will result or may reasonably
+be expected to result, from the scheme
+118. Subparagraph 177D(b)(vi) requires that consideration be
+given to any change in the financial position of any person who has,
+or has had, any connection with the taxpayer being a change that
+may reasonably be expected to result from the scheme. In a wash
+sale, persons whose financial position may be relevant under this
+factor include the person to whom the taxpayer disposes of, or deals,
+the asset to, and the person from whom the taxpayer acquires a
+replacement asset. Depending on the scheme implemented these
+may be the same person. If there are other arrangements entered
+into to mitigate the risks of not holding the asset, provide a synthetic
+asset exposure, or provide the financial benefits of the asset to the
+taxpayer, any change in the financial position of the persons involved
+in these other arrangements may be relevant.
+119. This factor assumes particular significance where the taxpayer
+disposes of the asset to a family member or other associate, for
+instance a wholly owned company or a trust in respect of which the
+taxpayer is the trustee and a beneficiary. The taxpayer may have
+disposed of the asset and changed financial position however the
+change may mean little because of an offsetting change in position of
+the family member, or associated entity.
+120. If, in such a case the taxpayer continues to benefit in
+substance from the asset, for instance by causing the associate to
+distribute to them the income and capital appreciation produced by
+the asset, the offsetting change in position of the entity indicates that,
+effectively, there has been no material change in the taxpayer’s
+economic exposure to, or interest in, the asset. As this is the same
+result as under the counterfactual, this factor would point towards the
+dominant purpose of obtaining the tax benefit.
+121. For example, a taxpayer may have changed their financial
+position if they transfer an asset to a wholly owned company of which
+they are a director. However, this change in financial position is offset
+by the wholly owned company acquiring the asset. Having regard to
+the relationship between the taxpayer and their company, as required
+by subparagraph 177D(b)(viii), these aspects of the arrangement may
+indicate that the company is merely the taxpayer’s ‘alter ego’ and that
+there has been no real change in the taxpayer’s financial position.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: not legally binding                            Page 39 of 47
+
+
+
+122. As the taxpayer is the only shareholder in the company and a
+director, they are in a position to cause the company to distribute to
+them the future benefits of the asset, or to reinstate their beneficial
+ownership of the asset. Whether it would be concluded that the
+taxpayer disposed of the asset for the objective dominant purpose of
+obtaining a capital loss, as opposed to taking advantage of the lower
+company tax rate (in contrast to the personal marginal tax rates) or
+for some other business or family purpose, will depend on other
+aspects of the arrangement, and the application of the other
+paragraph 177D(b) factors.
+123. For instance, whether the arrangement constitutes more than
+a simple disposition of an income producing asset to a wholly owned
+company under Taxation Determination TD 95/4 would depend on
+whether it was apparent from the objective circumstances of the
+scheme that the taxpayer chose to transfer those particular assets
+because they carry unrealised losses, particularly if the taxpayer has
+other assets that are not in loss which generate greater income, the
+decision to not elect for roll-over relief under Subdivision 122-A of the
+ITAA 1997, and the extent of income produced by the asset (if the
+income produced is relatively minor the benefits of a lower tax rate
+may be of lesser significance than the tax benefit of the capital loss).
+If the taxpayer re-acquired the asset from the company, this would
+also point strongly towards the application of Part IVA of the
+ITAA 1936.
+124. The timing of the scheme, for instance its proximity to the year
+end and facts indicating a connection with a capital gain already
+derived or otherwise expected to be derived, may also point towards
+a conclusion that the taxpayer disposed of the asset to the wholly
+owned company for the objective dominant purpose of incurring a
+capital loss rather than for taking advantage of the lower company tax
+rate.
+
+
+Subparagraph 177D(b)(vii) – any other consequences for the
+relevant taxpayer, or for any other person referred to in
+subparagraph (vi), of the scheme having been entered into or
+carried out
+125. Subparagraph 177D(b)(vii) supplements
+subparagraphs 177D(b)(v) to (vi) with its focus on the non-tax effects
+of the scheme, not only for the relevant taxpayer, but also for all
+connected parties. This factor looks to the practical, legal, economic
+and any other outcomes achieved by the scheme for the taxpayer
+and connected parties. The seventh factor serves as a catch-all
+ensuring that any other consequences from the scheme are taken
+into account, for instance regulatory consequences, or other non-tax
+advantages arising to the parties to the scheme, whether of a
+commercial or family nature.
+Taxation Ruling
+
+TR 2008/1
+Page 40 of 47                             Page status: not legally binding
+
+
+
+126. This factor has regard to the commercial and other
+consequences that result from disposing of, or otherwise dealing with,
+an asset. A significant consequence for a taxpayer ending their
+beneficial ownership of, or interest in, an asset is that the taxpayer no
+longer benefits from the income produced by the asset or any capital
+appreciation in the asset. For instance, a taxpayer who disposes of
+shares in a company traded on the stock exchange would forego any
+increases in the share price or any dividends subsequently paid on
+the shares.
+127. By contrast, the effect of a wash sale is that the taxpayer
+continues their economic exposure to, or interest in, the asset and
+consequently they may not miss out on any capital appreciation or
+income generated by the asset, but rather continue to financially
+benefit from the asset.
+128. Also of relevance under this factor is whether the asset
+subject of the wash sale is worthless, or near worthless. An asset is
+worthless if it has no value and there is little likelihood of this
+changing. An example of a worthless asset is shares in a company in
+liquidation where the assets are insufficient such that there is little, if
+any, likelihood of the shareholders receiving a distribution in winding
+up. The consequence for the recipient of receiving a worthless asset
+is that the recipient is unlikely to benefit from the asset, as the
+objective circumstances indicate they are unlikely to receive any type
+of return on it.
+129. If the worthless, or near worthless asset, is disposed of or
+otherwise dealt with to an associate, for instance a family member,
+the consequence that the family member is unlikely to benefit from
+the asset favours a conclusion that the dominant purpose of one of
+the parties to the scheme was to enable the taxpayer to incur a
+capital loss or allowable deduction. This will particularly be the case if
+the taxpayer has obtained a large and immediate financial advantage
+in the income year of disposal by applying the capital loss or
+allowable deduction against capital gains or other assessable income.
+130. However, it is acknowledged that a worthless or near
+worthless asset may, in the future, recover some worth, or that a
+return may be payable on it, as a result of a change in circumstances.
+The particular facts or circumstances impacting on any likelihood of a
+recovery in financial worth will also be taken into account and
+weighed under this factor. However, the financial advantage of
+reduced tax may outweigh any uncertain and, depending on the
+circumstances, highly unlikely chance of an improvement in the asset
+at some indefinite future time. If the taxpayer obtains other business
+or family advantages by disposing of the worthless asset to the
+associate then these will also be taken into account under this factor
+and, depending on their weight, may point against the conclusion that
+the asset was disposed of for the dominant purpose of incurring a
+capital loss or allowable deduction.
+                                                          Taxation Ruling
+
+                                               TR 2008/1
+Page status: not legally binding                           Page 41 of 47
+
+
+
+Subparagraph 177D(b)(viii) – the nature of any connection
+(whether of a business, family or other nature) between the
+relevant taxpayer and any person referred to in
+subparagraph (vi)
+131. Subparagraph 177D(b)(viii) inquires into the nature of the
+connection between the taxpayer and any other person whose
+financial position is reasonably expected to change as a result of the
+scheme or for whom there are any other consequences from the
+scheme. The existence of any connection between the taxpayer and
+these other persons is relevant to the identification of the other
+factors, such as the manner of the scheme, the form and substance
+of the scheme, tax result, financial change and other consequences
+of the scheme.
+132. If the parties the taxpayer deals with in implementing the wash
+sale scheme are unrelated parties dealing at arm’s length this aspect
+may tend against the requisite conclusion as to purpose, although its
+weight as against other factors which point towards the requisite
+purpose will also have to be considered. For example, in the context
+of change in financial position, the connection between the parties
+may be one of arm’s length vendor and purchaser, or broker and
+client and, thus, subparagraphs 177D(b)(v) and (vi) and this factor
+may point towards a non-tax purpose, or at least be neutral as to
+purpose.
+133. If the taxpayer has transferred the asset to a wholly owned
+company, or to an associated trust, this factor may tend towards the
+conclusion as to dominant purpose. In this context the extent of
+control the taxpayer exerts over the entity, whether there are other
+associated arrangements enabling the taxpayer to re-acquire the
+asset or otherwise obtain the financial benefits produced by the asset
+and whether that power has been or will be exercised substantially for
+the economic benefit of the taxpayer (as a shareholder in the
+company, or a beneficiary under the trust, for instance) as against
+other shareholders or beneficiaries are all relevant considerations.
+134. The fact that the taxpayer disposing of the asset to the
+associated entity is not the only person capable of benefiting from it is
+relevant and may point away from the requisite purpose but does not
+necessarily preclude a finding that the taxpayer or some other person
+had the requisite purpose. Regard should be had to whether the
+taxpayer will substantially receive the economic benefits of the asset
+by reason of the ability to control who receives them and previous
+patterns of distributions or other relevant information impacting on
+how the benefits are likely to be distributed.
+135. This factor also requires that attention be paid to the existence
+of family relationships between the taxpayer and other persons who
+are affected in any way by the scheme. This could assist taxpayers in
+some cases, particularly where family members benefit in substance
+from the arrangement.
+Taxation Ruling
+
+TR 2008/1
+Page 42 of 47                                    Page status: not legally binding
+
+
+
+136. For example, a taxpayer may provide for family members by
+settling or transferring assets they own on trust for the benefit of
+themselves and family members, retain control over those assets by
+virtue of being the trustee (including, if a discretionary trust, the ability
+to determine to whom the trust property will be distributed) and may,
+by virtue of being a beneficiary or object, have the potential to receive
+the financial benefits of the asset. Yet, if the circumstances indicate
+that the family members benefit or are likely to benefit in substance
+from this arrangement, this would point away from the requisite
+purpose, regardless of the fact that the taxpayer has maintained
+control of the asset (which may, in any event, be consistent with an
+ordinary family dealing).
+
+
+Compensating adjustments
+137. Where the Commissioner has made a determination under
+subsection 177F(1) cancelling the whole or part of a tax benefit
+obtained in connection with a wash sale, he may, if in his opinion it is
+fair and reasonable, make another determination under
+subsection 177F(3) adjusting the taxation situation of any taxpayer. A
+subsection 177F(3) determination is known as a ‘compensating
+adjustment’.16
+138. A determination for a compensating adjustment can be made
+where, in the opinion of the Commissioner, had the scheme not been
+entered into or carried out, an amount:
+           •        would not have been or would not be included in
+                    assessable income;
+           •        would have been or would be allowable as a
+                    deduction;
+           •        would have been or would be incurred as a capital
+                    loss; and
+           •        would have been or would be allowable as a foreign
+                    tax credit.
+139. The Commissioner must also be of the opinion that it is fair
+and reasonable that the compensating adjustment be made.
+140. Whether compensating adjustments can, and should, be
+made in the case of wash sales needs to be considered on the
+particular facts of the case, and the Commissioner will only be in a
+position to determine whether it is fair and reasonable that a
+compensating adjustment be made when the application of Part IVA
+is finally established (Australia & New Zealand Banking Group Ltd v.
+Federal Commissioner of Taxation (2003) 137 FCR 1; 2003 ATC
+5041; (2003) 54 ATR 449).
+
+
+
+16
+     Further, general information about compensating adjustments is also provided in
+     paragraphs 136 to 138 of PS LA 2005/24.
+                                                            Taxation Ruling
+
+                                                      TR 2008/1
+Page status: not legally binding                             Page 43 of 47
+
+
+
+141. However, if the taxpayer subsequently genuinely ends their
+beneficial ownership of, or interest in, the wash sale asset the
+Commissioner is likely to consider making adjustments to a
+taxpayer’s position if:
+           •       an additional amount has been included in assessable
+                   income that would not have been included, or
+           •       a larger capital loss or allowable deduction would have
+                   been incurred,
+had the wash sale not been entered into carried out.
+142. The result of the wash sale scheme and the application of
+Part IVA cancelling the capital loss made on the wash sale is that the
+cost base of the original asset is no longer available to any taxpayer.
+However, the circumstances may be such that economically the
+amount of the capital loss denied or some part of it would have been
+incurred by the taxpayer at the time when their interest in the asset
+genuinely comes to an end. The extent of any such adjustments will
+depend on whether the capital proceeds received on the subsequent
+disposal are greater or less than the original cost base (or reduced
+cost base) of the asset. It will also depend, if the wash sale involves
+two or more taxpayers, on who was taxed on the proceeds of the
+subsequent genuine disposition, and the relationship between those
+taxpayers.
+143. For example, following on from Example 1 of this Ruling,
+Catherine genuinely ends her interest in the company by selling the
+100,000 shares for $0.75 per share on the 14 April 2008. Catherine
+has made a $24,000 capital gain on the sale of the shares,17 but she
+would have made a $25,000 capital loss18 if the wash sale had not
+been entered into. When the application of Part IVA is established,
+subject to the particular circumstances, the Commissioner may make
+the following expected compensating adjustments:
+           •       to not include the $24,000 capital gain in the
+                   2007-2008 income year (which would not have been
+                   included in the assessable income of Catherine if the
+                   wash sale scheme had not been entered into or carried
+                   out) under paragraph 177F(3)(a); and
+           •       to include a capital loss of $25,000 in the 2007-2008
+                   income year upon the genuine disposal (being a loss
+                   that would have been incurred by Catherine if the wash
+                   sale scheme had not been entered into or carried out)
+                   under paragraph 177F(3)(c).
+
+
+
+
+     Calculated as (100,000 × $0.75) - (100,000 × $0.51).
+17
+
+     Calculated as (100,000 × $0.75) - (100,000 × $1.00).
+18
+Taxation Ruling
+
+TR 2008/1
+Page 44 of 47                                  Page status: not legally binding
+
+
+
+144. However, if the 100,000 shares were sold for $1.30 per share
+on the 14 April 2008 such that Catherine made a capital gain of
+$79,00019 the Commissioner may make a compensating adjustment
+to not include $50,000 of the capital gain in the 2007-08 income year
+under paragraph 177F(3)(a) so that Catherine makes a $29,000
+capital gain in the 2007-2008 income year.
+145. The Commissioner’s power to make an adjustment under
+subsection 177F(3) may be exercised in relation to any taxpayer, not
+only the taxpayer who obtained the tax benefit. Thus, in Example 3 of
+this Ruling, if Trustee 2 subsequently disposes of the 500,000 shares
+and distributes the net capital gain to Oscar the Commissioner may
+make, if fair and reasonable, compensating adjustments to both
+Trustee 1 and Trustee 2 in order to tax Oscar as if the wash sale
+scheme had not been entered into or carried out.
+
+
+
+
+     Calculated as (100,000 × $1.30) - (100,000 × $0.51).
+19
+                                                             Taxation Ruling
+
+                                                 TR 2008/1
+Page status: not legally binding                              Page 45 of 47
+
+
+
+
+Appendix 2 – Detailed contents list
+146.     The following is a detailed contents list for this Ruling:
+                                                                Paragraph
+What this Ruling is about                                                 1
+Class of entity/arrangement                                               2
+Ruling                                                                    9
+Examples                                                                 18
+Example 1: concurrent disposal and acquisition                           18
+Example 2: 24 hours between disposal and acquisition                     26
+Example 3: transfer between two trusts                                   35
+Example 4: transfer to a discretionary trust                             42
+Example 5: transfer to a discretionary trust                             51
+Example 6: period of time between disposal and acquisition               61
+Date of effect                                                           68
+Previous Rulings                                                         69
+Appendix 1 – Explanation                                                 70
+General overview of Part IVA                                             70
+Scheme                                                                   73
+Tax benefit                                                              75
+Dominant purpose                                                         82
+The eight factors in paragraph 177D(b)                                   85
+Subparagraph 177D(b)(i) – the manner in which the
+scheme was entered into or carried out                                   86
+Subparagraph 177D(b)(ii) – the form and substance
+of the scheme                                                            97
+Subparagraph 177D(b)(iii) – the time in which the
+scheme was entered into and the length of the period
+during which the scheme was carried out                                 104
+Subparagraph 177D(b)(iv) – the result in relation to the
+operation of this Act that, but for this Part, would be
+achieved by the scheme                                                  110
+Subparagraph 177D(b)(v) – any change in the financial
+position of the relevant taxpayer that has resulted,
+will result, or may reasonably be expected to result
+from the scheme                                                         112
+Taxation Ruling
+
+TR 2008/1
+Page 46 of 47                           Page status: not legally binding
+
+
+
+Subparagraph 177D(b)(vi) – any change in the financial
+position of any person who has, or has had, any connection
+(whether of a business, family or other nature) with the
+relevant taxpayer, being a change that has resulted,
+will result or may reasonably be expected to result,
+from the scheme                                                     118
+Subparagraph 177D(b)(vii) – any other consequences
+for the relevant taxpayer, or for any other person referred
+to in subparagraph (vi), of the scheme having been
+entered into or carried out                                         125
+Subparagraph 177D(b)(viii) – the nature of any connection
+(whether of a business, family or other nature) between
+the relevant taxpayer and any person referred to in
+subparagraph (vi)                                                   131
+Compensating adjustments                                            137
+Appendix 2 – Detailed contents list                                 146
+                                                          Taxation Ruling
+
+                                             TR 2008/1
+Page status: not legally binding                           Page 47 of 47
+
+
+
+
+References
+Previous draft:                       -   ITAA 1997 104-5
+TR 2007/D7                            -   ITAA 1997 104-10
+                                      -   ITAA 1997 104-55
+Related Rulings/Determinations:       -   ITAA 1997 104-60
+                                      -   ITAA 1997 Subdiv 122-A
+TD 95/4; TR 2006/10
+                                      -   TAA 1953
+Previous Rulings/Determinations:
+                                      Case references:
+IT 2643; TR 96/14
+                                      - Australia & New Zealand
+                                        Banking Group Ltd v. Federal
+Subject references:
+                                        Commissioner of Taxation
+- capital loss                          (2003) 203 ALR 644; (2003)
+- deduction                             137 FCR 1; 2003 ATC 5041;
+- income tax                            (2003) 54 ATR 449; [2003]
+- scheme                                FCA 1410; [2004] ALMD 1895;
+- tax benefit                           [2004] ALMD 1894
+                                      - Cumins v. FC of T [2007]
+Legislative references:                 FCAFC 21; 2007 ATC 4303;
+- ITAA 1936 Pt IVA                      66 ATR 57
+- ITAA 1936 177A                      - FCT v. Hart (2004) 78 ALJR
+- ITAA 1936 177A(1)                     875; (2004) 206 ALR 207;
+- ITAA 1936 177A(5)                     (2004) 217 CLR 216; [2004]
+- ITAA 1936 177C                        HCA 26; 2004 ATC 4599;
+- ITAA 1936 177C(1)                     (2004) 55 ATR 712; [2004]
+- ITAA 1936 177C(1)(b)                  ALMD 4877; [2004] ALMD
+- ITAA 1936 177C(1)(ba)                 4881
+- ITAA 1936 177D                      - FCT v. Peabody (1994) 68
+- ITAA 1936 177D(b)                     ALJR 680; (1994) 123 ALR
+- ITAA 1936 177D(b)(i)                  451; (1994) 181 CLR 359; 94
+- ITAA 1936 177D(b)(ii)                 ATC 4663; (1994) 28 ATR 344
+- ITAA 1936 177D(b)(iii)              - FC of T v. Spotless Services
+- ITAA 1936 177D(b)(iv)                 Limited 1996) 71 ALJR 81;
+- ITAA 1936 177D(b)(v)                  (1996) 141 ALR 92; (1996)
+- ITAA 1936 177D(b)(vi)                 186 CLR 404; 96 ATC 5201;
+- ITAA 1936 177D(b)(vii)                (1996) 34 ATR 183
+- ITAA 1936 177D(b)(viii)
+- ITAA 1936 177F                      Other references:
+- ITAA 1936 177F(1)                   - PS LA 2005/24
+- ITAA 1936 177F(3)
+- ITAA 1936 177F(3)(a)
+- ITAA 1936 177F(3)(c)
+
+ATO references
+NO:            2005/18220
+ISSN:          1039-0731
+ATOlaw topic: Income Tax ~~ Deductions ~~ capital v revenue
+               expenditure
+               Income Tax ~~ Entity specific matters ~~ trusts
+               Income Tax ~~ Tax integrity measures ~~ schemes
+

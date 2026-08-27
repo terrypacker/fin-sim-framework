@@ -210,7 +210,7 @@
    "nonConcessionalYTD": 0,
    "qualifyingEarningsYTD": 0,
    "sgYTD": 0,
-   "tsbAtFyStart": 2048202.78,
+   "tsbAtFyStart": 2048202.81,
    "unusedByFy": {
     "2060": 87500,
     "2061": 90000,
@@ -413,7 +413,7 @@
   "discretionary": 6850.2793632,
   "essential": 15983.9851808
  },
- "foreignGeneralIncomeYTD": 4956583.08045,
+ "foreignGeneralIncomeYTD": 4956583.08049,
  "foreignPassiveCapGainsYTD": 2535049.11,
  "foreignPassiveIncomeYTD": 3758777.73,
  "ftcCurrentForeignTax": 43400.5610315,
@@ -452,7 +452,11 @@
     "id": "inheritedBrokerageAccount-inherited-lot",
     "label": "Inherited Brokerage",
     "marketValue": 2794263.73,
-    "purchaseDate": 2083968000000
+    "pricePerUnit": 574.3491102,
+    "purchaseDate": 2083968000000,
+    "rateKey": "EQUITY_AU",
+    "securityId": "sec-auto-EQUITY_AU",
+    "units": 4865.09629836
    }
   ],
   "inherited": true,
@@ -496,11 +500,11 @@
   "checkingAccount": 5000,
   "inheritedBrokerageAccount": 2794263.73,
   "monthly_expenses": 22169.1888777,
-  "netLiquidity": 5193737.38,
-  "netWorth": 7984216.59,
+  "netLiquidity": 5193737.41,
+  "netWorth": 7984216.62,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
-  "superAccount": 2118798.6,
+  "superAccount": 2118798.63,
   "super_earnings": 138612.99
  },
  "monthlyExpenses": 22834.264544,
@@ -603,11 +607,45 @@
  "propertyReturnDev": {},
  "propertyReturnDriftComp": {},
  "propertyReturnMarketDev": 0,
+ "securities": {
+  "sec-auto-EQUITY_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_AU",
+   "idioVol": 0,
+   "name": "Australian market index",
+   "rateKey": "EQUITY_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_AU",
+   "idioVol": 0,
+   "name": "International ex-AU market index",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_US",
+   "idioVol": 0,
+   "name": "International ex-US market index",
+   "rateKey": "EQUITY_INTL_EX_US",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_US",
+   "idioVol": 0,
+   "name": "US market index",
+   "rateKey": "EQUITY_US",
+   "symbol": ""
+  }
+ },
  "superAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 2118798.6,
+  "balance": 2118798.63,
   "balanceAtResidencyChange": null,
-  "contributionBasis": 211714.559007,
+  "contributionBasis": 211714.559042,
   "costBaseStepUpByCountry": null,
   "country": "AU",
   "currency": {
@@ -616,7 +654,7 @@
   },
   "derivedIncomeBasis": 0,
   "drawdownPriority": 2,
-  "earningsBasis": 1907084.04231,
+  "earningsBasis": 1907084.05227,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -624,7 +662,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 211714.559007,
+    "costBasis": 211714.560538,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -635,14 +673,17 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 2118798.60131,
+    "marketValue": 2118798.63,
     "maturityDate": null,
+    "pricePerUnit": 1291.54291335,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 1640.51740792,
     "zeroCoupon": false
    }
   ],
@@ -662,7 +703,7 @@
  "usFilingSingleBase": true,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 1223728.62,
- "usOrdinaryIncomeYTD": 6180311.70045,
+ "usOrdinaryIncomeYTD": 6180311.70049,
  "usPenaltyYTD": 0,
  "usPersonHousehold": false,
  "usSeEarningsYTD": 0,

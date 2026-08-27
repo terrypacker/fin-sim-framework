@@ -14,7 +14,7 @@ import { RATE_KEY_META }      from './rate-keys.js';
 import { interpolateSpread, countryOfRateKey } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { revalueLedger }     from '../assets/investment-account.js';
-import { reprice }        from '../holdings/holding-utils.js';
+import { reprice, instrumentOf } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -24,13 +24,15 @@ const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
  * in which case the caller keeps the perpetual-fund behavior. Floored at 0 (a bond
  * at/after maturity has 0 years left — BondMaturityReducer redeems it).
  *
- * @param {object} h        - Holding
+ * Takes the INSTRUMENT view (design 94 §5.1): a maturity date is a fact about the bond.
+ *
+ * @param {object} inst     - instrument view of a holding (`instrumentOf`)
  * @param {number|null} asOfMs
  * @returns {number|null}
  */
-function yearsToMaturity(h, asOfMs) {
-  if (h?.maturityDate == null || asOfMs == null) return null;
-  const matMs = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+function yearsToMaturity(inst, asOfMs) {
+  if (inst?.maturityDate == null || asOfMs == null) return null;
+  const matMs = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
   if (!Number.isFinite(matMs)) return null;
   return Math.max(0, (matMs - asOfMs) / YEAR_MS);
 }
@@ -95,6 +97,7 @@ export class BondPriceAdjustReducer extends Reducer {
     const dt = (asOfMs != null && priorMs != null) ? (asOfMs - priorMs) / YEAR_MS : 0;
 
     const accountUpdates = {};
+    const securities = state.securities ?? null;
 
     for (const key of Object.keys(state)) {
       const account = state[key];
@@ -107,24 +110,25 @@ export class BondPriceAdjustReducer extends Reducer {
       const nextHoldings = account.holdings.map(h => {
         if (!h || h.allocation !== ALLOCATION.BOND) return h;
 
-        const ttm = yearsToMaturity(h, asOfMs);        // null ⇒ fund
+        const inst = instrumentOf(h, securities);
+        const ttm  = yearsToMaturity(inst, asOfMs);    // null ⇒ fund
         let mv = h.marketValue ?? 0;
         let touched = false;
 
         // (1) Rate-sensitivity mark, with maturity-decayed effective duration.
-        if (h.rateKey) {
-          const staticDuration = h.duration ?? RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
+        if (inst.rateKey) {
+          const staticDuration = inst.duration ?? RATE_KEY_META[inst.rateKey]?.defaultDuration ?? 0;
           const effDuration = ttm != null ? Math.min(staticDuration, ttm) : staticDuration;
           if (effDuration > 0) {
             // Curve lookup point: the bond's own tenor (ttm), or the fund tenor
             // (defaultDuration, ≈ the 5y anchor) for a perpetual fund. The curve
             // COUNTRY comes from the holding's own rateKey (independent US/AU curves),
             // not the action's period country.
-            const curveCC   = countryOfRateKey(h.rateKey);
-            const fundTenor = RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
+            const curveCC   = countryOfRateKey(inst.rateKey);
+            const fundTenor = RATE_KEY_META[inst.rateKey]?.defaultDuration ?? 0;
             const tenor     = ttm != null ? ttm : fundTenor;
-            const curRate   = (effectiveRates[h.rateKey] ?? 0) + interpolateSpread(yieldCurve[curveCC], tenor);
-            const prevBase  = priorRates[h.rateKey];
+            const curRate   = (effectiveRates[inst.rateKey] ?? 0) + interpolateSpread(yieldCurve[curveCC], tenor);
+            const prevBase  = priorRates[inst.rateKey];
             const prevRate  = prevBase != null
               ? prevBase + interpolateSpread(priorCurve[curveCC], tenor)
               : curRate;   // first mark (no prior) ⇒ Δrate 0
@@ -141,7 +145,7 @@ export class BondPriceAdjustReducer extends Reducer {
         // a TIPS indexes to CPI (redeeming at the adjusted principal, not the original
         // face) — so a fixed-face pull-to-par here would double-count / fight it. The
         // rate-sensitivity mark (1) above still applies to both.
-        if (ttm != null && h.faceValue != null && dt > 0 && !h.zeroCoupon && !h.inflationLinked) {
+        if (ttm != null && h.faceValue != null && dt > 0 && !inst.zeroCoupon && !inst.inflationLinked) {
           const frac  = ttm > 0 ? dt / (ttm + dt) : 1;   // ttm 0 ⇒ snap to par
           const delta = +((h.faceValue - mv) * frac).toFixed(2);
           if (delta !== 0) { mv = Math.max(0, mv + delta); touched = true; }

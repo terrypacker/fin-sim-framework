@@ -13,6 +13,8 @@ import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { resolvePresentCash } from './cash-routing.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { inheritedRaStrategy, INHERITED_RA_WINDOW } from './inherited-ra-distribution-strategy.js';
+import { promoteToUnitised }  from '../holdings/holding-utils.js';
+import { resolveRateKey }     from '../holdings/default-allocations.js';
 
 /**
  * inheritance-classes.js — design 63 (Inheritance).
@@ -165,7 +167,7 @@ export class InheritApplyReducer extends Reducer {
         // Brokerage: a single stepped-up lot the FIFO sale path consumes directly.
         updated.holdings = [_inheritedLot(
           stateKey, name, fmv, universalBase, auResident, inheritedBase,
-          deceasedAcquisitionDate, inheritanceDateMs,
+          deceasedAcquisitionDate, inheritanceDateMs, entry,
         )];
       }
       // Retirement carries no CGT step-up (IRD); funded pre-tax. contributionBasis
@@ -365,13 +367,17 @@ function _stampAuDualBasis(record, auResident, inheritedBase, deceasedAcquisitio
  * `acquisitionDateByCountry.AU` = deceased acquisition date (consumeHoldingsFifo
  * reads exactly these — design 57/62).
  */
-function _inheritedLot(stateKey, name, fmv, universalBase, auResident, inheritedBase, deceasedAcquisitionDate, inheritanceDateMs) {
+function _inheritedLot(stateKey, name, fmv, universalBase, auResident, inheritedBase, deceasedAcquisitionDate, inheritanceDateMs, account = null) {
   const lot = {
     id:          `${stateKey}-inherited-lot`,
     label:       name || 'Inherited Holding',
     allocation:  'EQUITY',
     marketValue: fmv,
     costBasis:   universalBase,
+    // The market this position tracks, from the account the bequest service seeded with a
+    // US_STOCK / AU_STOCK role. Without it the lot resolves no security and design 94's
+    // migration would leave the one account created DURING a run un-securitised.
+    rateKey:     resolveRateKey(account?.country ?? null, 'EQUITY', account?.role ?? null),
     // US acquisition (step-up) clock starts at the inheritance date.
     purchaseDate: inheritanceDateMs ?? null,
   };
@@ -381,5 +387,10 @@ function _inheritedLot(stateKey, name, fmv, universalBase, auResident, inherited
       lot.acquisitionDateByCountry = { AU: deceasedAcquisitionDate };
     }
   }
-  return lot;
+  // Design 94 §9.5c — a lot BIRTH site, and the only one that fires inside a reducer on an
+  // account that did not exist at boot. `PAR_PER_UNIT` (the default) is the right price
+  // here precisely because there are no siblings: this account is created at death with
+  // `holdings: []` and this is its first and only lot, so there is no prevailing price for
+  // it to join and the convention is the whole of the answer.
+  return promoteToUnitised(lot);
 }
