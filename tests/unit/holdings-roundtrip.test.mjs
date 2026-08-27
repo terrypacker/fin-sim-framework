@@ -161,7 +161,7 @@ describe('Holding — unitised fields (design 93 §5)', () => {
     assert.equal(back.cpiIndexRatio, 1.07);
   });
 
-  test('promoteToUnitised is value-preserving, and only promotes individual bonds', () => {
+  test('promoteToUnitised is value-preserving, for both instruments that have units', () => {
     const bond = { allocation: 'BOND', marketValue: 980, costBasis: 1000, faceValue: 1000,
                    maturityDate: new Date(Date.UTC(2035, 0, 1)) };
     const up = promoteToUnitised(bond);
@@ -179,8 +179,39 @@ describe('Holding — unitised fields (design 93 §5)', () => {
     // A bond FUND has no maturity and no par, so there is nothing to count units of.
     const fund = { allocation: 'BOND', marketValue: 500, costBasis: 500 };
     assert.equal(promoteToUnitised(fund), fund, 'a fund is left scalar');
-    const eq = { allocation: 'EQUITY', marketValue: 500, costBasis: 500 };
-    assert.equal(promoteToUnitised(eq), eq, 'equity is left scalar under Option A');
+    // Design 94 step 3 — this assertion used to read "equity is left scalar under Option A",
+    // and its job was always to fail HERE, at the migration. Equity is now a position in a
+    // security: a unit count at the same PAR_PER_UNIT convention (§9.2) and the synthetic
+    // market security derived from the lot's rateKey (§9.1).
+    const eq = promoteToUnitised({ allocation: 'EQUITY', marketValue: 500, costBasis: 500,
+                                   rateKey: 'EQUITY_US' });
+    assert.equal(eq.units, 5);
+    assert.equal(eq.pricePerUnit, 100);
+    assert.equal(eq.securityId, 'sec-auto-EQUITY_US');
+    // No `parPerUnit`, so `syncHolding` derives no faceValue: equity has no par, and
+    // minting one would hand pull-to-par and redemption a target to converge shares onto.
+    assert.equal(eq.parPerUnit, undefined);
+    assert.equal(syncHolding(eq).faceValue, undefined);
+    assert.equal(syncHolding(eq).marketValue, 500, 'promotion must not move market value');
+
+    // A lot BORN mid-run joins at the price its siblings stand at, not at the convention.
+    const born = promoteToUnitised({ allocation: 'EQUITY', marketValue: 500, costBasis: 500,
+                                     rateKey: 'EQUITY_US' }, { price: 250 });
+    assert.equal(born.units, 2);
+    assert.equal(born.pricePerUnit, 250);
+
+    // An authored securityId is never overwritten — it may name a REAL security.
+    const authored = promoteToUnitised({ allocation: 'EQUITY', marketValue: 500, costBasis: 500,
+                                         rateKey: 'EQUITY_US', securityId: 'VTI' });
+    assert.equal(authored.securityId, 'VTI');
+
+    // Idempotent, and in both directions independently: promoting twice is a no-op, and a
+    // lot that already has units still gets its security.
+    assert.equal(promoteToUnitised(eq), eq, 'already promoted ⇒ same object');
+    const unitsOnly = promoteToUnitised({ allocation: 'EQUITY', marketValue: 500, units: 5,
+                                          pricePerUnit: 100, rateKey: 'EQUITY_AU' });
+    assert.equal(unitsOnly.units, 5, 'an existing unit count is not recomputed');
+    assert.equal(unitsOnly.securityId, 'sec-auto-EQUITY_AU');
   });
 
   test('promoting a seasoned TIPS recovers its indexation from the price it was carrying', () => {
@@ -254,10 +285,13 @@ describe('Holding — unitised fields (design 93 §5)', () => {
     assert.equal(indexedRedemptionValue({ ...tips, cpiIndexRatio: 0.94 }), 1_000);
   });
 
-  test('securityId is reserved and stays null under Option A', () => {
+  test('securityId round-trips, and is still ABSENT by default after design 94 step 2', () => {
     const h = new Holding({ allocation: 'BOND', marketValue: 100, securityId: 'sec-1' });
     assert.equal(h.securityId, 'sec-1', 'the field carries a value when one is given');
     const plain = new Holding({ allocation: 'BOND', marketValue: 100 });
-    assert.ok(!('securityId' in plain), 'but is absent by default — Option C is not on yet');
+    // The `Security` entity and its registry now exist (design 94 step 2), but no lot NAMES
+    // one until step 3 migrates them. Keeping the field absent-by-default is what lets that
+    // migration land without every pre-existing fixture gaining a key it never had.
+    assert.ok(!('securityId' in plain), 'absent by default — step 3 is what starts setting it');
   });
 });

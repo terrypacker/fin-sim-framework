@@ -177,6 +177,11 @@ export class ScenarioCompiler {
       realProperties: services.realPropertyService?.getAll() ?? [],
       collectibles:   services.collectibleService?.getAll()  ?? [],
       companyEquities: services.companyEquityService?.getAll() ?? [],
+      // Design 94 §7 — dated corporate actions are authored SCENARIO data, like
+      // `cfg.securities`, not service records: they describe what an ISSUER did, so
+      // there is nothing for a service to own. Read off the definition for the same
+      // reason `parameters` is.
+      corporateActions: definition?.corporateActions ?? [],
       bequests,
       parameters,
       paramSchema,

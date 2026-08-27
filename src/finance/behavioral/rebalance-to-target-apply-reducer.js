@@ -12,7 +12,7 @@ import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
 import { disposalTermFields }   from '../holdings/holding-period.js';
-import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
+import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
@@ -162,6 +162,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         const r = consumeHoldings(matching, take, {
           indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU' },
           terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
+          securities: state.securities ?? null,
         });
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
         taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
@@ -201,7 +202,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       // established in any account, including a US IRA/401k/Roth.
       holdings = [...holdings, _newSleeve({
         allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey,
-        traits: _inheritedTraits(matching), priceLevel: auLevel,
+        traits: _inheritedTraits(matching, state.securities ?? null), priceLevel: auLevel, siblings: matching,
       })];
     }
 
@@ -394,29 +395,52 @@ function _addProRata(holdings, allocation, amount) {
  * default" — a mixed sleeve gets the plain, resolved defaults rather than an arbitrary
  * lot's traits.
  *
+ * **Unanimity is judged on the INSTRUMENT, not on the record** (design 94 §12 D10, step 6).
+ * Every field here except `securityId` is instrument-level, so the question "do these lots
+ * agree?" is a question about what they are POSITIONS IN, and the answer belongs to the
+ * security when they name one. The difference is reachable: two lots naming one security,
+ * one of them born here with a null inline `dividendYield` and one authored with its own,
+ * are the same instrument and disagree only as records — and the record view would drop the
+ * yield on the next buy. That is D10's "collapse to one unanimity check" as behaviour: when
+ * the lots name one security, that security answers all five. Where nothing names a security
+ * — every BOND lot today — `instrumentOf` returns the holding and this is exactly the
+ * historic comparison, field for field.
+ *
  * Deliberately excluded: `couponRate` (design 66 G1 — a bond bought today locks TODAY's
  * market yield, which is the whole point of the lock), and everything date- or
  * basis-shaped (`purchaseDate`, `costBaseByCountry`, `acquisitionDateByCountry`,
  * `acquisitionPriceLevel`) — inheriting those is the defect this split exists to fix.
  */
-function _inheritedTraits(matching) {
+function _inheritedTraits(matching, securities = null) {
   const lots = (matching ?? []).filter(Boolean);
-  const unanimous = (field) => {
-    if (lots.length === 0) return undefined;
-    const first = lots[0][field] ?? null;
-    return lots.every(h => (h[field] ?? null) === first) ? first : undefined;
+  // Resolved ONCE per lot rather than per field: `instrumentOf` spreads two objects, and
+  // this runs per buy leg per rebalance for the life of the run.
+  const insts = lots.map(h => instrumentOf(h, securities));
+  const unanimousOn = (records) => (field) => {
+    if (records.length === 0) return undefined;
+    const first = records[0][field] ?? null;
+    return records.every(h => (h[field] ?? null) === first) ? first : undefined;
   };
+  const unanimous = unanimousOn(insts);
+  // `securityId` is the one POSITION field in this set — it is what a lot names, not
+  // something the instrument says about itself — so it is read off the records.
+  const unanimousLot = unanimousOn(lots);
   return {
     rateKey:       unanimous('rateKey'),
     taxExemption:  unanimous('taxExemption'),
     issuingState:  unanimous('issuingState'),
     dividendYield: unanimous('dividendYield'),
     duration:      unanimous('duration'),
+    // Design 94 D10. A sleeve where every lot is one security buys more of THAT security;
+    // a mixed sleeve buys the generic market position, which is the honest answer and not
+    // an arbitrary lot's. Undefined here falls through to the synthetic market security
+    // `promoteToUnitised` derives from the rateKey below.
+    securityId:    unanimousLot('securityId'),
   };
 }
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */
-function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null, traits = {}, priceLevel = null }) {
+function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null, traits = {}, priceLevel = null, siblings = [] }) {
   // The role is safe to pass now: resolveRateKey only lets it refine WITHIN the
   // allocation's own class, so a BOND sleeve in an equity-role account still
   // resolves to the bond rate. (This used to force role=null to work around the
@@ -445,7 +469,12 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
   const couponRate = allocation === ALLOCATION.BOND
     ? _stampCouponRate(state, stateKey, rateKey)
     : null;
-  return {
+  // par-reviewed: a CONSTRUCTION, not a mutation — there is no prior position whose par
+  // this could fall out of step with. It reads as the write shape only because design 94
+  // step 3 gave it a conditional `...securityId` spread; an established EQUITY sleeve
+  // carries no faceValue at all, and a BOND sleeve established here is a bond FUND with
+  // no par. `promoteToUnitised` below is what gives it a unit count.
+  const lot = {
     // A UNIQUE, deterministic id is mandatory: the per-sleeve growth / dividend /
     // coupon / cash-interest streams emit HoldingTransactActions keyed by holdingId,
     // and HoldingTransactReducer matches `h.id === holdingId`. Two holdings sharing an
@@ -478,7 +507,15 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
     // it joins is unanimously something else — buying more treasuries stays exempt.
     taxExemption:  traits.taxExemption ?? 'none',
     issuingState:  traits.issuingState ?? null,
+    ...(traits.securityId == null ? {} : { securityId: traits.securityId }),
   };
+  // Design 94 §9.5c — every lot BIRTH site establishes units, not only the config→run
+  // boundary. A rebalance buy is the second-largest source of lots in the model, and one
+  // born scalar beside unitised siblings is the mixed mode §9.5c measured. The price it
+  // joins at is the sleeve's own (`prevailingPrice`), never the convention's 100: minting
+  // at 100 beside a seasoned lot fabricates the unit count and defeats compaction.
+  // A no-op on BOND-fund and CASH sleeves, which carry no unit count to establish.
+  return promoteToUnitised(lot, { price: prevailingPrice(siblings) });
 }
 
 /**

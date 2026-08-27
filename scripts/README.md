@@ -282,6 +282,10 @@ Targeted engine-fidelity probes, each tied to a design doc: `probe-residency-cgt
 `probe-foreign-property-cgt`, `probe-988-method-dispersion` (all wired to npm scripts),
 plus `prototype-crossborder-allocation-scope` and `prototype-rebalance-cadence`.
 
+A probe is committed when its answer has to be re-derivable later — when a number in a
+design doc would otherwise go stale silently, or when the measurement is the thing a
+decision rests on. Throwaway spikes stay throwaway.
+
 `probe-988-method-dispersion` (`npm run probe:988-method`) is design 87 G6's deciding
 measurement: the two `§1.988-2(a)(2)(iii)(B)(1)` consumption conventions run across seeded
 FX paths, paired by seed, reported as **dispersion** rather than a winner — because the
@@ -299,6 +303,23 @@ other line rises, because expenses are AUD-funded and AU tax is paid from a USD 
 It is committed rather than throwaway because design 89's original table went stale enough
 to change its own headline: **shares go stale, the classification does not.** It also
 prints a COVERAGE block naming the debited state keys the shipped reports cannot see.
+
+The two **design 94** probes are the step-0 spike for "equity as security positions", and
+they exist because the design's first pass got both answers wrong in opposite directions:
+
+- `probe-security-registry-clone-cost` prices a `state.securities` registry the only way
+  that matters — `deepClone` cost on a real run's state, because reducers can only read
+  what is in state and state is cloned per event (design 78 §3.2). The first pass called
+  the registry free; it is roughly **+50% per clone at 20 securities**, paid by every
+  scenario whether or not it holds a concentrated position. That number is what design 94
+  §6.4's `cloneState()` recommendation exists to remove, so re-run this before adopting or
+  dropping it.
+- `probe-unitised-equity-rounding` asks whether flipping equity from scalar to unitised
+  moves the money. It is exact on the growth path and **sub-cent once units change**, which
+  is the difference between "the migration moves no golden" (the first pass's claim) and
+  "the migration ships with a re-gold" (what step 3 actually has to plan for). It is a
+  replica of `holding-utils.js` arithmetic, not the engine — its job is to make a falsifiable
+  prediction for the real golden run, not to replace it.
 
 `probe-consumption-intent-gap` is design 89 §5.1 step A. `AccumulateConsumptionReducer`
 builds `cumulativeConsumption` — what `DIE_WITH_TARGET` maximizes — from `action.amount`,

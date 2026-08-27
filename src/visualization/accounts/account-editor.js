@@ -13,6 +13,7 @@ import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
+import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Liability types: `balance` is debt owed (positive), net worth subtracts it, and
@@ -102,7 +103,8 @@ export class AccountEditor extends BaseComponent {
    */
   constructor({ parent, container, node, people = [], realProperties = [], accounts = [],
                 onSave, onDelete, onHistory,
-                links = null, onParamChange = null, onOpenParam = null, primeRates = {} }) {
+                links = null, onParamChange = null, onOpenParam = null, primeRates = {},
+                securities = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -113,6 +115,13 @@ export class AccountEditor extends BaseComponent {
     // Used to render the cash "Interest Rate" field as an absolute (Prime + spread)
     // and to convert the entered absolute back to a stored `primeSpread` on save.
     this._primeRates = primeRates ?? {};
+    // The scenario's instrument registry (design 94 §4), `id → frozen Security`. Supplied
+    // by the host from `scenarioSecurityRegistry(cfg)` — the SAME composition the loader
+    // projects into `state.securities`, so the picker can never offer an instrument the
+    // run does not have. Null when the host predates step 9: the picker then renders the
+    // holding's own id as the only option, which preserves a value it cannot enumerate
+    // rather than silently clearing it.
+    this._securities = securities ?? null;
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
@@ -593,7 +602,7 @@ export class AccountEditor extends BaseComponent {
         ${expandCell}
         <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
         <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
-        <td><select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select></td>
+        <td>${_rateKeyCellHtml(h, this._instrumentOverride(h, 'rateKey'))}</td>
         <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
         <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
       `;
@@ -649,6 +658,83 @@ export class AccountEditor extends BaseComponent {
   }
 
   /**
+   * The instrument a position is held IN (design 94 §4), or null.
+   *
+   * @param {object} h - a holding
+   * @returns {object|null} the frozen Security record
+   */
+  _securityFor(h) {
+    if (h?.securityId == null) return null;
+    return this._securities?.[h.securityId] ?? null;
+  }
+
+  /**
+   * What the SECURITY says about one instrument-level field, or `undefined` when it is
+   * silent — and `undefined` is the whole point of the return type.
+   *
+   * `instrumentOf` merges `{ ...holding, ...security }`, so any key PRESENT on the
+   * security wins, INCLUDING one holding an explicit `null` (design 94 §4 rule 2). An
+   * editor that showed a writable box for such a field would be lying twice over: the
+   * number in it is not the one the engine reads, and typing into it changes nothing.
+   * So the test has to be `in`, not `!= null` — `??` is precisely the mistake the
+   * `destinationKey` guard was written for.
+   *
+   * @returns {*} the security's value, or `undefined` if it declares none
+   */
+  _instrumentOverride(h, field) {
+    const sec = this._securityFor(h);
+    if (!sec || !(field in sec)) return undefined;
+    return sec[field];
+  }
+
+  /**
+   * Render a control as INHERITED: disabled, showing the security's value, captioned
+   * with where it came from.
+   *
+   * Deliberately still rendered rather than hidden. A field that vanishes when a
+   * security is picked leaves the reader unable to see what the instrument actually
+   * says — which is the same "lying by omission" the cube's security column fixes on
+   * the reporting side (design 94 §3 item 6).
+   */
+  _inheritedFieldHtml(label, value, symbol) {
+    const shown = value == null || value === '' ? '—' : String(value);
+    return `<label class="h-df h-df--inherited" title="From the security '${_escape(symbol)}' — edit the instrument, not the lot (design 94 §5.1)">`
+      + `<span class="h-df-label">${_escape(label)} <span class="h-df-from">· ${_escape(symbol)}</span></span>`
+      + `<input class="h-input" value="${_escape(shown)}" disabled/></label>`;
+  }
+
+  /**
+   * Options for the security picker: every instrument in the scenario's registry, with
+   * the four synthetic market securities grouped apart from the authored ones.
+   *
+   * The split matters. `sec-auto-EQUITY_US` is what design 94 step 3's migration gave
+   * every equity lot, so it is by far the most common value and would otherwise sit in
+   * an undifferentiated list looking like something an author chose. Grouping says which
+   * ones are the plan's own.
+   *
+   * A value not in the registry is preserved as its own option rather than dropped —
+   * a scenario edited against a stale registry must not silently lose a lot's instrument.
+   */
+  _securityOptionsHtml(selected) {
+    const cur  = selected ?? '';
+    const all  = Object.values(this._securities ?? {});
+    const label = (sec) => sec.symbol || sec.name || sec.id;
+    const opt   = (sec) =>
+      `<option value="${_escape(sec.id)}"${sec.id === cur ? ' selected' : ''}>${_escape(label(sec))}</option>`;
+
+    const authored  = all.filter(sec => !sec.id.startsWith(SYNTHETIC_SECURITY_PREFIX));
+    const synthetic = all.filter(sec =>  sec.id.startsWith(SYNTHETIC_SECURITY_PREFIX));
+
+    const parts = [`<option value=""${cur === '' ? ' selected' : ''}>— none —</option>`];
+    if (authored.length)  parts.push(`<optgroup label="Scenario securities">${authored.map(opt).join('')}</optgroup>`);
+    if (synthetic.length) parts.push(`<optgroup label="Market (auto)">${synthetic.map(opt).join('')}</optgroup>`);
+    if (cur && !all.some(sec => sec.id === cur)) {
+      parts.push(`<optgroup label="Not in this scenario"><option value="${_escape(cur)}" selected>${_escape(cur)}</option></optgroup>`);
+    }
+    return parts.join('');
+  }
+
+  /**
    * Build the labeled detail fields for one holding, gated by allocation (design 53
    * §5.2). Each field is a `<label class="h-df">` with a caption + control so the
    * sub-row reads as a small form rather than a run of bare inputs.
@@ -671,7 +757,30 @@ export class AccountEditor extends BaseComponent {
     const field = (label, controlHtml, title = '') =>
       `<label class="h-df"${title ? ` title="${title}"` : ''}><span class="h-df-label">${label}</span>${controlHtml}</label>`;
 
+    // ── design 94 step 9: the instrument, and what it takes over ────────────────
+    //
+    // `field` renders an editable box; `instrumentField` renders the SAME caption as an
+    // inherited, disabled one whenever the named security declares that field. Every
+    // instrument-level control below routes through it, so a lot that names a security
+    // cannot show an editable value the engine will not read. That is the editor's half
+    // of design 94 §5.1's partition — the position fields stay editable, the instrument
+    // fields move behind the reference.
+    const sec       = this._securityFor(h);
+    const secLabel  = sec ? (sec.symbol || sec.name || sec.id) : '';
+    const instrumentField = (label, fieldName, controlHtml, title = '') => {
+      const override = this._instrumentOverride(h, fieldName);
+      return override === undefined
+        ? field(label, controlHtml, title)
+        : this._inheritedFieldHtml(label, override, secLabel);
+    };
+
     const parts = [];
+
+    // First, because it changes what every field under it means.
+    parts.push(field('Security',
+      `<select class="h-input" data-f="securityId">${this._securityOptionsHtml(h.securityId ?? '')}</select>`,
+      'The INSTRUMENT this position is held in (design 94 §4). Fields the instrument '
+      + 'declares are shown inherited below — edit the security, not the lot.'));
 
     if (showCostBasis) {
       parts.push(field('Cost basis',
@@ -680,7 +789,7 @@ export class AccountEditor extends BaseComponent {
 
     if (incomeField) {
       const title = incomeField === 'dividendYield' ? 'Dividend yield' : 'Coupon rate';
-      parts.push(field(title,
+      parts.push(instrumentField(title, incomeField,
         `<input class="h-input h-num" type="number" step="0.001" data-f="${incomeField}" value="${h[incomeField] ?? ''}"/>`));
     }
 
@@ -692,10 +801,10 @@ export class AccountEditor extends BaseComponent {
       const maturityVal = h.maturityDate
         ? (h.maturityDate instanceof Date ? h.maturityDate.toISOString().slice(0, 10) : String(h.maturityDate).slice(0, 10))
         : '';
-      parts.push(field('Duration (yr)',
+      parts.push(instrumentField('Duration (yr)', 'duration',
         `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}"/>`,
         'Modified duration (years)'));
-      parts.push(field('Maturity',
+      parts.push(instrumentField('Maturity', 'maturityDate',
         `<input class="h-input" type="date" data-f="maturityDate" value="${maturityVal}"/>`,
         'Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund'));
       parts.push(field('Face value',
@@ -707,7 +816,7 @@ export class AccountEditor extends BaseComponent {
       //   Municipal (federal-exempt; state-exempt only when the issuing state matches
       //   residence) | Muni all-state (unconditionally state-exempt).
       const te = h.taxExemption ?? 'none';
-      parts.push(field('Tax treatment',
+      parts.push(instrumentField('Tax treatment', 'taxExemption',
         `<select class="h-input" data-f="taxExemption">`
           + `<option value="none"${te === 'none' ? ' selected' : ''}>Taxable</option>`
           + `<option value="state"${te === 'state' ? ' selected' : ''}>Treasury</option>`
@@ -801,6 +910,13 @@ export class AccountEditor extends BaseComponent {
             // Re-render so the row shows exactly this allocation's inputs.
             this._refreshHoldingsTbody();
             this._syncBalance(this._rootEl);
+          } else if (field === 'securityId') {
+            // Which INSTRUMENT this position is in. A full re-render, because the choice
+            // decides which of the fields below are still the lot's to set: the new
+            // security may declare a market, a yield or a tax treatment, and each of
+            // those flips its control from editable to inherited.
+            this._holdings[i].securityId = input.value || null;
+            this._refreshHoldingsTbody();
           } else if (field === 'taxLossPartner') {
             this._holdings[i].taxLossPartner = input.value || null;
           } else if (field === 'taxExemption') {
@@ -1200,6 +1316,27 @@ function _escape(s) {
  * @param {string} selected - the holding's current rateKey ('' when unset)
  * @returns {string} inner HTML for the <select>
  */
+/**
+ * The Rate Key cell — a picker, or the security's own market shown read-only.
+ *
+ * `rateKey` is on the INSTRUMENT side of design 94 §5.1's partition, so once a lot names
+ * a security that declares one, the lot's own value is dead: `instrumentOf` merges the
+ * security over the holding and the engine never reads it again. Leaving an enabled
+ * dropdown there is the editor's version of the defect design 94 §9.5b measured — a
+ * control that looks live, changes state, and moves nothing.
+ *
+ * `undefined` means the security is SILENT about the market (or there is no security),
+ * and then the lot's own value is authoritative and editable. Explicit null is not
+ * silence — see `_instrumentOverride`.
+ */
+function _rateKeyCellHtml(h, override) {
+  if (override === undefined) {
+    return `<select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select>`;
+  }
+  return `<input class="h-input h-input--inherited" value="${_escape(override ?? '—')}" disabled`
+    + ` title="From the security this position names — design 94 §5.1"/>`;
+}
+
 function _rateKeyOptionsHtml(selected) {
   const cur   = selected ?? '';
   const blank = `<option value=""${cur === '' ? ' selected' : ''}>— none —</option>`;

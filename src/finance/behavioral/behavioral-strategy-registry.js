@@ -76,7 +76,15 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       const taxableStateKeys = _taxableStateKeys(context);
       const handler = new TaxLossHarvestHandler({
         taxableStateKeys,
-        taxLossHarvestCap: p.taxLossHarvestCap ?? 3000,
+        // Null, not 3000 — design 94 §8.1h. The \$3,000 was a "US deduction cap proxy",
+        // but §1211(b) is enforced downstream and correctly: `_computeCapitalLossLimitation`
+        // nets by character, allows ORDINARY_CAPITAL_LOSS_CAP against ordinary income and
+        // carries the rest forward under §1212(b). Capping the HARVEST at the same figure
+        // limited it twice, in the wrong place — the strategy could never build the
+        // carryforward that is most of its value. The param survives as a POLICY cap for a
+        // household that does not want to sell more than \$X; it is no longer a
+        // statutory-looking default that silently duplicates the statute.
+        taxLossHarvestCap: p.taxLossHarvestCap ?? null,
       });
       // Wire to the TAX_LOSS_HARVEST scheduled event
       const evt = context.schedulesById?.['TAX_LOSS_HARVEST'];
@@ -88,8 +96,13 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       {
         key: 'taxLossHarvestCap', label: 'TLH Cap ($/yr)',
         type: 'Number', group: 'Behavioral', mc: false, opt: true,
-        defaultValue: 3000,
-        description: 'Maximum dollar loss to realize per year via tax-loss harvesting (US deduction cap proxy, design/29 §3.3)',
+        defaultValue: null,
+        description: 'Optional POLICY cap on how much loss to realize per year — blank (the default) = no cap. '
+          + 'It is deliberately NOT the $3,000 figure any more (design 94 §8.1h): that is §1211(b)\'s limit on '
+          + 'capital loss deductible against ORDINARY income, it is already applied on the return along with the '
+          + '§1212(b) carryforward, and capping the harvest at it limited the same loss twice — so the strategy '
+          + 'could never accumulate the carryforward that is most of what it is for. Set it only if the household '
+          + 'genuinely will not sell more than this in a year.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TAX_LOSS_HARVEST' },
       },
       {

@@ -34,10 +34,25 @@ export class EquityReturnStepReducer extends Reducer {
 
   reduce(state, action) {
     if (action?.deviation == null) return this.newState(state);
-    return this.newState(state, {
+    const next = {
       equityReturnDev:       { ...action.deviation },
       equityReturnDriftComp: { ...(action.driftComp ?? {}) },
       equityReturnMarketDev: action.marketDev ?? 0,
-    });
+    };
+    // The per-security overlay (design 94 §6.2/§6.3), stored the same way and read the
+    // same way property returns are — `computeHoldingsGrowth` adds it to the holding's
+    // resolved rate DIRECTLY rather than folding it onto `effectiveGrowthRates`, so the
+    // rates map keeps its shape and its two-deep precedence and no `<securityId>` fan-out
+    // is created (design 75 §4.2 A2's precedent).
+    //
+    // The pair is written only when the handler sent it, i.e. only when the registry
+    // carries a security that is not the β=1/σ=0 identity — so a scenario whose
+    // securities are all identities gains NO state key at all. Both are replaced whole
+    // each tick, which is what clears a security whose overlay evaluated to zero this year.
+    if (action.securityDeviation != null) {
+      next.securityReturnDev       = { ...action.securityDeviation };
+      next.securityReturnDriftComp = { ...(action.securityDriftComp ?? {}) };
+    }
+    return this.newState(state, next);
   }
 }

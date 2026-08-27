@@ -199,6 +199,7 @@ export class BondCouponApplyReducer extends AccountServiceReducer {
           stateKey: key, buckets, prevailingRate: action._prevailingRate,
           year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
           priceLevel: state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1,
+          securities: state.securities ?? null,
         })
       // pre-G10b fallback — still a purchase, so still its own vintage lot (§5.0a).
       : distributeHoldingsCredit(sa.holdings, amount, {
@@ -294,11 +295,12 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
       lotStrategy:     state.drawdownLotStrategy,
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
+      securityOrder:   state.drawdownSecurityOrder,
     }), sa);
     // Design 90 §9 step 2 — the signed, §1222-charactered split rides alongside the
     // AU indexation context. Unlike `indexation` it is not AU-specific: the US
     // short/long test applies to every disposal a US person makes.
-    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] } });
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] }, securities: state.securities ?? null });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): the realized AU basis sums each lot's

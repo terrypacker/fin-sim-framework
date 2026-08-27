@@ -30,7 +30,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { AllocationPlugin } from '../../src/visualization/workbench/plugins/finance/allocation-plugin.js';
+import { AllocationPlugin, ALLOCATION_CSV_COLUMNS } from '../../src/visualization/workbench/plugins/finance/allocation-plugin.js';
+import { buildAllocationSeries } from '../../src/finance/allocation-reporting/allocation-grouping.js';
 
 const RUNTIME = { bus: { subscribe: () => () => {} } };
 
@@ -164,10 +165,52 @@ test('switching the view changes the grouping, not the fact table', () => {
   assert.equal(rateOpts.filter({ rateKey: null }), false);
   assert.equal(rateOpts.filter({ rateKey: 'EQUITY_US' }), true);
 
+  // design 94 step 9 — the one view that answers "what do I actually OWN", as against
+  // "what market am I exposed to". Filtered like `rateKey`, and for the same reason: a
+  // house, a company stake and a cash sleeve name no instrument.
+  plugin._view = 'security';
+  const secOpts = plugin._seriesOpts();
+  assert.deepEqual(secOpts.by, ['security']);
+  assert.equal(secOpts.filter({ securityId: null }), false);
+  assert.equal(secOpts.filter({ securityId: 'sec-emp' }), true);
+
   plugin._view = 'account';
   plugin._stateKey = 'usStockAccount';
   assert.equal(plugin._seriesOpts().filter({ stateKey: 'usStockAccount' }), true);
   assert.equal(plugin._seriesOpts().filter({ stateKey: 'auHouseProperty' }), false);
+  plugin.unmount();
+});
+
+test('the security view separates two instruments that share one market', () => {
+  // The whole point of the column: `rateKey` puts an employer stake and an index fund in
+  // one band because they track the same market, and concentration — the risk an
+  // allocation view exists to show — is invisible in that band.
+  const at   = new Date(Date.UTC(2030, 11, 31));
+  const rows = [
+    row({ securityId: 'sec-emp', security: 'EMP',  marketValue: 400 }),
+    row({ securityId: 'sec-idx', security: 'VTI',  marketValue: 600 }),
+    row({ stateKey: 'auHouseProperty', assetClass: 'REAL_ESTATE', rateKey: null,
+          securityId: null, security: null, marketValue: 900 }),
+  ].map(r => ({ ...r, date: at }));
+
+  const { plugin } = mountPlugin([sample(2030, rows)]);
+  plugin._view = 'security';
+  const series = buildAllocationSeries(plugin._rows(), plugin._seriesOpts());
+  assert.deepEqual(series.keys.slice().sort(), ['EMP', 'VTI']);
+  // The house is filtered out rather than collapsed into a `(none)` band that would
+  // dwarf both instruments.
+  assert.ok(!series.keys.includes('(none)'));
+  plugin.unmount();
+});
+
+test('the CSV carries the security columns — the fact table is what gets re-checked', () => {
+  const { plugin } = mountPlugin(TWO_YEARS);
+  // The panel downloads the whole cube, not the drawn series, precisely so a number can
+  // be traced back to the lot it came from. A column missing here is a number nobody can
+  // chase.
+  for (const c of ['securityId', 'security', 'units']) {
+    assert.ok(ALLOCATION_CSV_COLUMNS.includes(c), `missing ${c}`);
+  }
   plugin.unmount();
 });
 

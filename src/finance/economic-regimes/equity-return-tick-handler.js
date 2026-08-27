@@ -37,18 +37,31 @@ import { EQUITY_SLEEVES, DEFAULT_EQUITY_BETA } from './rate-keys.js';
  * stores both; EquityReturnReducer folds `deviation + driftComp` onto
  * `effectiveGrowthRates[<sleeve>]` (and its `<sleeve>::<stateKey>` variants) each period.
  *
+ * After the sleeve loop it applies the PER-SECURITY overlay (design 94 §6.2): a security
+ * loads on its SLEEVE's total deviation and carries only its DIFFERENCE from it, so β = 1
+ * with σ_idio = 0 — every synthetic market security, and therefore every migrated equity
+ * lot — is exactly the identity and costs nothing. The overlay rides on the action as
+ * `securityDeviation` / `securityDriftComp`, and `computeHoldingsGrowth` adds it to the
+ * holding's resolved rate directly rather than folding it onto `effectiveGrowthRates`
+ * (design 94 §6.3, following design 75 §4.2 A2's property precedent).
+ *
  * ⚠️ RNG-cursor ordering (design 74 §4). Idiosyncratic draws consume extra uniforms, so
  * enabling them shifts every subsequent draw. Sleeves are iterated in the stable sorted
  * `EQUITY_SLEEVES` order, and the idio draw is **skipped entirely** (not drawn-and-
  * multiplied-by-zero) when `σ_idio` is 0 — otherwise the idio-off path would not
- * reproduce the market-only path.
+ * reproduce the market-only path. **The same rule, and the same skip, now govern the
+ * security loop — which iterates the REGISTRY in sorted `id` order, not the portfolio.
+ * Declaring a security with idiosyncratic vol perturbs the run whether or not anything
+ * holds it** (design 94 §6.2: conditioning the cursor on holdings would make the random
+ * path a function of portfolio state, which changes under every MPC rollout, optimizer
+ * probe and replay branch).
  *
  * Determinism: the only randomness is drawn from the snapshot-safe sim.rng (its cursor
  * is captured/restored in every history snapshot), so replays and MPC/optimizer forward
  * rollouts reproduce the same path byte-for-byte.
  */
 export class EquityReturnTickHandler extends HandlerEntry {
-  static description = 'Draws one market factor from the seeded sim.rng, loads each equity sleeve on it via beta (+ optional idiosyncratic term), and emits EQUITY_RETURN_STEP_APPLY (design 74 §5.1).';
+  static description = 'Draws one market factor from the seeded sim.rng, loads each equity sleeve on it via beta (+ optional idiosyncratic term), applies the per-security overlay, and emits EQUITY_RETURN_STEP_APPLY (design 74 §5.1, design 94 §6.2).';
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
@@ -91,6 +104,10 @@ export class EquityReturnTickHandler extends HandlerEntry {
     const geometric = this.driftComp === 'GEOMETRIC';
     const deviation = {};
     const driftComp = {};
+    // Var(sleeveDev[k]) = (β_k·σ_market)² + σ_idio,k² — captured in the sleeve loop
+    // because the per-security drift compensation (§6.2) needs the variance of the
+    // sleeve a security loads on, not the market factor's.
+    const sleeveVar = {};
     for (const sleeve of EQUITY_SLEEVES) {
       const beta    = this.beta[sleeve]    ?? DEFAULT_EQUITY_BETA[sleeve] ?? 1.0;
       const idioVol = this.idioVol[sleeve] ?? 0;
@@ -111,11 +128,70 @@ export class EquityReturnTickHandler extends HandlerEntry {
       // term kept SEPARATE from the stochastic deviation so `equityReturnDev` stays
       // pure mean-0. (Exact for WHITE_NOISE; for MEAN_REVERTING the stationary variance
       // is lower, so GEOMETRIC slightly over-compensates — an accepted approximation.)
+      sleeveVar[sleeve]  = Math.pow(beta * this.vol, 2) + idioVol * idioVol;
       driftComp[sleeve] = geometric
-        ? (Math.pow(beta * this.vol, 2) + idioVol * idioVol) / 2
+        ? sleeveVar[sleeve] / 2
         : 0;
     }
 
-    return [{ type: 'EQUITY_RETURN_STEP_APPLY', marketDev, deviation, driftComp }];
+    // ── The per-security overlay (design 94 §6.2) ─────────────────────────────────
+    //
+    // A security loads on its SLEEVE's total deviation and stores only its DIFFERENCE
+    // from it, so β=1 with σ_idio=0 — every synthetic market security, and therefore
+    // every migrated lot — stores exactly zero and draws nothing:
+    //
+    //     secDev[s]  = (β_s − 1)·sleeveDev[s.rateKey] + (σ_idio,s > 0 ? σ_idio,s·√dt·z_s : 0)
+    //     secComp[s] = geometric ? ((β_s² − 1)·Var(sleeveDev[s.rateKey]) + σ_idio,s²)/2 : 0
+    //
+    // Expressed as a deviation FROM the sleeve rather than as an absolute rate, so a
+    // security tracks whatever its sleeve does — including design 90 §7.4's sleeve
+    // dispersion when that arrives. The two compose instead of racing.
+    //
+    // ⚠️ **The draw set is the REGISTRY, not the portfolio.** Securities are iterated in
+    // sorted `id` order, AFTER the sleeve loop, and a σ_idio > 0 security draws whether or
+    // not any position currently holds it. Conditioning the cursor on holdings would make
+    // the random path depend on portfolio state — which changes under every MPC rollout,
+    // every optimizer probe and every replay branch — and the determinism guarantee would
+    // not survive it. The price, which belongs wherever a registry is authored: **declaring
+    // an unheld security with idiosyncratic vol perturbs the whole run.**
+    const securities        = state.securities ?? null;
+    const securityDeviation = {};
+    const securityDriftComp = {};
+    let   hasOverlay        = false;
+    for (const id of Object.keys(securities ?? {}).sort()) {
+      const sec     = securities[id];
+      const secBeta = sec?.beta ?? 1.0;
+      const secIdio = sec?.idioVol ?? 0;
+      // The identity. Not "a small number" — exactly zero on both terms, so it takes no
+      // draw, gets no state entry and costs no growth-path arithmetic. This is what keeps
+      // §9's migration inert and a plan holding six index funds free.
+      if (secBeta === 1 && !(secIdio > 0)) continue;
+      hasOverlay = true;
+      let dev = (secBeta - 1) * (deviation[sec.rateKey] ?? 0);
+      // Same skip discipline as the sleeve loop: SKIPPED entirely at σ_idio = 0, not
+      // drawn-and-multiplied-by-zero, so a beta-only security leaves the cursor alone.
+      if (secIdio > 0) {
+        const zIdio = gaussianFrom(sim.rng);
+        dev += secIdio * Math.sqrt(this.dt) * zIdio;
+      }
+      const comp = geometric
+        ? ((secBeta * secBeta - 1) * (sleeveVar[sec.rateKey] ?? 0) + secIdio * secIdio) / 2
+        : 0;
+      // Sparse: an entry exists only where the overlay is non-zero.
+      if (dev  !== 0) securityDeviation[id] = dev;
+      if (comp !== 0) securityDriftComp[id] = comp;
+    }
+
+    const out = { type: 'EQUITY_RETURN_STEP_APPLY', marketDev, deviation, driftComp };
+    // Emitted as a PAIR and only when the registry actually carries a non-identity
+    // security, so a scenario whose securities are all identities gains no action field
+    // and no state key. Once present they are emitted every tick even when empty, so a
+    // year in which the overlay evaluates to zero CLEARS last year's entries rather than
+    // leaving them to persist.
+    if (hasOverlay) {
+      out.securityDeviation = securityDeviation;
+      out.securityDriftComp = securityDriftComp;
+    }
+    return [out];
   }
 }

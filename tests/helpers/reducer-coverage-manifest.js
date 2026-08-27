@@ -150,6 +150,12 @@ export const COVERED = [
   'DynamicTaxReducer', 'UsPeriodAdvanceReducer', 'AuPeriodAdvanceReducer',
   'UsTaxSettleApplyReducer', 'AuTaxSettleApplyReducer', 'UsTaxPaymentDebitReducer',
   'AuTaxPaymentDebitReducer',
+  // design 94 §8.1l — the April filing of the prior US return (wash-sale.test.mjs)
+  'UsTaxFileApplyReducer',
+  // design 94 §7 / step 8 — splits, renames, spin-offs, mergers and returns of capital
+  // (corporate-actions.test.mjs, which drives the reducer against the two Acts' own
+  // worked examples rather than against this engine's first answer)
+  'CorporateActionApplyReducer',
 
   // A — framework primitives (reducer-postconditions-framework-primitives.test.mjs)
   'BalanceSnapshotReducer', 'ScriptedReducer', 'RepeatingReducer',

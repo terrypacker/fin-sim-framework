@@ -639,6 +639,10 @@ test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are 
     'AccumulateTaxesPaidReducer',
     'AccumulateConsumptionReducer',
     'AccumulateConsumptionUtilityReducer',   // design 39 §4 — CRRA companion on EXPENSE_DEBIT
+    // design 94 §8.1i — §1091 companion on US_TAX_SETTLE_APPLY. It runs at TAX_APPLY + 1
+    // precisely BECAUSE UsTaxSettleApplyReducer runs first: the carryforward it corrects is
+    // the one that reducer just wrote. Two reducers on one action by design, not by overlap.
+    'WashSaleReducer',
   ]);
 
   const duplicates = [...actionTypeMap.entries()]

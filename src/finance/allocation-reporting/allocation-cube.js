@@ -9,6 +9,7 @@
  */
 
 import { ASSET_CLASS, assetClassForAllocation, exposureCountryForRateKey } from './asset-class.js';
+import { instrumentOf } from '../holdings/holding-utils.js';
 import { resolveDefaultAllocation } from '../holdings/default-allocations.js';
 // The SAME valuation FX helper computeNetWorth uses (design 82 §5.1a) — the cube's
 // total has to equal net worth (THE INVARIANT below), so the two cannot be allowed to
@@ -148,6 +149,7 @@ export function buildAllocationCube(state, opts = {}) {
   /** Assemble one row, doing the FX and rounding in exactly one place. */
   const push = ({
     stateKey, entry, source, assetClass, allocation = null, rateKey = null,
+    securityId = null, security = null, units = null,
     marketValueLocal, costBasisLocal = null, holdingCount = 0, inferred = false,
   }) => {
     const currency = currencyOf(entry, baseCurrency);
@@ -171,6 +173,23 @@ export function buildAllocationCube(state, opts = {}) {
       assetClass,
       allocation,
       rateKey,
+      // ── design 94 §3 item 6 / step 9: what is actually HELD ──────────────────
+      //
+      // `rateKey` names the MARKET a bucket tracks and, until Option C, that was the
+      // finest thing the cube could say. It is not the same question as "what do I own":
+      // a plan with 40% in one employer's stock and a plan with 40% in a total-market
+      // fund produce the identical `rateKey` row, and concentration risk — the thing an
+      // allocation view exists to show — is invisible in it (§3 item 4).
+      //
+      // Two columns rather than one: `securityId` is the join key and `security` is what
+      // a legend prints. A view that grouped on the raw id would put `sec-auto-EQUITY_US`
+      // on the chart, and a view that grouped on the symbol alone would silently merge two
+      // instruments an author happened to give the same ticker.
+      securityId,
+      security,
+      // Present only where every lot in the bucket is unitised, so a mixed or scalar
+      // bucket reads as "no count" rather than as an undercount. See `_pushAccountRows`.
+      units,
       holdingCount,
       // Design 88 D6: the disclosure column. Always a real boolean (never undefined)
       // so a consumer can filter on it without re-deriving the rule, and so a row
@@ -211,7 +230,7 @@ export function buildAllocationCube(state, opts = {}) {
     }
 
     if (_isAccount(entry)) {
-      _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTolerance });
+      _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTolerance, securities: state.securities ?? null });
       continue;
     }
 
@@ -256,7 +275,13 @@ export function buildAllocationCube(state, opts = {}) {
   rows.sort((a, b) =>
     a.stateKey.localeCompare(b.stateKey) ||
     a.assetClass.localeCompare(b.assetClass) ||
-    String(a.rateKey).localeCompare(String(b.rateKey)));
+    String(a.rateKey).localeCompare(String(b.rateKey)) ||
+    // The security joined the bucket key at step 9, so it has to join the ORDER too:
+    // without it, two instruments in one sleeve tie on the three keys above and fall
+    // back to `Array.prototype.sort`'s handling of equal elements — which is stable in
+    // V8, and therefore depends on `Object.entries` insertion order, which is exactly
+    // what the comment above says this sort exists to remove.
+    String(a.securityId).localeCompare(String(b.securityId)));
 
   return rows;
 }
@@ -266,7 +291,7 @@ export function buildAllocationCube(state, opts = {}) {
  * row when it has none, plus any residual against the denormalized balance.
  * @private
  */
-function _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTolerance }) {
+function _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTolerance, securities = null }) {
   const holdings = Array.isArray(entry.holdings) ? entry.holdings : [];
   const balance  = typeof entry.balance === 'number' ? entry.balance : 0;
 
@@ -291,23 +316,50 @@ function _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTo
     return;
   }
 
-  // Fold holdings into (allocation, rateKey) buckets — this is what collapses a
-  // bond ladder's rungs into a single BOND row.
+  // Fold holdings into (allocation, rateKey, securityId) buckets — this is what
+  // collapses a bond ladder's rungs into a single BOND row.
+  //
+  // `securityId` joins the key at design 94 step 9, and the cardinality it adds is
+  // **zero for every scenario in the repo**: step 3 gave every migrated equity lot the
+  // synthetic security for its own market, so `sec-auto-EQUITY_US` and
+  // `rateKey: EQUITY_US` are the same partition. A bucket splits only where an author
+  // put two real instruments in one sleeve — which is exactly the case the cube was
+  // previously unable to show, and the reason for the column (§3 item 6).
   const buckets = new Map();
   let holdingsTotal = 0;
   for (const h of holdings) {
     const allocation = h?.allocation ?? null;
-    const rateKey    = h?.rateKey ?? null;
-    const key        = `${allocation}\u0000${rateKey}`;
+    // The MARKET a lot tracks is an instrument fact (design 90 §7.3 / design 94 §5.1) —
+    // which is the whole reason the cube can name it.
+    const inst       = instrumentOf(h, securities);
+    const rateKey    = inst?.rateKey ?? null;
+    const securityId = h?.securityId ?? null;
+    const key        = `${allocation}\u0000${rateKey}\u0000${securityId}`;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { allocation, rateKey, marketValue: 0, costBasis: 0, count: 0 };
+      bucket = {
+        allocation, rateKey, securityId,
+        // What a legend prints. Symbol, then name, then the id — an authored security
+        // usually carries a ticker; a synthetic one falls back to its market name.
+        // `||`, not `??`, and the difference is load-bearing: `syntheticEquitySecurities`
+        // declares `symbol: ''` — an empty string is a real, deliberate value meaning "this
+        // instrument has no ticker", and `??` would let it win and print a blank cell. The
+        // nullish operator is right for a VALUE and wrong for a LABEL.
+        security: securityId == null ? null : (inst?.symbol || inst?.name || securityId),
+        marketValue: 0, costBasis: 0, count: 0,
+        // Σ units, and whether EVERY lot in the bucket had one. A partial sum would be
+        // an undercount presented as a count, which is worse than no number: it is the
+        // shape of defect design 93 §5 spent eight bugs on.
+        units: 0, allUnitised: true,
+      };
       buckets.set(key, bucket);
     }
     const mv = Number(h?.marketValue) || 0;
     bucket.marketValue += mv;
     bucket.costBasis   += Number(h?.costBasis) || 0;
     bucket.count       += 1;
+    if (h?.units == null) bucket.allUnitised = false;
+    else                  bucket.units += Number(h.units) || 0;
     holdingsTotal      += mv;
   }
 
@@ -318,6 +370,9 @@ function _pushAccountRows(push, stateKey, entry, { reconcileToBalance, balanceTo
       assetClass:       assetClassForAllocation(bucket.allocation),
       allocation:       bucket.allocation,
       rateKey:          bucket.rateKey,
+      securityId:       bucket.securityId,
+      security:         bucket.security,
+      units:            bucket.allUnitised ? +bucket.units.toFixed(6) : null,
       marketValueLocal: bucket.marketValue,
       costBasisLocal:   bucket.costBasis,
       holdingCount:     bucket.count,

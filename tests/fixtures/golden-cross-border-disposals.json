@@ -262,12 +262,15 @@
     "label": "",
     "marketValue": 193295.5,
     "maturityDate": null,
+    "pricePerUnit": 201.21965751,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 960.61936689,
     "zeroCoupon": false
    }
   ],
@@ -650,12 +653,15 @@
     "label": "",
     "marketValue": 450438.31,
     "maturityDate": null,
+    "pricePerUnit": 225.219155,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 2000,
     "zeroCoupon": false
    }
   ],
@@ -679,7 +685,7 @@
    "code": "USD",
    "symbol": "$"
   },
-  "derivedIncomeBasis": 237410.78,
+  "derivedIncomeBasis": 237410.77,
   "drawdownPriority": 4,
   "earningsBasis": 398406.85,
   "holdings": [
@@ -702,12 +708,15 @@
     "label": "401(k) Equity",
     "marketValue": 405394.5,
     "maturityDate": null,
+    "pricePerUnit": 225.21916667,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 1800,
     "zeroCoupon": false
    },
    {
@@ -1125,12 +1134,15 @@
     "label": "",
     "marketValue": 180175.33,
     "maturityDate": null,
+    "pricePerUnit": 225.2191625,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 800,
     "zeroCoupon": false
    }
   ],
@@ -1144,6 +1156,40 @@
   "type": "roth"
  },
  "scenarioFailed": false,
+ "securities": {
+  "sec-auto-EQUITY_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_AU",
+   "idioVol": 0,
+   "name": "Australian market index",
+   "rateKey": "EQUITY_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_AU",
+   "idioVol": 0,
+   "name": "International ex-AU market index",
+   "rateKey": "EQUITY_INTL_EX_AU",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_INTL_EX_US",
+   "idioVol": 0,
+   "name": "International ex-US market index",
+   "rateKey": "EQUITY_INTL_EX_US",
+   "symbol": ""
+  },
+  "sec-auto-EQUITY_US": {
+   "beta": 1,
+   "id": "sec-auto-EQUITY_US",
+   "idioVol": 0,
+   "name": "US market index",
+   "rateKey": "EQUITY_US",
+   "symbol": ""
+  }
+ },
  "spouseIraAccount": {
   "allowsEarlyWithdrawal": true,
   "balance": 225219.14,
@@ -1178,12 +1224,15 @@
     "label": "",
     "marketValue": 225219.14,
     "maturityDate": null,
+    "pricePerUnit": 225.21914,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 1000,
     "zeroCoupon": false
    }
   ],
@@ -1230,12 +1279,15 @@
     "label": "",
     "marketValue": 337828.75,
     "maturityDate": null,
+    "pricePerUnit": 225.21916667,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 1500,
     "zeroCoupon": false
    }
   ],
@@ -1282,12 +1334,15 @@
     "label": "",
     "marketValue": 90087.65,
     "maturityDate": null,
+    "pricePerUnit": 225.219125,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 400,
     "zeroCoupon": false
    }
   ],
@@ -1334,12 +1389,15 @@
     "label": "",
     "marketValue": 250104.53,
     "maturityDate": null,
+    "pricePerUnit": 200.083624,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 1250,
     "zeroCoupon": false
    }
   ],
@@ -1390,12 +1448,15 @@
     "label": "",
     "marketValue": 500209.03,
     "maturityDate": null,
+    "pricePerUnit": 200.083612,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 2500,
     "zeroCoupon": false
    }
   ],
@@ -1572,12 +1633,15 @@
     "label": "US Equity (Domestic)",
     "marketValue": 96976.26,
     "maturityDate": null,
+    "pricePerUnit": 179.58566667,
     "purchaseDate": null,
     "rateKey": "EQUITY_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 540,
     "zeroCoupon": false
    },
    {
@@ -1603,12 +1667,15 @@
     "label": "International Equity (ex-US)",
     "marketValue": 64650.82,
     "maturityDate": null,
+    "pricePerUnit": 179.58561111,
     "purchaseDate": null,
     "rateKey": "EQUITY_INTL_EX_US",
     "rollAtMaturity": false,
     "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_INTL_EX_US",
     "taxExemption": "none",
     "taxLossPartner": null,
+    "units": 360,
     "zeroCoupon": false
    },
    {

@@ -241,11 +241,12 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
       lotStrategy:     state.drawdownLotStrategy,
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
+      securityOrder:   state.drawdownSecurityOrder,
     }), sa);
     // Design 90 §9 step 2 — the signed, §1222-charactered split. Requested for BOTH
     // countries even though this is an AU account: a US person is taxed on worldwide
     // gains, so the US character of an AU disposal is not optional.
-    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] } });
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] }, securities: state.securities ?? null });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): realized AU basis from each lot's

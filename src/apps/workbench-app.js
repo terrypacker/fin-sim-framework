@@ -79,6 +79,7 @@ import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
 import { withBalances }             from '../finance/spending-reporting/account-flow-tie.js';
 import { scenarioParamValues, primeRatesOf } from '../finance/param-schema-utils.js';
+import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
@@ -397,6 +398,10 @@ export class WorkbenchApp extends BaseComponent {
           // Sibling accounts back the loan "Payment Source" picker (design 54 P4).
           accounts: registry.graphQueryApi.getByKind('account'),
           primeRates,
+          // Design 94 step 9 — the security picker's option list. The SAME composition
+          // ScenarioLoader projects into `state.securities`, via the one shared builder,
+          // so the picker cannot offer an instrument the run does not have.
+          securities: scenarioSecurityRegistry(registry?.scenarioService?.getActive?.()),
           ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {

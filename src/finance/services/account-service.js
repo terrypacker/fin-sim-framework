@@ -16,7 +16,7 @@ import { computeConversionRecapture } from '../account-rules/us/roth-conversion-
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
-import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
+import { rescaleHoldingsToBalance, instrumentOf } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
 import { disposalTermFields } from '../holdings/holding-period.js';
@@ -249,7 +249,12 @@ export class AccountService extends AssetService {
       ? holdingSpec
       : new Holding(holdingSpec);
     if (holding.id == null) holding.id = this._generateHoldingId();
-    if (holding.rateKey == null) {
+    // Backfill the lot's own rate key only when nothing already supplies one. Read through
+    // the seam so that under Option C a lot naming a security — which carries the rateKey —
+    // is left alone instead of having a redundant inline copy stamped on it. No registry
+    // here (this takes an account RECORD), so today `instrumentOf` is the identity and this
+    // is the read it always was; design 94 step 2's punch list has the site.
+    if (instrumentOf(holding).rateKey == null) {
       holding.rateKey = resolveRateKey(account.country, holding.allocation, account.role);
     }
     account.holdings = [...(account.holdings ?? []), holding];
@@ -276,7 +281,11 @@ export class AccountService extends AssetService {
   findOrCreateHolding(account, allocation, rateKey = null) {
     const key = rateKey ?? resolveRateKey(account.country, allocation, account.role);
     const existing = (account.holdings ?? []).find(
-      h => h.allocation === allocation && h.rateKey === key
+      // No registry in hand here — `findOrCreateHolding` takes an account RECORD, not
+      // state. Under Option A `instrumentOf` returns the holding, so this is exactly the
+      // read it was; under Option C it needs the registry threaded (design 94 step 2's
+      // punch list), because a securitised lot carries no inline rateKey.
+      h => h.allocation === allocation && instrumentOf(h).rateKey === key
     );
     if (existing) return existing;
     const created = new Holding({
@@ -405,16 +414,20 @@ export class AccountService extends AssetService {
           // par-reviewed: there are no units to scale, so the money IS the position; units
           // are established at the going price (par for a lot whose price is stale) and par
           // follows the count, so nothing can fall out of step.
-          const price = (h.pricePerUnit ?? 0) > 0 ? h.pricePerUnit : (h.parPerUnit ?? 0);
+          // No registry here either: `transaction` takes an account RECORD and no state.
+          // Option A ⇒ `instrumentOf` is the identity, so this is the read it always was;
+          // design 94 step 2's punch list has this site.
+          const inst  = instrumentOf(h);
+          const price = (h.pricePerUnit ?? 0) > 0 ? h.pricePerUnit : (inst.parPerUnit ?? 0);
           const units = h.units == null ? null : (price > 0 ? value / price : 0);
           return {
             ...h,
             marketValue: value,
             costBasis:   (h.costBasis ?? 0) + amount,
             ...(units == null ? {} : { units }),
-            ...(units == null || h.parPerUnit == null
+            ...(units == null || inst.parPerUnit == null
               ? {}
-              : { faceValue: +(units * h.parPerUnit).toFixed(2) }),
+              : { faceValue: +(units * inst.parPerUnit).toFixed(2) }),
           };
         });
         return;
@@ -657,6 +670,7 @@ export class AccountService extends AssetService {
       lotStrategy:     state.drawdownLotStrategy,
       sleeveWeights:   state.drawdownSleeveWeights,
       rebalanceWeight: state.drawdownRebalanceWeight,
+      securityOrder:   state.drawdownSecurityOrder,
     });
     // AU CPI level for design-57 basis indexation. The event-driven disposal
     // reducers read exactly this pair (cpiAccumulator.AU, falling back to
@@ -1411,7 +1425,7 @@ export class AccountService extends AssetService {
       // a stamped design-61 target, bias the sleeve order toward its over-weight class.
       const acctSelection = withRebalanceCoupling(selection, account);
       const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
-        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection, terms: termCtx })
+        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection, terms: termCtx, securities: state?.securities ?? null })
         : null;
 
       this.transaction(targetAccount, +credited, date);

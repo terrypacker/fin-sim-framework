@@ -1,0 +1,305 @@
+                                                                             
+Taxpayer Alert
+
+TA 2008/7
+Application of Part IVA of the Income Tax Assessment Act 1936 to
+'wash sale' arrangements
+
+
+
+
+  w       The ATO view on the arrangement described in TA
+          2008/7 is set out in TR 2008/1.
+
+
+
+
+  w       This document incorporates revisions made since
+          original publication. View its history and amending
+        notices, if applicable.
+
+
+
+FOI status: may be released
+
+
+Taxpayer Alerts are intended to be an \"early warning\" of significant new
+and emerging tax planning issues or arrangements that the ATO has under
+risk assessment.
+
+
+Taxpayer Alerts will provide information that is in the interests of an open tax
+administration to taxpayers. Taxpayer Alerts are written principally for
+taxpayers and their advisers and they also serve to inform ATO officers of
+new and emerging tax planning issues.Not all potential tax planning issues
+that the ATO has under risk assessment will be the subject of a Taxpayer
+Alert, and some arrangements that are the subject of a Taxpayer Alert may
+on further examination be found not to be of concern to the ATO.
+Taxpayer Alerts will give the title of the issue (which may be a scheme,
+arrangement or particular transaction), briefly describe the issue and will
+highlight the features which the ATO considers give rise to taxation issues.
+These issues will generally require more detailed analysis to provide an
+ATO view to taxpayers.
+
+
+The developers and marketers of an arrangement which is the subject of a
+Taxpayer Alert should provide the full facts of the arrangement to the ATO
+to enable the ATO to finalise its view.
+
+
+Taxpayers who have entered into or are contemplating entering into an
+arrangement similar to that described in this Taxpayer Alert can seek a
+formal determination of the ATO's position through a Private Ruling. Such
+taxpayers might obtain their own advice and/or contact the ATO officer
+named in the Alert.
+
+
+This Taxpayer Alert is issued under the authority of the Commissioner.
+
+
+
+1. This Taxpayer Alert describes an arrangement called a 'wash sale' where
+an asset is disposed of, but there is no substantial change in economic
+interest in the asset.
+
+
+DESCRIPTION
+
+
+2. The type of wash sale arrangement this alert covers is where a taxpayer
+disposes of, or otherwise deals with a capital gains tax (CGT) asset to
+generate a capital or revenue loss, but where in substance, there is no
+significant change in the taxpayer's economic exposure in the asset. This
+may occur where the interest in the asset is in some way reinstated by the
+taxpayer, in order to apply a resulting capital loss or allowable deduction
+against a capital gain or assessable income already derived or expected to
+be derived.
+
+
+3. Reinstatement of the taxpayer's interest is commonly achieved by a
+taxpayer selling a CGT asset and creating a trust over the asset or
+transferring an asset to a trust. We are concerned where this is done with
+the sole or dominant purpose of generating a capital or revenue loss to
+offset against a capital gain or assessable income when in substance there
+is an intention to acquire the same or substantially the same asset or the
+taxpayer still benefits from the asset.
+
+
+4. Examples of mechanisms to carry out wash sale arrangements covered
+by this Taxpayer Alert and where Part IVA might be relevant are those
+discussed in paragraph 4 of TR 2008/1 which sets out the ATO view in
+relation to wash sales. These examples apply where the taxpayer disposes
+of, or otherwise deals with, an asset and there is an arrangement to acquire
+the same or substantially the same asset, or otherwise continue to benefit
+from the asset.
+
+
+Example: 24 hours between disposal and acquisition
+
+
+This example corresponds with Example 2 in TR 2008/1.
+
+
+Step 1
+
+
+     1.   Kelly maintains a large share portfolio. She sells a parcel of
+          Alpha shares from her portfolio on 20 March 2007 and
+          makes a capital gain of $62,000 in the year ended 30 June
+          2007.
+
+
+Step 2
+
+
+     2.   On 5 June 2007, Kelly receives a financial booklet
+          discussing various end of year income tax saving strategies.
+          As a result of what she reads, she reviews her share
+          portfolio and notes that her shares in Echo Ltd (Echo) are
+          currently trading at $1.20 per share. Kelly's reduced cost
+          base for her Echo shares is $2.42 per share. Acting on one
+          of the strategies outlined in the booklet she devises a plan
+          which would allow her to crystallise the unrealised loss and
+          maintain her interest in Echo. In view of this she contacts
+          Bruce, her broker, on the same day to obtain information on
+          the market and the current expectations as to the price of
+          the Echo shares. Bruce assures her that there have been no
+          relevant market announcements and that he expects, based
+          on the information available to him, that there will be no
+         significant movements in the price of the Echo shares over
+         the next couple of days.
+
+
+Step 3
+
+
+    3.   Acting on Bruce's advice she places with him a sell order for
+         50,000 Echo shares at $1.20 per share.
+    4.   Kelly's capital proceeds from the sale transaction are
+         $60,000, and her reduced cost base is $122,000 (including
+         the $1,000 transaction costs see Step 4), giving her a
+         capital loss of $62,000.
+
+
+Step 4
+
+
+    5.   The next day (6 June 2007), Kelly instructs Bruce to buy
+         50,000 Echo shares. The price of the stock has now moved
+         up to $1.21 per share.
+    6.   Bruce charges Kelly $1,000 for transaction costs associated
+         with the sell and buy orders.
+
+
+Outcome
+
+
+    7.   Kelly offsets the $62,000 capital loss against the $62,000
+         capital gain when preparing her income tax return for the
+         year ended 30 June 2007.
+    8.   The scheme, for the purposes of subsection 177A(1),
+         includes all the steps leading to, the entering into and the
+         implementation of the planned sell and buy transactions,
+         the incurrence of a $62,000 capital loss and the offsetting
+         of that capital loss against the $62,000 capital gain by Kelly.
+         The facts surrounding the entry into the scheme, including
+         the adoption of the strategy in the financial booklet and the
+         advice received on the expectations as to price, suggest
+         that Kelly planned to purchase back the same number of
+         Echo shares shortly after she sold them. Accordingly, the
+         disposal and acquisition of the shares 24 hours later
+         constitute a scheme within the meaning of subsection
+         177A(1).
+    9.   Upon weighing up the eight factors in section 177D (ITAA
+         1936) (see example 2 in TR 2008/1 for the full analysis), it
+         would be concluded that the dominant purpose of Kelly in
+         entering into and carrying out the scheme was to obtain a
+         tax benefit in the form of a capital loss. In particular the
+          manner, form and substance, timing, tax effects and
+          financial consequences for Kelly arising from the scheme
+          support this conclusion. Accordingly, the Commissioner
+          may make a determination under section 177F to cancel the
+          tax benefit.
+
+
+FEATURES WHICH CONCERN US
+
+
+5. Depending upon the individual facts and circumstances, the Tax Office
+considers that wash sale arrangements that have the above features may
+give rise to taxation issues including whether:
+
+
+     1.   the general anti-avoidance provisions in Part IVA of the ITAA
+          1936 should be applied to cancel all or part of a relevant
+          capital loss or allowable deduction from the wash sale
+          arrangement where the taxpayer disposes of the assets
+          with every intention of acquiring the same or substantially
+          the same assets, or otherwise continue to benefit from the
+          asset.
+     2.   any entity involved in the arrangement is a promoter of a tax
+          exploitation scheme for the purposes of Division 290 of
+          Schedule 1 to the Taxation Administration Act 1953.
+
+
+The Australian Taxation Office has examined these wash sale arrangements
+and a view as to the application of Part IVA has been provided in TR 2008/1.
+
+
+Note 1: Penalties of up to 50% of the tax avoided can apply where
+Part IVA is applied. Reductions in base penalty may be available if the
+taxpayer makes a voluntary disclosure to the Tax Office. If you have
+any information about the current arrangement, phone us on 1800
+060 062. Tax agents wanting to provide information about people or
+companies who may be promoting arrangements covered by this
+Alert should call 13 72 86 (Fast Key Code 3 4 ).
+Note 2: Penalties of up to 5,000 penalty units for individuals, 25,000
+penalty units for bodies corporate or up to twice the amount of
+consideration received or receivable may apply to promoters of tax
+exploitation schemes under Division 290 of Schedule 1 to the
+Taxation Administration Act 1953. The Commissioner can also apply
+to the Federal Court of Australia for restraining and performance
+injunctions against promoters where prohibited conduct has
+occurred, is occurring or is proposed .
+
+
+
+Amendment history
+
+  Date of                 Comment
+  amendment
+
+  3 May 2024              Updated Tax Agent tip off hotline number
+
+  20 February             Updated ATO tip-off hotline number
+  2024
+
+
+Date of Issue: 18 April 2008
+
+
+Date of Effect: 18 April 2008
+
+
+Related Rulings/Determinations:
+TR 2008/1
+TD 2004/13
+
+Related Practice Statements:
+PS LA 2005/13 - Taxpayer Alerts
+
+Subject References:
+Aggressive tax planning
+Wash sales
+Capital gain tax
+Capital losses
+Deductions
+Arrangement
+Promoters
+
+
+Legislative References:
+Income Tax Assessment Act 1936
+Part IVA
+Taxation Administration Act 1953
+Schedule 1 Div 290
+
+Authorised by:
+Stephanie Martin
+Deputy Commissioner, Aggressive Tax Planning
+(02) 6216 1599
+
+
+          Contact Officer:              Deborah Vegar
+
+          Business Line:                Law & Practice
+
+          Section:                      Tax Counsel Network
+
+          Phone:                        (02) 9374 2872
+
+
+
+  TA 2008/7 history
+
+
+                        Date:                     Version:
+
+                        18 April 2008             Original statement
+
+                        20 February 2024          Updated alert
+
+  You are here →        3 May 2024                Updated alert
+
+
+
+Copyright notice
+
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+
+You are free to copy, adapt, modify, transmit and distribute material on this
+website as you wish (but not in any way that suggests the ATO or the
+Commonwealth endorses you or any of your services or products).
+

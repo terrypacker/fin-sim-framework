@@ -11,6 +11,7 @@
 import { ALLOCATION, isCollectibleAllocation } from './allocation.js';
 import { buildHoldingsComparator } from './holdings-selection.js';
 import { isLongTerm, YEAR_MS }     from './holding-period.js';
+import { instrumentOf }            from './holding-utils.js';
 
 /**
  * Consume an account's holdings to satisfy a sale of `amount` dollars at
@@ -120,7 +121,7 @@ function _emptyTermTally(countries) {
   return out;
 }
 
-export function consumeHoldings(holdings, amount, { indexation = null, selection = null, terms = null } = {}) {
+export function consumeHoldings(holdings, amount, { indexation = null, selection = null, terms = null, securities = null } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
     return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, realizedDiscountableGainByCountry: {}, realizedGainByCountryAndTerm: {}, collectibleGainByCountryAndTerm: {}, collectibleProceeds: 0, collectibleBasis: 0, collectibleBasisByCountry: {}, collectibleIndexedBasisByCountry: {}, section988: null, newHoldings: holdings ?? [], consumed: 0 };
   }
@@ -130,7 +131,7 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   for (const h of holdings) {
     if (h?.costBaseByCountry) for (const c of Object.keys(h.costBaseByCountry)) countries.add(c);
   }
-  const sorted = [...holdings].sort(buildHoldingsComparator(selection));
+  const sorted = [...holdings].sort(buildHoldingsComparator(selection, securities));
   let remaining     = amount;
   let realizedBasis = 0;
   let consumed      = 0;
@@ -273,7 +274,7 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
     // matches `bondPrincipalUnits`; the two must agree or the amount realized on a sale
     // and the amount realized at maturity would measure different things.
     if (h.allocation === ALLOCATION.BOND && h.fxBasisRate > 0) {
-      const par = h.inflationLinked
+      const par = instrumentOf(h, securities).inflationLinked
         ? Math.max(mv, h.faceValue ?? 0)
         : (h.faceValue ?? mv);
       const parShare = par * fraction;
@@ -312,7 +313,13 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       // arithmetic's remainder and the §4.4 balance invariant is untouched by rounding.
       if (h.units != null && (h.pricePerUnit ?? 0) > 0) {
         partial.units = +(remainingMv / h.pricePerUnit).toFixed(8);
-        partial.faceValue = +(partial.units * (h.parPerUnit ?? 0)).toFixed(2);
+        // Only an instrument that HAS a par gets one derived. Design 94 step 3 made this
+        // reachable: equity is unitised now and carries no `parPerUnit`, and the old
+        // `?? 0` stamped `faceValue: 0` on every partly-sold share position — a par of
+        // zero is a redemption target, not the absence of one, so `_syncBalance`'s ghost-par
+        // sweep and the maturity path would both have had an opinion about a share lot.
+        const par = instrumentOf(h, securities).parPerUnit;
+        if (par != null) partial.faceValue = +(partial.units * par).toFixed(2);
       } else if (h.faceValue != null && mv > 0) {
         partial.faceValue = +(h.faceValue * (remainingMv / mv)).toFixed(2);
       }

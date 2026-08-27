@@ -36,6 +36,7 @@ import { UsAccountModule2026 }   from './account-rules/us/us-account-module-2026
 import { AuAccountModule2024 }   from './account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 }   from './account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 }   from './account-rules/au/au-account-module-2026.js';
+import { UsTaxFileHandler, UsTaxFileApplyReducer } from './tax/us/tax-file-classes.js';
 
 // Per-country handler/reducer factories — keyed by country code.
 const PERIOD_ADVANCE_HANDLER = { US: UsPeriodAdvanceHandler, AU: AuPeriodAdvanceHandler };
@@ -160,6 +161,25 @@ export class TaxService {
 
       reducers.push(new TAX_SETTLE_APPLY_REDUCER[cc]());
       reducers.push(new TAX_PAYMENT_DEBIT_REDUCER[cc]({ accountService, stateRegistry }));
+      // FILING the prior year's return, as an event distinct from the tax year ENDING
+      // (design 94 §8.1l). It exists because a 31-December settle cannot see whether a
+      // 31-December sale was a wash — that window closes on 30 January. US only: Australia
+      // has no §1091, and its Part IVA answer is a different mechanism entirely (§8.1d).
+      //
+      // ⚠️ **NO EventSeries, and that is the whole trick** (§8.1m). A standing annual series
+      // would sit in the queue of every US scenario — and the queue's comparator is
+      // `date || order` with NO final tie-break, so merely ADDING a node re-resolves ties
+      // among unrelated same-date events elsewhere in the run. Measured: a standing series
+      // moved all eleven goldens, 560 fields, worst \$391k. The filing is therefore scheduled
+      // LAZILY by the settle, one occurrence at a time, only when there is something to
+      // amend — which is also what it means: you lodge an amendment when you have one.
+      //
+      // Registered by `static eventType` with no `handledEvents`, the same way the engine
+      // wires its other event-driven-but-unscheduled handlers.
+      if (cc === 'US') {
+        handlers.push(new UsTaxFileHandler());
+        reducers.push(new UsTaxFileApplyReducer());
+      }
 
       // Dynamic tax reducers (one per action type per country)
       const actionTypes = new Set();
@@ -213,3 +233,5 @@ function _periodAdvanceDateFor(cc) {
 function _taxSettleDateFor(cc) {
   return cc === 'AU' ? { month: 6, day: 30 } : { month: 12, day: 31 };
 }
+
+

@@ -296,7 +296,14 @@ describe('TaxLossHarvestHandler', () => {
     const handler = new TaxLossHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxLossHarvestCap: 10000 });
     const actions = handler.call({ state });
 
-    assert.strictEqual(actions.length, 0, 'harvest skipped when no substitute found');
+    assert.strictEqual(actions.filter(a => a.type === 'STOCK_HARVEST_APPLY').length, 0,
+      'harvest skipped when no substitute found');
+    // design 94 §8.1h — the skip is RECORDED now. R2 measured it firing 2.6-4.0 times per
+    // lifetime path as a `console.warn` nobody reads, and it is what stops an uncapped
+    // harvester dead after its first harvest. A strategy that declines to act must not look
+    // like one that had nothing to do.
+    const skip = actions.find(a => a.fieldName === 'tlh_skipped_no_substitute');
+    assert.ok(skip, `the skip must be recorded, got: ${JSON.stringify(actions)}`);
   });
 
   test('TLH-H-4: skips accounts not in taxableStateKeys (tax-advantaged are no-op)', () => {

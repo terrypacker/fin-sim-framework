@@ -104,7 +104,7 @@ function valueWriteSites() {
  * NUMBER so that converting one to a primitive (good) or adding a new raw write (needs a
  * decision) both show up here rather than passing quietly.
  */
-const EXPECTED_ANNOTATED = 21;
+const EXPECTED_ANNOTATED = 26;
 // 23 → 21 at design 93 §5b. Four of §4's annotated exceptions were the SAME statement
 // written four times — "there are no units to scale, so the money becomes the position" —
 // and they collapsed into the `establish()` primitive. `absorbIntoRungs`' hand-written
@@ -114,6 +114,24 @@ const EXPECTED_ANNOTATED = 21;
 // which gained a conditional `cpiIndexRatio` spread and so now reads as the shape too.
 // 22 → 21 at §5.5: the rebalancer's and the ladder's merge sites collapsed into the one
 // in `lot-compaction.js`, which is where the rule now lives for all three families.
+// 21 → 22 at design 94 step 1: HoldingSplitReducer's child CONSTRUCTION gained a
+// conditional `...securityId` spread (a split child is a piece of the same instrument), so
+// the walker now reads it as the shape. Nothing about its par behaviour changed — it never
+// carried `faceValue` — which is exactly what an annotation is for: the shape is a
+// heuristic, and this is the case where the heuristic is wrong and has to be told so.
+// 22 → 24 at design 94 step 3, and both for the same reason as the one above: the
+// rebalancer's `_newSleeve` and `distributeHoldingsCredit`'s vintage lot are lot
+// CONSTRUCTIONS that gained a conditional `...securityId` spread, so the walker now reads
+// them as the shape. Neither carries a par — an equity sleeve has none and a bond FUND lot
+// sets `faceValue: null` in the same literal — so there is nothing for either to desync.
+// 24 → 26 at design 94 step 8, and these two are the FIRST that are not lot constructions
+// wearing a spread. `corporate-action.js` builds a spun-off lot and a merged lot by writing
+// `marketValue` next to `units` and `pricePerUnit` and handing the whole thing to
+// `syncHolding`, which re-derives value AND par from the count in the same statement. The
+// raw write is the SCALAR branch's answer; on a unitised position it is overwritten before
+// the object escapes. Converting them to a primitive is not available — `reprice` and
+// `resize` each move one of the two things a corporate action moves, and a spin-off moves
+// both at once — which is what an annotated exception is for.
 
 describe('holding value-write gate (design 93 §4)', () => {
   test('no unannotated `{ ...holding, marketValue }` outside the primitives', () => {

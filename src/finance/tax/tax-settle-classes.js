@@ -222,7 +222,28 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
   static eventType        = 'TAX_SETTLE_US';
   static description      = 'Computes end-of-year US tax liability and emits US_TAX_SETTLE_APPLY + RECORD_BALANCE.';
 
-  call({ state }) {
+  call({ sim, state }) {
+    // ── design 94 §8.1l/§8.1m — lodge the April amendment, if there will be one ──
+    //
+    // Scheduled here rather than standing in the queue all run: the queue orders by
+    // `date || order` with no final tie-break, so a permanent annual series would perturb
+    // unrelated same-date events in every scenario that has one (measured at 560 moved
+    // fields across the goldens). Created only when a §1091 window is actually open, which
+    // is also what an amended return IS.
+    //
+    // Read off the SAME condition the apply reducer uses to write its snapshot, so the two
+    // cannot disagree about whether a filing exists to serve.
+    if (sim && state.washPendingLosses?.length > 0) {
+      const year = new Date(state.currentPeriods?.US?.startMs ?? 0).getUTCFullYear();
+      sim.schedule({
+        type:  'TAX_FILE_US',
+        name:  'US Tax File',
+        date:  new Date(Date.UTC(year + 1, 3, 15)),   // 15 April, the year after the return's
+        order: 110,                                   // after the settle band (design 34 §13)
+        data:  { cc: 'US', taxYear: year },
+      });
+    }
+
     // No US person in this household ⇒ no US return. `usPersonHousehold` is stamped
     // once at compile time from the configured persons (US_TAX.state()), NOT read
     // from live `state.people`, because a year-of-death settle runs after the
@@ -476,6 +497,25 @@ class TaxSettleApplyReducerBase extends Reducer {
       }
     }
     const extra = this._extraStatePatches(state, action);
+    // ── design 94 §8.1l — preserve the return's inputs for the April filing ──────
+    //
+    // `TAX_FILE_US` recomputes this return once the §1091 windows it could not see have
+    // closed, and `computeUsTax` reads exactly the accumulators and pools this reducer is
+    // about to overwrite. So the snapshot is the PRE-IMAGE of the patch: `state[k]` for every
+    // key `k` in `{...resets, ...extra}`, plus `currentPeriods` (which the 1-January advance
+    // moves, and which selects the year's rate module).
+    //
+    // Derived from the patch rather than from a list of field names ON PURPOSE. A hand-kept
+    // list of "what the return reads" is a manifest, and every manifest in this repo has
+    // drifted from the thing it mirrors at least once. This one cannot: add a field to
+    // YTD_FIELDS or a pool to `_extraStatePatches` and the snapshot follows for free.
+    //
+    // Written only when a correction is POSSIBLE — `washPendingLosses` is already known here,
+    // and a scenario with no pending entry can never produce one. So a run that never harvests
+    // gains no state key and no whole-state fixture moves.
+    const pendingSnapshot = this.constructor.cc === 'US' && (state.washPendingLosses?.length > 0)
+      ? { [PENDING_RETURN_KEY]: _snapshotPreImage(state, { ...resets, ...extra }) }
+      : {};
     // Design 95 §8.2 — the true-up. Payroll already withheld part (or all) of this
     // liability during the year, so only the BALANCE DUE leaves cash now. Withholding
     // it and then debiting the whole liability again would charge it twice.
@@ -492,9 +532,9 @@ class TaxSettleApplyReducerBase extends Reducer {
     // exactly what a whole-state fixture is built to catch, and did.
     const balanceDue = Math.max(0, tax - withheld);
     if (balanceDue > 0) {
-      return this.newState({ ...state, ...resets, ...extra }, {}, [{ type: this.constructor.debitActionType, amount: balanceDue }]);
+      return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot }, {}, [{ type: this.constructor.debitActionType, amount: balanceDue }]);
     }
-    return this.newState({ ...state, ...resets, ...extra });
+    return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot });
   }
 
   /**
@@ -503,6 +543,22 @@ class TaxSettleApplyReducerBase extends Reducer {
    * pools + the FITO handoff; AU funds the US §904 current-year foreign tax.
    */
   _extraStatePatches(_state, _action) { return {}; }
+}
+
+/** Where the settle leaves the return's inputs for the April filing (design 94 §8.1l). */
+export const PENDING_RETURN_KEY = 'usPendingReturn';
+
+/**
+ * The pre-image of a patch: what `state` held for every key the patch is about to change.
+ *
+ * `currentPeriods` rides along because `computeUsTax` selects its rate module from
+ * `currentPeriods.US` and the 1-January advance moves it before the April filing runs — so
+ * without it the filing would recompute a 2032 return against 2033's brackets.
+ */
+function _snapshotPreImage(state, patch) {
+  const out = { currentPeriods: state.currentPeriods };
+  for (const k of Object.keys(patch)) out[k] = state[k];
+  return out;
 }
 
 /**

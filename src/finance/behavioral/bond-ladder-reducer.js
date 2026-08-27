@@ -13,7 +13,7 @@ import { ALLOCATION }         from '../holdings/allocation.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { resolveRateKey }     from '../holdings/default-allocations.js';
 import { resolveYield }       from '../economic-regimes/yield-curve.js';
-import { unitiseBond, addValue } from '../holdings/holding-utils.js';
+import { unitiseBond, addValue, instrumentOf } from '../holdings/holding-utils.js';
 import { compactLots, LOT_POLICIES } from '../holdings/holding-utils.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -106,9 +106,11 @@ export class BondLadderReducer extends Reducer {
     // brokerage's $1.29M by year 20. Absorbing them into the standing rungs is the crude
     // form of design 66 §10.5's buy-side tail routing: it keeps every bond dollar inside a
     // dated rung without resetting the maturity spacing a full rebuild would destroy.
-    const standingRungs = bondHoldings.filter(h => h?.maturityDate != null);
+    // "Dated rung or perpetual fund?" is an INSTRUMENT question (design 94 §5.1).
+    const isDated = h => instrumentOf(h, state.securities ?? null)?.maturityDate != null;
+    const standingRungs = bondHoldings.filter(h => h && isDated(h));
     if (account._bondLadderRungs === N && standingRungs.length > 0) {
-      const funds = bondHoldings.filter(h => h?.maturityDate == null);
+      const funds = bondHoldings.filter(h => h && !isDated(h));
       const fundValue = +funds.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
       if (fundValue <= 0.01) return this.newState(state);
       const spacing = this.spacingYears > 0 ? this.spacingYears : 1;

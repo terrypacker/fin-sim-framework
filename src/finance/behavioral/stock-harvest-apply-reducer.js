@@ -11,7 +11,8 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { singleAssetTermFields } from '../holdings/holding-period.js';
 import { toMs } from '../account-rules/main-residence.js';
-import { resize, addValue } from '../holdings/holding-utils.js';
+import { resize, addValue, promoteToUnitised, prevailingPrice } from '../holdings/holding-utils.js';
+import { identityGroupOf } from '../holdings/security.js';
 
 /**
  * StockHarvestApplyReducer — dedicated sell+rebuy path for tax-loss and tax-gain
@@ -32,6 +33,13 @@ import { resize, addValue } from '../holdings/holding-utils.js';
  *   sellAmount        - dollar amount to realize from sourceHolding (≤ holding.marketValue)
  *   sourceHoldingId   - id of the holding to sell (must be < basis for LOSS; > for GAIN)
  *   substituteHoldingId - id of the holding to rebuy (same account; may equal source for GAIN)
+ *   substituteSecurityId - a SECURITY to rebuy into when the account holds no suitable lot;
+ *                       a fresh position is opened in it (design 94 §8.1h). This is the
+ *                       two-fund rotation the model could not express before a lot named an
+ *                       instrument: sell A, buy B, and next year sell B and buy A again —
+ *                       "buy A again" was unreachable while a substitute had to be a lot
+ *                       that already existed, which is what turned the harvester into a
+ *                       one-shot strategy (R2, §8.1f)
  *   purpose           - 'LOSS' | 'GAIN'  (informational; no branch on this field)
  *   residency         - 'US' | 'AU'  (passed to STOCK_WITHDRAWAL_TAX)
  */
@@ -46,7 +54,8 @@ export class StockHarvestApplyReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const { stateKey, sellAmount, sourceHoldingId, substituteHoldingId, purpose, residency } = action;
+    const { stateKey, sellAmount, sourceHoldingId, substituteHoldingId, substituteSecurityId,
+            purpose, residency } = action;
     const account = state[stateKey];
     if (!account) return state;
 
@@ -117,12 +126,46 @@ export class StockHarvestApplyReducer extends Reducer {
     // the sell may have fully removed the holding from afterSell. Re-add it with the
     // rebuyed values so the position stays invested.
     let substituteFound = false;
-    let afterRebuy = afterSell.map(h => {
+    let replacementId    = null;   // the lot the proceeds landed in — §1091's "replacement"
+    let replacementUnits = 0;      // how many SHARES it acquired, which is what §1091(b) matches
+    let afterRebuy = substituteHoldingId == null ? afterSell : afterSell.map(h => {
       if (h.id !== substituteHoldingId) return h;
       substituteFound = true;
       // New money into an existing lot: basis rises by the full amount (design 93 §4).
-      return addValue(h, consume);
+      const grown = addValue(h, consume);
+      replacementId    = h.id;
+      replacementUnits = Math.max(0, (grown.units ?? 0) - (h.units ?? 0));
+      return grown;
     });
+
+    // A SECURITY substitute: open a fresh position in it rather than adding to a lot that
+    // does not exist (design 94 §8.1h). Dated today, basis = market, and it takes the
+    // sold lot's allocation — it is the same asset class in the same market, differing
+    // only in which instrument it is, which is the entire point.
+    if (!substituteFound && substituteSecurityId != null) {
+      const sec      = state.securities?.[substituteSecurityId] ?? null;
+      const siblings = afterSell.filter(h => h.allocation === source.allocation);
+      // par-reviewed: CREATES a lot. `source` is a TEMPLATE for allocation and the
+      // position-level fields a fresh buy inherits; every instrument field comes from the
+      // security it names, so nothing about the sold instrument rides along.
+      const fresh = promoteToUnitised({
+        id:            `tlh-${substituteSecurityId}-${toMs(date) ?? 0}`,
+        allocation:    source.allocation,
+        rateKey:       sec?.rateKey ?? source.rateKey ?? null,
+        securityId:    substituteSecurityId,
+        label:         sec?.name ?? sec?.symbol ?? '',
+        marketValue:   consume,
+        costBasis:     consume,
+        costBaseByCountry: null,
+        purchaseDate:  date instanceof Date ? new Date(date) : new Date(toMs(date) ?? 0),
+        acquisitionPriceLevel:    source.acquisitionPriceLevel ?? null,
+        acquisitionDateByCountry: null,
+      }, { price: prevailingPrice(siblings) });
+      afterRebuy       = [...afterSell, fresh];
+      substituteFound  = true;
+      replacementId    = fresh.id;
+      replacementUnits = fresh.units ?? 0;
+    }
 
     if (!substituteFound) {
       if (substituteHoldingId === sourceHoldingId) {
@@ -143,11 +186,108 @@ export class StockHarvestApplyReducer extends Reducer {
       }
     }
 
+    // ── §1091(a)/(d) + §1223(3): the IMMEDIATE wash (design 94 §8.1j, step 7b) ──
+    //
+    // The harvester sells and rebuys in one action, in one account, on one day. When the
+    // replacement is in the sold lot's own §1091 identity group that IS a wash sale, and it
+    // is the only wash in this engine where **both lots are in hand at the moment it
+    // happens** — so it needs no ledger, no window scan and no lag. It is also the dominant
+    // one: in an un-securitised book every equity lot shares a market synthetic, so step 3
+    // of `resolveSubstitute` picks an identical partner and every harvest lands here.
+    //
+    // Three consequences, and this is the branch that has all three (§8.1b):
+    //   (a) §1091(a) — the matched share of the loss is DISALLOWED;
+    //   (b) §1091(d) — it is not destroyed: it moves into the replacement's BASIS, so it is
+    //       recovered on the eventual sale. Timing, not money, which is why R2 held it;
+    //   (c) §1223(3) — the replacement's holding period INCLUDES the sold lot's, so a wash
+    //       can never convert long-term into short-term.
+    //
+    // AU is deliberately untouched. There is no §1091 in Australia; TR 2008/1's answer is a
+    // Part IVA cancellation, a different mechanism with a different consequence (§8.1d), and
+    // stamping this on `auGain` would be the wrong rule in the wrong country.
+    let lossShort = Math.max(0, -usShortTermGain);
+    let lossLong  = Math.max(0, -usLongTermGain);
+    let unitsLeft = (source.units ?? 0) * basisFrac;
+    let disallowed = 0;
+    const sourceGroup = identityGroupOf(source, state.securities ?? null);
+    const replacement = afterRebuy.find(h => h.id === replacementId) ?? null;
+    if ((lossShort > 0 || lossLong > 0) && sourceGroup != null && replacement != null
+        && identityGroupOf(replacement, state.securities ?? null) === sourceGroup) {
+      // §1091(b) / §1.1091-1(h) Example 2 — shares, not dollars.
+      const frac = unitsLeft > 0 ? Math.min(1, replacementUnits / unitsLeft) : 0;
+      const dShort = +(lossShort * frac).toFixed(2);
+      const dLong  = +(lossLong  * frac).toFixed(2);
+      disallowed   = +(dShort + dLong).toFixed(2);
+      if (disallowed > 0) {
+        lossShort = +(lossShort - dShort).toFixed(2);
+        lossLong  = +(lossLong  - dLong).toFixed(2);
+        // §1.1091-1(e): shares that have already disallowed a loss are disregarded when
+        // testing another. Taking them out of the count here is what stops the sheltered
+        // ledger below matching the same shares a second time.
+        unitsLeft = +(unitsLeft * (1 - frac)).toFixed(6);
+        afterRebuy = afterRebuy.map((h) => {
+          if (h.id !== replacementId) return h;
+          // (b) and (c) together. `costBasis` rises by the disallowed loss — §1.1091-2's
+          // worked form is "basis of the new = basis of the old ± the price difference",
+          // which for a same-day sell-and-rebuy at one price reduces to exactly this. The
+          // date moves back only for a lot BORN here: an existing lot already carries its
+          // own, older, holding period and rewriting it would tack the period onto shares
+          // that were never sold.
+          const bornHere = replacementUnits > 0 && (h.units ?? 0) - replacementUnits < 1e-9;
+          return {
+            ...h,
+            costBasis: +((h.costBasis ?? 0) + disallowed).toFixed(2),
+            ...(bornHere && source.purchaseDate != null ? { purchaseDate: source.purchaseDate } : {}),
+          };
+        });
+      }
+    }
+    // What the US return actually sees: the loss net of the disallowance. `lossShort` and
+    // `lossLong` started as the loss and were reduced by whatever was disallowed above, so
+    // the reported figure is simply their negation — a GAIN is never touched, because
+    // §1091 is a rule about losses.
+    // `|| 0` and not just `-x`: negating a zero gives -0, which survives into the payload
+    // and into any fixture written from it, where it compares unequal to 0 under
+    // `Object.is` and reads as noise in a diff.
+    const usShortTermGainRep = usShortTermGain < 0 ? (-lossShort || 0) : usShortTermGain;
+    const usLongTermGainRep  = usLongTermGain  < 0 ? (-lossLong  || 0) : usLongTermGain;
+    const gainRep = +(realizedGainLoss + disallowed).toFixed(2) || 0;
+
     const newBalance = +afterRebuy.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+
+    // ── the §1091 pending ledger (design 94 §8.1i) ──────────────────────────────
+    //
+    // Written HERE rather than from the chained STOCK_WITHDRAWAL_TAX, because this is the
+    // only place that knows all four facts at once: the loss, its character, the number of
+    // units that left, and WHAT they were units OF. The tax action carries the money but
+    // not the instrument, and adding the instrument to a payload five emitters share is a
+    // manifest change §8.1i does not need.
+    //
+    // Only a LOSS, and only a lot that names something: an un-securitised lot makes no
+    // identity claim (§8.1c), so it can never be matched and an entry for it would sit in
+    // the ledger forever.
+    const washPatch = {};
+    const group = identityGroupOf(source, state.securities ?? null);
+    // NET of anything §8.1j already disallowed on the spot: the same shares must not be
+    // matched twice (§1.1091-1(e)), and the same dollars must not be disallowed twice.
+    if (realizedGainLoss < 0 && group != null && (lossShort > 0 || lossLong > 0)) {
+      washPatch.washPendingLosses = [
+        ...(state.washPendingLosses ?? []),
+        {
+          ms:         toMs(date) ?? 0,
+          group,
+          units:      +unitsLeft.toFixed(6),
+          shortLoss:  lossShort,
+          longLoss:   lossLong,
+          stateKey,
+        },
+      ];
+    }
 
     return this.newState(
       state,
       {
+        ...washPatch,
         [stateKey]: {
           ...account,
           holdings: afterRebuy,
@@ -156,10 +296,15 @@ export class StockHarvestApplyReducer extends Reducer {
       },
       [{
         type:        'STOCK_WITHDRAWAL_TAX',
-        gain:        realizedGainLoss,
+        gain:        gainRep,
         auGain:      auGainLoss,
         auDiscountableGain,
-        usShortTermGain, usLongTermGain, auShortTermGain, auLongTermGain,
+        usShortTermGain: usShortTermGainRep,
+        usLongTermGain:  usLongTermGainRep,
+        auShortTermGain, auLongTermGain,
+        // Stated on the payload rather than silently netted, so the disallowance can be
+        // drilled from the journal and footed against the return (design 94 §8.1j).
+        ...(disallowed > 0 ? { washDisallowed: disallowed } : {}),
         residency:   residency ?? 'US',
         proceeds:    consume,
         costBasis:   basisShare,

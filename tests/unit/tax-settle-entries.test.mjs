@@ -114,7 +114,18 @@ test('TSE-7: against a real run, every settlement halves to exactly one entry', 
 
   assert.ok(settles.length > 0);
   assert.equal(primary.size, actions.size, 'exactly one entry survives per settle action');
-  assert.equal(settles.length, actions.size * 2, 'the engine really does journal each settle twice');
+  // The fan-out is one journal entry per REDUCER that reduced the action, so the multiple is
+  // not a constant and asserting one pins the reducer roster rather than this helper. It was
+  // 2 until design 94 §8.1i put a second reducer on US_TAX_SETTLE_APPLY (WashSaleReducer,
+  // running after the settle so it can correct the carryforward the settle just wrote), at
+  // which point US settles fan out to 3 and AU settles stay at 2. What matters here is that
+  // fan-out EXISTS and that the helper collapses it.
+  assert.ok(settles.length > actions.size,
+    'the engine really does journal each settle more than once');
+  for (const id of actions) {
+    assert.ok(settles.filter(e => e.action.instanceId === id).length >= 2,
+      'every settle action fans out to at least two entries');
+  }
 
   // And each survivor is the earlier of its pair.
   for (const entry of primary) {

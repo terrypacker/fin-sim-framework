@@ -70,7 +70,13 @@ export const US_BROKERAGE = {
       // field says" — so an AU-domiciled disposal is mislabelled in the journal's
       // display layer while every computation on it is correct.
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { currency: ValueType.text(), gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), auDiscountableGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text(), proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() , stateKey: ValueType.text()} },
+        fields: { currency: ValueType.text(), gain: ValueType.currency('USD'), auGain: ValueType.currency('USD'), auIndexedGain: ValueType.currency('USD'), auDiscountableGain: ValueType.currency('USD'), usShortTermGain: ValueType.currency('USD'), usLongTermGain: ValueType.currency('USD'), auShortTermGain: ValueType.currency('USD'), auLongTermGain: ValueType.currency('USD'), residency: ValueType.text(), proceeds: ValueType.currency('USD'), costBasis: ValueType.currency('USD'), description: ValueType.text() , stateKey: ValueType.text(),
+          // design 94 §8.1j — the part of this disposal's loss that §1091(a) disallowed and
+          // §1091(d) moved into the replacement's basis. Declared because `pickPayload` keeps
+          // only declared fields: an undeclared one never reaches the tax documents, and a
+          // tax adjustment nobody can drill from the journal is exactly the shape this repo
+          // has been bitten by. Zero or absent on every disposal that was not a wash.
+          washDisallowed: ValueType.currency('USD')} },
       { type: 'FIXED_INCOME_EARNINGS_TAX',
         fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
     ],

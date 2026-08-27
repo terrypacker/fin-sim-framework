@@ -76,7 +76,7 @@ import { RebalanceToTargetApplyReducer, _sweepDust, _compactSeasonedLots } from 
 import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
-import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
+import { resolveSubstitute, resolveSubstituteSecurity } from './finance/behavioral/substitute-holding.js';
 import { TaxGainHarvestHandler } from './finance/behavioral/tax-gain-harvest-handler.js';
 import { TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
@@ -150,16 +150,19 @@ import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-i
 import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation, MIX_SUM_EPSILON, totalizeMix, isTotalMix, assertTotalMix } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
-import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
-import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
+import { CorporateActionHandler, CorporateActionApplyReducer } from './finance/holdings/corporate-action-classes.js';
+import { CORPORATE_ACTION_KIND, normalizeCorporateAction, applyCorporateAction, registryPatchFor } from './finance/holdings/corporate-action.js';
+import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
+import { HOLDING_ACTION_TYPES, VALUE_KIND, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
-import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
+import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
 import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
+import { SECURITY_FIELDS, makeSecurity, buildSecurityRegistry, assertAllocationMatch, identityGroupOf, SYNTHETIC_SECURITY_PREFIX, syntheticSecurityId, syntheticEquitySecurities, scenarioSecurityRegistry } from './finance/holdings/security.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { exportDrillReports } from './finance/journal-reporting/drill-report-export.js';
@@ -322,11 +325,12 @@ import { indexLimit, ROUNDING } from './finance/tax/statutory-indexation.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
-import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, PENDING_RETURN_KEY, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
 import { FICA_SS_RATE, FICA_MEDICARE_RATE, FICA_WAGE_BASE_BY_YEAR, ficaWageBase, ficaOnWage } from './finance/tax/us/fica-rates.js';
+import { UsTaxFileHandler, UsTaxFileApplyReducer } from './finance/tax/us/tax-file-classes.js';
 import { US_CONTRIBUTION_LIMITS_BY_YEAR, FIRST_PUBLISHED_YEAR, LAST_PUBLISHED_YEAR, usContributionLimits, catchUpAllowance } from './finance/tax/us/us-contribution-limits.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
@@ -338,6 +342,7 @@ import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRates2026 } from './finance/tax/us/us-tax-rates-2026.js';
 import { UsTaxRatesBase, _computeInvestmentInterestLimitation, ORDINARY_CAPITAL_LOSS_CAP, _computeCapitalLossLimitation, _computeCapitalLossBasketAdjustment, _computeRateDifferentialAdjustment, _computePassiveLossLimitation, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
+import { resolveWashSales } from './finance/tax/us/wash-sale.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService, US_BRACKET_BASE_YEAR, usRatesForYear, usBracketGrossIncomeCeiling } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -362,6 +367,7 @@ import { AU_INCOME } from './scenarios/toolsets/au-income-toolset.js';
 import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.js';
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
 import { AU_TAX } from './scenarios/toolsets/au-tax-toolset.js';
+import { CORPORATE_ACTIONS } from './scenarios/toolsets/corporate-actions-toolset.js';
 import { resolvePropertyRateKey, ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
 import { INHERITANCE } from './scenarios/toolsets/inheritance-toolset.js';
 import { ScenarioCompiler } from './scenarios/toolsets/scenario-compiler.js';
@@ -416,7 +422,7 @@ import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-frame
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, SimulationHorizonError, TELEMETRY_LEVELS, Simulation } from './simulation-framework/simulation.js';
-import { deepClone, snapshotForDiff, MutationTracker, diffStates } from './simulation-framework/state-utils.js';
+import { deepClone, cloneState, snapshotForDiff, MutationTracker, diffStates } from './simulation-framework/state-utils.js';
 import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
@@ -855,6 +861,7 @@ export const Finance = {
   StockHarvestApplyReducer,
   StrategicAssetLocationReducer,
   resolveSubstitute,
+  resolveSubstituteSecurity,
   TaxGainHarvestHandler,
   TaxLossHarvestHandler,
   AccountBuilder,
@@ -997,13 +1004,21 @@ export const Finance = {
   assertTotalMix,
   resolveScheduledRate,
   bootstrapHoldingSplit,
+  CorporateActionHandler,
+  CorporateActionApplyReducer,
+  CORPORATE_ACTION_KIND,
+  normalizeCorporateAction,
+  applyCorporateAction,
+  registryPatchFor,
   DEFAULT_ALLOCATION_BY_ROLE,
   DEFAULT_ALLOCATION_BY_TYPE,
   resolveDefaultAllocation,
+  CLASS_KEYS_BY_ALLOCATION,
   EQUITY_MARKETS_BY_COUNTRY,
   resolveEquityMarketMix,
   resolveRateKey,
   HOLDING_ACTION_TYPES,
+  VALUE_KIND,
   HOLDING_ACTION_ENTRIES,
   HoldingTransactAction,
   HoldingRevalueAction,
@@ -1037,6 +1052,8 @@ export const Finance = {
   isUnitised,
   PAR_PER_UNIT,
   unitiseBond,
+  unitiseEquity,
+  prevailingPrice,
   syncHolding,
   indexedRedemptionValue,
   promoteToUnitised,
@@ -1082,6 +1099,15 @@ export const Finance = {
   resolveDrawdownSelection,
   withRebalanceCoupling,
   buildHoldingsComparator,
+  SECURITY_FIELDS,
+  makeSecurity,
+  buildSecurityRegistry,
+  assertAllocationMatch,
+  identityGroupOf,
+  SYNTHETIC_SECURITY_PREFIX,
+  syntheticSecurityId,
+  syntheticEquitySecurities,
+  scenarioSecurityRegistry,
   JournalDataSource,
   JournalQueryApi,
   exportDrillReports,
@@ -1458,6 +1484,7 @@ export const Finance = {
   withoutUsSourceIncome,
   UsTaxSettleHandler,
   AuTaxSettleHandler,
+  PENDING_RETURN_KEY,
   UsTaxSettleApplyReducer,
   AuTaxSettleApplyReducer,
   DRAWDOWN_TAX_ACTION_TYPES,
@@ -1481,6 +1508,8 @@ export const Finance = {
   FICA_WAGE_BASE_BY_YEAR,
   ficaWageBase,
   ficaOnWage,
+  UsTaxFileHandler,
+  UsTaxFileApplyReducer,
   US_CONTRIBUTION_LIMITS_BY_YEAR,
   FIRST_PUBLISHED_YEAR,
   LAST_PUBLISHED_YEAR,
@@ -1503,6 +1532,7 @@ export const Finance = {
   _computeRateDifferentialAdjustment,
   _computePassiveLossLimitation,
   _drawDownBasket,
+  resolveWashSales,
   TaxService,
   TaxSettleService,
   US_BRACKET_BASE_YEAR,
@@ -1601,6 +1631,7 @@ export const Engine = {
   TELEMETRY_LEVELS,
   Simulation,
   deepClone,
+  cloneState,
   snapshotForDiff,
   MutationTracker,
   diffStates,
@@ -1677,6 +1708,7 @@ export const Scenarios = {
   AU_REAL_PROPERTY,
   AU_RETIREMENT,
   AU_TAX,
+  CORPORATE_ACTIONS,
   resolvePropertyRateKey,
   ECONOMIC_REGIMES,
   INHERITANCE,

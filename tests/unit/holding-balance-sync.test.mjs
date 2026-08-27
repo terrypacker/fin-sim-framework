@@ -150,9 +150,30 @@ test('a reinvested dividend opens its OWN lot and leaves the paying sleeves unto
   assert.equal(lot.allocation,  'EQUITY', 'allocation inherited from the sleeves that paid');
   assert.equal(lot.purchaseDate.getTime(), Date.UTC(2031, 5, 30), 'bought today, not in 2020');
   assert.equal(lot.acquisitionPriceLevel, 1.12, 'indexed from its own acquisition (design 57 §6.3)');
-  assert.equal(lot.maturityDate, null, 'a fund position — no maturity, no par, no units');
+  assert.equal(lot.maturityDate, null, 'a fund position — no maturity and no par');
   assert.equal(lot.faceValue,    null);
-  assert.equal(lot.units,        undefined, 'and therefore nothing that could blend a par');
+  assert.equal(lot.parPerUnit,   undefined, 'and therefore nothing that could blend a par');
+  // Design 94 §9.5c — a lot BIRTH site, so the new vintage is a POSITION, not a scalar.
+  // The paying sleeves here are scalar (an Option-A fixture), so `prevailingPrice` finds
+  // no price to join and falls back to the PAR_PER_UNIT convention.
+  assert.equal(lot.units,        10);
+  assert.equal(lot.pricePerUnit, 100);
+  assert.equal(lot.securityId,   undefined, 'rateKey `EQ` is not a market — no synthetic');
+});
+
+test('a vintage lot joins its sleeve at the sleeve`s OWN price, not at the convention', () => {
+  // Minting at 100 beside a lot standing at 250 would claim 2.5x the shares for the same
+  // money, and design 94 §5.5's compaction — whose fungibility key ran through the price —
+  // would then never merge the two, so the lot count would grow without bound.
+  const holdings = [
+    { id: 'a', allocation: 'EQUITY', marketValue: 25_000, costBasis: 10_000, rateKey: 'EQ',
+      units: 100, pricePerUnit: 250, securityId: 'sec-auto-EQUITY_US' },
+  ];
+  const out = distributeHoldingsCredit(holdings, 1_000, { stateKey: 'acct', year: 2031 });
+  assert.equal(out[1].pricePerUnit, 250);
+  assert.equal(out[1].units, 4, '1,000 of new money at 250 a unit');
+  assert.equal(out[1].marketValue, 1_000);
+  assert.equal(out[1].securityId, 'sec-auto-EQUITY_US', 'a position in what the sleeve holds');
 });
 
 test('a second payment in the same year merges into that year\'s lot; a new year opens a new one', () => {

@@ -15,6 +15,7 @@ import { buildUsCalendarYear, applyTo }
   from '../../finance/period/period-builder.js';
 import { UsPeriodAdvanceHandler, UsPeriodAdvanceReducer }
   from '../../finance/tax/period-advance-classes.js';
+import { UsTaxFileHandler, UsTaxFileApplyReducer } from '../../finance/tax/us/tax-file-classes.js';
 import { UsTaxSettleHandler, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer }
   from '../../finance/tax/tax-settle-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
@@ -37,8 +38,8 @@ export const US_TAX = {
   dependencies: ['US_BANKING'],
 
   types: {
-    handlers: [UsPeriodAdvanceHandler, UsTaxSettleHandler],
-    reducers: [UsPeriodAdvanceReducer, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer, BalanceSnapshotReducer],
+    handlers: [UsPeriodAdvanceHandler, UsTaxSettleHandler, UsTaxFileHandler],
+    reducers: [UsPeriodAdvanceReducer, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer, BalanceSnapshotReducer, UsTaxFileApplyReducer],
     actions: [
       { type: 'US_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
       { type: 'US_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
@@ -54,6 +55,14 @@ export const US_TAX = {
         // report-currency normalisation from re-reading it as USD.
         fields: { withheld: ValueType.currency('USD'), tax: ValueType.number(), taxDetail: ValueType.any(), fxRate: ValueType.number(),
                   usTaxPaidOnUsSourceAud: ValueType.currency('AUD') } },
+      // design 94 §8.1l — the April filing of the PRIOR year's return. `delta` is the balance
+      // due on the amendment; `disallowed` is the §1091 loss that caused it. Declared because
+      // pickPayload keeps only declared fields, and a tax correction nobody can drill from the
+      // journal is the shape this repo has been bitten by.
+      { type: 'US_TAX_FILE_APPLY', cc: 'US',
+        fields: { taxYear: ValueType.number(), delta: ValueType.currency('USD'),
+                  disallowed: ValueType.currency('USD'), ledger: ValueType.any(),
+                  remaining: ValueType.any(), capitalLoss: ValueType.any() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can

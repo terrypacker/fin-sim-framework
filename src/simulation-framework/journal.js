@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import { deepClone } from './state-utils.js';
+import { cloneState } from './state-utils.js';
 
 /**
  * A single reducer execution recorded in the journal.
@@ -106,7 +106,7 @@ export class Journal {
   addSnapshot(date, state) {
     const key = _dateKey(date);
     if (!this.snapshots.has(key)) {
-      this.snapshots.set(key, { seq: this._seq, state: deepClone(state) });
+      this.snapshots.set(key, { seq: this._seq, state: cloneState(state) });
     }
   }
 
