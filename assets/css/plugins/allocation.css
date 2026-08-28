@@ -25,7 +25,37 @@
 
 .alloc-spacer { flex: 1; }
 
-.alloc-account { max-width: 190px; }
+.alloc-account { max-width: 190px; min-width: 90px; }
+
+.alloc-view { min-width: 90px; }
+
+/* The WHAT axis: narrows every view to one or more classes, so a WHERE view ("by
+ * account") can be asked about one class at a time. The shared MapFilterMultiSelect,
+ * shrunk to toolbar height — its default 12px/6px input is taller than the row it sits
+ * in. Its placeholder carries the current selection (see AssetClassSelect). */
+.alloc-class {
+  display: inline-flex;
+  /* The one control in the toolbar allowed to give up width. Everything else here is a
+   * fixed affordance — a two-button toggle, a checkbox, an icon — and squeezing any of
+   * them off the row costs the reader a control; this one only truncates its label,
+   * which its own tooltip and the chart itself still carry. */
+  width: 150px;
+  min-width: 80px;
+  flex-shrink: 1;
+}
+
+.alloc-class .multi-select-input {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: inherit;
+  border-radius: 3px;
+  text-overflow: ellipsis;
+}
+
+.alloc-class .multi-select-input::placeholder {
+  color: var(--text);
+  opacity: 0.85;
+}
 
 .alloc-asof {
   color: var(--text-muted);
@@ -36,6 +66,7 @@
 /* Segmented share/$ switch. */
 .alloc-seg {
   display: inline-flex;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 3px;
   overflow: hidden;
@@ -73,6 +104,7 @@
 
 .alloc-csv-btn {
   background: none;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text-muted);
@@ -159,7 +191,16 @@
   letter-spacing: 0.04em;
 }
 
-/* Doubles as the chart's legend, so the chips are clickable (click = hide the band). */
+/* Says out loud that the shares beside it are of a SUBSET. Without it a reader has no
+ * way to tell a filtered 68% from a portfolio 68%, and the two mean different things. */
+.alloc-mix-filtered {
+  color: var(--text-dim);
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* Doubles as the chart's legend, so the chips are clickable (click = drop the category
+ * from the chart AND from the 100% denominator). */
 .alloc-mix-item {
   display: inline-flex;
   align-items: center;

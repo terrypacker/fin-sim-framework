@@ -15,10 +15,13 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 import { buildAllocationSeries, mixAt } from '../../../../finance/allocation-reporting/allocation-grouping.js';
-import { summarizeSamples, samplesToRows, samplesToTargetRows, lastYearEndIndex } from '../../../../finance/allocation-reporting/allocation-sampler.js';
+import { createAllocationSampler, summarizeSamples, samplesToRows, samplesToTargetRows, lastYearEndIndex } from '../../../../finance/allocation-reporting/allocation-sampler.js';
 import { targetedStateKeys, driftAgainstTarget } from '../../../../finance/allocation-reporting/target-cube.js';
 import { colorForSeriesKey }  from '../../../../finance/allocation-reporting/allocation-palette.js';
-import { ASSET_CLASS }        from '../../../../finance/allocation-reporting/asset-class.js';
+import { ASSET_CLASS, ASSET_CLASS_VALUES } from '../../../../finance/allocation-reporting/asset-class.js';
+import { groupKey }           from '../../../../finance/reporting-common/series-keys.js';
+import { MapFilterMultiSelect } from '../../../components/map-filter-multi-select.js';
+import { QueryApi }            from '../../../../query/query-api.js';
 
 /**
  * The cube columns the panel exports, in order.
@@ -81,6 +84,10 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._mode      = 'pct';         // pct (share) | abs (currency)
     this._withDebt  = false;         // total only: include LIABILITY (net-worth decomposition)
     this._stateKey  = '__all__';     // account view: one account, or all side by side
+    // WHAT: the classes in scope. EMPTY means every class — "no filter" and "all of
+    // them" are the same statement, and a set that empties itself to mean nothing would
+    // give the reader a way to blank the panel with no way back.
+    this._assetClasses = new Set();
 
     this._chart        = null;
     this._unsubSimBus  = null;
@@ -90,6 +97,12 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._rowsCache    = null;
     this._targetsCache = null;
     this._accountsSig  = null;
+    this._classesSig   = null;
+    this._classSelect  = null;   // MapFilterMultiSelect, built on first render with data
+    this._classItems   = [];     // its live option list (see _renderClassPicker)
+    this._live         = null;   // opening-state record, before the run has sampled
+    this._liveSig      = null;
+    this._isLive       = false;  // true while the panel is reading _live, not sim.samples
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -111,6 +124,8 @@ export class AllocationPlugin extends WorkbenchComponent {
           <option value="role">By wrapper</option>
         </select>
         <select class="wb-select alloc-account" data-alloc="account" style="display:none"></select>
+        <span class="alloc-class" data-alloc="class"
+              title="Narrow every view to one or more asset classes"></span>
         <span class="alloc-seg" data-alloc="mode">
           <button type="button" data-mode="pct" class="on">share</button>
           <button type="button" data-mode="abs">$</button>
@@ -150,8 +165,15 @@ export class AllocationPlugin extends WorkbenchComponent {
     // Late-mount: the scenario is usually built before this panel first mounts.
     if (!this._sim) this._bindSim(this._services()?.simulationRegistry?.getPrimary?.() ?? null);
 
-    this._bindOnce('view',    'change', (el) => { this._view = el.value; this._syncControls(); this._render(); });
-    this._bindOnce('account', 'change', (el) => { this._stateKey = el.value; this._render(); });
+    // Each of these changes the keyspace the chips name — `EQUITY` becomes `US · EQUITY`
+    // becomes an account name — so a carried-over selection would filter the wrong thing,
+    // or nothing at all.
+    this._bindOnce('view',    'change', (el) => {
+      this._view = el.value; this._hidden.clear(); this._syncControls(); this._render();
+    });
+    this._bindOnce('account', 'change', (el) => {
+      this._stateKey = el.value; this._hidden.clear(); this._render();
+    });
     this._bindOnce('debt',    'change', (el) => { this._withDebt = el.checked; this._render(); });
     this._bindOnce('csv',     'click',  () => this._downloadCsv());
     this._bindOnce('mixbar',  'click',  null, (e) => this._onMixBarClick(e));
@@ -186,6 +208,7 @@ export class AllocationPlugin extends WorkbenchComponent {
     // unmounted and remounted many times a session, and leaking one pair per remount is
     // how a long session turns slow.
     this._disposeChart();
+    this._classSelect?.close();
   }
 
   destroy() {
@@ -235,21 +258,25 @@ export class AllocationPlugin extends WorkbenchComponent {
 
   _invalidate() {
     this._dataSig = null;
+    this._live = null;
+    this._liveSig = null;
     this._rowsCache = null;
     this._targetsCache = null;
     this._accountsSig = null;
+    this._classesSig = null;
   }
 
   /**
-   * Signature of the sampled data. The LAST sample is upserted on every `stepTo`
+   * Signature of the data being read. The LAST sample is upserted on every `stepTo`
    * (design 82 §5.1b keeps a partial year current), so a count alone would miss the
-   * most-changing point on the chart; the last sample's instant catches it.
+   * most-changing point on the chart; the last record's instant catches it.
    */
   _signature() {
-    const samples = this._samples();
-    if (samples.length === 0) return 'empty';
-    const last = samples[samples.length - 1];
-    return `${samples.length}|${last?.at?.getTime?.() ?? 0}|${Math.round(last?.netWorth ?? 0)}`;
+    const records = this._records();
+    if (records.length === 0) return 'empty';
+    const last = records[records.length - 1];
+    return `${this._isLive ? 'live' : records.length}|${last?.at?.getTime?.() ?? 0}` +
+           `|${Math.round(last?.netWorth ?? 0)}`;
   }
 
   _samples() {
@@ -258,6 +285,65 @@ export class AllocationPlugin extends WorkbenchComponent {
     // session) yields records with no `rows` — treat them as no data rather than
     // throwing deep inside the pivot.
     return Array.isArray(samples) ? samples.filter(s => Array.isArray(s?.rows)) : [];
+  }
+
+  /**
+   * What the panel reads: the run's own samples, or — before the run has produced any —
+   * ONE record read off live state.
+   *
+   * The opening state is a real, answerable question ("what does this plan start as?"),
+   * and until now the panel had no answer to it: the first sample is only written once
+   * the clock has moved, so a freshly loaded scenario showed a placeholder telling the
+   * reader to go and step the sim. A doughnut of the opening mix is the honest picture,
+   * and it needs no time axis, so nothing about it has to wait for a second point.
+   *
+   * Two rules keep this from becoming a second, disagreeing source of truth:
+   *
+   *   - it is built by `createAllocationSampler`, the SAME function the run installs, so
+   *     the opening record and every later sample carry identical contents and the same
+   *     tie-out. A hand-rolled cube here could disagree with the chart it turns into.
+   *   - it is READ-ONLY and it is discarded the instant the run files a sample of its
+   *     own. The panel still never steps the primary sim (design 82 §6) — it reads the
+   *     state that is already there.
+   */
+  _records() {
+    const samples = this._samples();
+    if (samples.length) {
+      this._isLive = false;
+      this._live = null;
+      this._liveSig = null;
+      return samples;
+    }
+    this._isLive = true;
+    const live = this._liveRecord();
+    return live ? [live] : [];
+  }
+
+  /**
+   * The opening state as one sampler record, cached against the run's own progress.
+   *
+   * `eventExecutions` is in the key because the state moves during the very first
+   * `stepTo` — every completed event re-renders this panel — and a record cached on the
+   * date alone would freeze the opening mix while the clock sat inside its first year.
+   */
+  _liveRecord() {
+    const sim = this._sim;
+    if (!sim?.state) return null;
+    const sig = `${sim.currentDate?.getTime?.() ?? 0}|${sim.eventExecutions ?? 0}`;
+    if (sig === this._liveSig && this._live) return this._live;
+    this._liveSig = sig;
+    try {
+      const sample = createAllocationSampler({
+        displayNameFor: (stateKey) => this._services()?.schemaRegistry?.displayNameFor?.(stateKey) ?? null,
+      });
+      this._live = sample(sim.state, sim.currentDate ?? new Date());
+    } catch (e) {
+      // A scenario that fails to cube is a bug worth seeing in the console, but it must
+      // not take the panel — or the workbench boot that mounts it — down with it.
+      console.warn('[AllocationPlugin] could not read the opening state', e);
+      this._live = null;
+    }
+    return this._live;
   }
 
   /** Cube rows for every sample, rebuilt only when the run has actually moved. */
@@ -275,7 +361,7 @@ export class AllocationPlugin extends WorkbenchComponent {
   _refreshCaches() {
     const sig = this._signature();
     if (sig === this._dataSig && this._rowsCache) return;
-    const samples      = this._samples();
+    const samples      = this._records();
     this._rowsCache    = samplesToRows(samples);
     this._targetsCache = samplesToTargetRows(samples);
     this._dataSig      = sig;
@@ -283,8 +369,8 @@ export class AllocationPlugin extends WorkbenchComponent {
 
   // ─── Views ───────────────────────────────────────────────────────────────
 
-  /** Pivot options for the active view — the whole of this panel's "query". */
-  _seriesOpts() {
+  /** Pivot options for the active view, BEFORE the reader's two interactive filters. */
+  _viewOpts() {
     const normalize = this._mode === 'pct';
     switch (this._view) {
       case 'domicile': return { by: ['domicileCountry', 'assetClass'], normalize };
@@ -310,6 +396,39 @@ export class AllocationPlugin extends WorkbenchComponent {
         : { filter: r => r.stateKey === this._stateKey, normalize };
       default:         return { normalize, excludeLiabilities: !this._withDebt };
     }
+  }
+
+  /**
+   * The view's pivot, narrowed by the two things the reader can turn:
+   *
+   *   - the asset-class scope (**what**) — one class or several, and it survives a view
+   *     change, so any view can be asked "…of my equity, and my gold". This is what
+   *     turns `By account` from "how big is each account" into "where does this class
+   *     actually live", without a second pivot.
+   *   - the legend chips (**which categories count**), cleared whenever the keyspace
+   *     changes underneath them.
+   *
+   * Both are ROW filters, deliberately, and NOT an ECharts `legendUnSelect`. Hiding a
+   * band leaves it in the 100% denominator: the remaining shares stop summing to 100 and
+   * stop being shares of anything nameable. Filtering the fact table instead
+   * re-normalises against what is left, which is the question actually being asked —
+   * "of the categories I kept, what is the mix?" — and it is the same reduction the CSV
+   * and the lab report run, so the two cannot disagree about a share.
+   *
+   * @param {object}  [o]
+   * @param {boolean} [o.withHidden=true] false yields the FULL key set for this scope.
+   *        The legend must keep listing a chip that is switched off, or there is no way
+   *        to switch it back on.
+   */
+  _seriesOpts({ withHidden = true } = {}) {
+    const base  = this._viewOpts();
+    const dims  = base.by ?? ['assetClass'];
+    const preds = [];
+    if (base.filter) preds.push(base.filter);
+    if (this._assetClasses.size) preds.push(r => this._assetClasses.has(r.assetClass));
+    if (withHidden && this._hidden.size) preds.push(r => !this._hidden.has(groupKey(r, dims)));
+    if (preds.length === 0) return base;
+    return { ...base, filter: r => preds.every(p => p(r)) };
   }
 
   /**
@@ -384,6 +503,10 @@ export class AllocationPlugin extends WorkbenchComponent {
     // The picker serves two views: it scopes the per-account mix, and it scopes the
     // target comparison (where one account is the LOCATED-mode location diagnostic).
     if (acc) acc.style.display = (this._view === 'account' || this._view === 'target') ? '' : 'none';
+    // Hidden in the target view: drift is already per class there, and scoping one side
+    // of a realized-vs-target comparison would draw a gap that is a filter, not a drift.
+    const cls = this._q('class');
+    if (cls) cls.style.display = this._view === 'target' ? 'none' : '';
     const debt = this._q('debt-wrap');
     if (debt) debt.style.display = this._view === 'total' ? '' : 'none';
     const debtBox = this._q('debt');
@@ -393,12 +516,16 @@ export class AllocationPlugin extends WorkbenchComponent {
   _render() {
     if (!this._mounted) return;
 
-    const samples = this._samples();
+    const samples = this._records();
     const asof    = this._q('asof');
     if (asof) {
-      asof.textContent = samples.length
-        ? `${samples[0].year}–${samples[samples.length - 1].year} · ${samples.length} year-ends`
-        : '—';
+      // Named, not dated: "2026 · opening state" says why there is one point on the
+      // panel, where a bare year would read as a one-year run.
+      const first = samples[0]?.year, last = samples[samples.length - 1]?.year;
+      const span  = first === last ? `${first}` : `${first}–${last}`;
+      asof.textContent = !samples.length ? '—'
+        : this._isLive ? `${samples[0].year} · opening state`
+        : `${span} · ${samples.length} year-end${samples.length === 1 ? '' : 's'}`;
     }
 
     const empty = samples.length === 0;
@@ -417,9 +544,34 @@ export class AllocationPlugin extends WorkbenchComponent {
 
     if (this._view === 'target') { this._renderTarget(); return; }
 
-    const built = buildAllocationSeries(this._rows(), this._seriesOpts());
+    this._renderClassPicker();
+
+    // Two builds, and the pair is the point: `builtAll` is every category in scope —
+    // the legend, so a switched-off chip is still there to switch back on — and `built`
+    // is what the chart draws and re-normalises over. When nothing is hidden they are
+    // the same object and the second pivot never runs.
+    const rows     = this._rows();
+    const builtAll = buildAllocationSeries(rows, this._seriesOpts({ withHidden: false }));
+    this._pruneHidden(builtAll.keys);
+    const built = this._hidden.size
+      ? buildAllocationSeries(rows, this._seriesOpts())
+      : builtAll;
     this._drawChart(built);
-    this._renderMixBar(built);
+    this._renderMixBar(builtAll, built);
+  }
+
+  /**
+   * Drop hidden keys that no longer exist.
+   *
+   * A key can leave the scope without the view changing — narrowing the class scope, or
+   * a run advancing past the year an account is emptied. A stale entry would sit in the
+   * set filtering nothing, and the "3 of 5" readout would then be counting a category
+   * that is not on the chart.
+   */
+  _pruneHidden(keys) {
+    if (this._hidden.size === 0) return;
+    const live = new Set(keys);
+    for (const key of this._hidden) if (!live.has(key)) this._hidden.delete(key);
   }
 
   /**
@@ -463,6 +615,7 @@ export class AllocationPlugin extends WorkbenchComponent {
 
     const share  = this._mode === 'pct';
     const dark   = this._dark();
+    const sparse = realized.dates.length <= 2;
     const ink    = dark ? '#94a3b8' : '#52514e';
     const line   = dark ? '#334155' : '#e1e0d9';
     const dates  = realized.dates;
@@ -518,7 +671,7 @@ export class AllocationPlugin extends WorkbenchComponent {
         const color = colorForSeriesKey(key, i, { dark });
         return [
           {
-            name: `${key} actual`, type: 'line', smooth: false, showSymbol: false,
+            name: `${key} actual`, type: 'line', smooth: false, showSymbol: sparse, symbolSize: 5,
             lineStyle: { width: 2, color }, itemStyle: { color },
             emphasis: { focus: 'series' },
             data: realized.series[key] ?? dates.map(() => 0),
@@ -526,7 +679,7 @@ export class AllocationPlugin extends WorkbenchComponent {
           {
             // Dashed and thinner: the target is the reference, the realized line is the
             // subject. Same colour, so the pairing needs no legend entry of its own.
-            name: `${key} target`, type: 'line', smooth: false, showSymbol: false,
+            name: `${key} target`, type: 'line', smooth: false, showSymbol: sparse, symbolSize: 4,
             lineStyle: { width: 1, type: 'dashed', color, opacity: 0.9 },
             itemStyle: { color }, emphasis: { focus: 'series' },
             data: tgt[key] ?? dates.map(() => null),
@@ -613,7 +766,12 @@ export class AllocationPlugin extends WorkbenchComponent {
       // the clock has got to, and it churns — a sale settling can read 0% equity for a
       // fortnight. Naming it "partial" is true whether the run is paused or finished.
       const dates = s.offBoundary.map(x => x.at.toISOString().slice(0, 10)).join(', ');
-      notes.push(`${dates} is a partial year, not a year-end`);
+      // Except when it IS the opening state: that record is not a partial year, it is
+      // the plan before anything has happened to it, and saying otherwise would put a
+      // caveat on the one reading that needs none.
+      notes.push(this._isLive
+        ? `read from live state — the plan before its first step`
+        : `${dates} is a partial year, not a year-end`);
     }
 
     // Design 88 §6: the disclosed-but-unrecognised amount, stated as a NOTE rather
@@ -637,6 +795,67 @@ export class AllocationPlugin extends WorkbenchComponent {
     el.className = 'alloc-provenance';
     el.innerHTML = `<span class="alloc-ok">ties to net worth</span>` +
       (notes.length ? ` · ${notes.join(' · ')}` : '');
+  }
+
+  /**
+   * Asset classes actually present in the cube, in the canonical legend order.
+   *
+   * LIABILITY is deliberately absent: the mix pivot drops it (an allocation is of gross
+   * assets), so offering it would offer a scope that can only ever draw an empty chart.
+   * The `with debt` toggle on the total view is where a liability belongs.
+   */
+  _classes() {
+    const seen = new Set();
+    for (const r of this._rows()) {
+      if (r.assetClass == null || r.assetClass === ASSET_CLASS.LIABILITY) continue;
+      seen.add(r.assetClass);
+    }
+    const rank = new Map(ASSET_CLASS_VALUES.map((v, i) => [v, i]));
+    return [...seen].sort((a, b) =>
+      (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER) ||
+      a.localeCompare(b));
+  }
+
+  /**
+   * The class scope, on the workbench's shared `MapFilterMultiSelect`.
+   *
+   * Its option list is a live array the component re-reads on every open (the same
+   * arrangement the timeline's event/action filters use), because the class set GROWS
+   * mid-run: a plan that buys its first bond in 2034 has no BOND option before then, and
+   * rebuilding the component to add one would drop the reader's selection.
+   *
+   * Selections are pruned against that list for the mirror-image reason — a class can
+   * leave the book entirely (the last gold sold), and a scope pinned to something no
+   * longer held is a permanently blank panel with no visible cause.
+   */
+  _renderClassPicker() {
+    const host = this._q('class');
+    if (!host) return;
+    const classes = this._classes();
+    const sig = classes.join('|');
+    if (sig !== this._classesSig) {
+      this._classesSig = sig;
+      this._classItems.length = 0;
+      this._classItems.push(...classes.map(c => ({ id: c, name: c })));
+      for (const c of this._assetClasses) if (!classes.includes(c)) this._assetClasses.delete(c);
+    }
+
+    if (!this._classSelect) {
+      this._classSelect = new AssetClassSelect({
+        parent:    this,          // BaseComponent child: torn down with the panel
+        container: host,
+        onToggle:  (_item, _added, selected) => {
+          this._assetClasses = new Set(selected.map(o => o.id));
+          // The chips name keys inside the old scope; narrowing to GOLD leaves an
+          // `EQUITY` in the set filtering a category that is no longer drawn.
+          this._hidden.clear();
+          this._classSelect.syncLabel();
+          this._render();
+        },
+        queryApi: new QueryApi({ getAll: () => this._classItems }),
+      });
+    }
+    this._classSelect.syncLabel();
   }
 
   _renderAccountPicker() {
@@ -674,36 +893,57 @@ export class AllocationPlugin extends WorkbenchComponent {
    * for the same reason — "equity is gone by now" is a finding, and dropping the row
    * would leave its colour unexplained wherever it still appears earlier on the chart.
    */
-  _renderMixBar(built) {
+  _renderMixBar(builtAll, built = builtAll) {
     const el = this._q('mixbar');
     if (!el) return;
-    if (!built.keys.length) { el.innerHTML = ''; return; }
+    if (!builtAll.keys.length) { el.innerHTML = ''; return; }
 
-    const mix  = mixAt(this._rows(), { ...this._seriesOpts(), normalize: true });
-    const dark = this._dark();
-    const year = built.dates.length ? built.dates[built.dates.length - 1].getUTCFullYear() : '';
+    // Shares of the SELECTION, matching the chart above: switch three of five classes
+    // off and each survivor's share is of the two that are left. A hidden chip therefore
+    // reads 0.0% — struck through and still listed, never silently dropped, because its
+    // colour is still on the chart at earlier dates.
+    const mix   = mixAt(this._rows(), { ...this._seriesOpts(), normalize: true });
+    const dark  = this._dark();
+    const dates = built.dates.length ? built.dates : builtAll.dates;
+    const year  = dates.length ? dates[dates.length - 1].getUTCFullYear() : '';
 
-    el.innerHTML = `<span class="alloc-mix-label">${year}</span>` + built.keys.map((key, i) => {
-      const share = mix[key] ?? 0;
-      const off   = this._hidden.has(key) ? ' alloc-mix-item--off' : '';
-      return `<span class="alloc-mix-item${off}" data-alloc-key="${_esc(key)}" title="click to hide this band">
-                <i style="background:${colorForSeriesKey(key, i, { dark })}"></i>
-                ${_esc(key)} <strong>${(share * 100).toFixed(1)}%</strong>
-              </span>`;
-    }).join('');
+    // Said out loud whenever it is true. An unlabelled 68% that is not 68% of the
+    // portfolio is exactly the number someone pastes into a note.
+    const kept = builtAll.keys.length - this._hidden.size;
+    const note = this._hidden.size
+      ? `<span class="alloc-mix-filtered">${kept} of ${builtAll.keys.length} · shares of the selection</span>`
+      : '';
+
+    el.innerHTML = `<span class="alloc-mix-label">${year}</span>${note}` +
+      builtAll.keys.map((key, i) => {
+        const share = mix[key] ?? 0;
+        const hidden = this._hidden.has(key);
+        // Colour by position in the FULL key list, so switching a category off does not
+        // repaint the ones that are left.
+        return `<span class="alloc-mix-item${hidden ? ' alloc-mix-item--off' : ''}"
+                      data-alloc-key="${_esc(key)}"
+                      title="${hidden ? 'click to count this category again'
+                                      : 'click to drop this category from the chart and the 100%'}">
+                  <i style="background:${colorForSeriesKey(key, i, { dark })}"></i>
+                  ${_esc(key)} <strong>${(share * 100).toFixed(1)}%</strong>
+                </span>`;
+      }).join('');
   }
 
-  /** Click a legend chip to drop that band out of the chart (and the 100% denominator). */
+  /**
+   * Click a legend chip to drop that category out of the chart AND out of the
+   * denominator, then redraw. A full re-render rather than a `legendSelect`: the shares
+   * have genuinely changed, so the chart, the strip and the tooltip all have to be
+   * rebuilt from the narrowed fact table. Not persisted — this is a thing you do while
+   * looking, not a setting.
+   */
   _onMixBarClick(e) {
     const item = e.target.closest('[data-alloc-key]');
     if (!item) return;
     const key = item.dataset.allocKey;
     if (this._hidden.has(key)) this._hidden.delete(key);
     else this._hidden.add(key);
-    this._chart?.dispatchAction({
-      type: this._hidden.has(key) ? 'legendUnSelect' : 'legendSelect', name: key,
-    });
-    item.classList.toggle('alloc-mix-item--off', this._hidden.has(key));
+    this._render();
   }
 
   // ─── Chart ───────────────────────────────────────────────────────────────
@@ -747,8 +987,80 @@ export class AllocationPlugin extends WorkbenchComponent {
       }
     }
     // `true` (notMerge): a view change replaces the series set outright. Merging would
-    // leave the previous view's series behind as ghost bands.
-    this._chart.setOption(this._option(built), true);
+    // leave the previous view's series behind as ghost bands. It is also what lets the
+    // panel swap between a doughnut and a stacked area without the two option shapes
+    // bleeding into each other.
+    const option = built.dates.length === 1 ? this._donutOption(built) : this._option(built);
+    this._chart.setOption(option, true);
+  }
+
+  /**
+   * One sample, drawn as a doughnut — the mix with no time axis.
+   *
+   * A time series of one point is not a small chart, it is the wrong chart: a stacked
+   * area over a single date draws nothing at all, which is why this panel read as broken
+   * for the whole of a plan's first year. But the reader's question at that moment is
+   * perfectly answerable — "what is the mix right now" — and it simply has no time
+   * dimension in it yet. So the panel answers THAT question until a second sample gives
+   * the time axis something to say, and switches to the area chart on its own.
+   *
+   * Negative slices are dropped rather than drawn: a pie cannot render one, and the only
+   * way to get here with one is the total view's `with debt` decomposition. The count is
+   * stated in the centre rather than silently omitted.
+   */
+  _donutOption(built) {
+    const share = this._mode === 'pct';
+    const dark  = this._dark();
+    const ink   = dark ? '#94a3b8' : '#52514e';
+    const money = (n) => this._money(n);
+
+    // In share mode the pivot has already normalised the column, so the slice values are
+    // shares; the gross is carried separately for the centre readout either way.
+    const gross = built.totals[0] || 0;
+    const data = built.keys
+      .map((key, i) => ({
+        name: key,
+        value: built.series[key][0] ?? 0,
+        itemStyle: { color: colorForSeriesKey(key, i, { dark }) },
+      }))
+      .filter(d => d.value > 0);
+    const dropped = built.keys.length - data.length;
+
+    return {
+      animation: false,
+      backgroundColor: 'transparent',
+      textStyle: { color: ink, fontFamily: 'var(--font-mono, monospace)' },
+      title: {
+        left: 'center', top: 'center',
+        text: String(built.dates[0].getUTCFullYear()),
+        subtext: money(gross) + (dropped ? ` · ${dropped} negative slice${dropped === 1 ? '' : 's'} not drawn` : ''),
+        textStyle:    { color: ink, fontSize: 14, fontFamily: 'var(--font-mono, monospace)' },
+        subtextStyle: { color: ink, fontSize: 10, fontFamily: 'var(--font-mono, monospace)', opacity: 0.8 },
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => `${p.marker} ${p.name} <strong>${
+          share ? `${(p.value * 100).toFixed(1)}%` : money(p.value)
+        }</strong> <span style="opacity:.7">${
+          share ? `of ${money(gross)}` : `· ${p.percent.toFixed(1)}%`}</span>`,
+      },
+      // The strip below the chart is the legend here as everywhere else, and it is the
+      // control surface too — its chips still filter the doughnut.
+      legend: { show: false },
+      series: [{
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: true,
+        // Sorted by the pivot's canonical order, not by size, so a class keeps its place
+        // between the doughnut and the area chart it turns into.
+        label: { show: false },
+        labelLine: { show: false },
+        itemStyle: { borderWidth: 1, borderColor: dark ? '#0f172a' : '#faf9f5' },
+        emphasis: { scale: true, scaleSize: 4 },
+        data,
+      }],
+    };
   }
 
   /**
@@ -759,6 +1071,10 @@ export class AllocationPlugin extends WorkbenchComponent {
   _option(built) {
     const share = this._mode === 'pct';
     const dark  = this._dark();
+    // Two dates draw as a hairline nobody can read a value off. Show the marks while the
+    // series is that short; they disappear on their own once the bands are legible. (One
+    // date never reaches here — `_drawChart` sends it to the doughnut instead.)
+    const sparse = built.dates.length <= 2;
     const ink   = dark ? '#94a3b8' : '#52514e';
     const line  = dark ? '#334155' : '#e1e0d9';
     const money = (n) => this._money(n);
@@ -771,7 +1087,9 @@ export class AllocationPlugin extends WorkbenchComponent {
       grid: { left: 58, right: 14, top: 10, bottom: 22 },
       // Present but hidden: the strip below the chart is the legend (_renderMixBar), and
       // the component still has to exist for its chips to drive legendSelect.
-      legend: { show: false, selected: Object.fromEntries([...this._hidden].map(k => [k, false])) },
+      // Present but hidden, and carrying no selection state: a switched-off category is
+      // filtered out of the fact table (see `_seriesOpts`), so it never reaches a series.
+      legend: { show: false },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'line', lineStyle: { color: ink, opacity: 0.35 } },
@@ -805,7 +1123,7 @@ export class AllocationPlugin extends WorkbenchComponent {
       },
       series: built.keys.map((key, i) => ({
         name: key, type: 'line', stack: 'all', smooth: false,
-        showSymbol: false, lineStyle: { width: 1 },
+        showSymbol: sparse, symbolSize: 5, lineStyle: { width: 1 },
         areaStyle: { opacity: 0.85 },
         itemStyle: { color: colorForSeriesKey(key, i, { dark }) },
         emphasis: { focus: 'series' },
@@ -861,6 +1179,47 @@ export class AllocationPlugin extends WorkbenchComponent {
   }
 
   _q(name) { return this.el?.querySelector(`[data-alloc="${name}"]`) ?? null; }
+}
+
+/**
+ * The class scope's control: `MapFilterMultiSelect`, with the input itself reporting the
+ * current selection.
+ *
+ * The base component's input is a SEARCH box — it holds what you typed, and the
+ * selection lives only as ticks inside the dropdown. That is right for the timeline,
+ * where the filter sits open beside its list; it is wrong in a toolbar the reader looks
+ * at with the dropdown shut, where a control that reads "Select..." while silently
+ * filtering out three quarters of the book is a chart nobody can trust. So the
+ * placeholder carries the answer whenever the box is empty, which is whenever it is not
+ * being typed into.
+ */
+class AssetClassSelect extends MapFilterMultiSelect {
+  constructor(opts) {
+    super(opts);
+    // The base component sorts its list by name, which is right for a long searchable
+    // map and wrong for a four-value vocabulary: it would list the classes alphabetically
+    // while the legend and the bands run in canonical order (EQUITY, BOND, CASH, GOLD).
+    // Two orders for one short list is harder to read than either. An empty sort keeps
+    // the option list in the order `_classes()` hands it over in.
+    this._query.sort = [];
+  }
+
+  /** Re-state the selection in the placeholder. Empty selection means every class. */
+  syncLabel() {
+    const chosen = [...this._selectedMap.values()].map(o => o.name);
+    this._input.placeholder = chosen.length === 0 ? 'all classes' : chosen.join(', ');
+    this._input.title = this._input.placeholder;
+  }
+
+  /** The base class redraws the list after every toggle; keep the label with it. */
+  onRenderVisible() { this.syncLabel(); }
+
+  /**
+   * Shut the dropdown. It lives on `document.body`, so it does not travel with the panel:
+   * a pane docked away or dragged elsewhere while the list is open would leave it
+   * floating over whatever is underneath, with no control beside it to explain it.
+   */
+  close() { this._dropdown.style.display = 'none'; }
 }
 
 function _esc(s) {

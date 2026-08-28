@@ -66,6 +66,45 @@ function sample(year, rows, over = {}) {
   };
 }
 
+/** The share the legend strip reports for one category. */
+function shareOf(plugin, key) {
+  return plugin.el.querySelector(`[data-alloc-key="${key}"] strong`).textContent;
+}
+
+/**
+ * Drive the class scope through the shared MapFilterMultiSelect the way a reader does:
+ * focus the input to open it, then click the rows. Its list is fetched asynchronously
+ * over two rAFs, so opening is awaited rather than assumed.
+ */
+async function openClassSelect(plugin) {
+  const host = plugin.el.querySelector('[data-alloc="class"]');
+  host.querySelector('.multi-select-input').dispatchEvent(new Event('focus'));
+  const ms = plugin._classSelect;
+  await new Promise(r => setTimeout(r, 0));
+  await ms._fetchPage(true);
+  ms._renderVisible();
+  return ms;
+}
+
+async function classOptions(plugin) {
+  const ms = await openClassSelect(plugin);
+  return [...ms._list.querySelectorAll('.multi-select-item')].map(el => el.dataset.id);
+}
+
+/**
+ * Toggle the scope until exactly `wanted` is selected. The list is re-queried after every
+ * click: each toggle redraws it, so a captured element is detached by the next iteration.
+ */
+async function pickClasses(plugin, wanted) {
+  const ms = await openClassSelect(plugin);
+  const want = new Set(wanted);
+  const ids = [...ms._list.querySelectorAll('.multi-select-item')].map(el => el.dataset.id);
+  for (const id of ids) {
+    if (plugin._assetClasses.has(id) === want.has(id)) continue;
+    ms._list.querySelector(`.multi-select-item[data-id="${id}"]`).click();
+  }
+}
+
 function mountPlugin(samples) {
   const plugin = new AllocationPlugin(RUNTIME);
   plugin.setServices({ schemaRegistry: { formatAmount: (n) => `$${Math.round(n)}` } });
@@ -134,18 +173,236 @@ test('the mix strip doubles as the legend: chart order, shares from the latest s
   plugin.unmount();
 });
 
-test('clicking a legend chip hides that band, and clicking again restores it', () => {
-  const { plugin } = mountPlugin(TWO_YEARS);
-  const chip = () => plugin.el.querySelector('[data-alloc-key="EQUITY"]');
+test('switching a legend chip off recomputes the shares over what is left', () => {
+  // The whole point of the interaction, and the reason it is a row filter rather than an
+  // ECharts legendUnSelect: hiding a band would leave it in the denominator, so the
+  // survivors would stop summing to 100% and stop being shares of anything nameable.
+  const three = [
+    sample(2029, [row({ marketValue: 50 }), row({ stateKey: 'bondAccount', name: 'Bonds', assetClass: 'BOND', allocation: 'BOND', rateKey: 'FIXED_INCOME_US', marketValue: 30 }), row({ stateKey: 'cashAccount', name: 'Cash', assetClass: 'CASH', allocation: 'CASH', rateKey: 'SAVINGS_US', marketValue: 20 })]),
+    sample(2030, [row({ marketValue: 50 }), row({ stateKey: 'bondAccount', name: 'Bonds', assetClass: 'BOND', allocation: 'BOND', rateKey: 'FIXED_INCOME_US', marketValue: 30 }), row({ stateKey: 'cashAccount', name: 'Cash', assetClass: 'CASH', allocation: 'CASH', rateKey: 'SAVINGS_US', marketValue: 20 })]),
+  ];
+  const { plugin } = mountPlugin(three);
+  const shareOf = (key) =>
+    plugin.el.querySelector(`[data-alloc-key="${key}"] strong`).textContent;
 
-  chip().click();
-  assert.ok(plugin._hidden.has('EQUITY'));
-  assert.ok(chip().className.includes('alloc-mix-item--off'));
+  assert.equal(shareOf('EQUITY'), '50.0%');
 
-  chip().click();
-  assert.ok(!plugin._hidden.has('EQUITY'));
-  assert.ok(!chip().className.includes('alloc-mix-item--off'));
+  plugin.el.querySelector('[data-alloc-key="CASH"]').click();
+  assert.ok(plugin._hidden.has('CASH'));
+  // 50 and 30 of the remaining 80 — NOT 50% and 30% of a total that still counts cash.
+  assert.equal(shareOf('EQUITY'), '62.5%');
+  assert.equal(shareOf('BOND'), '37.5%');
+  // The switched-off category stays listed (or it could never be switched back on),
+  // struck through and at zero, and the strip says the shares are of a subset.
+  assert.equal(shareOf('CASH'), '0.0%');
+  assert.ok(plugin.el.querySelector('[data-alloc-key="CASH"]').className.includes('alloc-mix-item--off'));
+  assert.match(plugin.el.querySelector('.alloc-mix-filtered').textContent, /2 of 3/);
+
+  plugin.el.querySelector('[data-alloc-key="CASH"]').click();
+  assert.ok(!plugin._hidden.has('CASH'));
+  assert.equal(shareOf('EQUITY'), '50.0%');
+  assert.equal(plugin.el.querySelector('.alloc-mix-filtered'), null);
   plugin.unmount();
+});
+
+test('the legend selection is dropped when the keyspace moves under it', () => {
+  // `EQUITY` in the total view, `US · EQUITY` in the country view, an account name in the
+  // account view. A carried-over key filters the wrong thing, or silently nothing.
+  const { plugin } = mountPlugin(TWO_YEARS);
+  plugin.el.querySelector('[data-alloc-key="EQUITY"]').click();
+  assert.ok(plugin._hidden.has('EQUITY'));
+
+  const view = plugin.el.querySelector('[data-alloc="view"]');
+  view.value = 'domicile';
+  view.dispatchEvent(new Event('change'));
+  assert.equal(plugin._hidden.size, 0);
+  plugin.unmount();
+});
+
+test('the class scope narrows every view — "where does this class live"', async () => {
+  const at = new Date(Date.UTC(2030, 11, 31));
+  const rows = [
+    row({ stateKey: 'usStockAccount', name: 'US Brokerage', marketValue: 60 }),
+    row({ stateKey: 'iraAccount', name: 'IRA', marketValue: 40 }),
+    row({ stateKey: 'iraAccount', name: 'IRA', assetClass: 'BOND', allocation: 'BOND',
+          rateKey: 'FIXED_INCOME_US', marketValue: 400 }),
+    row({ stateKey: 'goldAccount', name: 'Gold', assetClass: 'GOLD', allocation: 'GOLD',
+          rateKey: 'GOLD', marketValue: 10 }),
+  ].map(r => ({ ...r, date: at }));
+  const { plugin } = mountPlugin([sample(2029, rows), sample(2030, rows)]);
+
+  assert.deepEqual(await classOptions(plugin), ['EQUITY', 'BOND', 'GOLD']);
+
+  plugin._view = 'account';
+  plugin._syncControls();
+  await pickClasses(plugin, ['EQUITY']);
+
+  // The IRA's 400 of bonds is out of scope, so the accounts are weighed on their EQUITY
+  // alone: 60/40, not 60/440.
+  assert.equal(shareOf(plugin, 'US Brokerage'), '60.0%');
+  assert.equal(shareOf(plugin, 'IRA'), '40.0%');
+
+  // More than one class at a time — the whole reason this is a multi-select. Gold is
+  // held only in the third account, which is now back on the chart.
+  await pickClasses(plugin, ['EQUITY', 'GOLD']);
+  assert.deepEqual([...plugin._assetClasses].sort(), ['EQUITY', 'GOLD']);
+  assert.equal(shareOf(plugin, 'Gold'), '9.1%');   // 10 of 110
+
+  // Deselecting back to nothing means every class again, not an empty panel.
+  await pickClasses(plugin, []);
+  assert.equal(plugin._assetClasses.size, 0);
+  assert.equal(shareOf(plugin, 'IRA'), '86.3%');   // 440 of 510
+  plugin.unmount();
+});
+
+test('the class scope re-states itself in its own control', async () => {
+  // The base component's input is a search box: the selection lives only as ticks inside
+  // a dropdown that is shut. A toolbar control reading "Select..." while filtering out
+  // three quarters of the book is a chart nobody can trust.
+  const { plugin } = mountPlugin(TWO_YEARS);
+  const input = () => plugin.el.querySelector('[data-alloc="class"] .multi-select-input');
+  assert.equal(input().placeholder, 'all classes');
+
+  await pickClasses(plugin, ['EQUITY']);
+  assert.equal(input().placeholder, 'EQUITY');
+  plugin.unmount();
+});
+
+test('a class that leaves the book cannot leave the panel scoped to it', async () => {
+  // The last gold is sold. A scope pinned to something no longer held is a permanently
+  // blank chart with no visible cause.
+  const gold = row({ stateKey: 'goldAccount', name: 'Gold', assetClass: 'GOLD',
+                     allocation: 'GOLD', rateKey: 'GOLD', marketValue: 10 });
+  const samples = [sample(2029, [row(), gold]), sample(2030, [row(), gold])];
+  const { plugin } = mountPlugin(samples);
+  await pickClasses(plugin, ['GOLD']);
+  assert.ok(plugin._assetClasses.has('GOLD'));
+
+  samples[1] = sample(2030, [row()]);
+  samples[0] = sample(2029, [row()]);
+  plugin._render();
+  assert.equal(plugin._assetClasses.size, 0, 'the scope falls back to every class');
+  plugin.unmount();
+});
+
+test('the class scope hides itself in the target view', () => {
+  const { plugin } = mountPlugin(TWO_YEARS);
+  plugin._view = 'target';
+  plugin._syncControls();
+  assert.equal(plugin.el.querySelector('[data-alloc="class"]').style.display, 'none');
+  plugin._view = 'account';
+  plugin._syncControls();
+  assert.equal(plugin.el.querySelector('[data-alloc="class"]').style.display, '');
+  plugin.unmount();
+});
+
+test('a freshly loaded scenario shows its opening mix, before any step', async () => {
+  // The opening state is a real, answerable question, and the run cannot answer it: the
+  // first sample is only written once the clock has moved. A panel that met a loaded
+  // scenario with "step the simulation" was refusing to show a picture it already had.
+  const state = {
+    brokerage: {
+      stateKey: 'brokerage', type: 'brokerage', role: 'us-stock', country: 'US',
+      currency: { code: 'USD' }, balance: 100,
+      holdings: [
+        { allocation: 'EQUITY', marketValue: 70, costBasis: 50, rateKey: 'EQUITY_US' },
+        { allocation: 'BOND',   marketValue: 30, costBasis: 30, rateKey: 'FIXED_INCOME_US' },
+      ],
+    },
+  };
+  const sim = { samples: [], state, currentDate: new Date(Date.UTC(2026, 0, 1)),
+                eventExecutions: 0, bus: null };
+  const plugin = new AllocationPlugin(RUNTIME);
+  plugin.setServices({ schemaRegistry: { formatAmount: (n) => `$${Math.round(n)}` } });
+  plugin._sim = sim;
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  plugin.mount(container);
+
+  assert.equal(plugin.el.querySelector('[data-alloc="placeholder"]').style.display, 'none');
+  assert.ok(plugin._isLive, 'reading live state, not sim.samples');
+  assert.equal(plugin.el.querySelector('[data-alloc="asof"]').textContent, '2026 · opening state');
+  assert.equal(shareOf(plugin, 'EQUITY'), '70.0%');
+
+  // One record, so it draws as a doughnut — no time axis to put it on yet.
+  const built = buildAllocationSeries(plugin._rows(), plugin._seriesOpts());
+  assert.equal(built.dates.length, 1);
+  assert.equal(plugin._donutOption(built).series[0].type, 'pie');
+
+  // The opening state is not a "partial year" — that caveat belongs to a mid-year
+  // horizon flush, and putting it here would caveat the one reading that needs none.
+  const prov = plugin.el.querySelector('[data-alloc="provenance"]').textContent;
+  assert.match(prov, /the plan before its first step/);
+  assert.doesNotMatch(prov, /partial year/);
+
+  // And the live reading is dropped the moment the run files a sample of its own.
+  sim.samples = [sample(2026, [row({ marketValue: 100 })])];
+  plugin._render();
+  assert.equal(plugin._isLive, false);
+  assert.equal(plugin._live, null);
+  plugin.unmount();
+});
+
+test('one sample is a doughnut — a time series of one point is the wrong chart', () => {
+  // A stacked area over a single date draws nothing at all, which is why the panel read
+  // as broken for a plan's whole first year. The reader's question at that moment ("what
+  // is the mix right now") is perfectly answerable; it just has no time axis in it yet.
+  const at = new Date(Date.UTC(2030, 11, 31));
+  const rows = [
+    row({ marketValue: 70 }),
+    row({ stateKey: 'bondAccount', name: 'Bonds', assetClass: 'BOND', allocation: 'BOND',
+          rateKey: 'FIXED_INCOME_US', marketValue: 30 }),
+  ].map(r => ({ ...r, date: at }));
+  const { plugin } = mountPlugin([sample(2030, rows)]);
+
+  const one = buildAllocationSeries(plugin._rows(), plugin._seriesOpts());
+  assert.equal(one.dates.length, 1);
+  const donut = plugin._donutOption(one);
+  assert.equal(donut.series[0].type, 'pie');
+  assert.deepEqual(donut.series[0].data.map(d => d.name), ['EQUITY', 'BOND']);
+  // Canonical order, the same order the legend strip and the eventual bands run in.
+  assert.equal(donut.title.text, '2030');
+
+  // And it switches to the time series on its own the moment a second sample lands.
+  const { plugin: two } = mountPlugin([sample(2029, rows), sample(2030, rows)]);
+  const series = buildAllocationSeries(two._rows(), two._seriesOpts());
+  assert.equal(two._option(series).series[0].type, 'line');
+  plugin.unmount();
+  two.unmount();
+});
+
+test('the doughnut refuses to draw a negative slice, and says how many it dropped', () => {
+  // The only way to get here with one is the total view's `with debt` decomposition, and
+  // a pie cannot render it. Dropping it silently would leave a mix that does not add up.
+  const at = new Date(Date.UTC(2030, 11, 31));
+  const rows = [
+    row({ marketValue: 100 }),
+    row({ stateKey: 'auHouseLoan', name: 'AU Loan', type: 'loan', assetClass: 'LIABILITY',
+          allocation: null, rateKey: null, marketValue: -40 }),
+  ].map(r => ({ ...r, date: at }));
+  const { plugin } = mountPlugin([sample(2030, rows)]);
+  plugin._withDebt = true;
+
+  const one = buildAllocationSeries(plugin._rows(), plugin._seriesOpts());
+  const donut = plugin._donutOption(one);
+  assert.deepEqual(donut.series[0].data.map(d => d.name), ['EQUITY']);
+  assert.match(donut.title.subtext, /1 negative slice not drawn/);
+  plugin.unmount();
+});
+
+test('a two-point series draws its marks — a hairline has no value to read off', () => {
+  const { plugin } = mountPlugin([sample(2029, [row()]), sample(2030, [row()])]);
+  const two = buildAllocationSeries(plugin._rows(), plugin._seriesOpts());
+  assert.equal(two.dates.length, 2);
+  assert.ok(plugin._option(two).series.every(sr => sr.showSymbol === true));
+
+  const { plugin: long } = mountPlugin([
+    sample(2028, [row()]), sample(2029, [row()]), sample(2030, [row()]),
+  ]);
+  const many = buildAllocationSeries(long._rows(), long._seriesOpts());
+  assert.ok(long._option(many).series.every(sr => sr.showSymbol === false));
+  plugin.unmount();
+  long.unmount();
 });
 
 test('switching the view changes the grouping, not the fact table', () => {
