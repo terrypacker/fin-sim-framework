@@ -324,3 +324,93 @@ test('onDownloadJson: empty initialState produces {} in payload', () => {
   document.getElementById('downloadJsonBtn').click();
   assert.deepStrictEqual(downloaded.scenarios[0].initialState, {});
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Authored-mix guard — a non-unit mix must never reach the compiler
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// `assertAuthoredMixes` throws inside the compiler and that throw escapes the whole
+// boot path: a single mistyped weight (0.77 where 0.76 was meant) left the workbench
+// blank with only a console trace, and the params editor that could fix it never
+// rendered. The guard runs the same rule here, before anything is compiled.
+
+function withMixParams(params) {
+  const stack = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  stack.presenter._activeScenario.params = params;
+  return stack;
+}
+
+const BAD_GLIDEPATH = [
+  { name: 'allocationGlidepath', type: 'AllocationGlidepath', value: [
+    { age: 47, weights: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } },
+  ] },
+];
+const GOOD_GLIDEPATH = [
+  { name: 'allocationGlidepath', type: 'AllocationGlidepath', value: [
+    { age: 47, weights: { EQUITY: 0.76, BOND: 0.12, CASH: 0, GOLD: 0.12 } },
+  ] },
+];
+
+test('Rebuild is refused when an authored mix does not sum to 1', () => {
+  const { presenter, view } = withMixParams(BAD_GLIDEPATH);
+  const initScenario = jest.fn();
+  presenter._initScenario = initScenario;
+  view.reportInvalidMixes = jest.fn();
+
+  document.getElementById('loadScenarioBtn').dispatchEvent(new Event('click'));
+
+  assert.strictEqual(initScenario.mock.calls.length, 0);
+  const [action, , problems] = view.reportInvalidMixes.mock.calls[0];
+  assert.strictEqual(action, 'Rebuild');
+  assert.strictEqual(problems.length, 1);
+  assert.match(problems[0].message, /allocationGlidepath\[0\] \(age 47\)/);
+});
+
+test('Rebuild proceeds once every authored mix sums to 1', () => {
+  const { presenter, view } = withMixParams(GOOD_GLIDEPATH);
+  const initScenario = jest.fn();
+  presenter._initScenario = initScenario;
+  view.reportInvalidMixes = jest.fn();
+
+  document.getElementById('loadScenarioBtn').dispatchEvent(new Event('click'));
+
+  assert.strictEqual(initScenario.mock.calls.length, 1);
+  assert.strictEqual(view.reportInvalidMixes.mock.calls.length, 0);
+});
+
+test('a refused Load still renders the params form — it is the only place to fix it', () => {
+  const { presenter, view } = withMixParams(BAD_GLIDEPATH);
+  presenter._initScenario = jest.fn();
+  view.reportInvalidMixes = jest.fn();
+  view._populateScenarioForm = jest.fn();
+
+  presenter._loadActiveScenario();
+
+  assert.strictEqual(presenter._initScenario.mock.calls.length, 0);
+  assert.strictEqual(view._populateScenarioForm.mock.calls.length, 1);
+  assert.strictEqual(view.reportInvalidMixes.mock.calls[0][0], 'Load');
+});
+
+test('Save warns before persisting an invalid mix, and honours a cancel', () => {
+  const { presenter, view, registry } = withMixParams(BAD_GLIDEPATH);
+  view.confirmSaveInvalidMixes = jest.fn(() => false);
+  const save = jest.spyOn(registry, 'save');
+
+  presenter._view.onSave();
+
+  assert.strictEqual(view.confirmSaveInvalidMixes.mock.calls.length, 1);
+  assert.strictEqual(save.mock.calls.length, 0);
+});
+
+// The control for the test above: without it, "save was not called" would pass just as
+// well on a save path that never reaches the registry at all.
+test('Save persists normally when every mix is valid', () => {
+  const { presenter, view, registry } = withMixParams(GOOD_GLIDEPATH);
+  view.confirmSaveInvalidMixes = jest.fn(() => false);
+  const save = jest.spyOn(registry, 'save');
+
+  presenter._view.onSave();
+
+  assert.strictEqual(view.confirmSaveInvalidMixes.mock.calls.length, 0);
+  assert.strictEqual(save.mock.calls.length, 1);
+});

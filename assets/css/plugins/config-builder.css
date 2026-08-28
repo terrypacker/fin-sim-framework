@@ -822,7 +822,30 @@
 }
 
 .mix-sum-ok  { color: var(--text-muted); }
-.mix-sum-bad { color: var(--danger, #e5534b); font-weight: 600; }
+.mix-sum-bad { color: var(--red); font-weight: 600; }
+
+/* Σ line: the readout, plus the explicit Normalize button that appears only while
+   the mix is non-unit. The rescale is offered, never applied for you. */
+.mix-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.mix-normalize {
+  font-size: 10px;
+  padding: 1px 6px;
+  line-height: 1.5;
+}
+
+/* A non-unit mix blocks Rebuild, so outline the whole grid, not just the Σ digits —
+   in a 40-anchor glidepath the one bad block has to be findable by scrolling. */
+.mix-grid-bad {
+  outline: 1px solid var(--red);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 
 /* Nested country shapes inside a yield-curve schedule year. */
 .yield-country { margin-top: 2px; }

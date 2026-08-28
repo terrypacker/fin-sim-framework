@@ -73,7 +73,7 @@ import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportu
 import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
 import { RebalanceToTargetApplyReducer, _sweepDust, _compactSeasonedLots } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
-import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
+import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, assertAuthoredMixes, collectAuthoredMixProblems, ageAsOf, interpolateGlidepath, resolveRegimeTarget, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute, resolveSubstituteSecurity } from './finance/behavioral/substitute-holding.js';
@@ -498,6 +498,7 @@ import { PersonEditor } from './visualization/people/person-editor.js';
 import { CSV_SCALAR_TYPES, paramsToCsv, csvToParamUpdates, coerceParamValue } from './visualization/scenario/param-csv.js';
 import { ParamFieldLinks } from './visualization/scenario/param-field-links.js';
 import { bindParamLinkedField } from './visualization/scenario/param-linked-field.js';
+import { showScenarioLoadError } from './visualization/scenario/scenario-load-error-overlay.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
@@ -854,6 +855,7 @@ export const Finance = {
   ALLOCATION_SCHEDULE,
   REGIME_TARGET_PRIORITY,
   assertAuthoredMixes,
+  collectAuthoredMixProblems,
   ageAsOf,
   interpolateGlidepath,
   resolveRegimeTarget,
@@ -1856,6 +1858,7 @@ export const Visualization = {
   coerceParamValue,
   ParamFieldLinks,
   bindParamLinkedField,
+  showScenarioLoadError,
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,

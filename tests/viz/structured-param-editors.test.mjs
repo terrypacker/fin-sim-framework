@@ -377,3 +377,67 @@ test('LocationPolicy: "+ Add Preference" picks an unused role, not a duplicate r
   assert.strictEqual(roles.length, 2);
   assert.notStrictEqual(roles[0], roles[1], 'a repeated entry says nothing in a ranking');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Normalize — the offered rescale
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Design 61 §12.2 Q3 forbids a SILENT rescale (an authored 0.75/0.25/0/0.25 executed as
+// 0.6/0.2/0/0.2). It does not forbid offering the fix: the button only appears while the
+// mix is non-unit, the user clicks it, and the result is on screen before any rebuild.
+
+test('Normalize: hidden while the mix already sums to 1', () => {
+  const param = { name: 'rebalanceTargetAllocation', value: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 } };
+  const host  = mount(buildMixListEditor(param));
+  assert.strictEqual(cell(host, 'normalizeMix').style.display, 'none');
+});
+
+test('Normalize: appears as soon as a weight breaks the sum', () => {
+  const param = { name: 'rebalanceTargetAllocation', value: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 } };
+  const host  = mount(buildMixListEditor(param));
+  type(cell(host, 'EQUITY'), '0.77');
+  assert.notStrictEqual(cell(host, 'normalizeMix').style.display, 'none');
+});
+
+test('Normalize: scales to exactly 1 and keeps the authored ratios', () => {
+  const param = { name: 'rebalanceTargetAllocation', value: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } };
+  const host  = mount(buildMixListEditor(param));
+  cell(host, 'normalizeMix').click();
+
+  assert.doesNotThrow(() => assertTotalMix(param.value, 'normalized'));
+  const before = 0.12 / 0.77;
+  assert.ok(Math.abs(param.value.BOND / param.value.EQUITY - before) < 1e-4,
+    'a proportional rescale, not a redistribution');
+  assert.strictEqual(cell(host, 'normalizeMix').style.display, 'none', 'and the offer withdraws');
+});
+
+test('Normalize: writes the new weights back into the visible cells', () => {
+  const param = { name: 'rebalanceTargetAllocation', value: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } };
+  const host  = mount(buildMixListEditor(param));
+  cell(host, 'normalizeMix').click();
+  assert.strictEqual(Number(cell(host, 'EQUITY').value), param.value.EQUITY);
+  assert.strictEqual(Number(cell(host, 'BOND').value),   param.value.BOND);
+});
+
+test('Normalize: an all-zero mix offers nothing — there is no ratio to preserve', () => {
+  const param = { name: 'rebalanceTargetAllocation', value: { EQUITY: 0, BOND: 0, CASH: 0, GOLD: 0 } };
+  const host  = mount(buildMixListEditor(param));
+  assert.strictEqual(cell(host, 'normalizeMix').style.display, 'none');
+});
+
+test('Normalize: a glidepath anchor normalises independently of its siblings', () => {
+  const param = { name: 'allocationGlidepath', value: [
+    { age: 47, weights: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } },
+    { age: 89, weights: { EQUITY: 0,    BOND: 1,    CASH: 0, GOLD: 0 } },
+  ] };
+  const host = mount(buildAllocationGlidepathEditor(param));
+  const buttons = cells(host, 'normalizeMix');
+  assert.strictEqual(buttons.length, 2);
+  assert.notStrictEqual(buttons[0].style.display, 'none');
+  assert.strictEqual(buttons[1].style.display, 'none');
+
+  buttons[0].click();
+  assert.doesNotThrow(() => assertTotalMix(param.value[0].weights, 'anchor 0'));
+  assert.deepStrictEqual(param.value[1].weights, { EQUITY: 0, BOND: 1, CASH: 0, GOLD: 0 },
+    'the valid anchor is untouched');
+});

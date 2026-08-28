@@ -122,31 +122,63 @@ export const REGIME_TARGET_PRIORITY = [
  * @param {object} p - the resolved scenario parameter bag
  */
 export function assertAuthoredMixes(p) {
+  const [first] = collectAuthoredMixProblems(p);
+  if (first) throw new Error(first.message);
+}
+
+/**
+ * The same rule as {@link assertAuthoredMixes}, reported instead of thrown.
+ *
+ * The authoring UI needs every problem at once, keyed to the anchor that carries it,
+ * so it can refuse a Rebuild and point at the offending row — and the boot-time
+ * recovery path needs to identify the bad param without parsing an error string.
+ * Both must agree with the compiler to the letter, so this IS the compiler's check:
+ * `assertAuthoredMixes` throws the first entry this returns.
+ *
+ * @param {object} p - the resolved scenario parameter bag
+ * @returns {Array<{param: string, index: number|null, message: string}>} empty when valid
+ */
+export function collectAuthoredMixProblems(p) {
+  const problems = [];
+  const check = (param, index, fn) => {
+    try { fn(); } catch (e) { problems.push({ param, index, message: e.message }); }
+  };
+
   if (p?.rebalanceTargetAllocation != null) {
-    assertTotalMix(p.rebalanceTargetAllocation, 'rebalanceTargetAllocation');
+    check('rebalanceTargetAllocation', null,
+      () => assertTotalMix(p.rebalanceTargetAllocation, 'rebalanceTargetAllocation'));
   }
 
   if (Array.isArray(p?.allocationGlidepath)) {
     p.allocationGlidepath.forEach((anchor, i) => {
-      if (!anchor || typeof anchor !== 'object') {
-        throw new Error(`allocationGlidepath[${i}]: expected { age, weights }, got ${JSON.stringify(anchor)}.`);
-      }
-      if (!Number.isFinite(Number(anchor.age))) {
-        throw new Error(`allocationGlidepath[${i}]: "age" must be a number, got ${JSON.stringify(anchor.age)}.`);
-      }
-      assertTotalMix(anchor.weights, `allocationGlidepath[${i}] (age ${anchor.age})`);
+      check('allocationGlidepath', i, () => {
+        if (!anchor || typeof anchor !== 'object') {
+          throw new Error(`allocationGlidepath[${i}]: expected { age, weights }, got ${JSON.stringify(anchor)}.`);
+        }
+        if (!Number.isFinite(Number(anchor.age))) {
+          throw new Error(`allocationGlidepath[${i}]: "age" must be a number, got ${JSON.stringify(anchor.age)}.`);
+        }
+        assertTotalMix(anchor.weights, `allocationGlidepath[${i}] (age ${anchor.age})`);
+      });
     });
   }
 
   if (p?.allocationRegimeTargets != null) {
     const map = p.allocationRegimeTargets;
     if (typeof map !== 'object' || Array.isArray(map)) {
-      throw new Error(`allocationRegimeTargets: expected a { regimeTag: mix } map, got ${typeof map}.`);
-    }
-    for (const [tag, mix] of Object.entries(map)) {
-      assertTotalMix(mix, `allocationRegimeTargets["${tag}"]`);
+      problems.push({
+        param: 'allocationRegimeTargets', index: null,
+        message: `allocationRegimeTargets: expected a { regimeTag: mix } map, got ${typeof map}.`,
+      });
+    } else {
+      Object.entries(map).forEach(([tag, mix], i) => {
+        check('allocationRegimeTargets', i,
+          () => assertTotalMix(mix, `allocationRegimeTargets["${tag}"]`));
+      });
     }
   }
+
+  return problems;
 }
 
 /** Whole years of age as of asOfMs (matches the RMD / spending-band handlers). */
