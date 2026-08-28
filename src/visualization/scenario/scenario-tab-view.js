@@ -751,6 +751,46 @@ export class ScenarioTabView {
     alert(lines.join('\n'));
   }
 
+  /**
+   * Report the authored-mix problems that blocked a Rebuild / Load.
+   *
+   * The compiler rejects a non-unit mix outright (design 61 §12.2 Q3), and that
+   * rejection used to arrive as an exception that emptied the whole page. Here it is
+   * a message naming every bad anchor, raised while the editors are still on screen.
+   */
+  reportInvalidMixes(action, scenarioName, problems = []) {
+    const lines = [
+      `${action} refused: "${scenarioName ?? 'this scenario'}" has ` +
+      `${problems.length} invalid allocation mix${problems.length === 1 ? '' : 'es'}.`,
+      '',
+      ...problems.map(p => `\u2022 ${p.message}`),
+      '',
+      'Allocation weights must sum to exactly 1 — they are NOT rescaled for you.',
+      'Fix them in the Parameters list (each mix shows a live \u03a3, and a Normalize',
+      'button appears next to any that is off), then Rebuild.',
+    ];
+    alert(lines.join('\n'));
+  }
+
+  /**
+   * Confirm a save that persists an invalid mix. Returns true to proceed.
+   *
+   * Refusing outright would strand every other edit in the form, so the save is the
+   * user's call — but it is the value that will fail to load next time, so say so.
+   */
+  confirmSaveInvalidMixes(problems = []) {
+    const body = [
+      `Save anyway? ${problems.length} allocation mix${problems.length === 1 ? '' : 'es'} ` +
+      `${problems.length === 1 ? 'does' : 'do'} not sum to 1:`,
+      '',
+      ...problems.map(p => `\u2022 ${p.message}`),
+      '',
+      'The scenario will save, but it cannot be simulated until these are fixed.',
+    ].join('\n');
+    if (typeof window === 'undefined' || typeof window.confirm !== 'function') return true;
+    return window.confirm(body);
+  }
+
 }
 
 // ─── ShockList editor ─────────────────────────────────────────────────────────

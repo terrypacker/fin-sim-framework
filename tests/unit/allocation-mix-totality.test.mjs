@@ -33,7 +33,7 @@ import { ALLOCATION, ALLOCATION_VALUES, totalizeMix, assertTotalMix, isTotalMix 
   from '../../src/finance/holdings/allocation.js';
 import { synthesizeTargetAllocation, ALLOC_WEIGHT_CLASSES, allocWeightKey, ALLOCATION_PRESETS }
   from '../../src/scenarios/intl-retirement-scenario.js';
-import { interpolateGlidepath, resolveRegimeTarget, assertAuthoredMixes }
+import { interpolateGlidepath, resolveRegimeTarget, assertAuthoredMixes, collectAuthoredMixProblems }
   from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 
 const sum = m => Object.values(m).reduce((s, v) => s + v, 0);
@@ -195,4 +195,59 @@ test('assertAuthoredMixes: rejects a malformed anchor shape', () => {
     /expected \{ age, weights \}/);
   assert.throws(() => assertAuthoredMixes({ allocationRegimeTargets: [] }),
     /expected a \{ regimeTag: mix \} map/);
+});
+
+// ─── collectAuthoredMixProblems ───────────────────────────────────────────────
+//
+// The reporting sibling of `assertAuthoredMixes`, used by the authoring UI to refuse a
+// Rebuild and by the boot-time recovery overlay to find the bad value. It has to agree
+// with the compiler to the letter — the tests below pin that agreement, because a UI
+// that disagreed would either block a valid scenario or wave a broken one through.
+
+test('collectAuthoredMixProblems: reports nothing for a valid bag', () => {
+  assert.deepEqual(collectAuthoredMixProblems({
+    rebalanceTargetAllocation: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 },
+    allocationGlidepath: [{ age: 47, weights: { EQUITY: 0.76, BOND: 0.12, CASH: 0, GOLD: 0.12 } }],
+    allocationRegimeTargets: { NORMAL: { EQUITY: 0.6, BOND: 0.4, CASH: 0, GOLD: 0 } },
+  }), []);
+  assert.deepEqual(collectAuthoredMixProblems({}), []);
+});
+
+test('collectAuthoredMixProblems: keys each problem to its param and index', () => {
+  const problems = collectAuthoredMixProblems({ allocationGlidepath: [
+    { age: 47, weights: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } },
+    { age: 53, weights: { EQUITY: 1,    BOND: 0,    CASH: 0, GOLD: 0 } },
+    { age: 89, weights: { EQUITY: 0,    BOND: 0.9,  CASH: 0, GOLD: 0 } },
+  ] });
+  assert.equal(problems.length, 2);
+  assert.deepEqual(problems.map(p => [p.param, p.index]),
+    [['allocationGlidepath', 0], ['allocationGlidepath', 2]]);
+  assert.match(problems[0].message, /allocationGlidepath\[0\] \(age 47\).*got 1\.010000/s);
+});
+
+test('collectAuthoredMixProblems: reports EVERY bad param, not just the first', () => {
+  const problems = collectAuthoredMixProblems({
+    rebalanceTargetAllocation: { EQUITY: 0.9, BOND: 0.2, CASH: 0, GOLD: 0 },
+    allocationGlidepath: [{ age: 47, weights: { EQUITY: 0.5, BOND: 0.2, CASH: 0, GOLD: 0 } }],
+    allocationRegimeTargets: { PANIC_SELL_TRIGGER: { EQUITY: 0, BOND: 0, CASH: 0, GOLD: 0 } },
+  });
+  assert.deepEqual(problems.map(p => p.param),
+    ['rebalanceTargetAllocation', 'allocationGlidepath', 'allocationRegimeTargets']);
+});
+
+test('collectAuthoredMixProblems: assertAuthoredMixes throws exactly its first message', () => {
+  const bag = { allocationGlidepath: [
+    { age: 47, weights: { EQUITY: 0.77, BOND: 0.12, CASH: 0, GOLD: 0.12 } },
+  ] };
+  const [first] = collectAuthoredMixProblems(bag);
+  assert.throws(() => assertAuthoredMixes(bag), (e) => e.message === first.message);
+});
+
+test('collectAuthoredMixProblems: malformed shapes are reported, not thrown', () => {
+  assert.deepEqual(
+    collectAuthoredMixProblems({ allocationGlidepath: [null] }).map(p => [p.param, p.index]),
+    [['allocationGlidepath', 0]]);
+  assert.deepEqual(
+    collectAuthoredMixProblems({ allocationRegimeTargets: [] }).map(p => p.param),
+    ['allocationRegimeTargets']);
 });

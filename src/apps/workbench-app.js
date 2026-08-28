@@ -82,6 +82,7 @@ import { scenarioParamValues, primeRatesOf } from '../finance/param-schema-utils
 import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
+import { showScenarioLoadError }     from '../visualization/scenario/scenario-load-error-overlay.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
@@ -629,7 +630,23 @@ export class WorkbenchApp extends BaseComponent {
     // to a different scenario on a switch (prevents cross-scenario holdings leak).
     this._loadedCfg = activeConfig;
     this.scenario.watchlists = activeConfig?.watchlists ?? [];
-    new ScenarioLoader().load(activeConfig, registry);
+    // A saved scenario can carry a value the compiler REJECTS rather than repairs — a
+    // non-unit allocation mix is the one that happens (design 61 §12.2 Q3). That throw
+    // escapes the whole boot path, leaving a blank page whose only diagnosis is a
+    // console stack, and the params editor that could fix the value never renders. So
+    // the failure gets a surface of its own: it stops the boot (a half-compiled graph
+    // must never be presented as a run) and hands over a repair + scenario switcher.
+    try {
+      new ScenarioLoader().load(activeConfig, registry);
+    } catch (err) {
+      console.error('[WorkbenchApp] scenario failed to load', err);
+      showScenarioLoadError({
+        error: err,
+        config: activeConfig,
+        scenarioRegistry: registry.scenarioRegistry,
+      });
+      throw err;
+    }
 
     // Display-currency conversion (design 10 §Phase 4): give the schema registry
     // the active display currency and a live rate source (the current sim state

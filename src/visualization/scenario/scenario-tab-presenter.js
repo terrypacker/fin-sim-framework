@@ -13,6 +13,7 @@ import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
 import { ScenarioLoader }     from '../../scenarios/scenario-loader.js';
 import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
 import { withBom } from '../../utils/csv.js';
+import { collectAuthoredMixProblems } from '../../finance/behavioral/rebalance-to-target-reducer.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -126,6 +127,7 @@ export class ScenarioTabPresenter {
     };
 
     this._view.onRebuild = () => {
+      if (!this._guardAuthoredMixes('Rebuild')) return;
       this._initScenario();
     };
 
@@ -186,6 +188,10 @@ export class ScenarioTabPresenter {
 
     this._view.onSave = () => {
       if (!this._activeScenario) return;
+      // Saving an invalid mix is allowed \u2014 an in-flight edit is the user's to keep
+      // \u2014 but it is what bricks the NEXT page load, so it is never silent.
+      const problems = collectAuthoredMixProblems(this._paramBag());
+      if (problems.length && !this._view.confirmSaveInvalidMixes(problems)) return;
       // Harvest in-flight service-map state into the active scenario record so
       // localStorage / Download / Rebuild see edits the user has made but not
       // yet rebuilt. The graph snapshot also forces subsequent loads through
@@ -280,8 +286,46 @@ export class ScenarioTabPresenter {
    * @private
    */
   _loadActiveScenario() {
+    // Populate the form FIRST when the stored scenario can't compile: the params panel
+    // is the only place the bad value can be fixed, so it has to render even though the
+    // build is refused. (Order matters — _initScenario() would throw before we got here.)
+    if (!this._guardAuthoredMixes('Load')) {
+      this._view._populateScenarioForm(this._activeScenario);
+      return;
+    }
     this._initScenario();
     this._view._populateScenarioForm(this._activeScenario);
+  }
+
+  /**
+   * Refuse to build a scenario whose authored allocation mixes are invalid.
+   *
+   * `assertAuthoredMixes` throws inside the compiler (design 61 §12.2 Q3 — a non-unit
+   * mix is REJECTED, never rescaled), and that throw escapes the whole boot path: one
+   * mistyped weight used to leave the workbench blank with only a console trace. The
+   * check runs here, against the same rule, BEFORE anything is compiled, so the bad
+   * anchor is named while its editor is still on screen and fixable.
+   *
+   * @param {string} action - what was refused, for the message ("Rebuild" / "Load")
+   * @returns {boolean} true when it is safe to build
+   * @private
+   */
+  _guardAuthoredMixes(action) {
+    const problems = collectAuthoredMixProblems(this._paramBag());
+    if (!problems.length) return true;
+    this._view.reportInvalidMixes(action, this._activeScenario?.name, problems);
+    return false;
+  }
+
+  /**
+   * The active scenario's params as a `{ name: value }` bag — the shape the compiled
+   * reducers see, and the shape the mix validator reads.
+   * @private
+   */
+  _paramBag() {
+    const bag = {};
+    for (const p of this._activeScenario?.params ?? []) bag[p.name] = p.value;
+    return bag;
   }
 
   _refresh() {

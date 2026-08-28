@@ -193,3 +193,92 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   position: absolute;
   inset: 0;
 }
+
+/* ─── scenario load-failure recovery overlay ──────────────────────────────────
+   Owns the whole viewport on purpose: the boot aborted, so whatever is behind it
+   is a half-built shell that must not be mistaken for a working run.
+
+   Every colour here is a token, with no literal fallbacks. This surface renders in
+   all three themes (dark / light / amber) and a hardcoded dark panel behind a
+   themed --text is exactly how you get unreadable dark-on-dark in the light one. */
+.scenario-load-error {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  background: var(--bg-base);
+  color: var(--text);
+}
+
+.sle-card {
+  width: min(720px, 100%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px 28px;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+.sle-title  { margin: 0 0 6px; font-family: var(--font-head); font-size: 18px; font-weight: 600; color: var(--text); }
+.sle-sub    { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.sle-section{
+  margin: 24px 0 8px;
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.sle-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--red);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--red-glow);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sle-mix {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-subtle);
+}
+
+.sle-mix-where { font-family: var(--font-mono); font-size: 11px; line-height: 1.5; margin-bottom: 10px; color: var(--text); }
+.sle-mix-note  { font-size: 12px; color: var(--text-dim); }
+
+.sle-mix-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sle-cell       { display: flex; flex-direction: column; gap: 3px; }
+.sle-cell-label { font-size: 10px; letter-spacing: 0.05em; color: var(--text-dim); }
+.sle-cell-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.sle-cell-input:focus { outline: none; border-color: var(--accent-primary); }
+
+.sle-mix-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+.sle-mix-sum  { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.sle-mix-sum.sle-bad { color: var(--red); font-weight: 600; }
+
+.sle-save   { margin-top: 6px; }
+.sle-others { display: flex; flex-wrap: wrap; gap: 8px; }

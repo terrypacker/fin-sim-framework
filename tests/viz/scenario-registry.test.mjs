@@ -364,3 +364,50 @@ test('upsertUserScenarios: no active flag in upload leaves current active unchan
   r.upsertUserScenarios({ scenarios: [{ id: 'u:1', name: 'B', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
   assert.strictEqual(r.getActive().id, 'u:0');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// getNextUserScenarioId — a minted id must never collide
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// This returned the COUNT of user scenarios. User ids are not dense — a delete leaves
+// a hole and an upload lands ids of its own — so with u:1, u:2, u:4, u:7 the count is
+// 4, which is already taken. `_upsert` then UPDATED that scenario instead of adding
+// one: Copy overwrote the very scenario it was copying, renaming it "New Scenario"
+// and carrying its whole config over to the "new" record.
+
+function withUserScenarios(ids) {
+  setStorageData({ scenarios: ids.map(id => ({ id, name: id, prebuilt: false, order: 100 })) });
+  return makeRegistry();
+}
+
+test('getNextUserScenarioId: no user scenarios → 0', () => {
+  assert.strictEqual(withUserScenarios([]).getNextUserScenarioId(), 0);
+});
+
+test('getNextUserScenarioId: dense ids → one past the last', () => {
+  assert.strictEqual(withUserScenarios(['u:0', 'u:1', 'u:2']).getNextUserScenarioId(), 3);
+});
+
+test('getNextUserScenarioId: gappy ids → one past the HIGHEST, not the count', () => {
+  const r = withUserScenarios(['u:1', 'u:2', 'u:4', 'u:7']);
+  assert.strictEqual(r.getNextUserScenarioId(), 8);
+});
+
+test('a minted id never names a scenario that already exists', () => {
+  const ids = ['u:1', 'u:2', 'u:4', 'u:7'];
+  const r = withUserScenarios(ids);
+  const minted = `u:${r.getNextUserScenarioId()}`;
+  assert.ok(!ids.includes(minted), `${minted} would overwrite an existing scenario`);
+  assert.strictEqual(r.get(minted), undefined);
+});
+
+test('saving under a minted id ADDS a scenario, leaving the source intact', () => {
+  const r = withUserScenarios(['u:1', 'u:2', 'u:4', 'u:7']);
+  const source = r.get('u:4');
+  source.name = 'Terry Jeanne Evaluation';
+
+  r.save({ id: `u:${r.getNextUserScenarioId()}`, name: 'New Scenario', prebuilt: false, order: 100 }, true);
+
+  assert.strictEqual(r.getUserScenarios().length, 5);
+  assert.strictEqual(r.get('u:4').name, 'Terry Jeanne Evaluation', 'the copied-from record is untouched');
+});

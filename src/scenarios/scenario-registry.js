@@ -208,8 +208,21 @@ export class ScenarioRegistry {
       .sort((a, b) => a.order - b.order);
   }
 
+  /**
+   * The next free `u:<N>` index — one past the highest in use.
+   *
+   * NOT the count. User ids are not dense: a delete leaves a hole, and an upload can
+   * land ids of its own, so `u:1, u:2, u:4, u:7` is an ordinary state. Returning the
+   * count (4 here) hands back an id that already exists, and `_upsert` then UPDATES
+   * that scenario instead of adding one — Copy silently overwrote the scenario it was
+   * copying, renaming it "New Scenario" and taking its config with it.
+   */
   getNextUserScenarioId() {
-    return this.getUserScenarios().length;
+    const used = this._byLayer()
+      .filter(n => typeof n.id === 'string' && n.id.startsWith('u:'))
+      .map(n => Number.parseInt(n.id.slice(2), 10))
+      .filter(n => Number.isInteger(n));
+    return used.length ? Math.max(...used) + 1 : 0;
   }
 
   /**
@@ -223,12 +236,8 @@ export class ScenarioRegistry {
   upsertUserScenarios(data) {
     if (!Array.isArray(data.scenarios)) return;
 
-    // Find next available index beyond all current u:<N> ids.
-    const existingIndices = this._byLayer()
-      .filter(n => n.id?.startsWith('u:'))
-      .map(n => parseInt(n.id.slice(2), 10))
-      .filter(n => !isNaN(n));
-    let nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 0;
+    // One id rule for every path that mints one: an id that collides is an overwrite.
+    let nextIndex = this.getNextUserScenarioId();
 
     let activeId = null;
     data.scenarios.forEach(s => {

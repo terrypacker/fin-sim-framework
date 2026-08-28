@@ -20,7 +20,11 @@
  *      REJECTED, not rescaled, when it doesn't. In a textarea you learn that at
  *      Rebuild, after typing the whole map. Here the grid always writes all four
  *      classes (so totality is structural, not a rule to remember) and shows Σ live,
- *      so a 1.25 mix is red while you are still looking at it.
+ *      so a 1.25 mix is red while you are still looking at it. A non-unit mix also
+ *      offers an explicit Normalize (the prohibition is on a SILENT rescale, not on
+ *      offering the fix) and blocks Rebuild outright — see `_guardAuthoredMixes` in
+ *      the scenario presenter, which runs the compiler's own rule before compiling,
+ *      because that throw otherwise escapes the boot path and empties the page.
  *   2. **The vocabulary is invisible.** Which regime tags exist, which account roles,
  *      which rate keys — all of it lived only in the description string. Selects and
  *      fixed key rows put the closed list on screen.
@@ -143,6 +147,9 @@ function mixSum(mix) {
   return ALLOCATION_VALUES.reduce((s, a) => s + Number(mix?.[a] ?? 0), 0);
 }
 
+/** Keep a normalized weight readable in the cell (and JSON) rather than 0.7599999999. */
+function round6(n) { return Math.round(n * 1e6) / 1e6; }
+
 /**
  * The four weight cells plus a live Σ readout, shared by every mix-valued editor.
  *
@@ -157,17 +164,47 @@ function buildMixGrid(getMix, setMix) {
   const row = el('div', 'age-band-row');
   row.style.gridTemplateColumns = MIX_GRID;
 
-  const sum = el('div', 'mix-sum');
+  const inputs = new Map();
+
+  const foot = el('div', 'mix-foot');
+  const sum  = el('div', 'mix-sum');
+
+  // Explicit, user-clicked rescale. The design-61 §12.2 Q3 prohibition is on a SILENT
+  // rescale — one the author never saw — not on offering the fix. Shown only while the
+  // mix is non-unit, and it scales proportionally, so the ratios the author typed are
+  // exactly what survives; the Σ readout updates in place so the result is on screen
+  // before anything is rebuilt.
+  const normalize = el('button', 'btn btn-sm mix-normalize', 'Normalize');
+  normalize.type = 'button';
+  normalize.dataset.id = 'normalizeMix';
+  normalize.title = 'Scale these weights proportionally so they sum to 1.';
+  normalize.addEventListener('click', () => {
+    const mix   = totalMix(getMix());
+    const total = mixSum(mix);
+    if (!(total > 0)) return;
+    const next = {};
+    for (const alloc of ALLOCATION_VALUES) next[alloc] = round6(mix[alloc] / total);
+    // Rounding six places can leave the sum a hair off; push the residue onto the
+    // largest weight so the result validates rather than failing by 1e-6.
+    const largest = ALLOCATION_VALUES.reduce((a, b) => (next[b] > next[a] ? b : a));
+    next[largest] = round6(next[largest] + (1 - mixSum(next)));
+    setMix(next);
+    for (const alloc of ALLOCATION_VALUES) inputs.get(alloc).value = next[alloc];
+    refresh();
+  });
+
   const refresh = () => {
     const total = mixSum(getMix());
-    sum.textContent = `Σ ${total.toFixed(4)}`;
+    sum.textContent = `\u03a3 ${total.toFixed(4)}`;
     const ok = Math.abs(total - 1) <= MIX_SUM_EPSILON;
     sum.classList.toggle('mix-sum-ok',  ok);
     sum.classList.toggle('mix-sum-bad', !ok);
     sum.title = ok
       ? 'Weights sum to 1.'
       : 'Weights must sum to 1. A non-unit mix is REJECTED at Rebuild, not rescaled '
-        + '— a silent rescale once turned an authored 0.75 equity into an executed 0.6.';
+        + '\u2014 a silent rescale once turned an authored 0.75 equity into an executed 0.6.';
+    normalize.style.display = ok || !(total > 0) ? 'none' : '';
+    wrap.classList.toggle('mix-grid-bad', !ok);
   };
 
   for (const alloc of ALLOCATION_VALUES) {
@@ -175,16 +212,20 @@ function buildMixGrid(getMix, setMix) {
     input.addEventListener('input', () => {
       const raw  = input.value.trim();
       const next = totalMix(getMix());
-      // Blank is 0 here, never "absent" — see the header note.
+      // Blank is 0 here, never "absent" \u2014 see the header note.
       next[alloc] = raw === '' ? 0 : Number(raw);
       setMix(totalMix(next));
       refresh();
     });
+    inputs.set(alloc, input);
     row.appendChild(input);
   }
 
+  foot.appendChild(sum);
+  foot.appendChild(normalize);
+
   wrap.appendChild(row);
-  wrap.appendChild(sum);
+  wrap.appendChild(foot);
   refresh();
   return wrap;
 }
