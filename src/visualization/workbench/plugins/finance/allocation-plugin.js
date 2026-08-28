@@ -83,7 +83,9 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._view      = 'total';       // total | target | domicile | exposure | account | rateKey | role
     this._mode      = 'pct';         // pct (share) | abs (currency)
     this._withDebt  = false;         // total only: include LIABILITY (net-worth decomposition)
-    this._stateKey  = '__all__';     // account view: one account, or all side by side
+    // WHERE: the accounts in scope. EMPTY means every account, on the same terms as the
+    // class scope — "no filter" and "all of them" are one statement.
+    this._stateKeys = new Set();
     // WHAT: the classes in scope. EMPTY means every class — "no filter" and "all of
     // them" are the same statement, and a set that empties itself to mean nothing would
     // give the reader a way to blank the panel with no way back.
@@ -98,8 +100,10 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._targetsCache = null;
     this._accountsSig  = null;
     this._classesSig   = null;
-    this._classSelect  = null;   // MapFilterMultiSelect, built on first render with data
-    this._classItems   = [];     // its live option list (see _renderClassPicker)
+    this._classSelect   = null;  // MapFilterMultiSelect, built on first render with data
+    this._classItems    = [];    // its live option list (see _renderClassPicker)
+    this._accountSelect = null;
+    this._accountItems  = [];
     this._live         = null;   // opening-state record, before the run has sampled
     this._liveSig      = null;
     this._isLive       = false;  // true while the panel is reading _live, not sim.samples
@@ -123,7 +127,8 @@ export class AllocationPlugin extends WorkbenchComponent {
           <option value="security">By security</option>
           <option value="role">By wrapper</option>
         </select>
-        <select class="wb-select alloc-account" data-alloc="account" style="display:none"></select>
+        <span class="alloc-account" data-alloc="account" style="display:none"
+              title="Scope the view to one or more accounts"></span>
         <span class="alloc-class" data-alloc="class"
               title="Narrow every view to one or more asset classes"></span>
         <span class="alloc-seg" data-alloc="mode">
@@ -171,9 +176,6 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._bindOnce('view',    'change', (el) => {
       this._view = el.value; this._hidden.clear(); this._syncControls(); this._render();
     });
-    this._bindOnce('account', 'change', (el) => {
-      this._stateKey = el.value; this._hidden.clear(); this._render();
-    });
     this._bindOnce('debt',    'change', (el) => { this._withDebt = el.checked; this._render(); });
     this._bindOnce('csv',     'click',  () => this._downloadCsv());
     this._bindOnce('mixbar',  'click',  null, (e) => this._onMixBarClick(e));
@@ -209,6 +211,7 @@ export class AllocationPlugin extends WorkbenchComponent {
     // how a long session turns slow.
     this._disposeChart();
     this._classSelect?.close();
+    this._accountSelect?.close();
   }
 
   destroy() {
@@ -391,9 +394,16 @@ export class AllocationPlugin extends WorkbenchComponent {
       // `sec-auto-<MARKET>`, so this view degrades to the return-series view rather than
       // to noise — which is the honest answer for a plan that holds index sleeves.
       case 'security': return { by: ['security'], filter: r => r.securityId != null, normalize };
-      case 'account':  return this._stateKey === '__all__'
-        ? { by: ['name'], normalize }
-        : { filter: r => r.stateKey === this._stateKey, normalize };
+      // Picking accounts is a drill-down, and the grouping follows it: ONE account and
+      // the question is what is inside it (by class); several — or none, meaning all —
+      // and the question is how they compare (by account). Grouping several accounts by
+      // class instead would merge them into a single mix and lose the comparison the
+      // reader just asked for by selecting more than one.
+      case 'account':  return this._stateKeys.size === 1
+        ? { filter: r => this._stateKeys.has(r.stateKey), normalize }
+        : this._stateKeys.size
+          ? { by: ['name'], filter: r => this._stateKeys.has(r.stateKey), normalize }
+          : { by: ['name'], normalize };
       default:         return { normalize, excludeLiabilities: !this._withDebt };
     }
   }
@@ -437,8 +447,8 @@ export class AllocationPlugin extends WorkbenchComponent {
    * The comparison set is the whole difficulty: a target exists only for accounts the
    * rebalancer manages, so measuring it against a book that also holds a house and a
    * company stake would report a "drift" that is really just two different questions.
-   * Both sides are therefore filtered to `targetedStateKeys` — or to the one picked
-   * account, which under LOCATED mode is the *location* diagnostic ("is the class where
+   * Both sides are therefore filtered to `targetedStateKeys` — or to the picked
+   * accounts, which under LOCATED mode is the *location* diagnostic ("is the class where
    * the plan wants it?") rather than a second opinion on the mix.
    *
    * Realized uses `source === 'holding'` because that is the reducer's own basis: it
@@ -448,8 +458,8 @@ export class AllocationPlugin extends WorkbenchComponent {
   _targetView() {
     const targetRows = this._targetRows();
     const targeted   = targetedStateKeys(targetRows);
-    const scope      = this._stateKey === '__all__' ? null : this._stateKey;
-    const inScope    = r => (scope ? r.stateKey === scope : targeted.has(r.stateKey));
+    const scope      = this._stateKeys.size ? new Set(this._stateKeys) : null;
+    const inScope    = r => (scope ? scope.has(r.stateKey) : targeted.has(r.stateKey));
     const normalize  = this._mode === 'pct';
 
     const realized = buildAllocationSeries(this._rows(), {
@@ -589,9 +599,11 @@ export class AllocationPlugin extends WorkbenchComponent {
     if (scopedTargetRows.length === 0) {
       this._q('chart').style.display = 'none';
       this._q('placeholder').style.display = '';
-      this._q('placeholder').textContent = scope
-        ? 'This account carries no target composition — the rebalancer does not manage it.'
-        : 'No account carries a target composition. Set an allocation strategy to compare against.';
+      this._q('placeholder').textContent = !scope
+        ? 'No account carries a target composition. Set an allocation strategy to compare against.'
+        : scope.size === 1
+          ? 'This account carries no target composition — the rebalancer does not manage it.'
+          : 'None of the selected accounts carries a target composition — the rebalancer does not manage them.';
       this._q('mixbar').innerHTML = '';
       return;
     }
@@ -724,9 +736,13 @@ export class AllocationPlugin extends WorkbenchComponent {
     const dark = this._dark();
     const keyIndex = new Map([...realized.keys, ...target.keys].map((k, i) => [k, i]));
 
-    const scopeNote = this._stateKey === '__all__'
+    // Always names the comparison set. Under LOCATED targeting the aggregate covers only
+    // the rebalanced accounts, and a reader who assumes it covers the whole plan reads a
+    // house-heavy book as a rebalancer failure.
+    const n = this._stateKeys.size;
+    const scopeNote = n === 0
       ? `${targeted.size} targeted account${targeted.size === 1 ? '' : 's'}`
-      : 'this account';
+      : n === 1 ? 'this account' : `${n} selected accounts`;
 
     el.innerHTML =
       `<span class="alloc-mix-label">${year} vs target</span>` +
@@ -841,10 +857,11 @@ export class AllocationPlugin extends WorkbenchComponent {
     }
 
     if (!this._classSelect) {
-      this._classSelect = new AssetClassSelect({
-        parent:    this,          // BaseComponent child: torn down with the panel
-        container: host,
-        onToggle:  (_item, _added, selected) => {
+      this._classSelect = new ScopeMultiSelect({
+        parent:     this,        // BaseComponent child: torn down with the panel
+        container:  host,
+        emptyLabel: 'all classes',
+        onToggle:   (_item, _added, selected) => {
           this._assetClasses = new Set(selected.map(o => o.id));
           // The chips name keys inside the old scope; narrowing to GOLD leaves an
           // `EQUITY` in the set filtering a category that is no longer drawn.
@@ -858,25 +875,47 @@ export class AllocationPlugin extends WorkbenchComponent {
     this._classSelect.syncLabel();
   }
 
+  /**
+   * The account scope, on the same shared component as the class scope.
+   *
+   * It serves two views and means something slightly different in each, which is why the
+   * grouping reads it rather than the other way round: in `By account` it is a
+   * drill-down (see `_viewOpts`), and in the target view it is the comparison set — the
+   * accounts realized and intended are BOTH measured over, which under LOCATED targeting
+   * is the location diagnostic rather than a second opinion on the mix.
+   */
   _renderAccountPicker() {
-    const sel = this._q('account');
-    if (!sel) return;
+    const host = this._q('account');
+    if (!host) return;
     const accounts = this._accounts();
     const sig = accounts.map(a => a.stateKey).join('|');
-    // The account set grows mid-run (an inherited account funds at its INHERIT date),
-    // so rebuild whenever membership moves — cheap, and only rebuilds on the rare step
-    // where it actually changes.
-    if (sig === this._accountsSig) { sel.value = this._stateKey; return; }
-    this._accountsSig = sig;
-
-    if (accounts.length && this._stateKey !== '__all__' && !accounts.some(a => a.stateKey === this._stateKey)) {
-      this._stateKey = '__all__';
+    // The account set grows mid-run (an inherited account funds at its INHERIT date), so
+    // rebuild whenever membership moves — cheap, and only when it actually changes.
+    if (sig !== this._accountsSig) {
+      this._accountsSig = sig;
+      this._accountItems.length = 0;
+      this._accountItems.push(...accounts.map(a => ({ id: a.stateKey, name: a.label })));
+      const live = new Set(accounts.map(a => a.stateKey));
+      for (const key of this._stateKeys) if (!live.has(key)) this._stateKeys.delete(key);
     }
-    sel.innerHTML = [
-      `<option value="__all__">all accounts</option>`,
-      ...accounts.map(a => `<option value="${_esc(a.stateKey)}">${_esc(a.label)}</option>`),
-    ].join('');
-    sel.value = this._stateKey;
+
+    if (!this._accountSelect) {
+      this._accountSelect = new ScopeMultiSelect({
+        parent:     this,
+        container:  host,
+        emptyLabel: 'all accounts',
+        onToggle:   (_item, _added, selected) => {
+          this._stateKeys = new Set(selected.map(o => o.id));
+          // The keyspace flips between account names and class names at the one/many
+          // boundary (see `_viewOpts`), so a carried-over chip would filter nothing.
+          this._hidden.clear();
+          this._accountSelect.syncLabel();
+          this._render();
+        },
+        queryApi: new QueryApi({ getAll: () => this._accountItems }),
+      });
+    }
+    this._accountSelect.syncLabel();
   }
 
   /**
@@ -1182,8 +1221,8 @@ export class AllocationPlugin extends WorkbenchComponent {
 }
 
 /**
- * The class scope's control: `MapFilterMultiSelect`, with the input itself reporting the
- * current selection.
+ * Either scope control — classes (WHAT) or accounts (WHERE): `MapFilterMultiSelect`, with
+ * the input itself reporting the current selection.
  *
  * The base component's input is a SEARCH box — it holds what you typed, and the
  * selection lives only as ticks inside the dropdown. That is right for the timeline,
@@ -1192,27 +1231,48 @@ export class AllocationPlugin extends WorkbenchComponent {
  * filtering out three quarters of the book is a chart nobody can trust. So the
  * placeholder carries the answer whenever the box is empty, which is whenever it is not
  * being typed into.
+ *
+ * @param {string} opts.emptyLabel what an empty selection means, in the reader's words —
+ *        "all classes", "all accounts". Empty is never "nothing selected" on this panel.
  */
-class AssetClassSelect extends MapFilterMultiSelect {
+class ScopeMultiSelect extends MapFilterMultiSelect {
   constructor(opts) {
     super(opts);
+    this._emptyLabel = opts.emptyLabel ?? 'all';
     // The base component sorts its list by name, which is right for a long searchable
-    // map and wrong for a four-value vocabulary: it would list the classes alphabetically
-    // while the legend and the bands run in canonical order (EQUITY, BOND, CASH, GOLD).
-    // Two orders for one short list is harder to read than either. An empty sort keeps
-    // the option list in the order `_classes()` hands it over in.
+    // map and wrong here: it would list the classes alphabetically while the legend and
+    // the bands run in canonical order (EQUITY, BOND, CASH, GOLD). Two orders for one
+    // short list is harder to read than either. An empty sort keeps each list in the
+    // order its own builder hands it over in — canonical for classes, by label for
+    // accounts, both matching what the chart shows.
     this._query.sort = [];
   }
 
-  /** Re-state the selection in the placeholder. Empty selection means every class. */
+  /** Re-state the selection in the placeholder. Empty selection means all of them. */
   syncLabel() {
     const chosen = [...this._selectedMap.values()].map(o => o.name);
-    this._input.placeholder = chosen.length === 0 ? 'all classes' : chosen.join(', ');
+    this._input.placeholder = chosen.length === 0 ? this._emptyLabel : chosen.join(', ');
     this._input.title = this._input.placeholder;
   }
 
   /** The base class redraws the list after every toggle; keep the label with it. */
   onRenderVisible() { this.syncLabel(); }
+
+  /**
+   * The list is sized to READ, not to match the control.
+   *
+   * The base component pins the dropdown to the input's own width, which is right where
+   * the filter is a full-width field. In a toolbar the input is ~150px and account names
+   * are not — "AU Superannuation (Jeanne)" wrapped onto three lines, which is how a list
+   * of nineteen accounts becomes unscannable. The list is free to be wider than the box
+   * that opens it; it is only ever open over the chart.
+   */
+  _position() {
+    super._position();
+    const rect  = this._input.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 240), Math.max(240, window.innerWidth - rect.left - 12));
+    this._dropdown.style.width = `${width}px`;
+  }
 
   /**
    * Shut the dropdown. It lives on `document.body`, so it does not travel with the panel:

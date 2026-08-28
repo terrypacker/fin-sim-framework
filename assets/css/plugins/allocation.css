@@ -25,25 +25,21 @@
 
 .alloc-spacer { flex: 1; }
 
-.alloc-account { max-width: 190px; min-width: 90px; }
-
 .alloc-view { min-width: 90px; }
 
-/* The WHAT axis: narrows every view to one or more classes, so a WHERE view ("by
- * account") can be asked about one class at a time. The shared MapFilterMultiSelect,
- * shrunk to toolbar height — its default 12px/6px input is taller than the row it sits
- * in. Its placeholder carries the current selection (see AssetClassSelect). */
+/* The two scope controls — WHERE (accounts) and WHAT (classes) — are the only items in
+ * the toolbar allowed to give up width. Everything else here is a fixed affordance (a
+ * two-button toggle, a checkbox, an icon) and squeezing one off the row costs the reader
+ * a control; these two only truncate a label their own tooltip still carries. */
+.alloc-account,
 .alloc-class {
   display: inline-flex;
-  /* The one control in the toolbar allowed to give up width. Everything else here is a
-   * fixed affordance — a two-button toggle, a checkbox, an icon — and squeezing any of
-   * them off the row costs the reader a control; this one only truncates its label,
-   * which its own tooltip and the chart itself still carry. */
   width: 150px;
-  min-width: 80px;
+  min-width: 70px;
   flex-shrink: 1;
 }
 
+.alloc-account .multi-select-input,
 .alloc-class .multi-select-input {
   padding: 2px 6px;
   font-size: 10px;
@@ -52,6 +48,7 @@
   text-overflow: ellipsis;
 }
 
+.alloc-account .multi-select-input::placeholder,
 .alloc-class .multi-select-input::placeholder {
   color: var(--text);
   opacity: 0.85;

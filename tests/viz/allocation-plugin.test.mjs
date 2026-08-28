@@ -72,38 +72,42 @@ function shareOf(plugin, key) {
 }
 
 /**
- * Drive the class scope through the shared MapFilterMultiSelect the way a reader does:
- * focus the input to open it, then click the rows. Its list is fetched asynchronously
- * over two rAFs, so opening is awaited rather than assumed.
+ * Drive one of the two scope controls through the shared MapFilterMultiSelect the way a
+ * reader does: focus the input to open it, then click the rows. Its list is fetched
+ * asynchronously over two rAFs, so opening is awaited rather than assumed.
  */
-async function openClassSelect(plugin) {
-  const host = plugin.el.querySelector('[data-alloc="class"]');
+async function openScope(plugin, which) {
+  const host = plugin.el.querySelector(`[data-alloc="${which}"]`);
   host.querySelector('.multi-select-input').dispatchEvent(new Event('focus'));
-  const ms = plugin._classSelect;
+  const ms = which === 'class' ? plugin._classSelect : plugin._accountSelect;
   await new Promise(r => setTimeout(r, 0));
   await ms._fetchPage(true);
   ms._renderVisible();
   return ms;
 }
 
-async function classOptions(plugin) {
-  const ms = await openClassSelect(plugin);
+async function scopeOptions(plugin, which) {
+  const ms = await openScope(plugin, which);
   return [...ms._list.querySelectorAll('.multi-select-item')].map(el => el.dataset.id);
 }
 
 /**
- * Toggle the scope until exactly `wanted` is selected. The list is re-queried after every
+ * Toggle a scope until exactly `wanted` is selected. The list is re-queried after every
  * click: each toggle redraws it, so a captured element is detached by the next iteration.
  */
-async function pickClasses(plugin, wanted) {
-  const ms = await openClassSelect(plugin);
+async function pickScope(plugin, which, wanted) {
+  const ms = await openScope(plugin, which);
+  const chosen = which === 'class' ? () => plugin._assetClasses : () => plugin._stateKeys;
   const want = new Set(wanted);
   const ids = [...ms._list.querySelectorAll('.multi-select-item')].map(el => el.dataset.id);
   for (const id of ids) {
-    if (plugin._assetClasses.has(id) === want.has(id)) continue;
+    if (chosen().has(id) === want.has(id)) continue;
     ms._list.querySelector(`.multi-select-item[data-id="${id}"]`).click();
   }
 }
+
+const classOptions = (plugin) => scopeOptions(plugin, 'class');
+const pickClasses  = (plugin, wanted) => pickScope(plugin, 'class', wanted);
 
 function mountPlugin(samples) {
   const plugin = new AllocationPlugin(RUNTIME);
@@ -431,9 +435,17 @@ test('switching the view changes the grouping, not the fact table', () => {
   assert.equal(secOpts.filter({ securityId: null }), false);
   assert.equal(secOpts.filter({ securityId: 'sec-emp' }), true);
 
+  // One account picked is a drill-down: the classes INSIDE it, so no `by` of its own.
   plugin._view = 'account';
-  plugin._stateKey = 'usStockAccount';
+  plugin._stateKeys = new Set(['usStockAccount']);
+  assert.equal(plugin._seriesOpts().by, undefined);
   assert.equal(plugin._seriesOpts().filter({ stateKey: 'usStockAccount' }), true);
+  assert.equal(plugin._seriesOpts().filter({ stateKey: 'auHouseProperty' }), false);
+
+  // Two is a comparison: back to one band per account, over just those two.
+  plugin._stateKeys = new Set(['usStockAccount', 'iraAccount']);
+  assert.deepEqual(plugin._seriesOpts().by, ['name']);
+  assert.equal(plugin._seriesOpts().filter({ stateKey: 'iraAccount' }), true);
   assert.equal(plugin._seriesOpts().filter({ stateKey: 'auHouseProperty' }), false);
   plugin.unmount();
 });
@@ -471,17 +483,64 @@ test('the CSV carries the security columns — the fact table is what gets re-ch
   plugin.unmount();
 });
 
-test('the account picker lists accounts only, and offers "all"', () => {
+test('the account scope lists accounts only, and empty means all of them', async () => {
   const { plugin } = mountPlugin(TWO_YEARS);
   plugin._view = 'account';
   plugin._syncControls();
   plugin._render();
 
-  const values = [...plugin.el.querySelectorAll('[data-alloc="account"] option')].map(o => o.value);
-  assert.equal(values[0], '__all__');
+  const values = await scopeOptions(plugin, 'account');
   assert.ok(values.includes('usStockAccount'));
-  // A property is not an account — it belongs to the total, not the per-account picker.
+  // A property is not an account — it belongs to the total, not the per-account scope.
   assert.ok(!values.includes('auHouseProperty'));
+  assert.equal(plugin._stateKeys.size, 0, 'nothing selected');
+  assert.equal(
+    plugin.el.querySelector('[data-alloc="account"] .multi-select-input').placeholder,
+    'all accounts');
+  plugin.unmount();
+});
+
+test('picking accounts is a drill-down: one shows inside it, several compare them', async () => {
+  const at = new Date(Date.UTC(2030, 11, 31));
+  const rows = [
+    row({ stateKey: 'brokerage', name: 'Brokerage', marketValue: 60 }),
+    row({ stateKey: 'brokerage', name: 'Brokerage', assetClass: 'BOND', allocation: 'BOND',
+          rateKey: 'FIXED_INCOME_US', marketValue: 40 }),
+    row({ stateKey: 'ira', name: 'IRA', marketValue: 100 }),
+    row({ stateKey: 'super', name: 'Super', marketValue: 300 }),
+  ].map(r => ({ ...r, date: at }));
+  const { plugin } = mountPlugin([sample(2029, rows), sample(2030, rows)]);
+  plugin._view = 'account';
+  plugin._syncControls();
+  plugin._render();
+
+  // Nothing picked: every account, side by side, biggest first (Brokerage and IRA tie on
+  // total and break alphabetically).
+  assert.deepEqual([...plugin.el.querySelectorAll('.alloc-mix-item')].map(e => e.dataset.allocKey),
+    ['Super', 'Brokerage', 'IRA']);
+
+  // One picked: what is INSIDE it — grouping one account by name would be a single band.
+  await pickScope(plugin, 'account', ['brokerage']);
+  assert.deepEqual([...plugin.el.querySelectorAll('.alloc-mix-item')].map(e => e.dataset.allocKey),
+    ['EQUITY', 'BOND']);
+  assert.equal(shareOf(plugin, 'EQUITY'), '60.0%');
+
+  // Two picked: a comparison again, over just those two — 100 and 300 of 400.
+  await pickScope(plugin, 'account', ['ira', 'super']);
+  assert.equal(shareOf(plugin, 'IRA'), '25.0%');
+  assert.equal(shareOf(plugin, 'Super'), '75.0%');
+  assert.equal(plugin.el.querySelector('[data-alloc-key="Brokerage"]'), null);
+  plugin.unmount();
+});
+
+test('the target view compares over the selected accounts, and names the set', () => {
+  // The comparison set is this overlay's one real hazard, so it is stated out loud:
+  // under LOCATED targeting the aggregate covers only some accounts, and a reader who
+  // assumes otherwise reads a house-heavy book as a rebalancer failure.
+  const { plugin } = mountPlugin(TWO_YEARS);
+  plugin._view = 'target';
+  plugin._stateKeys = new Set(['a', 'b']);
+  assert.equal(plugin._targetView().scope.size, 2);
   plugin.unmount();
 });
 
@@ -591,7 +650,7 @@ test('picking an account with no target explains that, rather than showing an em
     [targetRow()])];
   const { plugin } = mountPlugin(samples);
   plugin._view = 'target';
-  plugin._stateKey = 'iraAccount';
+  plugin._stateKeys = new Set(['iraAccount']);
   plugin._render();
 
   assert.match(plugin.el.querySelector('[data-alloc="placeholder"]').textContent,
