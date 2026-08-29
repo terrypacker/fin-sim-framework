@@ -660,3 +660,171 @@ The shock-and-regime framework adds three things on top of the existing engine:
 3. **A toolset and event/handler/action set** that introduces shocks deterministically and recovers along a small set of named curves.
 
 Every existing earnings/interest/inflation/appreciation handler changes by **one constructor line and one `call()` line**. The pre-existing fallback (`?? this.<rate>`) means scenarios without the regime toolset behave identically to today. Single runs remain deterministic; volatility lives in Monte Carlo over shock severity. The one external dependency is FX, owned by `design/23-fx-exchange.md` — `RegimeApplyReducer` composes into the effective-rate fields that design 23 introduces, with no shim required.
+
+---
+
+## 18. Library addendum — `DOTCOM_2000_LITE` and asymmetric level effects
+
+**Status**: Built (2026-08-29). Tests: `tests/unit/evt-shock-dotcom.test.mjs` (5).
+**Motivation**: `scenarios/offset-bond-pool/STUDY.md` — a bond/offset reserve study needs a
+crash whose defining property is **duration**, not depth.
+
+### 18.1 Why the existing library could not express it
+
+Every equity preset in §4.1's library is a **fast, deep, global** shock: −40 % / −30 % applied
+identically to `EQUITY_US` and `EQUITY_AU`, faded over 6–18 months on a V. A two-year bond
+bucket survives all of them, because the bucket only has to bridge to the recovery. The
+dot-com bust is the opposite shape and is therefore the binding test for a reserve:
+
+| | GFC preset | dot-com |
+|---|---|---|
+| peak-to-trough | fast (V, 18 mo) | **30 months of grind** |
+| US vs AU | same multiplier | S&P −49 %, **ASX −22 %** |
+| bonds | untouched | **rallied** (Fed 6.5 % → 1.0 %, 10y 6.5 % → 3.6 %) |
+| inflation | none | **mild disinflation** (CPI 3.4 % → 1.6 %) |
+| dividends | −40 % | roughly held (damage was in non-payers) |
+| back to prior peak | — | **~7.5 years** (Mar 2000 → Oct 2007) |
+
+### 18.2 The one framework change: `equityRevaluation` may be an ARRAY
+
+`levelEffects.equityRevaluation` accepted a single `{ rateKeys, multiplier }`, so a preset
+could only say *one crash, everywhere*. It now also accepts an **array** of such entries, each
+emitted as its own `REVALUE_ASSET_APPLY`; the reducer path is unchanged. This is what lets a
+preset state a **US-led** bust — −35 % on `EQUITY_US` / `EQUITY_INTL_EX_AU`, −32 % on
+`EQUITY_INTL_EX_US`, −18 % on `EQUITY_AU` — instead of averaging the asymmetry away.
+
+`applySeverity` (the MC/opt knob) re-scales an array **proportionally**, taking the deepest
+market as the headline: `severity: 0.50` deepens the US leg to −50 % and the AU leg to
+−0.18 × (0.50/0.35). Setting every entry to −severity would have quietly converted a US-led
+bust into a uniform global one at every point of an MC sweep — the asymmetry is the preset.
+
+The object form is untouched and byte-identical (full suite 5,739 pass / 0 fail).
+
+### 18.3 How the 30-month grind is composed
+
+The framework applies a level effect **once**, at `startDate`; a slow decline therefore has to
+be *level break + sustained forward-return drag*, with the drag's persistence carried by the
+recovery profile. `U / 36 months` holds the drag at full strength for 18 months, then fades it
+linearly — flat-then-fade being exactly the shape a bucket has to outlast.
+
+Measured (`scenarios/offset-bond-pool/probe-dotcom-path.mjs`, 7 % base return, no spending):
+
+| month | 3 | 12 | **24–33** | 48 | 72 |
+|---|---|---|---|---|---|
+| US equity vs t0 | −35 % | −43.5 % | **−47.7 %** (trough) | −35.9 % | −26.6 % |
+| GFC preset, same axis | −40 % | −36.5 % | −32.1 % | −22.2 % | −10.9 % |
+
+−47.7 % at month 30 against a real −49 % at month 30. The recovery is a *fade back to
+baseline growth*, never a rebound overshoot — which matches the actual 2003–2007 grind back
+and is all the framework can express (§7: curves scale a regime toward zero, they cannot
+add a positive adjustment).
+
+### 18.4 The rates side, and one convention worth stating
+
+- **Bonds gain.** `returnAdjustment` + `interestRateAdjustment` both move
+  `FIXED_INCOME_US −2.0pp / FIXED_INCOME_AU −1.2pp`: the level falls, `BondPriceAdjustReducer`
+  marks duration up. Layered on top is a **bull-steepener `yieldCurveTwist`**, stated
+  *relative to that level move* because the 5-year point is the curve's anchor (spread 0):
+  short −1.5pp further, long +0.8/+1.3pp back. Total effect: 1y ≈ −3.5pp, 30y ≈ −0.7pp.
+- **The policy cut lands on `PRIME_*` only, never on `SAVINGS_*`.** `PrimeRelinkReducer`
+  *adds* the Prime delta onto each linked account's `SAVINGS_*::<stateKey>` key (design 56 §5),
+  so moving both keys would cut a Prime-linked account twice. An account authored with a fixed
+  savings rate opted out of the policy link and correctly does not move. **This is a library
+  convention, not a dot-com detail** — any future preset that cuts or hikes policy rates should
+  do the same.
+- Because Prime also prices variable loans, the cut lowers the mortgage rate — so in this
+  preset an offset account's implicit yield *falls* at the same time the bond sleeve *gains*.
+  That divergence is the whole reason the preset belongs in the bond/offset study.
+
+### 18.5 Known gap, deliberately not closed here
+
+`MARKET_CRASH_2008_LITE`, `COVID_2020_LITE` and `MILD_CORRECTION` name only `EQUITY_US` /
+`EQUITY_AU` and so **miss the two international sleeves entirely** (`EQUITY_INTL_EX_US`,
+`EQUITY_INTL_EX_AU`, added by design 90 §7.2). A household holding an international sleeve
+takes no level hit from those presets. Fixing it moves goldens and is out of scope for this
+addendum; `DOTCOM_2000_LITE` names all four.
+
+---
+
+## 19. Multi-leg shocks — `shock.legs` (design 21 §18.6)
+
+**Status**: Built (2026-08-29). Test: `evt-shock-dotcom.test.mjs` DOTCOM-6.
+
+### 19.1 The defect
+
+§7 gives a regime ONE recovery curve, so every part of a shock decays at the same speed. Real
+episodes do not. In the dot-com bust the equity leg ground down for ~30 months while the
+monetary easing that answered it ran for years — the funds rate was at 1 % into 2004 and the
+10-year had still not recovered by 2006.
+
+Sharing a 36-month curve made the rate cut **round-trip by construction**:
+`FIXED_INCOME_US` ran 4.00 → 2.00 (2027) → 2.56 → 3.89 → 4.00 (2030). The bond sleeve was
+marked up at the shock and handed the whole gain back in year two — the framework deleting, as
+a modelling convention, exactly the protection the episode is famous for.
+
+### 19.2 The change
+
+A shock may declare `legs`, each with its own `regime` and `recovery`:
+
+```js
+DOTCOM_2000_LITE: {
+  levelEffects: { … },                 // still shock-level: a level effect is instantaneous
+  legs: [
+    { id: 'equity', regime: { returnAdjustment: {EQUITY_*}, dividendAdjustment, fx… },
+      recovery: { profile: 'U', durationMonths: 36 } },
+    { id: 'rates',  regime: { interestRateAdjustment: {PRIME_*, FIXED_INCOME_*}, yieldCurveTwist… },
+      recovery: { profile: 'U', durationMonths: 84 } },
+  ],
+  recovery: { profile: 'U', durationMonths: 36 },   // what a single-leg reader sees
+}
+```
+
+`EconomicShockHandler` emits one `ADD_REGIME_APPLY` per leg, id'd `regime-<shockId>-<legId>`.
+**Nothing downstream changed**: `state.activeRegimes` is already a stack whose per-rate-key
+adjustments sum (§4.3), so two legs at different recovery factors compose exactly as two
+unrelated shocks would. This is the framework's own composition mechanism rather than a second
+one beside it — the alternative, per-adjustment-family recovery curves inside one regime, would
+have duplicated the stack's arithmetic in `RegimeApplyReducer`.
+
+Two details that matter:
+
+- **Leg ids must be distinct.** `RegimeApplyReducer` keys the live stack by `id`; two legs
+  sharing one would collapse into a single regime carrying whichever adjustments landed last.
+- **Recovery ticks span the LONGEST leg** (`scheduleShock`). Ticks stopping at the equity leg's
+  horizon would leave the slow leg's factor recomputed only at period boundaries — it would
+  still decay, in yearly steps, which is the resolution the tick series exists to avoid.
+
+Absent `legs`, a shock is its own single leg and the behaviour is byte-identical (full suite
+5,753 pass / 0 fail).
+
+### 19.3 What it changed, and the direction is the interesting part
+
+Re-running the dot-com column: **almost nothing, and slightly AGAINST bonds** at the reference
+plan's 3-rung ladder (a 6-year bond reserve went from −19.8 % to −22.1 % vs equity-only).
+
+That is not a bug, it is the mechanism finally being modelled. A sustained easing does two
+opposing things to a bond holder:
+
+| | effect | scales with |
+|---|---|---|
+| price marked up | **one-off** gain | DURATION |
+| coupons reinvested lower, for years | **compounding** loss | how fast the ladder ROLLS |
+
+A 3-rung, 1-year ladder is the structure that captures the least of the first and the most of
+the second — it rolls its whole book at 2 % for seven years. Making the easing persist made
+short bonds correctly worse, which is what happened to real short-duration holders in 2003.
+
+Lengthening the ladder inverts it. Cost of a 6-year bond reserve in the dot-com column:
+
+| ladder | before the fix | **after** |
+|---|---|---|
+| 3 rungs × 1y (the plan) | −19.8 % | **−22.1 %** |
+| 5 rungs × 1y | −15.3 % | −13.8 % |
+| 10 rungs × 1y | −10.9 % | −7.9 % |
+| **10 rungs × 2y** | −9.0 % | **−2.4 %** |
+| 15 rungs × 2y | −11.4 % | −2.1 % |
+
+And it moves the boundary of §9.5's crossover a long way: with a 10 × 2y ladder the reserve
+beats equity-only at **9 % equity in an early crash and 8 % at any crash date**, against ~6.5 %
+for the 3-rung ladder. The fix did not make bonds better; it made **duration** matter, which is
+what the episode was always about.

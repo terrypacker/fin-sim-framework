@@ -219,11 +219,47 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           // its tax-favored account; PER_ACCOUNT drives every account to the uniform mix.
           locationMode:   p.allocationLocation ?? ALLOCATION_LOCATION.LOCATED,
           locationPolicy: p.allocationLocationPolicy ?? null,
+          // Design 97 §9 — YEARS_OF_SPEND pools. Absent ⇒ null ⇒ the mode falls back to the
+          // authored target, so selecting the mode without sizing a pool is inert rather
+          // than a zero-reserve plan.
+          poolYears: (Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears))
+            ? { CASH: p.poolCashYears ?? 0, BOND: p.poolBondYears ?? 0 }
+            : null,
+          // What `state.monthlyExpenses` is a price IN — the same param the expense handler
+          // reads. Passed rather than re-derived so the target and the debit cannot disagree
+          // about the currency of the spend line.
+          expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
         }),
         new RebalanceToTargetApplyReducer(),
       ];
     },
     paramSchema: () => [
+      {
+        key: 'poolCashYears', label: 'Cash Pool (years of spend)',
+        type: 'Number', group: 'Behavioral', mc: false, opt: true,
+        defaultValue: null,
+        description: 'YEARS_OF_SPEND only (design 97 §9). Size of the CASH pool as a number of '
+          + 'years of CURRENT annual spending, resolved every period against the live, inflated '
+          + 'spend line rather than authored as a percentage. A percentage cannot hold a number '
+          + 'of years: measured on the reference plan a fixed BOND percentage ran 3.5 years of '
+          + 'cover in 2027 to 13.6 by 2042 with no crash, and fell to 4.5 with one — it '
+          + 'over-provisions as the book grows and under-provisions after a crash, which is '
+          + 'inverted from what a reserve is for. Blank ⇒ the mode falls back to the authored mix.',
+        visibleWhen: { param: 'allocationSchedule', equals: 'YEARS_OF_SPEND' },
+      },
+      {
+        key: 'poolBondYears', label: 'Bond Pool (years of spend)',
+        type: 'Number', group: 'Behavioral', mc: false, opt: true,
+        defaultValue: null,
+        description: 'YEARS_OF_SPEND only (design 97 §9). Size of the BOND pool in years of current '
+          + 'annual spending. Filled after the cash pool and before gold, with EQUITY taking whatever '
+          + 'is left — so a book too small for both pools ends up all cash and no equity rather than a '
+          + 'shrunken copy of a mix it cannot afford. NOTE this sizes the MIX, not where it sits: with '
+          + 'the default LOCATED policy bonds go to the tax-favoured wrappers, which for a pre-60 '
+          + 'household are age-gated and are not cover for anyone. For accessible cover, also author '
+          + 'allocationLocationPolicy with the taxable roles first for BOND and CASH.',
+        visibleWhen: { param: 'allocationSchedule', equals: 'YEARS_OF_SPEND' },
+      },
       {
         key: 'allocationStrategy', label: 'Allocation Strategy',
         type: 'Enum', group: 'Allocation', mc: false, opt: false,
@@ -254,12 +290,17 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       {
         key: 'allocationSchedule', label: 'Allocation Schedule',
         type: 'Enum', group: 'Allocation', mc: false, opt: false,
-        options: [ALLOCATION_SCHEDULE.STATIC, ALLOCATION_SCHEDULE.GLIDEPATH, ALLOCATION_SCHEDULE.REGIME_CONDITIONED],
+        options: [ALLOCATION_SCHEDULE.STATIC, ALLOCATION_SCHEDULE.GLIDEPATH,
+                  ALLOCATION_SCHEDULE.REGIME_CONDITIONED, ALLOCATION_SCHEDULE.YEARS_OF_SPEND],
         defaultValue: ALLOCATION_SCHEDULE.STATIC,
         description: 'How the target mix changes over the plan. STATIC = one mix for the whole run ' +
           '(default). GLIDEPATH = interpolate between {age, weights} anchors by age (e.g. equity ' +
           '80%→40% from 50→75). REGIME_CONDITIONED = a distinct mix per active economic-regime tag ' +
-          '(the "shift to bonds/gold in a downturn" lever).',
+          '(the "shift to bonds/gold in a downturn" lever). YEARS_OF_SPEND = size the CASH and BOND ' +
+          'pools as N years of CURRENT spending and let EQUITY take the residual (design 97 §9) — ' +
+          'the only mode in which a plan authored as "2 years of cash, 4 years of bonds" still is ' +
+          'that in twenty years; every other mode states a percentage, and a percentage drifts to ' +
+          'roughly 4x its authored cover over a long horizon.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
       },
       {

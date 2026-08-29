@@ -98,8 +98,11 @@ import { instrumentOf }            from './holding-utils.js';
  *
  * @param {Object}  [opts={}]
  * @param {{ level?: number, asOfMs: number, country: string }|null} [opts.indexation=null]
- * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, sleeveScore?: Function, lotStrategy?: string }|null} [opts.selection=null]
+ * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, sleeveScore?: Function, lotStrategy?: string, sleeveInclude?: Set<string> }|null} [opts.selection=null]
  *   The design-65 selection policy; null ⇒ FIFO (identical to the historic behavior).
+ *   `sleeveInclude` (design 97) narrows the draw to those ALLOCATION classes: lots outside
+ *   it are never consumed, so `consumed` can come back short of `amount` even when the
+ *   account holds more. That shortfall is the pool boundary.
  * @param {{ asOfMs: number, countries: string[] }|null} [opts.terms=null]
  *   Disposal date + the countries to characterize for; absent ⇒ no term tally.
  * §988 bond principal (design 87 G9): `section988` is `{ principal, usdBasis, weightedDays }`
@@ -185,10 +188,22 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
   const s988AsOfMs  = termAsOfMs ?? indexation?.asOfMs ?? null;
   const newHoldings = [];
 
+  // Design 97 §3.2 — the POOL filter. `selection.sleeveInclude` narrows a draw to a set
+  // of ALLOCATION classes, so a caller can spend "the bond sleeve of this account" and
+  // stop there rather than spilling into equity. Distinct from `sleeveOrder`, which only
+  // says what to sell FIRST: an ordering can never express a pool boundary, because the
+  // draw always continues into the next sleeve once the first is exhausted. Excluded lots
+  // pass through untouched and `consumed` comes back short, which is exactly the signal
+  // the drawdown walk needs to move on to the next pool in the sequence.
+  const include = selection?.sleeveInclude ?? null;
+  const excluded = include
+    ? (h) => !include.has(h?.allocation)
+    : () => false;
+
   for (const h of sorted) {
     if (!h) continue;
     const mv = h.marketValue ?? 0;
-    if (remaining <= 0 || mv <= 0) {
+    if (remaining <= 0 || mv <= 0 || excluded(h)) {
       if (mv > 0) newHoldings.push(h);
       continue;
     }

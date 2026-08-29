@@ -652,6 +652,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // The security tier (design 94 step 6): ids to sell out of first, in order. Empty = no
   // security bias, and no state key at all — so every existing scenario is byte-identical.
   drawdownSecurityOrder: [],
+  drawdownSequence:      null,   // design 97 — the ordered POOL list; null = drawdownPriority alone
   // Lever C (design 65 §4-C) rebalance-coupling weight (w_mix). 0 = off (default);
   // >0 biases the sleeve sell order toward the design-61 over-weight class so a debit
   // doubles as a rebalance. Inert unless a TARGET_ALLOCATION strategy stamps targets.
@@ -921,6 +922,28 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       + 'expressible once a position names one. An order, not a filter — once the listed '
       + 'securities are exhausted the draw carries on through the rest, exactly as the sleeve '
       + 'order does with an absent class. Empty = no security bias (the default).',
+  },
+  {
+    // Design 97 — the POOL sequence. Feeds state.drawdownSequence; validated in the
+    // US_RETIREMENT toolset (`normalizeDrawdownSequence`), which throws on an unknown key,
+    // an overlapping sleeve set, or a sequence set beside PROPORTIONAL.
+    //
+    // 'Object' (a JSON textarea), not a bespoke editor: the list is an ORDER over pairs of
+    // (account, sleeve set), and a control that expresses that honestly is real UI work.
+    // A textarea over validated JSON says what it is; a half-editor would not.
+    key: 'drawdownSequence', label: 'Drawdown Sequence (pools)',
+    type: 'Object', group: 'Spending',
+    mc: false, opt: false, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownSequence,
+    description: 'ORDERED list of pools to draw spending from, e.g. '
+      + '[{"key":"auSavingsAccount"},{"key":"brokerageAccount","sleeves":["BOND"]},'
+      + '{"key":"auOffsetAccount"},{"key":"brokerageAccount","sleeves":["EQUITY","GOLD"]}]. '
+      + 'Each entry is an account, optionally narrowed to allocation sleeves; an account may '
+      + 'appear more than once with disjoint sleeves. This is the only way to say "after bonds, '
+      + 'before equity": account priority and within-account sleeve order are two separate '
+      + 'orderings and that policy lives between them. Accounts not listed follow the sequence '
+      + 'in their ordinary drawdownPriority order. Blank (the default) = drawdownPriority alone, '
+      + 'byte-identical to before. Sleeves apply only to a BROKERAGE account (the only draw that '
+      + 'runs through the holdings primitive).',
   },
   {
     // Lever C (design 65 §4-C) — rebalance coupling. Feeds state.drawdownRebalanceWeight;
@@ -1299,6 +1322,7 @@ export class IntlRetirementScenario extends BaseScenario {
       drawdownLotStrategy:      p.drawdownLotStrategy ?? undefined,
       drawdownRebalanceWeight:  p.drawdownRebalanceWeight ?? undefined,
       drawdownSecurityOrder:    p.drawdownSecurityOrder ?? undefined,
+      drawdownSequence:         p.drawdownSequence ?? undefined,
       // US_RETIREMENT — cross-border drawdown mode (design 58 Lever A). AUTO
       // default preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling.
       crossBorderDrawdown:      p.crossBorderDrawdown ?? 'AUTO',

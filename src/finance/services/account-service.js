@@ -20,7 +20,7 @@ import { rescaleHoldingsToBalance, instrumentOf } from '../holdings/holding-util
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
 import { disposalTermFields } from '../holdings/holding-period.js';
-import { resolveDrawdownSelection, withRebalanceCoupling } from '../holdings/holdings-selection.js';
+import { resolveDrawdownSelection, withRebalanceCoupling, withSleeveInclude } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 import { realizeCurrencyDisposition } from '../account-rules/currency-basis.js';
@@ -69,6 +69,58 @@ function _drawDerived(account, fromEarnings, preDrawEarnings) {
   const drawn = +(d * share).toFixed(2);
   account.derivedIncomeBasis = Math.max(0, +(d - drawn).toFixed(2));
   return drawn;
+}
+
+/**
+ * Design 97 §3.1 — order the drawdown sources by an authored pool sequence.
+ *
+ * `sources` is the priority-sorted `[key, account]` list; `sequence` is the authored
+ * `[{ key, sleeves? }]`. Returns `[key, account, sleeves]` triples: every sequence entry
+ * that names a live account, in list order, followed by every account the sequence did
+ * not name, in its ordinary priority order.
+ *
+ * An account may appear MORE THAN ONCE with disjoint sleeve sets — that is the point of
+ * the design, and why this cannot be expressed as a comparator over `sources`.
+ *
+ * `poolCandidates` is every drawable account, including ones the queue excludes — an
+ * offset carries `drawdownPriority: null` by design, and requiring a priority to be named
+ * would mean the only way into the sequence is the mechanism it replaces.
+ *
+ * Unknown keys are skipped here rather than thrown: the throw belongs at config time
+ * (design 97 §6), where the author can be told which key is wrong, and a service that
+ * threw mid-run would fail a simulation for an authoring mistake three years earlier.
+ */
+function _applyDrawdownSequence(sources, sequence, poolCandidates = null) {
+  const byKey  = poolCandidates ?? new Map(sources.map(entry => [entry[0], entry[1]]));
+  const out    = [];
+  // WHOLE means the sequence already claims everything in the account; a Set means it
+  // claims only those sleeves and the rest is a remainder (below).
+  const WHOLE  = true;
+  const claimed = new Map();
+  for (const entry of sequence) {
+    const key = typeof entry === 'string' ? entry : entry?.key;
+    const account = key ? byKey.get(key) : null;
+    if (!account) continue;                 // not a live drawdown source this period
+    const sleeves = (typeof entry === 'string') ? null : (entry?.sleeves ?? null);
+    out.push([key, account, sleeves]);
+    if (sleeves == null) claimed.set(key, WHOLE);
+    else if (claimed.get(key) !== WHOLE) claimed.set(key, (claimed.get(key) ?? new Set()));
+  }
+  // Everything the sequence did not claim follows it, in ordinary priority order. That
+  // includes the UNNAMED SLEEVES of a named account — naming an account's bond sleeve is
+  // a statement about WHEN to spend bonds, not a decision to strand its equity. Getting
+  // this wrong is the difference between "equity was sold later than you wanted" (visible
+  // in the journal) and a spurious OUT_OF_FUNDS with the money still sitting there.
+  //
+  // The remainder is passed unnarrowed rather than as "the classes not yet claimed": by
+  // the time the walk reaches it, every pool ahead of it in the same walk has been drawn
+  // to exhaustion, so an unnarrowed draw and a complement-narrowed one consume identical
+  // lots — and the unnarrowed form cannot strand an allocation class that is not in
+  // DRAWDOWN_SLEEVE_CLASSES.
+  for (const entry of sources) {
+    if (claimed.get(entry[0]) !== WHOLE) out.push([entry[0], entry[1], null]);
+  }
+  return out;
 }
 
 export class AccountService extends AssetService {
@@ -698,14 +750,20 @@ export class AccountService extends AssetService {
     // Discover all drawdown sources in priority order.
     const cashBucketActive = state.regimeActions?.drawdown_source_override?.active ?? false;
     const _CASH_FIRST_ROLES = new Set([ACCOUNT_ROLES.FIXED_INCOME, ACCOUNT_ROLES.AU_FIXED_INCOME, ACCOUNT_ROLES.AU_SAVINGS]);
+    // Is this state entry an account that could ever give up cash? Split out from the
+    // queue test below because a design-97 sequence may name an account the QUEUE
+    // excludes — see `poolCandidates`.
+    const isDrawableAccount = ([k, v]) =>
+      k !== targetKey &&
+      v !== null &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      'balance' in v &&
+      v.type !== ACCOUNT_TYPE.LOAN;      // liabilities are never a source of cash (design 54 §8)
+
     const sources = Object.entries(state)
       .filter(([k, v]) =>
-        k !== targetKey &&
-        v !== null &&
-        typeof v === 'object' &&
-        !Array.isArray(v) &&
-        'balance' in v &&
-        v.type !== ACCOUNT_TYPE.LOAN &&   // liabilities are never a source of cash (design 54 §8)
+        isDrawableAccount([k, v]) &&
         'drawdownPriority' in v &&
         v.drawdownPriority !== null &&
         (globalDrawdown || v.country === country || isCashRole(v))
@@ -719,6 +777,34 @@ export class AccountService extends AssetService {
         }
         return a.drawdownPriority - b.drawdownPriority;
       });
+
+    // ── Design 97 — the POOL sequence ─────────────────────────────────────────
+    // `state.drawdownSequence` is one ordered list whose entries are either an account
+    // or an (account, sleeves) pair, so a pool is a NAMED POSITION in a single order
+    // rather than an emergent consequence of two independent ones (account priority and
+    // within-account sleeve order). It is what makes "after bonds, before equity"
+    // expressible: with only the two orderings, an account-level priority is either
+    // before BOTH sleeves of the brokerage or after both, and there is nothing between.
+    //
+    // Entries become `[key, account, sleeves]`; accounts absent from the sequence follow
+    // it in their ordinary drawdownPriority order, so a partial sequence degrades to
+    // today's behaviour rather than stranding an account. Absent ⇒ `orderedSources` IS
+    // `sources` and every existing scenario stays byte-identical.
+    const sequence = Array.isArray(state.drawdownSequence) ? state.drawdownSequence : null;
+    // A sequence entry resolves against EVERY drawable account, not just the queued ones.
+    // Two exclusions the queue applies do not survive an explicit naming:
+    //   · `drawdownPriority: null` — the offset's authored state, and the entire reason
+    //     the design exists. Requiring a priority to be named would mean the only way
+    //     into the sequence is the mechanism the sequence replaces.
+    //   · the LOCAL_FIRST country gate — naming an account is the more specific statement
+    //     than the mode (design 97 §8 Q3). The draw still converts through fxOf/feeOf.
+    // Anything NOT named still has to earn its place in the queue the ordinary way.
+    const poolCandidates = sequence?.length
+      ? new Map(Object.entries(state).filter(isDrawableAccount))
+      : null;
+    const orderedSources = sequence?.length
+      ? _applyDrawdownSequence(sources, sequence, poolCandidates)
+      : sources;
 
     let remaining         = deficit;
     const drawnKeys       = [];
@@ -784,14 +870,18 @@ export class AccountService extends AssetService {
       return this.isWithdrawalEligible(account, { birthDate: acctBirthDate }, date);
     };
 
-    if (state.drawdownMode === 'PROPORTIONAL') {
+    // A sequence IS an ordering, so it takes the ordered walk. `assertDrawdownSequence`
+    // rejects a config that sets both (design 97 §6); this guard keeps a hand-built state
+    // that bypassed validation deterministic instead of letting one policy silently win.
+    const sequenced = orderedSources !== sources;
+    if (!sequenced && state.drawdownMode === 'PROPORTIONAL') {
       // Pro-rata: split the deficit across penalty-free available balances in
       // proportion to each source's availability. Loop because per-account caps
       // can leave a small residual after a pass; the guard + no-progress check
       // prevent an infinite loop.
       let guard = 0;
       while (remaining >= 1e-9 && guard++ < 100) {
-        const avail = sources
+        const avail = orderedSources
           .map(([key, account]) => {
             const eligible = eligibleOf(account);
             const fx = fxOf(account);
@@ -816,15 +906,18 @@ export class AccountService extends AssetService {
         }
         if (drawnThisPass < 1e-9) break;
       }
-    } else if ((state.withinTierDraw ?? 'SEQUENTIAL') === 'SEQUENTIAL') {
+    } else if (sequenced || (state.withinTierDraw ?? 'SEQUENTIAL') === 'SEQUENTIAL') {
       // Ordered, SEQUENTIAL within a tier (default): walk sources in
       // drawdownPriority order, draining each fully before the next. Byte-identical
       // to the pre-Lever-C behavior.
-      for (const [key, account] of sources) {
+      for (const [key, account, sleeves] of orderedSources) {
         if (remaining < 1e-9) break;
         if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
+        // Design 97 — narrow this leg to the pool's sleeves. `withSleeveInclude` returns
+        // `drawSelection` untouched when the entry names none, so an unsequenced run and
+        // an unnarrowed entry both stay on the byte-identical path.
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel, state
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), withSleeveInclude(drawSelection, sleeves), auCpiLevel, state
         );
       }
     } else {
@@ -845,12 +938,12 @@ export class AccountService extends AssetService {
         const cashTier = cashBucketActive ? (_CASH_FIRST_ROLES.has(v.role) ? 0 : 1) : 0;
         return `${cashTier}:${v.drawdownPriority}`;
       };
-      for (let i = 0; i < sources.length && remaining >= 1e-9;) {
+      for (let i = 0; i < orderedSources.length && remaining >= 1e-9;) {
         // Gather the maximal run of same-tier sources starting at i.
-        const key0 = tierKeyOf(sources[i]);
+        const key0 = tierKeyOf(orderedSources[i]);
         let j = i;
-        while (j < sources.length && tierKeyOf(sources[j]) === key0) j++;
-        const tier = sources.slice(i, j);
+        while (j < orderedSources.length && tierKeyOf(orderedSources[j]) === key0) j++;
+        const tier = orderedSources.slice(i, j);
         i = j;
 
         // Split this tier's draw across its members, redistributing the residual
@@ -891,7 +984,7 @@ export class AccountService extends AssetService {
     }
 
     // ── Phase 2: early withdrawal (with penalty) ──────────────────────────────
-    for (const [key, account] of sources) {
+    for (const [key, account] of orderedSources) {
       if (remaining < 1e-9) break;
       if (!account.allowsEarlyWithdrawal) continue;
       const acctBirthDate2 = (account.ownerId && account.ownerId !== personKey)
@@ -1028,7 +1121,7 @@ export class AccountService extends AssetService {
     // (B) is deficit-sized against post-Phase-2 balances, so it never double-draws
     // what the scheduled decant (A) or the penalty draw already took (§9 Q3).
     if (earlyBeforeBrokerage && remaining >= 1e-9) {
-      for (const [key, account] of sources) {
+      for (const [key, account] of orderedSources) {
         if (remaining < 1e-9) break;
         if (!isDeferredTaxable(account)) continue;
         remaining -= this._drawPenaltyFree(
@@ -1387,7 +1480,17 @@ export class AccountService extends AssetService {
     if (eligible) {
       const drawable = this._drawableBalance(account); // floored at minimumBalance (cash buffer)
       if (drawable <= 0) return 0;
-      const withdraw = Math.min(wantSrc, drawable); // source currency
+      // Design 97 — a pool draw is capped at the market value of ITS OWN sleeves, not the
+      // account balance. Without this cap the debit below (`-withdraw`, sized off balance)
+      // and `consumeHoldings` (which can only consume the included lots) disagree, and the
+      // account's holdings silently stop summing to its balance — the desync class this
+      // codebase has paid for before. The cap is the pool boundary made arithmetic.
+      const include  = selection?.sleeveInclude ?? null;
+      const poolCap  = include
+        ? (account.holdings ?? []).reduce((sum, h) => sum + (include.has(h?.allocation) ? (h?.marketValue ?? 0) : 0), 0)
+        : Infinity;
+      if (poolCap <= 0) return 0;
+      const withdraw = Math.min(wantSrc, drawable, poolCap); // source currency
       const credited = withdraw * fx - fee;                // target currency, net of fee
       if (credited <= 0) return 0;                         // draw too small to clear the fee
 

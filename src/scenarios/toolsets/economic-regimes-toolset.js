@@ -289,15 +289,23 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleG
  */
 function applySeverity(shock, severity) {
   const lv = shock.levelEffects?.equityRevaluation;
+  if (!lv) return { ...shock, severity };
+  const mag = Math.abs(severity);
+  // ARRAY form (per-market severities, e.g. DOTCOM_2000_LITE): severity re-scales the
+  // whole vector PROPORTIONALLY, taking the deepest market as the headline. Setting every
+  // entry to −severity would flatten the asymmetry that is the point of the array — an MC
+  // severity sweep would silently turn a US-led bust into a uniform global one.
+  const scaled = Array.isArray(lv)
+    ? (() => {
+        const peak = Math.max(...lv.map(e => Math.abs(e?.multiplier ?? 0)), 0);
+        const k    = peak > 0 ? mag / peak : 0;
+        return lv.map(e => ({ ...e, multiplier: -Math.abs((e?.multiplier ?? 0) * k) }));
+      })()
+    : { ...lv, multiplier: -mag };
   return {
     ...shock,
     severity,
-    ...(lv && {
-      levelEffects: {
-        ...shock.levelEffects,
-        equityRevaluation: { ...lv, multiplier: -Math.abs(severity) },
-      },
-    }),
+    levelEffects: { ...shock.levelEffects, equityRevaluation: scaled },
   };
 }
 
@@ -346,7 +354,14 @@ function resolveShockEntry(item) {
  */
 function scheduleShock(shock, events) {
   const startDate = shock.startDate instanceof Date ? shock.startDate : new Date(shock.startDate);
-  const durationMonths = shock.recovery?.durationMonths ?? 12;
+  // Ticks have to span the LONGEST leg (design 21 §18.6). A multi-leg shock whose ticks stopped
+  // at the equity leg's horizon would leave the slower leg's recovery factor un-recomputed
+  // between period boundaries — it would still decay, but in yearly steps, which is exactly
+  // the resolution the tick series exists to provide.
+  const legDurations = (Array.isArray(shock.legs) && shock.legs.length)
+    ? shock.legs.map(l => l.recovery?.durationMonths ?? 12)
+    : [shock.recovery?.durationMonths ?? 12];
+  const durationMonths = Math.max(...legDurations);
 
   events.push(new OneOffEvent({
     name:    shock.name ?? `Economic Shock (${shock.shockId})`,

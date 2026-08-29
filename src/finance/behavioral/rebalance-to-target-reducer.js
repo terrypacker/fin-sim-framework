@@ -13,6 +13,7 @@ import { REGIME_TAG }          from '../economic-regimes/regime-tag.js';
 import { ALLOCATION, totalizeMix, assertTotalMix } from '../holdings/allocation.js';
 import { ACCOUNT_ROLES }       from '../state/account-roles.js';
 import { planLocatedTargets } from './allocation-location.js';
+import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 const ACTION_KEY = 'rebalance_to_target';
 
@@ -97,6 +98,8 @@ export const ALLOCATION_SCHEDULE = Object.freeze({
   STATIC:             'STATIC',
   GLIDEPATH:          'GLIDEPATH',
   REGIME_CONDITIONED: 'REGIME_CONDITIONED',
+  // Design 97 §9 — the pool target as a number of YEARS OF SPENDING, not a percent.
+  YEARS_OF_SPEND:     'YEARS_OF_SPEND',
 });
 
 /**
@@ -282,6 +285,9 @@ export class RebalanceToTargetReducer extends Reducer {
    * @param {number}   [opts.driftBandSheltered]   - drift band for sheltered accounts (tight)
    * @param {string}   [opts.scheduleMode]         - ALLOCATION_SCHEDULE mode (design 61 Lever B)
    * @param {Array}    [opts.glidepath]            - GLIDEPATH anchors [{ age, weights }]
+   * @param {object}   [opts.poolYears]            - YEARS_OF_SPEND pools { CASH, BOND } in years
+   * @param {string}   [opts.expensesCurrency]     - what `state.monthlyExpenses` is a price in
+   * @param {string}   [opts.baseCurrency]         - valuation base for the years arithmetic
    * @param {object}   [opts.regimeTargets]        - REGIME_CONDITIONED map { <REGIME_TAG>|NORMAL: weights }
    * @param {string}   [opts.locationMode]         - ALLOCATION_LOCATION mode (design 61 Lever D)
    * @param {object}   [opts.locationPolicy]       - class → preferred-roles map (Lever D placement)
@@ -289,6 +295,7 @@ export class RebalanceToTargetReducer extends Reducer {
   constructor({ accounts = [], targetAllocation = { EQUITY: 0.60, BOND: 0.40 },
                 driftBandTaxable = 0.10, driftBandSheltered = 0.02,
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
+                poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
                 locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null } = {}) {
     super('Rebalance To Target', PRIORITY.PRE_PROCESS + 4);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
@@ -299,9 +306,85 @@ export class RebalanceToTargetReducer extends Reducer {
     this.driftBandSheltered   = driftBandSheltered;
     this.scheduleMode         = scheduleMode;
     this.glidepath            = glidepath;
+    // Design 97 §9 — YEARS_OF_SPEND config. `poolYears` is { CASH: n, BOND: n } in years of
+    // current annual spending; `expensesCurrency` says what currency `state.monthlyExpenses`
+    // is a price in (see `_annualSpendBase`).
+    this.poolYears            = poolYears;
+    this.expensesCurrency     = expensesCurrency;
+    this.baseCurrency         = baseCurrency;
     this.regimeTargets        = regimeTargets;
     this.locationMode         = locationMode;
     this.locationPolicy       = locationPolicy;
+  }
+
+  /**
+   * The household's annual spend, in the valuation base currency (design 97 §9).
+   *
+   * `state.monthlyExpenses` is the NATIVE figure in `expensesCurrency`, and under the
+   * default RESIDENCE mode that native figure is denominated in the BASE currency —
+   * `MonthlyExpensesHandler` re-bases it into the residence currency once, at spend time
+   * (`rebaseAtAnchor(nativeAmount, baseCurrency, residenceCurrency, state)`). So RESIDENCE
+   * needs no conversion here and an explicitly pinned USD/AUD does.
+   *
+   * It is read live rather than from the authored parameter because
+   * `InflationAdjustReducer` inflates it every year — that is the whole point of a target
+   * expressed in years: the reserve grows with the spend line instead of with the book.
+   */
+  _annualSpendBase(state) {
+    const monthly = Number(state?.monthlyExpenses);
+    if (!Number.isFinite(monthly) || monthly <= 0) return 0;
+    const ccy = (this.expensesCurrency === 'RESIDENCE') ? this.baseCurrency : this.expensesCurrency;
+    return toBaseCurrency(monthly * 12, ccy, this.baseCurrency, state);
+  }
+
+  /**
+   * Design 97 §9 — the pool target resolved as N YEARS OF SPENDING.
+   *
+   * A percentage target and a years target diverge in exactly the wrong direction: a fixed
+   * BOND percentage **over-provisions as the book grows and under-provisions after a
+   * crash**, which is inverted from what a reserve is for. Measured on the reference plan,
+   * accessible bond cover under a fixed percentage ran 3.5 years in 2027 to 13.6 by 2042 with
+   * no crash, and fell to 4.5 by 2042 with one — so a plan authored as "4 years of bonds" is
+   * not 4 years for most of its own horizon.
+   *
+   * Here CASH and BOND are dollar figures off the live spend line, converted to fractions of
+   * the current book; GOLD keeps its authored weight and EQUITY is the residual. Fill order
+   * is CASH → BOND → GOLD → EQUITY, so when the book cannot cover the pools the LOWER pool
+   * wins: a book too small for both buckets should be all cash and no equity, not a
+   * proportionally shrunken version of a mix it cannot afford.
+   *
+   * ⚠️ This decides the mix, NOT where it sits. The design-61 LOCATED planner then places
+   * bonds in whichever account is tax-favoured, which for a pre-60 household is the
+   * age-gated wrappers — where they are not cover for anyone. "N years of ACCESSIBLE cover"
+   * additionally needs a location policy that prefers the taxable accounts for CASH/BOND.
+   * That is authorable config (`allocationLocationPolicy`); it is deliberately not forced
+   * here, because location is a separate lever and silently overriding it would make one
+   * mode of one strategy secretly rewrite another.
+   *
+   * @param {object} state
+   * @param {number} bookBase - the rebalanced book, in base currency
+   * @returns {object|null} a total mix, or null to fall through to the authored target
+   */
+  _resolveYearsTarget(state, bookBase) {
+    const S = this._annualSpendBase(state);
+    if (!(S > 0) || !(bookBase > 0)) return null;   // no spend line / empty book ⇒ fall back
+
+    const years = this.poolYears ?? {};
+    let room = 1;
+    const take = (y) => {
+      const want = Number(y);
+      if (!Number.isFinite(want) || want <= 0) return 0;
+      const frac = Math.min(room, (want * S) / bookBase);
+      room -= frac;
+      return frac;
+    };
+
+    const CASH   = take(years[ALLOCATION.CASH]);
+    const BOND   = take(years[ALLOCATION.BOND]);
+    const GOLD   = Math.min(room, Math.max(0, Number(this.targetAllocation?.[ALLOCATION.GOLD]) || 0));
+    room -= GOLD;
+    const EQUITY = Math.max(0, room);
+    return totalizeMix({ CASH, BOND, GOLD, EQUITY });
   }
 
   /**
@@ -310,7 +393,10 @@ export class RebalanceToTargetReducer extends Reducer {
    * age; REGIME_CONDITIONED ⇒ pick the per-regime mix from state.activeRegimes.
    * Both time-varying modes fall back to the static target when unconfigured.
    */
-  resolveScheduledTarget(state, action) {
+  resolveScheduledTarget(state, action, bookBase = 0) {
+    if (this.scheduleMode === ALLOCATION_SCHEDULE.YEARS_OF_SPEND) {
+      return this._resolveYearsTarget(state, bookBase) ?? this.targetAllocation;
+    }
     if (this.scheduleMode === ALLOCATION_SCHEDULE.GLIDEPATH) {
       const cc         = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
       const primaryKey = Object.keys(state.people ?? {})[0];
@@ -337,18 +423,30 @@ export class RebalanceToTargetReducer extends Reducer {
       !alreadyFired.has(r.shockId),
     );
 
-    // The portfolio target in effect this period (Lever B time variation).
-    const scheduledTarget = this.resolveScheduledTarget(state, action);
-
     // Present accounts with their current totals (skip absent / empty).
+    //
+    // Built BEFORE the target is resolved because YEARS_OF_SPEND needs the book to turn a
+    // dollar figure ("4 years of spending") into the fraction the rest of this reducer
+    // works in. Every other mode ignores the extra argument.
     const present = [];
+    let bookBase = 0;
     for (const { stateKey, role } of this.accounts) {
       const account = state[stateKey];
       if (!account || !Array.isArray(account.holdings)) continue;
       const total = account.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
       if (total <= 0) continue;
       present.push({ stateKey, role, total });
+      // FX-normalised, unlike `total` itself. The years arithmetic compares a spend figure
+      // against a book, so the two have to be in one currency or "4 years" means nothing.
+      // Note the located planner downstream still sums raw per-account totals — a
+      // pre-existing currency-blindness (design 61 / `planLocatedTargets`) that this mode
+      // inherits rather than fixes, and which shifts the REALISED pool by the AUD share of
+      // the book. Measure the realised years; do not assume them.
+      bookBase += toBaseCurrency(total, currencyOf(account, this.baseCurrency), this.baseCurrency, state);
     }
+
+    // The portfolio target in effect this period (Lever B time variation).
+    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase);
 
     // Lever D — locate the portfolio target across accounts (design 61 §4-D). The
     // plan assigns each account a composition summing to its own total, so each

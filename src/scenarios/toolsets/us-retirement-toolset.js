@@ -31,6 +31,7 @@ import {
   IntlUsStockEarningsHandler,
 } from '../../finance/handlers/earnings-handlers.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../../finance/holdings/holdings-selection.js';
+import { normalizeDrawdownSequence } from '../../finance/holdings/drawdown-sequence.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
@@ -667,6 +668,18 @@ export const US_RETIREMENT = {
       // "absent is absent" rule the security registry itself follows, design 94 §4.1).
       ...((Array.isArray(p.drawdownSecurityOrder) && p.drawdownSecurityOrder.length)
         ? { drawdownSecurityOrder: [...p.drawdownSecurityOrder] } : {}),
+      // The POOL sequence (design 97): one ordered list whose entries are an account or an
+      // (account, sleeves) pair. Validated HERE, at the boundary where scenario params
+      // become runtime state, because every way of getting it wrong (an unknown key, an
+      // overlapping sleeve set, a sequence beside PROPORTIONAL) produces a run that
+      // completes and lies. Spread so an absent sequence adds NO state key at all — the
+      // same "absent is absent" rule drawdownSecurityOrder follows above.
+      ...((() => {
+        const seq = normalizeDrawdownSequence(p.drawdownSequence, context.accounts ?? [], {
+          drawdownMode: p.drawdownMode,
+        });
+        return seq ? { drawdownSequence: seq } : {};
+      })()),
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

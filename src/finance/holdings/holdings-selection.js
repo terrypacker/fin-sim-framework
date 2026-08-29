@@ -169,6 +169,25 @@ export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy
 }
 
 /**
+ * Design 97 §3.2 — narrow a selection to a POOL: the set of ALLOCATION classes an entry in
+ * `state.drawdownSequence` is allowed to consume. Returns a selection carrying
+ * `sleeveInclude`, which `consumeHoldings` uses to skip every other lot.
+ *
+ * A null/empty `sleeves` returns `selection` unchanged (the whole account is the pool), so
+ * an unnarrowed entry stays on the byte-identical path.
+ *
+ * Note the base selection may be null (plain FIFO). Narrowing still has to produce a
+ * non-null object, because the FILTER is not the same statement as the ORDER: a pool of
+ * one sleeve drawn FIFO within it is a perfectly ordinary policy.
+ */
+export function withSleeveInclude(selection, sleeves) {
+  if (!sleeves) return selection;
+  const list = Array.isArray(sleeves) ? sleeves : [...sleeves];
+  if (list.length === 0) return selection;
+  return { lotStrategy: 'FIFO', ...(selection ?? {}), sleeveInclude: new Set(list) };
+}
+
+/**
  * Lever C — rebalance coupling (design 65 §4-C). Bias the sleeve order toward the
  * **over-weight** class (per the account's design-61 `targetComposition`, stamped
  * into state each period by RebalanceToTargetReducer) so a spending debit *doubles

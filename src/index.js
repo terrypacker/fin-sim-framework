@@ -153,6 +153,7 @@ import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-spli
 import { CorporateActionHandler, CorporateActionApplyReducer } from './finance/holdings/corporate-action-classes.js';
 import { CORPORATE_ACTION_KIND, normalizeCorporateAction, applyCorporateAction, registryPatchFor } from './finance/holdings/corporate-action.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
+import { normalizeDrawdownSequence } from './finance/holdings/drawdown-sequence.js';
 import { HOLDING_ACTION_TYPES, VALUE_KIND, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
@@ -161,7 +162,7 @@ import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, pre
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
 import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
-import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
+import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withSleeveInclude, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { SECURITY_FIELDS, makeSecurity, buildSecurityRegistry, assertAllocationMatch, identityGroupOf, SYNTHETIC_SECURITY_PREFIX, syntheticSecurityId, syntheticEquitySecurities, scenarioSecurityRegistry } from './finance/holdings/security.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
@@ -1019,6 +1020,7 @@ export const Finance = {
   EQUITY_MARKETS_BY_COUNTRY,
   resolveEquityMarketMix,
   resolveRateKey,
+  normalizeDrawdownSequence,
   HOLDING_ACTION_TYPES,
   VALUE_KIND,
   HOLDING_ACTION_ENTRIES,
@@ -1099,6 +1101,7 @@ export const Finance = {
   sleeveWeightKey,
   sleeveWeightsFromParams,
   resolveDrawdownSelection,
+  withSleeveInclude,
   withRebalanceCoupling,
   buildHoldingsComparator,
   SECURITY_FIELDS,
