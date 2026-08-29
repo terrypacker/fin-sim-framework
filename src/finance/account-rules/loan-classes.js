@@ -82,6 +82,12 @@ export function synthesizeLoanForProperty(prop) {
     // rate and silently recognize no exchange gain or loss on the years of currency
     // movement that actually preceded it.
     bookingFxRate:         prop.mortgageBookingFxRate         ?? null,
+    // The cash pool the payment debits. Without this the field was unreachable for a
+    // property mortgage: `resolveLoanCashKey` reads `loan.paymentSourceKey`, but the
+    // loan entry is rebuilt from the property every load, so a scenario could author
+    // it only on a standalone LoanAccount. An offset mortgage — the one case where it
+    // decides whether the offset survives — could not express it at all.
+    paymentSourceKey:      prop.mortgagePaymentSourceKey      ?? null,
     linkedPropertyKey: prop.stateKey,
     country:           prop.country ?? 'US',
     currency:          prop.currency ?? null,

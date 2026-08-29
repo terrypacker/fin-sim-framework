@@ -75,6 +75,7 @@
   "minimumBalance": 0,
   "monthlyPayment": 2360.44,
   "name": "Home Loan",
+  "paymentSourceKey": null,
   "postIoPrincipal": null,
   "primeSpread": 0.02,
   "stateKey": "auHousePropertyLoan",

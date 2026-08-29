@@ -161,6 +161,15 @@ export class RealProperty extends Asset {
     // loss measured against it. null ⇒ stamped at the first payment, which treats
     // the debt as incurred then and so UNDERSTATES §988 for an existing loan.
     this.mortgageBookingFxRate         = opts.mortgageBookingFxRate         ?? null;
+    // Which cash pool the mortgage direct-debits. null keeps the resolver's default
+    // precedence (a same-currency linked OFFSET first, then the country cash pool),
+    // which is what an everyday AU offset mortgage does. Naming an account here is
+    // the only way to stop P&I draining a linked offset: an offset is a balance-sheet
+    // no-op whose real value is the drawable balance, and paying the loan from it
+    // retires that balance on a schedule nobody authored. Note the money still has to
+    // come from somewhere — pointing this at a cash account funds the loan out of the
+    // portfolio instead, which is a real cost, not a free preservation.
+    this.mortgagePaymentSourceKey      = opts.mortgagePaymentSourceKey      ?? null;
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;

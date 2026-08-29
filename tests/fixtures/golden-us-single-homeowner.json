@@ -1054,6 +1054,7 @@
   "minimumBalance": 0,
   "monthlyPayment": 2385.66,
   "name": "Home Loan",
+  "paymentSourceKey": null,
   "postIoPrincipal": null,
   "primeSpread": null,
   "stateKey": "usHousePropertyLoan",

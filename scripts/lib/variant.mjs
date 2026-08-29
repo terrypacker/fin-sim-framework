@@ -445,6 +445,12 @@ export function applyLoan(cfg, set, loanKey, o = {}) {
     // The post-IO payment anchor. A study that raises `balance` on an IO loan and
     // leaves this alone prices the new principal against the OLD payment schedule.
     postIoPrincipal: ['mortgagePostIoPrincipal', 'postIoPrincipal'],
+    // Which cash pool the payment debits. The lever that decides whether a linked
+    // OFFSET survives: left null the loan direct-debits the offset and drains it in
+    // lockstep with the balance, so the drawable pool dies on the amortisation
+    // schedule. Point it at a cash account and the pool is preserved — by funding the
+    // loan out of the portfolio instead, which is not free. Sweep it as an arm.
+    paymentSourceKey: ['mortgagePaymentSourceKey', 'paymentSourceKey'],
   };
 
   for (const [field, [propField, loanField]] of Object.entries(MAP)) {
