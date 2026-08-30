@@ -189,6 +189,12 @@ function normalizeGate(raw, flowId) {
   // The market-state pair. Prefer these to the drawdown pair in a DECUMULATION plan: a
   // trailing-high gate cannot tell a falling market from a pool being spent down, and latches
   // shut after the first crash (see `poolMarketReturn`).
+  //
+  // Both read the PRIOR period's return off the pool cube, never the current period's — see
+  // `PoolFlowReducer#_gateOpen`, where design 97 §20 measured the live reading to be exactly
+  // the return of the year the gate is deciding in. So `sourceReturnOver: 0` means "sell the
+  // source only after an up year", not "only in an up year"; the two differ by a year of
+  // foresight and the second is not implementable.
   if (raw.sourceReturnOver  != null) out.sourceReturnOver  = num(raw.sourceReturnOver,  `flow '${flowId}' gate.sourceReturnOver`,  { min: -1, max: 1 });
   if (raw.targetReturnUnder != null) out.targetReturnUnder = num(raw.targetReturnUnder, `flow '${flowId}' gate.targetReturnUnder`, { min: -1, max: 1 });
   if (raw.notInRegime != null) {

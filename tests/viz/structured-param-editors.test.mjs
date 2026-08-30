@@ -529,8 +529,12 @@ test('LiquidityGraph: a graph round-trips into three tables and back out unchang
         claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
     ],
     flows: [
+      // ANNUAL on exactly one edge, and the default left off the other two: that is what
+      // makes the assertion real. A cadence written onto every edge would round-trip whether
+      // or not the control read anything, and a graph where every collection carries its
+      // default value cannot detect a field being dropped (`copy-fidelity-masked-by-drift-merge`).
       { id: 'g2r', from: 'growth', to: 'reserve', priority: 10,
-        gate: { sourceDrawdownUnder: 0.05 } },
+        gate: { sourceDrawdownUnder: 0.05 }, cadence: 'ANNUAL' },
       { id: 'r2c', from: 'reserve', to: 'cash',
         trigger: { below: { mode: 'YEARS_OF_SPEND', value: 1 } } },
       { id: 'dip', from: 'reserve', to: 'growth',

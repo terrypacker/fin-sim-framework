@@ -338,6 +338,28 @@ describe('stochastic equity — e2e', () => {
   const END = Date.UTC(2040, 0, 1);
   const nw = (sim) => Math.round(sim.state.metrics?.netWorth ?? 0);
 
+  test('the mean-reversion speed reaches the handler, and only under MEAN_REVERTING', () => {
+    // Design 97 §20. `EquityReturnTickHandler` has always taken `reversionSpeed`, and the
+    // toolset never passed it — so MEAN_REVERTING ran at the constructor's 0.3 no matter
+    // what a scenario said, silently. The pair is the point: a test that only asserts the
+    // OU runs differ would also pass if the param were still dropped and something else
+    // moved, and a test that only asserts WHITE_NOISE is unmoved would pass against a param
+    // that reaches nothing at all.
+    const run = (params) => nw(loadSim({ params: { equityReturnStochastic: true, randomSeed: 7, ...params }, simEnd: END, stepTo: END }).sim);
+
+    const ou = { equityReturnModel: 'MEAN_REVERTING' };
+    assert.notEqual(run({ ...ou, equityReturnReversionSpeed: 0.3 }),
+                    run({ ...ou, equityReturnReversionSpeed: 0.9 }),
+                    'the OU pull-back speed must change the path');
+
+    // WHITE_NOISE has no k in its step, so the same sweep must be exactly inert — same RNG
+    // draws, same everything.
+    const wn = { equityReturnModel: 'WHITE_NOISE' };
+    assert.equal(run({ ...wn, equityReturnReversionSpeed: 0.3 }),
+                 run({ ...wn, equityReturnReversionSpeed: 0.9 }),
+                 'WHITE_NOISE must not read a reversion speed');
+  });
+
   // §6 test 1: inertness.
   test('stochastic OFF ⇒ two default runs are byte-identical', () => {
     const a = loadSim({ simEnd: END, stepTo: END }).sim;

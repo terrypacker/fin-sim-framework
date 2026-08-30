@@ -703,7 +703,21 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         options:      FX_PROCESS_MODEL_IDS,
         defaultValue: 'WHITE_NOISE',
-        description:  'Process for the market factor. WHITE_NOISE (default) draws an independent shock each year — equity returns are close to IID. MEAN_REVERTING (Ornstein-Uhlenbeck) imposes some year-to-year predictability for a valuation-based view; not the default because the evidence does not support it. Only used when Stochastic Equity Returns is on.',
+        description:  'Process for the market factor. WHITE_NOISE (default) draws an independent shock each year — equity returns are close to IID. MEAN_REVERTING (Ornstein-Uhlenbeck) makes consecutive annual returns POSITIVELY correlated, at e^(-k) for the reversion speed k: a down year is followed by another below-average year. It reverts the LEVEL toward the anchor over time, which for a return means the return persists — measured at +0.60 for k=0.5 (design 97 §20.9, probe-return-autocorrelation.mjs). Neither process makes a crash predict a rebound, so neither supports a "wait for the recovery before selling" rule. Only used when Stochastic Equity Returns is on.',
+      },
+      {
+        key:          'equityReturnReversionSpeed',
+        // Named for what it DOES, not for the enum it belongs to. The value it controls is the
+        // autocorrelation of returns, which is positive — calling it "mean-reversion speed"
+        // (as the FX and yield-curve knobs correctly are, because those run on levels) sends
+        // exactly the person testing a bucket strategy in the wrong direction. design 97 §20.9.
+        label:        'Equity Return Persistence (OU pull-back speed k)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.3,
+        description:  'Ornstein-Uhlenbeck pull-back speed k, per year. Consecutive annual returns end up correlated at e^(-k), which is POSITIVE — so a LOWER k is MORE persistent (k=0.15 measures +0.83; k=0.9 measures +0.41), and this is a momentum knob, not a rebound one. Unlike the FX and yield-curve reversion speeds, which run on levels and do mean-revert, this runs on a return. Ignored under WHITE_NOISE. No setting of it makes a down year predict an up year: see design 97 §20.9 for what that rules out. Only used when Stochastic Equity Returns is on with MEAN_REVERTING.',
       },
       {
         key:          'equityReturnBeta',
@@ -997,6 +1011,11 @@ export const ECONOMIC_REGIMES = {
         ? [new EquityReturnTickHandler({
             vol:            p.equityReturnVol   ?? 0.18,
             model:          p.equityReturnModel ?? 'WHITE_NOISE',
+            // Unwired until design 97 §20: the handler has always accepted it and nothing
+            // passed it, so MEAN_REVERTING ran at the constructor's 0.3 whatever the scenario
+            // said. A process switch whose one tuning knob cannot be reached is a switch with
+            // a hidden constant behind it.
+            reversionSpeed: p.equityReturnReversionSpeed ?? 0.3,
             beta:           p.equityReturnBeta      ?? {},
             idioVol:        p.equityReturnIdioVol   ?? {},
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
@@ -1009,6 +1028,10 @@ export const ECONOMIC_REGIMES = {
         ? [new PropertyReturnTickHandler({
             marketVol:         p.equityReturnVol   ?? 0.18,
             model:             p.equityReturnModel ?? 'WHITE_NOISE',
+            // Same knob, same reason: property already borrows the equity model and vol, and
+            // leaving the speed behind would make the two walks disagree about what
+            // MEAN_REVERTING means whenever `shareMarketFactor` is off.
+            reversionSpeed:    p.equityReturnReversionSpeed ?? 0.3,
             beta:              p.propertyReturnBeta    ?? {},
             idioVol:           p.propertyReturnIdioVol ?? {},
             idioScale:         p.propertyReturnIdioScale ?? 1,

@@ -966,6 +966,9 @@ export function applyStochastic(cfg, set, s = {}) {
     set('equityReturnStochastic', true);
     if (s.equityVol   != null) set('equityReturnVol', s.equityVol);
     if (s.equityModel != null) set('equityReturnModel', s.equityModel);
+    // Only meaningful under MEAN_REVERTING; see design 97 §20, where the wait-for-the-recovery
+    // rule turns out to be a bet on exactly this number.
+    if (s.equityReversion != null) set('equityReturnReversionSpeed', s.equityReversion);
     if (s.equityDrift != null) set('equityReturnDriftComp', s.equityDrift);
   }
   if (s.property) set('propertyReturnStochastic', true);

@@ -117,13 +117,14 @@ function offsetState({ offset = 300_000, loan = 200_000 } = {}) {
   };
 }
 
-test('POOL-4: OFFSET_CAP capacity is min(balance, linked loan) — cash above the debt is not capacity', () => {
+test('POOL-4: OFFSET_CAP — the ceiling is what is OWED; cash above the debt is not utilised', () => {
   const g    = normalizeLiquidityGraph(REFERENCE, ACCOUNTS);
   const pool = g.pools.find(p => p.id === 'offset');
   const state = offsetState({ offset: 300_000, loan: 200_000 });
   const m = poolMetrics(state, pool, poolContext(state));
   assert.equal(m.balance, 300_000);
-  assert.equal(m.capacity, 200_000);       // 100k of the balance suppresses no interest
+  assert.equal(m.capacity, 200_000);       // the debt is the ceiling
+  assert.equal(m.utilised, 200_000);       // 100k of the balance suppresses no interest
   assert.equal(m.headroom, 0);             // and so a refill has nowhere to put more
 });
 
@@ -132,8 +133,25 @@ test('POOL-4b: the cap follows the loan down — a pool that shrinks with nobody
   const pool = g.pools.find(p => p.id === 'offset');
   const before = offsetState({ offset: 100_000, loan: 200_000 });
   const after  = offsetState({ offset: 100_000, loan:  40_000 });   // amortised
-  assert.equal(poolMetrics(before, pool, poolContext(before)).capacity, 100_000);
+  assert.equal(poolMetrics(before, pool, poolContext(before)).capacity, 200_000);
   assert.equal(poolMetrics(after,  pool, poolContext(after)).capacity,   40_000);
+  // Utilisation is capped by whichever side is smaller, which is the figure §12.1 wanted.
+  assert.equal(poolMetrics(before, pool, poolContext(before)).utilised, 100_000);
+  assert.equal(poolMetrics(after,  pool, poolContext(after)).utilised,   40_000);
+});
+
+test('POOL-4d: a DRAINED offset can be refilled — the ceiling is not the balance', () => {
+  // Design 97 §20. `min(balance, loan)` is never above the balance, so it made `headroom`
+  // identically zero and NO flow could refill an offset pool — least of all a drained one,
+  // which is the only time a refill is wanted. The failure was silent: a pool sitting at its
+  // stated capacity looks correct, and the arm simply measured a policy that never ran.
+  const g    = normalizeLiquidityGraph(REFERENCE, ACCOUNTS);
+  const pool = g.pools.find(p => p.id === 'offset');
+  const state = offsetState({ offset: 0, loan: 400_000 });
+  const m = poolMetrics(state, pool, poolContext(state));
+  assert.equal(m.capacity, 400_000);
+  assert.equal(m.utilised, 0);
+  assert.equal(m.headroom, 400_000);
 });
 
 test('POOL-4c: the offset→loan join resolves through the property key, same currency only', () => {
@@ -184,8 +202,9 @@ function flowFixture({ cash = 50_000, equity = 1_000_000, flow = {}, high = null
   return { graph, state, reducer, savings, broker };
 }
 
-const fire = (reducer, state) => {
-  const out = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', date: '2030-01-01' }, new Date('2030-01-01'));
+const fire = (reducer, state, { date = new Date('2030-01-01') } = {}) => {
+  const iso = new Date(date).toISOString();
+  const out = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', date: iso }, new Date(iso));
   return { next: out.next.filter(a => a.type === 'POOL_FLOW_APPLY'), state: out };
 };
 
@@ -629,6 +648,10 @@ test('POOL-12: a trailing-high gate cannot tell a falling market from a pool bei
   // The defect this pair exists for. Same pool, same 20%-below-its-high reading, two
   // completely different worlds: one where the market fell, one where the household simply
   // spent the money. `sourceDrawdownUnder` cannot separate them; `sourceReturnOver` can.
+  //
+  // The reading the gate acts on is the PRIOR period's, stamped on the cube (design 97 §20),
+  // so the world is declared there — `effectiveGrowthRates` is set to the same value only so
+  // the cube this period stamps is consistent with it.
   const graph = normalizeLiquidityGraph({
     pools: [
       { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
@@ -645,8 +668,9 @@ test('POOL-12: a trailing-high gate cannot tell a falling market from a pool bei
       usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
       effectiveExchangeRates: { USD_AUD: 1 },
       effectiveGrowthRates: { EQUITY_US: equityRate },
-      // 20% below its high in BOTH worlds.
-      liquidityPools: { growth: { high: 1_000_000 }, cash: { high: 0 } },
+      // 20% below its high in BOTH worlds; the market gate reads `marketReturn`, which is
+      // what LAST period ended at.
+      liquidityPools: { growth: { high: 1_000_000, marketReturn: equityRate }, cash: { high: 0 } },
     };
   };
   const reducer = new PoolFlowReducer({ graph });
@@ -675,6 +699,89 @@ test('POOL-12b: a pool with no rated lots leaves a market gate inert, not shut',
     auSavingsAccount: new CheckingAccount(0, { country: 'US', currency: USD }),
     monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
     effectiveGrowthRates: { EQUITY_US: -0.4 },
+    liquidityPools: { a: { marketReturn: null }, b: { marketReturn: null } },
   };
   assert.equal(fire(new PoolFlowReducer({ graph }), state).next.length, 1);
+});
+
+test('POOL-12c: a market gate cannot see the period it is deciding in', () => {
+  // Design 97 §20. `EquityReturnReducer` stamps the year's draw at PRE_PROCESS + 1.5 and this
+  // reducer runs at PRE_PROCESS + 3, so a gate reading `effectiveGrowthRates` live knows the
+  // return of the year it is about to act in — measured at corr(reading_t, realized_t) =
+  // 1.0000 by `probe-pool-gate-foresight.mjs`. A household cannot do that, and the resulting
+  // arm looks brilliant for a reason that has nothing to do with liquidity.
+  //
+  // So: a catastrophic CURRENT rate with a healthy PRIOR one must leave the gate OPEN, and
+  // the reverse must shut it. The two assertions are the same statement from both sides —
+  // one alone would pass against a gate that reads neither.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate: { sourceReturnOver: 0 } }],
+  }, ACCOUNTS);
+
+  const make = (liveRate, priorRate) => {
+    const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+    const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+    broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+    return {
+      usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+      effectiveExchangeRates: { USD_AUD: 1 },
+      effectiveGrowthRates: { EQUITY_US: liveRate },
+      liquidityPools: { growth: { high: 800_000, marketReturn: priorRate }, cash: { high: 0 } },
+    };
+  };
+  const reducer = new PoolFlowReducer({ graph });
+
+  // The year ahead is a catastrophe and the year behind was fine ⇒ the gate must NOT know.
+  assert.equal(fire(reducer, make(-0.35, 0.08)).next.length, 1);
+  // The year behind was the catastrophe ⇒ this is the rule a household can actually follow.
+  assert.equal(fire(reducer, make(0.08, -0.35)).next.length, 0);
+
+  // And the period's own reading is stamped, with the year it was taken in, for a LATER
+  // year's gates to act on.
+  const stamped = fire(reducer, make(-0.35, 0.08)).state.liquidityPools.growth;
+  assert.equal(stamped.marketReturn, -0.35);
+  assert.equal(stamped.priorYearReturn, 0.08);
+  assert.ok(stamped.marketReturnYear > 2000);
+});
+
+test('POOL-12d: a second advance in the same year does not pick up the first one\'s stamp', () => {
+  // The half of §20.2 the first fix missed, and the reason the unit here is the YEAR and not
+  // the period. This reducer fires on both US_ and AU_PERIOD_ADVANCE, six months apart. With
+  // the gate reading "the previous period", the January advance correctly saw last December
+  // — and the July one saw THIS JANUARY, i.e. this year's return. Half a year of foresight,
+  // in exactly half the evaluations, and invisible to any probe that samples one reading per
+  // year (which is how it survived the first fix).
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate: { sourceReturnOver: 0 } }],
+  }, ACCOUNTS);
+
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const base = {
+    usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+    // Last year was fine; THIS year is the crash.
+    effectiveGrowthRates: { EQUITY_US: -0.35 },
+    liquidityPools: { growth: { high: 800_000, marketReturn: 0.08, marketReturnYear: 2029 }, cash: { high: 0 } },
+  };
+  const reducer = new PoolFlowReducer({ graph });
+
+  // January 2030: last completed year was +8% ⇒ open, and −35% is stamped as 2030's.
+  const jan = fire(reducer, base, { date: D(2030) });
+  assert.equal(jan.next.length, 1, 'the first advance of the year reads LAST year');
+  assert.equal(jan.state.liquidityPools.growth.marketReturnYear, 2030);
+
+  // July 2030, carrying January's cube forward: the same year, so the same conclusion.
+  const jul = fire(reducer, { ...base, liquidityPools: jan.state.liquidityPools }, { date: new Date(Date.UTC(2030, 6, 1)) });
+  assert.equal(jul.next.length, 1, 'the second advance of the year must not see this year\'s crash');
+  assert.equal(jul.state.liquidityPools.growth.priorYearReturn, 0.08);
 });
