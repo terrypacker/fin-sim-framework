@@ -52,6 +52,10 @@ describe('computePathShape', () => {
     assert.deepEqual(computePathShape([]), {
       netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null,
       houseCagr: null, houseMaxDrawdown: null,
+      // design 97 §18 — the liquidity trough. Null, not 0: "no series" and "the plan
+      // hit zero" are different facts and a report has to be able to tell them apart.
+      minRealNetLiquidity: null, minRealNetLiquidityYear: null,
+      troughRealNetLiquidity: null, troughRealNetLiquidityYear: null, troughRealDrawdown: null,
     });
     assert.deepEqual(computePathShape(ts(100)).netWorthCagr, null);
   });

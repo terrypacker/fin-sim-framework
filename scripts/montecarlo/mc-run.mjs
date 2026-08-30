@@ -38,6 +38,14 @@
  *   --no-recentre       skip the check that MC centers match the scenario. The runner
  *                       re-centres itself now, so this only silences the verification.
  *
+ *   --spending          also record the per-path CLASSIFIED SPENDING summary (design 89
+ *                       phase 6): realized vs intended spend, the shortfall on a path that
+ *                       ran short, lifetime tax, and the per-category split — which is where
+ *                       a study reads the COST of a strategy (loan INTEREST, say) rather
+ *                       than only its outcome. Off by default and genuinely expensive: the
+ *                       cube reads `stateDiff`, so it forces FULL telemetry, measured at
+ *                       ~7.5x (design 89 §20). Budget for it before enabling it on a grid.
+ *
  *   --mix               also record the per-year ASSET MIX on every path (design 82 §8),
  *                       so `mc-report.mjs` can report mix bands, threshold probabilities
  *                       and the mix conditioned on failure. Off by default: it builds an
@@ -79,38 +87,62 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
 import { buildVariant } from '../lib/variant.mjs';
-import { buildMcConfig, runArm } from '../lib/mc.mjs';
+import { buildMcConfig, runArm, mergeArmLevers } from '../lib/mc.mjs';
 import { pct } from '../lib/format.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { MC_SAMPLER_CADENCE } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const has  = (n) => argv.includes(n);
+// `-n` is the documented short form and predates this parser; normalize it rather than
+// break every runbook that uses it. Everything else goes through `parseFlags`, which REJECTS
+// an unknown flag — the reason for moving off the hand-rolled parser that used to live here.
+// It silently swallowed `--spending`, so a grid asked for the spending cube, paid nothing for
+// it, and wrote arm files with no spending data in them. A typo that selects the default is
+// precisely the failure this repo keeps re-finding.
+const argv = process.argv.slice(2).map(t => (t === '-n' ? '--n' : t));
 
-const specFile = flag('--arms');
-const outDir   = flag('--out');
+const opts = parseFlags(argv, {
+  usage: 'node scripts/montecarlo/mc-run.mjs --arms <spec.json> --out <dir> [--n 400] [options]',
+  arms:  { type: 'string', help: 'REQUIRED. { base, arms } spec file' },
+  out:   { type: 'string', help: 'REQUIRED. one <armKey>.json per arm is written here' },
+  n:     { type: 'number', default: 400, help: 'paths per arm' },
+  only:  { type: 'list',   default: [],  help: 'comma-separated subset of arms to run' },
+  scenario: { type: 'string', default: null, help: 'base scenario export; omitted => synthetic' },
+  index:    { type: 'number', default: 0,    help: 'scenario index in that file' },
+  paths:    { type: 'flag',   help: 'stochastic year-by-year equity returns (real sequence risk)' },
+  vol:      { type: 'number', default: 0.18, help: 'equity return vol when --paths' },
+  drift:    { type: 'string', default: 'GEOMETRIC', choices: ['GEOMETRIC', 'NONE'], help: 'return anchor reading' },
+  propertyPaths: { type: 'flag', help: 'stochastic property appreciation path' },
+  shock:    { type: 'flag', help: 'manufactured single crash (severity + date)' },
+  noRecentre: { type: 'flag', help: 'skip the check that MC centers match the scenario' },
+  mix:      { type: 'flag', help: 'also record the per-year asset mix' },
+  spending: { type: 'flag', help: 'also record classified spending — forces FULL telemetry, ~7.5x' },
+});
+
+const specFile = opts.arms;
+const outDir   = opts.out;
 if (!specFile || !outDir) {
-  console.error('usage: mc-run.mjs --arms <spec.json> --out <dir> [-n 400] [options]  (see file header)');
+  console.error('usage: mc-run.mjs --arms <spec.json> --out <dir> [--n 400] [options]  (see file header)');
   process.exit(2);
 }
 
-const n     = Number(flag('-n') ?? flag('--n') ?? 400);
-const vol   = Number(flag('--vol') ?? 0.18);
-const drift = flag('--drift') ?? 'GEOMETRIC';
-const paths = has('--paths');
-const propertyPaths = has('--property-paths');
-const shock = has('--shock');
-const recentre = !has('--no-recentre');
-const mix = has('--mix');
+const n     = opts.n;
+const vol   = opts.vol;
+const drift = opts.drift;
+const paths = opts.paths;
+const propertyPaths = opts.propertyPaths;
+const shock = opts.shock;
+const recentre = !opts.noRecentre;
+const mix = opts.mix;
+const spending = opts.spending;
 
 const spec = JSON.parse(readFileSync(specFile, 'utf8'));
-const only = flag('--only')?.split(',').map(s => s.trim());
+const only = opts.only.length ? opts.only : undefined;
 const armKeys = Object.keys(spec.arms ?? {}).filter(k => !only || only.includes(k));
 if (!armKeys.length) { console.error('no arms selected'); process.exit(2); }
 
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
 const base = loadBaseConfig(source);
 mkdirSync(outDir, { recursive: true });
 
@@ -122,7 +154,8 @@ const stochastic = (paths || propertyPaths)
   : null;
 
 const riskModel = {
-  paths, propertyPaths, shock, vol: paths ? vol : null, drift: paths ? drift : null, recentre, mix,
+  paths, propertyPaths, shock, vol: paths ? vol : null, drift: paths ? drift : null,
+  recentre, mix, spending,
 };
 
 console.log(`\n${describeSource(base)}`);
@@ -139,6 +172,7 @@ function describeRisk() {
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push('manufactured crash');
   if (mix) parts.push('recording asset mix');
+  if (spending) parts.push('recording classified spending (FULL telemetry, ~7.5x)');
   if (!recentre) parts.push('** CENTER CHECK SKIPPED **');
   return parts.join(' + ');
 }
@@ -155,21 +189,32 @@ function describeRisk() {
  * directory for `*.json` and treats each hit as an arm; a sibling `<arm>.mix.json`
  * would silently join the next report as a nameless extra arm.
  */
-function serializeArm(record, mixSeries) {
+function serializeArm(record, mixSeries, spendingRuns = null) {
   const SENTINEL = '@@MIX_SERIES@@';
-  const json = JSON.stringify({ ...record, mixSeries: mixSeries ? SENTINEL : null }, null, 1);
+  const json = JSON.stringify({
+    ...record,
+    mixSeries: mixSeries ? SENTINEL : null,
+    // The per-path spending summaries are ~20 numbers each — small enough to keep formatted,
+    // and they must be IN this file: `mc-report.mjs` globs the directory and treats every
+    // `*.json` hit as an arm, so a sibling `<arm>.spending.json` would silently join the next
+    // report as a nameless extra arm.
+    spendingRuns: spendingRuns ?? null,
+  }, null, 1);
   return mixSeries
     ? json.replace(`"${SENTINEL}"`, JSON.stringify(mixSeries))
     : json;
 }
 
 for (const [order, key] of armKeys.entries()) {
-  const levers = { ...(spec.base ?? {}), ...(spec.arms[key] ?? {}) };
+  // See `mergeArmLevers`: `params` merges one level deep so a spec's shared hygiene is not
+  // silently dropped by any arm that carries params of its own.
+  const levers = mergeArmLevers(spec.base, spec.arms[key]);
   if (stochastic) levers.stochastic = { ...(levers.stochastic ?? {}), ...stochastic };
 
   const cfg = buildVariant(base.cfg, levers);
   const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });
-  const { rows, mixSeries, pathShape, provenance, ms } = await runArm({ cfg, n, mcConfig, shocks, mix });
+  const { rows, mixSeries, spendingRuns, pathShape, provenance, ms } =
+    await runArm({ cfg, n, mcConfig, shocks, mix, spending });
 
   const fails = rows.filter(r => r.failed).length;
   // `order` preserves the spec's arm sequence. mc-report reads a DIRECTORY, so
@@ -185,7 +230,7 @@ for (const [order, key] of armKeys.entries()) {
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
     samplerCadence: MC_SAMPLER_CADENCE,
     riskModel, levers, recentred, provenance, pathShape, rows,
-  }, mixSeries));
+  }, mixSeries, spendingRuns));
 
   const extras = pathShape?.medianHouseCagr != null
     ? `  houseCAGR=${pct(pathShape.medianHouseCagr)} repair p50=$${Math.round((pathShape.medianRepairSpend ?? 0) / 1000)}k`

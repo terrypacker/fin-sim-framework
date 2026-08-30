@@ -338,6 +338,14 @@ export class RebalanceToTargetReducer extends Reducer {
    *
    * Classes no pool targets keep their scheduled weights, renormalised into whatever room
    * is left — so a graph that sizes only the reserve leaves the glidepath governing the rest.
+   *
+   * **A target of ZERO is a target.** "Hold no reserve" is an authorable policy and the
+   * natural bottom row of any pool-size sweep, and it must not fall through to the
+   * scheduled weight for that class. This guard used to read `targetBase > 0`, which
+   * conflated "the pool resolved no target" with "the pool's target is nothing" — so an arm
+   * authored as 0 years of bonds silently held the AUTHORED bond weight, and a size sweep's
+   * bottom row was not a member of its own series. Found by a pool search whose 0-year arm
+   * held MORE bonds than its 2-year arm (design 97 §18.3e).
    */
   _resolvePoolTarget(state, bookBase, fallbackMix) {
     const cube = state?.liquidityPools;
@@ -353,8 +361,10 @@ export class RebalanceToTargetReducer extends Reducer {
       const cls = (pool.claims.flatMap(c => c.sleeves ?? []))[0];
       if (!cls) continue;                                   // a whole-account pool holds no class
       const targetBase = cube[pool.id]?.target;
-      if (!(targetBase > 0)) continue;
-      const frac = Math.min(room, targetBase / bookBase);
+      // Finite, not positive: zero is an authored policy (see the note above), while null,
+      // undefined and NaN mean the pool resolved no target at all and must fall through.
+      if (!Number.isFinite(targetBase)) continue;
+      const frac = Math.max(0, Math.min(room, targetBase / bookBase));
       mix[cls] = (mix[cls] ?? 0) + frac;
       room -= frac;
       taken.add(cls);

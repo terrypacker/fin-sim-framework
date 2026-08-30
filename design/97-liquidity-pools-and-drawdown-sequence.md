@@ -11,7 +11,8 @@ Tests: `tests/unit/evt-drawdown-sequence.test.mjs` (7), `tests/unit/evt-years-of
 `design/54-loan-liability-accounts.md`, `design/65-allocation-aware-drawdown.md` (the
 `consumeHoldings({selection})` seam this extends), `design/61-holding-allocation-lever.md`
 (the rebalancer that refills), `design/29-behavioral-layer.md`.
-**Prior evidence**: `scenarios/offset-bucket-study/FINDINGS.md` §6 — the four gaps between
+**Prior evidence**: the offset-bucket study's own findings §6 (private, and referred to below
+as `FINDINGS.md`) — the four gaps between
 "three pools" as a strategy and what the engine can express. This design implements §6.2
 only, and states precisely why the other three can wait.
 
@@ -201,8 +202,8 @@ schedule cannot see it, because bucket 2 looks refilled (`FINDINGS.md` §6.4). I
 dominates, the arms converge and the study's table measures the rebalancer.
 
 **The answer: the arms separate on every crash column, by 100 % of the larger.**
-`scripts/probes/probe-refill-laundering.mjs`, run on `scenarios/offset-bucket-study`
-(9k/month, FX pinned, 2027–2042, deterministic):
+`scripts/probes/probe-refill-laundering.mjs`, run on the offset-bucket study plan
+(FX pinned, 16-year horizon, deterministic):
 
 | shock | down years | equity sold in them, A | …B | terminal netLiq A | …B | …control |
 |---|---|---|---|---|---|---|
@@ -313,7 +314,7 @@ into equity" is a behavioural strategy that does not exist yet.
 
 **Status**: Built (2026-08-29). `ALLOCATION_SCHEDULE.YEARS_OF_SPEND`.
 Tests: `tests/unit/evt-years-of-spend-target.test.mjs` (6).
-Probe: `scenarios/offset-bond-pool/probe-pool-years-held.mjs`.
+Probe: `probe-pool-years-held.mjs`, in the study's own (private) directory.
 
 `FINDINGS.md` §6.1, implemented. §3 above says how a pool is *spent*; this says how big it is.
 
@@ -1003,6 +1004,11 @@ vs market falling — and asserts only the return gate separates them.
 
 ### 16.2 What is deliberately still not built
 
+(§19 is the one requirement that turned out NOT to be a matter of building more of this design:
+"do not sell equity in a down market" is answered by the rebalancer, not the spend walk, and the
+veto that answers it makes the plan worse. Read §19 before proposing anything in this space.)
+
+
 - **A cost function on an edge** (§13, unchanged). Gates are conditions on market state.
 - **Persisting the trailing `high` across a mid-run save/load.** It is on `state.liquidityPools`
   and survives a replay from t0 byte-identically (POOL-11), which is what determinism needs;
@@ -1088,3 +1094,367 @@ Two blanks stay load-bearing and are tested (`tests/viz/structured-param-editors
   the normalizer rejects an empty claim outright, so writing `[]` would turn a valid config
   invalid;
 - **an emptied list = `null`**, the shape every consumer reads as "no override".
+---
+
+## 18. Scoring a pool SEARCH — the paired Monte Carlo counterfactual
+
+**Status**: steps 1–3 **Built** (2026-08-30). Step 4 (the price frontier) proposed.
+Tests: `tests/unit/mc-trough-metric.test.mjs` (8),
+`tests/unit/pool-graph-generator.test.mjs` (16), `tests/unit/pool-arms-search.test.mjs` (13),
+`evt-liquidity-pools.test.mjs` POOL-9a.
+
+**Scope of this section**: the ENGINE and TOOLING a pool search needs, and the decisions taken
+in building them. Measurements, arm lists, results and study conclusions live with the study
+that produced them, not here — a design doc that accumulates a study's tables stops being
+readable as a design.
+
+Everything above §17 builds pools and measures them on **one deterministic path**, which
+cannot price a sequencing device: order only matters when there is a bad price to avoid. The
+search restates the question so a number can answer it —
+
+> Generate identical return / inflation / rate / lifespan paths, run each path under each
+> funding strategy, and measure the DISTRIBUTION OF DIFFERENCES in terminal wealth, minimum
+> real wealth, spending shortfall and probability of failure. The value of a pool shape is the
+> improvement in the chosen risk metric, **net of its incremental interest cost and tax**.
+
+— and makes it a SEARCH rather than an A/B: an authored graph is one point in a space of
+shapes and sizes, and pool-less is another point in the same space.
+
+### 18.1 Five of the six pieces already existed
+
+| the question needs | already built |
+|---|---|
+| identical worlds across strategies | `mc-run.mjs` seeds path *i* from *i*; `pairedRescues` / `pairedMetric` consume it |
+| a whole strategy as an arm value | `levers.params.liquidityGraph` — §16.2's point exactly, and why the un-built `poolTarget::` params (§12.8) do not block a study |
+| real sequence risk | `--paths` (year-by-year draws, `--drift GEOMETRIC`) |
+| spending shortfall | `--spending` ⇒ `shortfallReal` / `wentShort` per path (design 89 phase 6) |
+| **the interest cost leg** | the same cube's `INTEREST` category. "Net of its incremental interest cost" is a subtraction, not a feature |
+| probability of failure | `failed` / `oof` per path |
+
+### 18.2 Step 1 — the metric a reserve is scored on
+
+MC carried two path metrics and neither can score a reserve. **`maxDrawdown`** is a fraction of
+net WORTH, which counts the house and any company equity — the two things a reserve cannot
+spend, so a plan can hold its net-worth drawdown flat while its spendable book collapses. And
+**terminal wealth** is measured after the recovery, so it rewards whoever carried the most
+equity through it (§7.1) — the bias a reserve study must not score itself on.
+
+So the sampler records the **price level** beside the level it deflates, and `computePathShape`
+reports the trough of REAL net liquidity in two forms:
+
+| | |
+|---|---|
+| `minRealNetLiquidity` | the whole-path floor |
+| `troughRealNetLiquidity` (+ `…Year`, `…Drawdown`) | the level at the bottom of the deepest fall from a running high — **the ranking metric** |
+
+**Why two.** The whole-path floor is the OPENING BALANCE on any plan still accumulating at t0,
+so every arm scores the same number and it is the one number no strategy can change. Found by
+running it: the first real run put the median trough in the first sampled year. A peak has to
+be set before there can be a fall, so the post-peak form cannot be reached by the opening
+balance. The floor is kept because on a plan that decumulates from day one the two coincide and
+the floor is the more direct statement; `mc-report --floor` asks for it.
+
+Four decisions worth keeping:
+
+1. **The deflator is sampled WITH the point**, never reconstructed afterwards. A per-run
+   average price level would deflate a trough at the wrong instant, and the whole difference
+   between *the reserve held* and *inflation ate it* lives in that number.
+2. **It is the RESIDENCE price index** — the one `InflationAdjustReducer` inflates
+   `state.monthlyExpenses` by — so real net liquidity is denominated in the basket it must
+   cover (`expense-price-level.js`; currency is not the axis).
+3. **A point with no price level deflates by 1**, making an un-indexed series a nominal trough
+   rather than a shorter window.
+4. **A path that only ever rose reports a zero drawdown, not null.** Null would drop it from
+   every percentile and quietly restrict the distribution to the paths that fell.
+
+Two limits: the series starts at the first year BOUNDARY, so t0 is not a candidate; and a path
+that ran out of funds troughs at ~0 by construction, so **failure is the primary key**.
+
+### 18.3 Step 2 — the graph is a function, not a document
+
+`scripts/lib/pool-graph.mjs`. `buildPoolGraph(cfg, spec)` turns `{ order, cashYears, bondYears,
+refill, refillTriggerYears, harvestGate, exclude }` into a whole `liquidityGraph`, reading the
+plan for account TYPES only; `SHAPES` names the points on the shape axis. `POOL_LESS` is
+`order: []` ⇒ `null`, so **the control is produced by the same call as every arm** and cannot
+drift from them.
+
+Hand-authored, a size grid is thirty near-identical JSON documents that drift in exactly the
+ways nobody notices — a sleeve dropped from one arm, a flow left in another — and the study
+then measures the drift.
+
+1. **The residual rule makes §3.1 structural.** Every drawdown sleeve of every account the
+   graph touches is claimed by exactly one pool; a class no named kind claims falls to the LAST
+   pool in the spend order. "No bond bucket" therefore means BOND joins growth, rather than
+   BOND keeping its own `drawdownPriority` and being spendable ahead of the pool that was
+   supposed to come first.
+2. **Four shapes throw rather than emit a plausible graph**: a *targeted* pool that would
+   absorb the residual (a "4 year" reserve quietly becoming the whole book); cash accounts with
+   no cash pool (unclaimed means drawn AFTER every pool, so the plan would sell investments
+   while holding cash); a pool the plan cannot fill; and a refill edge into an unsized pool.
+3. **Only the gate that survived §16.1b is emittable** — `sourceReturnOver`, never the
+   trailing-high pair.
+
+`OFFSET_CAP` is claimed only where the offset links to a property (§12.1). `exclude` drops a
+book from the pools, and the doc comment insists on what that does NOT mean: an excluded
+account keeps its `drawdownPriority` and is still spent, just after every pool.
+
+**The reverse "buy the dip" edge is deliberately not generated.** §16.1(2) makes it a different
+object — an in-portfolio edge needs exactly one allocation class at each end, so it cannot
+attach to a `growth` pool holding EQUITY and GOLD together.
+
+**The faithfulness check belongs with the study**: reproduce a hand-authored graph from a spec
+and diff the claim sets. It is the generator's real test, and it needs a real plan.
+
+### 18.4 Step 3 — the space, the hygiene and the landing gate
+
+`scripts/lib/pool-arms.mjs`. `poolArmGrid()` enumerates the space; `poolArmSpec()` writes the
+`{ base, arms }` file `mc-run.mjs` reads; `assertPoolArmLanded` and `assertArmsWealthMatched`
+are the preflight. Three decisions:
+
+1. **The hygiene lives in the spec's `base`, so the CONTROL gets it too.** Every setting there
+   is one the pooled arms need and the control does not — which is exactly why both must have
+   it. Applied to the pooled arms alone, the control runs a different allocation policy (§12.2)
+   and a different crash, and the grid reports the difference as the pool shape. §16.3 makes
+   this point about deleting flows; it is the same mistake one level up.
+2. **Refill on/off is the FLAG, the gate is the graph.** `poolFlowsEnabled: false` with the
+   flows still generated keeps pools, targets and spend order identical across the pair
+   (§16.3); CASCADE vs CASCADE_HARVEST is a real difference in the graph.
+3. **The control is emitted once.** A "pool-less, 4 bond years" arm is the control run again
+   under a name claiming it measured something.
+
+**Three shared-machinery defects fell out of building it**, all of the same family — a wrong
+thing that runs:
+
+- `mc-run.mjs` merged an arm's levers over the spec's base with a plain spread, so
+  `base.params` was dropped **entirely** for any arm carrying `params` of its own — silently
+  giving every arm a different baseline than the spec states. `params` now merges one level
+  deep (`mergeArmLevers`); every other lever is still replaced whole, because nothing else in a
+  lever set is a bag of independent keys.
+- **`--spending` was not one of `mc-run.mjs`'s flags.** Its hand-rolled parser accepted and
+  ignored it, so a run asked for the classified-spending cube, paid none of its 7.5x, and wrote
+  arm files with no spending data. The flag is wired (`serializeArm` was also dropping
+  `spendingRuns`) and the parser is now the shared `parseFlags`, which **rejects an unknown
+  flag and names the near miss**. The fix is to stop hand-rolling the parser that permits the
+  typo.
+- A cfg's accounts carry `type` (a serializer export) or only a `__type` class discriminator
+  (`buildDefaultConfig`). A helper reading only `type` classifies every account as
+  none-of-the-above against a synthetic base. `accountType()` reads either, and an untyped list
+  throws with the cfg-shape diagnosis rather than the plan-has-no-accounts one.
+
+### 18.5 A pool target of ZERO is a target
+
+`_resolvePoolTarget` guarded with `target > 0`, conflating *the pool resolved no target* with
+*the pool's target is nothing*. So the 0-year row of a size sweep fell through to the AUTHORED
+weight for that class, and the bottom row of a series was not a member of it. The guard is now
+`Number.isFinite`. Test POOL-9a pins both halves, since a pool with genuinely no target must
+still fall through — that is the case the old guard was written for.
+
+Found in the field, by a size sweep whose 0-year arm held more bonds than its 2-year arm.
+
+### 18.6 What any pool search must control for
+
+Three properties, each learned by getting one wrong. They are stated here because they are
+constraints on the tooling, not findings about a plan.
+
+1. **Arms must be ALLOCATION-matched, not merely wealth-matched.** §9.2 is explicit that a
+   years-of-spend target sizes the MIX with equity taking the residual, so the size axis is
+   also an equity-share axis — and a pool-less control holding its authored weights differs
+   from every pooled arm by both a drawdown order and a portfolio. `assertArmsWealthMatched`
+   was watching the wrong invariant. The remedy is a second control per pooled arm, pool-less
+   but pinned to that arm's realized mix: **pooled vs matched control is the pool effect at
+   constant allocation; matched control vs authored control is the allocation effect.**
+2. **The ranking percentile must clear the failure rate.** A failed path troughs at ~0, so on a
+   plan failing 15-20 % of the time a p10 trough reads zero for every arm including the
+   control. Read a percentile above the failure mass, or condition on survival with failure as
+   the primary key.
+3. **Shape is not a deterministic axis, and must be gated structurally.** Changing the ORDER
+   money is taken in only matters when there is a bad price to avoid, so on a smooth path two
+   orders that draw the same dollars agree to rounding. Gate shape on the compiled
+   `drawdownSequence` differing — a smooth path cannot hide that, and a dropped shape lever
+   cannot survive it — and let the paths price it. Size and the refill flag DO move a
+   deterministic answer, and a failure to do so there is a dead lever.
+
+4. **An account no pool claims is not deprioritised — on many plans it is never spent.** §3.1
+   rule 3 puts unclaimed accounts after every pool, and a plan whose pools do not run dry never
+   reaches them. Measured: pool-less arms drained the age-gated wrappers to zero over the
+   horizon while every pooled arm ended holding them untouched, because the graph named only
+   the accessible book. Authoring a partial graph therefore authors "never touch the wrappers"
+   **silently**, and the effect is large and high-variance — it swings the terminal composition
+   in both directions rather than costing a little. A study that means to compare draw ORDERS
+   must either claim every spendable account or state the exclusion as one of its axes; the
+   generator's `exclude` doc comment says this about an explicit exclusion, and it is equally
+   true of an implicit one. `POOL_KIND.WRAPPERS` + `withWrappersAt()` make the placement an
+   axis rather than an accident.
+
+   **The corollary is sharper than the rule**: a pool placed BELOW a pool that never runs dry
+   is not a low-priority pool, it is an unclaimed one. Measured on a placement sweep, putting
+   the wrappers after the growth bucket left 88-92 runs out of 100 byte-identical to not
+   claiming them at all — the two positions are the same arm except on the near-failure paths
+   where the book actually empties. So "spend it last" and "never spend it" are the same
+   statement unless something ahead of it is exhausted, and a study sweeping position has to
+   check which of its points are distinct rather than assume the order it wrote is the order
+   it gets.
+
+Corollary for any preflight: probe deep enough that the reserve is being SPENT. At a near date
+every arm differing only below the bonds is literally the same run, because the pools ahead
+still cover the whole spend line.
+
+### 18.7 Step 4 (proposed) — report the price, not the winner
+
+Per path, Δ against the matched control on terminal after-tax NW, `troughRealNetLiq`,
+`shortfallReal` and failure, against the cost leg (Δ lifetime `INTEREST` + Δ lifetime tax).
+Plotted, that is the frontier the question asks for: expected dollars given up per point of
+failure probability, and per dollar of tail trough.
+
+**The objective**: rank on the post-peak trough of real net liquidity at a percentile above the
+failure rate, subject to failure probability ≤ the matched control, with terminal wealth and
+interest cost reported alongside rather than inside the objective. The alternative — scoring on
+the existing `MAX_CRRA_UTILITY` — prices the whole path in one number and hides the very trade
+the study exists to show.
+
+### 18.8 Traps carried forward
+
+- **Wealth-match AND allocation-match every arm** (§18.6).
+- **No dated shock when `--paths` is on**: double-counted downside, and a *foreseen* dated
+  crash biases exactly this class of timing lever.
+- **Preflight that the graph reached state** (§7.2 — `cfg.params` rows key on `name`).
+- **Identical sampled-variable set across arms**, or common random numbers stop pairing.
+- **`mc-report` globs the output directory** — prune between runs, or a stale arm joins the
+  report.
+- **A glidepath and pool targets do not compose, and the collision is silent.** Authoring both
+  is legal: under §12.2 the graph governs the classes a pool targets, so the glidepath is left
+  governing only the residual and the anchors the author wrote are not the mix the plan holds.
+  §9.4 says this about `YEARS_OF_SPEND`; it is equally true of a graph target, and deserves the
+  same warning the location-policy mismatch was promised (§12.2). For a study whose axis IS the
+  pool, the glidepath comes out.
+- **Pool shape is fixed for life, and should not be** (raised 30 Aug, not built). A glidepath
+  says the MIX may change with age; nothing yet says the pool STRUCTURE may. The natural shape
+  is `target` taking an anchored schedule the way `allocationGlidepath` does, or a pool carrying
+  `notBefore`/`notAfter`. Non-trivial precisely because of §12.2: a time-varying pool target and
+  a glidepath would be two schedules over the same classes.
+
+---
+
+## 19. Not selling equity in a down market — PROPOSED, one candidate left
+
+**Status**: proposed 30 Aug 2026, nothing here built. Two of the three candidate mechanisms have
+now been **measured**, which is why this section is worth more than the feature sketch it
+started as: one of them exists and fails, and the reason it fails constrains the other two.
+
+### 19.1 The requirement
+
+*Do not sell equities while the market is down; use the offset facility instead.* It is the
+classic bucket-strategy rule — pause equity sales in a falling market and let the near-term
+buckets carry the household — and it is what the offset in the pool study is FOR.
+
+A pool's `spendOrder` is unconditional (§3), so the graph cannot say it today.
+
+### 19.2 Three things measurement established first
+
+Each of these changes what the feature should be, and each was arrived at by getting the
+previous one wrong.
+
+1. **Score GROSS disposals, never net.** A crash year that sells \$114k of equity and buys \$97k
+   back nets to −\$17k and reads as "barely touched" — the drift band buys the dip, so *every*
+   net measure says no equity is sold in a crash. The sale still happened, at the bottom, still
+   realizing. §7's original probe used the net measure and this design believed it twice.
+
+2. **The seller in a crash is the REBALANCER, not the spend walk.** Measured per account under a
+   dated crash: the taxable brokerage sold \$114k of equity while a super account bought \$77k —
+   the design-61 LOCATED planner moving a class between accounts. With a bond reserve in front
+   of it the spend walk never reaches the equity sleeve at all, so essentially none of that sale
+   is a spending draw.
+
+   **Therefore a spend-side feature cannot, by itself, stop the sale that was measured.** A pool
+   cannot intercept a draw that does not pass through it. That is the single most important
+   sentence in this section and it is why §19.3's obvious design is not the answer.
+
+3. **The rebalance veto — which DOES intercept it — works mechanically and fails economically.**
+   `gate.sourceReturnOver` on the `growth → buffer` edge is executor 1's veto (§12.4), and under
+   a dated crash it takes crash-year gross equity disposals from \$114k to **zero**. It is also
+   the worst arm measured: failure 39/100 against 33 (no flows) and 32 (an ungated cascade), 0
+   worlds rescued and 6 broken, median after-tax wealth down \$1.8m.
+
+   The mechanism is the finding. With equity pinned, the rebalancer cannot sell it to refill the
+   buffer — so the cascade drains **the buffer** into cash to fund spending instead. The
+   household leaves the crash holding less cover and more equity, and rebuilds the reserve by
+   selling into the recovery. **The veto does not hold cash instead of selling equity; it spends
+   the reserve instead** — and the reserve is what was providing the protection. It is a
+   leverage strategy wearing a protection strategy's name, and it prices like one: it wins the
+   rebound paths and breaks the ones without a rebound.
+
+   Corollary, and the design constraint for anything built here: **the gap has to be funded from
+   somewhere.** Refusing to sell equity in a crash is not a saving, it is a redirection, and the
+   whole value of any feature in this space is *which source absorbs it*.
+
+### 19.3 Candidate A — `pool.spendWhen` (the obvious design, and the one still open)
+
+The §12.3 gate object applied to the spend walk: shut ⇒ the pool is skipped and the walk moves
+on. The vocabulary exists, and `poolMarketReturn` already reads the live rate table.
+
+**Its value is not "the offset gets spent ahead of equity".** §19.2(2) shows the walk never
+reaches equity anyway. The hypothesis worth testing is one position further forward:
+
+> In a crash, promote the offset to the **front** of the walk, so the cash and bond pools are
+> not drawn down at all. The reserve stays at target, the rebalancer has nothing to refill, and
+> the facility — not the reserve — absorbs the year's spending.
+
+That is the §19.2(3) corollary answered with the one source that is neither the reserve nor the
+equity. It is the only untested candidate, and it is a genuinely different proposition from what
+was measured: the veto redirected the gap onto the reserve, and this redirects it off the balance
+sheet entirely, at the cost of loan interest.
+
+Two known reasons it may still disappoint, both worth stating up front rather than discovering:
+
+- **It may not touch the measured sale.** The \$114k was cross-account location churn, which is
+  driven by the location policy and not by spending. Keeping the pools full removes the *refill*
+  pressure; it does not obviously stop the planner relocating a class.
+- **The facility is small relative to the gap**, and it decays: an offset's capacity is
+  `min(balance, linked loan balance)` and the loan amortises (§12.1). A backstop sized in years
+  of spend is a different instrument from one sized by whatever debt happens to remain.
+
+### 19.4 Candidate B — freeze the LOCATION planner in a crash
+
+Not designed, not sketched anywhere else, and the only candidate that addresses the measured
+\$114k directly: suppress cross-account relocation of a class while that class is down, so a
+crash cannot trigger a taxable sale whose only purpose is to move equity into a wrapper.
+
+It belongs to design 61 rather than here, and it is named in this section only so the next
+session does not re-derive §19.2(2) from scratch. It is also the candidate with no obvious cost:
+deferring a location move is not deferring a spend.
+
+### 19.5 If `spendWhen` is built
+
+One architectural decision is forced. **§12's build-time compile has to move.**
+`compileToDrawdownSequence` runs once, in the toolset's state projection; a conditional order
+must be re-derived every period. The seam exists — `PoolFlowReducer` already runs at
+`PRE_PROCESS`, after the regime reducers stamp `state.activeRegimes` and before spending — so
+the move is small, but it weakens §12's "no second drawdown code path" guarantee and should be
+taken deliberately.
+
+On the condition: `notInRegime` looks like the natural fit and is **inert today** — the shock
+presets carry `tags: []` (§16.1b), so a regime-tag gate silently never fires. Either the shock
+library learns to stamp tags, or the condition uses `poolMarketReturn`, which is built, tunable,
+and does not require the crash to be declared.
+
+`spendWhen` is also worth having for its own sake, independent of this requirement: *hold this
+facility out of the ordinary walk so it is still there later* is a real policy, and the
+alternative (a `floor` on the pools above it, §15 Q1) says something weaker and less directly.
+Measured on the pool study, a claimed offset with no such gate is drained early in ordinary
+years and is gone before any crash arrives.
+
+### 19.6 How to test whichever is built
+
+The measurement design is settled and should not be re-derived:
+
+- **A dated shock, identical on every arm.** The usual objection (a foreseen crash biases a
+  timing lever) does not apply to a gate: it reads current market state and reacts, it cannot
+  foresee. Note the pool study's standing hygiene sets `shocks: []`, which is why the veto went
+  three rounds without ever meeting a crash — the arm set for this question must override it,
+  and must **assert that the override landed**.
+- **Score gross taxable equity disposals in the crash year, per account** (§19.2(1) and (2)),
+  alongside failure, the post-peak trough and after-tax wealth. A mechanism result and an
+  economic result are different questions and this feature separates them: the veto scored
+  perfectly on the first and worst on the second.
+- **Include an arm that changes nothing but the mechanism.** The veto's verdict was mis-attributed
+  for three rounds because the grid held no ungated cascade, so two things differed at once.
