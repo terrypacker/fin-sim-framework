@@ -122,6 +122,11 @@ export const COVERED = [
   'RebalanceToTargetReducer', 'RebalanceToTargetApplyReducer',
   // Design 66 §G8 Phase C — bond-ladder length lever (bond-ladder-reducer.test.mjs)
   'BondLadderReducer',
+  // Design 97 Part II — the liquidity-pool graph (evt-liquidity-pools.test.mjs).
+  // PoolFlowReducer: POOL-5/5b/5c/5d/6/6b/7 (triggers, gates, the veto, the cube).
+  // PoolFlowApplyReducer: POOL-8/8b (the transfer goes through the taxing seam, and the
+  // scoped draw does not reach past its source pool).
+  'PoolFlowReducer', 'PoolFlowApplyReducer',
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',

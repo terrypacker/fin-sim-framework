@@ -12,6 +12,7 @@ import { isParamVisible, visibleWhenControllers } from '../../finance/param-sche
 import { scenarioSecurityRegistry } from '../../finance/holdings/security.js';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
+  buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
 } from './structured-param-editors.js';
@@ -38,6 +39,10 @@ export class ScenarioTabView {
      * @type {function(): Array<{id:string,name:string}>|null}
      */
     this.personsProvider = null;
+    // Supplies the account list the design-97 pool editors select over. Null-safe: with no
+    // provider the selects render empty and a stored key still shows as "(not found)"
+    // rather than being silently re-saved as a different account.
+    this.accountsProvider = null;
     /** @type {function()|null} */
     this.onNew = null;
     /** @type {function()|null} */
@@ -346,6 +351,11 @@ export class ScenarioTabView {
    * changes — so dependent rows appear/disappear live. No-op for params nothing
    * depends on, keeping ordinary edits cheap.
    */
+  /** The live accounts, for the pool editors' account selects. `[]` when unavailable. */
+  _accounts() {
+    return (typeof this.accountsProvider === 'function' ? this.accountsProvider() : null) ?? [];
+  }
+
   _maybeRerenderForController(param, scenario) {
     if (this._controllerNames?.has(param.name)) this._renderParamsList(scenario);
   }
@@ -562,6 +572,10 @@ export class ScenarioTabView {
         valueInput = buildYieldCurveScheduleEditor(param);
       } else if (param.type === 'RateKeyMap') {
         valueInput = buildRateKeyMapEditor(param);
+      } else if (param.type === 'DrawdownSequence') {
+        valueInput = buildDrawdownSequenceEditor(param, this._accounts());
+      } else if (param.type === 'LiquidityGraph') {
+        valueInput = buildLiquidityGraphEditor(param, this._accounts());
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
           param, () => this._maybeRerenderForController(param, scenario),

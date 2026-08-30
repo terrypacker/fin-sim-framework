@@ -296,7 +296,8 @@ export class RebalanceToTargetReducer extends Reducer {
                 driftBandTaxable = 0.10, driftBandSheltered = 0.02,
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
                 poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
-                locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null } = {}) {
+                locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null,
+                poolGraph = null } = {}) {
     super('Rebalance To Target', PRIORITY.PRE_PROCESS + 4);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['REBALANCE_TO_TARGET_APPLY'];
@@ -315,6 +316,119 @@ export class RebalanceToTargetReducer extends Reducer {
     this.regimeTargets        = regimeTargets;
     this.locationMode         = locationMode;
     this.locationPolicy       = locationPolicy;
+    // Design 97 §12.2/§12.4 — EXECUTOR 1. When a liquidity graph is present it is the ONE
+    // authority for the size of the classes its pools claim, and its gates act as a veto on
+    // the sale that would otherwise refill them. Null ⇒ every line below is inert and this
+    // reducer is byte-identical to the pre-97 one.
+    this.poolGraph            = poolGraph;
+  }
+
+  /**
+   * Design 97 §12.2 — the portfolio mix implied by the graph's pool targets.
+   *
+   * `PoolFlowReducer` has already resolved each pool's target to a base-currency figure and
+   * stamped it on `state.liquidityPools`, so this reads ONE spend line and ONE book — a
+   * years-of-spend target and a years-of-cover report that read different lines would
+   * silently disagree about what "4 years" means.
+   *
+   * Fill order is the SPEND order, which is the same principle §9.2 established for
+   * CASH → BOND → GOLD → EQUITY: when the book cannot cover the pools, the pool that is
+   * spent FIRST wins. A book too small for both buckets should be all cash and no equity,
+   * not a proportionally shrunken copy of a mix it cannot afford.
+   *
+   * Classes no pool targets keep their scheduled weights, renormalised into whatever room
+   * is left — so a graph that sizes only the reserve leaves the glidepath governing the rest.
+   */
+  _resolvePoolTarget(state, bookBase, fallbackMix) {
+    const cube = state?.liquidityPools;
+    if (!cube || !(bookBase > 0)) return null;
+    const pools = [...(this.poolGraph.pools ?? [])]
+      .filter(p => p.target)
+      .sort((a, b) => (a.spendOrder ?? Number.MAX_SAFE_INTEGER) - (b.spendOrder ?? Number.MAX_SAFE_INTEGER));
+
+    const mix    = {};
+    const taken  = new Set();
+    let room     = 1;
+    for (const pool of pools) {
+      const cls = (pool.claims.flatMap(c => c.sleeves ?? []))[0];
+      if (!cls) continue;                                   // a whole-account pool holds no class
+      const targetBase = cube[pool.id]?.target;
+      if (!(targetBase > 0)) continue;
+      const frac = Math.min(room, targetBase / bookBase);
+      mix[cls] = (mix[cls] ?? 0) + frac;
+      room -= frac;
+      taken.add(cls);
+    }
+    if (!taken.size && !Object.keys(state.poolRefillPlan?.adjust ?? {}).length) return null;
+
+    // Design 97 §12.4 — an in-portfolio `fractionOfSource` edge that fired this period,
+    // stamped by PoolFlowReducer as a per-pool shift. This is the ONE thing a static target
+    // cannot say: "on a 20 % drawdown, rotate a quarter of the reserve into equity". The
+    // shift is temporary by construction — when the gate closes the edge stops firing and
+    // the mix returns to its targets, which is what a dip-buy is.
+    const adjust = state.poolRefillPlan?.adjust;
+    if (adjust) {
+      for (const pool of this.poolGraph.pools ?? []) {
+        const delta = adjust[pool.id];
+        if (!delta) continue;
+        const cls = (pool.claims.flatMap(c => c.sleeves ?? []))[0];
+        if (!cls) continue;
+        const base = mix[cls] ?? (fallbackMix?.[cls] ?? 0);
+        mix[cls] = Math.max(0, base + delta / bookBase);
+        taken.add(cls);
+      }
+      // Recompute the room from what the mix now actually claims rather than tracking it
+      // incrementally: an adjustment can move a class the target loop never touched, and a
+      // running subtraction then double-counts the fallback weight it inherited.
+      room = Math.max(0, 1 - Object.values(mix).reduce((a, b) => a + b, 0));
+    }
+
+    // The residual, split by the scheduled mix's relative weights among the classes the
+    // graph did not claim. EQUITY absorbs it when the fallback names none of them, which is
+    // the same residual rule §9.2 uses.
+    const rest = Object.entries(fallbackMix ?? {}).filter(([c, w]) => !taken.has(c) && w > 0);
+    const restTotal = rest.reduce((s, [, w]) => s + w, 0);
+    if (room > 1e-9) {
+      if (restTotal > 0) for (const [c, w] of rest) mix[c] = (mix[c] ?? 0) + room * (w / restTotal);
+      else mix[ALLOCATION.EQUITY] = (mix[ALLOCATION.EQUITY] ?? 0) + room;
+    }
+    return totalizeMix(mix);
+  }
+
+  /**
+   * Design 97 §12.4 — the GATE AS A VETO.
+   *
+   * A closed gate stops the explicit refill edge. If the drift band then sells the same
+   * sleeve for the same reason, the gate has changed nothing — which is `FINDINGS.md` §6.4's
+   * laundering, arriving from the other direction. So a vetoed pool's classes have their
+   * target RAISED to what the portfolio currently holds: the rebalancer cannot sell them,
+   * and the other classes renormalise into what is left.
+   *
+   * Raising the target rather than deleting the sell leg is deliberate — legs must sum to
+   * zero for gross value to be conserved, and surgery on one leg breaks that invariant.
+   */
+  _applyVeto(mix, state, actualFractions) {
+    const vetoed = state?.poolRefillPlan?.vetoed;
+    if (!Array.isArray(vetoed) || vetoed.length === 0 || !mix) return mix;
+    const byId = new Map((this.poolGraph?.pools ?? []).map(p => [p.id, p]));
+    const held = new Map();
+    for (const id of vetoed) {
+      for (const cls of (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? [])) {
+        held.set(cls, Math.max(held.get(cls) ?? 0, actualFractions?.[cls] ?? 0));
+      }
+    }
+    if (!held.size) return mix;
+    const out = { ...mix };
+    let floorSum = 0;
+    for (const [cls, frac] of held) {
+      out[cls] = Math.max(out[cls] ?? 0, frac);
+      floorSum += out[cls];
+    }
+    if (floorSum >= 1) return totalizeMix(Object.fromEntries([...held].map(([c]) => [c, out[c]])));
+    const others = Object.entries(out).filter(([c]) => !held.has(c) && out[c] > 0);
+    const otherSum = others.reduce((s, [, w]) => s + w, 0);
+    if (otherSum > 0) for (const [c, w] of others) out[c] = (1 - floorSum) * (w / otherSum);
+    return totalizeMix(out);
   }
 
   /**
@@ -393,7 +507,20 @@ export class RebalanceToTargetReducer extends Reducer {
    * age; REGIME_CONDITIONED ⇒ pick the per-regime mix from state.activeRegimes.
    * Both time-varying modes fall back to the static target when unconfigured.
    */
-  resolveScheduledTarget(state, action, bookBase = 0) {
+  resolveScheduledTarget(state, action, bookBase = 0, actualFractions = null) {
+    // Design 97 §12.2 — ONE authority. A graph target governs the classes its pools claim
+    // and `allocationSchedule` governs the rest; authoring both a graph target and
+    // poolCashYears/poolBondYears throws at config time, because one would silently win.
+    if (this.poolGraph) {
+      const base = this._scheduledMix(state, action, bookBase);
+      const mix  = this._resolvePoolTarget(state, bookBase, base) ?? base;
+      return this._applyVeto(mix, state, actualFractions);
+    }
+    return this._scheduledMix(state, action, bookBase);
+  }
+
+  /** The pre-97 schedule resolution — Lever B alone. */
+  _scheduledMix(state, action, bookBase = 0) {
     if (this.scheduleMode === ALLOCATION_SCHEDULE.YEARS_OF_SPEND) {
       return this._resolveYearsTarget(state, bookBase) ?? this.targetAllocation;
     }
@@ -445,8 +572,27 @@ export class RebalanceToTargetReducer extends Reducer {
       bookBase += toBaseCurrency(total, currencyOf(account, this.baseCurrency), this.baseCurrency, state);
     }
 
+    // Portfolio-level actual fractions — needed only by the design-97 veto, which has to
+    // know what the vetoed classes currently hold in order to pin their target there.
+    let actualFractions = null;
+    if (this.poolGraph && bookBase > 0) {
+      const byClass = {};
+      let grossTotal = 0;
+      for (const { stateKey } of present) {
+        const account = state[stateKey];
+        for (const h of account.holdings ?? []) {
+          const v = toBaseCurrency(h?.marketValue ?? 0, currencyOf(account, this.baseCurrency), this.baseCurrency, state);
+          byClass[h.allocation] = (byClass[h.allocation] ?? 0) + v;
+          grossTotal += v;
+        }
+      }
+      actualFractions = grossTotal > 0
+        ? Object.fromEntries(Object.entries(byClass).map(([c, v]) => [c, v / grossTotal]))
+        : {};
+    }
+
     // The portfolio target in effect this period (Lever B time variation).
-    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase);
+    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase, actualFractions);
 
     // Lever D — locate the portfolio target across accounts (design 61 §4-D). The
     // plan assigns each account a composition summing to its own total, so each

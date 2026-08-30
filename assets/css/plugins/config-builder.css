@@ -861,9 +861,36 @@
 
 .rate-key-unknown { color: var(--warn, #d29922); }
 
-/* Move-up button in an order-is-the-datum row list (location policy). */
+/* Move-up button in an order-is-the-datum row list (location policy, drawdown sequence). */
 .row-list-move { font-size: 10px; }
 .row-list-move:disabled { opacity: 0.35; cursor: default; }
+
+/* ── row-list checkset cell (design 97 pool sleeves) ──
+   An array-valued column over a closed list. Laid out in a row, not the stacked column
+   `.enum-multi-editor` uses, because it lives INSIDE a grid cell beside other fields. */
+.row-list-checkset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.row-list-checkset .enum-multi-option { font-size: 10px; gap: 3px; padding: 0; }
+
+/* Shown in place of the boxes when THIS row has no options — a non-brokerage claim cannot
+   be narrowed to sleeves, so saying "whole account" beats an empty cell that reads as a
+   control that failed to draw. */
+.row-list-note {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* ── LiquidityGraph editor (design 97 Part II) ──
+   Three stacked row lists (pools, claims, flows) under their own headings. */
+.liquidity-graph-editor { display: flex; flex-direction: column; gap: 4px; }
+.liquidity-graph-editor > .age-band-col-label { margin-top: 4px; }
 
 /* ── ExpenseEventList param editor (design 86 G8; was HealthcareEventList) ── */
 .healthcare-event-list-editor {

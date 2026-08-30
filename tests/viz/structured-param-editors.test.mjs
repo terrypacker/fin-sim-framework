@@ -30,7 +30,7 @@ import assert from 'node:assert/strict';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor,
-  buildRateKeyMapEditor,
+  buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
 } from '../../src/visualization/scenario/structured-param-editors.js';
 import { ALLOCATION_VALUES } from '../../src/finance/holdings/allocation.js';
 import { assertTotalMix }    from '../../src/finance/holdings/allocation.js';
@@ -440,4 +440,220 @@ test('Normalize: a glidepath anchor normalises independently of its siblings', (
   assert.doesNotThrow(() => assertTotalMix(param.value[0].weights, 'anchor 0'));
   assert.deepStrictEqual(param.value[1].weights, { EQUITY: 0, BOND: 1, CASH: 0, GOLD: 0 },
     'the valid anchor is untouched');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 97 — DrawdownSequence and LiquidityGraph
+//
+// These two replaced JSON textareas, and the property worth testing is the one a
+// textarea could not give: the value written by the editor is the shape
+// `normalizeLiquidityGraph` accepts, including its two "blank means something" rules —
+// blank sleeves = THE WHOLE ACCOUNT (not "no sleeves"), and an emptied list = null.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const ACCOUNTS = [
+  { stateKey: 'usSavingsAccount', name: 'US Savings', type: 'savings' },
+  { stateKey: 'usStockAccount',   name: 'US Stock',   type: 'brokerage' },
+  { stateKey: 'auOffsetAccount',  name: 'Offset',     type: 'offset' },
+];
+
+const tick = (host, id) => { const cb = cell(host, id); cb.checked = true; cb.dispatchEvent(new Event('change')); };
+const pick = (sel, value) => { sel.value = value; sel.dispatchEvent(new Event('change')); };
+
+test('DrawdownSequence: null renders the default state and authors nothing', () => {
+  const param = { name: 'drawdownSequence', value: null };
+  const host  = mount(buildDrawdownSequenceEditor(param, ACCOUNTS));
+  assert.match(host.textContent, /drawdownPriority order/i);
+  assert.strictEqual(param.value, null, 'rendering must not author a value');
+});
+
+test('DrawdownSequence: an existing sequence round-trips unchanged', () => {
+  const seq = [
+    { key: 'usSavingsAccount' },
+    { key: 'usStockAccount', sleeves: ['BOND'] },
+    { key: 'auOffsetAccount' },
+    { key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] },
+  ];
+  const param = { name: 'drawdownSequence', value: seq };
+  mount(buildDrawdownSequenceEditor(param, ACCOUNTS));
+  assert.deepStrictEqual(param.value, seq);
+});
+
+test('DrawdownSequence: blank sleeves mean THE WHOLE ACCOUNT, so the key is omitted', () => {
+  // §3.1 rule 3: an unnarrowed entry claims everything, and the normalizer REJECTS an
+  // empty `sleeves` array outright. Writing [] here would turn a valid config invalid.
+  const param = { name: 'drawdownSequence', value: [{ key: 'usStockAccount', sleeves: ['BOND'] }] };
+  const host  = mount(buildDrawdownSequenceEditor(param, ACCOUNTS));
+  const bond  = cell(host, 'sleeves:BOND');
+  bond.checked = false;
+  bond.dispatchEvent(new Event('change'));
+  assert.deepStrictEqual(param.value, [{ key: 'usStockAccount' }]);
+});
+
+test('DrawdownSequence: ORDER is the datum — move-up reorders the value', () => {
+  const param = { name: 'drawdownSequence', value: [
+    { key: 'usSavingsAccount' }, { key: 'auOffsetAccount' },
+  ] };
+  const host = mount(buildDrawdownSequenceEditor(param, ACCOUNTS));
+  cells(host, 'moveRowUp')[1].click();
+  assert.deepStrictEqual(param.value.map(e => e.key), ['auOffsetAccount', 'usSavingsAccount']);
+});
+
+test('DrawdownSequence: removing the last row normalises to null, not []', () => {
+  const param = { name: 'drawdownSequence', value: [{ key: 'usSavingsAccount' }] };
+  const host  = mount(buildDrawdownSequenceEditor(param, ACCOUNTS));
+  cell(host, 'removeRow').click();
+  assert.strictEqual(param.value, null);
+});
+
+test('LiquidityGraph: null renders the default state and authors nothing', () => {
+  const param = { name: 'liquidityGraph', value: null };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.match(host.textContent, /No pools/i);
+  assert.strictEqual(param.value, null);
+});
+
+test('LiquidityGraph: a graph round-trips into three tables and back out unchanged', () => {
+  const graph = {
+    pools: [
+      { id: 'cash', label: 'Bucket 1', spendOrder: 10,
+        target: { mode: 'YEARS_OF_SPEND', value: 1 },
+        claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'reserve', label: 'Bucket 2', spendOrder: 20,
+        target: { mode: 'YEARS_OF_SPEND', value: 4 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'offset', label: 'Backstop', spendOrder: 30,
+        capacity: { mode: 'OFFSET_CAP' },
+        claims: [{ key: 'auOffsetAccount' }] },
+      { id: 'growth', label: 'Bucket 3', spendOrder: 40,
+        claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
+    ],
+    flows: [
+      { id: 'g2r', from: 'growth', to: 'reserve', priority: 10,
+        gate: { sourceDrawdownUnder: 0.05 } },
+      { id: 'r2c', from: 'reserve', to: 'cash',
+        trigger: { below: { mode: 'YEARS_OF_SPEND', value: 1 } } },
+      { id: 'dip', from: 'reserve', to: 'growth',
+        gate: { targetDrawdownOver: 0.2 }, amount: { fractionOfSource: 0.25 } },
+    ],
+  };
+  const param = { name: 'liquidityGraph', value: graph };
+  mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.deepStrictEqual(param.value, graph);
+});
+
+test('LiquidityGraph: a multi-account pool is just two claim rows', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  // The claims table's "+ Add Claim" — the whole reason claims get their own table is that
+  // "one year of cash across two accounts" should be this easy.
+  button(host, 'Add Claim').click();
+  const accountSelects = cells(host, 'key');
+  pick(accountSelects[accountSelects.length - 1], 'auOffsetAccount');
+  assert.deepStrictEqual(param.value.pools[0].claims,
+    [{ key: 'usSavingsAccount' }, { key: 'auOffsetAccount' }]);
+});
+
+test('LiquidityGraph: renaming a pool re-renders the claim table so nothing is orphaned', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const poolId = cell(host, 'id');
+  type(poolId, 'bucket1', 'change');
+  // The claim still points at the OLD id, which is now a dangling reference — and the
+  // control has to show that immediately rather than at Rebuild.
+  const poolSel = cell(host, 'pool');
+  assert.match([...poolSel.options].map(o => o.textContent).join(' '), /not found/);
+  assert.strictEqual(poolSel.value, 'cash');
+});
+
+test('LiquidityGraph: emptying the pools normalises to null', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  cell(host, 'removeRow').click();
+  assert.strictEqual(param.value, null);
+});
+
+test('LiquidityGraph: an opaque `ui` blob survives an edit (effort 2 needs it)', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, ui: { x: 40, y: 200 }, claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cell(host, 'label'), 'Bucket 1', 'change');
+  assert.deepStrictEqual(param.value.pools[0].ui, { x: 40, y: 200 });
+});
+
+test('LiquidityGraph: what the editor writes is what the normalizer accepts', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  const param = { name: 'liquidityGraph', value: null };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  button(host, 'Add Pool').click();
+  type(cell(host, 'id'), 'cash', 'change');
+  pick(cell(host, 'targetMode'), 'YEARS_OF_SPEND');
+  type(cell(host, 'targetValue'), '2', 'change');
+  button(host, 'Add Claim').click();
+  pick(cell(host, 'key'), 'usSavingsAccount');
+
+  button(host, 'Add Pool').click();
+  type(cells(host, 'id')[1], 'growth', 'change');
+  type(cells(host, 'spendOrder')[1], '20', 'change');
+  button(host, 'Add Claim').click();
+  pick(cells(host, 'pool')[1], 'growth');
+  pick(cells(host, 'key')[1], 'usStockAccount');
+  // The savings claim offers NO sleeve boxes (a non-brokerage cannot be narrowed), so the
+  // only EQUITY checkbox on screen is the brokerage claim's.
+  assert.strictEqual(cells(host, 'sleeves:EQUITY').length, 1);
+  tick(host, 'sleeves:EQUITY');
+
+  button(host, 'Add Flow').click();
+  type(cells(host, 'id')[2], 'g2c', 'change');
+  pick(cell(host, 'from'), 'growth');
+  pick(cell(host, 'to'), 'cash');
+  pick(cell(host, 'gateKind'), 'sourceDrawdownUnder');
+  type(cell(host, 'gateValue'), '0.05', 'change');
+
+  // The point of the whole exercise: the config boundary is the only validator, and what
+  // the control produces has to pass it.
+  const g = normalizeLiquidityGraph(param.value, ACCOUNTS);
+  assert.strictEqual(g.pools.length, 2);
+  assert.strictEqual(g.flows[0].gate.sourceDrawdownUnder, 0.05);
+  assert.deepStrictEqual(g.pools[0].target, { mode: 'YEARS_OF_SPEND', value: 2, spendBasis: 'LIVE' });
+});
+
+test('LiquidityGraph: the market-state gates round-trip (they must not be dropped on edit)', () => {
+  // A gate kind the control does not know about is silently deleted the first time anything
+  // in the row is touched — the graph still loads, still runs, and quietly has no gate.
+  const graph = {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 2 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate: { sourceReturnOver: 0 } }],
+  };
+  const param = { name: 'liquidityGraph', value: graph };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateKind').value, 'sourceReturnOver');
+  type(cell(host, 'priority'), '5', 'change');          // touch an unrelated cell
+  assert.deepStrictEqual(param.value.flows[0].gate, { sourceReturnOver: 0 });
+});
+
+test('LiquidityGraph: a NEGATIVE return threshold survives the control', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer' }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  pick(cell(host, 'gateKind'), 'sourceReturnOver');
+  type(cell(host, 'gateValue'), '-0.1', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, { sourceReturnOver: -0.1 });
 });

@@ -44,9 +44,10 @@ const NO_OPTIONS = [];
  *
  * @param {object} opts
  * @param {Array<object>} opts.rows        the list being edited, mutated IN PLACE
- * @param {Array<{field: string, label: string, type?: 'number'|'select',
+ * @param {Array<{field: string, label: string, type?: 'number'|'select'|'text'|'checkset',
  *                step?: string, min?: string, max?: string,
- *                options?: Array<[value: string, label: string]>,
+ *                options?: Array<[value: string, label: string]>
+ *                         | function(): Array<[value: string, label: string]>,
  *                placeholder?: string, blankValue?: *,
  *                width?: string}>} opts.columns
  * @param {function(): object} opts.newRow  factory for the row "+ Add" appends
@@ -59,7 +60,10 @@ const NO_OPTIONS = [];
  *        for whatever the user types, not just for what they typed in order.
  * @param {boolean} [opts.reorderable=false] add a "move up" button per row, for lists
  *        whose ORDER is the datum (a preference ranking) rather than incidental.
- * @returns {HTMLElement}
+ * @returns {HTMLElement} the container, carrying a `.refresh()` that re-renders it.
+ *        Needed when a column's options depend on ANOTHER editor's rows (the pool ids a
+ *        claim or a flow names): that editor's `onChange` calls this one's `refresh`, so a
+ *        renamed pool is not silently orphaned in the sibling table.
  */
 export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
                                      onChange = null, emptyText = null,
@@ -107,8 +111,7 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
       // so the row the user just retyped moves to where the consumer will read it.
       const resort = sortBy ? () => { rows.sort(sortBy); render(); } : null;
       for (const col of columns) {
-        rowEl.appendChild(col.type === 'select' ? buildSelect(col, row, changed, resort)
-                                                : buildNumber(col, row, changed, resort));
+        rowEl.appendChild(buildCell(col, row, changed, resort, render));
       }
 
       if (reorderable) {
@@ -150,7 +153,104 @@ export function buildRowListEditor({ rows, columns, newRow, addLabel = '+ Add',
   };
 
   render();
+  container.refresh = render;
   return container;
+}
+
+/** Dispatch a column to its cell builder. */
+function buildCell(col, row, changed, resort, rerender) {
+  // `rerender: true` re-draws the whole list after this cell changes. For columns whose
+  // value decides what ANOTHER column in the same row may offer — picking a savings account
+  // means that row has no sleeves to narrow — this is what keeps the impossible choice off
+  // the screen instead of letting it be typed and rejected at Rebuild.
+  const after = col.rerender ? () => { if (resort) resort(); else rerender(); } : resort;
+  switch (col.type) {
+    case 'select':   return buildSelect(col, row, changed, after);
+    case 'text':     return buildText(col, row, changed, after);
+    case 'checkset': return buildCheckSet(col, row, changed);
+    default:         return buildNumber(col, row, changed, after);
+  }
+}
+
+/**
+ * A column's options, which may be a live function — of nothing (a list that depends on a
+ * sibling editor's rows) or of the row (a list that depends on another cell in the same row).
+ */
+function optionsOf(col, row = null) {
+  const raw = typeof col.options === 'function' ? col.options(row) : col.options;
+  return Array.isArray(raw) ? raw : NO_OPTIONS;
+}
+
+/**
+ * A free-text cell — for the one field a closed list cannot supply: an identity the user
+ * invents (a pool id, a flow id). Blank writes `col.blankValue ?? null` on the same rule as
+ * a numeric cell, so an unfinished row is filtered out by `readRowList` rather than saved
+ * as an empty-string key that nothing can reference.
+ */
+function buildText(col, row, changed, resort = null) {
+  const input = document.createElement('input');
+  input.type       = 'text';
+  input.className  = 'age-band-input';
+  input.dataset.id = col.field;
+  if (col.placeholder != null) input.placeholder = col.placeholder;
+  input.value = row[col.field] ?? '';
+  input.addEventListener('change', () => {
+    const raw = input.value.trim();
+    row[col.field] = raw === '' ? (col.blankValue ?? null) : raw;
+    changed();
+    if (resort) resort();
+  });
+  return input;
+}
+
+/**
+ * A checkbox SET cell — an array-valued column over a closed list (the ALLOCATION sleeves a
+ * pool claim narrows to).
+ *
+ * A set, deliberately, not an ordered multi-select. `EnumMulti` expresses order by CHECK
+ * ORDER, which under-serves an order-valued param and over-serves a set-valued one; sleeves
+ * within a claim are unordered (the sell order inside a pool is design-65's `sleeveOrder`,
+ * a different lever), so ticking is exactly the right control here.
+ *
+ * Blank (nothing ticked) writes `col.blankValue ?? null`, and for a claim that null is
+ * meaningful: it means "the WHOLE account", not "no sleeves". Rendering it as every box
+ * unticked is honest — the pool is not narrowed.
+ */
+function buildCheckSet(col, row, changed) {
+  const wrap = document.createElement('div');
+  wrap.className  = 'row-list-checkset';
+  wrap.dataset.id = col.field;
+
+  const options = optionsOf(col, row);
+  if (options.length === 0) {
+    // No options for THIS row (the account it names holds no sleeves). Say so, rather than
+    // rendering an empty cell that reads as a control that failed to draw.
+    const note = document.createElement('span');
+    note.className   = 'row-list-note';
+    note.textContent = col.emptyText ?? '—';
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  const selected = new Set(Array.isArray(row[col.field]) ? row[col.field] : []);
+  for (const [value, label] of options) {
+    const lab = document.createElement('label');
+    lab.className = 'enum-multi-option';
+    const cb = document.createElement('input');
+    cb.type    = 'checkbox';
+    cb.value   = value;
+    cb.checked = selected.has(value);
+    cb.dataset.id = `${col.field}:${value}`;
+    cb.addEventListener('change', () => {
+      if (cb.checked) selected.add(value); else selected.delete(value);
+      row[col.field] = selected.size ? [...selected] : (col.blankValue ?? null);
+      changed();
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(label));
+    wrap.appendChild(lab);
+  }
+  return wrap;
 }
 
 /**
@@ -183,7 +283,7 @@ function buildSelect(col, row, changed, resort = null) {
   const sel = document.createElement('select');
   sel.className   = 'age-band-input';
   sel.dataset.id  = col.field;
-  for (const [value, label] of (col.options ?? NO_OPTIONS)) {
+  for (const [value, label] of optionsOf(col, row)) {
     const opt = document.createElement('option');
     opt.value       = value;
     opt.textContent = label;

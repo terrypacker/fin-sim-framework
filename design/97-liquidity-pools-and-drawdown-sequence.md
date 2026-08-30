@@ -1,7 +1,12 @@
 # 97 — Liquidity Pools: the unified drawdown sequence (scaffolding)
 
-**Status**: **Built** (2026-08-29) — §3 only. §§6.1/6.3/6.4 of the prior study's gap list stay
-open by design. Tests: `tests/unit/evt-drawdown-sequence.test.mjs` (7).
+**Status**: Part I (§§1–9) **Built** (2026-08-29) — the spend sequence (§3) and years-based
+pool sizing (§9). Part II (§§10–15) — the pool GRAPH, which closes the two gaps Part I deferred
+(`FINDINGS.md` §6.3 capacity, §6.4 the refill rule) — is split into **effort 1** (logic +
+settings) and **effort 2** (the control surface, §14, sketched only).
+**Effort 1 is BUILT** (2026-08-29); §16 records what building it changed.
+Tests: `tests/unit/evt-drawdown-sequence.test.mjs` (7), `tests/unit/evt-years-of-spend-target.test.mjs` (6),
+`tests/unit/evt-liquidity-pools.test.mjs` (26).
 **Related**: `design/53-account-basis-refactor-and-offset.md` (offset accounts),
 `design/54-loan-liability-accounts.md`, `design/65-allocation-aware-drawdown.md` (the
 `consumeHoldings({selection})` seam this extends), `design/61-holding-allocation-lever.md`
@@ -421,3 +426,665 @@ arithmetic says the need for one goes UP under this mode, not down:
 So adopting years-based targets removes the accidental dip-buying. That is a real behavioural
 change and it is not measured here — the study is one axis by decision, and this is the first
 thing to look at if a crash column reads worse than expected.
+
+---
+
+# Part II — the pool GRAPH
+
+**Status**: PROPOSED, 2026-08-29. Part I (§§1–9) built the *spend* side: one ordered list, and
+a years-based way to size what is in it. Part II is the rest of the concept, split into two
+efforts at the author's direction:
+
+- **Effort 1 (designed here)** — the data structure, the logic, and the settings exposed
+  through the ordinary parameter surface. Closes `FINDINGS.md` §6.3 (derived capacity) and
+  §6.4 (the refill rule), the two gaps Part I deliberately deferred.
+- **Effort 2 (sketched in §21, not designed)** — the control surface: a real editor for the
+  graph, a pool panel, and the optimizer/MPC hooks. Deferred by decision so effort 1 can be
+  used by hand and in studies first.
+
+§21 exists because effort-1 decisions foreclose effort-2 options. Everything in §21 is a
+constraint on effort 1, not a promise about effort 2.
+
+---
+
+## 10. Why the sequence has to become a graph
+
+§3's `drawdownSequence` is a **list**. Three things the concept needs cannot be said in a list,
+and all three are already on the table:
+
+1. **A pool can span accounts.** "One year of cash" is the AU savings account *and* the US
+   savings account *and* the settled cash sleeve of the brokerage. As a list, that is three
+   adjacent entries that nothing ties together — so nothing can size it, report it, or refill
+   it as one thing. A pool has to be a **named node with a set of claims**.
+2. **Refilling is a flow between two pools, and it has more than one source and more than one
+   destination.** The bucket literature states the mechanic as a cascade — spend bucket 1,
+   refill 1 from 2, refill 2 from 3, harvesting gains in up markets — and adds a gate: *pause
+   equity sales in a falling market and let bucket 1 draw on bucket 2 and accumulated income
+   instead.* That is three nodes and at least four directed edges, several of them conditional.
+   The offset adds a fourth node whose only outbound edge is into cash, and "buy the dip"
+   (§7.0, named there as unimplemented) is an edge pointing **back up** the cascade. A list
+   cannot hold any of it.
+3. **The spend order and the refill order are different orders over the same nodes.** Today
+   they are different *mechanisms* over different objects (a sequence; a drift band). One
+   node set with two edge types says it once.
+
+So: **pools are nodes, flows are edges**, and §3's sequence is the degenerate case — the
+ordered spend edges of a graph whose refill edges are all implicit in the rebalancer.
+
+### 10.1 The (s, S) band is the classical name for this
+
+Salas-Molina, Rodríguez-Aguilar & Guillen, [*A multidimensional review of the cash management
+problem*](https://pmc.ncbi.nlm.nih.gov/articles/PMC10014414/) (Financial Innovation 9:67, 2023)
+is the same problem with a different
+vocabulary: a set of accounts, a cost function per transfer, and a policy that is a **temporal
+sequence of transactions between accounts**. Its canonical answer — Miller–Orr — is a
+**control band**: do nothing while the balance is inside (s, S); when it leaves, transact back
+to a return point. "Refill bucket 1 when it drops below 12 months, and fill it to 24" *is* an
+(s, S) band. Adopting that shape deliberately (§13.2) means the trigger and the fill target are
+two separate numbers from the outset, which is what stops the refill from firing every period
+and churning.
+
+The review's six dimensions also name the axis this design is weakest on and effort 2 owns:
+**the cost function**. Our edges will be gated on *market state*, not priced against a transfer
+cost. That is a modelling choice, and it is the reason §21 keeps the optimizer hook open.
+
+---
+
+## 11. The data structure
+
+One new authored object, `liquidityGraph`:
+
+```jsonc
+{
+  "pools": [
+    {
+      "id": "cash",                              // stable identity — flows, params and the editor all key off it
+      "label": "Bucket 1 — near-term cash",
+      "claims": [ { "key": "auSavingsAccount" },
+                  { "key": "usBrokerageAccount", "sleeves": ["CASH"] } ],
+      "spendOrder": 10,                          // position on the spend walk; absent ⇒ never spent from
+      "target":   { "mode": "YEARS_OF_SPEND", "value": 1 },
+      "floor":    { "mode": "AMOUNT", "value": 0 },   // never spend below this
+      "capacity": { "mode": "BALANCE" },
+      "ui": { "x": 40, "y": 200 }                // opaque to the engine (§21)
+    },
+    {
+      "id": "reserve", "label": "Bucket 2 — the reserve",
+      "claims": [ { "key": "usBrokerageAccount", "sleeves": ["BOND"] } ],
+      "spendOrder": 20,
+      "target": { "mode": "YEARS_OF_SPEND", "value": 4 }
+    },
+    {
+      "id": "offset", "label": "The backstop",
+      "claims": [ { "key": "auOffsetAccount" } ],
+      "spendOrder": 30,
+      "capacity": { "mode": "OFFSET_CAP" }       // min(balance, linked loan balance) — §12
+    },
+    {
+      "id": "growth", "label": "Bucket 3 — growth",
+      "claims": [ { "key": "usBrokerageAccount", "sleeves": ["EQUITY", "GOLD"] } ],
+      "spendOrder": 40
+    }
+  ],
+  "flows": [
+    { "id": "g2r", "from": "growth",  "to": "reserve",
+      "trigger": { "belowTargetFraction": 0.75 },
+      "gate":    { "sourceDrawdownUnder": 0.05 },
+      "amount":  { "toTarget": true }, "priority": 10 },
+
+    { "id": "r2c", "from": "reserve", "to": "cash",
+      "trigger": { "below": { "mode": "YEARS_OF_SPEND", "value": 1 } },
+      "amount":  { "toTarget": true }, "priority": 10 },
+
+    { "id": "o2c", "from": "offset",  "to": "cash",
+      "trigger": { "below": { "mode": "YEARS_OF_SPEND", "value": 1 } },
+      "amount":  { "toTarget": true }, "priority": 20 },   // fires only after r2c cannot fill it
+
+    { "id": "dip", "from": "reserve", "to": "growth",
+      "gate":   { "sourceDrawdownUnder": null, "targetDrawdownOver": 0.20 },
+      "amount": { "fractionOfSource": 0.25 }, "priority": 10 }
+  ]
+}
+```
+
+Read the four flows as the whole concept: **the cascade** (g2r, r2c), **the backstop as a
+second source into the same pool, tried second** (o2c — the "multiple sources per pool"
+requirement, and the thing §1 said had no expression), and **the reverse edge** (dip — the
+"multiple destinations per source" requirement, and the buy-the-dip behaviour §7.0 recorded as
+missing).
+
+---
+
+## 12. The central architectural statement: the graph COMPILES
+
+**Effort 1 adds no second drawdown code path.** The graph is compiled, once, at scenario-build
+time and re-derived per period only where it must be:
+
+| produced | consumed by | when |
+|---|---|---|
+| `state.drawdownSequence` | `AccountService.replenishSavings` — **unchanged** | build time |
+| `state.liquidityPools` (id → claims, target, capacity rule, trailing high) | the new flow reducer, the rebalancer's target source, telemetry | build time + per period |
+| `state.poolFlows` (normalized edges) | the new flow reducer | build time |
+
+The spend side is therefore *already built and already tested* (§3, §5): a pool's claims flatten
+to consecutive `drawdownSequence` entries in `spendOrder` order, and every §3 semantic —
+including "what the sequence does not claim follows it in `drawdownPriority` order" — is
+inherited unchanged. A multi-account pool compiles to several adjacent entries; nothing
+downstream needs to know they were one pool.
+
+This is the property that makes effort 1 small enough to build in one pass, and it is the one
+to defend under pressure: **if a change to the graph would require a change to
+`replenishSavings`, the change is in the wrong place.**
+
+### 12.1 Capacity — `FINDINGS.md` §6.3, closed
+
+A pool is not a balance. The offset is `min(cash parked, outstanding debt)`, and the cap falls
+on a schedule nobody authored — which is why its decay was invisible until it was plotted.
+
+```
+capacity(pool) = Σ over claims:
+  BALANCE     → the claimed market value (the default; capacity == balance)
+  OFFSET_CAP  → min(account.balance, linked loan balance)     ← the amortising cap
+  AMOUNT / YEARS_OF_SPEND → an authored ceiling
+```
+
+Two consequences, both load-bearing:
+
+- **A refill edge never fills a pool past its capacity.** Without this, `o2c` would happily
+  push cash into an offset facility that suppresses no interest — the model would author the
+  exact mistake the study warned against.
+- **Cover reporting reads capacity, not balance.** `probe-bucket-cover.mjs` computes this by
+  hand today; effort 1 moves it into the engine so the app can show it and effort 2 can plot it.
+
+Note what capacity is *not*: it is derived every period, never stored as truth. The offset's
+decay is loan arithmetic and must stay so — a stored capacity would drift the moment the loan
+re-amortises (`offset-loan-reamortises-never-retires`).
+
+### 12.2 Targets — §9 generalised onto the node
+
+`poolCashYears` / `poolBondYears` (§9) are per-**ALLOCATION-class** knobs that happen to be
+called pools. On the graph they become what they always meant: `pool.target`, in one of
+
+- `YEARS_OF_SPEND` — value × the live annual spend line (§9's arithmetic, unchanged);
+- `PERCENT` — of the rebalanced book;
+- `AMOUNT` — a fixed figure in base currency.
+
+`spendBasis: 'LIVE' | 'TRAILING'` is the second-order decision `FINDINGS.md` §6.1 flagged and
+Part I never took: a guardrail strategy that cuts spending in a bad year would otherwise shrink
+the reserve at the moment it is needed. **Effort 1 ships `LIVE` as the default** (it is what §9
+built and measured) **and `TRAILING` as an option with a `trailingYears` window**, because the
+option is three lines here and a re-measurement later.
+
+**One authority.** For every ALLOCATION class claimed by a pool carrying a `target`, the
+rebalancer's scheduled target for that class comes from the graph; unclaimed classes keep
+`allocationSchedule` (STATIC / GLIDEPATH / REGIME_CONDITIONED) exactly as authored. Authoring
+both a graph target and `poolCashYears`/`poolBondYears` **throws** — that is the
+`two-param-stores-trap` shape, and it is the single most likely way for this feature to produce
+a believable wrong number.
+
+**The two companion settings from §9.3 apply unchanged and are still not forced.** A pool
+target sizes the MIX; the design-61 LOCATED planner decides WHERE it sits, and its default
+sends bonds to the age-gated wrappers where they are cover for nobody — measured at **0.0
+years, in every year**. Effort 1 does not override `allocationLocationPolicy` (one lever
+silently rewriting another is how levers stop meaning what they say), but it **does** add a
+config-time *warning* when a pool's claims name only accounts that the location policy does not
+prefer for that pool's classes. Warning, not throw: it is a plausible authoring, just almost
+never the intended one.
+
+### 12.3 Flows — `FINDINGS.md` §6.4, closed
+
+An edge is `{ id, from, to, priority, trigger, gate, amount, cadence }`.
+
+**`trigger` — when the destination wants money.** One of:
+- `below: { mode, value }` — absolute (the Schwab rule of thumb, "refill bucket 1 once it
+  falls below 12 months of expenses");
+- `belowTargetFraction: f` — relative to the pool's own target;
+- absent — fires whenever the destination is under target at all.
+
+Trigger and `amount.toTarget` together are the (s, S) band of §10.1: **the trigger is `s`, the
+target is `S`**, and keeping them separate is what stops a refill firing every period. This is
+the substantive improvement over the drift band, which conflates them.
+
+**`gate` — when the SOURCE may be sold.** This is the rule `FINDINGS.md` §6.4 called "probably
+80 % of the pools concept", and the vocabulary is deliberately small:
+
+| gate | meaning |
+|---|---|
+| `sourceDrawdownUnder: x` | fire only while the source is within x of its trailing high. `0` is §6.4's "do not refill while bucket 3 is below its trailing high"; `0.05` is the softer "harvest in up markets". |
+| `targetDrawdownOver: x` | the reverse edge's condition — fire only when the DESTINATION is x below its high (buy the dip). |
+| `notInRegime: [TAG]` | reuse the existing regime tags (`ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER`). |
+| `notBefore` / `notAfter` / `ageOver` / `ageUnder` | the ordinary time gates. |
+| absent | always. |
+
+A trailing high is per-pool state (`state.liquidityPools[id].high`, monotone, updated once per
+period). It has to be **state**, not a window recomputed from the journal, because it must
+survive serialization and replay identically — and because a peak set before the run's start
+date is not knowable from the run.
+
+**`amount`** — `toTarget` (fill the destination to its target, the usual case),
+`fractionOfSource: f`, `max`, `min`. Every transfer is additionally clamped by: the source's
+available balance above its own `floor`, the destination's `capacity`, and the destination's
+shortfall.
+
+**`priority`** orders edges *into the same destination* — that is how "try the reserve, then
+the offset" is said. Edges *out of the same source* to different destinations run in the same
+priority order and each sees the balance the earlier ones left, unless they declare `share`
+(pro-rata split of what the source can give this period).
+
+### 12.4 Two executors, and why the split is not an implementation detail
+
+An edge moves value between two pools. **How** depends on whether the two ends are inside the
+same rebalanceable book:
+
+1. **In-portfolio** (e.g. `growth → reserve`, both sleeves of the taxable brokerage). Realised
+   by the **existing design-61 rebalancer**: the graph supplies the target composition and the
+   gate acts as a **veto on the rebalance leg** that would sell the gated source. No new
+   transfer machinery, no new disposal path, no new tax path. When the gate is shut the pool
+   simply stays under target for the period — which is exactly the intended behaviour and is
+   visible in the pool telemetry.
+2. **Cross-account** (e.g. `offset → cash`). Realised by a new `PoolFlowReducer` emitting
+   `POOL_FLOW_APPLY`, which **must** route through the same debit/credit path
+   `replenishSavings` uses — withdrawal tax, `INTL_TRANSFER_RECORD`, §988 realization on any
+   cross-currency leg. This repo has found the same bug three times (`replenish-savings-bypasses-actions`,
+   `tax-payment-funding-untaxed`, `disposal-tax-five-emitters`): a new way to move money that
+   does not go through the taxing seam produces a believable, untaxed number.
+
+**A gated in-portfolio edge is a veto; a cross-account edge is a transaction.** Stating it that
+way is what keeps executor (1) free.
+
+### 12.5 Cycles are allowed; simultaneous opposing edges are not
+
+`growth → reserve` and `reserve → growth` are both wanted (harvest, and buy the dip), so the
+graph is not a DAG and validation must not demand one. Instead:
+
+- each edge fires **at most once per period**;
+- edges evaluate in a fixed order (destination `spendOrder`, then edge `priority`, then `id`)
+  so a period is deterministic and replayable;
+- an opposing pair where **neither** edge has a `gate` or `trigger` is a config error — that is
+  an unconditional laundering loop and there is no reading under which it is intended.
+
+A conditional loop that does fire in both directions in one period is legal, visible in the
+journal as two `POOL_FLOW_APPLY` entries, and cheap to find. That is the §3.1 principle again:
+prefer the failure that is visible in the journal to the one that strands money silently.
+
+### 12.6 When flows run
+
+`PRIORITY.PRE_PROCESS`, on `US_/AU_PERIOD_ADVANCE`, **after** the inflation reducer has moved
+`state.monthlyExpenses` (a years-based trigger reads the live spend line) and the regime
+reducers have stamped `state.activeRegimes` (gates read them), and **before**
+`RebalanceToTargetReducer` (which is `PRE_PROCESS + 4` and is executor 1). Spending happens
+later in the period, so a period reads: *observe → refill → rebalance → spend*.
+
+`cadence` defaults to the period; `ANNUAL` restricts an edge to the first period of the
+calendar year. Note the 31-Dec trough convention (§9.4) is unchanged and is still the honest
+measurement point — a pool you only have in January is not a reserve.
+
+### 12.7 Validation — the same bar as §6
+
+Every one of these throws at config time, for the reason §6 gives:
+
+- duplicate `pool.id`; a flow naming an unknown pool; a self-edge;
+- an unknown account `key`; sleeve narrowing on a non-BROKERAGE (§3's rule, unchanged);
+- **claims that overlap across pools** — §3 checked this within one sequence; a graph must
+  check it globally, because two pools claiming the same sleeve would be double-counted by
+  every target, trigger and cover figure in the feature;
+- a graph alongside `drawdownMode: 'PROPORTIONAL'` (§6, unchanged);
+- a graph target alongside `poolCashYears` / `poolBondYears` (§12.2);
+- a graph alongside a hand-authored `drawdownSequence` — the graph compiles to it, so both is
+  two authorities on one field;
+- an unconditional opposing edge pair (§12.5);
+- `OFFSET_CAP` on a pool whose claimed account has no linked loan.
+
+Plus one **warning** (not a throw): §12.2's location-policy mismatch.
+
+### 12.8 Settings surface for effort 1
+
+Deliberately the ordinary parameter surface — effort 2 is where this gets a real editor.
+
+| param | type | notes |
+|---|---|---|
+| `liquidityGraph` | `LiquidityGraph` (three row-list tables), group `Spending` | the whole `{ pools, flows }` object. Absent ⇒ nothing changes. See §17 — this shipped as a JSON textarea and was replaced. |
+| `poolTarget::<poolId>` | `Number`, `opt: true`, `mc: true` | a scalar overlay on one pool's `target.value`, generated per pool at render time so a study can sweep pool sizes without rewriting JSON. **`::`, never `.`** — dotted keys are silently dropped by the optimizer's `set()` (`optimizer-param-key-dot-collision`). |
+| `poolFlowsEnabled` | `Boolean`, default `true` | authors the graph's *topology* without its *behaviour*: pools, targets, capacity and the spend order stay live, refill flows do not fire. This is the arm-vs-control switch every study of this feature will want, and it costs one flag. |
+
+Deprecated-but-honoured: `drawdownSequence`, `poolCashYears`, `poolBondYears`. They keep
+working exactly as built; each throws only when combined with a graph that says the same thing.
+
+### 12.9 State, serialization and telemetry
+
+- `state.liquidityPools`: `{ [id]: { claims, target, capacityRule, high, balance, capacity } }`.
+  `high` is persisted (§12.3); `balance` / `capacity` are re-derived each period.
+- `state.poolFlows`: the normalized edge list.
+- Round-trips through `ScenarioSerializer` in both directions, and gains golden-fixture coverage
+  — a field that is rebuilt from config on every load and silently drops is exactly how
+  `mortgagePaymentSourceKey` was inert for two study arms (`FINDINGS.md` §7).
+- **Telemetry**: one row per pool per period — `balance, capacity, target, yearsOfCover,
+  inflow, outflow, gatedFlows[]`. Opt-in behind the existing telemetry level and **batched**;
+  the naive per-period `getAll()` was quadratic once already (`design/78`).
+
+`gatedFlows` is the field that makes the feature debuggable: the interesting event is usually a
+flow that *did not* fire, and nothing else in the journal records a non-event.
+
+### 12.10 Test plan
+
+Reuses §5's shape; SEQ-1..6 all still apply through the compiled sequence.
+
+- **POOL-1 identity** — no `liquidityGraph` ⇒ a golden run is byte-identical.
+- **POOL-2 compilation** — a graph whose pools are single-claim compiles to exactly the §4
+  arm-A `drawdownSequence`, and the run is byte-identical to authoring that sequence by hand.
+  *This is the test that makes §12's claim true rather than aspirational.*
+- **POOL-3 multi-account pool** — one pool claiming two accounts compiles to two adjacent
+  entries and drains both before the next pool.
+- **POOL-4 capacity** — an `OFFSET_CAP` pool reports `capacity = min(balance, loanBalance)`
+  and a refill into it stops at the cap, with the loan amortising underneath.
+- **POOL-5 trigger band** — a flow with `below` fires only when the destination crosses `s`,
+  and fills to `S`; it does **not** fire in the periods between.
+- **POOL-6 gate** — `sourceDrawdownUnder: 0` suppresses the refill in a down year and the
+  destination runs under target; the same scenario with the gate removed refills. Both arms
+  wealth-matched (`offset-arms-not-wealth-matched`).
+- **POOL-7 reverse edge** — `targetDrawdownOver` moves reserve into growth in a crash year and
+  in no other year.
+- **POOL-8 cross-account executor** — an `offset → cash` flow emits `POOL_FLOW_APPLY` **and**
+  the withdrawal-tax + `INTL_TRANSFER_RECORD` actions; asserted on the action stream, not on
+  the balance (`disposal-tax-five-emitters`: count emitters, not fires).
+- **POOL-9 one-authority** — a pool target overrides `allocationSchedule` for its claimed
+  classes and leaves unclaimed classes alone; authoring both throws.
+- **POOL-10 validation** — each item in §12.7, one case each.
+- **POOL-11 determinism** — a graph with a legal cycle produces a byte-identical state on a
+  re-run and on a serialize/reload round trip (`sim-is-bit-deterministic`).
+
+Two traps carried forward from §7.2, both of which have already cost a session:
+`cfg.params` rows are keyed by **`name`**, not `key`, so a preflight assertion that the graph
+actually reached `state` is mandatory (`scripts/lib/preflight.mjs` already has the landing-check
+idiom); and `(ΔMV − Δbasis)/MV` is a circular measure of return, so any "did it sell in a down
+year" check must be measured on lots whose basis did not move.
+
+### 12.11 Build order
+
+1. `liquidity-graph.js` — the shape, `normalizeLiquidityGraph()` (all of §12.7), and
+   `compileToDrawdownSequence()`. Pure, no engine dependency. Tests POOL-2/3/10.
+2. Capacity + derived pool state (§12.1) and the telemetry rows. Tests POOL-4.
+3. `PoolFlowReducer` + `POOL_FLOW_APPLY`, cross-account executor only, routed through the
+   existing debit path. Tests POOL-5/8/11.
+4. Gates, including the trailing high on state + serializer + goldens. Tests POOL-6/7.
+5. The rebalancer as executor 1: graph targets as the target source, gate-as-veto. Tests
+   POOL-9, and re-run `probe-refill-laundering.mjs` — §7's table is the regression test for
+   this step, because it is the measurement the refill rule was deferred against.
+6. Params, serializer round-trip, `poolTarget::` generation, deprecation guards.
+
+Steps 1–2 are inert (nothing fires); step 3 is the first behavioural change. Each step is
+independently shippable and each ends byte-identical for a scenario with no graph.
+
+---
+
+## 13. What effort 1 deliberately does NOT do
+
+- **No cost function on an edge.** Gates are conditions on market state, not a priced
+  comparison of "draw the offset" against "sell equity". The cash-management literature (§10.1)
+  makes the cost function a first-class dimension and we are choosing not to — because the two
+  costs were measured at the **same order of magnitude** (`FINDINGS.md` §5), so a price would
+  not decide the edge anyway. It is the optimizer's job, and it is effort 2's hook.
+- **No solver.** The graph is a policy the author writes, not one the engine derives. Johansson
+  & Boyd, [*A Tax-Efficient Model Predictive Control Policy for Retirement
+  Funding*](https://web.stanford.edu/~boyd/papers/retirement.html) (2025), is the shape of the
+  alternative — pose the year's transfers as a convex program and re-solve every year — and it
+  is a different project. Note the two are not rivals: an MPC still needs somewhere to *put* the
+  answer, and this graph is a candidate action space for one.
+- **No spending rule.** Forsyth, Vetzal & Westmacott, [*Optimal control of the decumulation of a
+  retirement portfolio with variable spending and dynamic asset
+  allocation*](https://arxiv.org/abs/2101.02760) (2021), finds that most of the achievable
+  improvement comes from letting *withdrawals* vary, with dynamic allocation adding a further
+  significant increment on top. This design moves the second lever only. That is a real limit on
+  what any pool study here can claim: a pool graph tuned against a fixed real spend line is
+  optimising the smaller of the two levers, and the guardrail/MPC spending work (design 58,
+  design 89) is the other one.
+- **No per-pool tax awareness.** Which *lot* gets sold inside a pool is still design-65's job.
+- **No change to `PROPORTIONAL`** or the design-58 within-tier modes (§3.3, unchanged).
+
+---
+
+## 14. Effort 2 — the control surface, and the constraints it puts on effort 1
+
+Not designed here. Sketched only far enough to name what effort 1 must not foreclose.
+
+**What it is, roughly**: a direct-manipulation editor for the graph (drag nodes, draw edges,
+edit a pool's target inline), a pool panel showing years-of-cover and capacity over time with
+the flows as a sankey, and the optimizer/MPC surface that searches pool sizes and gate
+thresholds instead of the author guessing them.
+
+**What effort 1 must therefore get right now, and each is already in the design above:**
+
+| constraint | where |
+|---|---|
+| Pool and flow **ids are stable and authored**, never positional — an editor needs to move a node without changing what a param key or a saved layout refers to. | §11 |
+| Nodes and edges carry an **opaque `ui` blob the engine ignores** and the serializer preserves — otherwise the editor needs a second store, and a second store drifts. | §11 |
+| The **telemetry cube is per-pool per-period**, and it records **gated (non-)flows**. A panel cannot render an event the engine did not record, and the interesting event is a flow that did not fire. | §12.9 |
+| Optimizable knobs are **flat `::` keys** generated from pool ids. | §12.8 |
+| **Capacity is derived**, so an editor that changes a loan cannot leave a stale pool capacity behind. | §12.1 |
+| **`poolFlowsEnabled`** exists, so the control surface has an off switch for A/B without editing the graph. | §12.8 |
+| **Cycles are legal**, so the editor never has to refuse an edge the author can reasonably want. | §12.5 |
+
+---
+
+## 15. Open questions for effort 1
+
+1. **Does a pool's `floor` interact with `minimumBalance`?** §8 Q2 proposed a per-entry floor
+   and deferred it; the graph gives it a natural home (`pool.floor`). Proposed: the effective
+   floor is `max(pool.floor, Σ account.minimumBalance over claims)`, so neither silently
+   overrides the other. Needs a test, because "the pool says draw it, the account says do not"
+   is a spurious-`OUT_OF_FUNDS` shape (§3.1).
+2. **Should income land in a pool?** Wages, coupons, dividends and rent currently land in a
+   cash account by existing rules. Modelling them as inbound edges from an exogenous source
+   node would make the graph complete — and would change the behaviour of every existing
+   scenario, which is why the proposal is **no for effort 1**: the graph governs *reallocation*
+   between pools, and income keeps its existing destination. Worth revisiting only if a study
+   needs coupon income to be directed somewhere other than where it lands.
+3. **Cross-border.** §8 Q3 settled that an explicitly named account is honoured over
+   `crossBorderDrawdown: LOCAL_FIRST`. A *flow* is a stronger statement still — it moves money
+   across the border on purpose. Proposed: honoured, converted through the same `fxOf`/`feeOf`
+   path, with the §988 leg realized (§12.4). First thing to check if an arm's numbers look wrong.
+4. **Does a `TRAILING` spend basis interact with the guardrail strategy the way §12.2 assumes?**
+   Untested. The concern is real (`guardrail-spendtotal-wiring-artefact` is a reminder that the
+   guardrail's own baseline is subtle), and `LIVE` is the default precisely so this can be
+   deferred.
+5. **What happens to a pool whose claims are all empty?** Proposed: it stays in the graph,
+   reports zero balance and zero capacity, and is skipped by both walks — so authoring a pool
+   for an account that only funds later in the plan is not an error. Same rationale as the
+   dormant-at-value-0 property (`property-purchase-and-downsizer`).
+
+
+---
+
+## 16. Effort 1, as built (2026-08-29)
+
+Five files, one new seam in `AccountService`, one new behavioral strategy. Full unit suite green.
+
+| file | what it owns |
+|---|---|
+| `finance/pools/liquidity-graph.js` | the shape, `normalizeLiquidityGraph` (every §12.7 error), `compileToDrawdownSequence`, executor classification, `resolveLiquidityGraph` (the ONE normalization site the three callers share) |
+| `finance/pools/pool-metrics.js` | balance / capacity / target / cover per pool, FX-normalised; `loanForOffset` |
+| `finance/pools/pool-flow-reducer.js` | triggers, gates, the trailing high, the per-pool cube, `poolRefillPlan` |
+| `finance/pools/pool-flow-apply-reducer.js` | executor 2 — delegates to the scoped draw |
+| `services/account-service.js` | `+ opts.scopedSources` — an exclusive source list, no remainder fall-through, no Phase 2, returns `shortfall` instead of throwing |
+| `behavioral/rebalance-to-target-reducer.js` | executor 1 — `poolGraph` as the target source, `_applyVeto`, the dip adjustment |
+| `behavioral/behavioral-strategy-registry.js` | the `LIQUIDITY_POOLS` strategy + its two params |
+
+§12's claim held: **`replenishSavings` never learned that pools exist.** The one change it took
+was the scoped-draw option, which is a narrowing of the walk it already had — not a second walk.
+
+### 16.1 Five things the build changed, all found by running it
+
+1. **`capacity: BALANCE` means "no ceiling", not "ceiling = what it holds".** Implemented
+   literally, `headroom` was identically zero and **no refill could ever fire** — and the
+   failure is silent, because a pool sitting exactly at its stated capacity looks correct.
+   Pools now carry a `capped` flag; an uncapped pool's headroom is infinite. This is the same
+   shape as every other bug in this design's history: a wrong-but-runnable reading that
+   produces a believable number.
+
+2. **Buy-the-dip cannot be a cash-into-a-sleeve transfer.** §11's example wrote the reverse
+   edge as `reserve → growth`, and the first tests wrote the reserve as a savings account.
+   Validation rejected it, correctly: depositing cash into a brokerage does not land in the
+   EQUITY sleeve the destination pool claims, so the pool would never fill and **the edge
+   would fire every period forever**. A dip edge has to be *in-portfolio* — BOND sleeve into
+   EQUITY sleeve of the same book — which makes it executor 1's business, not a transfer.
+
+3. **So `toTarget` and `fractionOfSource` mean different things on an in-portfolio edge**, and
+   the distinction is the whole of how executor 1 works:
+   - `toTarget` — the destination's own `target` already states how big it should be, so the
+     edge contributes **only its gate**. Recording an adjustment as well would fill the pool
+     twice.
+   - `fractionOfSource` — this is the case a static target *cannot* express ("on a 20 %
+     drawdown, rotate a quarter of the reserve into equity"), so it is stamped on
+     `poolRefillPlan.adjust` and the rebalancer shifts the target mix by it. The shift lasts
+     while the gate is open and unwinds when it closes, which is what a dip-buy is: a
+     temporary overweight, not a new policy.
+
+   Both ends of such an edge must claim exactly one ALLOCATION class — the same
+   no-unique-split rule a `target` follows — and that now throws.
+
+4. **Two sources into one pool have to SHARE the shortfall.** Each edge recomputes the
+   destination against what earlier edges already promised it, or "try the reserve, then the
+   offset" fills the pool twice over. This is the `o2c`-after-`r2c` case from §11 and it is
+   POOL-5d.
+
+5. **The intra-period order is set by the framework's queueing, not by the priorities.**
+   Emitted actions are unshifted, so the rebalancer (deciding at `PRE_PROCESS + 4`, one step
+   after the flow reducer at `+3`) gets its APPLY processed *before* the cross-account
+   transfer. That is the right way round — rebalance to the possibly-vetoed target, then raise
+   the cash — but it is emergent rather than authored, and a future reducer inserted between
+   them would change it silently.
+
+### 16.1b The gate defect the first authored plan found (and the fix)
+
+The first real configuration authored on this feature (`cash 1yr → bonds 2yr → offset →
+equity`, with `growth → buffer` gated at `sourceDrawdownUnder: 0.05`) ran, produced plausible
+tables, and was wrong in a way no test had asked about.
+
+**A trailing-high gate cannot tell a falling market from a pool being spent down.** The
+`high` is a peak of BALANCE, and in a decumulation plan the balance never returns to its peak
+because the household keeps removing capital from it. Measured on that plan:
+
+| year | growth pool | its trailing high | "drawdown" | 5 % gate |
+|---|---|---|---|---|
+| 2028 | \$2,311k | \$2,410k | 4.1 % | open |
+| 2029 (crash) | \$1,161k | \$2,410k | 51.8 % | shut — correctly |
+| 2034 | \$2,206k | \$2,410k | 8.5 % | **shut** |
+| 2038 | \$2,194k | \$2,410k | 9.0 % | **shut** |
+| 2042 | \$2,194k | \$2,410k | 9.0 % | **shut** |
+
+By 2034 the market had fully recovered; the pool reads 9 % down because six years of spending
+came out of it. So the gate **latched shut forever after the first crash** — which is not
+"harvest in up markets", it is "never harvest again". Downstream the bond buffer sat at **zero
+for a decade** while the plan spent equity directly, and the run still looked healthy: terminal
+net worth was 18 % HIGHER than the corrected plan, because a deterministic path rewards
+whoever held the most equity (§7.1, exactly).
+
+`FINDINGS.md` §6.4's original wording — "do not refill bucket 2 from bucket 3 while bucket 3
+is below its trailing high" — was written about a portfolio, and is simply wrong about a pool
+being drawn down. That is the sentence this design inherited without re-examining.
+
+**A second gate would not have saved it either.** `notInRegime` was the obvious fallback, and
+on that plan's `MARKET_CRASH_2008_LITE` every active regime carries `tags: []` — so a
+regime-tag gate is silently inert there. Two of the three gate kinds were unusable on the first
+plan that tried them.
+
+**The fix: a market-state pair that reads the rate table, not a balance history.**
+`gate.sourceReturnOver` / `gate.targetReturnUnder` compare the pool's live, value-weighted
+return (`poolMarketReturn` over `state.effectiveGrowthRates`) against a threshold. A withdrawal
+does not change a return, so the confound is gone. `sourceReturnOver: 0` is the bucket
+literature's rule stated exactly: *harvest in up markets, pause equity sales in a falling one.*
+A pool holding no rated lots returns null, which leaves the gate **inert rather than shut** —
+"no signal" must not read as "bad signal" (POOL-12b).
+
+The drawdown pair is kept, because against an accumulating pool it is the right measure and it
+is what a peak-to-trough statement means. The description now says which is which. Tests:
+POOL-12 puts the two worlds side by side — same 20 %-below-its-high reading, market recovered
+vs market falling — and asserts only the return gate separates them.
+
+### 16.2 What is deliberately still not built
+
+- **A cost function on an edge** (§13, unchanged). Gates are conditions on market state.
+- **Persisting the trailing `high` across a mid-run save/load.** It is on `state.liquidityPools`
+  and survives a replay from t0 byte-identically (POOL-11), which is what determinism needs;
+  a mid-run resume would restart the high from the current balance.
+- **A `TRAILING` spend basis regression test.** The plumbing and the `spendHistory` series are
+  built and validated; nothing yet measures whether it behaves better than `LIVE` under a
+  guardrail cut (§15 Q4).
+- **The location-policy warning of §12.2.** Not implemented — the accessible-cover trap
+  (§9.3(a), measured at *zero* years) is still only documented, not detected.
+- **The `poolTarget::<poolId>` optimizer params of §12.8.** Not built, and the reason is a
+  seam rather than a decision: `BEHAVIORAL_STRATEGY_REGISTRY[k].paramSchema()` takes no
+  context, so it cannot see the authored pools and cannot generate one param per pool. Giving
+  it context is a change every strategy in the registry would feel, and it belongs with
+  effort 2's optimizer surface rather than tacked onto this.
+
+  **A study does not have to wait for it.** `liquidityGraph` is an ordinary object param, so
+  whole graphs sweep as axis values — exactly how `allocationGlidepath` takes whole anchor
+  arrays today (`FINDINGS.md` §10). Sizing arms are authored as N graphs, not as N points on
+  a scalar; that is more verbose and loses nothing.
+
+### 16.3 The smallest arm-vs-control a study can run
+
+`poolFlowsEnabled: false` keeps the pools, their targets, the compiled spend order and the
+whole per-pool cube live and fires no refill edge (POOL-5c). It is the control arm for any
+question about the refill rule, and it matters that it is a flag rather than "delete the
+flows": deleting them would also change the pool sizing, and the two arms would then differ in
+two ways at once — which is how `FINDINGS.md` §2's 5x cover error happened.
+
+
+---
+
+## 17. The controls (2026-08-29)
+
+Both design-97 params shipped as `type: 'Object'` — a JSON textarea — and the schema comment
+said why: *"the list is an ORDER over pairs of (account, sleeve set), and a control that
+expresses that honestly is real UI work; a textarea over validated JSON says what it is, a
+half-editor would not."*
+
+That was right about the ORDER and has since stopped being true about the cost.
+`buildRowListEditor` gained `reorderable` (a move-up button per row) for the design-95 lists,
+which was the missing piece. With two more column types — `text` for an id the user invents,
+`checkset` for an array-valued column over a closed list — an honest control is a composition
+of parts that already exist. Both are now typed editors:
+
+- **`DrawdownSequence`** — a reorderable (account, sleeves) row list. Deliberately NOT sorted:
+  there is no invariant to sort by, and the order is the only thing the param says.
+- **`LiquidityGraph`** — **three flat tables**: Pools, Claims, Flows.
+
+### 17.1 Why a graph is three flat tables and not one nested editor
+
+A pool holds a *list* of claims, so the natural shape is a list of lists — and a nested
+repeating-row editor is exactly the "real UI work" the original comment named. Splitting
+claims into their own table keyed by pool id makes all three tables flat, so all three are the
+same shared component and none of them is bespoke.
+
+It also makes the case that motivates the whole design as easy to author as the trivial one:
+**a multi-account pool is one more row.** "One year of cash across two savings accounts" is
+the reason a pool is a node rather than a sequence entry (§10), and in a nested editor it
+would have been the awkward path.
+
+The cost is that a pool's identity is a string typed in one table and selected in two others.
+That is what `container.refresh()` is for: renaming a pool re-renders the claim and flow
+tables, so a dangling reference shows as **"(not found)"** immediately rather than at Rebuild.
+
+### 17.2 What the controls do NOT do
+
+They do not re-implement `normalizeLiquidityGraph`. §6/§12.7 put validation at the config
+boundary precisely because every way of getting a graph wrong produces a run that completes
+and lies, and a second copy in the UI is a second thing to keep in step. What the editors do
+is make the **vocabulary visible** — the account list, the sleeve set, the target and capacity
+modes, the gate kinds — so most of those errors are no longer typable.
+
+One is now structurally untypable rather than merely visible: **sleeve narrowing on a
+non-brokerage account.** The sleeves column takes its options from the row's own account, so a
+savings or offset claim renders "whole account" instead of checkboxes. §3.1's rule (sleeves
+only mean something where the draw runs through `consumeHoldings`) stops being a paragraph in
+a description string.
+
+Two blanks stay load-bearing and are tested (`tests/viz/structured-param-editors.test.mjs`,
+12 new tests):
+
+- **blank sleeves = the WHOLE account**, so the key is omitted rather than written as `[]` —
+  the normalizer rejects an empty claim outright, so writing `[]` would turn a valid config
+  invalid;
+- **an emptied list = `null`**, the shape every consumer reads as "no override".

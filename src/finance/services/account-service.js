@@ -697,6 +697,18 @@ export class AccountService extends AssetService {
     const earlyWithdrawalRulesFn = typeof opts === 'function'
       ? opts
       : (opts.earlyWithdrawalRulesFn ?? getUsEarlyWithdrawalRules);
+    // Design 97 §12.4 — a SCOPED draw (executor 2, the pool-flow transfer). An explicit
+    // source list, exclusive: the walk draws ONLY from these (account, sleeves) claims and
+    // there is no remainder fall-through, no early-withdrawal phase and no shortfall throw.
+    //
+    // It exists so a cross-account pool flow reuses THIS seam rather than growing a fourth
+    // way to move money. Every cross-currency leg here converts through fxOf/feeOf and
+    // realizes its §988 disposition, and every taxable sale raises its withdrawal-tax
+    // action — a transfer executor that bypassed that would produce a believable untaxed
+    // number, which this repo has now found three separate times.
+    const scopedSources = (typeof opts === 'object' && Array.isArray(opts.scopedSources) && opts.scopedSources.length)
+      ? opts.scopedSources
+      : null;
     const targetAccount = state[targetKey];
     const country       = targetAccount.country;
     const currency      = targetAccount.currency?.code ?? country;
@@ -802,9 +814,17 @@ export class AccountService extends AssetService {
     const poolCandidates = sequence?.length
       ? new Map(Object.entries(state).filter(isDrawableAccount))
       : null;
-    const orderedSources = sequence?.length
-      ? _applyDrawdownSequence(sources, sequence, poolCandidates)
-      : sources;
+    // A scoped draw resolves against every drawable account (like a sequence entry) but,
+    // unlike one, claims ONLY what it names — a refill that quietly reached past its source
+    // pool into the next account would be indistinguishable from the refill working.
+    const scopedCandidates = scopedSources
+      ? new Map(Object.entries(state).filter(isDrawableAccount))
+      : null;
+    const orderedSources = scopedSources
+      ? scopedSources
+          .map(e => [e.key, scopedCandidates.get(e.key), e.sleeves ?? null])
+          .filter(e => e[1] != null)
+      : (sequence?.length ? _applyDrawdownSequence(sources, sequence, poolCandidates) : sources);
 
     let remaining         = deficit;
     const drawnKeys       = [];
@@ -981,6 +1001,13 @@ export class AccountService extends AssetService {
 
     if (remaining < 1e-9) {
       return { drawnKeys, pendingTaxActions, crossBorderTransfers };
+    }
+
+    // A scoped draw stops here. Phase 2 trades a 10% penalty for meeting a SPENDING
+    // deficit; a refill has no such urgency — an under-filled pool is the honest outcome
+    // and the caller reports the shortfall rather than paying a penalty to hide it.
+    if (scopedSources) {
+      return { drawnKeys, pendingTaxActions, crossBorderTransfers, shortfall: Math.max(0, remaining) };
     }
 
     // ── Phase 2: early withdrawal (with penalty) ──────────────────────────────
