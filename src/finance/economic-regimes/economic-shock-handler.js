@@ -82,6 +82,12 @@ export class EconomicShockHandler extends HandlerEntry {
           endDate:          DateUtils.addMonths(startDate, durationMonths),
           recoveryProfile:  leg.recovery?.profile ?? 'V',
           durationMonths,
+          // Rebound shape (design 21 §22), read only by the *_REBOUND profiles: where in
+          // the window the drag is spent (`reboundStart`, a fraction) and how far the
+          // factor swings BELOW zero after it (`reboundPeak`). Undefined for every other
+          // profile, which never looks at them.
+          reboundStart:     leg.recovery?.reboundStart ?? null,
+          reboundPeak:      leg.recovery?.reboundPeak  ?? null,
           currentFactor:    1.0,
           returnAdjustment:       leg.regime?.returnAdjustment       ?? null,
           interestRateAdjustment: leg.regime?.interestRateAdjustment ?? null,

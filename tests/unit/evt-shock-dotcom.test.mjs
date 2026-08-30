@@ -93,11 +93,14 @@ test('DOTCOM-1: array levelEffects emit one revaluation per entry, each with its
   const byKey  = Object.fromEntries(revals.map(a => [a.rateKey, a.multiplier]));
 
   // Four equity markets, three distinct depths — US-led, AU shallow.
+  // Four equity markets, three distinct depths. Since the §21 recalibration the LEVEL
+  // break is only the front-loaded part of the fall (~17 % of it for this episode) and the
+  // drag carries the rest — so these are small numbers, and the asymmetry is what matters.
   assert.equal(revals.length, 4, `one action per rate key, got ${revals.length}`);
-  assert.equal(byKey.EQUITY_US,         -0.35);
-  assert.equal(byKey.EQUITY_INTL_EX_AU, -0.35);
-  assert.equal(byKey.EQUITY_INTL_EX_US, -0.32);
-  assert.equal(byKey.EQUITY_AU,         -0.18);
+  assert.equal(byKey.EQUITY_US,         -0.074);
+  assert.equal(byKey.EQUITY_INTL_EX_AU, -0.074);
+  assert.equal(byKey.EQUITY_INTL_EX_US, -0.068);
+  assert.equal(byKey.EQUITY_AU,         -0.024);
   assert.ok(byKey.EQUITY_AU > byKey.EQUITY_US, 'AU must fall LESS than the US — that is the preset');
 });
 
@@ -113,26 +116,47 @@ test('DOTCOM-2: severity re-scales the array proportionally, preserving the mark
   const byKey = {};
   for (const e of lv) for (const k of e.rateKeys) byKey[k] = e.multiplier;
 
-  // Deepest market takes the headline severity; the rest keep their ratio to it.
-  const k = 0.50 / 0.35;
-  assert.ok(Math.abs(byKey.EQUITY_US - (-0.50)) < 1e-9, `US takes the headline, got ${byKey.EQUITY_US}`);
-  assert.ok(Math.abs(byKey.EQUITY_AU - (-0.18 * k)) < 1e-9, `AU scales with it, got ${byKey.EQUITY_AU}`);
-  assert.ok(Math.abs(byKey.EQUITY_AU / byKey.EQUITY_US - 0.18 / 0.35) < 1e-9, 'ratio preserved');
+  // Since §21 the trough is composed from level + drag, so severity scales BOTH by the
+  // ratio to the preset's own headline depth. Scaling only the level would change the
+  // SHAPE of the shock at each end of an MC range while pretending to change magnitude.
+  const base = SHOCK_LIBRARY.DOTCOM_2000_LITE;
+  const baseByKey = {};
+  for (const e of base.levelEffects.equityRevaluation) for (const k of e.rateKeys) baseByKey[k] = e.multiplier;
+  const k = 0.50 / base.severity;
+
+  assert.ok(Math.abs(byKey.EQUITY_US - baseByKey.EQUITY_US * k) < 1e-9,
+    `US level scales by k, got ${byKey.EQUITY_US}`);
+  assert.ok(Math.abs(byKey.EQUITY_AU / byKey.EQUITY_US
+    - baseByKey.EQUITY_AU / baseByKey.EQUITY_US) < 1e-9, 'market ratio preserved');
+
+  // …and the drag scales by the same k, which is the half that used to be missed.
+  const eqLeg     = shock.legs.find(l => l.id === 'equity');
+  const baseEqLeg = base.legs.find(l => l.id === 'equity');
+  assert.ok(Math.abs(eqLeg.regime.returnAdjustment.EQUITY_US
+    - baseEqLeg.regime.returnAdjustment.EQUITY_US * k) < 1e-9,
+    `drag must scale with severity too, got ${eqLeg.regime.returnAdjustment.EQUITY_US}`);
 });
 
-test('DOTCOM-3: 36-month U recovery still bites at month 24, where a GFC has fully faded', () => {
+test('DOTCOM-3: the drag is still at FULL strength at month 24 — the grind a bucket must outlast', () => {
   const dot = SHOCK_LIBRARY.DOTCOM_2000_LITE;
-  const gfc = SHOCK_LIBRARY.MARKET_CRASH_2008_LITE;
-  assert.equal(dot.recovery.profile, 'U');
-  assert.equal(dot.recovery.durationMonths, 36);
+  const eq  = dot.legs.find(l => l.id === 'equity');
+  assert.equal(eq.recovery.profile, 'U_REBOUND');
 
-  const dotAt24 = RecoveryCurves[dot.recovery.profile](24, dot.recovery.durationMonths);
-  const gfcAt24 = RecoveryCurves[gfc.recovery.profile](24, gfc.recovery.durationMonths);
-  assert.ok(Math.abs(dotAt24 - 2 / 3) < 1e-9, `dot-com at month 24 should be 2/3 strength, got ${dotAt24}`);
-  assert.equal(gfcAt24, 0, 'the GFC preset is fully recovered by month 24');
+  const f = (t) => RecoveryCurves[eq.recovery.profile](t, eq.recovery.durationMonths, eq.recovery);
 
-  // Flat for the first 18 months — the stretch a two-year bond bucket has to outlast.
-  assert.equal(RecoveryCurves.U(17, 36), 1);
+  // U_REBOUND holds full strength through the first half of its DECLINE phase
+  // (reboundStart × durationMonths = 30 months here), then fades across the second half.
+  // The first year-end therefore takes the drag at FULL strength, and the second still
+  // takes 40 % of it — which is how a two-year slide gets built out of annual samples.
+  assert.equal(f(11), 1, 'still at full strength at the first year-end');
+  assert.ok(f(24) > 0.3, `still biting hard at the second year-end, got ${f(24)}`);
+
+  // The drag is spent at reboundStart × duration, and NEGATIVE after — the tailwind that
+  // lets the preset reach its measured 81-month return to the prior peak (§22).
+  const spent = eq.recovery.durationMonths * eq.recovery.reboundStart;
+  assert.ok(Math.abs(f(spent)) < 1e-9, `factor must cross zero at month ${spent}, got ${f(spent)}`);
+  assert.ok(f(spent + 12) < 0, 'past the crossing the factor is NEGATIVE — a tailwind, not a drag');
+  assert.equal(f(eq.recovery.durationMonths), 0, 'and it is spent at the end of the window');
 });
 
 test('DOTCOM-4: the policy cut lands on PRIME_* and the fixed-income level, never on SAVINGS_*', () => {
@@ -155,11 +179,15 @@ test('DOTCOM-4: the policy cut lands on PRIME_* and the fixed-income level, neve
     `the bond level should fall 2pp, got ${eff.FIXED_INCOME_US - base.FIXED_INCOME_US}`);
 });
 
-test('DOTCOM-5: the level break marks a US equity account down ~35 %', () => {
+test('DOTCOM-5: the level break is small — this episode is a GRIND, and the drag carries it', () => {
+  // Before the §21 recalibration this asserted a −35 % instant break. Only 17 % of the
+  // dot-com fall happened in the first three months, so the break is now −7.4 % and the
+  // rest arrives as a forward-return drag over two more year-ends. The distinction is the
+  // whole point for a reserve study: an instant crash leaves nothing to bridge.
   const sim = loadScenario({ shocks: [{ preset: 'DOTCOM_2000_LITE', startDate: '2026-03-01' }] });
   sim.stepTo(new Date('2026-04-01'));
   const balance = sim.state.rothAccount.balance;
-  assert.ok(balance > 60000 && balance < 70000, `Expected ~65000 after a −35 % break, got ${balance}`);
+  assert.ok(balance > 91000 && balance < 94000, `Expected ~92600 after a −7.4 % break, got ${balance}`);
 });
 
 
@@ -170,9 +198,16 @@ test('DOTCOM-6: the rate cut OUTLIVES the equity drag — two legs, two clocks',
   // modelling convention. Assert the two legs decay independently, in the sim, not in the
   // library object.
   const dot = SHOCK_LIBRARY.DOTCOM_2000_LITE;
-  assert.equal(dot.legs.length, 2);
-  assert.equal(dot.legs.find(l => l.id === 'equity').recovery.durationMonths, 36);
-  assert.equal(dot.legs.find(l => l.id === 'rates').recovery.durationMonths, 84);
+  const eq  = dot.legs.find(l => l.id === 'equity');
+  const rt  = dot.legs.find(l => l.id === 'rates');
+  assert.ok(eq && rt, 'the preset must carry distinct equity and rates legs');
+
+  // Assert the BEHAVIOUR rather than the durations: at month 60 the equity drag is spent
+  // (its factor has already crossed zero into the rebound) while the rate cut is still on.
+  const eqF = RecoveryCurves[eq.recovery.profile](60, eq.recovery.durationMonths, eq.recovery);
+  const rtF = RecoveryCurves[rt.recovery.profile](60, rt.recovery.durationMonths, rt.recovery);
+  assert.ok(eqF <= 0, `equity drag must be spent by month 60, got ${eqF}`);
+  assert.ok(rtF > 0,  `the rate cut must still bite at month 60, got ${rtF}`);
 
   // A ten-year horizon: the rate leg alone runs seven, and stepping past simEnd throws.
   const sim = loadScenario({ shocks: [{ preset: 'DOTCOM_2000_LITE', startDate: '2026-02-01' }] },

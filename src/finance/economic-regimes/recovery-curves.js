@@ -9,13 +9,19 @@
  */
 
 /**
- * Deterministic recovery curve functions. Each returns a factor in [0, 1]
- * that scales the regime's adjustments. When the factor reaches 0 and the
- * regime is past its endDate, RegimeApplyReducer drops the regime from the stack.
+ * Deterministic recovery curve functions. Each returns a factor that scales the regime's
+ * adjustments — in [0, 1] for the four original profiles, and possibly NEGATIVE for the
+ * *_REBOUND pair. When the factor reaches 0 and the regime is past its endDate,
+ * RegimeApplyReducer drops the regime from the stack.
  *
  * @param {number} t              months since shock start (may be negative before shock)
  * @param {number} durationMonths total recovery duration in months
- * @returns {number} scale factor in [0, 1]
+ * @param {object} [regime]       the regime being scaled; the rebound profiles read
+ *                                `reboundStart` and `reboundPeak` off it. The four
+ *                                original curves ignore it.
+ * @returns {number} scale factor. [0, 1] for the four original profiles; the *_REBOUND
+ *                   profiles also return NEGATIVE values, which flip the regime's
+ *                   adjustments into a tailwind (design 21 §22).
  */
 export const RecoveryCurves = Object.freeze({
   /**
@@ -57,4 +63,60 @@ export const RecoveryCurves = Object.freeze({
     if (t >= durationMonths) return 0;
     return 1;
   },
+
+  /**
+   * V with a rebound. Linear fade 1 → 0 over the first `reboundStart` of the window,
+   * then a half-sine EXCURSION BELOW ZERO to −`reboundPeak` and back to 0 at the end.
+   *
+   * The negative stretch is the point. Every other profile can only fade a drag toward
+   * zero, so the best a shock can do is hand back the baseline — and real recoveries did
+   * not creep back at baseline, they ran well above it (the S&P regained its 2007 peak in
+   * 65 months while compounding at 7 % needs ~140). A negative factor multiplies the
+   * regime's NEGATIVE returnAdjustment into a POSITIVE one, which is the only way this
+   * framework can express an above-baseline recovery. See design 21 §22.
+   */
+  V_REBOUND: (t, durationMonths, regime) => _rebound(t, durationMonths, regime, 'V'),
+
+  /**
+   * U with a rebound: flat at full strength for the first half of the decline phase,
+   * fade to zero, then the same below-zero excursion. The shape for an episode that
+   * ground down before it snapped back.
+   */
+  U_REBOUND: (t, durationMonths, regime) => _rebound(t, durationMonths, regime, 'U'),
 });
+
+/**
+ * Shared body of the rebound profiles.
+ *
+ * `reboundStart` (default 0.5) is the FRACTION of `durationMonths` at which the factor
+ * reaches zero — i.e. where the drag is spent and the tailwind begins. `reboundPeak`
+ * (default 0.5) is how far below zero the factor goes at the midpoint of what remains,
+ * as a fraction of the original adjustment: 0.5 against a −20 pp drag is a +10 pp tailwind
+ * at its peak.
+ *
+ * Both are read off the regime so a preset can tune them per leg without a new profile
+ * per shape. Absent, the defaults give a symmetric fade-then-rebound.
+ */
+function _rebound(t, durationMonths, regime, declineShape) {
+  if (t < 0)               return 1;
+  if (t >= durationMonths) return 0;
+
+  const startFrac = _clamp(regime?.reboundStart ?? 0.5, 0.05, 0.95);
+  const peak      = Math.max(0, regime?.reboundPeak ?? 0.5);
+  const declineMonths = durationMonths * startFrac;
+
+  if (t < declineMonths) {
+    if (declineShape === 'U') {
+      const stagnation = declineMonths * 0.5;
+      if (t < stagnation) return 1;
+      return 1 - (t - stagnation) / (declineMonths - stagnation);
+    }
+    return 1 - t / declineMonths;
+  }
+
+  // Rebound phase: 0 → −peak → 0, smooth at both ends so the tailwind has no step change.
+  const span = durationMonths - declineMonths;
+  return -peak * Math.sin(Math.PI * (t - declineMonths) / span);
+}
+
+const _clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));

@@ -288,25 +288,42 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleG
  * equityRevaluation multiplier so severity is the single canonical knob.
  */
 function applySeverity(shock, severity) {
-  const lv = shock.levelEffects?.equityRevaluation;
-  if (!lv) return { ...shock, severity };
-  const mag = Math.abs(severity);
-  // ARRAY form (per-market severities, e.g. DOTCOM_2000_LITE): severity re-scales the
-  // whole vector PROPORTIONALLY, taking the deepest market as the headline. Setting every
-  // entry to −severity would flatten the asymmetry that is the point of the array — an MC
-  // severity sweep would silently turn a US-led bust into a uniform global one.
-  const scaled = Array.isArray(lv)
-    ? (() => {
-        const peak = Math.max(...lv.map(e => Math.abs(e?.multiplier ?? 0)), 0);
-        const k    = peak > 0 ? mag / peak : 0;
-        return lv.map(e => ({ ...e, multiplier: -Math.abs((e?.multiplier ?? 0) * k) }));
-      })()
-    : { ...lv, multiplier: -mag };
-  return {
-    ...shock,
-    severity,
-    levelEffects: { ...shock.levelEffects, equityRevaluation: scaled },
+  const headline = Math.abs(shock.severity ?? 0);
+  const target   = Math.abs(severity);
+  if (!headline) return { ...shock, severity };
+
+  // `severity` is the episode's TROUGH DEPTH, and since design 21 §21 the trough is
+  // composed from a level break PLUS a forward-return drag rather than being the level
+  // break alone. So severity can no longer just overwrite the multiplier: it scales the
+  // whole shock — every level entry and every leg's returnAdjustment — by the ratio to
+  // the preset's own headline depth. Scaling only the level would sweep a preset toward
+  // its old instant-break shape at one end of an MC range and away from it at the other,
+  // which is a change of SHAPE disguised as a change of magnitude.
+  const k = target / headline;
+
+  const scaleLevel = (lv) => {
+    if (!lv) return lv;
+    const one = (e) => ({ ...e, multiplier: -Math.abs((e?.multiplier ?? 0) * k) });
+    return Array.isArray(lv) ? lv.map(one) : one(lv);
   };
+  const scaleReturns = (regime) => {
+    if (!regime?.returnAdjustment) return regime;
+    const scaled = {};
+    for (const [rk, v] of Object.entries(regime.returnAdjustment)) scaled[rk] = v * k;
+    return { ...regime, returnAdjustment: scaled };
+  };
+
+  const out = { ...shock, severity };
+  if (shock.levelEffects?.equityRevaluation) {
+    out.levelEffects = { ...shock.levelEffects,
+      equityRevaluation: scaleLevel(shock.levelEffects.equityRevaluation) };
+  }
+  if (Array.isArray(shock.legs)) {
+    out.legs = shock.legs.map(leg => ({ ...leg, regime: scaleReturns(leg.regime) }));
+  } else if (shock.regime) {
+    out.regime = scaleReturns(shock.regime);
+  }
+  return out;
 }
 
 /**

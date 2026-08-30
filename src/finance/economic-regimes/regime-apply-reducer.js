@@ -55,7 +55,10 @@ export class RegimeApplyReducer extends Reducer {
       const end     = regime.endDate   instanceof Date ? regime.endDate   : (regime.endDate ? new Date(regime.endDate) : null);
       const t       = monthsBetween(start, now);
       const curve   = RecoveryCurves[regime.recoveryProfile] ?? RecoveryCurves.V;
-      const factor  = curve(t, regime.durationMonths);
+      // The regime is passed so the *_REBOUND profiles can read `reboundStart` /
+      // `reboundPeak` off it. The four original curves take two arguments and ignore it,
+      // so every existing regime is byte-identical.
+      const factor  = curve(t, regime.durationMonths, regime);
 
       if (factor <= 0 && end && now >= end) continue;
       live.push({ ...regime, currentFactor: factor });

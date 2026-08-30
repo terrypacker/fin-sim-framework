@@ -62,7 +62,7 @@ Single runs remain **fully deterministic**. Recovery curves are deterministic sh
 | Mortgage spread adjustments | `RealProperty.mortgagePayment` is static; no rate-driven repricing exists. |
 | Bond duration sensitivity | `FixedIncomeAccount` is a single growth rate; no duration, no yield curve. |
 | Correlation regimes | Returns are deterministic point estimates; no inter-asset correlation matrix exists. |
-| Dividend-yield cuts | Equity shocks affect price only (`balance`); `DividendScheduledHandler`'s yield stays as configured. |
+| ~~Dividend-yield cuts~~ | **No longer true.** `dividendAdjustment` ships: it multiplies the payout (`-0.22` = pay 22 % less) and `DividendScheduledHandler` reads it via `state.effectiveDividendAdjustments`. Calibrated against S&P 500 dividends per share — see §20 and `docs/economic-shocks/README.md` §2. |
 
 ---
 
@@ -828,3 +828,254 @@ And it moves the boundary of §9.5's crossover a long way: with a 10 × 2y ladde
 beats equity-only at **9 % equity in an early crash and 8 % at any crash date**, against ~6.5 %
 for the 3-rung ladder. The fix did not make bonds better; it made **duration** matter, which is
 what the episode was always about.
+
+---
+
+## 20. Calibration provenance — `docs/economic-shocks/`
+
+**Status**: Built (2026-08-29).
+
+Sections 1–19 above specify the *mechanism*. They do not say where a number like
+`−40 %`, `18 months` or `PRIME_US: -0.045` came from, and until now nothing did — the
+library's figures were asserted in JSDoc and could not be checked without re-deriving them
+by hand. That is the same failure mode design 94 §8.1 closed for tax law
+(*never quote a rule that is not on disk*), applied to empirical calibration.
+
+`docs/economic-shocks/` closes it the same way:
+
+| file | what |
+|---|---|
+| `README.md` | **The user-facing document.** What each preset does to a scenario, the units and consumer of every regime field, why each recovery profile was chosen, and a preset-by-preset justification of shape / behaviour / duration citing the measurements. Written to be liftable into a UI help panel. |
+| `SOURCES.md` | Provenance for every series — the route, the gotchas, and what each one calibrates. Follows `docs/us-tax/SOURCES.md`. |
+| `MEASUREMENTS.md` | Generated. Drawdown depths and durations, dividend cuts, CPI paths, policy-rate moves, per-tenor curve twists, FX drift and realized FX volatility, real-estate drawdowns. |
+| `fetch-sources.sh` | Re-fetches everything into `data/` (FRED, RBA, NBER, Shiller). All scripted. |
+| `scripts/probes/measure-shock-history.mjs` | Reduces `data/` to `MEASUREMENTS.md`. `--write` to regenerate. |
+
+Three things the exercise turned up that are worth stating here rather than only there.
+
+### 20.1 The presets are not uniformly conservative
+
+`README.md` §5 lists every place the library and the record disagree. The pattern is not a
+consistent bias, which is why it matters: the GFC preset's **level effect is ~10 points too
+shallow** (−40 % against a measured −50.8 % on the S&P and −53.3 % on the broad index)
+while its **dividend cut is roughly twice too deep** (−40 % against a measured −22.3 % fall
+in S&P dividends per share). The COVID preset's dividend cut is −30 % against a measured
+−2.3 %. A study that leans on distribution income is therefore being told a much harsher
+story than a study that leans on the book value, from the same preset.
+
+`STAGFLATION_1970S_LITE` carries **no level effect at all**, while the S&P fell 43.4 %
+nominal and 59.6 % real across 1973–74. That is defensible as a division of labour —
+compose it with a crash preset — but it is not obvious from the preset's name, and a run of
+it alone understates the decade badly.
+
+### 20.2 Two calibration claims rest on series that cannot support them
+
+- **The 1970s FX leg.** `STAGFLATION_1970S_LITE` sets `USD_AUD: -0.10` for "broad USD
+  weakness". The AUD **floated on 12 December 1983**; every pre-1984 USD/AUD observation is
+  an administered rate. The claim is real but it is *trade-weighted* — the major-currencies
+  dollar index fell 10.7 % over 1973–1980 — so the sign is supported and the magnitude is
+  an assertion. `SOURCES.md` records this so the next person does not "verify" it against
+  `DEXUSAL` and conclude the sign is backwards.
+- **`fxVolAdjustment` in general.** It only bites when `fxProcessModel ≠ NONE`. Measured
+  realized USD/AUD volatility went to ×2.87 of baseline in the GFC and ×1.57 in COVID; the
+  presets say ×1.5 and ×2.0 respectively — i.e. the two are ranked the wrong way round.
+
+### 20.3 The framework cannot express a rebound, and that is directional
+
+§7's curves scale a regime toward zero; they cannot add a positive adjustment. So every
+preset's aftermath is "baseline growth resumes", where the historical record repeatedly
+delivered a violent snap-back (COVID regained its prior peak in four months on the Nasdaq).
+Combined with §20.1, this means shock results in this framework are **conservative about
+the recovery and unreliable about the depth**, in that order. A study comparing two
+strategies through a shock is on much firmer ground than one quoting an absolute outcome.
+
+---
+
+## 21. What `durationMonths` means, and how a preset is calibrated
+
+**Status**: Built (2026-08-30). Probe: `scripts/probes/shock-path-engine.mjs`.
+Output: `docs/economic-shocks/CALIBRATION.md`.
+
+The recurring question about this framework is what `durationMonths` is *for*: is it
+peak→trough, or peak→trough→back-to-peak? It is neither, and the confusion was doing real
+damage to the library, so this section fixes the semantics.
+
+### 21.1 The three quantities, and which of them is settable
+
+`durationMonths` is **the life of the depressed-return regime** — how long the adjustments
+stay on the stack before the recovery curve retires them. The two quantities a reader
+actually cares about are both *emergent*:
+
+| quantity | what determines it | settable? |
+|---|---|---|
+| **peak → trough** | where `base + drag × recoveryFactor(t)` crosses zero | indirectly, via (level, drag, profile, duration) |
+| **trough depth** | the level break compounded with the drag up to that crossing | indirectly, same four |
+| **trough → back to peak** | whatever compounding does afterwards | **no** — see §22 |
+
+So a preset cannot *declare* a −50 % drawdown. It declares four things that compose to
+one, and the composition has to be measured. That is what the probe is for.
+
+### 21.2 The resolution limit nobody had written down
+
+**Equity growth is applied once a year.** `INTL_STOCK_EARNINGS` / `INTL_ROTH_EARNINGS` and
+their siblings are `interval: 'year-end'` EventSeries, and `computeHoldingsGrowth` applies
+`balance × rate × factor` with `factor = 1`. `ECONOMIC_RECOVERY_TICK` recomputes the
+recovery factor every month, but **for equity that factor is only ever SAMPLED on
+31 December**.
+
+Three consequences, none of them obvious from §7:
+
+1. **A decline is only expressible in whole years.** A 17-month slide becomes "two
+   year-ends". The GFC preset bottoms at 24 months against a measured 17 and cannot do
+   better.
+2. **Most of a short curve is invisible to equity.** A `V/18` regime is sampled exactly
+   once, at `f(11.5) = 0.36`. Its remaining 17 months of area never touch an equity
+   balance. This is why the old presets' drags were decorative.
+3. **Interest and dividends are NOT affected the same way** — savings and fixed-income
+   handlers pass `factor: 1/12` and so do see the monthly curve. A single preset therefore
+   has one time resolution for equity and another for cash. Worth remembering before
+   reading a bond-vs-equity result too closely.
+
+### 21.3 The finding that forced the recalibration
+
+Running every shipped preset through the engine (`shock-path-engine.mjs`), **five of six
+had their trough at month 1**: the level effect was the entire drawdown and the
+`returnAdjustment` contributed nothing to it. `DOTCOM_2000_LITE` was the only preset that
+composed a path at all, and only because §18.3 had tuned it by hand.
+
+That is the wrong shape, and wrongest for exactly the study this framework gets used for.
+A cash or bond reserve exists to avoid selling into a decline. If the decline is
+instantaneous there is nothing to bridge, and the reserve is being asked to prove itself
+against a world where its whole purpose has been deleted.
+
+### 21.4 The rule the library now follows
+
+Measured from the source data (`MEASUREMENTS.md`), the fraction of each episode's fall that
+happened in its first three months:
+
+| episode | fall in 3 months | shape |
+|---|---|---|
+| GFC | **8 %** | a grind |
+| dot-com | **17 %** | a grind |
+| stagflation 1973-74 | **16 %** | a grind |
+| COVID | **82 %** | a break |
+| 2018 correction | **100 %** | a break |
+
+So: **the level effect is the front-loaded part of the fall; the drag carries the rest.**
+Fast episodes are level breaks whose drag exists only to set the recovery speed. Slow ones
+are mostly drag, and their level break is small. That is why the numbers in the library now
+look so different from one preset to the next — the shapes really are different.
+
+Calibration targets, in order: **(trough depth, trough year)** first, since both are
+settable and both bear directly on a spending plan; then **back-to-peak** and the ten-year
+cumulative as checks. `CALIBRATION.md` prints all four against the measured episode on every
+regeneration.
+
+### 21.5 `severity` had to change with it
+
+`applySeverity` used to overwrite the level multiplier with `−severity`, which was fine
+while the level *was* the drawdown. Now that the trough is composed, it scales **the level
+and every leg's `returnAdjustment` together**, by the ratio of the requested severity to the
+preset's own headline depth. Scaling only the level would have swept a preset toward its old
+instant-break shape at one end of an MC range and away from it at the other — a change of
+*shape* disguised as a change of magnitude. Each preset's `severity` is now its measured
+trough depth, so the knob stays readable.
+
+---
+
+## 22. Recovery that can overshoot — `V_REBOUND` / `U_REBOUND`
+
+**Status**: Built (2026-08-30). Tests: `tests/unit/evt-recovery-rebound.test.mjs` (6).
+
+### 22.1 The gap
+
+§7's curves scale a regime's adjustments toward zero. They cannot go past it, so the best
+outcome a shock can produce is *baseline growth resumes*. History does not work that way:
+the S&P regained its 2007 peak in **65 months**, and compounding a −50.8 % hole at 7 % needs
+about **140**. The same gap appears everywhere — COVID round-tripped in 7 months against a
+model floor of 12, the dot-com bust in 81 against 133.
+
+The consequence was not a rounding error, it was a **structural conflict in the calibration**:
+a preset could match the measured trough or the measured recovery, never both. A shape search
+over every (profile, duration) candidate with (level, drag) solved to hit the trough exactly
+found the best back-to-peak error was still **75 months** for the GFC and 34–47 for COVID.
+No shape could express the episode.
+
+### 22.2 The change
+
+The framework already tolerated the fix. `RegimeApplyReducer` keeps a regime while
+`factor <= 0 && now >= endDate` is false, and nothing anywhere clamps the factor or the
+resulting effective rate. A curve returning a **negative** factor multiplies a negative
+`returnAdjustment` into a **positive** one — an above-baseline tailwind — and everything
+downstream already handles it.
+
+So two profiles were added, and nothing else:
+
+```js
+V_REBOUND: 1 → 0 over `reboundStart` of the window, then a half-sine to −`reboundPeak` and back to 0
+U_REBOUND: flat, then fade, then the same excursion
+```
+
+`reboundStart` (default 0.5) is the fraction of `durationMonths` at which the drag is spent;
+`reboundPeak` (default 0.5) is how far below zero the factor swings, as a fraction of the
+original adjustment — 0.5 against a −20 pp drag is a +10 pp tailwind at its peak. Both are
+read off the regime, so a preset tunes the shape per leg rather than needing a new profile
+per episode. `RegimeApplyReducer` now passes the regime as a third argument to the curve;
+V/U/W/L ignore it and are byte-identical.
+
+### 22.3 What it bought
+
+| preset | back to peak, before | after | measured |
+|---|---|---|---|
+| `MARKET_CRASH_2008_LITE` | 96 mo | **72 mo** | 65 mo |
+| `COVID_2020_LITE` | 72 mo | **24 mo** | 7 mo |
+| `MILD_CORRECTION` | 36 mo | **12 mo** | 7 mo |
+| `DOTCOM_2000_LITE` | 144 mo | **84 mo** | 81 mo |
+
+The residual on the two fast presets is the annual-sampling floor from §21.2, not the curve.
+
+**One interaction to know about.** `fxVolAdjustment` composes multiplicatively
+(`baseVol × (1 + adj × factor)`), so a negative factor pushes volatility *below* baseline.
+That is arguably right — markets do calm after a crisis — but it is a side effect, not a
+decision. Every shipped preset keeps its FX and dividend adjustments on a separate non-rebound
+leg for this reason.
+
+---
+
+## 23. What this framework still cannot express
+
+The user-facing version of this list is `docs/economic-shocks/README.md` §5. This is the
+engineering one: each item says what would have to change.
+
+### 23.1 Hard limits — a preset simply cannot say it
+
+| gap | what it costs | what it would take |
+|---|---|---|
+| **A leg cannot start late.** Every leg begins at the shock date. | COVID's real inflation arrived ~18 months after the crash. The preset models the disinflation that came *with* the crash and leaves the inflation to a second shock you schedule yourself. | A `startOffsetMonths` on a leg, applied in `scheduleShock` when computing `startDate` and the tick span. Small, contained, and the highest-value item here. |
+| **A shock cannot ramp up.** The factor starts at 1 and only decays. | The 1970s built to a peak over ~24 months and had a second wave at ~87. The preset flattens both into one sustained level (the L profile at the decade's *average* excess). | A profile whose factor rises before it falls — or better, `W` used properly with a phase offset. |
+| **Equity resolution is one year** (§21.2). | A 17-month slide can only bottom at 12 or 24 months. Fast recoveries have a 12-month floor. | Move equity earnings to a monthly or quarterly series. Large blast radius: it changes every scenario's compounding, not just shocked ones. |
+| **No equity volatility.** A return is a rate the shock shifts, not a distribution whose *shape* it changes. | VIX averaged 40 through the GFC against 13.7 in 2004-06; none of that is expressible. Design 74's stochastic path is a separate axis and shocks do not modulate its variance. | A `returnVolAdjustment` alongside `fxVolAdjustment`, consumed by design 74's draw. |
+| **No correlation regime.** Sleeves move by one draw × beta. | "Everything correlates to 1 in a crash" cannot be modelled; nor can the dot-com case where bonds rallied *because* equity fell. Presets fake it by moving both keys by hand. | A correlation matrix in the return model. Explicitly out of scope since §3. |
+| **Rebound shape is per LEG, not per market.** | `DOTCOM_2000_LITE` needs a separate `equity-au` leg purely because the ASX recovered on a different clock. Workable, but it does not scale past a handful of markets. | Per-rate-key recovery specs inside one regime — which §19.2 deliberately rejected, because it would duplicate the stack's arithmetic in `RegimeApplyReducer`. |
+
+### 23.2 Soft limits — expressible, but nothing on disk supports the number
+
+- **AU dividend cuts.** There is no free scripted AU dividend series (the RBA path that
+  would carry it 404s — see `SOURCES.md`). Every AU `dividendAdjustment` in the library is
+  the US figure, flagged in place. The COVID case is the one where this is likely to be
+  materially wrong in a known direction: APRA's 2020 capital guidance cut bank payouts hard,
+  and banks are a much larger share of the ASX than of the S&P.
+- **Pre-1984 USD/AUD.** The AUD floated on 12 December 1983, so the 1970s FX leg cannot be
+  calibrated against `DEXUSAL` at all. It rests on the trade-weighted dollar (−10.7 % over
+  1973-80) — right sign, asserted magnitude.
+- **Intra-month troughs.** Depths are calibrated to monthly averages, because the model has
+  no finer resolution. COVID's daily peak-to-trough was −33.9 % against the −19.1 % monthly
+  figure the preset uses. Reach for `severity` if the harsher case is the point.
+
+### 23.3 Not a limit, but the thing most likely to mislead
+
+Every preset is now calibrated to a **single historical episode**, and says so. That makes
+the numbers checkable, and it also makes them specific in a way a forecast is not. Two
+presets composed together do not produce "a worse crash" so much as an arithmetic sum of two
+particular decades. The framework's honest use is **comparing strategies across a shared set
+of shock arms**, not quoting an absolute outcome from any one of them.

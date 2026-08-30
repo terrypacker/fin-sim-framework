@@ -99,8 +99,16 @@ test('PARAM-5: preset reference schedules ECONOMIC_SHOCK and RECOVERY_TICK event
   const tickEvents  = events.filter(e => e.type === 'ECONOMIC_RECOVERY_TICK');
 
   assert.strictEqual(shockEvents.length, 1, 'One ECONOMIC_SHOCK event');
-  // MARKET_CRASH_2008_LITE has 18-month duration → 18 ticks
-  assert.strictEqual(tickEvents.length, SHOCK_LIBRARY.MARKET_CRASH_2008_LITE.recovery.durationMonths);
+  // Ticks span the LONGEST leg, not the shock-level `recovery` (design 21 §19.2): a
+  // multi-leg shock whose ticks stopped at the equity leg's horizon would leave the slower
+  // legs' recovery factors recomputed only at period boundaries.
+  const crash = SHOCK_LIBRARY.MARKET_CRASH_2008_LITE;
+  const longestLeg = Math.max(...(crash.legs ?? [{ recovery: crash.recovery }])
+    .map(l => l.recovery?.durationMonths ?? 12));
+  assert.strictEqual(tickEvents.length, longestLeg,
+    `ticks must span the longest leg (${longestLeg}), got ${tickEvents.length}`);
+  assert.ok(longestLeg > crash.recovery.durationMonths,
+    'this preset is the regression case: its slowest leg outlives its headline recovery');
 
   // Shock data carries the resolved template
   const shock = shockEvents[0].data.shock;
@@ -139,8 +147,11 @@ test('PARAM-8: two preset shocks both schedule events independently', () => {
   assert.ok(ids.includes('MARKET_CRASH_2008_LITE'));
   assert.ok(ids.includes('COVID_2020_LITE'));
 
-  const expectedTicks = SHOCK_LIBRARY.MARKET_CRASH_2008_LITE.recovery.durationMonths
-                      + SHOCK_LIBRARY.COVID_2020_LITE.recovery.durationMonths;
+  const longest = (k) => {
+    const sh = SHOCK_LIBRARY[k];
+    return Math.max(...(sh.legs ?? [{ recovery: sh.recovery }]).map(l => l.recovery?.durationMonths ?? 12));
+  };
+  const expectedTicks = longest('MARKET_CRASH_2008_LITE') + longest('COVID_2020_LITE');
   const tickEvents = events.filter(e => e.type === 'ECONOMIC_RECOVERY_TICK');
   assert.strictEqual(tickEvents.length, expectedTicks);
 });
