@@ -18,6 +18,7 @@ import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
 import { section988ForBondPrincipal } from '../account-rules/bond-currency-basis.js';
+import { identityGroupOf }       from '../holdings/security.js';
 import { toMs } from '../account-rules/main-residence.js';
 import { addValue, resize } from '../holdings/holding-utils.js';
 
@@ -138,6 +139,9 @@ export class RebalanceToTargetApplyReducer extends Reducer {
 
     let holdings = [...account.holdings];
     const taxActions = [];
+    // Design 94 §8.1n — the §1091 pending entries this reducer's sell legs generate. See
+    // `_washPendingEntries` for why they are written here and what they deliberately omit.
+    const washEntries = [];
     // Design 84 G2 — realised gain inside a SHELTERED wrapper. It pays no tax today,
     // which is why this path never computed it, but for an Australian resident it is
     // an amount DERIVED by the trust estate and therefore assessable under s99B when
@@ -164,6 +168,17 @@ export class RebalanceToTargetApplyReducer extends Reducer {
           terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
           securities: state.securities ?? null,
         });
+        // Design 94 §8.1n — BEFORE `holdings` is rebuilt, while the pre-sale lots
+        // (`matching`) and their post-sale counterparts (`r.newHoldings`) are both in hand.
+        // That pairing is the only place the units and identity of what was sold can be
+        // recovered exactly, and it is why this could not be done from the tax action.
+        washEntries.push(..._washPendingEntries({
+          // `purchaseMs`, not `eventMs`: it is the SAME date the buy legs stamp on the
+          // replacement lot, via the same fallback chain. §1091's window is ±30 days, so a
+          // sale and its replacement dated off two different clocks would silently fail to
+          // match — and a null date would skip the entry entirely.
+          allocation, country, matching, fifo: r, state, stateKey, ms: purchaseMs,
+        }));
         holdings = [...holdings.filter(h => h.allocation !== allocation), ...r.newHoldings];
         taxActions.push(_sellTax({ allocation, country, proceeds: take, fifo: r, residency, stateKey }));
         // Design 87 G9 — a rebalance that trims a foreign-currency BOND sleeve disposes
@@ -212,10 +227,114 @@ export class RebalanceToTargetApplyReducer extends Reducer {
     const newBalance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     return this.newState(
       state,
-      { [stateKey]: { ...account, ...realiseDerivedGain(account, shelteredGain), holdings, balance: newBalance } },
+      {
+        [stateKey]: { ...account, ...realiseDerivedGain(account, shelteredGain), holdings, balance: newBalance },
+        // Appended, never replaced: the harvester writes to this same ledger on 31 December
+        // and this reducer runs on 1 January, so both years' entries have to coexist until
+        // the April filing resolves them (§8.1l).
+        ...(washEntries.length > 0
+          ? { washPendingLosses: [...(state.washPendingLosses ?? []), ...washEntries] }
+          : {}),
+      },
       taxActions,
     );
   }
+}
+
+/**
+ * The §1091 pending-ledger entries a taxable sell leg generates (design 94 §8.1n).
+ *
+ * ─── why this exists ─────────────────────────────────────────────────────────
+ *
+ * `state.washPendingLosses` used to have exactly ONE writer, `StockHarvestApplyReducer`, and
+ * §8.1j's reasoning for that is quoted in its own comment: the harvester "sells and rebuys in
+ * one action, in one account, on one day". True of the harvester — but it treats the harvester
+ * as the only SELLER, and it is not. The design-61 LOCATED planner relocates a class by selling
+ * it in the taxable book and rebuying it inside a wrapper, and in a down year that sale realizes
+ * a loss. If the wrapper is an IRA or Roth, Rev. Rul. 2008-5 DESTROYS that loss — and until this
+ * function existed the loss reached the return in full, because `characterizeCapitalGain` reads
+ * the signed term fields off any disposal action while `resolveWashSales` only ever saw the
+ * harvester's entries.
+ *
+ * ─── the one real difference from the harvester ──────────────────────────────
+ *
+ * The harvester sells ONE lot, so `identityGroupOf(source)` is unambiguous. A rebalance leg
+ * consumes every lot of an allocation in the account, which may span several identity groups —
+ * so the loss is apportioned and **one entry is emitted per group**. A single undifferentiated
+ * entry would attribute the whole loss to whichever group sorted first and then match it against
+ * that group's replacements, which is a wrong number that still balances.
+ *
+ * Units and per-lot value are recovered by diffing the pre-sale lots against
+ * `fifo.newHoldings` — exact, and the reason this is called before `holdings` is rebuilt.
+ *
+ * ─── what it deliberately does not do ────────────────────────────────────────
+ *
+ * - **EQUITY only.** `_shelteredReplacements` matches EQUITY lots and nothing else, so an entry
+ *   for a BOND or GOLD leg could never be matched and would sit in the ledger forever. That also
+ *   keeps this inside the sourced scope: §8.1b's rule is quoted about stock and securities.
+ * - **The US branch only** (`country !== 'AU'`). §1091 is a US rule resolved against the US
+ *   return; an AU-domiciled disposal chains `AU_STOCK_WITHDRAWAL_TAX` into the AU module, where
+ *   there is nothing for a §1091 entry to reduce. Deliberate under-write, in the same direction
+ *   as §8.1i's 401(k) exclusion.
+ * - **No §1091(d) basis write-back.** This closes the SHELTERED half only, where the loss is
+ *   destroyed and no basis moves anywhere (§8.1i). A taxable replacement bought in another
+ *   account is a timing effect and remains §8.1j's standing gap.
+ * - **A group whose consumed units are not positive is skipped.** `resolveWashSales` divides by
+ *   `max(entry.units, 1e-9)`, so an entry with zero units would match at fraction 1 and disallow
+ *   the whole loss against any replacement at all. Note this also skips a lot that carries no
+ *   `pricePerUnit`, because `consumeHoldings` rescales `units` on a PARTIAL sale only for a
+ *   unitised lot (design 93 §5b) — an un-unitised one keeps its full count and reports no units
+ *   consumed. That under-writes rather than over-disallows, which is the safe direction, and it
+ *   cannot arise for a lot that names a security: the migration unitises those (§9.2).
+ *
+ * @returns {object[]} zero or more `{ ms, group, units, shortLoss, longLoss, stateKey }`
+ */
+function _washPendingEntries({ allocation, country, matching, fifo, state, stateKey, ms }) {
+  if (allocation !== ALLOCATION.EQUITY || country === 'AU' || ms == null) return [];
+
+  // The leg's signed, §1222-charactered split — the same fields `_sellTax` stamps, and the
+  // only honest reading of the loss: `gain` is clamped at zero and reports every loss as 0.
+  const { usShortTermGain, usLongTermGain } = disposalTermFields(fifo.realizedGainByCountryAndTerm);
+  const lossShort = Math.max(0, -(usShortTermGain ?? 0));
+  const lossLong  = Math.max(0, -(usLongTermGain  ?? 0));
+  if (lossShort <= 0 && lossLong <= 0) return [];
+
+  const after = new Map((fifo.newHoldings ?? []).map(h => [h.id, h]));
+  const byGroup = new Map();          // group → { units, loss }
+  let totalLoss = 0;
+  for (const h of matching) {
+    const group = identityGroupOf(h, state?.securities ?? null);
+    // An un-securitised lot makes no identity claim (§8.1c), so it can never be matched.
+    if (group == null) continue;
+    const a       = after.get(h.id);
+    const units   = (h.units ?? 0) - (a?.units ?? 0);
+    const proceeds = (h.marketValue ?? 0) - (a?.marketValue ?? 0);
+    const basis    = (h.costBasis   ?? 0) - (a?.costBasis   ?? 0);
+    if (!(units > 0) || proceeds <= 0) continue;
+    const lotLoss = basis - proceeds;                 // positive ⇒ this lot sold at a loss
+    if (lotLoss <= 0) continue;
+    const rec = byGroup.get(group) ?? { units: 0, loss: 0 };
+    rec.units += units;
+    rec.loss  += lotLoss;
+    byGroup.set(group, rec);
+    totalLoss += lotLoss;
+  }
+  if (totalLoss <= 0) return [];
+
+  // Character comes from the leg's authoritative split, apportioned across groups by their
+  // share of the loss. In the ordinary case there is exactly one group per allocation per
+  // account (every equity lot names its market's synthetic security), so the apportionment is
+  // the identity; it only approximates when one account genuinely holds two named securities
+  // of the same class, and then only in how the short/long split is divided, never in the total.
+  const out = [];
+  for (const [group, rec] of byGroup) {
+    const share = rec.loss / totalLoss;
+    const shortLoss = +(lossShort * share).toFixed(2);
+    const longLoss  = +(lossLong  * share).toFixed(2);
+    if (shortLoss <= 0 && longLoss <= 0) continue;
+    out.push({ ms, group, units: +rec.units.toFixed(6), shortLoss, longLoss, stateKey });
+  }
+  return out;
 }
 
 /**

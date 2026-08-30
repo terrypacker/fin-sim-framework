@@ -1413,6 +1413,9 @@ buying.
   the brokerage, rather than the harvester's own rebuy. It needs the lagged machinery §8.1i
   built, plus a replacement lot located a year later to write basis onto, and the lot may have
   been sold or compacted by then. Left out, and it is the one remaining §1091 gap.
+  **⚠ "The one remaining gap" was wrong — see §8.1n.** This paragraph reasons about the
+  harvester as the only SELLER; the rebalancer realizes taxable losses too and writes no pending
+  entry at all, which reaches the SHELTERED branch (permanent) and not merely this taxable one.
 - **AU Part IVA** (§8.1d) — a declared policy switch, not a computed rule, and it needs
   TR 2008/1 read rather than cited.
 - The §8.1i under-matches noted there (401(k), additions to seasoned lots) are unchanged.
@@ -1641,6 +1644,170 @@ filing handler and its apply reducer call.
 
 The terminal flush (design 68 Gap 2) now includes `TAX_FILE_US`, so a death before April still
 lodges the outstanding amendment.
+
+#### 8.1n The REBALANCER writes no §1091 entry — FOUND and FIXED  ✅ (2026-08-30)
+
+**Status**: found, reproduced deterministically, and **fixed**. 5,899 unit + 1,197 viz tests
+green; no golden moved. It was dormant in the reference plan, but dormant by accident rather
+than by rule — see "what the fix costs" below, which is the part of this section to read before
+trusting a crash-year headline number.
+
+##### How it was found — from the other end
+
+Not by auditing §1091. Design 97 §19 was measuring whether a plan could be stopped from selling
+equity in a crash, and step 0 of that work asked the sign of the realized gain on the
+design-61 LOCATED planner's cross-account relocation. The answer at the early crash was a
+**loss** — and the replacement was bought inside a wrapper. That is this section's fact pattern,
+arrived at from a completely different question, which is worth recording because §8.1's own
+review passes did not surface it in three rounds.
+
+##### The claim §8.1j made, and the half of it that is not true
+
+§8.1j's "what is still not modelled" names one residual gap — a TAXABLE replacement bought
+elsewhere in the window — and reasons about the harvester throughout:
+
+> The harvester sells and rebuys in one action, in one account, on one day.
+
+That is true of the harvester. **It is not true that the harvester is the only seller.** The
+rebalancer realizes taxable losses too, and `state.washPendingLosses` has exactly ONE writer:
+`StockHarvestApplyReducer`. A loss realized by `RebalanceToTargetApplyReducer` therefore never
+enters the pending ledger, so `resolveWashSales` never sees it — while the loss itself **does**
+reach the return, because `characterizeCapitalGain` reads the signed
+`usShortTermGain`/`usLongTermGain` off *any* disposal action.
+
+§8.1j even records the adjacent observation without following it: *"the IRA case, which no
+substitute choice can avoid because the rebalancer, not the harvester, does the buying."* The
+rebalancer does the buying — and, on the other leg of the same relocation, the selling.
+
+##### Confirmation — four links, all present
+
+Reproduced on a two-account construction with no scenario behind it: a taxable brokerage holding
+an EQUITY position under water, and an IRA holding only cash, under an ordinary authorable
+`allocationLocationPolicy` naming the IRA as EQUITY's first home. One rebalance:
+
+| # | link | observed |
+|---|---|---|
+| 1 | the rebalancer realizes a taxable loss | `STOCK_WITHDRAWAL_TAX` … `proceeds` 120,000, `costBasis` 200,000, `description: 'rebalance'` |
+| 2 | the loss reaches the return | `usLongTermGain: -80000` on the same action; `characterizeCapitalGain` passes it straight through |
+| 3 | a substantially identical replacement lands in a covered wrapper inside the window | a fresh IRA lot, same `identityGroup`, `purchaseDate` = the same day |
+| 4 | §1091 never runs on it | `state.washPendingLosses` is `[]` after the rebalance |
+
+Handing the entry the rebalancer never wrote to the **shipped** `resolveWashSales` — not a
+reimplementation — returns `matchedFraction: 1`, **\$80,000 disallowed**. The full loss is
+deducted today and the ruling destroys it.
+
+Note link 1's action carries `gain: 0`. `_sellTax` clamps `gain` at zero, so any audit that
+reads that field sees no loss anywhere and concludes there is nothing to disallow. The signed
+fields are the only honest reading, and this is the second time in two days that clamp has
+pointed an investigation the wrong way.
+
+##### Why the reference plan does not show it, and why that is not reassurance
+
+Measured on the reference plan the exposure is **\$0**, for two reasons that are both properties
+of that plan rather than of the rule:
+
+- its relocation crosses MARKETS — the taxable book sells the US market synthetic and the
+  wrapper buys the AU one, so the identity groups differ and nothing is substantially identical;
+- the receiving wrapper is an AU **super fund**, which `SHELTERED_ROLES` deliberately excludes
+  (§8.1i: IRA and Roth only, because that is what Rev. Rul. 2008-5 and Pub. 550 name).
+
+Change either — a plan whose wrappers have room for the same market's equity, which is what the
+DEFAULT policy asks for, since `DEFAULT_LOCATION_POLICY` names **ROTH first** for EQUITY — and
+the pattern is live. The construction above needed nothing exotic to produce it.
+
+##### The fix, as built — the sell leg writes the entry, exactly as the harvester does
+
+The seam was already proven; it just had one caller too few. `_washPendingEntries` in
+`rebalance-to-target-apply-reducer.js`, called from the taxable sell leg **before** `holdings`
+is rebuilt — which is the only moment the pre-sale lots and their post-sale counterparts are
+both in hand, and therefore the only place the units and identity of what was sold can be
+recovered exactly. That is also the answer to §8.1j's objection: the instrument never needed to
+go on the payload, because the payload was never the right seam.
+
+1. **`RebalanceToTargetApplyReducer`'s sell leg appends to `washPendingLosses`**, on the same
+   terms §8.1i set: only a LOSS, only lots that name an identity group, `units` from the lots
+   actually consumed. No new machinery, no manifest change, and no second copy of the matching
+   arithmetic — `resolveWashSales` and the April `TAX_FILE_US` resolution (§8.1l/m) are reused
+   whole.
+
+2. **The one real difference from the harvester: the entry must be split by identity group.**
+   The harvester sells a single lot, so `identityGroupOf(source)` is unambiguous. The rebalancer
+   calls `consumeHoldings(matching, take, …)` across every lot of that allocation in the account,
+   which may span several groups. `consumeHoldings` returns `newHoldings`, and `matching` is in
+   hand, so units consumed per lot — and hence the loss apportioned per group — is an exact local
+   diff. Emitting one undifferentiated entry would attribute a loss to whichever group happened
+   to be first, and would match against the wrong replacements.
+
+3. **The buy side needs nothing.** `_shelteredReplacements` reads IRA/Roth lots off their
+   `purchaseDate`, and a rebalance buy establishes a fresh dated lot, so the replacement is
+   already visible to the resolver.
+
+4. **Scope: the sheltered branch only**, matching §8.1i's precedent. The §1091(d) taxable branch
+   for a rebalance sell with a rebalance buy in another TAXABLE account is the same shape as
+   §8.1j's named gap and carries the same cost — it needs a replacement lot located later to
+   write basis onto. It is a timing effect; this one is permanent. The permanent half is closed
+   and §8.1j's entry stands, now widened to name the rebalancer as well as the 1-January
+   neighbour.
+
+5. **The entry is dated `purchaseMs`, not `eventMs`** — the same date, through the same fallback
+   chain, that the buy legs stamp on the replacement lot. §1091's window is ±30 days, so a sale
+   and its replacement dated off two different clocks would silently fail to match, and a null
+   date would skip the entry entirely.
+
+Eleven tests in `tests/unit/rebalance-wash-pending.test.mjs`. The last one is the one that
+matters: it drives the **shipped** `resolveWashSales` over state the reducer produced, so it
+asserts what the return loses rather than the shape of a ledger row. Its two halves are the
+IRA case (destroyed) and the super/cross-market case (stands) — the reference plan's own
+configuration, pinned so that "the plan measures zero" cannot quietly become "the rule does
+nothing".
+
+One fixture detail cost a debugging pass and is worth repeating: **`consumeHoldings` rescales
+`units` on a PARTIAL sale only for a lot carrying `pricePerUnit`** (design 93 §5b). A test lot
+without one keeps its full unit count after a partial sale, the diff reports zero units
+consumed, and no entry is written — a green-looking fixture measuring nothing.
+
+##### Three things to be careful of, all of which can produce a believable wrong number
+
+- **Double-matching.** §1.1091-1(e) says shares that disallowed one loss are disregarded for
+  another. §8.1j already nets its on-the-spot disallowance out of the §8.1i entry; a rebalance
+  entry is separate shares and should compose, but the two writers now share one ledger and that
+  has to be tested rather than assumed.
+- **Over-disallowance from innocent replacements.** `_shelteredReplacements` counts *every*
+  IRA/Roth equity lot bought in the window — an ordinary contribution or a rebalance internal to
+  the wrapper, not only a relocation. That is already true for harvester entries; the rebalancer's
+  loss volume is larger, so a false match costs more.
+- **Australia is untouched**, as in §8.1j: there is no §1091 there, and `auShortTermGain` /
+  `auLongTermGain` must keep carrying the full loss. Stamping the US rule on the AU figure passes
+  every total-based check in the repo.
+
+##### What the fix costs — a drift with no tax in it
+
+Measured on the reference plan, crash-dated: **no shock ⇒ byte-identical**; **with the crash ⇒
+terminal net worth moves +\$22k on a \$14m book (+0.16 %)**, and every April filing it triggers
+reports `delta: 0, disallowed: 0`. **No tax was assessed or removed.** The plan's relocation
+sells one market's synthetic and buys another's inside a super fund, so nothing matches — which
+is exactly what §8.1n predicted and what the end-to-end test pins.
+
+The movement is the extra 15-April `TAX_FILE_US` event perturbing same-date ordering. §8.1m
+already measured this mechanism at "560 moved fields across the goldens" when the filing was
+scheduled unconditionally, and named its cause: **the queue orders by `date || order` with no
+final tie-break.** The filing is scheduled only where a §1091 window is genuinely open, which is
+what §8.1l says should happen — so the behaviour is correct and the drift is a pre-existing
+engine weakness surfacing in more runs than before.
+
+Two consequences worth stating rather than discovering:
+
+- **A crash-year headline number is not comparable across this change.** Any study arm that
+  realizes a rebalance loss will move by a fraction of a percent for reasons that are not tax.
+- **The real fix is a final tie-break on the event queue**, not suppressing a correct filing.
+  That belongs to design 34 §13 and is deliberately not attempted here.
+
+##### Why this matters beyond one plan
+
+If the disallowance is real and unmodelled, **the LOCATED planner books a tax benefit in every
+down year in which it relocates a class into a covered wrapper**, whether or not anyone ever
+authors a feature in this space. That is a correctness question about a default policy, not an
+optional lever — which is what makes it worth a section rather than a backlog line.
 
 ### 8.2 Dividend character
 
