@@ -185,10 +185,20 @@ export function poolMetrics(state, pool, ctx) {
     const native = claimValueNative(account, sleeves);
     balance += fx(native);
     if (hasOffsetCap) {
-      // min(what is parked, what is owed): cash above the debt suppresses no interest and
-      // earns nothing, so it is not capacity — it is money sitting in the wrong place.
+      // The CEILING is what is OWED. Cash above the debt suppresses no interest and earns
+      // nothing, so it is money sitting in the wrong place — but that is a statement about
+      // the balance being too big, not about the ceiling being small.
+      //
+      // Design 97 §12.1 wrote this as `min(balance, loan)` and §20 found what that does: a
+      // ceiling that is never above the balance makes `headroom` identically zero, in BOTH
+      // regimes, so **no flow can ever refill an offset pool** — least of all a drained one,
+      // which is the only time a refill is wanted. It is the exact failure the BALANCE branch
+      // below carries a warning about, one branch down and shipped.
+      //
+      // `min(balance, loan)` is still the right number for "how much of this pool is doing
+      // work"; it is reported as `utilised`, which is what the cover reporting wants.
       const loan = loanForOffset(state, account);
-      offsetCap += fx(Math.min(native, Math.max(0, loan?.balance ?? 0)));
+      offsetCap += fx(Math.max(0, loan?.balance ?? 0));
     }
   }
 
@@ -213,6 +223,10 @@ export function poolMetrics(state, pool, ctx) {
     id:        pool.id,
     balance,
     capacity,
+    // What the pool is actually doing, as distinct from what it could hold. For an offset
+    // this is `min(parked, owed)` — design 97 §12.1's figure, in the field that means it —
+    // and for every other capacity mode it is the balance, clamped at the ceiling.
+    utilised:  capped ? Math.min(balance, capacity) : balance,
     capped,
     target,
     floor,

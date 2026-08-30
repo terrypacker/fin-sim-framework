@@ -46,7 +46,8 @@ import { poolContext, allPoolMetrics } from './pool-metrics.js';
  *
  * ── What it writes ──────────────────────────────────────────────────────────────────
  *  - `state.liquidityPools[id]` — the per-pool cube: balance, capacity, target, cover, the
- *    persisted trailing `high` and (for a TRAILING spend basis) `spendHistory`;
+ *    persisted trailing `high`, the period's `marketReturn` (which the NEXT period's market
+ *    gates read — see `_gateOpen`) and (for a TRAILING spend basis) `spendHistory`;
  *  - `state.poolRefillPlan` — what executor 1 must know: per-pool shortfall, and the set of
  *    source pools whose sale is VETOED this period;
  *  - one `POOL_FLOW_APPLY` per firing TRANSFER edge.
@@ -105,7 +106,7 @@ export class PoolFlowReducer extends Reducer {
    * Returns `{ open, reason }` — the reason is carried into the cube so a closed gate is a
    * recorded event rather than an absence.
    */
-  _gateOpen(flow, { metrics, highs, state, asOfMs }) {
+  _gateOpen(flow, { metrics, highs, state, asOfMs, priorYearReturns }) {
     const g = flow.gate;
     if (!g) return { open: true, reason: null };
 
@@ -124,8 +125,35 @@ export class PoolFlowReducer extends Reducer {
     if (g.targetDrawdownOver != null && drawdownOf(flow.to) < g.targetDrawdownOver - 1e-12) {
       return { open: false, reason: `destination ${flow.to} is not ${(g.targetDrawdownOver * 100).toFixed(0)}% below its high` };
     }
-    // Market state, read live off the rate table rather than off a balance history.
-    const ret = (poolId) => metrics[poolId]?.marketReturn;
+    // Market state — the last COMPLETED calendar year's reading, never this period's.
+    //
+    // `metrics[poolId].marketReturn` reads `state.effectiveGrowthRates`, and design 97 §20
+    // measured what that means at this point in the period: `EquityReturnReducer` folds the
+    // year's draw on at PRE_PROCESS + 1.5, this reducer runs at PRE_PROCESS + 3, and the
+    // holdings grow later in the same period. A gate reading it live therefore knows the
+    // return of the year it is deciding in — corr(reading_t, realized_t) = 1.0000 over 15
+    // years, against 0.07 for the prior year (`probe-pool-gate-foresight.mjs`).
+    //
+    // That is clairvoyance, and it is worth a fortune for reasons that have nothing to do
+    // with liquidity: a gate that pauses equity sales in the year the market is ABOUT to
+    // fall makes every bucket arm look brilliant, believably, and silently. No household can
+    // do it, so no gate may. Reading the previous period's stamped value makes the rule
+    // implementable — "do not sell after a down year" — and turns the gate into a bet on
+    // year-to-year predictability, which is a property of the RETURN PROCESS
+    // (`equityReturnModel`) and therefore something a study can vary rather than assume.
+    //
+    // The unit is the calendar YEAR, not the period, and that is not a simplification. This
+    // reducer fires on BOTH `US_PERIOD_ADVANCE` and `AU_PERIOD_ADVANCE`, six months apart, so
+    // "the previous period's stamp" means last December on the January advance and THIS
+    // JANUARY on the July one — half a year of foresight, surviving in exactly half the
+    // evaluations. `_priorYearReturns` carries the last stamp from an EARLIER year across
+    // every advance within a year, which is also the right unit on its own terms: the equity
+    // tick is annual (`dt = 1`), so a year is the finest grain at which the signal changes.
+    //
+    // Null on the first year, and for a pool with no rated lots (POOL-12b): "no signal" is
+    // not "bad signal", so `sourceReturnOver` stays OPEN and `targetReturnUnder` stays SHUT,
+    // matching each gate's own absent-reading default.
+    const ret = (poolId) => priorYearReturns?.[poolId] ?? null;
     if (g.sourceReturnOver != null) {
       const r = ret(flow.from);
       if (r != null && r < g.sourceReturnOver) {
@@ -153,6 +181,27 @@ export class PoolFlowReducer extends Reducer {
       if (g.ageUnder != null && age > g.ageUnder) return { open: false, reason: `age ${age.toFixed(1)} > ${g.ageUnder}` };
     }
     return { open: true, reason: null };
+  }
+
+  /**
+   * Per pool, the market return of the last COMPLETED calendar year — what the gates act on.
+   *
+   * `marketReturnYear` is the year a cube entry's `marketReturn` was observed in. On the first
+   * advance of a year the prior entry is necessarily from an earlier year, so its
+   * `marketReturn` IS last year's; on any later advance within the same year the earlier
+   * advance has already overwritten it with this year's, so the value it resolved is carried
+   * forward instead. A year with no advance at all simply leaves the most recent completed
+   * year standing, which is what "the last thing that finished" means.
+   */
+  _priorYearReturns(prior, yearOf) {
+    const out = {};
+    for (const pool of this.graph.pools) {
+      const p = prior?.[pool.id] ?? {};
+      out[pool.id] = (p.marketReturnYear != null && p.marketReturnYear >= yearOf)
+        ? (p.priorYearReturn ?? null)
+        : (p.marketReturn ?? null);
+    }
+    return out;
   }
 
   /** How much the destination is asking for, or 0 when the trigger has not tripped. */
@@ -185,6 +234,8 @@ export class PoolFlowReducer extends Reducer {
 
     const prior   = state.liquidityPools ?? {};
     const metrics = allPoolMetrics(state, this.graph, ctx);
+    const yearOf  = new Date(asOfMs).getUTCFullYear();
+    const priorYearReturns = this._priorYearReturns(prior, yearOf);
 
     // The trailing high, monotone, updated BEFORE the gates read it so a pool at a fresh peak
     // this period reads as 0% below its high rather than as one period stale.
@@ -207,11 +258,10 @@ export class PoolFlowReducer extends Reducer {
       const flows = [...this.graph.flows].sort((a, b) =>
         (orderOf.get(a.to) - orderOf.get(b.to)) || (a.priority - b.priority) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-      const yearOf = new Date(asOfMs).getUTCFullYear();
       for (const flow of flows) {
         if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf) continue;
 
-        const gate = this._gateOpen(flow, { metrics, highs, state, asOfMs });
+        const gate = this._gateOpen(flow, { metrics, highs, state, asOfMs, priorYearReturns });
         const dest = metrics[flow.to];
         const src  = metrics[flow.from];
         // Recompute the destination's shortfall against what earlier edges already promised
@@ -273,9 +323,20 @@ export class PoolFlowReducer extends Reducer {
       const entry = {
         balance:      +m.balance.toFixed(2),
         capacity:     +m.capacity.toFixed(2),
+        utilised:     +m.utilised.toFixed(2),
         target:       m.target != null ? +m.target.toFixed(2) : null,
         yearsOfCover: m.yearsOfCover != null ? +m.yearsOfCover.toFixed(3) : null,
         high:         +highs[pool.id].toFixed(2),
+        // This period's observation and the year it was taken in — read by a LATER year's
+        // gates (see `_priorYearReturns`). Also the only record of what a pool's market was
+        // doing in a period: the journal carries the rate table, not the pool's weighted view
+        // of it.
+        marketReturn:     m.marketReturn != null ? +m.marketReturn.toFixed(6) : null,
+        marketReturnYear: yearOf,
+        // What the gates ACTED on this period. Persisted rather than re-derived because a
+        // second advance in the same year must reach the same conclusion as the first, and
+        // because a closed gate is only debuggable next to the number that closed it.
+        priorYearReturn:  priorYearReturns[pool.id] != null ? +priorYearReturns[pool.id].toFixed(6) : null,
         inflow:       +(inflow[pool.id] ?? 0).toFixed(2),
         outflow:      +(outflow[pool.id] ?? 0).toFixed(2),
         gatedFlows:   gatedFlows.filter(g => g.to === pool.id || g.from === pool.id),

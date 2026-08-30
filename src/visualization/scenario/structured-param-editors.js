@@ -715,12 +715,28 @@ const TRIGGER_OPTIONS = Object.freeze([
 // The market-state pair is listed FIRST because it is the one to reach for in a plan being
 // spent down: a trailing-high gate cannot tell a falling market from the pool being drawn
 // down, and latches shut after the first crash (design 97 §16.1b).
+//
+// "last year" is in the labels because it is the whole meaning of the control. These gates act
+// on the last COMPLETED calendar year, not the year they fire in (design 97 §20.2) — a gate
+// that read the current year would be pausing sales in the year the market is about to fall,
+// which no household can do. The difference between "sell only in an up market" and "sell only
+// after an up year" is a year of foresight, and only the second is a rule anyone can follow.
 const GATE_OPTIONS = Object.freeze([
   ['',                    'always'],
-  ['sourceReturnOver',    'source returning over X'],
-  ['targetReturnUnder',   'destination returning under X'],
+  ['sourceReturnOver',    'source returned over X last year'],
+  ['targetReturnUnder',   'destination returned under X last year'],
   ['sourceDrawdownUnder', 'source within X of its high (accumulating pools)'],
   ['targetDrawdownOver',  'destination X below its high (accumulating pools)'],
+]);
+
+// design 97 §12.6. PERIOD is the default; ANNUAL restricts an edge to the first period of the
+// calendar year. Authorable because a market gate reads an ANNUAL signal (the equity tick runs
+// once a year), so an edge free to fire on every advance is re-deciding on an unchanged
+// reading — and because an arm built in a script and not reproducible in the app is a study
+// nobody can check.
+const CADENCE_OPTIONS = Object.freeze([
+  ['PERIOD', 'every period'],
+  ['ANNUAL', 'once a year'],
 ]);
 
 const AMOUNT_OPTIONS = Object.freeze([
@@ -832,6 +848,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     return {
       id: f?.id ?? null, from: f?.from ?? null, to: f?.to ?? null,
       priority: Number.isFinite(Number(f?.priority)) ? Number(f.priority) : 0,
+      cadence: f?.cadence === 'ANNUAL' ? 'ANNUAL' : 'PERIOD',
       triggerKind, triggerValue,
       gateKind, gateValue: gateKind ? g[gateKind] : null,
       amountKind:  f?.amount?.fractionOfSource != null ? 'fractionOfSource' : 'toTarget',
@@ -893,11 +910,13 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
       // the per-kind range; the control must not pre-empt it with the tighter one.
       { field: 'gateValue',    label: 'X',        type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
+      { field: 'cadence',      label: 'Cadence',  type: 'select', options: CADENCE_OPTIONS, width: '1fr' },
       { field: 'amountKind',   label: 'Amount',   type: 'select', options: AMOUNT_OPTIONS, width: '1.1fr' },
       { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr' },
     ],
     newRow:    () => ({ id: null, from: pools[0]?.id ?? null, to: pools[1]?.id ?? null, priority: 0,
-                        triggerKind: '', triggerValue: null, gateKind: '', gateValue: null,
+                        cadence: 'PERIOD', triggerKind: '', triggerValue: null,
+                        gateKind: '', gateValue: null,
                         amountKind: 'toTarget', amountValue: null }),
     addLabel:  '+ Add Flow',
     emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
@@ -945,6 +964,9 @@ function buildFlow(f) {
       : { below: { mode: f.triggerKind === 'belowYears' ? 'YEARS_OF_SPEND' : 'AMOUNT', value: f.triggerValue } };
   }
   if (f.gateKind && f.gateValue != null) out.gate = { [f.gateKind]: f.gateValue };
+  // Only when it is not the default: an authored `cadence: 'PERIOD'` on every edge would make
+  // every previously-saved graph differ from itself on the next save, for nothing.
+  if (f.cadence === 'ANNUAL') out.cadence = 'ANNUAL';
   if (f.amountKind === 'fractionOfSource' && f.amountValue != null) {
     out.amount = { fractionOfSource: f.amountValue };
   }

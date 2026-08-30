@@ -6,7 +6,12 @@ pool sizing (§9). Part II (§§10–15) — the pool GRAPH, which closes the tw
 settings) and **effort 2** (the control surface, §14, sketched only).
 **Effort 1 is BUILT** (2026-08-29); §16 records what building it changed.
 Tests: `tests/unit/evt-drawdown-sequence.test.mjs` (7), `tests/unit/evt-years-of-spend-target.test.mjs` (6),
-`tests/unit/evt-liquidity-pools.test.mjs` (26).
+`tests/unit/evt-liquidity-pools.test.mjs` (30).
+§19 closed the "do not sell equity in a down market" requirement; **§20 reopens it** on a
+different footing, answers it (§20.9), and records three engine defects the reopening found and
+fixed — each silent, each producing believable numbers.
+Study: `scripts/lab/sequence-risk/`. Probes: `scripts/probes/probe-pool-gate-foresight.mjs`,
+`probe-offset-payment-drain.mjs`, `probe-return-autocorrelation.mjs`.
 **Related**: `design/53-account-basis-refactor-and-offset.md` (offset accounts),
 `design/54-loan-liability-accounts.md`, `design/65-allocation-aware-drawdown.md` (the
 `consumeHoldings({selection})` seam this extends), `design/61-holding-allocation-lever.md`
@@ -1004,9 +1009,11 @@ vs market falling — and asserts only the return gate separates them.
 
 ### 16.2 What is deliberately still not built
 
-(§19 is the one requirement that turned out NOT to be a matter of building more of this design:
-"do not sell equity in a down market" is answered by the rebalancer, not the spend walk, and the
-veto that answers it makes the plan worse. Read §19 before proposing anything in this space.)
+(§19 is CLOSED and nothing in it was built. "Do not sell equity in a down market" is answered by
+the rebalancer, not the spend walk; the veto that answers it makes the plan worse; and the sale
+it was all aimed at turns out to carry ~no tax cost, because the class is immediately rebought
+elsewhere. Read §19.2c before proposing anything in this space — the metric, not the mechanism,
+is what went wrong.)
 
 
 - **A cost function on an edge** (§13, unchanged). Gates are conditions on market state.
@@ -1335,11 +1342,21 @@ the study exists to show.
 
 ---
 
-## 19. Not selling equity in a down market — PROPOSED, one candidate left
+## 19. Not selling equity in a down market — CLOSED, all three candidates fail
 
-**Status**: proposed 30 Aug 2026, nothing here built. Two of the three candidate mechanisms have
-now been **measured**, which is why this section is worth more than the feature sketch it
-started as: one of them exists and fails, and the reason it fails constrains the other two.
+**Status**: CLOSED 30 Aug 2026 as stated, and **REOPENED the same day on a different metric —
+see §20**. Everything below stands: all three candidate mechanisms are measured, one exists and
+fails economically (§19.2(3)), and §19.2b/§19.2c dispose of the other two. What §20 changes is
+not a candidate but the *harm* — §19.2c's own diagnosis was that the requirement had none, and
+a requirement that names one is a different requirement. Read §19.2c first; it is still the
+reason none of §19.3–§19.5 was built.
+
+**Two things below are now false as written**, both found by §20 and both fixed there, and
+neither rescues a candidate (§20.9 reaches §19's verdict by an independent route): `gate.sourceReturnOver` was reading the return of the year it was
+deciding in (§20.2), and `equityReturnReversionSpeed` never reached the return process (§20.3).
+The §19.2(3) veto measurement was taken with the clairvoyant gate, so its *mechanism* number
+(crash-year disposals to zero) was flattered; its economic verdict — worst arm of the set —
+was not, and if anything the honest gate can only be worse.
 
 ### 19.1 The requirement
 
@@ -1387,7 +1404,86 @@ previous one wrong.
    somewhere.** Refusing to sell equity in a crash is not a saving, it is a redirection, and the
    whole value of any feature in this space is *which source absorbs it*.
 
-### 19.3 Candidate A — `pool.spendWhen` (the obvious design, and the one still open)
+### 19.2b The attribution — MEASURED (30 Aug 2026)
+
+§19.2(2) named the rebalancer as the crash-year seller and stopped there. But a rebalancer sells
+equity in a crash for two structurally different reasons, and §19's two live candidates address
+one each — so the sale was split before either was built. Three arms, same pools, sizes and
+spend order, one variable at a time: the baseline; the same plan under
+`allocationLocation: PER_ACCOUNT`, where no cross-account placement is possible; and that again
+with no reserve to restore. Two crash dates, early and late, because the facility decays.
+(Numbers in `POOL-SEARCH.md` §9.)
+
+**The generalizable results, which is all that belongs here:**
+
+1. **Cross-account LOCATION churn is the majority of the crash-year sale** — half to two thirds
+   of it, at both crash dates. It is the design-61 LOCATED planner relocating a class, it is a
+   real tax event, and **no liquidity feature can displace it**, because it is not a liquidity
+   event. This is candidate B's target.
+2. **Within-account target RESTORATION — the only component a spend-side gate could prevent —
+   is a small single-digit percentage of the sale, and at the early crash it is indistinguishable
+   from zero.** Candidate A's ceiling is therefore an order of magnitude below the number §19
+   set out to reduce. The no-reserve arm changes the MIX as well as the mechanism, so it bounds
+   that component rather than measuring it cleanly — which only strengthens the conclusion,
+   since even the ceiling is small.
+3. **The facility that would fund candidate A decays to nothing well inside the plan.** Its
+   capacity is `min(balance, linked loan balance)` (§12.1) and the loan amortises: measured
+   against the household's own live spend line it starts under two years of spend, falls below
+   one within four years, and is **identically zero for the last third of the run**. §19.3's
+   second caveat was right and is quantitative. Worse, the two facts compose in the wrong
+   direction: restoration is largest at the LATE crash, which is exactly when the facility is
+   already gone.
+
+**Decision (superseded by §19.2c — B was not built either).** A is bounded
+above by a small fraction of the sale, funded by an instrument that expires before that fraction
+gets interesting. B addresses the majority and has no such decay. §19.5's closing paragraph
+still stands on its own merits — `spendWhen` as a way to hold a facility out of the ordinary
+walk is a real policy — but it is not this requirement's answer, and the attribution run also
+showed the facility falling at a flat rate in every arm, crash or no crash: that is the
+amortisation schedule, not a response to anything.
+
+### 19.2c The requirement does not survive its own metric — CLOSED (30 Aug 2026)
+
+§19.2b said "build candidate B". Before building it, one thing was checked that nothing in this
+section had checked: **whether the location churn is a harm at all.**
+
+It is not obviously one. The planner sells taxable equity and **rebuys the same class inside a
+wrapper**. The household keeps the exposure; nothing is lost to the market; the entire cost is
+the tax. So the question is the SIGN of the realized gain, and measured on both crash dates the
+answer is: **small, and inconsistent in sign.** At the early crash the relocation realizes a
+LOSS — in this model a tax *benefit*, so freezing it would destroy value. At the late crash it is
+noise on a relocation several times its size. (Numbers in `POOL-SEARCH.md` §10.)
+
+Three things follow, in ascending order of importance.
+
+1. **Candidate B is not worth building either.** Its target is real and is the majority of the
+   volume (§19.2b), but removing it is not reliably a saving.
+
+2. **The metric was wrong the whole way, and this is the second time.** §19.2(3) killed the veto
+   because it scored perfectly on the mechanism and worst on the economics. §19.2b then picked
+   the next candidate *by the same mechanism number*. Gross disposal volume was never a proxy for
+   harm: **selling equity in a crash and immediately rebuying the same class in another account
+   is not "selling into a down market" in the sense §19.1 means.** The exposure is retained, only
+   the tax changes, and in a crash the lots sold are at or below their basis. A requirement stated
+   as "do not sell X" needs a harm to name; this one never had one, and every candidate it
+   generated was scored against the absence.
+
+   The generalizable rule, and the reason this section is worth keeping now that it is closed:
+   **a mechanism metric may select a candidate but must never validate one.** Both halves of §19.6
+   said this; §19.2b applied only the first half.
+
+3. **What the measurement actually found is a correctness question elsewhere.** The realized loss
+   at the early crash sits on a taxable sale whose replacement lands in a SHELTERED wrapper — the
+   Rev. Rul. 2008-5 fact pattern, where the loss is disallowed *and destroyed*, with no basis
+   increase anywhere. That rule is unmodelled (design 94 §8.1). If the loss is not real, the
+   location planner is manufacturing tax benefits in every down year, in every plan, whether or
+   not anyone ever builds a feature here. **That belongs to design 94 and is larger than anything
+   §19 proposed.**
+
+Nothing below this line was built. §19.3–§19.5 are kept as the record of what was considered and
+why each was rejected; §19.6's measurement design is the part worth reusing.
+
+### 19.3 Candidate A — `pool.spendWhen` — MEASURED AS NOT WORTH BUILDING for this requirement (§19.2b)
 
 The §12.3 gate object applied to the spend walk: shut ⇒ the pool is skipped and the walk moves
 on. The vocabulary exists, and `poolMarketReturn` already reads the live rate table.
@@ -1413,7 +1509,7 @@ Two known reasons it may still disappoint, both worth stating up front rather th
   `min(balance, linked loan balance)` and the loan amortises (§12.1). A backstop sized in years
   of spend is a different instrument from one sized by whatever debt happens to remain.
 
-### 19.4 Candidate B — freeze the LOCATION planner in a crash
+### 19.4 Candidate B — freeze the LOCATION planner in a crash — REJECTED on measurement (§19.2c)
 
 Not designed, not sketched anywhere else, and the only candidate that addresses the measured
 \$114k directly: suppress cross-account relocation of a class while that class is down, so a
@@ -1458,3 +1554,391 @@ The measurement design is settled and should not be re-derived:
   perfectly on the first and worst on the second.
 - **Include an arm that changes nothing but the mechanism.** The veto's verdict was mis-attributed
   for three rounds because the grid held no ungated cascade, so two things differed at once.
+
+---
+
+## 20. Reopening §19 — the requirement with a harm and a price (30 Aug 2026)
+
+**Status**: **CLOSED with an answer** (30 Aug 2026). The engine work is built (§20.2, §20.3,
+§20.4b, all with tests), the scenario and arms are in `scripts/lab/sequence-risk/`, and the
+study is run — §20.9 has the numbers and §20.10 says what would have to exist for the answer to
+be different. Three probes are in source control and are the record of the measurements:
+`probe-pool-gate-foresight.mjs`, `probe-offset-payment-drain.mjs`,
+`probe-return-autocorrelation.mjs`.
+
+**The one-line answer.** The policy is not a liquidity strategy in this engine; it is leverage
+plus a bet on a number the engine cannot produce. Deferring equity sales into the offset earns
+nothing under IID returns (a coin flip: 164/300 paths, +\$4.9k median on \$13m) and LOSES under
+the only other process available, which turns out to be momentum rather than mean reversion
+(66/300 paths). What does move money in these arms is the borrowing, and it prices like
+borrowing: a better median with a fatter left tail and more ruin.
+
+### 20.1 What is actually different from §19
+
+§19.2c closed the requirement on a real defect in it: *"do not sell X" names no harm*. Gross
+disposal volume was the only thing being scored, and most of that volume turned out to be the
+location planner selling taxable equity and rebuying the same class in a wrapper — exposure
+retained, only the tax changed, and the sign of that tax was inconsistent. Nothing was left to
+save.
+
+The restatement names both sides:
+
+- **the harm** — shares sold at a depressed price are permanently gone from the recovery. That
+  is a claim about the *wealth path*, not about volume, and it is scored on terminal after-tax
+  wealth and on failure;
+- **the price** — an offset drawn down stops suppressing loan principal, so the deferral is
+  bought with interest.
+
+§19's rule survives intact and governs the whole of §20: **a mechanism metric may select a
+candidate but must never validate one.** Disposal volume appears in the report as diagnostics
+and never as an outcome.
+
+**The load-bearing consequence, and it is not about liquidity at all.** Whether the rule can
+work is decided by the RETURN PROCESS before any pool shape is chosen. `EquityReturnTickHandler`
+defaults to `WHITE_NOISE` — explicitly, "equity returns are close to IID" — and every arm in
+§§16–19 ran on it. Under IID returns *there is no recovery to wait for*: a down year says
+nothing about the next, so "spend the offset now and refill it after the market comes back"
+degenerates to **borrow at the loan rate to stay invested**. That is §19.2(3)'s "leverage
+strategy wearing a protection strategy's name" — reached this time by reading the process
+rather than by three rounds of measurement.
+
+The handler also offers `MEAN_REVERTING`, where a down year does predict an up one. So the
+study's primary axis is `equityReturnModel`, not the pool graph:
+
+- pays under `MEAN_REVERTING` and not under `WHITE_NOISE` ⇒ the strategy is worth exactly the
+  mean reversion the author believes in and nothing else. That converts a real-world intuition
+  into a number a scenario can carry, and every future bucket question inherits it;
+- pays under both ⇒ it is the leverage, and §20.7's arm B is what shows that.
+
+Either way the section closes with a finding, which is what §19 could not do.
+
+### 20.2 The gate could see the year it was deciding in — MEASURED and FIXED
+
+Every candidate in §19 rests on `gate.sourceReturnOver`, which reads `poolMarketReturn`, which
+read `state.effectiveGrowthRates`. Two writers sit one priority step apart inside the same
+period advance:
+
+| priority | reducer | what it does |
+|---|---|---|
+| `PRE_PROCESS + 1.5` | `EquityReturnReducer` | folds this tick's draw onto the rate table |
+| `PRE_PROCESS + 3` | `PoolFlowReducer` | the gate reads it |
+
+and the holdings grow later in the same period. `probe-pool-gate-foresight.mjs` patches
+`_gateOpen` to record what the gate saw *at the instant it saw it*, and measures the realized
+return over the year that follows (Δ market value net of Δ cost basis, the convention of
+`probe-bucket-sequencing.mjs`):
+
+```
+                          corr w/ realized(t)   corr w/ realized(t-1)
+  the LIVE rate table           1.0000                0.0704
+```
+
+Perfect correlation with the year the gate is deciding in. Since the equity tick is annual, that
+is a full year of foresight: the gate paused equity sales in the year the market was *about to*
+fall. It is worth an enormous amount, it has nothing to do with liquidity, no household can do
+it, and the failure is silent — the number is believable either way. It is the same shape as the
+three mis-attributions §19 already records, one layer further down.
+
+**The fix.** `PoolFlowReducer` already computes `marketReturn` per pool per period; it now stamps
+it on the cube, and `sourceReturnOver` / `targetReturnUnder` read the **prior** period's stamp.
+`sourceReturnOver: 0` therefore means *"sell the source only after an up year"*, not *"only in an
+up year"* — the two differ by a year of foresight and only the first is implementable. The
+absent-reading defaults are unchanged and now also cover the first period: no reading leaves
+`sourceReturnOver` open and `targetReturnUnder` shut, because "no signal" is not "bad signal"
+(POOL-12b's rule).
+
+The existing gates were changed rather than joined by honest siblings, deliberately: a
+clairvoyant gate has no legitimate use, and no shipped finding depends on one — §19 built
+nothing. `evt-liquidity-pools.test.mjs` POOL-12 now declares the world on the cube; **POOL-12c**
+is the regression, and it asserts the property from both sides in one test, because a
+catastrophic *current* rate that leaves the gate open would also pass against a gate that reads
+nothing at all.
+
+**The generalizable rule.** *A reducer that gates on a rate table stamped earlier in the same
+period advance is reading the future.* Swept for siblings: `PoolFlowReducer` is the only consumer
+of `effectiveGrowthRates` as a SIGNAL. The behavioral trio that also reacts to market state
+(`PanicSellReducer`, `DownturnRothConversionReducer`, `OpportunisticRebalanceReducer`, all at
+`PRE_PROCESS + 4`) read `state.activeRegimes`, which a shock stamps on the same tick it books its
+revaluation — they react to a fall that has already happened, and are unaffected.
+
+The probe stays, and it still prints the LIVE row next to the acted-on one. That row is not a
+bug report: it is a standing demonstration that the live rate table IS the coming year's return,
+which is why no gate may read it.
+
+### 20.3 The mean-reversion speed never reached the process — WIRED
+
+`EquityReturnTickHandler` has always accepted `reversionSpeed`, and
+`economic-regimes-toolset.js` never passed it — so `MEAN_REVERTING` ran at the constructor's
+`0.3` whatever a scenario said. A process switch whose one tuning knob cannot be reached is a
+switch with a hidden constant behind it, and §20.1 makes that constant the single number this
+study's answer turns on.
+
+Added `equityReturnReversionSpeed` (default `0.3`, mirroring `yieldCurveReversionSpeed`) and
+passed it to both the equity handler and `PropertyReturnTickHandler`, which already borrows the
+equity model and vol and would otherwise disagree about what `MEAN_REVERTING` means whenever
+`shareMarketFactor` is off. `variant.mjs` exposes it as `stochastic.equityReversion`.
+
+The test is a pair, and needs to be: the OU sweep must move the run, and the same sweep under
+`WHITE_NOISE` must be exactly inert. Either assertion alone passes against a param that reaches
+nothing.
+
+### 20.4 The offset has a second drain, and pinning it only changes which end dies
+
+An arm that spends the offset in a down market measures that policy only if nothing else is
+draining the offset meanwhile. `resolveLoanCashKey` (design 54 P4) says something is: absent an
+explicit `paymentSourceKey`, a loan direct-debits a same-currency offset linked to its property,
+ahead of the ordinary cash resolver. `probe-offset-payment-drain.mjs`, one variable — where the
+mortgage debits — on a synthetic 16-year run:
+
+```
+        A: payment debits the OFFSET (default)   B: payment debits AU savings
+year     offset       loan    facility           offset       loan    facility
+2026   A$264,000  A$369,116  A$264,000         A$300,000  A$368,280  A$300,000
+2030   A$120,000  A$248,336  A$120,000         A$300,000  A$227,887  A$227,887
+2034         A$0  A$132,332        A$0         A$300,000   A$83,887   A$83,887
+2037         A$0   A$37,440        A$0         A$300,000        A$0        A$0
+```
+
+`facility` is `min(balance, loan)` — `POOL_CAPACITY_MODE.OFFSET_CAP` (§12.1), the figure that
+decides how much spending the backstop can actually absorb.
+
+**Two different decay mechanisms, and pinning converts one into the other.** In A the direct
+debit consumes the cash at the full P&I, flat, and the facility is dead in year 9 — of the
+policy's own money, before any crash. In B the offset holds, and the facility now tracks the
+**loan**, which amortises to zero anyway. This is §19.2b's "the facility decays to nothing well
+inside the plan" split into its causes, and it explains §19.2b's other observation — the facility
+falling at a flat rate in every arm, crash or no crash — as the direct debit, not a response to
+anything.
+
+**Consequence for the arm design, and it is not optional.** The scenario that tests the mechanism
+must pin `paymentSourceKey` **and** run the loan interest-only, or the facility expires before the
+theory can be exercised and a null result means only "the offset ran out". Facility decay is a
+real constraint and deserves its own arm — but it is a *second* question, and leaving it inside
+the first one is how §19 spent three rounds attributing results to the wrong cause.
+
+### 20.5 The mechanism needs no new code
+
+§19.5 held that testing this forces `spendWhen`, and with it §12's build-time compile out of the
+toolset's state projection — weakening the "no second drawdown code path" guarantee. It does not,
+because **spending the offset first with a return-gated refill is the conditional spend**:
+
+- **up year** — spend the offset, refill it from equity ⇒ net identical to selling equity to
+  spend;
+- **down year** — spend the offset, refill gate shut ⇒ the offset carries the year and equity is
+  untouched.
+
+The refill is `growth → offset`, `amount: toTarget`, `gate: { sourceReturnOver: 0 }`. It is a
+cross-account edge, so `PoolFlowApplyReducer` executes it through `replenishSavings` — real
+disposal, real CGT, the taxing seam intact (§12.4). All of it exists.
+
+This is worth stating as a general property rather than a trick: **a conditional draw order and an
+unconditional draw order with a conditional refill are the same policy**, and the second is
+expressible in the graph as it stands. `spendWhen` may still be worth building for the reason
+§19.5's closing paragraph gives — holding a facility out of the ordinary walk so it is still there
+later — but that is a separate argument and this study does not need it.
+
+### 20.6 The minimal scenario
+
+§19's measurements were taken on a plan carrying a bond reserve, a cross-account location planner
+and a rebalancer, and every one of those turned out to sit between the policy and the thing it was
+supposed to change (§19.2(2): "a pool cannot intercept a draw that does not pass through it").
+The scenario for §20 removes each of them by construction:
+
+| element | setting | why |
+|---|---|---|
+| growth book | one taxable brokerage, EQUITY only | no bond reserve between the spend walk and equity — the draw the policy is about actually reaches it |
+| location | `allocationLocation: PER_ACCOUNT` | no cross-account relocation, which §19.2b measured as the majority of crash-year volume and §19.2c showed is not a harm |
+| the facility | offset + property + interest-only loan, `paymentSourceKey` pinned to cash | §20.4 |
+| spending | fixed, real | a guardrail cannot run out of money, so `failed` would stop being informative |
+| shocks | dated, identical on every arm, and **asserted to have landed** | the pool study's standing hygiene is `shocks: []`, which is why §19's veto went three rounds without meeting a crash |
+
+A dated shock is legitimate against a gate that reads the *prior* period, and only now: §19.6
+argued a gate "reacts, it cannot foresee", which was the right principle applied to a mechanism
+that did not satisfy it (§20.2). The stochastic arms carry the weight regardless; the dated crash
+is the readable case.
+
+### 20.7 The arms and the metric
+
+One variable each (§19.6's third rule, which the veto grid lacked):
+
+| arm | what it is |
+|---|---|
+| **A** control | spend equity directly; the offset is untouched |
+| **B** mechanism | offset first in `spendOrder`, refill **ungated** |
+| **C** the theory | as B, refill gated `sourceReturnOver: 0` |
+| **D** bound | as C with no refill at all — the pure deferral |
+
+B is the arm the study lives or dies on: by §20.5 it should land on top of A, and if it does not,
+the difference is plumbing rather than policy and C means nothing. Each arm runs under both
+`WHITE_NOISE` and `MEAN_REVERTING`, paired on identical seeds.
+
+**Scored**: after-tax terminal wealth as a PAIRED per-path difference (C−B, never a difference of
+two medians), failure count with worlds rescued and worlds broken, cumulative loan interest paid
+— the price, which is the half §19 never had — and the post-crash trough. Gross equity disposals
+are reported as diagnostics, labelled as such.
+
+### 20.4b A refill could never fill an offset pool at all — FOUND BY THE ARMS, FIXED
+
+Building the arms found a third defect, and it is the one that would have made the whole study
+report a null result about a policy that never ran.
+
+`POOL_CAPACITY_MODE.OFFSET_CAP` was `min(balance, linked loan)` (§12.1). That expression is
+never greater than the balance, so `headroom = max(0, capacity − balance)` was **identically
+zero for every offset pool in every state** — and a flow's transfer is clamped by headroom. No
+refill edge could put a dollar into an offset, least of all a drained one, which is the only
+time a refill is wanted. In the first run of the arms the offset drained to zero in year one
+and stayed there in all three of B, C and D, which were byte-identical as a result.
+
+The failure was silent in the way this design keeps naming: a pool sitting exactly at its
+stated capacity looks correct.
+
+It is also the failure `pool-metrics.js` already carries a warning about, one branch further
+up — *"BALANCE mode means this pool has no ceiling of its own, NOT that its ceiling is what it
+currently holds. Conflating the two makes `headroom` identically zero and no refill can ever
+fire"* — written by the same hand that then shipped the same conflation in `OFFSET_CAP`.
+
+**The fix separates two things §12.1 had in one field.**
+
+| field | meaning |
+|---|---|
+| `capacity` | the CEILING — the linked loan balance. The most that can usefully be parked. |
+| `utilised` | `min(balance, capacity)` — how much of the pool is doing work. §12.1's figure, in the field that means it. Cash above the debt suppresses no interest, which is a statement about the balance being too big, not about the ceiling being small. |
+
+`headroom` is now right in both regimes: zero when the offset already exceeds the debt (POOL-4's
+case, unchanged), and `loan − balance` when it is drawn (POOL-4d, new). §12.1's prose above is
+superseded on this point.
+
+### 20.8 What closes this section
+
+A statement of the form: *under this return process, at this reversion speed, deferring equity
+sales into the offset is worth X per path, costs Y in interest, and rescues/breaks Z worlds* —
+with the `WHITE_NOISE` column present, because a strategy that only works under an assumption
+should be read next to the assumption.
+
+### 20.9 The answer — MEASURED (30 Aug 2026)
+
+`scripts/lab/sequence-risk/`, 300 paired paths per arm, equity vol 18 %, common random numbers
+(asserted: every arm sees the same realized equity path on the same seed, or the report says so
+and refuses to be read as paired). All figures are per-path differences in after-tax terminal
+wealth, on the synthetic scenario of §20.6.
+
+**First, the process. This is the finding everything else follows from.**
+`probe-return-autocorrelation.mjs` measures the lag-1 autocorrelation of annual equity returns
+in each world the engine can produce:
+
+| process | measured ρ(1) | predicted |
+|---|---|---|
+| `WHITE_NOISE` | −0.001 | 0 |
+| `MEAN_REVERTING`, k = 0.9 | **+0.409** | e^(−k) = 0.407 |
+| `MEAN_REVERTING`, k = 0.5 | **+0.601** | 0.607 |
+| `MEAN_REVERTING`, k = 0.15 | **+0.830** | 0.861 |
+
+`EquityReturnTickHandler` reuses `FX_PROCESS_MODELS`, whose OU step is
+`dev_t = dev_(t−1)·e^(−k·dt) + σ·√dt·z`. For FX that runs on a RATE — a level — and is genuinely
+mean-reverting. For equity it runs on the deviation of a RETURN, which is already a rate of
+change, so consecutive **returns** are correlated at e^(−k): positively. **What the enum calls
+mean reversion is momentum**, and a lower k is *more* persistent, not less.
+
+The generalizable statement, and the reason this is worth keeping: *an OU on a level
+mean-reverts; the same OU on a rate of change is momentum.* One shared process library across
+two quantities one derivative apart is what hides it.
+
+That settles the requirement before the arms are read. "Do not sell in a down market, sell after
+the recovery" is a bet on ρ(1) < 0. **The engine has no world with ρ(1) < 0.** IID offers
+nothing to wait for; the OU makes the rule actively wrong, because a down year predicts another
+down year and the household holds through a continuing decline.
+
+**The gate itself — C − B, per path:**
+
+| world | median | wins | p10 | rescued / broken |
+|---|---|---|---|---|
+| IID, no crash | +\$4.9k | 164/300 | −\$54k | 0 / 1 |
+| IID, dated crash | +\$23.7k | 192/300 | −\$109k | 1 / 2 |
+| momentum, no crash | \$0 | 66/300 | −\$260k | 0 / 2 |
+| momentum, dated crash | −\$8.4k | 105/300 | −\$227k | 0 / 6 |
+
+A coin flip where there is no information (164/300 is 55 %, on a median terminal wealth of
+\$13m — 0.04 %), and a loser where the information points the other way (66/300). The one
+column where it earns anything is the dated crash, and that world contains a rebound **by
+construction**: a shock's recovery curve is declared in advance, not drawn. Even there it is
++0.29 % of median wealth, bought with a p10 of −\$109k and two worlds broken against one
+rescued.
+
+**What actually moves money in this arm set is the borrowing.** B − A is the carry of routing
+spending through the facility at all, and its sign is the leverage's P&L rather than a fee:
++\$116k median with no crash, −\$46k with one, −\$437k under momentum-with-a-crash. D — draw
+the facility and never repay it — has the best median of any arm under IID (+\$367k over B) and
+the worst tail (p10 −\$381k, **9 worlds broken against 0 rescued**). That is the signature
+§19.2(3) described from one path and one arm: *a leverage strategy wearing a protection
+strategy's name*, and it prices like one.
+
+**Three conclusions.**
+
+1. **§19's economic verdict is confirmed by a completely independent route**, on a scenario
+   built to remove every confound §19 tripped over, with a named harm and a priced cost. It is
+   not that the mechanism could not intercept the sale (§19.2(2)) or that the volume was not a
+   harm (§19.2c) — here the mechanism *does* intercept and the harm *is* named, and the policy
+   still earns nothing.
+2. **The requirement was never a liquidity question.** It is a question about the return
+   process, and it was decided by ρ(1) before any pool was drawn. A liquidity feature cannot
+   create a rebound to sell into.
+3. **The one thing worth keeping from all of §19 and §20 is the instrument, not the policy.**
+   Three engine defects surfaced only because something finally tried to use the gate for real
+   (§20.2, §20.4b, and the unwired knob of §20.3), and each was silent and produced believable
+   numbers. That is the return on building the arms.
+
+### 20.10 What would have to exist for the answer to change
+
+One thing, and it is not in this design's territory: **an equity return process with negative
+lag-1 autocorrelation** — an OU on the price LEVEL relative to trend, so that a fall creates a
+subsequent excess return, rather than an OU on the return, which creates persistence. That is a
+design-74 change, it moves what every Monte Carlo in the repo means, and it should be taken
+deliberately rather than as a side effect of a bucket study.
+
+Two things to say honestly before anyone builds it. Annual equity ρ(1) measured on real data is
+small and unstable in sign — which is why `WHITE_NOISE` is the default and why the bucket
+literature's central claim is contested — so the likely outcome is a small effect with a wide
+band around it. And the process would have to be calibrated and declared per scenario, because
+the whole value of the policy is then a function of exactly that number: **the deliverable would
+be the assumption becoming visible, not a feature.**
+
+Until then, the honest summary for a household asking this question is that the offset is a
+**leverage** decision priced against the loan rate, not a sequence-risk hedge — and that it
+should be evaluated on the left tail, where D loses 9 worlds and rescues none.
+
+### 20.11 The control surface, checked against a study that actually used it
+
+§17's editor holds up: pools, claims and flows are all authorable, and arms A, B and D of §20.7
+were reproducible in the app as authored. Three gaps showed up only because a study tried to
+build a specific arm and then read what it did.
+
+**Fixed here.**
+
+1. **`cadence` was not authorable.** The C arm is `cadence: ANNUAL` (§12.6) and the flows table
+   had no column for it, so the arm the study ran could not be written in the app. It happens
+   not to change this scenario's numbers — the periods are annual anyway — which is exactly why
+   it would have gone on being missing. Added as a column, written back only when it is not the
+   default so no saved graph differs from itself on the next save.
+2. **Two labels had become false**, and false in the direction that misleads the one person who
+   reaches for them:
+   - the gate options read *"source returning over X"*, which is the clairvoyant reading §20.2
+     removed. They now read *"source returned over X **last year**"* — the difference between
+     the two is a year of foresight, and only the second is a rule anyone can follow;
+   - *"Equity Mean-Reversion Speed"* is a **momentum** knob (§20.9): returns end up correlated
+     at +e^(−k), so a lower k is more persistent. It is now labelled *"Equity Return Persistence
+     (OU pull-back speed k)"*, with the measured numbers in the description and a note that no
+     setting of it makes a down year predict an up year. The FX and yield-curve reversion
+     speeds keep their names: those run on levels and do mean-revert.
+
+**Left for the next session, and it is the one worth doing.** *Nothing in the workbench reads
+`state.liquidityPools`.* The graph can be authored and cannot be observed. The cube already
+carries balance, target, capacity, `utilised`, cover, inflow, outflow, `marketReturn`,
+`priorYearReturn` and `gatedFlows` — and `PoolFlowReducer`'s own docstring says why the last of
+those matters: *"the interesting event is nearly always a flow that did NOT fire, and nothing
+else in the journal records a non-event."* A Liquidity Pools panel, sibling to
+`spending-plugin.js` and `allocation-plugin.js`, showing those per year with the gate's reason
+next to the flow that did not fire.
+
+The argument for it is this section's own history: §20.2's foresight, §20.4b's identically-zero
+headroom and §20.3's unwired knob were all visible in that cube from the first period of the
+first run, and each took a study to find instead.
