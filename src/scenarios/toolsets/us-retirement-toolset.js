@@ -32,6 +32,7 @@ import {
 } from '../../finance/handlers/earnings-handlers.js';
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../../finance/holdings/holdings-selection.js';
 import { normalizeDrawdownSequence } from '../../finance/holdings/drawdown-sequence.js';
+import { resolveLiquidityGraph, compileToDrawdownSequence } from '../../finance/pools/liquidity-graph.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
 import { ExpenseEventHandler, buildExpenseEventSchedule } from '../../finance/spending/strategies/expense-event-handler.js';
@@ -674,7 +675,20 @@ export const US_RETIREMENT = {
       // overlapping sleeve set, a sequence beside PROPORTIONAL) produces a run that
       // completes and lies. Spread so an absent sequence adds NO state key at all — the
       // same "absent is absent" rule drawdownSecurityOrder follows above.
+      //
+      // Design 97 Part II — THE GRAPH COMPILES (§12). When a `liquidityGraph` is authored it
+      // is the authority, and `compileToDrawdownSequence` flattens its pools' claims into
+      // exactly the field above. That is what keeps effort 1 from growing a second drawdown
+      // code path: `AccountService.replenishSavings` never learns that pools exist.
+      // Authoring both a graph and a hand-written sequence throws (two authorities, one
+      // field); authoring neither leaves both keys absent and the drawdownPriority walk
+      // byte-identical.
       ...((() => {
+        const graph = resolveLiquidityGraph(p, context.accounts ?? []);
+        if (graph) {
+          const seq = compileToDrawdownSequence(graph);
+          return { liquidityGraph: graph, ...(seq ? { drawdownSequence: seq } : {}) };
+        }
         const seq = normalizeDrawdownSequence(p.drawdownSequence, context.accounts ?? [], {
           drawdownMode: p.drawdownMode,
         });

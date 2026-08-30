@@ -313,6 +313,8 @@ holdings math / action emission; none service-backed).
 | `ContributionSuspensionToggleReducer` | ✅ |
 | `DownturnRothConversionReducer` | ✅ |
 | `StockHarvestApplyReducer` | ✅ |
+| `PoolFlowReducer` (design 97 Part II) | ✅ `evt-liquidity-pools.test.mjs` — POOL-5/5b/5c/5d (the (s, S) band and shared shortfall), POOL-6/6b (the gate and its working-detector control), POOL-7 (the reverse edge). I1-pure: it reads state and emits, it moves nothing. |
+| `PoolFlowApplyReducer` (design 97 Part II) | ✅ `evt-liquidity-pools.test.mjs` — POOL-8 (the transfer raises its disposal-tax action, asserted on the ACTION stream), POOL-8b (a scoped draw does not reach past its source pool). Service-backed, so **not** I1-pure — §7.3's class. |
 
 ### F — Economic regimes
 

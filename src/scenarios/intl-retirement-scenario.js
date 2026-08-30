@@ -928,11 +928,13 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // US_RETIREMENT toolset (`normalizeDrawdownSequence`), which throws on an unknown key,
     // an overlapping sleeve set, or a sequence set beside PROPORTIONAL.
     //
-    // 'Object' (a JSON textarea), not a bespoke editor: the list is an ORDER over pairs of
-    // (account, sleeve set), and a control that expresses that honestly is real UI work.
-    // A textarea over validated JSON says what it is; a half-editor would not.
+    // `DrawdownSequence` — a reorderable (account, sleeves) row list. It WAS a JSON
+    // textarea, on the reasoning that the param is an ORDER and a control that says so
+    // honestly is real UI work. The missing piece was per-row reordering, which
+    // `buildRowListEditor` gained for the design-95 lists; with that plus a sleeve
+    // checkset the honest control is a composition of parts that already exist.
     key: 'drawdownSequence', label: 'Drawdown Sequence (pools)',
-    type: 'Object', group: 'Spending',
+    type: 'DrawdownSequence', group: 'Spending',
     mc: false, opt: false, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownSequence,
     description: 'ORDERED list of pools to draw spending from, e.g. '
       + '[{"key":"auSavingsAccount"},{"key":"brokerageAccount","sleeves":["BOND"]},'

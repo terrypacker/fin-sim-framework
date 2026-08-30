@@ -647,3 +647,306 @@ export function buildRateKeyMapEditor(param) {
   render();
   return container;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DESIGN 97 — the drawdown sequence and the liquidity POOL GRAPH
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Both design-97 params shipped as `type: 'Object'` — a JSON textarea — and the schema
+ * comment said why: "the list is an ORDER over pairs of (account, sleeve set), and a control
+ * that expresses that honestly is real UI work; a textarea over validated JSON says what it
+ * is, a half-editor would not."
+ *
+ * That reasoning was about the ORDER. `buildRowListEditor` gained `reorderable` since (a
+ * move-up button per row), which is the missing piece, so an honest control is now a
+ * composition of parts that already exist rather than new UI work. What these two editors
+ * add on top is two column types (`text` for an invented id, `checkset` for the sleeves) and
+ * the cross-table refresh a graph needs.
+ *
+ * ─── why a graph is THREE flat tables, not one nested editor ─────────────────
+ *
+ * A pool holds a LIST of claims, so the natural shape is a list of lists — and a nested
+ * repeating-row editor is the thing the original comment correctly called real UI work.
+ * Splitting claims into their own table keyed by pool id makes all three tables flat, so all
+ * three are the same shared component. It also makes the multi-account pool (the "one year
+ * of cash across two savings accounts" case, which is the whole reason a pool is a node and
+ * not a sequence entry) as easy to author as the single-account one: add a row.
+ *
+ * The cost is that a pool's identity is a string the user types in one table and selects in
+ * two others. That is what `refresh` is for: renaming a pool re-renders the claim and flow
+ * tables so an orphaned reference shows as "(not found)" immediately, rather than at Rebuild.
+ *
+ * ─── validation stays where it is ────────────────────────────────────────────
+ *
+ * These editors deliberately do NOT re-implement `normalizeLiquidityGraph`. Design 97 §6/§12.7
+ * put validation at the config boundary precisely because every way of getting a graph wrong
+ * produces a run that completes and lies; a second copy in the UI would be a second thing to
+ * keep in step. What the editors do is make the *vocabulary* visible — the account list, the
+ * sleeve set, the target and capacity modes, the gate kinds — so most of those errors are no
+ * longer typable.
+ */
+
+/** The ALLOCATION sleeves a claim may narrow to — the drawdown-relevant classes. */
+const SLEEVE_OPTIONS = Object.freeze(
+  ALLOCATION_VALUES.filter(a => a !== 'OTHER').map(a => [a, a]));
+
+const TARGET_MODE_OPTIONS = Object.freeze([
+  ['',               '— none —'],
+  ['YEARS_OF_SPEND', 'years of spend'],
+  ['PERCENT',        '% of book'],
+  ['AMOUNT',         'amount'],
+]);
+
+const CAPACITY_MODE_OPTIONS = Object.freeze([
+  ['BALANCE',        'balance (no ceiling)'],
+  ['OFFSET_CAP',     'offset cap (min of cash, loan)'],
+  ['AMOUNT',         'amount'],
+  ['YEARS_OF_SPEND', 'years of spend'],
+]);
+
+const TRIGGER_OPTIONS = Object.freeze([
+  ['',                    'under target'],
+  ['belowYears',          'below N years'],
+  ['belowAmount',         'below amount'],
+  ['belowTargetFraction', 'below fraction of target'],
+]);
+
+// The market-state pair is listed FIRST because it is the one to reach for in a plan being
+// spent down: a trailing-high gate cannot tell a falling market from the pool being drawn
+// down, and latches shut after the first crash (design 97 §16.1b).
+const GATE_OPTIONS = Object.freeze([
+  ['',                    'always'],
+  ['sourceReturnOver',    'source returning over X'],
+  ['targetReturnUnder',   'destination returning under X'],
+  ['sourceDrawdownUnder', 'source within X of its high (accumulating pools)'],
+  ['targetDrawdownOver',  'destination X below its high (accumulating pools)'],
+]);
+
+const AMOUNT_OPTIONS = Object.freeze([
+  ['toTarget',         'fill to target'],
+  ['fractionOfSource', 'fraction of source'],
+]);
+
+/** Account options as `[stateKey, label]`, from the live account list. */
+function accountOptions(accounts) {
+  return (accounts ?? []).map(a => [a.stateKey, a.name ? `${a.name} (${a.stateKey})` : a.stateKey]);
+}
+
+/**
+ * The sleeves a row may narrow to, given the account it names.
+ *
+ * Empty for anything but a brokerage, because §3.1's rule is that sleeves only MEAN
+ * something on an account whose draw runs through `consumeHoldings` — narrowing a savings or
+ * offset account reads as a pool boundary and enforces nothing, and the normalizer throws on
+ * it. Returning no options is what turns that from an error you can type and discover at
+ * Rebuild into a choice that is not on screen.
+ */
+function sleeveOptionsFor(accounts) {
+  const typeOf = new Map((accounts ?? []).map(a => [a.stateKey, a.type]));
+  return (row) => (typeOf.get(row?.key) === 'brokerage' ? SLEEVE_OPTIONS : []);
+}
+
+/**
+ * `DrawdownSequence` — design 97 §3's ordered pool list, `[{ key, sleeves }]`.
+ *
+ * ORDER is the datum here, so the list is `reorderable` and deliberately NOT sorted: there
+ * is no invariant to sort by, and re-sorting would destroy the only thing the param says.
+ *
+ * Blank sleeves = the whole account, which is why the checkset's `blankValue` is null rather
+ * than `[]`: §3.1 rule 3 gives an unnarrowed entry a different meaning (it claims everything),
+ * and an empty array would be rejected by the normalizer as a claim of nothing.
+ */
+export function buildDrawdownSequenceEditor(param, accounts = []) {
+  const rows = (Array.isArray(param.value) ? param.value : []).map(e => ({
+    key:     typeof e === 'string' ? e : (e?.key ?? null),
+    sleeves: Array.isArray(e?.sleeves) && e.sleeves.length ? [...e.sleeves] : null,
+  }));
+  const sync = () => {
+    const kept = rows.filter(r => r.key);
+    param.value = kept.length
+      ? kept.map(r => ({ key: r.key, ...(r.sleeves?.length ? { sleeves: [...r.sleeves] } : {}) }))
+      : null;
+  };
+  sync();
+
+  return buildRowListEditor({
+    rows,
+    reorderable: true,
+    columns: [
+      { field: 'key',     label: 'Account', type: 'select', options: accountOptions(accounts),
+        rerender: true, width: '1.6fr' },
+      { field: 'sleeves', label: 'Sleeves (blank = whole account)', type: 'checkset',
+        options: sleeveOptionsFor(accounts), blankValue: null, width: '2fr',
+        emptyText: 'whole account' },
+    ],
+    newRow:    () => ({ key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
+    addLabel:  '+ Add Pool',
+    emptyText: 'No sequence — accounts are drawn in drawdownPriority order (the default).',
+    onChange:  sync,
+  });
+}
+
+/**
+ * `LiquidityGraph` — design 97 Part II, `{ pools, flows }`, as three flat tables.
+ *
+ * The value is rebuilt from the tables on every edit rather than mutated in place, for the
+ * reason `buildAllocationRegimeTargetsEditor` gives about maps: a half-renamed pool id would
+ * otherwise drop its claims the moment the new key was written.
+ */
+export function buildLiquidityGraphEditor(param, accounts = []) {
+  const value = isPlainObject(param.value) ? param.value : {};
+
+  // Pools, minus their claims — the claims live in their own table (see the header note).
+  const pools = (Array.isArray(value.pools) ? value.pools : []).map(p => ({
+    id:          p?.id ?? null,
+    label:       p?.label ?? null,
+    spendOrder:  Number.isFinite(Number(p?.spendOrder)) ? Number(p.spendOrder) : null,
+    targetMode:  p?.target?.mode ?? '',
+    targetValue: Number.isFinite(Number(p?.target?.value)) ? Number(p.target.value) : null,
+    capacity:    p?.capacity?.mode ?? 'BALANCE',
+    // Round-tripped untouched: `ui` is opaque to the engine and belongs to the editor that
+    // effort 2 will build (design 97 §14). Dropping it here would silently discard a layout.
+    ui:          p?.ui ?? null,
+  }));
+
+  const claims = (Array.isArray(value.pools) ? value.pools : []).flatMap(p =>
+    (Array.isArray(p?.claims) ? p.claims : []).map(c => ({
+      pool:    p?.id ?? null,
+      key:     typeof c === 'string' ? c : (c?.key ?? null),
+      sleeves: Array.isArray(c?.sleeves) && c.sleeves.length ? [...c.sleeves] : null,
+    })));
+
+  const flows = (Array.isArray(value.flows) ? value.flows : []).map(f => {
+    const t = f?.trigger ?? {};
+    const g = f?.gate ?? {};
+    const triggerKind = t.belowTargetFraction != null ? 'belowTargetFraction'
+      : t.below?.mode === 'YEARS_OF_SPEND' ? 'belowYears'
+      : t.below != null ? 'belowAmount' : '';
+    const triggerValue = triggerKind === 'belowTargetFraction' ? t.belowTargetFraction
+      : t.below?.value ?? null;
+    // Order matters only in that a gate object carrying two kinds would round-trip as the
+    // first found; the normalizer accepts several, but the row control expresses one.
+    const gateKind = ['sourceReturnOver', 'targetReturnUnder',
+                      'sourceDrawdownUnder', 'targetDrawdownOver'].find(k => g[k] != null) ?? '';
+    return {
+      id: f?.id ?? null, from: f?.from ?? null, to: f?.to ?? null,
+      priority: Number.isFinite(Number(f?.priority)) ? Number(f.priority) : 0,
+      triggerKind, triggerValue,
+      gateKind, gateValue: gateKind ? g[gateKind] : null,
+      amountKind:  f?.amount?.fractionOfSource != null ? 'fractionOfSource' : 'toTarget',
+      amountValue: f?.amount?.fractionOfSource ?? null,
+    };
+  });
+
+  const poolIdOptions = () => pools.filter(p => p.id).map(p => [p.id, p.label || p.id]);
+
+  const sync = () => {
+    const kept = pools.filter(p => p.id);
+    if (!kept.length) { param.value = null; return; }
+    param.value = {
+      pools: kept.map(p => ({
+        id: p.id,
+        ...(p.label ? { label: p.label } : {}),
+        ...(p.spendOrder != null ? { spendOrder: p.spendOrder } : {}),
+        ...(p.targetMode ? { target: { mode: p.targetMode, value: p.targetValue ?? 0 } } : {}),
+        ...(p.capacity && p.capacity !== 'BALANCE' ? { capacity: { mode: p.capacity } } : {}),
+        ...(p.ui ? { ui: p.ui } : {}),
+        claims: claims.filter(c => c.pool === p.id && c.key)
+          .map(c => ({ key: c.key, ...(c.sleeves?.length ? { sleeves: [...c.sleeves] } : {}) })),
+      })),
+      ...(flows.some(f => f.id && f.from && f.to)
+        ? { flows: flows.filter(f => f.id && f.from && f.to).map(buildFlow) }
+        : {}),
+    };
+  };
+
+  const container = el('div', 'age-band-list-editor liquidity-graph-editor');
+
+  const claimsEditor = buildRowListEditor({
+    rows: claims,
+    columns: [
+      { field: 'pool',    label: 'Pool',    type: 'select', options: poolIdOptions, width: '1.2fr' },
+      { field: 'key',     label: 'Account', type: 'select', options: accountOptions(accounts),
+        rerender: true, width: '1.6fr' },
+      { field: 'sleeves', label: 'Sleeves (blank = whole account)', type: 'checkset',
+        options: sleeveOptionsFor(accounts), blankValue: null, width: '2fr',
+        emptyText: 'whole account' },
+    ],
+    newRow:    () => ({ pool: pools[0]?.id ?? null, key: accounts?.[0]?.stateKey ?? null, sleeves: null }),
+    addLabel:  '+ Add Claim',
+    emptyText: 'No claims — a pool with no claims holds nothing.',
+    onChange:  sync,
+  });
+
+  const flowsEditor = buildRowListEditor({
+    rows: flows,
+    columns: [
+      { field: 'id',           label: 'Id',       type: 'text',   placeholder: 'g2r', width: '0.9fr' },
+      { field: 'from',         label: 'From',     type: 'select', options: poolIdOptions, width: '1fr' },
+      { field: 'to',           label: 'To',       type: 'select', options: poolIdOptions, width: '1fr' },
+      { field: 'priority',     label: 'Pri',      type: 'number', step: '1', width: '0.5fr' },
+      { field: 'triggerKind',  label: 'Trigger',  type: 'select', options: TRIGGER_OPTIONS, width: '1.2fr' },
+      { field: 'triggerValue', label: 'at',       type: 'number', step: '0.01', width: '0.6fr' },
+      { field: 'gateKind',     label: 'Gate',     type: 'select', options: GATE_OPTIONS, width: '1.4fr' },
+      // No min of 0: a RETURN threshold is legitimately negative ("harvest unless the market
+      // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
+      // the per-kind range; the control must not pre-empt it with the tighter one.
+      { field: 'gateValue',    label: 'X',        type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
+      { field: 'amountKind',   label: 'Amount',   type: 'select', options: AMOUNT_OPTIONS, width: '1.1fr' },
+      { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr' },
+    ],
+    newRow:    () => ({ id: null, from: pools[0]?.id ?? null, to: pools[1]?.id ?? null, priority: 0,
+                        triggerKind: '', triggerValue: null, gateKind: '', gateValue: null,
+                        amountKind: 'toTarget', amountValue: null }),
+    addLabel:  '+ Add Flow',
+    emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
+    onChange:  sync,
+  });
+
+  const poolsEditor = buildRowListEditor({
+    rows: pools,
+    columns: [
+      { field: 'id',          label: 'Id',       type: 'text',   placeholder: 'reserve', width: '1fr' },
+      { field: 'label',       label: 'Label',    type: 'text',   placeholder: 'Bucket 2', width: '1.3fr' },
+      { field: 'spendOrder',  label: 'Spend #',  type: 'number', step: '10', placeholder: 'never', width: '0.7fr' },
+      { field: 'targetMode',  label: 'Target',   type: 'select', options: TARGET_MODE_OPTIONS, width: '1.2fr' },
+      { field: 'targetValue', label: 'Size',     type: 'number', step: '0.5', width: '0.7fr' },
+      { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS, width: '1.5fr' },
+    ],
+    newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
+                        targetMode: '', targetValue: null, capacity: 'BALANCE', ui: null }),
+    addLabel:  '+ Add Pool',
+    emptyText: 'No pools — the drawdownPriority order applies and nothing refills (the default).',
+    // Renaming or adding a pool changes the option list the OTHER two tables select from,
+    // so both are re-rendered. Without this a renamed pool leaves its claims pointing at a
+    // dead id and the user finds out at Rebuild.
+    onChange:  () => { sync(); claimsEditor.refresh(); flowsEditor.refresh(); },
+  });
+
+  container.appendChild(el('div', 'age-band-col-label', 'Pools'));
+  container.appendChild(poolsEditor);
+  container.appendChild(el('div', 'age-band-col-label', 'Claims — which accounts and sleeves each pool holds'));
+  container.appendChild(claimsEditor);
+  container.appendChild(el('div', 'age-band-col-label', 'Flows — refill edges between pools'));
+  container.appendChild(flowsEditor);
+
+  sync();
+  return container;
+}
+
+/** One flow row → the authored edge shape `normalizeLiquidityGraph` reads. */
+function buildFlow(f) {
+  const out = { id: f.id, from: f.from, to: f.to };
+  if (f.priority) out.priority = f.priority;
+  if (f.triggerKind && f.triggerValue != null) {
+    out.trigger = f.triggerKind === 'belowTargetFraction'
+      ? { belowTargetFraction: f.triggerValue }
+      : { below: { mode: f.triggerKind === 'belowYears' ? 'YEARS_OF_SPEND' : 'AMOUNT', value: f.triggerValue } };
+  }
+  if (f.gateKind && f.gateValue != null) out.gate = { [f.gateKind]: f.gateValue };
+  if (f.amountKind === 'fractionOfSource' && f.amountValue != null) {
+    out.amount = { fractionOfSource: f.amountValue };
+  }
+  return out;
+}

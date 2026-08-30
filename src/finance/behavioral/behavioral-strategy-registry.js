@@ -24,6 +24,9 @@ import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATI
 import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
+import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
+import { PoolFlowApplyReducer }                from '../pools/pool-flow-apply-reducer.js';
+import { resolveLiquidityGraph }               from '../pools/liquidity-graph.js';
 import {
   ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
   buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHTS,
@@ -229,6 +232,11 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           // reads. Passed rather than re-derived so the target and the debit cannot disagree
           // about the currency of the spend line.
           expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
+          // Design 97 Part II §12.4 — EXECUTOR 1. When a liquidity graph is authored, this
+          // reducer both SIZES the classes its pools claim (one authority; combining a pool
+          // target with poolCashYears/poolBondYears throws) and honours its gates as a veto
+          // on the sale that would refill them. Null ⇒ every design-97 line is inert.
+          poolGraph: resolveLiquidityGraph(p, context.accounts ?? []),
         }),
         new RebalanceToTargetApplyReducer(),
       ];
@@ -520,6 +528,78 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         defaultValue: 0,
         description: '0% LTCG bracket ceiling (USD). Gains realized up to this threshold in low-income years at zero tax cost (design/29 §3.8). Set to 0 to disable.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'TAX_GAIN_HARVEST' },
+      },
+    ],
+  },
+
+
+  /**
+   * LIQUIDITY_POOLS (design 97 Part II) — the refill side of the pool graph.
+   *
+   * The SPEND side needs no strategy: the graph compiles to `state.drawdownSequence` in the
+   * toolset's state projection, so the draw order is live whether or not this is selected.
+   * What this adds is the flow evaluation — the (s, S) triggers, the market-state gates, the
+   * per-pool cube, and the cross-account transfers.
+   *
+   * Executor 1 (in-portfolio edges) lives in TARGET_ALLOCATION's rebalancer, so a graph whose
+   * flows are all in-portfolio still needs that strategy selected. Stated in the param
+   * description rather than enforced, because a graph with only cross-account flows is a
+   * perfectly good configuration and forcing a rebalancer on it would change its behaviour.
+   */
+  LIQUIDITY_POOLS: {
+    handlers: (_context) => [],
+    reducers: (context) => {
+      const p     = context.parameters;
+      const graph = resolveLiquidityGraph(p, context.accounts ?? []);
+      if (!graph) return [];      // no graph authored ⇒ contribute nothing at all
+      const accounts = (context.accounts ?? []).map(a => ({ stateKey: a.stateKey, type: a.type }));
+      return [
+        new PoolFlowReducer({
+          graph,
+          flowsEnabled:     p.poolFlowsEnabled !== false,
+          expensesCurrency: p.monthlyExpensesCurrency ?? 'RESIDENCE',
+        }),
+        new PoolFlowApplyReducer({ accountService: context.accountService, graph, accounts }),
+      ];
+    },
+    paramSchema: () => [
+      {
+        // `LiquidityGraph` — three flat tables (pools, claims, flows) over the shared
+        // row-list component, rather than a JSON textarea. Claims get their own table so
+        // all three are flat and a multi-account pool is as easy to author as a
+        // single-account one; see `buildLiquidityGraphEditor`.
+        key: 'liquidityGraph', label: 'Liquidity Pools (graph)',
+        type: 'LiquidityGraph', group: 'Spending', mc: false, opt: false,
+        defaultValue: null,
+        description: 'The pool GRAPH: { pools: [...], flows: [...] } (design 97 Part II). A pool is '
+          + 'a named node with `claims` of (account, sleeves), an optional `spendOrder` (its position '
+          + 'on the draw walk), a `target` ({mode: YEARS_OF_SPEND|PERCENT|AMOUNT, value}), an optional '
+          + '`floor`, and a `capacity` rule (BALANCE, or OFFSET_CAP for an offset, whose ceiling is '
+          + 'min(cash parked, loan owed) and falls on a schedule nobody authored). A flow is a directed '
+          + 'edge {from, to} with a `trigger` (when the destination wants money), an `amount` (how far '
+          + 'to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceReturnOver: 0` '
+          + 'is "only harvest in a year the market is up" and is the gate to reach for in a plan being '
+          + 'SPENT DOWN; `targetReturnUnder` is the same machinery pointing the other way, i.e. buy the '
+          + 'dip. `sourceDrawdownUnder` / `targetDrawdownOver` measure a pool against its own peak '
+          + 'BALANCE instead, which in decumulation cannot tell a falling market from the household '
+          + 'spending the pool down — it latches shut after the first crash (design 97 §16.1b). Use '
+          + 'them only for a pool that is accumulating. Trigger and amount are '
+          + 'deliberately two numbers — an (s, S) band — so a refill does not fire every period. '
+          + 'The graph COMPILES to the drawdown sequence, so it replaces `drawdownSequence` rather than '
+          + 'sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical '
+          + 'to before. In-portfolio refills are executed by the TARGET_ALLOCATION rebalancer, so select '
+          + 'that strategy too unless every flow is cross-account.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+      },
+      {
+        key: 'poolFlowsEnabled', label: 'Pool Refill Flows Enabled',
+        type: 'Boolean', group: 'Spending', mc: false, opt: false,
+        defaultValue: true,
+        description: 'Authors the graph\'s TOPOLOGY without its BEHAVIOUR: pools, targets, capacity '
+          + 'and the spend order stay live, refill flows do not fire. This is the arm-vs-control switch '
+          + 'a study of the refill rule needs — the alternative is deleting the flows in one arm, which '
+          + 'also changes the pool sizing and makes the two arms differ in two ways at once.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
       },
     ],
   },

@@ -103,6 +103,15 @@ export class ScenarioTabPresenter {
         .map(p => ({ id: p.id, name: p.name ?? p.id }));
     };
 
+    // Supply the account list to the design-97 pool editors (DrawdownSequence,
+    // LiquidityGraph), which select over stateKeys rather than asking the user to type them.
+    this._view.accountsProvider = () => {
+      const registry = ServiceRegistry.getInstance();
+      return (registry.accountService?.getAll?.() ?? [])
+        .map(a => ({ stateKey: a.stateKey, name: a.name ?? a.stateKey, type: a.type }))
+        .filter(a => a.stateKey);
+    };
+
     // Click-through: open the linked account/person in the shared edit modal.
     this._view.onOpenLinkedNode = (paramNode) => {
       const info = this._view.nodeLookup?.(paramNode);

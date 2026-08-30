@@ -213,6 +213,10 @@ import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, spli
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
+import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, FLOW_EXECUTOR, depositKeyFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph } from './finance/pools/liquidity-graph.js';
+import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
+import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
+import { loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext } from './finance/pools/pool-metrics.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -503,7 +507,7 @@ import { showScenarioLoadError } from './visualization/scenario/scenario-load-er
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
-import { buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor, buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor, buildRateKeyMapEditor } from './visualization/scenario/structured-param-editors.js';
+import { buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor, buildLocationPolicyEditor, buildYieldCurveShapeEditor, buildYieldCurveScheduleEditor, buildRateKeyMapEditor, buildDrawdownSequenceEditor, buildLiquidityGraphEditor } from './visualization/scenario/structured-param-editors.js';
 import { ScenarioComparePresenter } from './visualization/scenario-compare/scenario-compare-presenter.js';
 import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
@@ -1269,6 +1273,23 @@ export const Finance = {
   PeriodService,
   Person,
   PAYROLL_ELECTION_FIELDS,
+  POOL_TARGET_MODE,
+  POOL_SPEND_BASIS,
+  POOL_CAPACITY_MODE,
+  FLOW_CADENCE,
+  FLOW_EXECUTOR,
+  depositKeyFor,
+  normalizeLiquidityGraph,
+  compileToDrawdownSequence,
+  poolsClaimingClass,
+  resolveLiquidityGraph,
+  PoolFlowApplyReducer,
+  PoolFlowReducer,
+  loanForOffset,
+  annualSpendBase,
+  poolMetrics,
+  allPoolMetrics,
+  poolContext,
   AccountRetitleApplyReducer,
   AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
@@ -1872,6 +1893,8 @@ export const Visualization = {
   buildYieldCurveShapeEditor,
   buildYieldCurveScheduleEditor,
   buildRateKeyMapEditor,
+  buildDrawdownSequenceEditor,
+  buildLiquidityGraphEditor,
   ScenarioComparePresenter,
   DashCardsComponent,
   PlaybackProgressComponent,
