@@ -82,6 +82,10 @@ test('MCMIX-4: without `mix` the record is unchanged — an ordinary run pays no
   const sim = run({ sampler: createMcSampler(), samplerCadence: 'year-boundary' });
   const sample = sim.samples[0];
 
+  // `priceLevel` joined the base record in design 97 §18 (the trough metric's deflator).
+  // The assertion stays EXACT rather than becoming a subset check: its job is to catch a
+  // field creeping into the per-sample record, which is the one place in MC where a cost
+  // is paid ~45 times per path per arm.
   assert.deepEqual(Object.keys(sample).sort(),
-    ['date', 'houseValueUsd', 'netLiquidity', 'netWorthUsd']);
+    ['date', 'houseValueUsd', 'netLiquidity', 'netWorthUsd', 'priceLevel']);
 });

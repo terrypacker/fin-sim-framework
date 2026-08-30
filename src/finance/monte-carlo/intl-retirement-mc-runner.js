@@ -26,6 +26,7 @@ import { buildAllocationCube }        from '../allocation-reporting/allocation-c
 import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
 import { buildSpendingCube }         from '../spending-reporting/spending-cube.js';
 import { summarizeSpendingForRun }   from '../spending-reporting/spending-distribution.js';
+import { residencePriceLevel }       from '../spending/expense-price-level.js';
 
 /** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
 export function computeNetWorthUsd(state) {
@@ -84,6 +85,14 @@ export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
       netWorthUsd:   computeNetWorth(state, baseCurrency),
       netLiquidity:  computeNetLiquidity(state, date),
       houseValueUsd: computeHouseValueUsd(state, baseCurrency),
+      // The deflator, sampled WITH the level it deflates (design 97 §18). A trough is a
+      // point on a path, so the price level at that point has to travel with it — a
+      // report cannot reconstruct it afterwards from a per-run average, and the whole
+      // difference between "the reserve held" and "inflation ate it" lives in this
+      // number. Same index `InflationAdjustReducer` inflates `state.monthlyExpenses`
+      // by (the RESIDENCE country's), so real net liquidity is denominated in the same
+      // basket as the spend line it has to cover. 1.0 at simStart => base-year dollars.
+      priceLevel:    residencePriceLevel(state),
     };
     if (!mix) return point;
 
@@ -124,6 +133,7 @@ function extractYearlyTimeSeries(sim) {
       netWorthUsd:   sample.netWorthUsd,
       netLiquidity:  sample.netLiquidity,
       houseValueUsd: sample.houseValueUsd,
+      priceLevel:    sample.priceLevel,
       ...(sample.mix ? { grossAssetsUsd: sample.grossAssetsUsd, mix: sample.mix } : {}),
     }));
 }
@@ -143,12 +153,49 @@ function extractYearlyTimeSeries(sim) {
  *   - decadeNetWorthUsd — net worth ~10 years in (min(10, last)); the aggregate step
  *                       marks whether this was below the cross-path median (§5.2's
  *                       "first decade below median" — the direct sequence-risk flag).
+ *   - minRealNetLiquidity / minRealNetLiquidityYear — the lowest point on the path,
+ *                       in SPENDABLE, BASE-YEAR terms (design 97 §18). This is the
+ *                       metric a liquidity reserve exists to move, and none of the
+ *                       three above can stand in for it:
+ *                         · `maxDrawdown` is a fraction of net WORTH, which counts
+ *                           the house and any company equity — the two things a
+ *                           reserve cannot spend. A plan can hold its net-worth
+ *                           drawdown flat while its spendable book goes to nothing.
+ *                         · it is a RATIO, so it cannot say how many years of
+ *                           spending were left at the worst point.
+ *                         · terminal wealth is measured after the recovery, so it
+ *                           rewards whoever carried the most equity through it
+ *                           (`scenarios/offset-bond-pool/STUDY.md`) — the exact bias
+ *                           a reserve study must not score itself on.
+ *                       Deflated by the price level sampled AT each point, so it is
+ *                       comparable across paths whose realized inflation differs.
+ *
+ *                       On a path that ran out of funds it is ~0 by construction, so
+ *                       failure is the primary key and this is the secondary one.
+ *   - troughRealNetLiquidity / …Year / …Drawdown — the same quantity measured AFTER
+ *                       the peak: the level at the bottom of the deepest fall from a
+ *                       running high, and that fall as a fraction of the high.
+ *
+ *                       Needed because `minRealNetLiquidity` is the whole-path floor,
+ *                       and on any plan that is still accumulating at t0 the floor IS
+ *                       t0 — measured on the reference plan, the median path's minimum
+ *                       fell in the FIRST sampled year, so the metric reported the
+ *                       opening balance and ranked every arm identically. The opening
+ *                       balance is the one number no strategy can change.
+ *
+ *                       The post-peak trough cannot be reached by the opening balance
+ *                       (a running peak has to be set first), so it is the one to rank
+ *                       strategies on; the whole-path floor stays, because on a plan
+ *                       that decumulates from day one they coincide and the floor is
+ *                       the more direct statement.
  */
 export function computePathShape(timeSeries) {
   const nw = (timeSeries ?? []).map(p => p.netWorthUsd);
   const empty = {
     netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null,
     houseCagr: null, houseMaxDrawdown: null,
+    minRealNetLiquidity: null, minRealNetLiquidityYear: null,
+    troughRealNetLiquidity: null, troughRealNetLiquidityYear: null, troughRealDrawdown: null,
   };
   if (nw.length < 2) return empty;
 
@@ -176,6 +223,49 @@ export function computePathShape(timeSeries) {
 
   const decadeNetWorthUsd = nw[Math.min(10, nw.length - 1)];
 
+  // The trough of REAL net liquidity, and the year it happened in. A point with no
+  // price level deflates by 1 rather than dropping out: an un-indexed series is then
+  // a NOMINAL trough, which is a readable number, where skipping the point would
+  // silently shorten the window a reserve is judged over.
+  let minRealNetLiquidity = null, minRealNetLiquidityYear = null;
+  // …and the deepest fall FROM A RUNNING PEAK, which is the ranking metric: the whole-path
+  // floor is the opening balance on any plan still accumulating at t0, and no strategy can
+  // change the opening balance.
+  let liqPeak = null, deepest = 0;
+  let troughRealNetLiquidity = null, troughRealNetLiquidityYear = null, troughRealDrawdown = null;
+  for (const p of timeSeries ?? []) {
+    if (typeof p.netLiquidity !== 'number' || !Number.isFinite(p.netLiquidity)) continue;
+    const level = (typeof p.priceLevel === 'number' && p.priceLevel > 0) ? p.priceLevel : 1;
+    const real  = p.netLiquidity / level;
+    const year  = p.date?.getUTCFullYear?.() ?? null;
+
+    if (minRealNetLiquidity === null || real < minRealNetLiquidity) {
+      minRealNetLiquidity     = real;
+      minRealNetLiquidityYear = year;
+    }
+
+    if (liqPeak === null || real > liqPeak) liqPeak = real;
+    // Ties go to the FIRST occurrence: on a path that runs dry the level sits at zero for
+    // years, and the year the money ran out is the informative one.
+    const fall = liqPeak > 0 ? (liqPeak - real) / liqPeak : 0;
+    if (fall > deepest) {
+      deepest = fall;
+      troughRealNetLiquidity     = real;
+      troughRealNetLiquidityYear = year;
+      troughRealDrawdown         = fall;
+    }
+  }
+  // A path that only ever rose has no fall from a peak. Its trough is its endpoint and its
+  // drawdown is zero — reported as such, rather than as null, because "never fell" is an
+  // answer and a null would drop the path out of every percentile.
+  if (troughRealNetLiquidity === null && minRealNetLiquidity !== null) {
+    const last = (timeSeries ?? []).filter(p => Number.isFinite(p.netLiquidity)).at(-1);
+    const lvl  = (typeof last?.priceLevel === 'number' && last.priceLevel > 0) ? last.priceLevel : 1;
+    troughRealNetLiquidity     = last.netLiquidity / lvl;
+    troughRealNetLiquidityYear = last.date?.getUTCFullYear?.() ?? null;
+    troughRealDrawdown         = 0;
+  }
+
   // House-price path (design 75 §6.4 C). Characterize the appreciation PATH over the pre-sale
   // window only: once the house is sold its value drops to 0, which is a sale event, not a
   // market drawdown — so we truncate at the first zero that follows a positive value. This
@@ -199,7 +289,11 @@ export function computePathShape(timeSeries) {
     }
   }
 
-  return { netWorthCagr, worst5yrCagr, maxDrawdown, decadeNetWorthUsd, houseCagr, houseMaxDrawdown };
+  return {
+    netWorthCagr, worst5yrCagr, maxDrawdown, decadeNetWorthUsd, houseCagr, houseMaxDrawdown,
+    minRealNetLiquidity, minRealNetLiquidityYear,
+    troughRealNetLiquidity, troughRealNetLiquidityYear, troughRealDrawdown,
+  };
 }
 
 /** Median of a numeric array (ignoring null/undefined/NaN); null when empty. */
@@ -579,6 +673,13 @@ export class IntlRetirementMcRunner {
       medianRepairSpend:       median(runs.map(r => r.lifetimeRepairSpend)),
       p90RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.90),
       p10RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.10),
+      // The reserve metric (design 97 §18). p10 is reported alongside the median because
+      // the question a liquidity pool answers is about the BAD tail — a median trough
+      // moves barely at all between pool shapes, and the arms separate at the bottom.
+      medianMinRealNetLiquidity: median(runs.map(r => r.pathShape.minRealNetLiquidity)),
+      p10MinRealNetLiquidity:    percentile(runs.map(r => r.pathShape.minRealNetLiquidity), 0.10),
+      medianTroughRealNetLiquidity: median(runs.map(r => r.pathShape.troughRealNetLiquidity)),
+      p10TroughRealNetLiquidity:    percentile(runs.map(r => r.pathShape.troughRealNetLiquidity), 0.10),
     };
 
     // Provenance of the sampled world (see summarizeProvenance). Carried on the

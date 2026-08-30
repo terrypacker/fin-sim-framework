@@ -183,6 +183,51 @@ columns({
   ],
 });
 console.log('Terminal net worth percentiles. No mean is shown — see the header note.');
+
+// ─── 1b. the TROUGH distribution (design 97 §18) ─────────────────────────────
+//
+// Terminal wealth is measured after the recovery, so it rewards whoever carried the
+// most equity through it — the exact bias any liquidity-reserve question must not
+// score itself on (`scenarios/offset-bond-pool/STUDY.md`). This table is the other
+// end of the same path: the lowest point spendable wealth reached, in base-year
+// dollars. Printed only when the arms carry it, so an arm file written before the
+// field existed still reports rather than showing a column of blanks.
+// Post-peak by default: the whole-path floor is the OPENING BALANCE on any plan still
+// accumulating at t0, and no strategy can change that. `--floor` asks for it anyway, which is
+// the right reading for a plan that decumulates from day one.
+const useFloor  = argv.includes('--floor');
+const troughKey = useFloor ? 'minRealNetLiq' : 'troughRealNetLiq';
+const yearKey   = useFloor ? 'minRealNetLiqYear' : 'troughRealNetLiqYear';
+const hasTrough = keys.some(k => arms[k].rows?.some(r => Number.isFinite(r[troughKey])));
+if (hasTrough) {
+  const troughs = k => arms[k].rows.map(r => r[troughKey]).filter(Number.isFinite);
+  const troughYears = k => arms[k].rows.map(r => r[yearKey]).filter(Number.isFinite);
+  columns({
+    title: useFloor
+      ? 'TROUGH — lowest REAL net liquidity on the whole path (base-year $)'
+      : 'TROUGH — REAL net liquidity at the deepest fall from its peak (base-year $)',
+    rows: keys,
+    columns: [
+      { head: 'ARM', get: k => k, width: 26, align: 'left' },
+      { head: 'p5',     get: k => millions(percentile(troughs(k), 5)), width: 10 },
+      { head: 'p10',    get: k => millions(percentile(troughs(k), 10)), width: 10 },
+      { head: 'p25',    get: k => millions(percentile(troughs(k), 25)), width: 10 },
+      { head: 'MEDIAN', get: k => millions(percentile(troughs(k), 50)), width: 11 },
+      { head: 'MED YR', get: k => String(percentile(troughYears(k), 50) ?? '—'), width: 8 },
+    ],
+  });
+  console.log('Spendable wealth only — the house and company equity are excluded, because a');
+  console.log('reserve cannot spend them. FAILED paths trough at ~0 by construction, so read');
+  console.log('this WITH the failure rate above, never instead of it.');
+  console.log(useFloor
+    ? 'Whole-path floor (--floor). On a plan still accumulating at t0 this is the OPENING'
+    : 'Measured after the peak, so the opening balance cannot be the answer (--floor for the');
+  console.log(useFloor
+    ? 'BALANCE, which no strategy can change — prefer the default post-peak trough.'
+    : 'whole-path floor).');
+  console.log(`Paired, world by world: --metric ${troughKey}`);
+}
+
 if (inconsistentN) {
   console.log('** arms have DIFFERENT n — the paired view below is only valid on shared seeds.');
 }

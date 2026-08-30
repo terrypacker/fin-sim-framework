@@ -412,6 +412,55 @@ test('POOL-9: a graph target sizes its own class and leaves the others to the sc
   assert.equal(+mix.GOLD.toFixed(4), 0.06);
 });
 
+test('POOL-9a: a target of ZERO holds none of the class — it does not fall back to the schedule', async () => {
+  // "Hold no reserve" is an authorable policy and the natural bottom row of any pool-size
+  // sweep. The guard here used to read `target > 0`, which conflated "no target resolved"
+  // with "the target is nothing", so a 0-year arm silently held the AUTHORED bond weight —
+  // and the bottom row of a size sweep was not a member of its own series. It was found in
+  // the field, by a 0-year arm holding MORE bonds than the 2-year arm beside it.
+  const { RebalanceToTargetReducer } = await import('../../src/finance/behavioral/rebalance-to-target-reducer.js');
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'reserve', spendOrder: 10, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'YEARS_OF_SPEND', value: 0 } },
+      { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
+    ],
+  }, ACCOUNTS);
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    // A schedule that WANTS bonds, so a fall-through is visible rather than coincidental.
+    targetAllocation: { EQUITY: 0.60, BOND: 0.30, GOLD: 0.10 },
+    poolGraph: graph,
+  });
+  const state = { monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+                  liquidityPools: { reserve: { target: 0 }, growth: {} } };
+  const mix = r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_200_000);
+
+  assert.equal(+((mix.BOND ?? 0).toFixed(6)), 0, 'a 0 target must hold no bonds');
+  // …and the whole book goes to the classes no pool sized, in their scheduled proportions.
+  assert.equal(+((mix.EQUITY + mix.GOLD).toFixed(4)), 1);
+  assert.equal(+(mix.EQUITY / mix.GOLD).toFixed(4), 6);
+
+  // A pool that resolved NO target still falls through, which is the case the old guard
+  // was actually written for.
+  const noTarget = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.60, BOND: 0.30, GOLD: 0.10 },
+    poolGraph: normalizeLiquidityGraph({
+      pools: [
+        { id: 'reserve', spendOrder: 10, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+        { id: 'cash',    spendOrder: 15, claims: [{ key: 'usStockAccount', sleeves: ['CASH'] }],
+          target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+        { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
+      ],
+    }, ACCOUNTS),
+  }).resolveScheduledTarget(
+    { monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+      liquidityPools: { reserve: {}, cash: { target: 120_000 }, growth: {} } },
+    { type: 'US_PERIOD_ADVANCE' }, 1_200_000);
+  assert.ok(noTarget.BOND > 0, 'an unsized pool leaves its class to the schedule');
+});
+
 test('POOL-9b: a veto pins the vetoed class at what is held, so the band cannot sell it', async () => {
   const { RebalanceToTargetReducer } = await import('../../src/finance/behavioral/rebalance-to-target-reducer.js');
   const graph = normalizeLiquidityGraph({

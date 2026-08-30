@@ -65,6 +65,27 @@ import { buildMixSeries }         from '../../src/finance/allocation-reporting/m
 import { quietAsync } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
+/**
+ * Combine an arms spec's `base` levers with one arm's, the way `mc-run.mjs` runs them.
+ *
+ * `params` merges ONE LEVEL DEEP; every other lever is replaced whole.
+ *
+ * A plain spread drops the base's `params` entirely as soon as an arm carries its own — and
+ * `base.params` is where a spec puts the settings that must be identical across arms (the
+ * study hygiene: a strategy switched off, a dated shock removed). Losing them silently gives
+ * every arm a DIFFERENT baseline than the one the spec states, which reads as the lever
+ * working. Nothing else in a lever set is a bag of independent keys, so nothing else gets
+ * this treatment: `retire`, `rothDecant` and friends are whole statements, and an arm that
+ * restates one means to replace it.
+ */
+export function mergeArmLevers(baseLevers = {}, armLevers = {}) {
+  const levers = { ...baseLevers, ...armLevers };
+  if (baseLevers.params || armLevers.params) {
+    levers.params = { ...(baseLevers.params ?? {}), ...(armLevers.params ?? {}) };
+  }
+  return levers;
+}
+
 /** The configured shock array, in the shape `runner.run()` needs (TRAP 2). */
 export function extractShocks(cfg) {
   return (cfg.params ?? []).find(p => p.name === 'shocks')?.value
@@ -177,6 +198,23 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     netWorthCagr: r.pathShape?.netWorthCagr ?? null,
     worst5yrCagr: r.pathShape?.worst5yrCagr ?? null,
     maxDrawdown:  r.pathShape?.maxDrawdown ?? null,
+    // The trough of SPENDABLE wealth in base-year dollars, and the year it fell in
+    // (design 97 §18) — what a liquidity reserve is bought to move. Scored per path so
+    // it pairs under common random numbers like every other row field; `maxDrawdown`
+    // cannot stand in for it (it is a ratio, and it is a ratio of net WORTH, which
+    // counts the house). On a failed path it is ~0 by construction, so read it with
+    // `failed`, never instead of it.
+    minRealNetLiq:     r.pathShape?.minRealNetLiquidity != null
+      ? Math.round(r.pathShape.minRealNetLiquidity) : null,
+    minRealNetLiqYear: r.pathShape?.minRealNetLiquidityYear ?? null,
+    // The RANKING metric: the same quantity measured after the peak. The whole-path floor
+    // above is the opening balance on any plan still accumulating at t0 — measured, the
+    // median path's minimum landed in the first sampled year — and no strategy can change
+    // the opening balance. `troughRealDrawdown` is the fall that got there, as a fraction.
+    troughRealNetLiq:     r.pathShape?.troughRealNetLiquidity != null
+      ? Math.round(r.pathShape.troughRealNetLiquidity) : null,
+    troughRealNetLiqYear: r.pathShape?.troughRealNetLiquidityYear ?? null,
+    troughRealDrawdown:   r.pathShape?.troughRealDrawdown ?? null,
     houseCagr:        r.pathShape?.houseCagr ?? null,
     houseMaxDrawdown: r.pathShape?.houseMaxDrawdown ?? null,
     repairSpend:      Math.round(r.lifetimeRepairSpend ?? 0),
