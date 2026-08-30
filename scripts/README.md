@@ -356,6 +356,11 @@ produced a wrong answer at least once.
 
 | module | what it owns |
 |---|---|
+| `cuts.mjs` | **the balance-sheet cuts a study reads off state** — one base currency, one scope vocabulary |
+| `path.mjs` | reading the PATH a run took: troughs, year walks, untouched-lot sleeve returns |
+| `grid.mjs` | the in-process rows × cols runner: the loop, the ETA, the tables, the envelope |
+| `cli.mjs` | flag parsing where an unknown flag is an ERROR; `setParam` writes both param stores |
+| `preflight.mjs` | the axis-liveness gate: prove the levers MOVE before the grid runs |
 | `scenario-source.mjs` | loading the base cfg; the file-vs-synthetic distinction |
 | `fx-rates.mjs` | the **published** rate table; holiday carry-forward vs. not-yet-published |
 | `section988-source.mjs` | real-history ingest: footing, the two classification axes, G6 measurements |
@@ -367,6 +372,108 @@ produced a wrong answer at least once.
 | `mc.mjs` | Monte Carlo arm setup and the three traps below |
 | `mc-analysis.mjs` | paired rescues, failure bands, driver attribution |
 | `format.mjs` | money formats and fixed-width tables |
+
+### Never re-derive a balance-sheet cut
+
+`cuts.mjs` owns "how many years of spending sit outside equity", "what is this book
+worth", "where did the BOND target land". Eleven study scripts across four studies had
+each written their own version, and they disagreed: three divided AUD by a **literal
+1.55** rather than the run's own rate, so their cover figures were not comparable with
+the studies they were quoted beside. In the `offset-bond-pool` grid that was live, not
+latent — `STAGFLATION_1970S_LITE` carries `fxAdjustment: { USD_AUD: -0.10 }` on a
+ten-year L profile, so the rate at the 2042 horizon is 1.45 and every AUD balance in
+that column was priced 6.9% wrong.
+
+`src/finance/fx/to-base-currency.js` already said this in its own header — *"adding a
+copy of these six lines is a bug waiting for a currency"* — after design 82 §5.3 found
+one of five in-engine copies had already drifted. `cuts.mjs` routes every scripts-side
+valuation through it.
+
+The scope is the part worth reading before you call it. `wrappers` defaults to
+`'exclude'` (age-gated money is not cover for an early retiree) and `offsets` to
+`'exclude'` (the backstop *below* the accessible pool, not part of it) — which is right
+for a cover question and wrong for a wealth question, so `netWorth` includes both. A
+missing FX rate now falls back to 1:1 rather than 1.55, which is a ~55% error on an AUD
+book, so call `assertRatesSeeded(state)` — or run the preflight gate, which does.
+
+### Prove the axes move before you run the grid
+
+`preflight.mjs`. The failure it exists to catch is not a crash; it is a grid that
+**completes, looks reasonable, and measured nothing**. A `drawdownSequence` authored with
+`key` instead of `name` was dropped on the way to the compiler and every arm came back
+byte-identical. A mistyped shock preset silently ran a no-crash column. A facility-size
+axis moved nothing because the offset was not in the drawdown queue. Each produced a
+confident, wrong answer *of exactly the right shape* — an inert axis does not look like
+noise, it looks like the finding "the lever doesn't matter", which is the one conclusion
+nobody re-checks.
+
+The gate runs the corner cells and asserts the answer CHANGES along each axis, after
+checking that each lever reached `sim.state` at all. `scenarios/offset-bond-pool/smoke.mjs`
+is the worked example; keep study-specific label checks (does the "6 year" row *realise*
+six years?) in the study, since they are the part that cannot generalise.
+
+One thing it taught, worth carrying: `cfg.events` is meaningless until the cell is
+opened. `ScenarioLoader` rebuilds the event list from the `shocks` param, and a scenario
+can carry an authored `ECONOMIC_SHOCK` of its own — read the cfg unopened and every
+column looks like a crash column.
+
+### Read the path, not just the endpoint
+
+`path.mjs`. Terminal wealth is measured after the recovery, so it rewards whoever
+carried the most equity through it — on that metric a cash-or-bond reserve can only
+lose, which is arithmetic about the equity premium and not a finding about reserves. In
+the `offset-bond-pool` study the terminal and trough tables **disagree in sign** in the
+lost-decade column.
+
+`troughTracker(read, window)` names the window instead of burying it in a `Math.min`,
+because a trough over the horizon and a trough over the vulnerable decade are different
+numbers answering different questions. `walkYearEnds` clamps to `simEnd` (stepping past
+it throws, and past it income and tax stop while balances keep growing) and starts in
+the **simStart year** — a loop that starts a year later closes its first interval at the
+end of year two, so a crash dated in year one happens inside it invisibly. That one cost
+a 2027 GFC column that read identical to no-crash.
+
+`sleeveReturn` measures a year's total return on the lots **nobody touched**, and adds
+income back. Both halves matter: a whole-book estimator reads a SALE as a market loss, so
+the arm that sells most looks like the arm that lived through the worst market; and
+coupons and dividends are paid out to cash rather than accruing into a lot, so a
+price-only reading scores bonds at ~0%/yr — not a small error, the whole of a bond's
+return. It is deliberately uncurrency-converted (it is a ratio over fixed lots) and
+reports `mixedCurrency` when that assumption stops holding.
+
+### Grids: two runners, and which one you want
+
+`lab/variant-grid.mjs` is the default — axes as DATA in a spec file, fanned across worker
+processes. Reach for `lib/grid.mjs` only when the axes cannot be written down as lever
+values: `offset-bond-pool` crosses shock presets with a drawdown SEQUENCE rebuilt from the
+scenario's own accounts, and a spec file cannot hold a function. `runGrid` owns the cross
+product, the progress line with an ETA, per-cell error handling and the results envelope,
+and runs cells serially in-process so a cell can read `sim.state` rather than reduce to a
+row. That is affordable at ~0.3s a cell; when a cell is a whole Monte Carlo arm it is
+minutes, the arm is defined by data anyway, and the answer is `parallel.mjs` plus a worker
+module (see `account-asset-classes/ladder-frontier.mjs`).
+
+A cell that throws **aborts the grid** by default. That is the same lesson as the
+preflight gate: catching the error turns a wiring failure into one odd entry in an
+otherwise complete table.
+
+Keep the axes in a `study-config.mjs` that both the grid and its preflight import, so the
+thing that is smoke-tested is literally the thing that runs.
+
+### Declare your flags
+
+`cli.mjs`. Seventeen scripts had their own `flag()` helper and all four spellings shared
+one behaviour: an unrecognised flag returns the default, silently. `node study.mjs
+--shock-yr 2033` ran the default year and said nothing — a mistyped shock flag is one of
+the two failures that produced a complete, plausible, meaningless grid. `parseFlags`
+takes a declaration, so an unknown flag is an error that names the near miss, `choices`
+are enforced, and `--help` falls out of the same declaration.
+
+`setParam` is in the same module because it is the same class of silence: `name` is the
+identity field `ScenarioLoader` syncs on, so a param row written with only `key` reads
+back correctly in the script and is dropped on the way to the compiler. Use
+`variant.mjs`'s `makeSetParam` when you hold a loaded cfg and the lever bag; use this one
+when you hold a parsed scenario document.
 
 ### Traps worth knowing before you write a lever
 
