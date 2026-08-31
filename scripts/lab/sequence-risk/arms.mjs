@@ -85,6 +85,18 @@ const refillFlow = (gate) => ({
 });
 
 /**
+ * Arms E and F — design 97 §20.13. The gate the STUDY used is `sourceReturnOver`, a reading of
+ * the last completed year's return. `sourceDrawdownUnder` is the other market gate the graph
+ * has always had, and it says something materially different: *refill only while the growth
+ * pool is within x of its own trailing high* — a level, not a rate of change.
+ *
+ * §12.3 argues against it in a decumulation plan ("cannot tell a falling market from a pool
+ * being spent down, and latches shut after the first crash"), and that argument is why arm C
+ * uses the return gate. It is an argument, not a measurement, and the first hand-authored run
+ * that tried it beat C — so it gets an arm rather than a footnote. Two thresholds, because
+ * the whole question is whether the latch §12.3 predicts actually bites: at 1 % the pool must
+ * be at a fresh peak, at 5 % it need only be near one.
+ *
  * @param {number} [facility]  the offset/loan size — DEFAULTS.facility unless an arm sweeps it
  * @returns {Array<{key,label,graph,note}>}
  */
@@ -109,6 +121,24 @@ export function arms(facility = DEFAULTS.facility) {
       key: 'D', label: 'bound — offset first, never refilled',
       note: 'the pure deferral: the ceiling on what the policy could be worth',
       graph: { pools: [offsetPool(facility), growthPool(2)], flows: [] },
+    },
+    {
+      key: 'E', label: 'trailing high — refill only within 1% of the growth pool\'s peak',
+      note: 'gate.sourceDrawdownUnder: 0.01 — a LEVEL gate, the §12.3 latch is the thing under test',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.01 })] },
+    },
+    {
+      key: 'F', label: 'trailing high — refill only within 5% of the growth pool\'s peak',
+      note: 'gate.sourceDrawdownUnder: 0.05 — the softer band; E and F bracket the latch',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.05 })] },
+    },
+    {
+      key: 'G', label: 'trailing high — refill only within 10% of the growth pool\'s peak',
+      note: 'gate.sourceDrawdownUnder: 0.10 — the hand-authored arm; wide enough that the latch releases',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.10 })] },
     },
   ];
 }

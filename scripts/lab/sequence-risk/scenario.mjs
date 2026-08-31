@@ -166,5 +166,38 @@ export function buildScenario({ params = {}, plan = {} } = {}) {
     r.monthlyMortgage          = 0;   // unused inside the IO window; 0 so a regression is loud
   }
 
+  // ── the OTHER asset collections, which are not accounts ─────────────────────────
+  // Found 30 Aug 2026, after §20.9 was written and on the numbers in it (design 97 §20.12).
+  //
+  // The zeroing loop above walks `cfg.accounts`. `buildDefaultConfig` also ships three
+  // collections that are NOT accounts and that it therefore never reached: a $500k company
+  // equity grant appreciating at 8 %, a $100k gold collectible, and an (inert) bequest. The
+  // grant is the one that matters, and it does not merely dilute:
+  // `INTL_RETIREMENT_DEFAULTS.companySaleYear` is **2033**, so it sells for ~$680k after tax
+  // into `usSavingsAccount` — the spend source — in the year AFTER the dated crash, and funds
+  // eleven years of spending. The whole post-crash recovery window, which is the only window
+  // the policy under test is about, ran with the portfolio untouched in EVERY arm.
+  //
+  // Set `plan.windfall = true` (or SEQRISK_KEEP_WINDFALL=1) to reproduce the pre-fix numbers.
+  // Nothing else in this file should ever need it: a scenario that claims to remove confounds
+  // by construction has to remove the ones it did not author as well as the ones it did.
+  if (!(P.windfall ?? process.env.SEQRISK_KEEP_WINDFALL === '1')) {
+    cfg.companyEquities = [];
+    cfg.collectibles    = [];
+    cfg.bequests        = [];
+  }
+
+  // The lab's standing idiom (§19.6, and the `shocks` assertion in `run-deterministic.mjs`):
+  // assert the construction LANDED rather than trust it. This one is the regression test for
+  // §20.12 — a future `buildDefaultConfig` that adds a fourth non-account collection carrying
+  // value will trip it here rather than in a study's numbers a month later.
+  if (!(P.windfall ?? process.env.SEQRISK_KEEP_WINDFALL === '1')) {
+    const stray = ['companyEquities', 'collectibles', 'bequests', 'speculativeAssets']
+      .filter(k => (cfg[k] ?? []).length);
+    if (stray.length) {
+      throw new Error(`sequence-risk scenario is not minimal: ${stray.join(', ')} still carry entries`);
+    }
+  }
+
   return cfg;
 }
