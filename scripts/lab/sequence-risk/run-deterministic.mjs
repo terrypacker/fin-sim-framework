@@ -31,10 +31,19 @@
  * Usage:
  *   node scripts/lab/sequence-risk/run-deterministic.mjs [--crash 2032] [--shock MARKET_CRASH_2008_LITE]
  *                                                        [--no-shock] [--from 2030] [--to 2040]
+ *
+ * `--export-json [file]` writes the arms as a workbench-importable scenario export instead of
+ * running them, so an arm can be opened in the browser and played with by hand:
+ *
+ *   node scripts/lab/sequence-risk/run-deterministic.mjs --export-json --export-arms C
+ *
+ * The export carries NO scenario id, so importing it can only ever ADD to the browser's
+ * scenarios — never overwrite one. See `export-json.mjs` for why.
  */
 
 import { buildScenario, GROWTH, OFFSET, LOAN, CASH, DEFAULTS } from './scenario.mjs';
 import { arms } from './arms.mjs';
+import { exportArms } from './export-json.mjs';
 import { openSim, quiet } from '../../lib/run.mjs';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../../../src/finance/derived-metrics/after-tax.js';
 import { SHOCK_LIBRARY } from '../../../src/finance/economic-shocks/shock-library.js';
@@ -47,9 +56,33 @@ const NO_SHOCK = argv.includes('--no-shock');
 const FROM     = Number(flag('from', CRASH - 2));
 const TO       = Number(flag('to', CRASH + 6));
 
+// `--export-json`'s path is OPTIONAL, which `flag()` cannot express: it reads the next argv
+// slot positionally, so a bare `--export-json --export-arms C` would take `--export-arms` as
+// the filename. A value starting with `--` is the next flag, not a path.
+const EXPORTING   = argv.includes('--export-json');
+const EXPORT_ARG  = EXPORTING ? flag('export-json', null) : null;
+const EXPORT_FILE = (EXPORT_ARG && !EXPORT_ARG.startsWith('--')) ? EXPORT_ARG : null;
+const EXPORT_ARMS = String(flag('export-arms', 'A,B,C,D')).split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
 if (!NO_SHOCK && !SHOCK_LIBRARY[SHOCK]) {
   console.error(`unknown --shock '${SHOCK}'. Known: ${Object.keys(SHOCK_LIBRARY).join(', ')}`);
   process.exit(1);
+}
+
+// ── --export-json: write the arms for the browser and stop ──────────────────────────
+// Before the run, not after: the export is the cfg the run would have used, and an arm that
+// cannot be built should say so without first spending four full simulations.
+if (EXPORTING) {
+  const tag  = NO_SHOCK ? 'no crash' : `${SHOCK} @ ${CRASH}`;
+  const slug = NO_SHOCK ? 'no-shock' : `${SHOCK.toLowerCase().replace(/_/g, '-')}-${CRASH}`;
+  const file = EXPORT_FILE
+    ?? `scenarios/sequence-risk-${EXPORT_ARMS.join('').toLowerCase()}-${slug}.json`;
+  const { names } = exportArms({ armKeys: EXPORT_ARMS, file, shock: NO_SHOCK ? null : SHOCK, crash: CRASH, tag });
+  console.log(`\nwrote ${file}`);
+  for (const n of names) console.log(`  · ${n}`);
+  console.log('\nImport it with the workbench Scenario tab\'s Upload button. The export carries no id,');
+  console.log('so it is added as a new scenario and cannot overwrite one you already have.\n');
+  process.exit(0);
 }
 
 /**
