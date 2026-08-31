@@ -1942,3 +1942,102 @@ next to the flow that did not fire.
 The argument for it is this section's own history: §20.2's foresight, §20.4b's identically-zero
 headroom and §20.3's unwired knob were all visible in that cube from the first period of the
 first run, and each took a study to find instead.
+
+---
+
+## 21. The Liquidity Pools panel — BUILT (30 Aug 2026)
+
+§20.11's open item, closed. `src/finance/pools/pool-history.js` (the replay + the pivot) and
+`plugins/finance/liquidity-pools-plugin.js` (the panel), a sibling of `spending-plugin.js` and
+`allocation-plugin.js` with the same skeleton: toolbar, provenance strip **above** the chart,
+clickable legend below. Tests: `tests/unit/pool-history.test.mjs` (10),
+`tests/viz/liquidity-pools-plugin.test.mjs` (17), `evt-liquidity-pools.test.mjs` POOL-5e/5f.
+
+### 21.1 The source is the JOURNAL, not the run's sampler
+
+The workbench's one sampler slot is occupied (design 82's allocation sampler, wrapped by
+design 89's `withBalances`) and it fires at **year boundaries**. That is the wrong cadence for
+this cube. `PoolFlowReducer` runs on both `US_PERIOD_ADVANCE` and `AU_PERIOD_ADVANCE` — six
+months apart — and rewrites `gatedFlows` on each, so a year-boundary sample would silently
+drop half of every non-event the panel exists to show.
+
+It does not need one. `diffStates` walks nested objects, so every `liquidityPools.<id>.<field>`
+movement is *already* a journal diff carrying `before`/`after`, and the cube's first write
+lands as a single whole-object diff that seeds every pool. `buildPoolHistory` replays those
+diffs and gets the cube at every period, for free, with no change to the shared sampler.
+
+Two properties of that replay are worth stating because they are easy to get wrong:
+
+- **A field with no diff this period keeps its value, and that IS the reading.** The reducer
+  writes every field every period, so an absent diff means the period recomputed the same
+  number — a gate still shut for the same reason. The one case it cannot see is a period in
+  which the *entire* cube was unchanged, which emits no diff and so no record.
+- **A replay is not a reading.** `tiePoolHistory` compares the last replayed period against
+  live `state.liquidityPools` field for field, and the strip leads with the result. A drifted
+  reconstruction draws a believable picture of a run that did not happen, which is the same
+  failure shape as every defect §20 found. Measured on the §20.7 arm C run: 0 mismatches.
+
+### 21.2 The graph comes off the live reducer
+
+Labels, spend order, the flow list and `flowsEnabled` are read from the `PoolFlowReducer`
+instance in the pipeline, never from `cfg.parameters`. A graph in the config that never
+reached a reducer is precisely the failure this panel exists to make visible
+(`config-field-in-state-is-not-read`), and a panel that drew it from config would report that
+failure as working.
+
+### 21.3 Four views, and the non-event is a first-class citizen in all of them
+
+| view | what it answers |
+|---|---|
+| **Years of cover** | is the reserve actually there — unit-free, so pools of very different sizes sit on one axis |
+| **Balance vs target vs capacity** | solid / dashed / dotted per pool. §20.4b in one picture: an offset sitting exactly at a capacity defined as its own balance *looks correct* and can never be refilled |
+| **Flows in and out** | inflow above the line, outflow below, and the gated flows marked **on the zero line** — a gated flow moved nothing, and drawing it at its `wanted` height would put a bar-shaped claim on the chart for money that never left |
+| **Flow log** | one row per evaluation: fired (marked *in-portfolio* when the rebalancer moved it), **gated** (with the gate's own reason string), or **veto** |
+
+The log carries the rebalance veto beside the gated flow deliberately. A gate that stops the
+explicit refill while the drift band keeps selling the same sleeve for the same reason has
+changed nothing (§12.4's laundering), and only the two rows together say which happened.
+
+The provenance strip separates the three states that all look like an empty flow log: **no
+graph authored**, **`poolFlowsEnabled: false`** (§16.3's control arm, stated loudly because it
+is indistinguishable from a working graph whose triggers never tripped), and **a graph whose
+edges never fired or gated**.
+
+### 21.4 `firedFlows` — the other half of the ledger (added on first use)
+
+The panel's first run against a real plan reported `growth-to-buffer` as **gated 81, fired 0**.
+It had in fact fired four times, moving \$25k / \$317k / \$337k / \$368k into the bond buffer.
+
+`gatedFlows` made the non-event visible; nothing made the *event* visible on equal terms.
+A firing was only countable through `POOL_FLOW_APPLY`, and **only executor 2 emits one**
+(§12.4) — an in-portfolio edge is realized as a veto on a rebalance leg and emits nothing per
+edge. So the visible half of the ledger was the cross-account edges alone, and an in-portfolio
+edge that fired every year its gate was open read as one that never fired. That is the same
+failure shape as §20.4b: a number that looks correct, on a policy that was working.
+
+`PoolFlowReducer` now records `firedFlows: [{ id, from, to, amount, executor }]` on the cube
+for **both** executors, on both endpoint pools, exactly parallel to `gatedFlows`. The panel
+reads it in preference to the action stream and falls back to `POOL_FLOW_APPLY` only for a run
+recorded before the field existed — where it says so rather than reporting a zero.
+
+**It also closed a live defect.** `cadence: ANNUAL` is enforced by reading back
+`prior[flow.to].lastFired[flow.id]`, and `lastFired` was stamped **only from the transfers**.
+An ANNUAL *in-portfolio* edge was therefore free to fire again on the second advance of the
+same year, re-deciding on an equity reading that only changes annually. Stamping it from every
+firing fixes that; the §20.7 arms are unaffected (their `g2o` is cross-account, so it was
+always stamped). On the plan that found it, the fix removed one duplicate firing and one gated
+evaluation. Tests: POOL-5e, POOL-5f.
+
+### 21.5 One more defect found while wiring it
+
+`POOL_FLOW_APPLY` was never declared in any toolset's `types.actions` block, so
+`TypeRegistry.pickPayload` fell to the heuristic — and **throws** in strict mode. Declared in
+`economic-regimes-toolset.js` alongside the other behavioral apply types. It is the same shape
+as `capital-gains-manifest-drift`: a payload nobody declared, working by fallback until
+something reads it.
+
+### 21.6 What it still does not do
+
+The topology (§14's node/edge editor, and a sankey of realized volume) is not drawn. The
+argument for deferring it is that neither shows a non-event, and the non-event is what the
+three defects of §20 were.

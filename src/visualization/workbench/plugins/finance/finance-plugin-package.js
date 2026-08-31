@@ -31,6 +31,7 @@ import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 import { HoldingsPlugin }          from './holdings-plugin.js';
 import { AllocationPlugin }        from './allocation-plugin.js';
 import { SpendingPlugin }          from './spending-plugin.js';
+import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
 import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
 
@@ -41,7 +42,7 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         AllocationPlugin, SpendingPlugin, PaychequePlugin, MpcCockpitPlugin };
+         AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -59,6 +60,7 @@ export const FINANCE_PLUGINS = [
   { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin    },
   { id: 'allocation',   title: 'Allocation',    component: AllocationPlugin  },
   { id: 'spending',     title: 'Spending',      component: SpendingPlugin    },
+  { id: 'pools',        title: 'Liquidity Pools', component: LiquidityPoolsPlugin },
   { id: 'paycheque',    title: 'Paycheque',     component: PaychequePlugin   },
   { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin      },
   { id: 'opt-runs',     title: 'OPT Runs',      component: OptRunsPlugin     },
@@ -83,7 +85,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'allocation', 'spending', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'timeline', 'chart', 'allocation', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

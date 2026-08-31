@@ -1,0 +1,242 @@
+/* ── Liquidity Pools Plugin (design 97 §20.11) ─────────────────────────────────
+ *
+ * The same skeleton as spending.css and allocation.css on purpose: thin toolbar,
+ * provenance strip ABOVE the chart, clickable legend below — here the legend doubles as
+ * the pool filter. The provenance placement is not cosmetic: the series are RECONSTRUCTED
+ * from journal diffs, and a replay that has drifted draws a believable picture of a run
+ * that did not happen.
+ */
+
+.pool-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.pool-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pool-spacer { flex: 1; }
+
+.pool-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Segmented scope switch for the flow log. */
+.pool-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pool-seg button {
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.pool-seg button:last-child { border-right: 0; }
+
+.pool-seg button.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.pool-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.pool-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+/* ── Provenance strip ─────────────────────────────────────────────────────── */
+
+.pool-provenance {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.pool-provenance:empty { display: none; }
+
+.pool-provenance code { font-size: 10px; color: var(--text-dim); }
+
+.pool-ok { color: var(--green); }
+
+/* A replay that does not tie to the run's own state makes every series here unquotable —
+ * this is meant to stop the reader, not decorate. */
+.pool-provenance--bad {
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-border);
+  color: var(--red);
+  white-space: normal;
+}
+
+/* ── Body: chart or the flow log ──────────────────────────────────────────── */
+
+.pool-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.pool-chart {
+  position: absolute;
+  inset: 0;
+}
+
+.pool-grid {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 8px 9px 12px;
+}
+
+.pool-placeholder {
+  color: var(--text-muted);
+  padding: 16px 12px;
+  font-style: italic;
+}
+
+.pool-grid-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+  white-space: normal;
+}
+
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.pool-table th,
+.pool-table td {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+
+.pool-table thead th {
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.pool-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pool-dim { color: var(--text-muted); }
+
+.pool-row-bad td { color: var(--red); }
+
+/* ── Legend / totals strip ────────────────────────────────────────────────── */
+
+/* WRAPS, where the spending panel's legend scrolls. Two differences make that the right
+ * call here: a pool's chip carries a long authored label AND its balance AND its cover, and
+ * the strip is not just a legend — it is the panel's only pool FILTER. A chip scrolled off
+ * the left edge is a control the reader cannot see, which is how a filter stops reading as
+ * a filter at all. */
+.pool-legend {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 4px 9px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+  max-height: 4.6em;
+  overflow-y: auto;
+}
+
+.pool-legend:empty { display: none; }
+
+.pool-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.pool-legend-item:hover { color: var(--text); }
+
+.pool-legend-item--off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.pool-legend-item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.pool-legend-item strong { color: var(--text); }
+
+/* A gate closing is the panel's subject, not an exception: warn-coloured, never red. Red
+ * would say the run is broken, and a gate doing exactly what it was authored to do is the
+ * one thing on this panel that is certainly working. */
+.pool-warn { color: var(--amber, #d97706); }
+
+.pool-kind {
+  display: inline-block;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  text-transform: uppercase;
+}
+
+.pool-kind--fired  { background: var(--green-glow, rgba(34,197,94,.15)); color: var(--green); }
+.pool-kind--gated  { background: var(--amber-glow, rgba(217,119,6,.15)); color: var(--amber, #d97706); }
+.pool-kind--vetoed { background: var(--bg-active); color: var(--text-muted); }
+
+.pool-row-gated td { color: var(--text-muted); }
+
+/* The gate's own reason string, in full. It is the most useful cell in the table and the
+ * only one that is prose, so it is the one column allowed to wrap. */
+.pool-table .pool-reason {
+  white-space: normal;
+  color: var(--text-muted);
+  min-width: 260px;
+}
