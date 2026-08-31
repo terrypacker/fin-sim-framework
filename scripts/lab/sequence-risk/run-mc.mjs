@@ -54,6 +54,9 @@ const VOL     = Number(flag('vol', 0.18));
 const SHOCK   = flag('shock', null);
 const CRASH   = Number(flag('crash', 2032));
 const OUT     = flag('out', null);
+// §20.6's spend calibration ("a plan that SURVIVES centrally") was computed with the windfall
+// of §20.12 still in the plan, so it has to be re-checkable without editing DEFAULTS.
+const SPEND   = flag('spend', null) != null ? Number(flag('spend', null)) : null;
 const WORKERS = parseWorkers(argv, 8);
 
 const HERE   = dirname(fileURLToPath(import.meta.url));
@@ -64,7 +67,7 @@ for (const p of PROCESSES) {
   for (const a of ARMS) {
     for (let seed = 1; seed <= N; seed++) {
       jobs.push({ id: `${p.key}:${a.key}:${seed}`, armKey: a.key, processKey: p.key,
-                  seed, vol: VOL, shock: SHOCK, crashYear: CRASH });
+                  seed, vol: VOL, shock: SHOCK, crashYear: CRASH, spend: SPEND });
     }
   }
 }
@@ -104,7 +107,7 @@ const usd = (v) => v == null ? '—' : `${v < 0 ? '-' : ''}$${Math.abs(Math.roun
 
 console.log(`\nSEQUENCE RISK — ${N} paired paths per arm, equity vol ${(VOL * 100).toFixed(0)}%`);
 console.log(`facility ${usd(DEFAULTS.facility)} @ ${(DEFAULTS.loanRate * 100).toFixed(1)}% interest-only · `
-  + `equity ${usd(DEFAULTS.equity)} · spend ${usd(DEFAULTS.monthlySpend)}/mo · `
+  + `equity ${usd(DEFAULTS.equity)} · spend ${usd(SPEND ?? DEFAULTS.monthlySpend)}/mo · `
   + `crash ${SHOCK ? `${SHOCK} @ ${CRASH}` : 'none (the draw is the only risk)'}`);
 console.log(`pairing: ${mismatched === 0 ? 'OK — every arm saw the same market on the same seed'
   : `BROKEN — ${mismatched} arm/seed pairs saw a DIFFERENT equity path; nothing below is paired`}`);
@@ -134,18 +137,26 @@ for (const p of PROCESSES) {
     }
     return { d, rescued, broken };
   };
-  console.log('\n   paired, per path            median         p10          p90     wins   rescued  broken');
+  console.log('\n   paired, per path                median         p10          p90     wins   rescued  broken');
   // C−A is the HOUSEHOLD's question — adopt the policy, or don't — and it is the sum of the
   // two effects the other rows separate: the carry of routing spending through the facility
   // at all, and the gate's own conditional deferral. Reported together because a decision
   // taken on C−A alone cannot tell which of the two it is buying.
-  for (const [t, c, label] of [['B', 'A', 'B−A  the standing carry'],
-                               ['C', 'B', 'C−B  the conditional gate'],
-                               ['C', 'A', 'C−A  the whole policy'],
-                               ['D', 'B', 'D−B  the pure deferral']]) {
+  // Every gated arm is read against B, the UNGATED refill — that difference is the gate's own
+  // effect and nothing else — and the whole-policy row against A. Derived from the arm list
+  // rather than written out, so an arm added to `arms.mjs` is scored rather than silently
+  // dropped from the report (§20.13 added E and F).
+  const GATED = ARMS.map(a => a.key).filter(k => !['A', 'B'].includes(k));
+  const LABEL = { C: 'the conditional gate', D: 'the pure deferral',
+                  E: 'the 1% trailing-high gate', F: 'the 5% trailing-high gate',
+                  G: 'the 10% trailing-high gate' };
+  const pairs = [['B', 'A', 'B−A  the standing carry']];
+  for (const k of GATED) pairs.push([k, 'B', `${k}−B  ${LABEL[k] ?? 'vs the ungated refill'}`]);
+  for (const k of GATED) pairs.push([k, 'A', `${k}−A  the whole policy`]);
+  for (const [t, c, label] of pairs) {
     const { d, rescued, broken } = pair(t, c);
     const wins = d.filter(x => x > 0).length;
-    console.log(`   ${label.padEnd(24)} ${usd(median(d)).padStart(11)} ${usd(quantile(d, 0.1)).padStart(11)}`
+    console.log(`   ${label.padEnd(28)} ${usd(median(d)).padStart(11)} ${usd(quantile(d, 0.1)).padStart(11)}`
       + ` ${usd(quantile(d, 0.9)).padStart(12)}  ${String(wins).padStart(3)}/${d.length}`
       + `      ${String(rescued).padStart(3)}     ${String(broken).padStart(3)}`);
   }

@@ -30,8 +30,9 @@ const { jobs } = JSON.parse(readFileSync(inF, 'utf8'));
 const ARMS = Object.fromEntries(arms().map(a => [a.key, a]));
 const PROC = Object.fromEntries(PROCESSES.map(p => [p.key, p]));
 
-const rows = jobs.map(({ id, armKey, processKey, seed, vol, shock, crashYear }) => {
+const rows = jobs.map(({ id, armKey, processKey, seed, vol, shock, crashYear, spend }) => {
   const cfg = buildScenario({
+    plan: spend != null ? { monthlySpend: spend } : {},
     params: {
       liquidityGraph: ARMS[armKey].graph,
       equityReturnStochastic: true,
