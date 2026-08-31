@@ -621,6 +621,18 @@ test('POOL-10: every config error in §12.7 throws at config time', () => {
     { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
     { id: 'b', spendOrder: 2, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 1 },
   ], flows: [{ id: 'ab', from: 'a', to: 'b' }] }, /claims no cash-like/);
+  // a drawdown BASIS with no drawdown clause to govern (§20.14): it would round-trip a
+  // setting that decides nothing, so every saved graph would differ from itself.
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', gate: { drawdownBasis: 'INDEX' } }] },
+    /no drawdown clause/);
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', gate: { sourceDrawdownUnder: 0.05, drawdownBasis: 'PRICE' } }] },
+    /drawdownBasis 'PRICE' is unknown/);
   // the three "two authorities" errors
   throws(P(), /PROPORTIONAL/, ACCOUNTS, { drawdownMode: 'PROPORTIONAL' });
   throws(P(), /COMPILES to that field/, ACCOUNTS, { hasDrawdownSequence: true });
@@ -826,6 +838,285 @@ test('POOL-12c: a market gate cannot see the period it is deciding in', () => {
   assert.ok(stamped.marketReturnYear > 2000);
 });
 
+// ─── POOL-13: the composed gate — OR, AND, NOT and the dwell (design 97 §20.15) ────
+
+/**
+ * One growth pool, one cash pool, one gated edge. `atDrawdown` puts the growth pool a chosen
+ * fraction below its trailing high with everything else held still, which is what a gate
+ * grammar test needs: the interesting variable is the SHAPE of the gate, not the world.
+ */
+const gateWorld = ({ drawdown = 0, priorReturn = 0.08 } = {}) => {
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  return {
+    usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+    effectiveGrowthRates: { EQUITY_US: 0.08 },
+    liquidityPools: {
+      growth: { high: 800_000 / (1 - drawdown), marketReturn: priorReturn, marketReturnYear: 2029 },
+      cash:   { high: 0 },
+    },
+  };
+};
+const gatedFlow = (gate) => normalizeLiquidityGraph({
+  pools: [
+    { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+    { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate }],
+}, ACCOUNTS);
+const opens = (gate, state, date = D(2030)) =>
+  fire(new PoolFlowReducer({ graph: gatedFlow(gate) }), state, { date }).next.length === 1;
+
+test('POOL-13: clauses on one node are an AND, and that is what a flat gate always meant', () => {
+  // The compatibility statement, and the reason the goldens do not move: every gate authored
+  // before §20.15 is a single node, and a single node is its clauses ANDed.
+  const both = { sourceDrawdownUnder: 0.05, sourceReturnOver: 0 };
+  assert.equal(opens(both, gateWorld({ drawdown: 0.02, priorReturn: 0.08 })), true);
+  assert.equal(opens(both, gateWorld({ drawdown: 0.20, priorReturn: 0.08 })), false, 'drawdown clause alone shuts it');
+  assert.equal(opens(both, gateWorld({ drawdown: 0.02, priorReturn: -0.3 })), false, 'return clause alone shuts it');
+});
+
+test('POOL-13b: anyOf is an OR, allOf and a bare array are an AND, not inverts', () => {
+  const world = gateWorld({ drawdown: 0.20, priorReturn: 0.08 });
+
+  // The first branch is false at a 20% drawdown, the second is true ⇒ open.
+  assert.equal(opens({ anyOf: [{ sourceDrawdownUnder: 0.05 }, { sourceReturnOver: 0 }] }, world), true);
+  // Both branches false ⇒ shut, and the reason names both.
+  const shut = fire(new PoolFlowReducer({ graph: gatedFlow({
+    anyOf: [{ sourceDrawdownUnder: 0.05 }, { sourceReturnOver: 0.5 }] }) }), world);
+  assert.equal(shut.next.length, 0);
+  assert.match(shut.state.poolRefillPlan.gated[0].reason, /no branch open/);
+
+  // allOf and the array sugar are the same AND, and both are shut by the 20% drawdown.
+  assert.equal(opens({ allOf: [{ sourceDrawdownUnder: 0.05 }, { sourceReturnOver: 0 }] }, world), false);
+  assert.equal(opens([{ sourceDrawdownUnder: 0.05 }, { sourceReturnOver: 0 }], world), false);
+  assert.equal(opens({ allOf: [{ sourceDrawdownUnder: 0.5 }, { sourceReturnOver: 0 }] }, world), true);
+
+  // not inverts, and nests.
+  assert.equal(opens({ not: { sourceDrawdownUnder: 0.05 } }, world), true);
+  assert.equal(opens({ not: { sourceDrawdownUnder: 0.5 } }, world), false);
+});
+
+test('POOL-13c: sustainedYears holds the gate shut until the condition has held that long', () => {
+  // The lever §20.13 measured as the one that matters: the threshold barely moved the arms,
+  // the DURATION moved them by two orders of magnitude more.
+  const gate    = { sourceDrawdownUnder: 0.05, sustainedYears: 2 };
+  const reducer = new PoolFlowReducer({ graph: gatedFlow(gate) });
+  const near    = gateWorld({ drawdown: 0.02 });
+
+  // Year one: the condition is true for the first time — one year of two.
+  const y1 = fire(reducer, near, { date: D(2030) });
+  assert.equal(y1.next.length, 0, 'a 2-year dwell cannot be satisfied on its first year');
+  assert.match(y1.state.poolRefillPlan.gated[0].reason, /held 1 of 2 years/);
+  assert.equal(y1.state.liquidityPools.cash.gateStreaks.g2c.gate.n, 1);
+
+  // Year two, carrying the cube forward: the dwell is met.
+  const y2 = fire(reducer, { ...near, liquidityPools: y1.state.liquidityPools }, { date: D(2031) });
+  assert.equal(y2.next.length, 1);
+  assert.equal(y2.state.liquidityPools.cash.gateStreaks.g2c.gate.n, 2);
+
+  // A year in which the condition fails resets the count to zero, not to one. The world has
+  // to be broken ON THE CARRIED CUBE — `high` is monotone pool state, so handing the reducer
+  // a fresh world with a bigger high would simply be ignored in favour of the one it kept.
+  const fallen = { ...near, liquidityPools: {
+    ...y2.state.liquidityPools,
+    growth: { ...y2.state.liquidityPools.growth, high: 800_000 / (1 - 0.30) },
+  } };
+  const broken = fire(reducer, fallen, { date: D(2032) });
+  assert.equal(broken.next.length, 0);
+  assert.equal(broken.state.liquidityPools.cash.gateStreaks.g2c.gate.n, 0);
+});
+
+test('POOL-13d: a dwell counts YEARS, so a second advance in one year does not advance it', () => {
+  // The same statement POOL-12d makes about the market reading. A dwell counted in
+  // evaluations would mean one year in a US-only plan and half a year in a cross-border one,
+  // from the same authored number — and the cross-border plan is the ordinary case here.
+  const reducer = new PoolFlowReducer({ graph: gatedFlow({ sourceDrawdownUnder: 0.05, sustainedYears: 2 }) });
+  const near    = gateWorld({ drawdown: 0.02 });
+
+  const jan = fire(reducer, near, { date: D(2030) });
+  assert.equal(jan.next.length, 0);
+  const jul = fire(reducer, { ...near, liquidityPools: jan.state.liquidityPools },
+    { date: new Date(Date.UTC(2030, 6, 1)) });
+  assert.equal(jul.next.length, 0, 'the second advance of the same year must not satisfy a 2-year dwell');
+  assert.equal(jul.state.liquidityPools.cash.gateStreaks.g2c.gate.n, 1);
+});
+
+test('POOL-13e: the author\'s composed rule — near the high for a year OR at it for two', () => {
+  // The rule this grammar was built for, stated as it was asked for: refill when the source
+  // is within 5% of its high for one year, OR within 1% of it for two. Each branch carries
+  // its own dwell, which is the whole reason dwell attaches to a NODE rather than to a gate.
+  const gate = { anyOf: [
+    { sourceDrawdownUnder: 0.05, sustainedYears: 1 },
+    { sourceDrawdownUnder: 0.01, sustainedYears: 2 },
+  ] };
+  const reducer = new PoolFlowReducer({ graph: gatedFlow(gate) });
+
+  // Within 5% ⇒ the first branch alone opens it, on its first year.
+  assert.equal(opens(gate, gateWorld({ drawdown: 0.03 })), true);
+
+  // Below both thresholds ⇒ neither branch can open, however long it holds.
+  const far = gateWorld({ drawdown: 0.30 });
+  const f1  = fire(reducer, far, { date: D(2030) });
+  const f2  = fire(reducer, { ...far, liquidityPools: f1.state.liquidityPools }, { date: D(2031) });
+  assert.equal(f2.next.length, 0);
+
+  // At the high but only for one year: the 5% branch would open it, so to see the 1%/2-year
+  // branch on its own the world has to sit between the two thresholds first — 3% down for a
+  // year (5% branch open) then 0.5% down (1% branch in year one). The composed gate stays
+  // open throughout, which is the point: the branches cover each other.
+  const near = gateWorld({ drawdown: 0.005 });
+  const n1   = fire(reducer, near, { date: D(2030) });
+  assert.equal(n1.next.length, 1, 'the 5% branch carries year one');
+  const n2   = fire(reducer, { ...near, liquidityPools: n1.state.liquidityPools }, { date: D(2031) });
+  assert.equal(n2.next.length, 1);
+  // …and by year two BOTH branches are satisfied, which the streaks record separately.
+  const streaks = n2.state.liquidityPools.cash.gateStreaks.g2c;
+  assert.equal(streaks['gate.anyOf[0]'].n, 2);
+  assert.equal(streaks['gate.anyOf[1]'].n, 2);
+});
+
+test('POOL-13f: a composed gate replays byte-identically', () => {
+  // The dwell is the first piece of gate state that is neither a balance nor a rate, so it
+  // has to survive serialization on its own terms (§12.3's rule for the trailing high).
+  const params = {
+    behavioralStrategies: ['LIQUIDITY_POOLS'],
+    liquidityGraph: {
+      pools: [
+        { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+        { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+      ],
+      flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate: { anyOf: [
+        { sourceDrawdownUnder: 0.05, sustainedYears: 2 },
+        { sourceReturnOver: 0.02, sustainedYears: 1 },
+      ] } }],
+    },
+  };
+  const a = loadScenarioSim({ params, simStart: '2026-01-01', simEnd: '2029-01-01', stepTo: '2029-01-01' });
+  const b = loadScenarioSim({ params, simStart: '2026-01-01', simEnd: '2029-01-01', stepTo: '2029-01-01' });
+  assert.equal(JSON.stringify(a.sim.state), JSON.stringify(b.sim.state));
+  assert.ok(a.sim.state.liquidityPools.cash.gateStreaks.g2c['gate.anyOf[0]']);
+});
+
+test('POOL-13g: a branch that decides nothing is a config error, not an open gate', () => {
+  // The most expensive way this feature could fail: an empty `anyOf` branch normalizes to
+  // "no conditions", an unconditioned branch is always open, and one always-open branch makes
+  // the whole gate always open — silently, and the run still looks plausible.
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', gate: { anyOf: [{ sourceReturnOver: 0 }, {}] } }] },
+    /always-open branch/);
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', gate: { sustainedYears: 3 } }] },
+    /no condition to sustain/);
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', gate: { sourceReturnOver: 0, sustainedYears: 1.5 } }] },
+    /whole number of years/);
+});
+
+test('POOL-12e: a drawdownBasis INDEX gate is not moved by spending, where BALANCE is', () => {
+  // Design 97 §20.14, and it is POOL-12's world seen from the other side. POOL-12 shows the
+  // trailing-BALANCE gate cannot separate "the market fell" from "the household spent the
+  // pool", and answers it with a return gate. The index answers it without giving up the
+  // gate's own question: it is a unit-value series, so a withdrawal cannot move it.
+  //
+  // One state, two gates. The pool is 20% below its peak BALANCE with its return index at a
+  // fresh high — the market recovered, the money was spent. BALANCE must shut, INDEX must not.
+  const graphOf = (gate) => normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate }],
+  }, ACCOUNTS);
+
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const state = {
+    usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+    effectiveGrowthRates: { EQUITY_US: 0.08 },
+    liquidityPools: {
+      // 1,000,000 peak against an 800,000 balance = 20% down on BALANCE …
+      growth: { high: 1_000_000, returnIndex: 1.5, returnIndexHigh: 1.5, marketReturn: 0.08, marketReturnYear: 2029 },
+      cash:   { high: 0 },
+    },
+  };
+
+  const balanceGate = fire(new PoolFlowReducer({ graph: graphOf({ sourceDrawdownUnder: 0.05 }) }), state);
+  assert.equal(balanceGate.next.length, 0, 'the BALANCE basis counts the spending as drawdown');
+  assert.match(balanceGate.state.poolRefillPlan.gated[0].reason, /below its high/);
+
+  // … and 0% down on the index, which is what the gate's name actually asks.
+  const indexGate = fire(new PoolFlowReducer({
+    graph: graphOf({ sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' }) }), state);
+  assert.equal(indexGate.next.length, 1, 'the INDEX basis is flow-neutral');
+
+  // And the reverse world, or the test passes against a gate that reads nothing: the index
+  // below its own peak must shut the INDEX gate even with the balance at a fresh high.
+  const fallen = { ...state, liquidityPools: {
+    growth: { high: 800_000, returnIndex: 1.2, returnIndexHigh: 1.5, marketReturn: 0.08, marketReturnYear: 2029 },
+    cash:   { high: 0 } } };
+  const shut = fire(new PoolFlowReducer({
+    graph: graphOf({ sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' }) }), fallen);
+  assert.equal(shut.next.length, 0);
+  assert.match(shut.state.poolRefillPlan.gated[0].reason, /below its return index's high/);
+});
+
+test('POOL-12f: the return index compounds COMPLETED years only, once per year', () => {
+  // The index is the series a gate acts on, so it inherits §20.2 exactly: compounding the
+  // year in progress would hand the gate that year's return, which is the foresight POOL-12c
+  // exists to forbid. The two assertions are the same statement POOL-12d makes about the
+  // return stamp, one derivative up.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', gate: { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' } }],
+  }, ACCOUNTS);
+
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(800_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 800_000, costBasis: 800_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const base = {
+    usSavingsAccount: savings, usStockAccount: broker, monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+    effectiveGrowthRates: { EQUITY_US: -0.35 },              // THIS year, in progress
+    liquidityPools: {
+      growth: { high: 800_000, returnIndex: 1, returnIndexHigh: 1, marketReturn: 0.10, marketReturnYear: 2029 },
+      cash:   { high: 0 },
+    },
+  };
+  const reducer = new PoolFlowReducer({ graph });
+
+  // January 2030 compounds 2029's completed +10% and NOT the −35% now in progress.
+  const jan = fire(reducer, base, { date: D(2030) });
+  assert.equal(jan.state.liquidityPools.growth.returnIndex, 1.1);
+  assert.equal(jan.state.liquidityPools.growth.returnIndexHigh, 1.1);
+  assert.equal(jan.next.length, 1, 'a completed up year leaves the gate open');
+
+  // July 2030 is the same year: nothing more compounds, and the two advances agree.
+  const jul = fire(reducer, { ...base, liquidityPools: jan.state.liquidityPools },
+    { date: new Date(Date.UTC(2030, 6, 1)) });
+  assert.equal(jul.state.liquidityPools.growth.returnIndex, 1.1);
+  assert.equal(jul.next.length, 1);
+
+  // January 2031 compounds 2030's −35%: the index falls below its peak and the gate shuts.
+  const y31 = fire(reducer, { ...base, liquidityPools: jul.state.liquidityPools }, { date: D(2031) });
+  assert.ok(Math.abs(y31.state.liquidityPools.growth.returnIndex - 0.715) < 1e-9);
+  assert.equal(y31.state.liquidityPools.growth.returnIndexHigh, 1.1);
+  assert.equal(y31.next.length, 0);
+});
+
 test('POOL-12d: a second advance in the same year does not pick up the first one\'s stamp', () => {
   // The half of §20.2 the first fix missed, and the reason the unit here is the YEAR and not
   // the period. This reducer fires on both US_ and AU_PERIOD_ADVANCE, six months apart. With
@@ -862,4 +1153,159 @@ test('POOL-12d: a second advance in the same year does not pick up the first one
   const jul = fire(reducer, { ...base, liquidityPools: jan.state.liquidityPools }, { date: new Date(Date.UTC(2030, 6, 1)) });
   assert.equal(jul.next.length, 1, 'the second advance of the year must not see this year\'s crash');
   assert.equal(jul.state.liquidityPools.growth.priorYearReturn, 0.08);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §20.18 — a market clause on a pool that has no market
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Run `fn` capturing console.warn, so a config-time warning is a value a test can assert on. */
+function capturingWarnings(fn) {
+  const real = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.join(' '));
+  try { fn(); } finally { console.warn = real; }
+  return lines;
+}
+
+const CASH_MARKET_GRAPH = (gate) => ({
+  pools: [
+    { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 100_000 } },
+    { id: 'offset', spendOrder: 20, claims: [{ key: 'offsetAccount' }], capacity: { mode: 'OFFSET_CAP' } },
+    { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [{ id: 'o2c', from: 'offset', to: 'cash', gate }],
+});
+
+test('POOL-14: an INDEX drawdown clause on a cash pool warns — it can only ever be constant', () => {
+  // The defect this exists for, from a real plan: `not { sourceDrawdownUnder, INDEX }` on an
+  // OFFSET source. The offset holds no lots, so its return is null, its index never moves off
+  // its high, the drawdown is 0 forever, and the clause is permanently satisfied — which under
+  // the `not` makes the edge permanently SHUT. It fired 0 times in a 35-year run.
+  const warnings = capturingWarnings(() =>
+    normalizeLiquidityGraph(CASH_MARKET_GRAPH({ not: { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' } }), ACCOUNTS));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /flow 'o2c' gate\.not\.sourceDrawdownUnder/);
+  assert.match(warnings[0], /pool 'offset'/);
+  assert.match(warnings[0], /ALWAYS FALSE/, 'a `not` above the clause flips its absent-reading default');
+});
+
+test('POOL-14b: the same clause WITHOUT the negation is always TRUE, and says so', () => {
+  const warnings = capturingWarnings(() =>
+    normalizeLiquidityGraph(CASH_MARKET_GRAPH({ sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' }), ACCOUNTS));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /ALWAYS TRUE/);
+});
+
+test('POOL-14c: the BALANCE basis on the same pool does NOT warn — a balance is a real series', () => {
+  // The working-detector control, and the reason this is a warning and not an error: a cash
+  // pool really does have a balance to measure against, so the same clause on the default
+  // basis is a legitimate authoring.
+  const warnings = capturingWarnings(() =>
+    normalizeLiquidityGraph(CASH_MARKET_GRAPH({ sourceDrawdownUnder: 0.1 }), ACCOUNTS));
+  assert.deepEqual(warnings, []);
+});
+
+test('POOL-14d: a market clause on a pool that HOLDS lots does not warn', () => {
+  const graph = {
+    pools: CASH_MARKET_GRAPH({}).pools,
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash',
+              gate: { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' } }],
+  };
+  assert.deepEqual(capturingWarnings(() => normalizeLiquidityGraph(graph, ACCOUNTS)), []);
+});
+
+test('POOL-14e: the return pair has no basis to choose, so it warns on a cash pool either way', () => {
+  const warnings = capturingWarnings(() =>
+    normalizeLiquidityGraph(CASH_MARKET_GRAPH({ sourceReturnOver: 0 }), ACCOUNTS));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /sourceReturnOver/);
+});
+
+test('POOL-15: a gated source the rebalancer cannot sell records no veto', () => {
+  // `_applyVeto` pins the target of the vetoed pool's ALLOCATION classes. A cash/offset pool
+  // narrows no sleeves, so it names no class and the veto is a no-op — logging one anyway put
+  // a "rebalance veto" row in the panel for every period of a run, for a decision never taken.
+  const graph = normalizeLiquidityGraph(CASH_MARKET_GRAPH({ notBefore: '2040-01-01' }), ACCOUNTS);
+  const state = {
+    usSavingsAccount: new CheckingAccount(0, { country: 'US', currency: USD }),
+    offsetAccount: new OffsetAccount(300_000, { offsetsPropertyKey: 'house', country: 'US', currency: USD }),
+    usStockAccount: new BrokerageAccount(0, { country: 'US', currency: USD }),
+    houseLoan: new LoanAccount(200_000, { linkedPropertyKey: 'house', country: 'US', currency: USD }),
+    monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+  };
+  const out = fire(new PoolFlowReducer({ graph }), state);
+  // The gate really is shut and the non-event really is recorded…
+  assert.equal(out.state.poolRefillPlan.gated.length, 1);
+  assert.equal(out.state.poolRefillPlan.gated[0].from, 'offset');
+  // …but there is no sale for a veto to stop.
+  assert.deepEqual(out.state.poolRefillPlan.vetoed, []);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §20.19/§20.20 — the two settings a refill edge cannot see
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** ACCOUNTS, plus the ROLE the rebalancer keys off — the fixture set carries only types. */
+const ROLED = [
+  { stateKey: 'usSavingsAccount', type: ACCOUNT_TYPE.SAVINGS,   role: 'us-savings' },
+  { stateKey: 'usStockAccount',   type: ACCOUNT_TYPE.BROKERAGE, role: 'us-stock' },
+  { stateKey: 'fixedIncomeAccount', type: ACCOUNT_TYPE.BROKERAGE, role: 'fixed-income' },
+];
+
+const REFILL_GRAPH = (bondKey) => ({
+  pools: [
+    { id: 'bonds',  spendOrder: 10, target: { mode: 'AMOUNT', value: 50_000 },
+      claims: [{ key: bondKey, sleeves: ['BOND'] }] },
+    { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [{ id: 'g2b', from: 'growth', to: 'bonds' }],
+});
+
+test('POOL-16: a REBALANCE edge into a role the rebalancer cannot trade warns', () => {
+  // `fixed-income` is in neither TAX_ADVANTAGED_ROLES nor TAXABLE_ROLES, so the reducer never
+  // sees the account: the edge validates, saves, and moves nothing, for ever, without even a
+  // failed firing to look at — a REBALANCE edge emits no action of its own.
+  const warnings = capturingWarnings(() =>
+    normalizeLiquidityGraph(REFILL_GRAPH('fixedIncomeAccount'), ROLED));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /flow 'g2b' is an in-portfolio \(REBALANCE\) edge/);
+  assert.match(warnings[0], /destination pool 'bonds' claims 'fixedIncomeAccount'/);
+});
+
+test('POOL-16b: the same edge into a taxable brokerage sleeve is silent', () => {
+  // The working-detector control, and the shape design 97 §20.19 recommends: two pools over
+  // two sleeves of ONE brokerage.
+  const g = REFILL_GRAPH('usStockAccount');
+  g.pools[1].claims = [{ key: 'usStockAccount', sleeves: ['EQUITY'] }];
+  assert.deepEqual(capturingWarnings(() => normalizeLiquidityGraph(g, ROLED)), []);
+});
+
+test('POOL-16c: no roles supplied ⇒ no warning (an absent role is not an untradeable one)', () => {
+  // Several call sites pass `{stateKey, type}` projections. Warning on those would fire on
+  // every graph in the test suite and mean nothing.
+  assert.deepEqual(
+    capturingWarnings(() => normalizeLiquidityGraph(REFILL_GRAPH('usStockAccount'), ACCOUNTS)), []);
+});
+
+test('POOL-17: an interest-bearing account may not hold EQUITY or GOLD', async () => {
+  const { assertInterestBearingHoldings, INTEREST_BEARING_ALLOCATIONS } =
+    await import('../../src/finance/holdings/default-allocations.js');
+  assert.deepEqual([...INTEREST_BEARING_ALLOCATIONS], ['BOND', 'CASH']);
+
+  const acct = (allocation) => ({
+    stateKey: 'fixedIncomeAccount', role: 'fixed-income',
+    holdings: [{ id: 'h1', allocation, label: 'X', marketValue: 1000 }],
+  });
+  // BOND and CASH resolve FIXED_INCOME_<cc> / SAVINGS_<cc>, both of which the interest
+  // series carries.
+  assert.doesNotThrow(() => assertInterestBearingHoldings(acct('BOND')));
+  assert.doesNotThrow(() => assertInterestBearingHoldings(acct('CASH')));
+  // EQUITY and GOLD have no entry in it, so they would silently take the ACCOUNT's interest
+  // rate and be booked as ordinary interest income.
+  assert.throws(() => assertInterestBearingHoldings(acct('EQUITY')),
+    /holds a EQUITY holding .*effectiveInterestRates/s);
+  assert.throws(() => assertInterestBearingHoldings(acct('GOLD')), /GOLD/);
+  // An empty account is fine — that is every scenario that has one and does not use it.
+  assert.doesNotThrow(() => assertInterestBearingHoldings({ stateKey: 'k', role: 'fixed-income', holdings: [] }));
 });

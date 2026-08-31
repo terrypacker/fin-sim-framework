@@ -149,9 +149,21 @@ for (const p of PROCESSES) {
   const GATED = ARMS.map(a => a.key).filter(k => !['A', 'B'].includes(k));
   const LABEL = { C: 'the conditional gate', D: 'the pure deferral',
                   E: 'the 1% trailing-high gate', F: 'the 5% trailing-high gate',
-                  G: 'the 10% trailing-high gate' };
+                  G: 'the 10% trailing-high gate',
+                  H: 'the 1% index gate', I: 'the 5% index gate', J: 'the 10% index gate',
+                  K: 'the index gate held 2 yrs', L: 'the index gate held 3 yrs',
+                  M: 'the index gate held 4 yrs', N: 'the index gate held 5 yrs' };
   const pairs = [['B', 'A', 'B−A  the standing carry']];
   for (const k of GATED) pairs.push([k, 'B', `${k}−B  ${LABEL[k] ?? 'vs the ungated refill'}`]);
+  // The dwell's own effect: the same gate, the same threshold, only the duration differs.
+  for (const t of ['K', 'L', 'M', 'N']) {
+    if (GATED.includes(t) && GATED.includes('J')) pairs.push([t, 'J', `${t}−J  the dwell alone`]);
+  }
+  for (const [t, c] of [['H', 'E'], ['I', 'F'], ['J', 'G']]) {
+    if (GATED.includes(t) && GATED.includes(c)) {
+      pairs.push([t, c, `${t}−${c}  flow-neutral vs balance`]);
+    }
+  }
   for (const k of GATED) pairs.push([k, 'A', `${k}−A  the whole policy`]);
   for (const [t, c, label] of pairs) {
     const { d, rescued, broken } = pair(t, c);

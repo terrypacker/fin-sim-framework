@@ -21,6 +21,7 @@ import {
   AuFixedIncomeEarningsApplyReducer,
 } from '../../finance/account-rules/au/au-fixed-income-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { assertInterestBearingHoldings } from '../../finance/holdings/default-allocations.js';
 
 /**
  * AU_BANKING toolset — AU savings and fixed income account interest and cash-flow machinery.
@@ -134,6 +135,9 @@ export const AU_BANKING = {
       const event = context.schedulesById['INTL_AU_FIXED_INCOME_INTEREST'];
       const rate  = context.parameters.auFixedIncomeInterestRate;
       fixedIncomeAccounts.forEach(acct => {
+        // The AU mirror of the US check — same coupling, same two wrong numbers if an
+        // EQUITY or GOLD lot lands here (design 97 §20.20).
+        assertInterestBearingHoldings(acct);
         const h = new AuFixedIncomeInterestMonthlyHandler({
           stateRegistry: context.stateRegistry,
           role:          ACCOUNT_ROLES.AU_FIXED_INCOME,

@@ -211,3 +211,53 @@ export function resolveRateKey(country, allocation, role = null) {
 
   return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[allocation] ?? null;
 }
+
+/**
+ * The allocations an INTEREST-BEARING account can actually earn on (design 97 §20.20).
+ *
+ * A dedicated fixed-income account earns through one handler — `FixedIncomeInterestHandler`
+ * (US) / `AuFixedIncomeInterestMonthlyHandler` (AU) — and both resolve their per-holding rate
+ * out of `state.effectiveInterestRates`. That series carries `SAVINGS_*`, `FIXED_INCOME_*`
+ * and `PRIME_*` and nothing else, so exactly the two allocations whose rate key is one of
+ * those are servable: BOND (`FIXED_INCOME_<cc>`) and CASH (`SAVINGS_<cc>`) — read
+ * `RATE_KEY_BY_COUNTRY_ALLOCATION` above, which is the fact this list is derived from.
+ *
+ * EQUITY and GOLD have no entry in that series. Nothing else on the interest path stops
+ * them: `computeHoldingsGrowth`'s BOND/CASH skip guard is `!useCoupon && …`, so on the
+ * interest path every holding is processed, and one whose rate key is absent falls through
+ * to the ACCOUNT's fallback — the fixed-income interest rate.
+ */
+export const INTEREST_BEARING_ALLOCATIONS = Object.freeze([ALLOCATION.BOND, ALLOCATION.CASH]);
+
+/**
+ * Throw when an interest-bearing account holds something its earnings handler cannot price.
+ *
+ * Two wrong numbers, both believable, are what this prevents: an EQUITY lot in a
+ * `fixed-income` account grows at the account's INTEREST rate rather than the equity rate,
+ * AND its growth is emitted as `FIXED_INCOME_EARNINGS_APPLY`, which chains
+ * `FIXED_INCOME_EARNINGS_TAX` — ordinary income taxed annually, where equity appreciation is
+ * unrealised and taxed on disposal. Measured: an account holding $91k of equity through such
+ * a mis-location earned the 4 % interest rate for six years and paid income tax on all of it.
+ *
+ * Called at CONFIG time, from the toolsets that wire the handler — the place that knows the
+ * coupling exists. No engine path can create the state today (`TAXABLE_ROLES` excludes both
+ * fixed-income roles, so the rebalancer cannot place anything there); the reachable author is
+ * a hand-edited or imported account, which is exactly what this catches.
+ *
+ * @param {{stateKey?: string, role?: string, holdings?: Array}} account
+ * @throws {Error} naming the account, the offending holding and the fix
+ */
+export function assertInterestBearingHoldings(account) {
+  const bad = (account?.holdings ?? []).find(
+    h => h && h.allocation != null && !INTEREST_BEARING_ALLOCATIONS.includes(h.allocation));
+  if (!bad) return;
+  const what = bad.label ? `'${bad.label}'` : `id '${bad.id ?? '?'}'`;
+  throw new Error(
+    `Account '${account.stateKey}' (role ${account.role}) holds a ${bad.allocation} holding `
+    + `(${what}), but an interest-bearing account earns only through its fixed-income interest `
+    + 'handler, which resolves rates from `effectiveInterestRates` — a series with no '
+    + `${bad.allocation} entry. That holding would grow at the account's INTEREST rate and its `
+    + 'growth would be booked as ordinary interest income taxed annually, rather than as '
+    + `capital appreciation. Hold ${INTEREST_BEARING_ALLOCATIONS.join(' or ')} here, or move `
+    + 'the holding to a brokerage account (role us-stock / au-stock).');
+}

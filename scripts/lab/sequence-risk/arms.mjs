@@ -140,6 +140,53 @@ export function arms(facility = DEFAULTS.facility) {
       graph: { pools: [offsetPool(facility), growthPool(2)],
                flows: [refillFlow({ sourceDrawdownUnder: 0.10 })] },
     },
+    // ── the flow-neutral basis (design 97 §20.14) ──────────────────────────────────
+    // H/I/J are E/F/G with one field changed. The trailing high in E–G is a peak BALANCE, so
+    // spending the pool down reads as drawdown and the gate stays shut for reasons that have
+    // nothing to do with the market — which LENGTHENS the deferral, and a longer deferral is
+    // a longer levered position. E–G may therefore be measuring leverage that the gate's name
+    // does not admit to. INDEX puts the same threshold on a series no withdrawal can move, so
+    // H−E is exactly "what was the contamination worth", and it is a number rather than an
+    // argument. Paired against E/F/G, never read alone.
+    {
+      key: 'H', label: 'flow-neutral 1% — the return index, not the balance',
+      note: 'E with drawdownBasis: INDEX; H−E prices the spend-down contamination',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.01, drawdownBasis: 'INDEX' })] },
+    },
+    {
+      key: 'I', label: 'flow-neutral 5% — the return index, not the balance',
+      note: 'F with drawdownBasis: INDEX',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' })] },
+    },
+    {
+      key: 'J', label: 'flow-neutral 10% — the return index, not the balance',
+      note: 'G with drawdownBasis: INDEX — the hand-authored arm, decontaminated',
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.10, drawdownBasis: 'INDEX' })] },
+    },
+    // ── the DWELL sweep (design 97 §20.16) ────────────────────────────────────────
+    // Every arm above produces a deferral DURATION as a side effect of a threshold, and
+    // §20.13 measured duration as the lever the threshold is not: 1/5/10 % landed within
+    // \$13k of each other while C-vs-E-vs-D — the same family differing only in how long the
+    // gate stays shut — spread by \$460k. `sustainedYears` (§20.15) is the first control that
+    // states duration directly, so this is the first arm set that moves the lever and nothing
+    // else: J's gate, n = 2…5, paired against J itself (n = 1).
+    //
+    // The expected shape, worth writing down before reading the numbers: J is one end and D
+    // (never refill) is the other, so if duration is genuinely the lever the sweep should walk
+    // from J toward D — a rising median with a widening left tail and more broken worlds —
+    // and turn over somewhere in between. A flat sweep says duration was a proxy for something
+    // else and §20.13's reading of it is wrong.
+    ...[2, 3, 4, 5].map((years, i) => ({
+      key: 'KLMN'[i],
+      label: `flow-neutral 10% held for ${years} years — the dwell sweep`,
+      note: `J plus sustainedYears: ${years}; paired against J, which is the same gate at n = 1`,
+      graph: { pools: [offsetPool(facility), growthPool(2)],
+               flows: [refillFlow({ sourceDrawdownUnder: 0.10, drawdownBasis: 'INDEX',
+                                    sustainedYears: years })] },
+    })),
   ];
 }
 
