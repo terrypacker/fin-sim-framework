@@ -54,7 +54,9 @@ import { poolContext, allPoolMetrics } from './pool-metrics.js';
  *
  * `gatedFlows` on the cube is the field that makes the feature debuggable: the interesting
  * event is nearly always a flow that did NOT fire, and nothing else in the journal records
- * a non-event.
+ * a non-event. `firedFlows` is its counterpart and is not redundant with the journal: only
+ * a cross-account edge emits an action, so without it the ledger's visible half is the
+ * TRANSFER edges alone and an in-portfolio edge reads as one that never fired.
  */
 export class PoolFlowReducer extends Reducer {
   static type        = 'PoolFlowReducer';
@@ -249,6 +251,7 @@ export class PoolFlowReducer extends Reducer {
     const outflow    = {};
     const vetoed     = new Set();
     const transfers  = [];
+    const fired      = [];
     const adjust     = {};
 
     if (this.flowsEnabled) {
@@ -297,6 +300,15 @@ export class PoolFlowReducer extends Reducer {
 
         inflow[flow.to]    = (inflow[flow.to] ?? 0) + amount;
         outflow[flow.from] = (outflow[flow.from] ?? 0) + amount;
+        // The firing, recorded for BOTH executors and before the executor split below.
+        // `gatedFlows` made the non-event visible; without its counterpart the visible half
+        // of the ledger is only the cross-account edges, because those are the only ones that
+        // emit an action. An in-portfolio edge is realized as a veto on a rebalance leg and
+        // emits nothing per-edge, so a reader counting `POOL_FLOW_APPLY` sees "this edge never
+        // fired" for an edge that fired every year its gate was open. Measured on a real plan:
+        // an edge with 81 gated evaluations and 4 firings read as 81 and 0.
+        fired.push({ id: flow.id, from: flow.from, to: flow.to,
+                     amount: +amount.toFixed(2), executor: flow.executor });
         if (flow.executor === FLOW_EXECUTOR.TRANSFER) {
           transfers.push({ type: 'POOL_FLOW_APPLY', flowId: flow.id, from: flow.from, to: flow.to, amountBase: +amount.toFixed(2), year: yearOf });
         } else if (flow.amount.fractionOfSource != null) {
@@ -340,10 +352,17 @@ export class PoolFlowReducer extends Reducer {
         inflow:       +(inflow[pool.id] ?? 0).toFixed(2),
         outflow:      +(outflow[pool.id] ?? 0).toFixed(2),
         gatedFlows:   gatedFlows.filter(g => g.to === pool.id || g.from === pool.id),
+        // The other half of the ledger, on the same terms as `gatedFlows`: recorded on both
+        // endpoints, so a reader looking at one pool sees everything that touched it.
+        firedFlows:   fired.filter(f => f.to === pool.id || f.from === pool.id),
         lastFired:    { ...(p.lastFired ?? {}) },
       };
-      for (const t of transfers) {
-        if (t.to === pool.id || t.from === pool.id) entry.lastFired[t.flowId] = t.year;
+      // Stamped from every firing, not just the transfers. `cadence: ANNUAL` reads this back
+      // (`prior[flow.to]?.lastFired?.[flow.id]`), so stamping only the TRANSFER half left an
+      // ANNUAL in-portfolio edge free to fire again on the second advance of the same year —
+      // re-deciding on an equity reading that only changes annually.
+      for (const f of fired) {
+        if (f.to === pool.id || f.from === pool.id) entry.lastFired[f.id] = yearOf;
       }
       // The TRAILING spend basis needs a series, and it has to be state: a window that
       // predates the run's start date is not recoverable from the journal.

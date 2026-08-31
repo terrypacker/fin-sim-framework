@@ -568,6 +568,20 @@ export const ECONOMIC_REGIMES = {
         },
       },
       {
+        // Design 97 §12.4 — executor 2, the cross-account pool flow. Declared because
+        // `pickPayload` keeps only declared fields, and in strict mode an UNDECLARED type
+        // throws: the design-97 panel reads this action out of the journal as the record of
+        // a refill that actually fired, against `gatedFlows` for the ones that did not.
+        type: 'POOL_FLOW_APPLY',
+        fields: {
+          flowId:     ValueType.text(),
+          from:       ValueType.text(),
+          to:         ValueType.text(),
+          amountBase: ValueType.number(),
+          year:       ValueType.number(),
+        },
+      },
+      {
         type: 'ASSET_LOCATION_REBALANCE_APPLY',
         fields: {
           fromStateKey:  ValueType.text(),

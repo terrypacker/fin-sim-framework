@@ -216,7 +216,8 @@ import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
 import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, FLOW_EXECUTOR, depositKeyFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph } from './finance/pools/liquidity-graph.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
-import { loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext } from './finance/pools/pool-metrics.js';
+import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
+import { poolMarketReturn, loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext } from './finance/pools/pool-metrics.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -526,7 +527,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -1285,6 +1286,14 @@ export const Finance = {
   resolveLiquidityGraph,
   PoolFlowApplyReducer,
   PoolFlowReducer,
+  POOL_CUBE_FIELDS,
+  POOL_EVENT_KIND,
+  buildPoolHistory,
+  poolHistoryRows,
+  poolSeries,
+  tiePoolHistory,
+  latestPools,
+  poolMarketReturn,
   loanForOffset,
   annualSpendBase,
   poolMetrics,
@@ -1959,6 +1968,7 @@ export const FinancePlugins = {
   HoldingsPlugin,
   AllocationPlugin,
   SpendingPlugin,
+  LiquidityPoolsPlugin,
   PaychequePlugin,
   MpcCockpitPlugin,
   FINANCE_PLUGINS,

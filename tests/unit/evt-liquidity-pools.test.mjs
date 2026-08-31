@@ -322,6 +322,84 @@ test('POOL-5c: poolFlowsEnabled=false keeps the topology and the cube, and fires
   assert.equal(out.state.liquidityPools.cash.balance, 100_000);
 });
 
+test('POOL-5e: every firing is on the cube, in-portfolio ones included', () => {
+  // `gatedFlows` made the non-event visible; without its counterpart the visible half of the
+  // ledger is the cross-account edges alone, because those are the only ones that emit an
+  // action. On a real plan an in-portfolio edge with 4 firings and 81 gated evaluations was
+  // reported as 0 and 81 — the firings were real and only the record was missing.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }], target: { mode: 'AMOUNT', value: 200_000 } },
+      { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'AMOUNT', value: 300_000 } },
+      { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [
+      { id: 'b2c', from: 'buffer', to: 'cash',   priority: 10 },   // cross-account ⇒ TRANSFER
+      { id: 'g2b', from: 'growth', to: 'buffer', priority: 10 },   // one book       ⇒ REBALANCE
+    ],
+  }, ACCOUNTS);
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(1_100_000, { country: 'US', currency: USD });
+  broker.holdings = [
+    new Holding({ id: 'bd', allocation: ALLOCATION.BOND,   marketValue: 100_000,   costBasis: 100_000,   purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' }),
+    new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 1_000_000, costBasis: 1_000_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' }),
+  ];
+  const state = {
+    usSavingsAccount: savings, usStockAccount: broker,
+    monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+  };
+  const out = new PoolFlowReducer({ graph }).reduce(
+    state, { type: 'US_PERIOD_ADVANCE', date: '2030-01-01' }, new Date('2030-01-01'));
+
+  const byId = Object.fromEntries(
+    out.liquidityPools.buffer.firedFlows.map(f => [f.id, f]));
+  assert.deepEqual(Object.keys(byId).sort(), ['b2c', 'g2b']);
+  assert.equal(byId.b2c.executor, FLOW_EXECUTOR.TRANSFER);
+  assert.equal(byId.g2b.executor, FLOW_EXECUTOR.REBALANCE);
+  assert.ok(byId.g2b.amount > 0);
+  // Recorded on both endpoints, like gatedFlows, so a reader looking at one pool sees
+  // everything that touched it.
+  assert.deepEqual(out.liquidityPools.growth.firedFlows.map(f => f.id), ['g2b']);
+  assert.deepEqual(out.liquidityPools.cash.firedFlows.map(f => f.id), ['b2c']);
+  // Only the cross-account edge emits an action — which is exactly why the cube has to carry
+  // the other one.
+  assert.deepEqual(out.next.filter(a => a.type === 'POOL_FLOW_APPLY').map(a => a.flowId), ['b2c']);
+});
+
+test('POOL-5f: an ANNUAL in-portfolio edge fires ONCE a year, not once per advance', () => {
+  // `cadence: ANNUAL` reads `lastFired`, which was stamped only from the TRANSFER half — so
+  // an in-portfolio edge was free to re-decide on the July advance against an equity reading
+  // that only changes annually.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'AMOUNT', value: 300_000 } },
+      { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', cadence: 'ANNUAL' }],
+  }, ACCOUNTS);
+  const broker = new BrokerageAccount(1_100_000, { country: 'US', currency: USD });
+  broker.holdings = [
+    new Holding({ id: 'bd', allocation: ALLOCATION.BOND,   marketValue: 100_000,   costBasis: 100_000,   purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' }),
+    new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 1_000_000, costBasis: 1_000_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' }),
+  ];
+  const base = { usStockAccount: broker, monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 } };
+  const r = new PoolFlowReducer({ graph });
+
+  const jan = r.reduce(base, { type: 'US_PERIOD_ADVANCE', date: '2030-01-01' }, new Date('2030-01-01'));
+  assert.equal(jan.liquidityPools.buffer.firedFlows.length, 1);
+  assert.equal(jan.liquidityPools.buffer.lastFired.g2b, 2030);
+
+  // The AU advance, six months later, on the state January left behind.
+  const jul = r.reduce(jan, { type: 'AU_PERIOD_ADVANCE', date: '2030-07-01' }, new Date('2030-07-01'));
+  assert.equal(jul.liquidityPools.buffer.firedFlows.length, 0);
+
+  // A new year re-opens it.
+  const next = r.reduce(jul, { type: 'US_PERIOD_ADVANCE', date: '2031-01-01' }, new Date('2031-01-01'));
+  assert.equal(next.liquidityPools.buffer.firedFlows.length, 1);
+});
+
 test('POOL-5d: two sources into one pool SHARE the shortfall — the second tops up the rest', () => {
   const graph = normalizeLiquidityGraph({
     pools: [
