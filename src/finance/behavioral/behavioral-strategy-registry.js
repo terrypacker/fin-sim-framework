@@ -455,8 +455,11 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       {
         key: 'bondLadderSpacingYears', label: 'Bond Ladder Spacing (years)',
         type: 'Number', group: 'Allocation', mc: false, opt: false,
-        min: 0.5, max: 5, step: 0.5, defaultValue: 1,
-        description: 'Years between adjacent rung maturities. Ladder term = rungs × spacing.',
+        min: 0.25, max: 5, step: 0.25, defaultValue: 1,
+        description: 'Years between adjacent rung maturities. Ladder term = rungs × spacing. '
+          + '0.25 is a quarterly ladder — four rungs of it cover a year of spending in three-month '
+          + 'steps, which is the shape a liquidity pool wants; the reducer has always accepted it, '
+          + 'the control just could not express it.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
       },
       {
@@ -577,13 +580,18 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + '`floor`, and a `capacity` rule (BALANCE, or OFFSET_CAP for an offset, whose ceiling is '
           + 'min(cash parked, loan owed) and falls on a schedule nobody authored). A flow is a directed '
           + 'edge {from, to} with a `trigger` (when the destination wants money), an `amount` (how far '
-          + 'to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceReturnOver: 0` '
-          + 'is "only harvest in a year the market is up" and is the gate to reach for in a plan being '
-          + 'SPENT DOWN; `targetReturnUnder` is the same machinery pointing the other way, i.e. buy the '
-          + 'dip. `sourceDrawdownUnder` / `targetDrawdownOver` measure a pool against its own peak '
-          + 'BALANCE instead, which in decumulation cannot tell a falling market from the household '
-          + 'spending the pool down — it latches shut after the first crash (design 97 §16.1b). Use '
-          + 'them only for a pool that is accumulating. Trigger and amount are '
+          + 'to fill it) and a `gate` (whether the SOURCE may be sold at all). `sourceDrawdownUnder` '
+          + 'with `drawdownBasis: INDEX` — "only harvest while the source is within x of its peak, '
+          + 'measured on its compounded RETURN so the household\'s own spending does not count as '
+          + 'drawdown" — is the gate that measured best in decumulation (design 97 §20.14). On the '
+          + 'default `BALANCE` basis the same clause cannot tell a falling market from the pool being '
+          + 'spent down and latches shut after the first crash, so use BALANCE only for a pool that is '
+          + 'accumulating. `sourceReturnOver: 0` is "only harvest after an up year" and '
+          + '`targetReturnUnder` is the same machinery pointing the other way, i.e. buy the dip. '
+          + 'Clauses can be composed — `anyOf` / `allOf` / `not`, an array is an AND — and any of them '
+          + 'can carry `sustainedYears: n`, which holds the gate shut until its condition has held n '
+          + 'consecutive years; §20.13 measured that DURATION, not the threshold, as the lever. '
+          + 'Trigger and amount are '
           + 'deliberately two numbers — an (s, S) band — so a refill does not fire every period. '
           + 'The graph COMPILES to the drawdown sequence, so it replaces `drawdownSequence` rather than '
           + 'sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical '

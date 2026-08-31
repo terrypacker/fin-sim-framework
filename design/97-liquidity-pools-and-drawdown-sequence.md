@@ -658,14 +658,25 @@ the substantive improvement over the drift band, which conflates them.
 |---|---|
 | `sourceDrawdownUnder: x` | fire only while the source is within x of its trailing high. `0` is §6.4's "do not refill while bucket 3 is below its trailing high"; `0.05` is the softer "harvest in up markets". |
 | `targetDrawdownOver: x` | the reverse edge's condition — fire only when the DESTINATION is x below its high (buy the dip). |
+| `drawdownBasis` | which series those two measure against — `BALANCE` (the peak balance, the default) or `INDEX` (the pool's compounded return, flow-neutral). **§20.14**, and it is the field that decides whether the household's own spending reads as a market signal. |
+| `sourceReturnOver: x` / `targetReturnUnder: x` | the market pair, on the last COMPLETED year (§20.2). |
 | `notInRegime: [TAG]` | reuse the existing regime tags (`ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER`). |
 | `notBefore` / `notAfter` / `ageOver` / `ageUnder` | the ordinary time gates. |
+| `sustainedYears: n` | the DWELL — hold this node shut until its condition has held n consecutive years (**§20.15**). §20.13 measured duration as the lever the thresholds are not. |
+| `anyOf` / `allOf` / `not` | composition; clauses on one node are an AND (**§20.15**). |
 | absent | always. |
 
 A trailing high is per-pool state (`state.liquidityPools[id].high`, monotone, updated once per
 period). It has to be **state**, not a window recomputed from the journal, because it must
 survive serialization and replay identically — and because a peak set before the run's start
-date is not knowable from the run.
+date is not knowable from the run. The same is true of `returnIndex` / `returnIndexHigh`
+(§20.14) and of the dwell's streak counters (§20.15).
+
+> **Superseded on one point.** The prose below and in `poolMarketReturn` recommends the RETURN
+> pair over the drawdown pair in a decumulation plan, because a trailing high cannot separate a
+> falling market from a pool being spent down. That is a property of the SERIES, not of the
+> gate: with `drawdownBasis: INDEX` the drawdown pair is flow-neutral, and §20.14 measures it as
+> the best-performing gate in the study. Read the recommendation as "not the trailing BALANCE".
 
 **`amount`** — `toTarget` (fill the destination to its target, the usual case),
 `fractionOfSource: f`, `max`, `min`. Every transfer is additionally clamped by: the source's
@@ -1559,19 +1570,33 @@ The measurement design is settled and should not be re-derived:
 
 ## 20. Reopening §19 — the requirement with a harm and a price (30 Aug 2026)
 
-**Status**: **CLOSED with an answer** (30 Aug 2026). The engine work is built (§20.2, §20.3,
-§20.4b, all with tests), the scenario and arms are in `scripts/lab/sequence-risk/`, and the
-study is run — §20.9 has the numbers and §20.10 says what would have to exist for the answer to
-be different. Three probes are in source control and are the record of the measurements:
-`probe-pool-gate-foresight.mjs`, `probe-offset-payment-drain.mjs`,
+**Status**: **REOPENED and RE-ANSWERED** (30 Aug 2026, same day). §20.9's answer was measured on
+a scenario that was not minimal — a company-equity sale landed in the spend account the year
+after the crash and funded eleven years of spending, so every arm ran with the portfolio
+untouched across the whole post-crash recovery window. **§20.12** has the defect, the fix and
+the re-measured tables; **§20.13** and **§20.14** are the finding that came out of re-running
+it. §§20.1–20.11 are left as written, because the sequence of measurements is the record; where
+a conclusion in them is superseded the later section says so.
+
+**The one-line answer, revised.** The *gate* is real and the *choice of gate* is most of it. A
+refill gated on the source pool's **flow-neutral drawdown** — the trailing high measured on the
+pool's compounded return rather than its balance (§20.14) — is worth **+\$175k median on 245 of
+300 paths** in the IID-with-a-crash world, against **+\$29k on 215** for the return gate §20.9
+scored, with a tighter left tail and ten worlds rescued against one broken. What has NOT
+changed: ρ(1) ≥ 0 in every world the engine can produce (§20.9), so none of this is the
+"sell into the recovery" bet the requirement was written as; and the pure deferral (arm D)
+remains leverage that breaks nine worlds and rescues none.
+
+The engine work is built (§20.2, §20.3, §20.4b, §20.14, §20.15, all with tests), the scenario
+and arms are in `scripts/lab/sequence-risk/`, and four probes are in source control as the
+record of the measurements: `probe-pool-gate-foresight.mjs`, `probe-offset-payment-drain.mjs`,
 `probe-return-autocorrelation.mjs`.
 
-**The one-line answer.** The policy is not a liquidity strategy in this engine; it is leverage
-plus a bet on a number the engine cannot produce. Deferring equity sales into the offset earns
-nothing under IID returns (a coin flip: 164/300 paths, +\$4.9k median on \$13m) and LOSES under
-the only other process available, which turns out to be momentum rather than mean reversion
-(66/300 paths). What does move money in these arms is the borrowing, and it prices like
-borrowing: a better median with a fatter left tail and more ruin.
+**The old one-line answer**, kept because §20.9's numbers are still what that scenario said:
+*the policy is not a liquidity strategy in this engine; it is leverage plus a bet on a number
+the engine cannot produce.* Deferring equity sales into the offset earned nothing under IID
+returns (a coin flip: 164/300 paths, +\$4.9k median on \$13m) and LOST under momentum
+(66/300 paths). §20.12 measures how much of that was the windfall.
 
 ### 20.1 What is actually different from §19
 
@@ -1815,7 +1840,13 @@ sales into the offset is worth X per path, costs Y in interest, and rescues/brea
 with the `WHITE_NOISE` column present, because a strategy that only works under an assumption
 should be read next to the assumption.
 
-### 20.9 The answer — MEASURED (30 Aug 2026)
+### 20.9 The answer — MEASURED (30 Aug 2026), and SUPERSEDED by §20.12–§20.14
+
+> Every number in this section is correct for the scenario as it stood, and that scenario was
+> not minimal: §20.12 found a company-equity windfall landing the year after the crash, which
+> switched the mechanism off for eleven of the run's thirty-five years. The process finding
+> below (ρ(1)) is independent of it and stands. The arm tables do not — read §20.12's
+> re-measured versions next to them.
 
 `scripts/lab/sequence-risk/`, 300 paired paths per arm, equity vol 18 %, common random numbers
 (asserted: every arm sees the same realized equity path on the same seed, or the report says so
@@ -1943,15 +1974,449 @@ The argument for it is this section's own history: §20.2's foresight, §20.4b's
 headroom and §20.3's unwired knob were all visible in that cube from the first period of the
 first run, and each took a study to find instead.
 
+### 20.12 The minimal scenario was not minimal — the study's own numbers, re-measured (30 Aug 2026)
+
+**Found by reading the exported arm in the app**, which is the thing §20.11 built the export
+for. The C arm's JSON carries a company-equity sale landing the year after the crash, and a
+household with that much cash arriving does not draw on an offset — so the arm was not
+exercising the policy at the one moment the policy exists for.
+
+`scenario.mjs` zeroes `cfg.accounts` and `cfg.realProperties`. `buildDefaultConfig` also ships
+three collections that are **not accounts** and that the loop therefore never reached:
+`companyEquities`, `collectibles`, `bequests`. The bequest is inert by default. The gold is
+dilution. The company equity is neither:
+
+| | |
+|---|---|
+| grant at t0 | \$500,000, appreciating at 8 % |
+| `INTL_RETIREMENT_DEFAULTS.companySaleYear` | **2033** — one year after the dated crash |
+| value when it sells | ~\$793,000, ~\$680,000 after tax, into `usSavingsAccount` |
+| what that buys | ~11 years of spending, 2033–2043 |
+
+Measured on the deterministic arm set: **every arm sells zero equity from 2033 to 2043**, and
+the offset sits full in A, B and C throughout. The post-crash recovery window — the only window
+the policy is about — ran with the portfolio untouched in every arm, and the four arms
+therefore differed over 7 of 35 years rather than 35.
+
+**The scenario's own contract is what makes this a defect rather than a caveat.** §20.6 says
+the confounds are removed *by construction*; the construction reached the collections it
+authored and not the ones `buildDefaultConfig` did. The generalizable rule, and it is the same
+shape as §20.4b and §20.2: *a scenario that claims minimality has to assert it, not perform
+it.* `buildScenario` now empties all three and then **throws** if any of the four value-bearing
+non-account collections is non-empty, so a future `buildDefaultConfig` addition trips in the
+builder rather than in a study's numbers a month later. `plan.windfall` / `SEQRISK_KEEP_WINDFALL=1`
+reproduces the pre-fix world, and does so to the dollar — which is how the table below is known
+to isolate one variable.
+
+**C − B, the gate's own effect, 300 paired paths, everything else identical:**
+
+| world | §20.9 as published | windfall removed |
+|---|---|---|
+| IID, no crash | +\$4.9k, 164/300, p10 −\$54k, 0 resc / 1 brk | +\$19.7k, **194/300**, p10 −\$30k, 3 / 0 |
+| IID, dated crash | +\$23.7k, 192/300, p10 −\$109k, 1 / 2 | +\$28.8k, **215/300**, p10 −\$53k, 3 / 3 |
+| momentum, no crash | \$0, 66/300, −\$260k, 0 / 2 | −\$23.3k, 53/300, −\$171k, 0 / 4 |
+| momentum, dated crash | −\$8.4k, 105/300, −\$227k, 0 / 6 | −\$18.2k, 84/300, −\$152k, 0 / 2 |
+
+**B − A, the carry of routing spending through the facility — this one changes sign:**
+
+| world | as published | windfall removed |
+|---|---|---|
+| IID, no crash | +\$116k, 256/300, 7 resc / 0 brk | +\$297k, 239/300, 11 / 0 |
+| IID, dated crash | **−\$46k**, 125/300, 6 / 0 | **+\$164k**, 158/300, **21 / 0** |
+| momentum, dated crash | −\$437k, 106/300 | −\$551k, 131/300, 7 / 0 |
+
+**What survives.** §20.9's ρ(1) finding is untouched — it is a property of the return process,
+measured by a probe that never loads this scenario, and no liquidity feature can create a
+rebound to sell into. The gate is still small money in absolute terms (+0.2 % and +0.67 % of
+median wealth). Momentum still beats the policy, harder than before. D is still leverage that
+breaks 9–10 worlds and rescues nearly none.
+
+**What does not.** Two things, and both were load-bearing conclusions.
+
+1. *"A coin flip: 164/300."* At 194/300 and 215/300 it is not one, and the left tail **halves**
+   in both IID worlds. The gate was being scored across a horizon on which it was switched off
+   for eleven years; most of what that added was noise in the paired difference.
+2. *"It should be evaluated on the left tail, where D loses 9 worlds and rescues none."* True of
+   D, and now false of B and C: in the IID crash world the facility **rescues 21 worlds and
+   breaks 0**. The old scenario could not show a liquidity rescue because the windfall was
+   preventing the failures it would have rescued.
+
+**A caveat that has to be recorded next to the new numbers.** Arm A's failure count went 24→66
+(IID, no crash) and 69→149 (IID, crash) of 300. §20.6 chose 3.6 % of the book as "a plan that
+survives centrally" — but that calibration was itself made with ~\$680k of windfall in the plan.
+With 22–50 % of paths insolvent, `run.mjs`'s contract bites (terminal wealth after an
+out-of-funds event compares two insolvencies, not two policies) and **rescued/broken is the
+primary reading, not the median**. `run-mc.mjs --spend` exists so the calibration can be
+re-taken; re-taking it is open work.
+
+### 20.13 The gate the design argued against is the one that works (30 Aug 2026)
+
+§12.3 and `poolMarketReturn`'s docstring both argue *against* `sourceDrawdownUnder` in a
+decumulation plan — it cannot separate a falling market from a pool being spent down, and
+latches shut after the first crash — and that argument is why arm C uses the return gate. It
+was an argument, not a measurement. The first hand-authored arm to try the other gate beat C,
+so it got arms rather than a footnote: **E, F, G** are C with `sourceDrawdownUnder` at 1 %, 5 %
+and 10 %, one field changed and nothing else.
+
+**IID with the dated crash — the world the policy is for:**
+
+| pair | median | wins | p10 | rescued / broken |
+|---|---|---|---|---|
+| C−B return gate | +\$28.7k | 215/300 | −\$52.9k | 3 / 3 |
+| E−B drawdown 1 % | +\$123.3k | 215/300 | −\$58.3k | 6 / 2 |
+| F−B drawdown 5 % | +\$132.0k | 221/300 | −\$50.3k | 8 / 2 |
+| G−B drawdown 10 % | **+\$136.3k** | **226/300** | **−\$45.4k** | 8 / 1 |
+| D−B never refill | −\$55.9k | 121/300 | −\$204.9k | 2 / 10 |
+
+G−A is +\$316.6k with **28 worlds rescued and 0 broken**. Under momentum the drawdown gates go
+to a \$0 median where the return gate loses \$18k and D loses \$73k — they are not merely better,
+they are less sensitive to the process assumption the whole of §20.1 turns on.
+
+**Two readings of that, and the second is the one worth keeping.**
+
+*The threshold is nearly inert.* 1 %, 5 % and 10 % land within \$13k of each other on a \$5m
+plan. A control that does not change the answer is not the lever, whatever its name suggests.
+
+*The DURATION is a lever* — and §20.16 measures it directly, isolates it, and finds it
+inert-to-harmful past the point the shipped rules already reach, so read this paragraph with
+that one. What separates C from E/F/G is not precision, it is **how long the gate stays shut**: the return gate re-opens after any up year and keeps the offset full, the
+drawdown gate stays shut for years. And D — shut forever — is worse than all of them. So the
+policy has an **interior optimum in deferral length**, and neither of the two gates the design
+shipped can express one directly; each produces a duration as a side effect of a threshold.
+That is what §20.15's grammar is for, and this measurement is the reason it exists.
+
+**The honest caveat, which §20.14 then measures rather than argues.** Part of why the drawdown
+gate defers so long is the confound §12.3 named: spending contaminates the trailing high, the
+gate latches, and a longer deferral is a longer levered position. On the deterministic path
+arm E drains the facility to zero by 2037 and never refills, which is arm D with a slow fuse —
+and D prices like leverage. So E/F/G's advantage cannot be attributed to the gate until the
+contamination is removed and the arms re-run, which is exactly what the next section does.
+
+### 20.14 The drawdown gate's confound is fixable, and fixing it wins — BUILT and MEASURED (30 Aug 2026)
+
+§12.3 treats "a trailing-high gate cannot tell a falling market from a pool being spent down"
+as a property of the gate, and answers it by recommending a different gate. It is a property of
+the **series**, not of the gate, and the series is replaceable.
+
+`gate.drawdownBasis` (`liquidity-graph.js`, `POOL_DRAWDOWN_BASIS`) chooses what
+`sourceDrawdownUnder` / `targetDrawdownOver` measure against:
+
+| basis | the series | what "20 % down" means |
+|---|---|---|
+| `BALANCE` (default) | the peak BALANCE | the pool is a fifth smaller than it has ever been — spending included |
+| `INDEX` | the pool's compounded RETURN, from 1.0 | the market this pool is invested in is a fifth off its peak |
+
+`INDEX` is the ordinary time-weighted definition of a drawdown, and it is flow-neutral by
+construction: a withdrawal, a refill and a rebalance all leave it alone. It is preferred to a
+flow-adjusted balance ("high less debits, low less credits") for two reasons — a flow-adjusted
+balance is path-dependent, so two pools with identical returns and different flow timing
+disagree; and one index serves BOTH directions, where a flow-adjusted balance needs a separate
+rule for the high and the low.
+
+**The index inherits §20.2 by construction, which is the part to get right.** It compounds one
+factor per **completed** calendar year, taken from the same cube stamp `_priorYearReturns`
+reads. An index built off the live rate table would compound the year it is deciding in and
+hand every drawdown gate the foresight §20.2 removed from the return gates — the same defect,
+one derivative up, and just as silent. POOL-12f is the regression; POOL-12e is the pair that
+shows BALANCE and INDEX disagreeing on one state, from both sides.
+
+**Measured.** Arms **H, I, J** are E, F, G with the one field changed. 300 paired paths.
+
+*IID, dated crash:*
+
+| pair | median | wins | p10 | rescued / broken | median interest |
+|---|---|---|---|---|---|
+| C−B return gate | +\$28.8k | 215/300 | −\$52.9k | 3 / 3 | \$137k |
+| G−B balance 10 % | +\$136.3k | 226/300 | −\$45.4k | 8 / 1 | \$385k |
+| **J−B index 10 %** | **+\$174.8k** | **245/300** | **−\$33.7k** | **10 / 1** | **\$229k** |
+
+*IID, no crash:* H−B +\$49.1k on 202/300 with p10 −\$67.9k and 3 worlds broken, against E−B's
++\$52.7k on 191/300 with p10 −\$102.1k and 5 broken.
+
+**Two findings, and the first is the one that was at risk.**
+
+1. **The contamination was worth almost nothing on the median.** H−E is −\$988 (no crash) and
+   \$0 (crash). §20.13's fear was that E/F/G were measuring the latch-as-leverage rather than
+   the gate — a longer deferral is a longer levered position — and that is now measured and
+   rejected. E/F/G's advantage over C was the gate.
+2. **What the flow-neutral basis buys is the TAIL.** Every p10 improves, every broken count
+   falls or holds, the win rate rises to 82 % in the crash world, and the interest bill falls
+   by a third to a half — because the facility is no longer held drawn for years by a gate
+   reading the household's own spending as a market signal. A rule that earns the same median
+   with a tighter tail and a smaller loan bill is strictly better, and that is the shape of
+   the improvement rather than a bigger number.
+
+`BALANCE` stays the default. The two genuinely answer different questions, and for a pool with
+a spending floor "is this pool smaller than it has ever been" is the one you want. But for the
+market gate on a growth pool in a plan being spent down, `INDEX` is what the author means every
+time, and the app's control now says so in the option label rather than in a design document.
+
+### 20.15 The gate becomes a composed condition with a dwell — BUILT (30 Aug 2026)
+
+§20.13's measurement is the argument for this section: across 1 %, 5 % and 10 % the threshold
+moved the answer by \$13k, while the same gate family differing only in **how long it stays
+shut** moved it by \$460k. (§20.16 then used this grammar to isolate duration on its own and
+found it inert-to-harmful beyond J's own rule — which is the grammar earning its keep by
+falsifying the reading that motivated it, not an argument against having built it.) The design shipped two gates that each produce a duration as a *side
+effect* of a threshold, and no way to state a duration directly. So the gate grows the two
+things that were missing — composition, and dwell.
+
+**The grammar.** A gate is a tree of nodes; a node carries clauses, children and a dwell:
+
+```
+{ sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX', sustainedYears: 2 }
+{ anyOf: [ … ] }        OR
+{ allOf: [ … ] }   [ … ]  AND (an array is sugar for allOf)
+{ not: { … } }          negation
+```
+
+A node is open when its own clauses all pass, every `allOf` child is open, at least one `anyOf`
+child is open, and any `not` child is shut. **Clauses on one node are an AND** — which is what a
+flat gate has always meant, so every gate authored before this section normalizes to exactly
+what it did, and no golden moves. The shape deliberately mirrors `visibleWhen`'s DSL: two
+composable predicate languages in one codebase that disagreed about whether an array is an AND
+would be a coin flip at every call site.
+
+The rule this was asked for reads:
+
+```
+gate: { anyOf: [
+  { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX', sustainedYears: 1 },
+  { sourceDrawdownUnder: 0.01, drawdownBasis: 'INDEX', sustainedYears: 2 },
+] }
+```
+
+**The dwell is stateful, and its unit is the YEAR.** `sustainedYears: n` holds a node shut until
+its condition has held on n consecutive years, this one included. Not periods: this reducer
+fires on both `US_PERIOD_ADVANCE` and `AU_PERIOD_ADVANCE`, so a dwell counted in evaluations
+would mean one year in a US-only plan and half a year in a cross-border one **from the same
+authored number** — and it is the same trap POOL-12d exists for, one layer up. It is also the
+grain at which anything changes: the equity tick is annual, so every gate reading is constant
+within a year.
+
+Three properties the implementation has to have, each with a test:
+
+- **the streak advances at most once per year** and on EVERY evaluation, not only the ones
+  whose flow then moves money — a dwell that counted the periods somebody asked about would be
+  measuring the household's demand rather than the market's behaviour (POOL-13d);
+- **`anyOf` never short-circuits.** Each branch carries its own streak, so a branch skipped
+  because an earlier one opened would have counted something other than the years its own
+  condition held (POOL-13e);
+- **a branch that decides nothing is a config error.** An empty `anyOf` branch is always open,
+  and one always-open branch makes the whole gate always open — silently, on a run that still
+  looks plausible. It throws (POOL-13g).
+
+**Where the state lives.** `state.liquidityPools[to].gateStreaks[flowId][path]`, on the
+DESTINATION pool's cube entry: a flow has exactly one `to`, so the counters need no new state
+key and travel with the rest of the pool state through serialization and replay (POOL-13f).
+`path` is the node's position in the tree (`gate.anyOf[1]`), recomputed at evaluation time
+rather than stamped on the graph, so a saved graph carries no editor bookkeeping. A streak for
+a flow that was NOT evaluated this period is carried forward, because `cadence: ANNUAL` skips
+an edge that already fired and dropping the streak would restart a multi-year dwell every time
+the edge fired.
+
+**The control surface** (§17.1's rule, applied unchanged). A flow holds a LIST of clauses, and a
+list of lists becomes a flat table keyed by the id above it — so the gate leaves the flows row
+and becomes a **fourth table**, keyed by flow id and an OR number. Rows sharing an OR number
+are ANDed; each OR number is an alternative. The author's rule above is two rows. Each row also
+carries the basis (§20.14) and the dwell, because both are per-clause.
+
+A gate outside disjunctive normal form (an OR inside an AND) cannot be drawn as
+rows, and the editor does not try: it round-trips the authored gate verbatim the way it already
+round-trips `ui`, and shows no clause rows for it. Flattening half a composed gate would leave
+a graph that still loads and still runs — the failure mode this design has now named five times.
+
+### 20.16 The dwell sweep — the lever measured directly, and it is a NEGATIVE result (30 Aug 2026)
+
+§20.15 built `sustainedYears` on §20.13's reading that *duration*, not threshold, is what moves
+the answer. §20.13 inferred that from arms that differ in several things at once (C's signal is
+a return, J's is an index level, D has no refill at all). This is the first arm set that moves
+duration and **nothing else**: arms **K, L, M, N** are arm J's gate at `sustainedYears` 2, 3, 4
+and 5, paired against J, which is the same gate at n = 1.
+
+**IID, dated crash — K−J … N−J, the dwell alone:**
+
+| dwell | median | wins | p10 | broken | median interest |
+|---|---|---|---|---|---|
+| n = 2 | \$0 | 138/300 | −\$138.9k | 1 | \$301k |
+| n = 3 | \$0 | 138/300 | −\$173.1k | 3 | \$359k |
+| n = 4 | \$0 | 135/300 | −\$246.8k | 5 | \$432k |
+| n = 5 | −\$3.8k | 133/300 | −\$263.3k | 5 | \$468k |
+
+Four coin flips, a left tail that roughly doubles, and an interest bill that doubles (J itself
+pays \$229k). IID no-crash is the same shape with the medians pointing the other way: +\$6.0k,
++\$14.5k, +\$14.2k for n = 3, 4, 5 — bought with p10 falling \$3,400,198 → \$3,347,621 and broken
+worlds going 2 → 5.
+
+**The finding: the dwell is a LEVERAGE control, not a protection control.** A better median with
+a fatter left tail and more ruin is §20.9's own description of arm D, and lengthening the dwell
+walks J toward D — which is exactly what the arm comment predicted it would do if duration were
+the lever, and the prediction being right does not make the lever a good one.
+
+**What this does and does not do to §20.13.** It does NOT show duration is irrelevant: C (a
+short deferral) and D (an unbounded one) are both worse than J, so an interior optimum is still
+the best reading of the family. It shows **J is already at or past that optimum**, and the sweep
+only probes the LONGER side — `sustainedYears` can lengthen a deferral and cannot shorten one.
+§20.13's sentence "the DURATION is the lever" should be read as "the duration is *a* lever, and
+the shipped rules are already near its useful end", which is a weaker and better-supported
+claim.
+
+**What would test the other side**, and it is a different control rather than another sweep: a
+**cooldown** (do not re-evaluate for n years after a refill) shortens the effective deferral
+from the other end, and a **forced refill after n consecutive shut years** bounds it. Neither is
+built. Both are one clause in §20.15's grammar if they are ever wanted.
+
+**The methodological point, which is the durable part.** §20.13 read a lever off arms that
+differed in more than one thing, and §20.15 was built on that reading. The lever turned out to
+be inert-to-harmful when isolated. The grammar is still the right thing to have — it is what
+made this measurement *sayable*, and a control that can state a hypothesis directly is how the
+hypothesis gets falsified — but the ordering is the lesson: **§19.6's "one variable per arm"
+applies to reading a lever out of a table just as much as to running one.**
+
 ---
 
-## 21. The Liquidity Pools panel — BUILT (30 Aug 2026)
+### 20.17 What the clause table could not say, and three things it silently dropped — BUILT (31 Aug 2026)
 
-§20.11's open item, closed. `src/finance/pools/pool-history.js` (the replay + the pivot) and
-`plugins/finance/liquidity-pools-plugin.js` (the panel), a sibling of `spending-plugin.js` and
-`allocation-plugin.js` with the same skeleton: toolbar, provenance strip **above** the chart,
-clickable legend below. Tests: `tests/unit/pool-history.test.mjs` (10),
-`tests/viz/liquidity-pools-plugin.test.mjs` (17), `evt-liquidity-pools.test.mjs` POOL-5e/5f.
+Authoring the §20 pool system through the app rather than through a script found five defects
+in the clause table, four of them the same shape: a field on screen that does not mean what it
+looks like it means.
+
+**`not` is a row, not an escape hatch.** The four clause kinds all state a condition in one
+direction, and the direction they cannot state is the one a decumulation plan is actually
+about: *fire only while the source is NOT within x of its high* — a down-market rule. The
+engine has had `not` since §20.15; the table did not offer it, so the rule fell out of DNF and
+into `rawGate`, where it could be run but not edited. The row now carries a **sense** —
+`when` / `when NOT` — and the negation wraps the CLAUSE, so the dwell rides on the negation:
+"has NOT been within 5 % of its high for two years". A saved gate that puts the dwell the other
+side of the `not` (`{ not: { X, sustainedYears: 2 } }`, i.e. "X has not held for two years")
+says a different thing and is left to `rawGate` rather than re-read as this one.
+
+**The OR # is a position, not a label.** `rowsToGate` emits one `anyOf` branch per distinct
+number in ascending order, so a 3 typed beside a 1 saves as branch 2, and a lone branch
+collapses to a bare node with no number at all. That is correct, and it was invisible: the
+author discovered the renumbering on the next load. The table now renumbers on the spot, so
+what is on screen is what will reload.
+
+**A flow whose gate the table cannot draw is no longer selectable in it.** `buildFlow` lets an
+undrawable `rawGate` win over the clause rows, so a row typed against such a flow was on
+screen, saved nowhere, and left the flow running a gate the author could not see.
+
+**An AMOUNT or YEARS_OF_SPEND capacity had no size cell**, so selecting either wrote
+`{ mode: 'AMOUNT' }` with no value — a mode offered on screen that `sizeSpec` rejects at
+Rebuild. It has a size cell now.
+
+**`floor`, a target's `spendBasis`/`trailingYears`, a trigger's `spendBasis` and `amount.max` /
+`amount.min` are carried, not drawn.** No column showed them, and nothing preserved them
+either: any keystroke anywhere in the three tables rewrote the graph without them. They now
+round-trip verbatim the way `ui` and `rawGate` do. Drawing them is a column each, later; the
+point of this fix is that a policy the author wrote is not deleted by an edit somewhere else.
+
+**Asked and not built: a dwell counted in PERIODS.** The flows table offers a cadence, so the
+dwell looks like it should too. It should not, and the reducer is the argument: `sustainedYears`
+is the only unit whose meaning does not depend on how many countries the plan files in, and
+every series the gate reads is annual — `_returnIndices` compounds nothing on a second advance
+within one year, and `_priorYearReturns` carries the same reading forward, *deliberately*, so
+the two advances of a cross-border year agree. A PERIODS dwell would therefore be a duplicate
+reading of an unchanged signal in a US-only plan, and exactly half the authored duration in a
+cross-border one — POOL-12d's trap with a nicer label. The one basis where a sub-year reading
+changes at all is the peak BALANCE, which changes because the household SPENT the pool, which
+is the confound §20.14 exists to remove.
+
+### 20.18 A market clause on a pool that has no market — BUILT (31 Aug 2026)
+
+Authoring the §20 system by hand found the failure this section is named for, and it is the
+most expensive shape in the feature: **a gate that validates, loads, runs, reports itself as
+working, and decides nothing.**
+
+The rule the author wanted was "refill cash from the offset when equities are down". The
+offset is `o2c`'s SOURCE, so it was written as `not { sourceDrawdownUnder: 0.1, INDEX }` — and
+the offset holds no lots. `poolMarketReturn` returns null, the return index never compounds
+off 1.0, its high stays 1.0, its drawdown is 0.0 in every period of the run, the clause is
+permanently satisfied, and the `not` makes the edge permanently SHUT. Measured on the plan:
+**`o2c` fired 0 times in 35 years.** Deleting the gate entirely — priority alone already says
+the rule, because `g2c` is tried first and is shut when growth is down — fired it in 28 of
+them, moving \$26–75k a year into cash through the crash.
+
+Nothing was broken. Each clause has a documented default for an absent reading ("no signal is
+not bad signal", POOL-12b), and each behaved exactly as documented. What was missing is that
+the default is a CONSTANT, and a constant clause is indistinguishable, in the panel and in the
+journal, from a gate that is doing its job — the shut edge dutifully logged a gated event in
+every period.
+
+So `normalizeLiquidityGraph` now **warns** when a clause reads a market signal on a pool whose
+claims are all cash-like, naming the flow, the clause's path in the gate tree, the pool, and —
+counting the `not`s above it — whether the clause is always TRUE or always FALSE. A warning
+and not an error, for §12.2's reason: the same clause on the default `BALANCE` basis measures
+a series a cash pool really has, so it is a legitimate authoring, just almost never the
+intended one.
+
+**And the veto stops crying wolf.** A closed gate vetoes its source's rebalance sale (§12.4),
+but `_applyVeto` works by pinning the target of the vetoed pool's ALLOCATION classes — so a
+pool that narrows no sleeves names no class and cannot be vetoed at all. The reducer logged
+one anyway, which put a "rebalance veto" row in the panel for a decision that was never taken,
+in **900 of 1,093 periods** of the run above. It is now recorded only for a source the
+rebalancer could actually sell; on that plan the survivors are `growth`, in 2033–2039, which
+are the real ones. This mattered more than a tidy log: the phantom vetoes are what sent the
+author looking at the veto for a swing the veto had nothing to do with.
+
+**What the swing actually was**, for the record, because none of it was the veto: the gate is
+measured against a MONOTONE all-time index high, so after a 48 % crash nothing refilled until
+the index recovered past 90 % of the OLD peak — six years, over which the offset drained
+\$400k → \$0 — and then `g2o` refilled the whole \$400k in one January. After that the
+annual saw-tooth is `cadence: ANNUAL` doing what it says: cash is filled to its \$100k target
+once a year, annual spend is ~\$120k, so cash empties around October and the last two months
+come out of the offset (spend order 1) until the next January refill.
+
+
+**What is NOT built.** No optimizer/MPC surface over dwell (§14's territory), and no arm set
+sweeping it: §20.13 says duration is the lever, and the obvious next measurement is
+`sustainedYears` swept 1…5 on the J arm, which is the first study this grammar makes sayable.
+
+
+### 20.19 Refilling an in-portfolio pool — three reasons it is inert, and the setting nobody could find (31 Aug 2026)
+
+An author adding a fourth pool — a quarterly Treasury ladder between cash and the offset —
+could not make it refill, and the reasons are worth writing down because none of them
+announces itself. A `growth → bonds` edge classifies as `executor: REBALANCE`, validates,
+saves, and then does nothing at all unless **three** separate settings line up.
+
+1. **`fixed-income` is not in `TAXABLE_ROLES`.** The rebalancer's account list is
+   tax-advantaged ∪ taxable, and that set is `{us-stock, au-stock}`. An account in the
+   `fixed-income` role is therefore outside the rebalanceable book entirely: the rebalancer
+   can neither buy nor sell in it, so a refill edge pointed at it can never execute no matter
+   what else is configured. `DEFAULT_LOCATION_POLICY` agrees by omission — its BOND
+   preference list is `[IRA, K401, SUPER, US_STOCK, AU_STOCK]`, and `fixed-income` is not on
+   it, so even under LOCATED the class would be routed somewhere else. The fix for the plan
+   was to put the ladder in the taxable brokerage's BOND sleeve — **two pools over two sleeves
+   of one account**, which is the shape §3.1 and §12.4 are built for. Whether the role
+   *should* be rebalanceable is a real question and not a silent change: every scenario with a
+   funded fixed-income account would move.
+2. **`allocationLocation: PER_ACCOUNT` drives every account to the uniform mix.** A book whose
+   pools are sleeves wants LOCATED, which assigns each account a composition summing to its
+   own total.
+3. **The drift band is in PERCENTAGE POINTS**, and the shipped taxable default is 0.10. A
+   one-year ladder is ~3.6 % of a \$2m book, so the drift between "full ladder" and "ladder
+   completely spent" is 3.6 points — it can never exceed a 10-point band, and the refill can
+   never fire. This is the same class of defect as §20.18: a control that is on screen, is
+   valid, and cannot reach the thing it governs.
+
+**The setting the author was looking for already exists: it is the pool's own `target`.**
+The question was "can TARGET_ALLOCATION re-up only my bonds and leave the other classes
+alone?", and `_resolvePoolTarget` is the answer — a class claimed by a pool carrying a target
+is sized by the GRAPH, and *classes no pool targets keep their scheduled weights,
+renormalised into whatever room is left*. Giving only the bond pool a target pins BOND at one
+year of spend and leaves everything else on its authored mix. The honest limit: a target mix
+is total by construction, so pinning one class does determine what the rest sums to; the
+residual is split among the unclaimed classes by their authored RELATIVE weights, not frozen
+at what is currently held.
+
+**And the gate is why the edge exists at all.** With the target alone, the drift band would
+rebuild the ladder by selling equity in the crash — §12.4's laundering, arriving from the
+third direction. The gated edge closes, the source pool is vetoed, and the rebalancer may not
+sell EQUITY that period either. Measured on the plan: the ladder is held at four rungs
+through 2026–2032, spent down over 2033–2034 while the gate is shut and `growth` is vetoed
+every period, the offset carries 2035–2039, and the whole structure — cash, ladder, offset —
+is rebuilt in the single January the drawdown falls back under the threshold.
 
 ### 21.1 The source is the JOURNAL, not the run's sampler
 
@@ -2041,3 +2506,90 @@ something reads it.
 The topology (§14's node/edge editor, and a sankey of realized volume) is not drawn. The
 argument for deferring it is that neither shows a non-event, and the non-event is what the
 three defects of §20 were.
+
+### 20.20 `fixed-income` stays out of `TAXABLE_ROLES`, and the two guards that say why — BUILT (31 Aug 2026)
+
+§20.19 left one question open: `fixed-income` is not a rebalanceable role, and that looks like
+an oversight. It is not, and the reason is a three-way coupling that only holds while the
+account holds fixed income.
+
+**The role is the key to the earnings handler as well as to the rebalancer.**
+`FixedIncomeInterestHandler` (US) / `AuFixedIncomeInterestMonthlyHandler` (AU) is the account's
+ONLY earnings stream — `IntlUsStockEarningsHandler`, `DividendScheduledHandler` and
+`BondCouponScheduledHandler` are all scoped to `US_STOCK`, and the sleeve handlers to
+us-stock/401k/IRA/Roth. It prices every holding out of `state.effectiveInterestRates`, which
+carries `SAVINGS_*`, `FIXED_INCOME_*` and `PRIME_*` — **no `EQUITY_US`, no `GOLD`** (checked on
+a live run). And `computeHoldingsGrowth`'s BOND/CASH skip is `!useCoupon && …`, so on the
+interest path nothing is skipped: a holding whose rate key is absent is processed and falls
+through to the account's fallback, the fixed-income rate.
+
+So an equity lot in such an account would (1) grow at ~4 % instead of ~7 % and (2) have that
+growth emitted as `FIXED_INCOME_EARNINGS_APPLY`, which chains `FIXED_INCOME_EARNINGS_TAX` —
+ordinary income taxed annually, where equity appreciation is unrealised until disposal. Two
+wrong numbers, both believable.
+
+**Measured, not argued.** Adding the role to `TAXABLE_ROLES` and running the plan: the account
+went from **\$73,843 of BOND to \$91,041 of EQUITY** by 2031. `DEFAULT_LOCATION_POLICY` names
+`fixed-income` for no class at all, and preference is soft-with-spill, so a role nobody prefers
+becomes the spill destination for whatever is left over — BOND goes to its preferred wrappers
+and EQUITY lands in the bond account. The ladder is destroyed and the bond pool holds equity
+earning the interest rate.
+
+A correct change is therefore three changes, not one: the role into `TAXABLE_ROLES`, the role
+into `DEFAULT_LOCATION_POLICY[BOND]` ahead of the wrappers, and the earnings coupling broken
+(scope the interest handler to BOND/CASH and wire the equity/dividend/gold streams onto the
+role — i.e. make `fixed-income` a full brokerage). **Not made.** The need it was raised for is
+already met by the shape §20.19 recommends: two pools over two sleeves of one taxable
+brokerage, where design 59's `INTL_BOND_COUPON` stream serves the bonds properly.
+
+**Two guards instead**, both of which would have ended the search in seconds:
+
+- `normalizeLiquidityGraph` **warns** when a REBALANCE edge's source or destination pool
+  claims an account in a role the rebalancer does not trade. A REBALANCE edge emits no action
+  of its own (§12.4), so an edge that never moves anything leaves no failed firing to look at
+  — it is invisible by construction. Skipped when the caller supplied no roles: an absent role
+  is not evidence of an untradeable one.
+- `assertInterestBearingHoldings` **throws** at config time, from the two toolsets that wire
+  the interest handler, when such an account holds anything but BOND or CASH. The list is
+  derived from `RATE_KEY_BY_COUNTRY_ALLOCATION` and stated beside it, so it cannot drift from
+  the series it describes. Config time and not runtime because no engine path can reach the
+  state today — `TAXABLE_ROLES` excludes both roles, so the rebalancer cannot place anything
+  there — and the author who hand-edits or imports an account is exactly who this catches.
+
+Tests: POOL-16/16b/16c (the warning, its control, and the no-roles case), POOL-17 (the throw,
+both directions).
+
+### 20.21 A dated holding crashed the Monte Carlo and not the run — FIXED (31 Aug 2026)
+
+Importing §20.19's ladder scenario ran deterministically and then failed on the first Monte
+Carlo iteration with `this.purchaseDate.toISOString is not a function`.
+
+JSON has no Date. A holding that has been through a file — an import, a downloaded scenario, a
+template — carries ISO **strings**, and `ScenarioSerializer._serializeAccount` revives such a
+record with `new Holding(h)`, not `Holding.fromJSON`. `fromJSON` parses its dates; the
+constructor stored them raw. So `toJSON` called `.toISOString()` on a string.
+
+The split is what made it look like a Monte Carlo bug: the deterministic run loads through
+`ScenarioLoader` → `fromJSON` and is fine, while `IntlRetirementMcRunner` puts the active
+scenario record through `serializeScenario` to get a JSON-safe per-iteration template, and
+dies there. Nothing about the MC was wrong.
+
+It had been half-found before: `toJSON`'s `maturityDate` line already carried an
+`instanceof Date ? … : …` guard while `purchaseDate` two lines up did not — a patch at the
+crash site rather than at the cause. The fix is in the CONSTRUCTOR, which is the one place
+both `fromJSON` and `new Holding(plain)` pass through, so every reader gets a Date and not
+just the one that crashed. An unparseable value throws rather than nulling: a dropped
+acquisition date silently changes cost-base indexation and the long/short CGT split, which is
+a wrong number rather than a missing one.
+
+Why it had never fired: every holding in the affected plan carried `purchaseDate: null`. The
+first dated holdings in it were §20.19's ladder rungs. Tests in `holding.test.mjs`.
+
+## 21. The Liquidity Pools panel — BUILT (30 Aug 2026)
+
+§20.11's open item, closed. `src/finance/pools/pool-history.js` (the replay + the pivot) and
+`plugins/finance/liquidity-pools-plugin.js` (the panel), a sibling of `spending-plugin.js` and
+`allocation-plugin.js` with the same skeleton: toolbar, provenance strip **above** the chart,
+clickable legend below. Tests: `tests/unit/pool-history.test.mjs` (10),
+`tests/viz/liquidity-pools-plugin.test.mjs` (17), `evt-liquidity-pools.test.mjs` POOL-5e/5f.
+

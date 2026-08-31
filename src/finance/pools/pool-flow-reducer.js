@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ageAsOf }           from '../behavioral/rebalance-to-target-reducer.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
-import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
+import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS } from './liquidity-graph.js';
 import { poolContext, allPoolMetrics } from './pool-metrics.js';
 
 /**
@@ -77,6 +77,12 @@ export class PoolFlowReducer extends Reducer {
     this.expensesCurrency   = expensesCurrency;
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['POOL_FLOW_APPLY'];
+    // The pools a rebalance veto can actually bind on: `RebalanceToTargetReducer#_applyVeto`
+    // pins the target of a vetoed pool's ALLOCATION classes, so a pool that narrows no
+    // sleeves names no class and cannot be vetoed. See where it is read, below.
+    this._vetoable = new Set((graph?.pools ?? [])
+      .filter(p => (p.claims ?? []).some(c => c.sleeves?.length))
+      .map(p => p.id));
   }
 
   /**
@@ -102,30 +108,109 @@ export class PoolFlowReducer extends Reducer {
     return total;
   }
 
+  /** Is a flow's gate open this period? The root of the composed evaluation (§20.15). */
+  _gateOpen(flow, ctx) {
+    if (!flow.gate) return { open: true, reason: null };
+    return this._evalNode(flow.gate, flow, ctx, 'gate');
+  }
+
   /**
-   * Is a flow's gate open this period?
+   * One node of a composed gate (design 97 §20.15), and the dwell that makes it stateful.
+   *
+   * Evaluated in two steps, because they are two different questions:
+   *
+   *   1. the RAW condition — this node's own clauses, plus its children, right now;
+   *   2. the DWELL — has that raw condition held for `sustainedYears` consecutive years?
+   *
+   * The streak advances at most once per year (`lastYear`), for the same reason the market
+   * reading is annual: this reducer fires on both US_ and AU_PERIOD_ADVANCE, and a streak
+   * that counted evaluations would reach `2` in one calendar year in a cross-border plan and
+   * in two years in a US-only one, from the same authored number.
+   *
+   * The streak is updated on EVERY evaluation, including ones whose flow then moves nothing —
+   * a dwell that only counted the periods somebody asked about would count the household's
+   * demand rather than the market's behaviour.
+   */
+  _evalNode(node, flow, ctx, path) {
+    const raw = this._rawNode(node, flow, ctx, path);
+
+    const want = node.sustainedYears ?? 1;
+    const prev = ctx.streaksIn?.[flow.id]?.[path];
+    const yearOf = ctx.yearOf;
+    let n;
+    if (!raw.open)                        n = 0;
+    else if (prev?.lastYear === yearOf)   n = prev.n;                    // same year, no advance
+    else if (prev?.lastYear === yearOf - 1) n = (prev.n ?? 0) + 1;
+    else                                  n = 1;                         // first, or a gap
+    if (ctx.streaksOut) {
+      (ctx.streaksOut[flow.id] ??= {})[path] = { n, lastYear: yearOf };
+    }
+
+    if (!raw.open) return raw;
+    if (n >= want) return { open: true, reason: null };
+    return { open: false, reason: `${path === 'gate' ? 'the gate' : path} has held ${n} of ${want} years` };
+  }
+
+  /** This node's own clauses and its children — everything but the dwell. */
+  _rawNode(node, flow, ctx, path) {
+    const leaf = this._leafClauses(node, flow, ctx);
+    if (!leaf.open) return leaf;
+
+    for (const [i, kid] of (node.allOf ?? []).entries()) {
+      const r = this._evalNode(kid, flow, ctx, `${path}.allOf[${i}]`);
+      if (!r.open) return r;
+    }
+    if (node.anyOf?.length) {
+      const reasons = [];
+      let open = false;
+      // Every branch is evaluated, never short-circuited: each carries its own dwell streak,
+      // and a streak that only advanced until the first branch opened would count something
+      // other than the years its own condition held.
+      for (const [i, kid] of node.anyOf.entries()) {
+        const r = this._evalNode(kid, flow, ctx, `${path}.anyOf[${i}]`);
+        if (r.open) open = true;
+        else reasons.push(r.reason);
+      }
+      if (!open) return { open: false, reason: `no branch open (${reasons.join('; ')})` };
+    }
+    if (node.not) {
+      const r = this._evalNode(node.not, flow, ctx, `${path}.not`);
+      if (r.open) return { open: false, reason: `${path}.not is satisfied` };
+    }
+    return { open: true, reason: null };
+  }
+
+  /**
+   * The leaf clauses of ONE node — the gate vocabulary itself, unchanged by §20.15.
    *
    * Returns `{ open, reason }` — the reason is carried into the cube so a closed gate is a
    * recorded event rather than an absence.
    */
-  _gateOpen(flow, { metrics, highs, state, asOfMs, priorYearReturns }) {
-    const g = flow.gate;
-    if (!g) return { open: true, reason: null };
+  _leafClauses(g, flow, { metrics, highs, indices, indexHighs, state, asOfMs, priorYearReturns }) {
 
-    // Drawdown from the trailing high. `high` is persisted pool state, not a journal window:
-    // a peak set before the run's start date is not knowable from the journal, and the value
-    // has to survive serialization identically or a replay diverges.
+    // Drawdown from the trailing high, on whichever series the gate names (§20.14). Both are
+    // persisted pool state, not a journal window: a peak set before the run's start date is
+    // not knowable from the journal, and the value has to survive serialization identically
+    // or a replay diverges.
+    //
+    // INDEX is the flow-neutral series and answers the question the gate's NAME asks — "is
+    // the market down?" — where BALANCE cannot separate that from "has this pool been spent".
+    // Neither reads anything later than the last COMPLETED year: `_returnIndices` compounds
+    // the prior year's stamp for the same reason `_priorYearReturns` reads it (§20.2).
+    const onIndex = g.drawdownBasis === POOL_DRAWDOWN_BASIS.INDEX;
     const drawdownOf = (poolId) => {
-      const high = highs[poolId] ?? 0;
+      const high = (onIndex ? indexHighs?.[poolId] : highs[poolId]) ?? 0;
+      const now  = onIndex ? (indices?.[poolId] ?? 0) : (metrics[poolId]?.balance ?? 0);
       if (!(high > 0)) return 0;
-      return Math.max(0, 1 - (metrics[poolId]?.balance ?? 0) / high);
+      return Math.max(0, 1 - now / high);
     };
+    const highWord = onIndex ? 'its return index\'s high' : 'its high';
 
     if (g.sourceDrawdownUnder != null && drawdownOf(flow.from) > g.sourceDrawdownUnder + 1e-12) {
-      return { open: false, reason: `source ${flow.from} is ${(drawdownOf(flow.from) * 100).toFixed(1)}% below its high` };
+      return { open: false, reason: `source ${flow.from} is ${(drawdownOf(flow.from) * 100).toFixed(1)}% below ${highWord}` };
     }
     if (g.targetDrawdownOver != null && drawdownOf(flow.to) < g.targetDrawdownOver - 1e-12) {
-      return { open: false, reason: `destination ${flow.to} is not ${(g.targetDrawdownOver * 100).toFixed(0)}% below its high` };
+      return { open: false, reason: `destination ${flow.to} is not ${(g.targetDrawdownOver * 100).toFixed(0)}% below ${highWord}` };
     }
     // Market state — the last COMPLETED calendar year's reading, never this period's.
     //
@@ -206,6 +291,40 @@ export class PoolFlowReducer extends Reducer {
     return out;
   }
 
+  /**
+   * Per pool, the flow-neutral RETURN INDEX and its running peak (§20.14) — the series a
+   * `drawdownBasis: INDEX` gate measures against.
+   *
+   * A unit-value series: it starts at 1.0 and compounds one factor per COMPLETED calendar
+   * year. Nothing a household does moves it — a withdrawal, a refill and a rebalance all
+   * leave it alone — which is the entire point, and the property a peak BALANCE cannot have
+   * in a plan being spent down (`poolMarketReturn`'s docstring is the measurement).
+   *
+   * The year test is `_priorYearReturns`' test, and for the same reason: a cube entry stamped
+   * in an EARLIER year carries a year that has now finished, so its `marketReturn` is a
+   * completed factor; an entry stamped in THIS year is the year in progress and compounding
+   * it would hand the gate the return of the year it is deciding in (§20.2). A second advance
+   * within one year therefore compounds nothing and reads the same index as the first, which
+   * is also what makes the two advances agree.
+   *
+   * A pool with no rated lots stamps a null `marketReturn` and simply does not compound —
+   * "no signal" leaves the index where it is, so the drawdown reads 0 and the gate stays
+   * OPEN, matching `sourceDrawdownUnder`'s absent-reading default (POOL-12b's rule).
+   */
+  _returnIndices(prior, yearOf) {
+    const indices = {};
+    const highs   = {};
+    for (const pool of this.graph.pools) {
+      const p     = prior?.[pool.id] ?? {};
+      const start = p.returnIndex ?? 1;
+      const done  = p.marketReturnYear != null && p.marketReturnYear < yearOf && p.marketReturn != null;
+      const idx   = done ? start * (1 + p.marketReturn) : start;
+      indices[pool.id] = idx;
+      highs[pool.id]   = Math.max(p.returnIndexHigh ?? idx, idx);
+    }
+    return { indices, indexHighs: highs };
+  }
+
   /** How much the destination is asking for, or 0 when the trigger has not tripped. */
   _demand(flow, pool, m, ctx, poolState) {
     const t = flow.trigger;
@@ -238,6 +357,7 @@ export class PoolFlowReducer extends Reducer {
     const metrics = allPoolMetrics(state, this.graph, ctx);
     const yearOf  = new Date(asOfMs).getUTCFullYear();
     const priorYearReturns = this._priorYearReturns(prior, yearOf);
+    const { indices, indexHighs } = this._returnIndices(prior, yearOf);
 
     // The trailing high, monotone, updated BEFORE the gates read it so a pool at a fresh peak
     // this period reads as 0% below its high rather than as one period stale.
@@ -245,6 +365,18 @@ export class PoolFlowReducer extends Reducer {
     for (const pool of this.graph.pools) {
       highs[pool.id] = Math.max(prior[pool.id]?.high ?? 0, metrics[pool.id].balance);
     }
+
+    // The dwell streaks (§20.15). Persisted on the DESTINATION pool's cube entry — a flow has
+    // exactly one `to`, so no new state key is needed and the counters travel with the rest of
+    // the pool state through serialization and replay. Merged into one map here because the
+    // evaluator asks by flow id, not by pool.
+    const streaksIn = {};
+    for (const pool of this.graph.pools) {
+      for (const [flowId, paths] of Object.entries(prior[pool.id]?.gateStreaks ?? {})) {
+        streaksIn[flowId] = { ...(streaksIn[flowId] ?? {}), ...paths };
+      }
+    }
+    const streaksOut = {};
 
     const gatedFlows = [];
     const inflow     = {};
@@ -264,7 +396,8 @@ export class PoolFlowReducer extends Reducer {
       for (const flow of flows) {
         if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf) continue;
 
-        const gate = this._gateOpen(flow, { metrics, highs, state, asOfMs, priorYearReturns });
+        const gate = this._gateOpen(flow, { metrics, highs, indices, indexHighs, state, asOfMs,
+                                            priorYearReturns, streaksIn, streaksOut, yearOf });
         const dest = metrics[flow.to];
         const src  = metrics[flow.from];
         // Recompute the destination's shortfall against what earlier edges already promised
@@ -277,9 +410,17 @@ export class PoolFlowReducer extends Reducer {
           // Record the non-event, and veto the SOURCE's rebalance sale: a gate that stops the
           // explicit refill but leaves the drift band selling the same sleeve for the same
           // reason has changed nothing (`FINDINGS.md` §6.4's laundering, exactly).
+          //
+          // The veto is recorded only for a source the rebalancer could actually sell.
+          // `_applyVeto` pins the target of the vetoed pool's ALLOCATION classes, so a pool
+          // that names none — a cash, savings or offset pool — cannot be vetoed by it, and
+          // logging one anyway put hundreds of phantom "rebalance veto" rows in the panel for
+          // a decision that was never taken. Measured on a real plan: a permanently shut edge
+          // out of an offset pool logged a veto in every period of a 35-year run, and it was
+          // the first thing the author went looking at (§20.18).
           if (want > 0) {
             gatedFlows.push({ id: flow.id, from: flow.from, to: flow.to, reason: gate.reason, wanted: +want.toFixed(2) });
-            vetoed.add(flow.from);
+            if (this._vetoable.has(flow.from)) vetoed.add(flow.from);
           }
           continue;
         }
@@ -349,6 +490,11 @@ export class PoolFlowReducer extends Reducer {
         // second advance in the same year must reach the same conclusion as the first, and
         // because a closed gate is only debuggable next to the number that closed it.
         priorYearReturn:  priorYearReturns[pool.id] != null ? +priorYearReturns[pool.id].toFixed(6) : null,
+        // The flow-neutral series and its peak (§20.14). Persisted rather than re-derived for
+        // the reason `high` is: the index is a product over every completed year of the run,
+        // and a replay that started later would compound a different number of factors.
+        returnIndex:     +indices[pool.id].toFixed(8),
+        returnIndexHigh: +indexHighs[pool.id].toFixed(8),
         inflow:       +(inflow[pool.id] ?? 0).toFixed(2),
         outflow:      +(outflow[pool.id] ?? 0).toFixed(2),
         gatedFlows:   gatedFlows.filter(g => g.to === pool.id || g.from === pool.id),
@@ -357,6 +503,17 @@ export class PoolFlowReducer extends Reducer {
         firedFlows:   fired.filter(f => f.to === pool.id || f.from === pool.id),
         lastFired:    { ...(p.lastFired ?? {}) },
       };
+      // Dwell counters for every flow INTO this pool. Carried forward when a flow was not
+      // evaluated this period — a `cadence: ANNUAL` edge that already fired skips the
+      // evaluation, and dropping its streak would silently restart a multi-year dwell every
+      // time the edge fired.
+      const streaks = {};
+      for (const flow of this.graph.flows) {
+        if (flow.to !== pool.id) continue;
+        const now = streaksOut[flow.id] ?? streaksIn[flow.id];
+        if (now) streaks[flow.id] = now;
+      }
+      if (Object.keys(streaks).length) entry.gateStreaks = streaks;
       // Stamped from every firing, not just the transfers. `cadence: ANNUAL` reads this back
       // (`prior[flow.to]?.lastFired?.[flow.id]`), so stamping only the TRANSFER half left an
       // ANNUAL in-portfolio edge free to fire again on the second advance of the same year —

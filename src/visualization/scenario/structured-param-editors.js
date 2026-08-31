@@ -712,9 +712,11 @@ const TRIGGER_OPTIONS = Object.freeze([
   ['belowTargetFraction', 'below fraction of target'],
 ]);
 
-// The market-state pair is listed FIRST because it is the one to reach for in a plan being
-// spent down: a trailing-high gate cannot tell a falling market from the pool being drawn
-// down, and latches shut after the first crash (design 97 §16.1b).
+// The market-state pair is listed first for history rather than for preference: §16.1b reached
+// for it because a trailing-high gate on the peak BALANCE cannot tell a falling market from
+// the pool being drawn down. Design 97 §20.14 measured that as a property of the SERIES —
+// `sourceDrawdownUnder` on the INDEX basis is flow-neutral, and beats the return pair on
+// median, win rate, left tail and interest paid in a plan being spent down.
 //
 // "last year" is in the labels because it is the whole meaning of the control. These gates act
 // on the last COMPLETED calendar year, not the year they fire in (design 97 §20.2) — a gate
@@ -722,11 +724,33 @@ const TRIGGER_OPTIONS = Object.freeze([
 // which no household can do. The difference between "sell only in an up market" and "sell only
 // after an up year" is a year of foresight, and only the second is a rule anyone can follow.
 const GATE_OPTIONS = Object.freeze([
-  ['',                    'always'],
   ['sourceReturnOver',    'source returned over X last year'],
   ['targetReturnUnder',   'destination returned under X last year'],
-  ['sourceDrawdownUnder', 'source within X of its high (accumulating pools)'],
-  ['targetDrawdownOver',  'destination X below its high (accumulating pools)'],
+  ['sourceDrawdownUnder', 'source within X of its high'],
+  ['targetDrawdownOver',  'destination X below its high'],
+]);
+
+// The SENSE of a clause — design 97 §12.3's `not`, on the row rather than as a nested node.
+// It is the only way to say a condition the four clause kinds state in one direction: "fire
+// only when the source is NOT within x of its high" is a down-market rule, and the positive
+// clauses cannot say it because a drawdown threshold has no upper bound to invert.
+//
+// The negation wraps the CLAUSE, and any dwell then rides on the negation — "the source has
+// NOT been within 5 % of its high for two years" — which is the reading `gateNodeToRow`
+// refuses to invent when a saved gate puts the dwell the other side of the `not`.
+const GATE_SENSE_OPTIONS = Object.freeze([
+  ['',    'when'],
+  ['NOT', 'when NOT'],
+]);
+
+// design 97 §20.14. Which series a drawdown clause measures against, and the labels say the
+// difference because it is the whole point: a peak BALANCE counts the household's own spending
+// as drawdown, so in a plan being spent down the gate latches shut for a reason that has
+// nothing to do with the market. INDEX is the pool's compounded return, which no withdrawal
+// can move. Blank on a RETURN clause, which has no series to choose.
+const GATE_BASIS_OPTIONS = Object.freeze([
+  ['BALANCE', 'peak balance (spending counts as drawdown)'],
+  ['INDEX',   'return index (flow-neutral)'],
 ]);
 
 // design 97 §12.6. PERIOD is the default; ANNUAL restricts an edge to the first period of the
@@ -804,6 +828,25 @@ export function buildDrawdownSequenceEditor(param, accounts = []) {
 }
 
 /**
+ * The keys of an authored sub-object that no column draws, kept so an edit somewhere else in
+ * the table does not delete them.
+ *
+ * The same rule as `ui` and `rawGate`, one level down: a `floor`, a `spendBasis` or an
+ * `amount.max` that the tables cannot show is still a policy the author wrote, and a graph
+ * that silently lost it on the next keystroke would still load and still run — this design's
+ * named failure mode. Carried, not drawn; making them editable is a column each, later.
+ */
+function extraKeys(obj, drawn) {
+  if (!isPlainObject(obj)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) if (!drawn.includes(k) && v != null) out[k] = v;
+  return Object.keys(out).length ? out : null;
+}
+
+/** Capacity modes that carry an authored size; BALANCE and OFFSET_CAP are derived from state. */
+const CAPACITY_NEEDS_VALUE = Object.freeze(['AMOUNT', 'YEARS_OF_SPEND']);
+
+/**
  * `LiquidityGraph` — design 97 Part II, `{ pools, flows }`, as three flat tables.
  *
  * The value is rebuilt from the tables on every edit rather than mutated in place, for the
@@ -821,6 +864,14 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     targetMode:  p?.target?.mode ?? '',
     targetValue: Number.isFinite(Number(p?.target?.value)) ? Number(p.target.value) : null,
     capacity:    p?.capacity?.mode ?? 'BALANCE',
+    // The capacity of an AMOUNT / YEARS_OF_SPEND pool. Without this cell those two modes are
+    // selectable and unauthorable: `sizeSpec` requires a value for every non-derived mode, so
+    // picking one wrote a graph that threw at Rebuild.
+    capacityValue: Number.isFinite(Number(p?.capacity?.value)) ? Number(p.capacity.value) : null,
+    // Carried, not drawn — see `extraKeys`.
+    floor:         p?.floor ?? null,
+    targetExtra:   extraKeys(p?.target,   ['mode', 'value']),
+    capacityExtra: extraKeys(p?.capacity, ['mode', 'value']),
     // Round-tripped untouched: `ui` is opaque to the engine and belongs to the editor that
     // effort 2 will build (design 97 §14). Dropping it here would silently discard a layout.
     ui:          p?.ui ?? null,
@@ -835,26 +886,32 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
 
   const flows = (Array.isArray(value.flows) ? value.flows : []).map(f => {
     const t = f?.trigger ?? {};
-    const g = f?.gate ?? {};
     const triggerKind = t.belowTargetFraction != null ? 'belowTargetFraction'
       : t.below?.mode === 'YEARS_OF_SPEND' ? 'belowYears'
       : t.below != null ? 'belowAmount' : '';
     const triggerValue = triggerKind === 'belowTargetFraction' ? t.belowTargetFraction
       : t.below?.value ?? null;
-    // Order matters only in that a gate object carrying two kinds would round-trip as the
-    // first found; the normalizer accepts several, but the row control expresses one.
-    const gateKind = ['sourceReturnOver', 'targetReturnUnder',
-                      'sourceDrawdownUnder', 'targetDrawdownOver'].find(k => g[k] != null) ?? '';
+    // The gate lives in its own table (§20.15). `rawGate` is the escape hatch: a gate the
+    // clause rows cannot express is carried through verbatim rather than flattened, because
+    // silently dropping half a composed gate leaves a graph that still loads and still runs.
+    const rows = gateToRows(f?.id ?? null, f?.gate ?? null);
     return {
       id: f?.id ?? null, from: f?.from ?? null, to: f?.to ?? null,
       priority: Number.isFinite(Number(f?.priority)) ? Number(f.priority) : 0,
       cadence: f?.cadence === 'ANNUAL' ? 'ANNUAL' : 'PERIOD',
       triggerKind, triggerValue,
-      gateKind, gateValue: gateKind ? g[gateKind] : null,
+      rawGate: rows == null ? (f?.gate ?? null) : null,
       amountKind:  f?.amount?.fractionOfSource != null ? 'fractionOfSource' : 'toTarget',
       amountValue: f?.amount?.fractionOfSource ?? null,
+      // Carried, not drawn — see `extraKeys`.
+      amountExtra:  extraKeys(f?.amount, ['toTarget', 'fractionOfSource']),
+      triggerExtra: extraKeys(f?.trigger?.below, ['mode', 'value']),
     };
   });
+
+  // Every representable flow's gate, as one flat table keyed by flow id and branch.
+  const gateClauses = (Array.isArray(value.flows) ? value.flows : [])
+    .flatMap(f => gateToRows(f?.id ?? null, f?.gate ?? null) ?? []);
 
   const poolIdOptions = () => pools.filter(p => p.id).map(p => [p.id, p.label || p.id]);
 
@@ -866,14 +923,23 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
         id: p.id,
         ...(p.label ? { label: p.label } : {}),
         ...(p.spendOrder != null ? { spendOrder: p.spendOrder } : {}),
-        ...(p.targetMode ? { target: { mode: p.targetMode, value: p.targetValue ?? 0 } } : {}),
-        ...(p.capacity && p.capacity !== 'BALANCE' ? { capacity: { mode: p.capacity } } : {}),
+        ...(p.targetMode
+          ? { target: { mode: p.targetMode, value: p.targetValue ?? 0, ...(p.targetExtra ?? {}) } }
+          : {}),
+        ...(p.capacity && p.capacity !== 'BALANCE'
+          ? { capacity: { mode: p.capacity,
+                          ...(CAPACITY_NEEDS_VALUE.includes(p.capacity)
+                            ? { value: p.capacityValue ?? 0 } : {}),
+                          ...(p.capacityExtra ?? {}) } }
+          : {}),
+        ...(p.floor ? { floor: p.floor } : {}),
         ...(p.ui ? { ui: p.ui } : {}),
         claims: claims.filter(c => c.pool === p.id && c.key)
           .map(c => ({ key: c.key, ...(c.sleeves?.length ? { sleeves: [...c.sleeves] } : {}) })),
       })),
       ...(flows.some(f => f.id && f.from && f.to)
-        ? { flows: flows.filter(f => f.id && f.from && f.to).map(buildFlow) }
+        ? { flows: flows.filter(f => f.id && f.from && f.to)
+              .map(f => buildFlow(f, gateClauses.filter(c => c.flow === f.id))) }
         : {}),
     };
   };
@@ -905,22 +971,78 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       { field: 'priority',     label: 'Pri',      type: 'number', step: '1', width: '0.5fr' },
       { field: 'triggerKind',  label: 'Trigger',  type: 'select', options: TRIGGER_OPTIONS, width: '1.2fr' },
       { field: 'triggerValue', label: 'at',       type: 'number', step: '0.01', width: '0.6fr' },
-      { field: 'gateKind',     label: 'Gate',     type: 'select', options: GATE_OPTIONS, width: '1.4fr' },
-      // No min of 0: a RETURN threshold is legitimately negative ("harvest unless the market
-      // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
-      // the per-kind range; the control must not pre-empt it with the tighter one.
-      { field: 'gateValue',    label: 'X',        type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
       { field: 'cadence',      label: 'Cadence',  type: 'select', options: CADENCE_OPTIONS, width: '1fr' },
       { field: 'amountKind',   label: 'Amount',   type: 'select', options: AMOUNT_OPTIONS, width: '1.1fr' },
       { field: 'amountValue',  label: 'f',        type: 'number', step: '0.05', min: '0', max: '1', width: '0.6fr' },
     ],
     newRow:    () => ({ id: null, from: pools[0]?.id ?? null, to: pools[1]?.id ?? null, priority: 0,
-                        cadence: 'PERIOD', triggerKind: '', triggerValue: null,
-                        gateKind: '', gateValue: null,
-                        amountKind: 'toTarget', amountValue: null }),
+                        cadence: 'PERIOD', triggerKind: '', triggerValue: null, rawGate: null,
+                        amountKind: 'toTarget', amountValue: null,
+                        amountExtra: null, triggerExtra: null }),
     addLabel:  '+ Add Flow',
     emptyText: 'No flows — pools are spent in order but never refilled by an explicit rule.',
-    onChange:  sync,
+    // Renaming a flow changes the option list the gate table selects from — the same reason
+    // the pools table refreshes the claims and flows tables (§17.1).
+    onChange:  () => { sync(); gateEditor.refresh(); },
+  });
+
+  // §20.15's table. Keyed by flow id and branch: same-branch rows are ANDed, branches are
+  // ORed — "within 5% of its high for a year, OR within 1% for two" is two rows, two branches.
+  //
+  // Only flows whose gate the table can DRAW are selectable. A flow carrying a `rawGate` keeps
+  // its authored gate verbatim (see `buildFlow`), so a clause row typed against it would be
+  // silently ignored — the row would be on screen, saved nowhere, and the flow would go on
+  // running the gate the author could not see.
+  const flowIdOptions = () => flows.filter(f => f.id && !f.rawGate).map(f => [f.id, f.id]);
+  const gateableFlowIds = () => flows.filter(f => f.id && !f.rawGate).map(f => f.id);
+
+  /**
+   * The OR # is a POSITION, not a label: `rowsToGate` emits one `anyOf` branch per distinct
+   * number in ascending order, so 1 and 3 save as — and reload as — 1 and 2, and a lone
+   * branch collapses to a bare node with no number at all. Renumbering here makes the table
+   * show that immediately, rather than letting the author discover on the next load that the
+   * 3 they typed reads as a 2.
+   */
+  const renumberBranches = () => {
+    let moved = false;
+    for (const id of new Set(gateClauses.map(c => c.flow))) {
+      const mine = gateClauses.filter(c => c.flow === id);
+      const dense = new Map([...new Set(mine.map(c => c.branch ?? 1))]
+        .sort((a, b) => a - b).map((n, i) => [n, i + 1]));
+      for (const c of mine) {
+        const next = dense.get(c.branch ?? 1);
+        if (c.branch !== next) { c.branch = next; moved = true; }
+      }
+    }
+    return moved;
+  };
+  const gateEditor = buildRowListEditor({
+    rows: gateClauses,
+    columns: [
+      { field: 'flow',      label: 'Flow',   type: 'select', options: flowIdOptions, width: '1fr' },
+      // Rows sharing a number are ANDed; each distinct number is an OR branch. A number
+      // rather than a group control because the shared row component is flat by design
+      // (§17.1) and because it is what makes "add one more alternative" one more row.
+      { field: 'branch',    label: 'OR #',   type: 'number', step: '1', min: '1', width: '0.5fr' },
+      { field: 'gateNegate', label: 'Sense', type: 'select', options: GATE_SENSE_OPTIONS, width: '0.8fr' },
+      { field: 'gateKind',  label: 'Clause', type: 'select', options: GATE_OPTIONS, width: '1.8fr' },
+      // No min of 0: a RETURN threshold is legitimately negative ("harvest unless the market
+      // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
+      // the per-kind range; the control must not pre-empt it with the tighter one.
+      { field: 'gateValue', label: 'X',      type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
+      { field: 'gateBasis', label: 'Measured against', type: 'select', options: GATE_BASIS_OPTIONS, width: '1.8fr' },
+      // The lever design 97 §20.13 measured as the one that moves the answer: the three
+      // drawdown thresholds landed within $13k of each other, while the same gate family
+      // differing only in how long it stays shut spread by $460k. Years, never periods —
+      // this reducer fires twice a year in a cross-border plan (§20.15).
+      { field: 'gateYears', label: 'for N yrs', type: 'number', step: '1', min: '1', width: '0.7fr' },
+    ],
+    newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
+                        gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
+                        gateBasis: 'INDEX', gateYears: 1 }),
+    addLabel:  '+ Add Gate Clause',
+    emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
+    onChange:  () => { const moved = renumberBranches(); sync(); if (moved) gateEditor.refresh(); },
   });
 
   const poolsEditor = buildRowListEditor({
@@ -932,9 +1054,13 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       { field: 'targetMode',  label: 'Target',   type: 'select', options: TARGET_MODE_OPTIONS, width: '1.2fr' },
       { field: 'targetValue', label: 'Size',     type: 'number', step: '0.5', width: '0.7fr' },
       { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS, width: '1.5fr' },
+      // Blank on BALANCE / OFFSET_CAP, whose ceiling is derived from live state.
+      { field: 'capacityValue', label: 'Cap size', type: 'number', step: '0.5', width: '0.7fr' },
     ],
     newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
-                        targetMode: '', targetValue: null, capacity: 'BALANCE', ui: null }),
+                        targetMode: '', targetValue: null, capacity: 'BALANCE',
+                        capacityValue: null, floor: null, targetExtra: null,
+                        capacityExtra: null, ui: null }),
     addLabel:  '+ Add Pool',
     emptyText: 'No pools — the drawdownPriority order applies and nothing refills (the default).',
     // Renaming or adding a pool changes the option list the OTHER two tables select from,
@@ -949,26 +1075,129 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
   container.appendChild(claimsEditor);
   container.appendChild(el('div', 'age-band-col-label', 'Flows — refill edges between pools'));
   container.appendChild(flowsEditor);
+  container.appendChild(el('div', 'age-band-col-label',
+    'Gate clauses — when a flow\'s SOURCE may be sold. Rows sharing an OR # are ANDed; each OR # is '
+    + 'an alternative, renumbered from 1. “when NOT” negates the clause, which is how a DOWN-market '
+    + 'rule is said. A flow whose authored gate the table cannot draw is not listed.'));
+  container.appendChild(gateEditor);
 
   sync();
   return container;
 }
 
+/**
+ * A flow's `gate` ⇄ a flat list of clause rows (design 97 §20.15, and §17.1's argument).
+ *
+ * The engine's gate is a TREE. §17.1's rule for the graph applies to it unchanged: a list of
+ * lists becomes a flat table keyed by the id above it, so every table in this editor is the
+ * same shared component and none is bespoke. The keys here are the flow id and a BRANCH
+ * number — rows sharing a branch are ANDed, and the branches are ORed:
+ *
+ *   flow  branch  clause                                     for
+ *   g2o     1     source within 0.05 of its high (INDEX)      1      ⎫ OR
+ *   g2o     2     source within 0.01 of its high (INDEX)      2      ⎭
+ *
+ * which is exactly `{ anyOf: [ {…}, {…} ] }` — disjunctive normal form. Every gate the engine
+ * accepts is not expressible this way (a nested `not`, an OR inside an AND), and the editor
+ * must not mangle one it cannot draw: `gateToRows` returns null for anything outside DNF, and
+ * the flow keeps its authored gate verbatim in `rawGate`, round-tripped the way `ui` is.
+ */
+const GATE_CLAUSE_KINDS = ['sourceReturnOver', 'targetReturnUnder',
+                           'sourceDrawdownUnder', 'targetDrawdownOver'];
+
+/** One node → one row, or null when the node says more than a row can. */
+function gateNodeToRow(node) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
+  // `{ not: {…} }`, optionally carrying the dwell on the node that HOLDS the negation, is one
+  // negated row. The two places a dwell can sit under a `not` say different things — "the
+  // clause has not held for n years" (inner) versus "its negation has held for n years"
+  // (outer) — and the row can only mean the second, so an inner dwell is left to `rawGate`
+  // rather than silently re-read as the other policy.
+  if (node.not != null) {
+    if (Object.keys(node).some(k => k !== 'not' && k !== 'sustainedYears')) return null;
+    const inner = gateNodeToRow(node.not);
+    if (!inner || inner.gateNegate === 'NOT' || inner.gateYears > 1) return null;
+    return { ...inner, gateNegate: 'NOT', gateYears: node.sustainedYears ?? 1 };
+  }
+  if (node.anyOf || node.allOf) return null;                      // a child: not a leaf row
+  const kinds = GATE_CLAUSE_KINDS.filter(k => node[k] != null);
+  if (kinds.length !== 1) return null;                            // 0 says nothing, 2+ is an AND
+  const known = new Set([...GATE_CLAUSE_KINDS, 'sustainedYears', 'drawdownBasis']);
+  if (Object.keys(node).some(k => !known.has(k))) return null;    // a clause the table lacks
+  const kind = kinds[0];
+  return {
+    gateNegate: '',
+    gateKind:  kind,
+    gateValue: node[kind],
+    gateBasis: kind.toLowerCase().includes('drawdown') ? (node.drawdownBasis ?? 'BALANCE') : '',
+    gateYears: node.sustainedYears ?? 1,
+  };
+}
+
+/** A flow's gate → clause rows in DNF, or null when it is not expressible as rows. */
+function gateToRows(flowId, gate) {
+  if (gate == null) return [];
+  const branches = Array.isArray(gate) ? [{ allOf: gate }]
+    : gate.anyOf ? gate.anyOf : [gate];
+  // An `anyOf` carrying clauses of its own is an AND-over-an-OR; the table cannot say it.
+  if (gate.anyOf && (gate.not || gate.allOf || GATE_CLAUSE_KINDS.some(k => gate[k] != null))) return null;
+  const rows = [];
+  for (const [i, branch] of branches.entries()) {
+    const nodes = Array.isArray(branch) ? branch : (branch?.allOf ?? [branch]);
+    if (branch?.allOf && (branch.anyOf || branch.not || branch.sustainedYears != null)) return null;
+    for (const node of nodes) {
+      const row = gateNodeToRow(node);
+      if (!row) return null;
+      rows.push({ flow: flowId, branch: i + 1, ...row });
+    }
+  }
+  return rows;
+}
+
+/** Clause rows for ONE flow → the authored gate, or undefined when there are none. */
+function rowsToGate(rows) {
+  const byBranch = new Map();
+  for (const r of rows) {
+    if (!r.gateKind || r.gateValue == null) continue;             // half-typed row: not a clause
+    const clause = { [r.gateKind]: r.gateValue };
+    // Only when they are not the defaults, for the reason `cadence` is: an authored default on
+    // every clause would make every previously-saved graph differ from itself on the next save.
+    if (r.gateBasis === 'INDEX' && r.gateKind.toLowerCase().includes('drawdown')) clause.drawdownBasis = 'INDEX';
+    // The dwell rides on the node the row IS — which, for a negated row, is the `not` holding
+    // the clause: "the source has NOT been within 5% of its high for two years".
+    const node = r.gateNegate === 'NOT' ? { not: clause } : clause;
+    if (Number(r.gateYears) > 1) node.sustainedYears = Number(r.gateYears);
+    const key = r.branch ?? 1;
+    byBranch.set(key, [...(byBranch.get(key) ?? []), node]);
+  }
+  if (!byBranch.size) return undefined;
+  const branches = [...byBranch.entries()].sort((a, b) => a[0] - b[0])
+    .map(([, nodes]) => (nodes.length === 1 ? nodes[0] : { allOf: nodes }));
+  return branches.length === 1 ? branches[0] : { anyOf: branches };
+}
+
 /** One flow row → the authored edge shape `normalizeLiquidityGraph` reads. */
-function buildFlow(f) {
+function buildFlow(f, clauses = []) {
   const out = { id: f.id, from: f.from, to: f.to };
   if (f.priority) out.priority = f.priority;
   if (f.triggerKind && f.triggerValue != null) {
     out.trigger = f.triggerKind === 'belowTargetFraction'
       ? { belowTargetFraction: f.triggerValue }
-      : { below: { mode: f.triggerKind === 'belowYears' ? 'YEARS_OF_SPEND' : 'AMOUNT', value: f.triggerValue } };
+      : { below: { mode: f.triggerKind === 'belowYears' ? 'YEARS_OF_SPEND' : 'AMOUNT',
+                   value: f.triggerValue, ...(f.triggerExtra ?? {}) } };
   }
-  if (f.gateKind && f.gateValue != null) out.gate = { [f.gateKind]: f.gateValue };
+  // A gate the table could not draw is returned exactly as authored; otherwise the clause
+  // rows ARE the gate, so deleting the last row deletes the gate (an edge with no gate is a
+  // legitimate, and common, thing to want).
+  const gate = f.rawGate ?? rowsToGate(clauses);
+  if (gate) out.gate = gate;
   // Only when it is not the default: an authored `cadence: 'PERIOD'` on every edge would make
   // every previously-saved graph differ from itself on the next save, for nothing.
   if (f.cadence === 'ANNUAL') out.cadence = 'ANNUAL';
   if (f.amountKind === 'fractionOfSource' && f.amountValue != null) {
-    out.amount = { fractionOfSource: f.amountValue };
+    out.amount = { fractionOfSource: f.amountValue, ...(f.amountExtra ?? {}) };
+  } else if (f.amountExtra) {
+    out.amount = { ...f.amountExtra };
   }
   return out;
 }

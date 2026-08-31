@@ -54,6 +54,12 @@ import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquid
  * again".
  *
  * A live return has no such confound: a withdrawal does not change it.
+ *
+ * **Superseded in part (design 97 §20.14).** The confound above belongs to the SERIES, not to
+ * the gate: `gate.drawdownBasis: 'INDEX'` measures the same threshold against the pool's
+ * compounded return — a unit-value series no flow can move — and measured across 300 paired
+ * paths it beats this return gate on median, win rate, left tail and interest paid. Read the
+ * paragraph above as an argument against the trailing BALANCE, not against a drawdown gate.
  */
 export function poolMarketReturn(state, pool) {
   const rates = state?.effectiveGrowthRates;

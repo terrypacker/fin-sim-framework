@@ -91,6 +91,7 @@ import {
   RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
 } from '../../finance/account-rules/us/roth-rollover-classes.js';
 import { projectHoldingsToState }             from '../../finance/holdings/holding-utils.js';
+import { assertInterestBearingHoldings } from '../../finance/holdings/default-allocations.js';
 
 function _accountToStatePlain(account) {
   const plain = {
@@ -1340,6 +1341,10 @@ export const US_RETIREMENT = {
     const fiEvent = context.schedulesById['INTL_FIXED_INCOME_INTEREST'];
     if (fiEvent) {
       for (const acct of fixedIncomeAccounts) {
+        // This handler is the account's ONLY earnings stream, and it prices every holding off
+        // `effectiveInterestRates`. An EQUITY or GOLD lot here would silently take the
+        // account's interest rate and be taxed as ordinary income (design 97 §20.20).
+        assertInterestBearingHoldings(acct);
         const h = new FixedIncomeInterestHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.FIXED_INCOME,
           ownerId: acct.ownerId, stateKey: acct.stateKey,

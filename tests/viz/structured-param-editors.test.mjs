@@ -619,8 +619,13 @@ test('LiquidityGraph: what the editor writes is what the normalizer accepts', as
   type(cells(host, 'id')[2], 'g2c', 'change');
   pick(cell(host, 'from'), 'growth');
   pick(cell(host, 'to'), 'cash');
+  // The gate is its own table now (design 97 §20.15) — a flow holds a LIST of clauses, and
+  // §17.1's rule makes a list of lists a flat table keyed by the id above it.
+  button(host, 'Add Gate Clause').click();
+  pick(cell(host, 'flow'), 'g2c');
   pick(cell(host, 'gateKind'), 'sourceDrawdownUnder');
   type(cell(host, 'gateValue'), '0.05', 'change');
+  pick(cell(host, 'gateBasis'), 'BALANCE');
 
   // The point of the whole exercise: the config boundary is the only validator, and what
   // the control produces has to pass it.
@@ -644,6 +649,7 @@ test('LiquidityGraph: the market-state gates round-trip (they must not be droppe
   const param = { name: 'liquidityGraph', value: graph };
   const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
   assert.strictEqual(cell(host, 'gateKind').value, 'sourceReturnOver');
+  assert.strictEqual(cell(host, 'flow').value, 'g2b');
   type(cell(host, 'priority'), '5', 'change');          // touch an unrelated cell
   assert.deepStrictEqual(param.value.flows[0].gate, { sourceReturnOver: 0 });
 });
@@ -657,7 +663,204 @@ test('LiquidityGraph: a NEGATIVE return threshold survives the control', () => {
     flows: [{ id: 'g2b', from: 'growth', to: 'buffer' }],
   } };
   const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  button(host, 'Add Gate Clause').click();
+  pick(cell(host, 'flow'), 'g2b');
   pick(cell(host, 'gateKind'), 'sourceReturnOver');
   type(cell(host, 'gateValue'), '-0.1', 'change');
   assert.deepStrictEqual(param.value.flows[0].gate, { sourceReturnOver: -0.1 });
+});
+
+test('LiquidityGraph: OR # branches compose, and a per-clause dwell rides on the row', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  // The rule design 97 §20.15 was built for, authored the way the app offers it: "within 5%
+  // of its high for one year, OR within 1% of it for two". Two rows, two branches.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'offset', spendOrder: 10, target: { mode: 'AMOUNT', value: 400000 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2o', from: 'growth', to: 'offset' }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  button(host, 'Add Gate Clause').click();
+  pick(cell(host, 'flow'), 'g2o');
+  pick(cell(host, 'gateKind'), 'sourceDrawdownUnder');
+  type(cell(host, 'gateValue'), '0.05', 'change');
+  pick(cell(host, 'gateBasis'), 'INDEX');
+
+  button(host, 'Add Gate Clause').click();
+  pick(cells(host, 'flow')[1], 'g2o');
+  type(cells(host, 'branch')[1], '2', 'change');
+  pick(cells(host, 'gateKind')[1], 'sourceDrawdownUnder');
+  type(cells(host, 'gateValue')[1], '0.01', 'change');
+  pick(cells(host, 'gateBasis')[1], 'INDEX');
+  type(cells(host, 'gateYears')[1], '2', 'change');
+
+  assert.deepStrictEqual(param.value.flows[0].gate, { anyOf: [
+    { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' },
+    { sourceDrawdownUnder: 0.01, drawdownBasis: 'INDEX', sustainedYears: 2 },
+  ] });
+  // And it passes the only validator that counts.
+  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS).flows[0].gate.anyOf.length === 2);
+});
+
+test('LiquidityGraph: two clauses on ONE branch are an AND', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer',
+              gate: { allOf: [{ sourceReturnOver: 0 }, { sourceDrawdownUnder: 0.1 }] } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  // Both clauses render, on the same branch, and survive an unrelated edit untouched.
+  assert.strictEqual(cells(host, 'gateKind').length, 2);
+  assert.strictEqual(cells(host, 'branch')[0].value, cells(host, 'branch')[1].value);
+  type(cell(host, 'priority'), '3', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { allOf: [{ sourceReturnOver: 0 }, { sourceDrawdownUnder: 0.1 }] });
+});
+
+test('LiquidityGraph: a gate the table cannot draw is round-tripped, not flattened', () => {
+  // The escape hatch. An OR *inside* an AND is outside DNF, so the editor must carry it
+  // through verbatim — a half-drawn gate still loads and still runs, which is the failure
+  // mode this whole design keeps naming. (A flat `not` IS drawable; see the Sense tests.)
+  const gate = { sourceReturnOver: 0,
+                 anyOf: [{ sourceDrawdownUnder: 0.05 }, { targetDrawdownOver: 0.2 }] };
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cells(host, 'gateKind').length, 0, 'nothing pretends to draw it');
+  type(cell(host, 'priority'), '7', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, gate);
+  // And the flow is not offered in the gate table at all: a clause row typed against it would
+  // be silently ignored (the authored gate wins), i.e. a row on screen that is saved nowhere.
+  button(host, 'Add Gate Clause').click();
+  assert.ok(![...cell(host, 'flow').options].some(o => o.value === 'g2b'),
+    'a flow with an undrawable gate is not selectable in the clause table');
+});
+
+test('LiquidityGraph: a clause can be NEGATED, which is how a down-market rule is said', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  // The rule the four clause kinds cannot state in the positive: "refill cash from the OFFSET
+  // only while equities are NOT within 5 % of their high". The engine has had `not` since
+  // design 97 §20.15; before this the table could not author it.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer' }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  button(host, 'Add Gate Clause').click();
+  pick(cell(host, 'flow'), 'g2b');
+  pick(cell(host, 'gateNegate'), 'NOT');
+  pick(cell(host, 'gateKind'), 'sourceDrawdownUnder');
+  type(cell(host, 'gateValue'), '0.05', 'change');
+  pick(cell(host, 'gateBasis'), 'INDEX');
+  type(cell(host, 'gateYears'), '2', 'change');
+
+  // The dwell rides on the NEGATION — "has NOT been within 5 % of its high for two years" —
+  // not on the clause inside it, which would be the other policy.
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { not: { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' }, sustainedYears: 2 });
+  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS).flows[0].gate.not);
+
+  // …and it draws again as the same row on the next load, rather than falling to `rawGate`.
+  const reloaded = { name: 'liquidityGraph', value: JSON.parse(JSON.stringify(param.value)) };
+  const host2 = mount(buildLiquidityGraphEditor(reloaded, ACCOUNTS));
+  assert.strictEqual(cell(host2, 'gateNegate').value, 'NOT');
+  assert.strictEqual(cell(host2, 'gateKind').value, 'sourceDrawdownUnder');
+  assert.strictEqual(cell(host2, 'gateYears').value, '2');
+});
+
+test('LiquidityGraph: a dwell INSIDE a `not` is left alone, not re-read as the other policy', () => {
+  // `{ not: { X, sustainedYears: 2 } }` is "X has not held for two years"; the row means
+  // "not-X has held for two years". Two different rules, so the table declines to draw it.
+  const gate = { not: { sourceDrawdownUnder: 0.2, sustainedYears: 2 } };
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cells(host, 'gateKind').length, 0);
+  type(cell(host, 'priority'), '2', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, gate);
+});
+
+test('LiquidityGraph: the OR # is renumbered on screen, so it reads back as it was saved', () => {
+  // The OR # is a POSITION: `rowsToGate` emits one branch per distinct number in ascending
+  // order, so a 3 typed beside a 1 saves as branch 2. It has to say so on the spot — the bug
+  // this fixes was discovering it on the next load.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 }, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer' }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  button(host, 'Add Gate Clause').click();
+  button(host, 'Add Gate Clause').click();
+  type(cells(host, 'branch')[1], '3', 'change');
+  assert.deepStrictEqual(cells(host, 'branch').map(c => c.value), ['1', '2']);
+  assert.strictEqual(param.value.flows[0].gate.anyOf.length, 2);
+
+  // A lone clause has no alternative to be numbered against, so its OR # collapses to 1.
+  cells(host, 'removeRow').at(-1).click();   // the gate table is the last one on the page
+  assert.deepStrictEqual(cells(host, 'branch').map(c => c.value), ['1']);
+  assert.ok(!param.value.flows[0].gate.anyOf, 'one branch is a bare node, not an anyOf');
+});
+
+test('LiquidityGraph: fields no column draws are carried, not deleted by an edit elsewhere', () => {
+  // `floor`, a target `spendBasis` and `amount.max` are authored policy the tables cannot
+  // show. Dropping them on the next keystroke would leave a graph that still loads and still
+  // runs — the failure mode design 97 names five times. Carried like `ui`.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'cash', spendOrder: 10, floor: { mode: 'AMOUNT', value: 25000 },
+        target: { mode: 'YEARS_OF_SPEND', value: 2, spendBasis: 'TRAILING', trailingYears: 5 },
+        claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash',
+              trigger: { below: { mode: 'YEARS_OF_SPEND', value: 0.5, spendBasis: 'TRAILING' } },
+              amount: { fractionOfSource: 0.25, max: 50000 } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cell(host, 'priority'), '3', 'change');
+  const cash = param.value.pools.find(p => p.id === 'cash');
+  assert.deepStrictEqual(cash.floor, { mode: 'AMOUNT', value: 25000 });
+  assert.strictEqual(cash.target.spendBasis, 'TRAILING');
+  assert.strictEqual(cash.target.trailingYears, 5);
+  assert.strictEqual(param.value.flows[0].amount.max, 50000);
+  assert.strictEqual(param.value.flows[0].trigger.below.spendBasis, 'TRAILING');
+});
+
+test('LiquidityGraph: an AMOUNT capacity is authorable, so the graph it writes builds', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  // Selecting a non-derived capacity mode used to write `{ mode: 'AMOUNT' }` with no value,
+  // which `sizeSpec` rejects — a mode on screen that could not be saved into a runnable plan.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  pick(cells(host, 'capacity')[0], 'AMOUNT');
+  type(cells(host, 'capacityValue')[0], '250000', 'change');
+  assert.deepStrictEqual(param.value.pools[0].capacity, { mode: 'AMOUNT', value: 250000 });
+  assert.doesNotThrow(() => normalizeLiquidityGraph(param.value, ACCOUNTS));
 });

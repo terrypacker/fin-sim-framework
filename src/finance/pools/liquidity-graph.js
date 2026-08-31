@@ -10,6 +10,10 @@
 
 import { ACCOUNT_TYPE }            from '../assets/account.js';
 import { DRAWDOWN_SLEEVE_CLASSES } from '../holdings/holdings-selection.js';
+// The rebalancer's own account set, imported rather than restated: two authorities on
+// "which accounts can this reducer trade" is how a warning comes to disagree with the
+// thing it warns about. No cycle — `rebalance-to-target-reducer.js` does not import us.
+import { TAX_ADVANTAGED_ROLES, TAXABLE_ROLES } from '../behavioral/rebalance-to-target-reducer.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -83,10 +87,40 @@ export const POOL_CAPACITY_MODE = Object.freeze({
 /** How often an edge may fire (design 97 §12.6). */
 export const FLOW_CADENCE = Object.freeze({ PERIOD: 'PERIOD', ANNUAL: 'ANNUAL' });
 
+/**
+ * What series a drawdown gate measures the pool against (design 97 §20.14).
+ *
+ * `sourceDrawdownUnder` has always meant "within x of the pool's trailing high", and `high`
+ * has always meant the peak BALANCE. In a plan being spent down those are two different
+ * questions wearing one name, and `poolMarketReturn`'s docstring is the record of it: the
+ * reference plan's growth pool sat 9–16 % below its peak balance in years the market had
+ * fully recovered, purely because spending had permanently removed capital, so a 5 % gate
+ * latched shut forever after the first crash.
+ *
+ * INDEX answers the question the gate's name asks. It is a unit-value series — the pool's own
+ * market return, compounded, starting at 1.0 and never touched by a contribution or a
+ * withdrawal — which is the ordinary time-weighted definition of a drawdown. Two pools with
+ * the same returns and different flow timing report the same number, which is the property a
+ * flow-adjusted balance cannot have.
+ *
+ * BALANCE remains the default: it is what every existing graph means, and the two answer
+ * genuinely different questions ("is the market down?" vs "is this pool smaller than it has
+ * ever been?"). The second is the right question for a pool with a spending FLOOR.
+ */
+export const POOL_DRAWDOWN_BASIS = Object.freeze({
+  /** the peak BALANCE — spending counts as drawdown. The default, and what §12.3 shipped. */
+  BALANCE: 'BALANCE',
+  /** the peak of the pool's compounded RETURN index — flow-neutral (§20.14). */
+  INDEX:   'INDEX',
+});
+
 const VALID_SLEEVES  = new Set(DRAWDOWN_SLEEVE_CLASSES);
 const TARGET_MODES   = new Set(Object.values(POOL_TARGET_MODE));
 const CAPACITY_MODES = new Set(Object.values(POOL_CAPACITY_MODE));
 const SPEND_BASES    = new Set(Object.values(POOL_SPEND_BASIS));
+const DRAWDOWN_BASES = new Set(Object.values(POOL_DRAWDOWN_BASIS));
+/** A composed gate is a tree; a bound keeps a cyclic or absurd authored one from recursing. */
+const MAX_GATE_DEPTH = 6;
 
 const err = (msg) => { throw new Error(`liquidityGraph: ${msg}`); };
 
@@ -179,13 +213,65 @@ function normalizeClaims(rawClaims, poolId, byKey) {
   return out;
 }
 
-/** Normalize a flow's `gate` (design 97 §12.3). Absent ⇒ null ⇒ always open. */
-function normalizeGate(raw, flowId) {
+/**
+ * Normalize a flow's `gate` (design 97 §12.3, composed in §20.15). Absent ⇒ null ⇒ open.
+ *
+ * ── the grammar ─────────────────────────────────────────────────────────────────────
+ * A gate is a TREE of nodes. A node carries clauses of its own, any number of child nodes,
+ * and an optional dwell:
+ *
+ *   { sourceDrawdownUnder: 0.05, sustainedYears: 2 }          one node, two clauses
+ *   { anyOf: [ {…}, {…} ] }                                   OR
+ *   { allOf: [ {…}, {…} ] }  ·  [ {…}, {…} ]                  AND (an array is sugar for it)
+ *   { not: {…} }                                              negation
+ *
+ * A node is open when its own clauses ALL pass, every `allOf` child is open, at least one
+ * `anyOf` child is open, and any `not` child is shut. Clauses on one node are therefore an
+ * AND, which is what a flat gate has always meant — every gate authored before this section
+ * normalizes to exactly what it did, which is the property that keeps the goldens still.
+ *
+ * The shape mirrors `visibleWhen`'s DSL deliberately: two composable predicate languages in
+ * one codebase that disagree about whether an array is an AND would be a coin flip at every
+ * call site.
+ *
+ * ── why dwell is the interesting half ───────────────────────────────────────────────
+ * §20.13 measured the three trailing-high thresholds (1 %, 5 %, 10 %) landing within \$13k of
+ * each other on a \$5m plan, while the C-vs-E-vs-D spread — the same gate family differing
+ * only in HOW LONG it stays shut — ran to \$460k. The threshold is nearly inert and the
+ * DURATION is the lever, so the grammar has to be able to say duration. `sustainedYears: n`
+ * is that: the node's condition must have held on the last n consecutive years, this one
+ * included, before it counts as open.
+ *
+ * The unit is the YEAR, and not for convenience. This reducer fires on both US_ and
+ * AU_PERIOD_ADVANCE, so a dwell counted in evaluations would mean one year in a US-only plan
+ * and half a year in a cross-border one — the same authored number silently meaning two
+ * different policies. It is also the grain at which the signal changes at all: the equity
+ * tick is annual, so every gate reading is constant within a year (§20.2, and POOL-12d is the
+ * regression for it).
+ */
+function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
   if (raw == null) return null;
-  if (typeof raw !== 'object') err(`flow '${flowId}' gate must be an object`);
+  if (Array.isArray(raw)) return normalizeGate({ allOf: raw }, flowId, depth, where);
+  if (typeof raw !== 'object') err(`flow '${flowId}' ${where} must be an object`);
+  if (depth > MAX_GATE_DEPTH) {
+    err(`flow '${flowId}' ${where} nests deeper than ${MAX_GATE_DEPTH}; flatten it`);
+  }
   const out = {};
-  if (raw.sourceDrawdownUnder != null) out.sourceDrawdownUnder = num(raw.sourceDrawdownUnder, `flow '${flowId}' gate.sourceDrawdownUnder`, { min: 0, max: 1 });
-  if (raw.targetDrawdownOver  != null) out.targetDrawdownOver  = num(raw.targetDrawdownOver,  `flow '${flowId}' gate.targetDrawdownOver`,  { min: 0, max: 1 });
+  if (raw.sourceDrawdownUnder != null) out.sourceDrawdownUnder = num(raw.sourceDrawdownUnder, `flow '${flowId}' ${where}.sourceDrawdownUnder`, { min: 0, max: 1 });
+  if (raw.targetDrawdownOver  != null) out.targetDrawdownOver  = num(raw.targetDrawdownOver,  `flow '${flowId}' ${where}.targetDrawdownOver`,  { min: 0, max: 1 });
+  // Which series those two measure against (§20.14). Normalized only when a drawdown clause
+  // is actually present: carrying a basis on a gate with no drawdown term would round-trip a
+  // setting that decides nothing, and every saved graph would then differ from itself.
+  if (raw.drawdownBasis != null) {
+    if (out.sourceDrawdownUnder == null && out.targetDrawdownOver == null) {
+      err(`flow '${flowId}' ${where}.drawdownBasis is set but the gate has no drawdown clause for it to govern`);
+    }
+    const b = String(raw.drawdownBasis).toUpperCase();
+    if (!DRAWDOWN_BASES.has(b)) {
+      err(`flow '${flowId}' ${where}.drawdownBasis '${raw.drawdownBasis}' is unknown. Valid: ${[...DRAWDOWN_BASES].join(', ')}`);
+    }
+    if (b !== POOL_DRAWDOWN_BASIS.BALANCE) out.drawdownBasis = b;   // default stays absent
+  }
   // The market-state pair. Prefer these to the drawdown pair in a DECUMULATION plan: a
   // trailing-high gate cannot tell a falling market from a pool being spent down, and latches
   // shut after the first crash (see `poolMarketReturn`).
@@ -195,22 +281,59 @@ function normalizeGate(raw, flowId) {
   // the return of the year the gate is deciding in. So `sourceReturnOver: 0` means "sell the
   // source only after an up year", not "only in an up year"; the two differ by a year of
   // foresight and the second is not implementable.
-  if (raw.sourceReturnOver  != null) out.sourceReturnOver  = num(raw.sourceReturnOver,  `flow '${flowId}' gate.sourceReturnOver`,  { min: -1, max: 1 });
-  if (raw.targetReturnUnder != null) out.targetReturnUnder = num(raw.targetReturnUnder, `flow '${flowId}' gate.targetReturnUnder`, { min: -1, max: 1 });
+  if (raw.sourceReturnOver  != null) out.sourceReturnOver  = num(raw.sourceReturnOver,  `flow '${flowId}' ${where}.sourceReturnOver`,  { min: -1, max: 1 });
+  if (raw.targetReturnUnder != null) out.targetReturnUnder = num(raw.targetReturnUnder, `flow '${flowId}' ${where}.targetReturnUnder`, { min: -1, max: 1 });
   if (raw.notInRegime != null) {
     const tags = Array.isArray(raw.notInRegime) ? raw.notInRegime : [raw.notInRegime];
-    if (!tags.length) err(`flow '${flowId}' gate.notInRegime is empty; omit it`);
+    if (!tags.length) err(`flow '${flowId}' ${where}.notInRegime is empty; omit it`);
     out.notInRegime = tags.map(String);
   }
   for (const k of ['notBefore', 'notAfter']) {
     if (raw[k] == null) continue;
     const t = new Date(raw[k]).getTime();
-    if (Number.isNaN(t)) err(`flow '${flowId}' gate.${k} is not a date: ${JSON.stringify(raw[k])}`);
+    if (Number.isNaN(t)) err(`flow '${flowId}' ${where}.${k} is not a date: ${JSON.stringify(raw[k])}`);
     out[k] = new Date(t).toISOString().slice(0, 10);
   }
-  if (raw.ageOver  != null) out.ageOver  = num(raw.ageOver,  `flow '${flowId}' gate.ageOver`,  { min: 0, max: 120 });
-  if (raw.ageUnder != null) out.ageUnder = num(raw.ageUnder, `flow '${flowId}' gate.ageUnder`, { min: 0, max: 120 });
+  if (raw.ageOver  != null) out.ageOver  = num(raw.ageOver,  `flow '${flowId}' ${where}.ageOver`,  { min: 0, max: 120 });
+  if (raw.ageUnder != null) out.ageUnder = num(raw.ageUnder, `flow '${flowId}' ${where}.ageUnder`, { min: 0, max: 120 });
+
+  // ── the composition, and the dwell ────────────────────────────────────────────────
+  for (const key of ['allOf', 'anyOf']) {
+    if (raw[key] == null) continue;
+    const list = Array.isArray(raw[key]) ? raw[key] : [raw[key]];
+    if (!list.length) err(`flow '${flowId}' ${where}.${key} is empty; omit it`);
+    const kids = list.map((k, i) => normalizeGate(k, flowId, depth + 1, `${where}.${key}[${i}]`));
+    // A child that normalizes away is a branch that decides nothing, and inside an `anyOf`
+    // one such branch is always open — which quietly makes the whole gate always open. That
+    // is the single most expensive way for this feature to fail, so it is a config error
+    // rather than a default.
+    kids.forEach((k, i) => {
+      if (!k) err(`flow '${flowId}' ${where}.${key}[${i}] has no conditions; ${key === 'anyOf'
+        ? 'an always-open branch makes the whole gate always open' : 'omit it'}`);
+    });
+    out[key] = kids;
+  }
+  if (raw.not != null) {
+    const kid = normalizeGate(raw.not, flowId, depth + 1, `${where}.not`);
+    if (!kid) err(`flow '${flowId}' ${where}.not has no conditions; it would never be true`);
+    out.not = kid;
+  }
+  // Dwell. `1` is the default and is dropped, so an authored 1 does not make a saved graph
+  // differ from itself on the next save.
+  if (raw.sustainedYears != null) {
+    const n = num(raw.sustainedYears, `flow '${flowId}' ${where}.sustainedYears`, { min: 1, max: 100 });
+    if (!Number.isInteger(n)) err(`flow '${flowId}' ${where}.sustainedYears must be a whole number of years, got ${n}`);
+    if (!hasCondition(out)) {
+      err(`flow '${flowId}' ${where}.sustainedYears is set but the node has no condition to sustain`);
+    }
+    if (n > 1) out.sustainedYears = n;
+  }
   return Object.keys(out).length ? out : null;
+}
+
+/** Does this normalized node say anything at all? (`sustainedYears` alone says nothing.) */
+function hasCondition(node) {
+  return Object.keys(node).some(k => k !== 'sustainedYears');
 }
 
 /**
@@ -482,6 +605,9 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
   assertNoUnconditionalCycle(flows);
   assignExecutors(pools, flows, byKey);
 
+  warnMarketClausesWithoutAMarket(pools, flows, byKey);
+  warnUntradeableRebalanceFlows(pools, flows, byKey);
+
   // A destination with no target can never be filled `toTarget` — it would move zero every
   // period, which reads in the journal as "the refill is broken" rather than "the pool has
   // no size". Caught here because it is exactly the believable-wrong-config class.
@@ -494,6 +620,105 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
   }
 
   return { pools, flows };
+}
+
+/**
+ * Design 97 §20.18 — a market clause on a pool that HAS no market.
+ *
+ * Four clauses read a market signal: the RETURN pair reads `poolMarketReturn`, and the
+ * drawdown pair reads the return INDEX that compounds from it. Both are computed off the
+ * lots the pool's claims hold, so on a pool that claims only cash-like accounts there is
+ * nothing to read — `poolMarketReturn` returns null, the index never compounds off 1.0, its
+ * high stays 1.0, and the drawdown is 0.0 forever.
+ *
+ * That is not an error: "no signal is not bad signal" is the absent-reading rule the gate
+ * vocabulary is built on (POOL-12b), and each clause has a documented default for it. What
+ * makes it worth a warning is that the default is a CONSTANT — `sourceDrawdownUnder` on such
+ * a pool is always true, and under a `not` it is always FALSE. A permanently shut edge
+ * validates, loads, runs, and reports itself as gated in every period of the run, which
+ * reads as a gate that is working. Measured on a real plan: an edge whose whole purpose was
+ * to fund spending in a crash fired 0 times in 35 years.
+ *
+ * Warning and not `err`, for §12.2's reason: it is a plausible authoring (the BALANCE basis
+ * on the same pool is perfectly meaningful — a balance is a series a cash pool really has),
+ * just almost never the intended one.
+ */
+function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
+  // A pool has a market iff some claim can hold LOTS. Cash-like accounts hold none; anything
+  // else — brokerage, and every wrapper — does, so an unknown type is left alone.
+  const hasMarket = new Map(pools.map(p =>
+    [p.id, p.claims.some(c => !CASH_LIKE_TYPES.has(byKey.get(c.key)?.type))]));
+  const cashClaims = new Map(pools.map(p => [p.id, p.claims.map(c => c.key).join(', ')]));
+
+  const visit = (node, flow, path, negated) => {
+    if (!node) return;
+    for (const [clause, role] of [['sourceDrawdownUnder', 'from'], ['targetDrawdownOver', 'to'],
+                                 ['sourceReturnOver',     'from'], ['targetReturnUnder',   'to']]) {
+      if (node[clause] == null) continue;
+      // The BALANCE basis reads the pool's own balance, which a cash pool really has. Only
+      // the INDEX basis (and the return pair, which has no basis to choose) needs lots.
+      const needsLots = clause.includes('Return') || node.drawdownBasis === POOL_DRAWDOWN_BASIS.INDEX;
+      const poolId = flow[role];
+      if (!needsLots || hasMarket.get(poolId)) continue;
+      // Each clause's own absent-reading default (POOL-12b): the two SOURCE clauses stay
+      // open on no signal, the two DESTINATION clauses stay shut. A `not` above flips it.
+      const base   = clause.startsWith('source');
+      const always = negated ? !base : base;
+      console.warn(
+        `liquidityGraph: flow '${flow.id}' ${path}.${clause} reads a market signal on pool `
+        + `'${poolId}', which claims only cash-like accounts (${cashClaims.get(poolId)}). They hold `
+        + 'no lots, so its return is null and its return index never moves off its high — the '
+        + `clause is therefore ALWAYS ${always ? 'TRUE' : 'FALSE'} and the gate decides nothing. `
+        + 'Measure the pool that has the market, or use `drawdownBasis: BALANCE`, which reads a '
+        + 'series a cash pool really has.');
+    }
+    for (const key of ['allOf', 'anyOf']) {
+      (node[key] ?? []).forEach((kid, i) => visit(kid, flow, `${path}.${key}[${i}]`, negated));
+    }
+    if (node.not) visit(node.not, flow, `${path}.not`, !negated);
+  };
+  for (const flow of flows) visit(flow.gate, flow, 'gate', false);
+}
+
+/**
+ * Design 97 §20.19 — an in-portfolio refill whose ends the rebalancer cannot trade.
+ *
+ * An edge with a brokerage at both ends is realised by `RebalanceToTargetReducer`
+ * (`assignExecutors` stamps `executor: REBALANCE`), and that reducer only ever sees accounts
+ * whose ROLE is tax-advantaged or taxable. `fixed-income` and `au-fixed-income` are in
+ * neither set, so an edge into or out of a pool claiming one of them validates, saves, and
+ * moves nothing — for ever, and silently, because a REBALANCE edge emits no action of its own
+ * and so cannot even report a firing that did not happen (§12.4).
+ *
+ * Warned, not thrown, for the same reason as §20.18: claiming such an account is a perfectly
+ * good thing to do — the pool is still a spend source and still reports cover — it is only
+ * the REFILL that cannot work.
+ *
+ * Skipped entirely when the caller supplied no roles (several call sites pass
+ * `{stateKey, type}` projections): an absent role is not evidence of an untradeable one.
+ */
+function warnUntradeableRebalanceFlows(pools, flows, byKey) {
+  const anyRole = [...byKey.values()].some(a => a?.role != null);
+  if (!anyRole) return;
+  const tradeable = (key) => {
+    const role = byKey.get(key)?.role;
+    return role == null || TAX_ADVANTAGED_ROLES.has(role) || TAXABLE_ROLES.has(role);
+  };
+  const byId = new Map(pools.map(p => [p.id, p]));
+  for (const flow of flows) {
+    if (flow.executor !== FLOW_EXECUTOR.REBALANCE) continue;
+    for (const [role, poolId] of [['source', flow.from], ['destination', flow.to]]) {
+      const blocked = (byId.get(poolId)?.claims ?? []).filter(c => !tradeable(c.key));
+      if (!blocked.length) continue;
+      console.warn(
+        `liquidityGraph: flow '${flow.id}' is an in-portfolio (REBALANCE) edge, but its `
+        + `${role} pool '${poolId}' claims ${blocked.map(c => `'${c.key}'`).join(', ')}, whose `
+        + 'role the rebalancer does not trade — only tax-advantaged and taxable-brokerage roles '
+        + `are in its account list. The edge will never move anything. Claim a us-stock / `
+        + 'au-stock brokerage sleeve instead, or drop the flow and let the pool be a spend '
+        + 'source only.');
+    }
+  }
 }
 
 /**

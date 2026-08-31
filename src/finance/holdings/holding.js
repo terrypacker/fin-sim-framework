@@ -81,6 +81,22 @@ function assertValidRateKey(rateKey, id) {
 }
 
 /**
+ * A Date, from a Date / ISO string / epoch ms, or null.
+ *
+ * Throws on an unparseable value rather than falling back to null: a dropped acquisition date
+ * silently changes cost-base indexation and the long/short CGT split, which is a wrong NUMBER
+ * rather than a missing one.
+ */
+function _asDate(value, field) {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Holding ${field} is not a date: ${JSON.stringify(value)}`);
+  }
+  return d;
+}
+
+/**
  * Holding — plain-data record of a single position inside an Account.
  *
  * An Account exposes a denormalized `balance` scalar, but the source of truth
@@ -283,7 +299,15 @@ export class Holding {
     // same rule on every write, since they never come back through this constructor.
     this.costBasis            = allocation === ALLOCATION.CASH ? marketValue : costBasis;
     this.costBaseByCountry    = costBaseByCountry;
-    this.purchaseDate         = purchaseDate;
+    // Coerced, not trusted. JSON has no Date, so a holding that has been through a file —
+    // an import, a downloaded scenario, a `structuredClone`d template — carries ISO STRINGS,
+    // and `_serializeAccount` revives such a record with `new Holding(h)`, not `fromJSON`.
+    // Before this the string was stored raw and `toJSON` then called `.toISOString()` on it:
+    // the deterministic run was fine (it loads through `fromJSON`, which parses) and the
+    // Monte Carlo died on the first iteration, because its template goes through
+    // `serializeScenario`. `maturityDate` had already been patched around at the `toJSON`
+    // site; fixing it HERE fixes it for every reader, not just the one that crashed.
+    this.purchaseDate         = _asDate(purchaseDate, 'purchaseDate');
     this.acquisitionPriceLevel = acquisitionPriceLevel;
     this.acquisitionDateByCountry = acquisitionDateByCountry;
     this.rateKey              = rateKey;
@@ -296,7 +320,7 @@ export class Holding {
     this.taxLossPartner       = taxLossPartner;
     this.taxExemption         = taxExemption;
     this.issuingState         = issuingState;
-    this.maturityDate         = maturityDate;
+    this.maturityDate         = _asDate(maturityDate, 'maturityDate');
     this.faceValue            = faceValue;
     this.rollAtMaturity       = rollAtMaturity;
     this.rollTermYears        = rollTermYears;
@@ -325,7 +349,9 @@ export class Holding {
       marketValue:         this.marketValue,
       costBasis:           this.costBasis,
       costBaseByCountry:   this.costBaseByCountry ? { ...this.costBaseByCountry } : null,
-      purchaseDate:        this.purchaseDate ? this.purchaseDate.toISOString() : null,
+      purchaseDate:        this.purchaseDate
+        ? (this.purchaseDate instanceof Date ? this.purchaseDate.toISOString() : this.purchaseDate)
+        : null,
       acquisitionPriceLevel: this.acquisitionPriceLevel,
       acquisitionDateByCountry: this.acquisitionDateByCountry ? { ...this.acquisitionDateByCountry } : null,
       rateKey:             this.rateKey,

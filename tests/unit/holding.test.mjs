@@ -209,3 +209,39 @@ test('DEFAULT_ALLOCATION_BY_TYPE: covers every ACCOUNT_TYPE', () => {
     assert.ok(DEFAULT_ALLOCATION_BY_TYPE[t], `missing default allocation for type: ${t}`);
   }
 });
+
+// ─── Dates survive a trip through JSON ─────────────────────────────────────────
+
+test('Holding: a date arriving as a STRING is coerced, so toJSON cannot crash on it', () => {
+  // The Monte Carlo bug. JSON has no Date, so a holding that has been through a file carries
+  // ISO strings — and `ScenarioSerializer._serializeAccount` revives such a record with
+  // `new Holding(h)`, NOT `fromJSON`. The string used to be stored raw and `toJSON` then
+  // called `.toISOString()` on it: the deterministic run was fine (it loads through
+  // `fromJSON`, which parses) and the MC died on iteration 1, because its template goes
+  // through `serializeScenario`.
+  const plain = {
+    id: 'ladder-1', allocation: ALLOCATION.BOND, marketValue: 18_000, costBasis: 18_000,
+    purchaseDate: '2026-01-01T00:00:00.000Z', maturityDate: '2026-04-02T00:00:00.000Z',
+  };
+  const h = new Holding(plain);
+  assert.ok(h.purchaseDate instanceof Date, 'purchaseDate is a Date');
+  assert.ok(h.maturityDate instanceof Date, 'maturityDate is a Date');
+  const json = h.toJSON();
+  assert.equal(json.purchaseDate, '2026-01-01T00:00:00.000Z');
+  assert.equal(json.maturityDate, '2026-04-02T00:00:00.000Z');
+  // Re-serialising the revived record is the actual failing path, and it is now idempotent.
+  assert.deepEqual(new Holding(json).toJSON(), json);
+});
+
+test('Holding: epoch ms and Date both work, and an unparseable date throws', () => {
+  const ms = Date.UTC(2030, 5, 1);
+  assert.equal(new Holding({ allocation: ALLOCATION.BOND, purchaseDate: ms }).purchaseDate.getTime(), ms);
+  const d = new Date(ms);
+  assert.equal(new Holding({ allocation: ALLOCATION.BOND, purchaseDate: d }).purchaseDate.getTime(), ms);
+  // Not silently nulled: a dropped acquisition date changes cost-base indexation and the
+  // long/short CGT split, which is a wrong number rather than a missing one.
+  assert.throws(() => new Holding({ allocation: ALLOCATION.BOND, purchaseDate: 'whenever' }),
+    /Holding purchaseDate is not a date: "whenever"/);
+  assert.throws(() => new Holding({ allocation: ALLOCATION.BOND, maturityDate: 'soon' }),
+    /Holding maturityDate is not a date: "soon"/);
+});
