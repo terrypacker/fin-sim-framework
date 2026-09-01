@@ -52,6 +52,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     this._unsubSimBus   = null;    // teardown for the per-run sim-bus subscription
     this._renderQueued  = false;   // rAF debounce flag for step-driven re-renders
     this._pickerSig     = null;    // membership signature of the account <select>
+    this._everHeld      = new Set(); // stateKeys seen holding at least one lot, this sim
     this._charts        = null;    // Map<hostName, echarts instance>, lazily built
     this._ros           = null;    // Map<hostName, ResizeObserver>, one per chart host
   }
@@ -204,6 +205,11 @@ export class HoldingsPlugin extends WorkbenchComponent {
       );
     }
 
+    // A new sim is a new history: an account that had held lots in the PREVIOUS run has
+    // not necessarily held any in this one, and carrying the set over would list it empty
+    // and never-funded.
+    this._everHeld = new Set();
+
     // Reset selection if the bound account is gone; keep it across steps otherwise.
     if (this._stateKey && !this._accountByKey(this._stateKey)) this._stateKey = null;
     this._resetActivityRender();   // new sim ⇒ new journal ⇒ rebuild the ledger from scratch
@@ -228,13 +234,34 @@ export class HoldingsPlugin extends WorkbenchComponent {
     this._actAsOf    = null;
   }
 
-  /** Accounts that currently hold a holdings array, as { stateKey, label, currency }. */
+  /**
+   * Accounts worth picking, as { stateKey, label, currency }.
+   *
+   * The gate is "holds lots now, OR has held them at some point in this run" — not the
+   * current length alone. The two empty-holdings cases are not the same account:
+   *
+   *   · an inherited (bequest-promoted) account is seeded empty and gains its lots only
+   *     when the INHERIT event funds it. Before that it is not yet an account anybody
+   *     can look at, and listing it is noise (design 63 §14).
+   *   · a fully drawn-down account has lost its last lot but is exactly the account whose
+   *     history is worth reading — the Activity ledger is built from the JOURNAL by
+   *     stateKey, so it survives the account going to zero. Gating on current length
+   *     dropped it from the picker, which meant the only way to inspect a brokerage that
+   *     emptied mid-run was to already know it had, and to scrub back past that year.
+   *
+   * `_everHeld` is what separates them; it is reset per sim in `_bindSim`. Everything
+   * downstream already handles an empty selection: `_renderCharts` hides the chart section
+   * when the allocation rollup is empty, and `_renderSnapshot` renders "No holdings."
+   */
   _holdingAccounts() {
     const state = this._sim?.state;
     if (!state) return [];
     const accounts = this._services()?.accountService?.getAll?.() ?? [];
+    for (const a of accounts) {
+      if (a.stateKey && state[a.stateKey]?.holdings?.length > 0) this._everHeld.add(a.stateKey);
+    }
     return accounts
-      .filter(a => a.stateKey && Array.isArray(state[a.stateKey]?.holdings) && state[a.stateKey].holdings.length > 0)
+      .filter(a => a.stateKey && Array.isArray(state[a.stateKey]?.holdings) && this._everHeld.has(a.stateKey))
       .map(a => ({
         stateKey: a.stateKey,
         label:    `${a.country ? a.country + ' ' : ''}${a.name || a.stateKey}`.trim(),
@@ -285,12 +312,12 @@ export class HoldingsPlugin extends WorkbenchComponent {
   _render() {
     if (!this._mounted) return;
 
-    // The holding-account set can change mid-run: an inherited account gains its
-    // holdings when funded at the inheritance date, and a fully drawn-down account
-    // loses its last holding. The picker is otherwise only built at bind/mount, so
-    // rebuild it whenever that membership changes — cheap (a joined-key compare),
-    // and only actually rebuilds the <select> on the rare step where the set moves.
-    // Without this, a mid-sim-funded inherited account never appears in the picker.
+    // The holding-account set still grows mid-run: an inherited account joins it when the
+    // INHERIT event funds it. (It never shrinks any more — a drained account stays; see
+    // `_holdingAccounts`.) The picker is otherwise only built at bind/mount, so rebuild it
+    // whenever that membership changes — cheap (a joined-key compare), and only actually
+    // rebuilds the <select> on the rare step where the set moves. Without this, a
+    // mid-sim-funded inherited account never appears in the picker.
     if (this._holdingAccounts().map(a => a.stateKey).join('|') !== this._pickerSig) {
       this._renderAccountPicker();
     }

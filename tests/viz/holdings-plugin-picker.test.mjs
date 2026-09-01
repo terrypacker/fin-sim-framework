@@ -13,13 +13,18 @@ import { HoldingsPlugin } from '../../src/visualization/workbench/plugins/financ
 
 // ─── HoldingsPlugin account-picker refresh (design 63 §14 regression) ───────────
 //
-// The holdings account <select> is filtered by the *current-date* state: an account
-// is listed only when `state[stateKey].holdings.length > 0`. That set is not static —
-// an inherited (bequest-promoted) account seeds at 0 with no holdings and only gains
-// them when the INHERIT event funds it mid-run; a fully drawn-down account loses its
-// last holding. The picker used to be rebuilt only at bind/mount time, so it froze at
-// its bind-time membership and a mid-sim-funded inherited account never appeared. The
-// fix rebuilds the picker whenever the holding-account membership changes on a render.
+// The holdings account <select> is filtered on "holds lots now, OR has held them at
+// some point in this run". That set is not static — an inherited (bequest-promoted)
+// account seeds at 0 with no holdings and only gains them when the INHERIT event funds
+// it mid-run. The picker used to be rebuilt only at bind/mount time, so it froze at its
+// bind-time membership and a mid-sim-funded inherited account never appeared. The fix
+// rebuilds the picker whenever the holding-account membership changes on a render.
+//
+// The `everHeld` half of the gate is what keeps the two empty-holdings cases apart: an
+// inherited account BEFORE funding is not yet anything to look at, while a fully
+// drawn-down account is exactly the one whose Activity ledger is worth reading (that
+// ledger comes from the journal, so it outlives the last lot). Gating on current length
+// alone dropped the drawn-down account out of the picker entirely.
 
 const RUNTIME = { bus: { subscribe: () => () => {} } };
 
@@ -70,7 +75,7 @@ test('HoldingsPlugin picker: an account funded mid-run appears on the next rende
   plugin.unmount();
 });
 
-test('HoldingsPlugin picker: a fully drawn-down account drops out on the next render', () => {
+test('HoldingsPlugin picker: a fully drawn-down account STAYS in the picker', () => {
   const a = makeAccount('usStockAccount',    'US Brokerage');
   const b = makeAccount('sharedBrokerageAccount', 'Shared Brokerage');
   const state = {
@@ -81,12 +86,64 @@ test('HoldingsPlugin picker: a fully drawn-down account drops out on the next re
   const { plugin } = mountPlugin([a, b], state);
   assert.deepEqual(pickerKeys(plugin).sort(), ['sharedBrokerageAccount', 'usStockAccount']);
 
-  // Draw the shared account down to nothing.
+  // Draw the shared account down to nothing. It has HELD lots in this run, so it remains
+  // selectable — its journal-built Activity ledger is the whole reason to open it.
+  state.sharedBrokerageAccount.balance  = 0;
   state.sharedBrokerageAccount.holdings = [];
   plugin._render();
 
+  assert.deepEqual(pickerKeys(plugin).sort(), ['sharedBrokerageAccount', 'usStockAccount'],
+    'a drawn-down account must stay in the picker');
+
+  plugin.unmount();
+});
+
+test('HoldingsPlugin picker: selecting a drawn-down account renders the empty snapshot', () => {
+  const a = makeAccount('usStockAccount', 'US Brokerage');
+  const state = { usStockAccount: { balance: 1000, holdings: [{ marketValue: 1000, costBasis: 800 }] } };
+
+  const { plugin } = mountPlugin([a], state);
+
+  state.usStockAccount.balance  = 0;
+  state.usStockAccount.holdings = [];
+  plugin._render();
+
+  // The placeholder must NOT take over — the account is still a valid selection.
+  assert.equal(plugin.el.querySelector('[data-hld="placeholder"]').style.display, 'none');
+  // The snapshot renders its empty row rather than a stale one, and the chart section
+  // (which cannot draw a zero-slice donut) hides itself.
+  assert.match(plugin.el.querySelector('[data-hld="snap-body"]').textContent, /No holdings/);
+  assert.equal(plugin.el.querySelector('[data-hld="snap-foot"]').innerHTML.trim(), '');
+  assert.equal(plugin.el.querySelector('[data-hld="chart-section"]').style.display, 'none');
+
+  plugin.unmount();
+});
+
+test('HoldingsPlugin picker: a new sim resets the ever-held set', () => {
+  const a = makeAccount('usStockAccount', 'US Brokerage');
+  const b = makeAccount('sharedBrokerageAccount', 'Shared Brokerage');
+  const state = {
+    usStockAccount:        { balance: 1000, holdings: [{ marketValue: 1000, costBasis: 800 }] },
+    sharedBrokerageAccount:{ balance: 500,  holdings: [{ marketValue: 500,  costBasis: 500 }] },
+  };
+
+  const { plugin } = mountPlugin([a, b], state);
+  assert.deepEqual(pickerKeys(plugin).sort(), ['sharedBrokerageAccount', 'usStockAccount']);
+
+  // Rebuild: a fresh sim whose shared account never holds anything. Carrying the previous
+  // run's ever-held set over would list it as a permanently empty account.
+  plugin._bindSim({
+    state: {
+      usStockAccount:        { balance: 1000, holdings: [{ marketValue: 1000, costBasis: 800 }] },
+      sharedBrokerageAccount:{ balance: 0,    holdings: [] },
+    },
+    currentDate: new Date('2050-06-01'),
+    journal: { journal: [] },
+    bus: RUNTIME.bus,
+  });
+
   assert.deepEqual(pickerKeys(plugin), ['usStockAccount'],
-    'a drawn-down account should drop from the picker');
+    'the ever-held set must not survive a rebuild');
 
   plugin.unmount();
 });
