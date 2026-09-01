@@ -13,6 +13,14 @@ import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor, CHART_PALETTE } from '../theme.js';
 import { APP_EVENTS } from '../app-display-settings.js';
 
+// Toolbox icons for the hover-popup toggle: a speech bubble, struck through when the
+// popup is off. ECharts scales the path to the icon box, so the coordinates are only
+// relative to each other.
+const TOOLTIP_ICON =
+    'path://M64,96 H960 V608 H448 L256,800 V608 H64 Z';
+const TOOLTIP_ICON_OFF =
+    'path://M64,96 H960 V608 H448 L256,800 V608 H64 Z M96,64 L992,832';
+
 /**
  * ECharts rendering layer. Extends BaseComponent so it participates in
  * the parent→child destroy lifecycle (e.g. MapFilterMultiSelect cleanup).
@@ -45,10 +53,14 @@ export class ChartView extends BaseComponent {
 
     this._chart        = null;
     this._ro           = null;
+    this._io           = null;
     this._seriesMap    = new Map();  // key → { colorIdx, dataArr } — dataArr is NATIVE currency
     this._colorIdx     = 0;
     this._annotations  = {};         // id → { date, label, color, position }
     this._hiddenSeries = new Set();
+    // Panel-local, deliberately not persisted: the popup is the useful half and the
+    // cluttering half at once, so the toggle is a per-view mood, not a preference.
+    this._tooltipOn    = true;
 
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
     this._seriesKinds  = new Map(); // key → ParameterValueType.kind string
@@ -202,6 +214,8 @@ export class ChartView extends BaseComponent {
     this.running = false;
     this._ro?.disconnect();
     this._ro = null;
+    this._io?.disconnect();
+    this._io = null;
     if (this._chart) {
       this._chart.dispose();
       this._chart = null;
@@ -299,10 +313,14 @@ export class ChartView extends BaseComponent {
       yAxisIndex,
       smooth:         true,
       smoothMonotone: 'x',
+      // Hidden at rest, drawn on hover: with tooltip trigger 'axis' ECharts pops a
+      // symbol onto every series at the hovered x, which reads as a highlight point
+      // instead of the permanent bead-on-a-string a shown symbol gives.
       symbol:         'circle',
       symbolSize:     6,
+      showSymbol:     false,
       sampling:       'lttb',
-      emphasis:       { focus: 'series' },
+      emphasis:       { focus: 'series', scale: 1.6 },
       lineStyle:      { color, width: 2, type: backfilled ? 'dashed' : 'solid' },
       itemStyle:      { color },
     };
@@ -400,6 +418,48 @@ export class ChartView extends BaseComponent {
     this._chart.setOption({ series, legend: { selected }, yAxis: this._buildYAxes() });
   }
 
+  /**
+   * The toolbox, rebuilt on every tooltip-toggle so the icon can report its own state.
+   */
+  _buildToolbox() {
+    const off = !this._tooltipOn;
+    return {
+      right: 12,
+      top:    6,
+      feature: {
+        dataZoom: {
+          yAxisIndex: 'none',
+          title:      { zoom: 'Select Zoom', back: 'Undo Zoom' },
+          brushStyle: { color: readThemeColor('--cyan-glow'), borderColor: readThemeColor('--blue-muted'), borderWidth: 1 },
+        },
+        restore: { title: 'Reset View' },
+        // A toolbox feature rather than chrome of our own: the toggle then sits with
+        // the chart's other view controls and moves with them. ECharts renders a custom
+        // feature only when its key is prefixed `my`; without that the icon is dropped
+        // silently, with no warning.
+        myTooltipToggle: {
+          show:    true,
+          title:   off ? 'Show Values' : 'Hide Values',
+          icon:    off ? TOOLTIP_ICON_OFF : TOOLTIP_ICON,
+          onclick: () => this._setTooltipOn(!this._tooltipOn),
+        },
+      },
+      iconStyle: { borderColor: readThemeColor(off ? '--border-hi' : '--text-muted') },
+      emphasis:  { iconStyle: { borderColor: readThemeColor('--text-dim') } },
+    };
+  }
+
+  /**
+   * Show or hide the hover popup. Panel-local and not persisted (the caller asked for
+   * a mood, not a setting); the axis pointer and the highlight points stay either way.
+   */
+  _setTooltipOn(on) {
+    this._tooltipOn = on;
+    if (!this._chart) return;
+    this._chart.dispatchAction({ type: 'hideTip' });
+    this._chart.setOption({ toolbox: this._buildToolbox() });
+  }
+
   _applyBaseOptions() {
     this._chart.setOption({
       backgroundColor: 'transparent',
@@ -415,20 +475,7 @@ export class ChartView extends BaseComponent {
         show:     false,
         selected: {},
       },
-      toolbox: {
-        right: 12,
-        top:    6,
-        feature: {
-          dataZoom: {
-            yAxisIndex: 'none',
-            title:      { zoom: 'Select Zoom', back: 'Undo Zoom' },
-            brushStyle: { color: readThemeColor('--cyan-glow'), borderColor: readThemeColor('--blue-muted'), borderWidth: 1 },
-          },
-          restore: { title: 'Reset View' },
-        },
-        iconStyle: { borderColor: readThemeColor('--text-muted') },
-        emphasis:  { iconStyle: { borderColor: readThemeColor('--text-dim') } },
-      },
+      toolbox: this._buildToolbox(),
       xAxis: {
         type:  'time',
         axisLabel: {
@@ -442,9 +489,16 @@ export class ChartView extends BaseComponent {
       },
       yAxis: this._buildYAxes(),
       tooltip: {
-        trigger:     'item',
+        // 'axis' rather than 'item': the pointer snaps to a date and reports every
+        // series there, so comparing lines does not mean landing the cursor on one.
+        trigger:     'axis',
+        // The chart lives in a workbench pane that clips its overflow, so the popup
+        // is hung off <body> and confined to the viewport instead of the pane.
+        appendTo:    () => document.body,
+        confine:     true,
         axisPointer: {
-          type:       'cross',
+          type:       'line',
+          snap:       true,
           lineStyle:  { color: readThemeColor('--border-hi') },
           crossStyle: { color: readThemeColor('--border-hi') },
         },
@@ -452,7 +506,10 @@ export class ChartView extends BaseComponent {
         borderColor:     readThemeColor('--border-hi'),
         borderWidth:     1,
         textStyle:       { color: readThemeColor('--text-primary'), fontSize: 11, fontFamily: 'monospace' },
-        formatter:       (params) => this._fmtTooltip(params),
+        // Off returns nothing rather than setting `show:false`, which would take the
+        // axis pointer and the hover highlights with it — the popup is the clutter,
+        // the circles on the lines are not.
+        formatter:       (params) => (this._tooltipOn ? this._fmtTooltip(params) : ''),
       },
       dataZoom: [
         { type: 'inside', xAxisIndex: 0, filterMode: 'filter' },
@@ -483,7 +540,23 @@ export class ChartView extends BaseComponent {
     this._ro = new ResizeObserver(() => this._chart?.resize());
     this._ro.observe(this.container);
 
+    // The tooltip is parented to <body> (see `appendTo` in _applyBaseOptions), so it
+    // outlives the chart going away: switching tabs while the cursor sits on the plot
+    // hides the canvas without ever firing a mouseout, and the popup is left stranded
+    // on the next panel. Dismiss it whenever the pointer or the panel leaves.
+    this.container.addEventListener(
+        'mouseleave', () => this._chart?.dispatchAction({ type: 'hideTip' }));
+    if (typeof IntersectionObserver === 'function') {
+      this._io = new IntersectionObserver((entries) => {
+        if (!entries.some(e => e.isIntersecting)) this._chart?.dispatchAction({ type: 'hideTip' });
+      });
+      this._io.observe(this.container);
+    }
+
     this._applyBaseOptions();
+    // 'Reset View' restores the option the chart was initialised with, which would put
+    // the toggle's icon back to on while the flag says otherwise.
+    this._chart.on('restore', () => this._chart?.setOption({ toolbox: this._buildToolbox() }));
     if (this._seriesMap.size > 0) this._doChartUpdate();
   }
 
@@ -500,10 +573,13 @@ export class ChartView extends BaseComponent {
     }
 
     // Filter out hidden/internal series
+    // With trigger 'axis' every series reports at the hovered date, including the
+    // ones with no point there; a null line is noise, not information.
     const filtered = list.filter(p =>
         p &&
         p.seriesName &&
-        p.seriesName !== '__annotations__'
+        p.seriesName !== '__annotations__' &&
+        (Array.isArray(p.value) ? p.value[1] : p.value) != null
     );
 
     if (filtered.length === 0) {

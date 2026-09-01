@@ -82,6 +82,9 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     this._histCache    = null;
     this._tieCache     = null;
     this._hidden       = new Set();  // pools switched off from the legend
+    // Panel-local and deliberately not persisted: the hover popup is the useful half
+    // and the cluttering half at once, so this is a mood rather than a preference.
+    this._tips         = true;
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -104,6 +107,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
         </span>
         <span class="pool-spacer"></span>
         <span class="pool-asof" data-pool="asof">—</span>
+        <button class="pool-csv-btn pool-tip-btn on" data-pool="tips"
+                title="Show or hide the hover popup">&#9678; values</button>
         <button class="pool-csv-btn" data-pool="csv" title="Download the per-pool cube as CSV">&#11015; CSV</button>
       </div>
 
@@ -136,6 +141,12 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
 
     this._bindOnce('view', 'change', (el) => { this._view = el.value; this._syncControls(); this._render(); });
     this._bindOnce('csv',  'click',  () => this._downloadCsv());
+    this._bindOnce('tips', 'click',  () => {
+      this._tips = !this._tips;
+      this._chart?.dispatchAction({ type: 'hideTip' });
+      this._syncControls();
+      this._render();   // only the flows view needs it, but the redraw is cheap
+    });
     this._bindOnce('legend', 'click', null, (e) => this._onLegendClick(e));
 
     const seg = this._q('logscope');
@@ -176,6 +187,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
   _disposeChart() {
     this._ro?.disconnect();
     this._ro = null;
+    this._io?.disconnect();
+    this._io = null;
     this._chart?.dispose();
     this._chart = null;
   }
@@ -252,6 +265,11 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     if (view) view.value = this._view;
     const seg = this._q('logscope');
     if (seg) seg.style.display = this._view === 'log' ? '' : 'none';
+    const tips = this._q('tips');
+    if (tips) {
+      tips.classList.toggle('on', this._tips);
+      tips.style.display = this._view === 'log' ? 'none' : '';
+    }
   }
 
   _render() {
@@ -364,6 +382,17 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
         this._ro = new ResizeObserver(() => this._chart?.resize());
         this._ro.observe(host);
       }
+      // The tooltip is parented to <body> (see `appendTo` below), so it outlives the
+      // chart going away: switching tabs while the cursor sits on the plot hides the
+      // canvas without ever firing a mouseout, and the popup is left stranded on the
+      // next panel. Dismiss it whenever the pointer or the panel leaves.
+      host.addEventListener('mouseleave', () => this._chart?.dispatchAction({ type: 'hideTip' }));
+      if (typeof IntersectionObserver === 'function') {
+        this._io = new IntersectionObserver((entries) => {
+          if (!entries.some(e => e.isIntersecting)) this._chart?.dispatchAction({ type: 'hideTip' });
+        });
+        this._io.observe(host);
+      }
     }
 
     const dark = this._dark();
@@ -427,7 +456,7 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           name: 'gated', type: 'scatter', symbol: 'triangle', symbolSize: 9, z: 6,
           itemStyle: { color: dark ? '#fbbf24' : '#b45309' },
           data: marks.map(m => [m.x, 0]),
-          tooltip: { formatter: (p) => _esc(marks[p.dataIndex].text) },
+          tooltip: { formatter: (p) => (this._tips ? _esc(marks[p.dataIndex].text) : '') },
         });
       }
     }
@@ -438,10 +467,20 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       textStyle: { color: ink, fontFamily: 'var(--font-mono, monospace)' },
       grid: { left: 60, right: 12, top: 10, bottom: 24 },
       tooltip: {
+        // Bars carry no hover highlight worth keeping, so the flows view switches the
+        // tooltip off outright; the line views return empty content instead, which
+        // keeps the axis pointer and the circles on the lines (the popup is the clutter).
+        show:    this._view !== 'flows' || this._tips,
         trigger: this._view === 'flows' ? 'item' : 'axis',
+        // The panel clips its overflow and the plot is only a couple of hundred pixels
+        // tall, so a tooltip parented to the chart gets cut off — worst in the stock
+        // view, which reports three lines per pool. Hang it off <body> and confine it
+        // to the viewport so it can grow past the panel and still stay on screen.
+        appendTo: () => document.body,
+        confine: true,
         axisPointer: { type: 'line' },
         formatter: this._view === 'flows' ? undefined : (params) => {
-          if (!params?.length) return '';
+          if (!this._tips || !params?.length) return '';
           const head = `<strong>${params[0].axisValue}</strong>`;
           const lines = params
             .filter(p => p.value != null)

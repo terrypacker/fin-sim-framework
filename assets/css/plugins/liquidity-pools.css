@@ -75,6 +75,12 @@
   color: var(--blue-text);
 }
 
+/* Hover-popup toggle: lit when the popup is on, plain when it is off. */
+.pool-tip-btn.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
 /* ── Provenance strip ─────────────────────────────────────────────────────── */
 
 .pool-provenance {
