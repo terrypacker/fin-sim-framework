@@ -14,6 +14,7 @@ import { ScenarioLoader }     from '../../scenarios/scenario-loader.js';
 import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
 import { withBom } from '../../utils/csv.js';
 import { collectAuthoredMixProblems } from '../../finance/behavioral/rebalance-to-target-reducer.js';
+import { collectAuthoredGraphProblems } from '../../finance/pools/liquidity-graph.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -105,10 +106,18 @@ export class ScenarioTabPresenter {
 
     // Supply the account list to the design-97 pool editors (DrawdownSequence,
     // LiquidityGraph), which select over stateKeys rather than asking the user to type them.
+    //
+    // The projection carries every field `normalizeLiquidityGraph` READS, not just the two
+    // the selects draw: `_graphProblems` validates the authored graph against this same
+    // list, and a missing `offsetsPropertyKey` there does not read as "not supplied" — it
+    // reads as "this offset links to no property", which would refuse a Rebuild the
+    // compiler is perfectly happy with. `role` is the second such field (§20.19's warning).
     this._view.accountsProvider = () => {
       const registry = ServiceRegistry.getInstance();
       return (registry.accountService?.getAll?.() ?? [])
-        .map(a => ({ stateKey: a.stateKey, name: a.name ?? a.stateKey, type: a.type }))
+        .map(a => ({ stateKey: a.stateKey, name: a.name ?? a.stateKey, type: a.type,
+                     ...(a.offsetsPropertyKey != null ? { offsetsPropertyKey: a.offsetsPropertyKey } : {}),
+                     ...(a.role != null ? { role: a.role } : {}) }))
         .filter(a => a.stateKey);
     };
 
@@ -201,6 +210,10 @@ export class ScenarioTabPresenter {
       // \u2014 but it is what bricks the NEXT page load, so it is never silent.
       const problems = collectAuthoredMixProblems(this._paramBag());
       if (problems.length && !this._view.confirmSaveInvalidMixes(problems)) return;
+      // The same bargain for design 97's pool sizes, which fail the same way: a PERCENT
+      // authored as 100 loads no better than a mix that sums to 3.
+      const poolProblems = this._graphProblems();
+      if (poolProblems.length && !this._view.confirmSaveInvalidPools(poolProblems)) return;
       // Harvest in-flight service-map state into the active scenario record so
       // localStorage / Download / Rebuild see edits the user has made but not
       // yet rebuilt. The graph snapshot also forces subsequent loads through
@@ -321,9 +334,65 @@ export class ScenarioTabPresenter {
    */
   _guardAuthoredMixes(action) {
     const problems = collectAuthoredMixProblems(this._paramBag());
-    if (!problems.length) return true;
-    this._view.reportInvalidMixes(action, this._activeScenario?.name, problems);
-    return false;
+    if (problems.length) {
+      this._view.reportInvalidMixes(action, this._activeScenario?.name, problems);
+      return false;
+    }
+    // Design 97's liquidity graph is the second value family the compiler REJECTS rather
+    // than repairs, and it fails in the same place for the same reason — so it is guarded
+    // in the same place, not left to be discovered by the next page load.
+    const poolProblems = this._graphProblems();
+    if (poolProblems.length) {
+      this._view.reportInvalidPools(action, this._activeScenario?.name, poolProblems);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * The active scenario's liquidity-graph problems, against the accounts its claims name.
+   * @private
+   */
+  _graphProblems() {
+    return collectAuthoredGraphProblems(this._paramBag(), this._graphAccounts());
+  }
+
+  /**
+   * The account list to validate the ACTIVE scenario's graph against.
+   *
+   * Not simply the live services: `_loadActiveScenario` guards BEFORE `_initScenario`, so
+   * on a scenario switch (or an upload-then-select) the services still hold the OUTGOING
+   * scenario's accounts. Validating the incoming graph against those reported every claim
+   * as naming a dead account — a refusal naming a scenario the user had just left, for a
+   * config that is perfectly valid.
+   *
+   * So the record's own accounts lead: they are the set the graph was authored against,
+   * and they carry every field the validator reads (`type`, `offsetsPropertyKey`, `role`).
+   * The live list is unioned in for what the record cannot know — an account added or
+   * renamed in the Configuration editor since the last save — and a null on either side is
+   * read as an absence rather than a contradiction. The union can only MISS a stale claim,
+   * never invent one; a missed one still throws in the compiler, which is where it used to
+   * be caught anyway. A false refusal, by contrast, blocks the user with nowhere to go.
+   *
+   * A record with no accounts at all (a toolset scenario, not yet compiled) falls back to
+   * the services — and when those are empty too, `collectAuthoredGraphProblems` skips the
+   * whole-graph leg rather than reporting every claim as an orphan.
+   * @private
+   */
+  _graphAccounts() {
+    const record = Array.isArray(this._activeScenario?.accounts) ? this._activeScenario.accounts : [];
+    const live   = this._view?._accounts?.() ?? [];
+    if (!record.length) return live;
+    const byKey = new Map();
+    for (const a of record) if (a?.stateKey) byKey.set(a.stateKey, a);
+    for (const a of live) {
+      if (!a?.stateKey) continue;
+      const prior = byKey.get(a.stateKey);
+      if (!prior) { byKey.set(a.stateKey, a); continue; }
+      const filled = Object.fromEntries(Object.entries(prior).filter(([, v]) => v != null));
+      byKey.set(a.stateKey, { ...a, ...filled });
+    }
+    return [...byKey.values()];
   }
 
   /**

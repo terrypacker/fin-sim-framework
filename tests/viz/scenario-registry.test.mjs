@@ -411,3 +411,42 @@ test('saving under a minted id ADDS a scenario, leaving the source intact', () =
   assert.strictEqual(r.getUserScenarios().length, 5);
   assert.strictEqual(r.get('u:4').name, 'Terry Jeanne Evaluation', 'the copied-from record is untouched');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// getStored — what a RELOAD would load, not what the editors are holding
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('getStored returns the persisted record, not the live node the editors mutate', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{ id: 'u:0', name: 'Saved', simStart: '2026-01-01', simEnd: '2041-01-01',
+                  params: [{ name: 'poolTarget', value: 0.05 }] }],
+  });
+  const r = makeRegistry();
+
+  // An in-flight edit: the editors mutate the graph node in place and do not persist.
+  r.get('u:0').params[0].value = 100;
+
+  assert.strictEqual(r.get('u:0').params[0].value, 100, 'the live node carries the edit');
+  assert.strictEqual(r.getStored('u:0').params[0].value, 0.05, 'storage does not');
+});
+
+test('getStored is null for a prebuilt and for an unknown id — nothing to go back to', () => {
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  assert.strictEqual(r.getStored('p:alpha'), null);
+  assert.strictEqual(r.getStored('u:99'), null);
+});
+
+test('getStored follows a save — it is the stored copy, not a frozen snapshot', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{ id: 'u:0', name: 'Saved', simStart: '2026-01-01', simEnd: '2041-01-01',
+                  params: [{ name: 'poolTarget', value: 0.05 }] }],
+  });
+  const r = makeRegistry();
+  const live = r.get('u:0');
+  live.params[0].value = 0.25;
+  r.save(live, true);
+
+  assert.strictEqual(r.getStored('u:0').params[0].value, 0.25);
+});

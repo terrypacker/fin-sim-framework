@@ -847,6 +847,30 @@ function extraKeys(obj, drawn) {
 const CAPACITY_NEEDS_VALUE = Object.freeze(['AMOUNT', 'YEARS_OF_SPEND']);
 
 /**
+ * What a pool size cell may hold, per MODE — the compiler's own bounds (`sizeSpec` in
+ * liquidity-graph.js), restated as cell attributes.
+ *
+ * The Size cell means three different quantities depending on the mode beside it, and the
+ * three do not share a range: PERCENT is a FRACTION of the book (0.05 is 5 %), so a 100
+ * typed there is 10,000 % — the compiler rejects it, and because the rejection happens at
+ * LOAD the scenario becomes unopenable in the very editor that could fix it. One static
+ * bound cannot serve all three, so the cell reads its bound off its own row.
+ *
+ * `null` marks a mode that derives its size from live state and takes no value at all.
+ */
+const SIZE_BOUNDS = Object.freeze({
+  PERCENT:        { min: '0', max: '1',  step: '0.01', title: 'A FRACTION of the book — 0.05 is 5%.' },
+  YEARS_OF_SPEND: { min: '0', max: '50', step: '0.5',  title: 'Years of spending.' },
+  AMOUNT:         { min: '0', max: null, step: '1000', title: 'A figure in the valuation base currency.' },
+  BALANCE:        null,
+  OFFSET_CAP:     null,
+  '':             null,
+});
+const boundsFor = (mode) => SIZE_BOUNDS[mode ?? ''] ?? null;
+/** A per-row accessor for one bound, for the row-list editor's function-valued attributes. */
+const sizeAttr = (modeField, key) => (row) => boundsFor(row?.[modeField])?.[key] ?? null;
+
+/**
  * `LiquidityGraph` — design 97 Part II, `{ pools, flows }`, as three flat tables.
  *
  * The value is rebuilt from the tables on every edit rather than mutated in place, for the
@@ -1051,11 +1075,19 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       { field: 'id',          label: 'Id',       type: 'text',   placeholder: 'reserve', width: '1fr' },
       { field: 'label',       label: 'Label',    type: 'text',   placeholder: 'Bucket 2', width: '1.3fr' },
       { field: 'spendOrder',  label: 'Spend #',  type: 'number', step: '10', placeholder: 'never', width: '0.7fr' },
-      { field: 'targetMode',  label: 'Target',   type: 'select', options: TARGET_MODE_OPTIONS, width: '1.2fr' },
-      { field: 'targetValue', label: 'Size',     type: 'number', step: '0.5', width: '0.7fr' },
-      { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS, width: '1.5fr' },
+      // `rerender` on both mode cells: the Size cell beside each one takes its bounds from
+      // the mode, so a mode change has to redraw the row or the new mode keeps the old range.
+      { field: 'targetMode',  label: 'Target',   type: 'select', options: TARGET_MODE_OPTIONS,
+        rerender: true, width: '1.2fr' },
+      { field: 'targetValue', label: 'Size',     type: 'number',
+        step: sizeAttr('targetMode', 'step'), min: sizeAttr('targetMode', 'min'),
+        max:  sizeAttr('targetMode', 'max'),  title: sizeAttr('targetMode', 'title'), width: '0.7fr' },
+      { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS,
+        rerender: true, width: '1.5fr' },
       // Blank on BALANCE / OFFSET_CAP, whose ceiling is derived from live state.
-      { field: 'capacityValue', label: 'Cap size', type: 'number', step: '0.5', width: '0.7fr' },
+      { field: 'capacityValue', label: 'Cap size', type: 'number',
+        step: sizeAttr('capacity', 'step'), min: sizeAttr('capacity', 'min'),
+        max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr' },
     ],
     newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
                         targetMode: '', targetValue: null, capacity: 'BALANCE',

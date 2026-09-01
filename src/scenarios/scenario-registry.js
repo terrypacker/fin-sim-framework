@@ -175,6 +175,23 @@ export class ScenarioRegistry {
   }
 
   /**
+   * The PERSISTED copy of a scenario, re-read from storage — NOT the live graph node.
+   *
+   * `get()` returns the node the editors mutate in place, so it can never answer "what
+   * would a reload load?". The recovery overlay has to ask exactly that: a scenario broken
+   * by in-flight edits that were never saved is repaired by discarding them, and a
+   * scenario broken in storage is not. The two look identical from the live record alone.
+   *
+   * @param {string} id
+   * @returns {object|null} the stored record, or null for a prebuilt (never persisted
+   *          until saved) and for an id storage has never seen
+   */
+  getStored(id) {
+    const data = this._scenarioStorage.load();
+    return (data?.scenarios ?? []).find(s => s?.id === id) ?? null;
+  }
+
+  /**
    * Delete a scenario by id. Falls back to getAll()[0] as the new active.
    */
   delete(id) {

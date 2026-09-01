@@ -771,3 +771,60 @@ export function resolveLiquidityGraph(params, accounts = []) {
     hasLegacyPoolYears:  Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears),
   });
 }
+
+/**
+ * The same rules as {@link normalizeLiquidityGraph}, reported instead of thrown — and
+ * localized to the FIELD that carries the problem.
+ *
+ * `collectAuthoredMixProblems` is the model (design 61 §12.2 Q3): the authoring UI needs
+ * every problem at once keyed to the row that carries it, and the boot-time recovery
+ * surface needs to identify the bad value without parsing an error string. A pool's
+ * `target`/`floor`/`capacity` are each re-validated through the SAME `sizeSpec` the
+ * compiler runs, so the two can never drift — a percent authored as 100 is reported here
+ * by exactly the sentence `normalizeLiquidityGraph` would have thrown.
+ *
+ * Field-local problems are reported alone: once a size spec is known bad the whole-graph
+ * pass would only re-report it, unlocalized. When there is none, the whole-graph pass runs
+ * and its first throw is reported with `field: null` — still nameable ("this graph does not
+ * compile"), just not repairable a cell at a time.
+ *
+ * @param {object} params   - the scenario parameter bag
+ * @param {Array}  accounts - the accounts the claims name; the whole-graph pass is SKIPPED
+ *        when this is empty, because every claim would then read as naming a dead account
+ * @returns {Array<{param: string, index: number|null, field: string|null, pool: string|null,
+ *                  message: string}>} empty when valid
+ */
+export function collectAuthoredGraphProblems(params, accounts = []) {
+  const p = params ?? {};
+  const graph = p.liquidityGraph;
+  if (!graph || typeof graph !== 'object') return [];
+  const rawPools = Array.isArray(graph.pools) ? graph.pools : [];
+  if (rawPools.length === 0) return [];
+
+  const problems = [];
+  const specs = [
+    ['target',   TARGET_MODES,   POOL_TARGET_MODE.YEARS_OF_SPEND],
+    ['floor',    TARGET_MODES,   POOL_TARGET_MODE.AMOUNT],
+    ['capacity', CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE],
+  ];
+  rawPools.forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object') return;
+    const id = typeof raw.id === 'string' && raw.id ? raw.id : `#${index}`;
+    for (const [field, allowed, defaultMode] of specs) {
+      try {
+        sizeSpec(raw[field], `pool '${id}' ${field}`, allowed, defaultMode);
+      } catch (e) {
+        problems.push({ param: 'liquidityGraph', index, field, pool: raw.id ?? null, message: e.message });
+      }
+    }
+  });
+  if (problems.length) return problems;
+
+  if (!accounts?.length) return problems;
+  try {
+    resolveLiquidityGraph(p, accounts);
+  } catch (e) {
+    problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null, message: e.message });
+  }
+  return problems;
+}

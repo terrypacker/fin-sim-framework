@@ -152,7 +152,7 @@ import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-u
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { CorporateActionHandler, CorporateActionApplyReducer } from './finance/holdings/corporate-action-classes.js';
 import { CORPORATE_ACTION_KIND, normalizeCorporateAction, applyCorporateAction, registryPatchFor } from './finance/holdings/corporate-action.js';
-import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey } from './finance/holdings/default-allocations.js';
+import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey, INTEREST_BEARING_ALLOCATIONS, assertInterestBearingHoldings } from './finance/holdings/default-allocations.js';
 import { normalizeDrawdownSequence } from './finance/holdings/drawdown-sequence.js';
 import { HOLDING_ACTION_TYPES, VALUE_KIND, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
@@ -213,7 +213,7 @@ import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, spli
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
-import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, FLOW_EXECUTOR, depositKeyFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph } from './finance/pools/liquidity-graph.js';
+import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, FLOW_EXECUTOR, depositKeyFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems } from './finance/pools/liquidity-graph.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
 import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
@@ -1025,6 +1025,8 @@ export const Finance = {
   EQUITY_MARKETS_BY_COUNTRY,
   resolveEquityMarketMix,
   resolveRateKey,
+  INTEREST_BEARING_ALLOCATIONS,
+  assertInterestBearingHoldings,
   normalizeDrawdownSequence,
   HOLDING_ACTION_TYPES,
   VALUE_KIND,
@@ -1278,12 +1280,14 @@ export const Finance = {
   POOL_SPEND_BASIS,
   POOL_CAPACITY_MODE,
   FLOW_CADENCE,
+  POOL_DRAWDOWN_BASIS,
   FLOW_EXECUTOR,
   depositKeyFor,
   normalizeLiquidityGraph,
   compileToDrawdownSequence,
   poolsClaimingClass,
   resolveLiquidityGraph,
+  collectAuthoredGraphProblems,
   PoolFlowApplyReducer,
   PoolFlowReducer,
   POOL_CUBE_FIELDS,

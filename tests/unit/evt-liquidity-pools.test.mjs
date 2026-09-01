@@ -33,7 +33,7 @@ import assert   from 'node:assert/strict';
 
 import {
   normalizeLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraph,
-  FLOW_EXECUTOR, POOL_CAPACITY_MODE,
+  collectAuthoredGraphProblems, FLOW_EXECUTOR, POOL_CAPACITY_MODE,
 } from '../../src/finance/pools/liquidity-graph.js';
 import { poolMetrics, poolContext, loanForOffset } from '../../src/finance/pools/pool-metrics.js';
 import { PoolFlowReducer }      from '../../src/finance/pools/pool-flow-reducer.js';
@@ -638,6 +638,39 @@ test('POOL-10: every config error in §12.7 throws at config time', () => {
   throws(P(), /COMPILES to that field/, ACCOUNTS, { hasDrawdownSequence: true });
   throws(P({ claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 4 }),
          /poolCashYears/, ACCOUNTS, { hasLegacyPoolYears: true });
+});
+
+test('POOL-10d: the reported problems are the thrown ones, localized to their field', () => {
+  // The authoring UI and the boot-time recovery overlay both need every problem at once,
+  // keyed to the cell that carries it — and they must agree with the compiler to the
+  // letter, or a value one accepts is a value the other refuses to load.
+  const params = { liquidityGraph: { pools: [
+    { id: 'offset', spendOrder: 1, target: { mode: 'PERCENT', value: 100 },
+      capacity: { mode: 'YEARS_OF_SPEND', value: -3 }, claims: [{ key: 'offsetAccount' }] },
+    { id: 'cash',   spendOrder: 2, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+      claims: [{ key: 'usSavingsAccount' }] },
+  ] } };
+  const problems = collectAuthoredGraphProblems(params, ACCOUNTS);
+
+  assert.deepEqual(problems.map(p => [p.pool, p.field, p.index]),
+    [['offset', 'target', 0], ['offset', 'capacity', 0]]);
+  assert.match(problems[0].message, /is a FRACTION of the book/);
+  // The SAME sentence the compiler throws — that identity is the point.
+  assert.throws(() => normalizeLiquidityGraph(params.liquidityGraph, ACCOUNTS),
+    (e) => e.message === problems[0].message);
+
+  // A valid graph reports nothing, and a value-clean graph still reports a SHAPE error —
+  // unlocalized, because there is no single cell to type into.
+  assert.deepEqual(collectAuthoredGraphProblems({ liquidityGraph: REFERENCE }, ACCOUNTS), []);
+  const shape = collectAuthoredGraphProblems(
+    { liquidityGraph: { pools: [{ id: 'a', spendOrder: 1, claims: [{ key: 'nope' }] }] } }, ACCOUNTS);
+  assert.equal(shape.length, 1);
+  assert.equal(shape[0].field, null);
+  assert.match(shape[0].message, /not an account stateKey/);
+
+  // With no accounts to resolve claims against, the whole-graph leg is skipped rather than
+  // reporting every claim in the scenario as an orphan.
+  assert.deepEqual(collectAuthoredGraphProblems({ liquidityGraph: REFERENCE }, []), []);
 });
 
 test('POOL-10b: a CONDITIONAL cycle is legal — harvest and buy-the-dip are both wanted', () => {

@@ -792,6 +792,40 @@ export class ScenarioTabView {
    * Refusing outright would strand every other edit in the form, so the save is the
    * user's call — but it is the value that will fail to load next time, so say so.
    */
+  confirmSaveInvalidPools(problems = []) {
+    const body = [
+      `Save anyway? ${problems.length} liquidity-pool value${problems.length === 1 ? '' : 's'} ` +
+      `${problems.length === 1 ? 'is' : 'are'} invalid:`,
+      '',
+      ...problems.map(p => `\u2022 ${p.message}`),
+      '',
+      'The scenario will save, but it cannot be simulated \u2014 or re-opened \u2014 until',
+      'these are fixed.',
+    ].join('\n');
+    if (typeof window === 'undefined' || typeof window.confirm !== 'function') return true;
+    return window.confirm(body);
+  }
+
+  /**
+   * Refuse a build whose liquidity graph carries a value the compiler rejects.
+   *
+   * The mix twin above, for design 97's pool sizes. Same reason it exists: the throw
+   * happens inside `ScenarioLoader.load()`, which on the NEXT page load runs before any
+   * tab renders — so a value saved unchecked here takes the whole workbench down and can
+   * only be repaired from the load-error overlay.
+   */
+  reportInvalidPools(action, scenarioName, problems = []) {
+    alert([
+      `${action} refused: "${scenarioName ?? 'this scenario'}" has ` +
+      `${problems.length} invalid liquidity-pool value${problems.length === 1 ? '' : 's'}.`,
+      '',
+      ...problems.map(p => `\u2022 ${p.message}`),
+      '',
+      'Fix them in the Parameters list under liquidityGraph \u2014 each pool\'s Size cell',
+      'takes its range from the Target mode beside it (a PERCENT is a FRACTION: 0.05 is 5%).',
+    ].join('\n'));
+  }
+
   confirmSaveInvalidMixes(problems = []) {
     const body = [
       `Save anyway? ${problems.length} allocation mix${problems.length === 1 ? '' : 'es'} ` +

@@ -33,6 +33,7 @@ const button = (text) =>
   [...document.querySelectorAll('.scenario-load-error button')].find(b => b.textContent.includes(text));
 const inputs = () => [...document.querySelectorAll('.sle-cell-input')];
 const type   = (input, value) => { input.value = value; input.dispatchEvent(new Event('input')); };
+const pick   = (sel, value) => { sel.value = value; sel.dispatchEvent(new Event('change')); };
 
 function badConfig() {
   return {
@@ -153,6 +154,148 @@ test('switching to another scenario leaves the broken one saved and untouched', 
   assert.strictEqual(onReload.mock.calls.length, 1);
   assert.strictEqual(registry.save.mock.calls.length, 0);
   assert.strictEqual(config.params[0].value[0].weights.EQUITY, 0.77, 'left exactly as stored');
+});
+
+// ─── design 97 pools ─────────────────────────────────────────────────────────
+
+const ACCOUNTS = [{ stateKey: 'auOffsetAccount', name: 'Offset', type: 'offset',
+                    offsetsPropertyKey: 'auHouse' }];
+
+/** The failure that motivated all of this: a PERCENT target authored as a percentage. */
+function badPoolConfig() {
+  return {
+    id: 'u:11',
+    name: 'Seq-risk C',
+    accounts: ACCOUNTS,
+    params: [{ name: 'liquidityGraph', type: 'LiquidityGraph', value: {
+      pools: [{ id: 'offset', spendOrder: 2, target: { mode: 'PERCENT', value: 100 },
+                capacity: { mode: 'OFFSET_CAP' }, claims: [{ key: 'auOffsetAccount' }] }],
+    } }],
+  };
+}
+
+// `inputs()` above counts every .sle-cell-input, and a pool spec draws a mode SELECT
+// beside its value; these two split them.
+const numbers = () => [...document.querySelectorAll('input.sle-cell-input')];
+const selects = () => [...document.querySelectorAll('select.sle-cell-input')];
+
+test('a bad pool size gets its own controls, not just the error text', () => {
+  const config = badPoolConfig();
+  show(config);
+  const text = document.querySelector('.scenario-load-error').textContent;
+  assert.match(text, /pool 'offset' target\.value is a FRACTION/);
+  assert.strictEqual(document.querySelectorAll('.sle-error').length, 0,
+    'the repair section already names it');
+  assert.strictEqual(numbers().length, 1, 'one value cell for the one bad spec');
+  assert.strictEqual(numbers()[0].max, '1', "and it carries PERCENT's own bound");
+});
+
+test('÷100 repairs the pool in place, on the live config', () => {
+  const config = badPoolConfig();
+  const { registry, onReload } = show(config);
+  button('÷ 100').click();
+  assert.deepStrictEqual(config.params[0].value.pools[0].target, { mode: 'PERCENT', value: 1 });
+
+  button('Save fixes and reload').click();
+  assert.strictEqual(registry.save.mock.calls[0][0], config);
+  assert.strictEqual(onReload.mock.calls.length, 1);
+});
+
+test('typing a valid fraction is enough, and the mode can be changed with it', () => {
+  const config = badPoolConfig();
+  show(config);
+  type(numbers()[0], '0.25');
+  assert.strictEqual(config.params[0].value.pools[0].target.value, 0.25);
+
+  pick(selects()[0], 'YEARS_OF_SPEND');
+  assert.strictEqual(config.params[0].value.pools[0].target.mode, 'YEARS_OF_SPEND');
+});
+
+test('save refuses while the pool size is still out of range', () => {
+  const config = badPoolConfig();
+  const { registry, onReload } = show(config);
+  const alert = jest.spyOn(window, 'alert').mockImplementation(() => {});
+
+  button('Save fixes and reload').click();
+  assert.strictEqual(registry.save.mock.calls.length, 0);
+  assert.strictEqual(onReload.mock.calls.length, 0);
+  assert.match(alert.mock.calls[0][0], /a PERCENT is a FRACTION/);
+  alert.mockRestore();
+});
+
+test('the broken scenario can be deleted, behind a confirm', () => {
+  const config = badPoolConfig();
+  const registry = { ...makeRegistry([{ id: 'u:1', name: 'Other' }]), delete: jest.fn() };
+  const { onReload } = show(config, { registry });
+  const confirm = jest.spyOn(window, 'confirm').mockImplementation(() => false);
+
+  button('Delete this scenario').click();
+  assert.strictEqual(registry.delete.mock.calls.length, 0, 'a declined confirm deletes nothing');
+
+  confirm.mockImplementation(() => true);
+  button('Delete this scenario').click();
+  assert.strictEqual(registry.delete.mock.calls[0][0], 'u:11');
+  assert.strictEqual(onReload.mock.calls.length, 1);
+  confirm.mockRestore();
+});
+
+// ─── the Rebuild path: broken by UNSAVED edits ───────────────────────────────
+//
+// The stored copy still loads, so the cheapest exit is to throw the edits away — but the
+// escape list omits the active scenario by design, which left the user's own saved copy
+// the one config on the page they could not get back to.
+
+/** The stored copy of `badPoolConfig` — same scenario, with the size it was saved with. */
+function storedPoolCopy() {
+  return { id: 'u:11', name: 'Seq-risk C', accounts: ACCOUNTS,
+           params: [{ name: 'liquidityGraph', type: 'LiquidityGraph', value: {
+             pools: [{ id: 'offset', spendOrder: 2, target: { mode: 'PERCENT', value: 0.05 },
+                       capacity: { mode: 'OFFSET_CAP' }, claims: [{ key: 'auOffsetAccount' }] }],
+           } }] };
+}
+
+test('unsaved edits: the saved version is offered, and going back writes nothing', () => {
+  const config = badPoolConfig();
+  const registry = { ...makeRegistry([{ id: 'u:1', name: 'Other' }]),
+                     getStored: () => storedPoolCopy(), delete: jest.fn() };
+  const { onReload } = show(config, { registry });
+
+  assert.match(document.querySelector('.sle-title').textContent, /These changes could not be loaded/);
+  const back = button('Discard changes and reload the saved version');
+  assert.ok(back, 'the stored copy is reachable');
+
+  back.click();
+  assert.strictEqual(onReload.mock.calls.length, 1);
+  assert.strictEqual(registry.save.mock.calls.length, 0,
+    'persisting the broken in-memory record is the one thing that must not happen');
+  // Still repairable in place for anyone who wants to KEEP the edits.
+  assert.strictEqual(numbers().length, 1);
+});
+
+test('a stored copy identical to the live one is not offered — it would reload to here', () => {
+  const config = badPoolConfig();
+  const registry = { ...makeRegistry([{ id: 'u:1', name: 'Other' }]),
+                     getStored: () => JSON.parse(JSON.stringify(config)) };
+  show(config, { registry });
+
+  assert.ok(!button('Discard changes'), 'nothing to discard');
+  assert.match(document.querySelector('.sle-title').textContent, /This scenario could not be loaded/);
+});
+
+test('a stored copy that is broken too is not offered as an escape', () => {
+  const config = badPoolConfig();
+  const stored = storedPoolCopy();
+  stored.params[0].value.pools[0].target.value = 42;      // broken in storage as well
+  const registry = { ...makeRegistry([{ id: 'u:1', name: 'Other' }]), getStored: () => stored };
+  show(config, { registry });
+
+  assert.ok(!button('Discard changes'));
+});
+
+test('a registry with no getStored (a prebuilt, an older caller) behaves as before', () => {
+  show(badPoolConfig());
+  assert.ok(!button('Discard changes'));
+  assert.match(document.querySelector('.sle-title').textContent, /This scenario could not be loaded/);
 });
 
 test('a failure the mix validator cannot localize still shows the error and the switcher', () => {

@@ -45,7 +45,9 @@ const NO_OPTIONS = [];
  * @param {object} opts
  * @param {Array<object>} opts.rows        the list being edited, mutated IN PLACE
  * @param {Array<{field: string, label: string, type?: 'number'|'select'|'text'|'checkset',
- *                step?: string, min?: string, max?: string,
+ *                step?: string|function(object): string,
+ *                min?: string|function(object): string,
+ *                max?: string|function(object): string,
  *                options?: Array<[value: string, label: string]>
  *                         | function(): Array<[value: string, label: string]>,
  *                placeholder?: string, blankValue?: *,
@@ -254,24 +256,59 @@ function buildCheckSet(col, row, changed) {
 }
 
 /**
+ * A column attribute that may depend on the ROW — `min`, `max`, `step`, `placeholder`.
+ *
+ * A pool's size is the case: the same cell means a fraction of the book under PERCENT, a
+ * number of years under YEARS_OF_SPEND and a currency figure under AMOUNT, and those three
+ * do not share a range. One static `max` would either permit the value the compiler rejects
+ * or forbid one it requires, so the bound is read per row, from the row's own mode.
+ */
+function attrOf(col, key, row) {
+  const raw = col[key];
+  return typeof raw === 'function' ? raw(row) : raw;
+}
+
+/**
  * A numeric cell. Blank writes `col.blankValue` — `null` by default, never 0 (see
  * `readRowList`). A column whose consumer requires the key PRESENT (an allocation
  * weight, where an absent key and a deliberate 0 mean different things) declares
  * `blankValue: 0` instead.
+ *
+ * `min`/`max` are ENFORCED, not merely advertised. A bare `max` attribute stops the
+ * spinner and fails form validation, and this editor is in no form — so a typed 100 in a
+ * cell bounded at 1 was written to the row, saved, and only rejected by the compiler at the
+ * NEXT page load, where the editor that could fix it no longer renders (design 97; the
+ * `scenario-load-error-overlay` is the surface built for exactly that trip). Clamping here
+ * is the cheap half of the fix: the value the cell shows is a value the compiler accepts.
  */
 function buildNumber(col, row, changed, resort = null) {
   const input = document.createElement('input');
   input.type      = 'number';
   input.className = 'age-band-input';
   input.dataset.id = col.field;
-  if (col.step        != null) input.step        = col.step;
-  if (col.min         != null) input.min         = col.min;
-  if (col.max         != null) input.max         = col.max;
-  if (col.placeholder != null) input.placeholder = col.placeholder;
+  const step = attrOf(col, 'step', row);
+  const min  = attrOf(col, 'min',  row);
+  const max  = attrOf(col, 'max',  row);
+  const placeholder = attrOf(col, 'placeholder', row);
+  if (step        != null) input.step        = step;
+  if (min         != null) input.min         = min;
+  if (max         != null) input.max         = max;
+  if (placeholder != null) input.placeholder = placeholder;
+  if (col.title   != null) input.title       = attrOf(col, 'title', row) ?? '';
   input.value = row[col.field] ?? '';
   input.addEventListener('change', () => {
     const raw = input.value.trim();
-    row[col.field] = raw === '' ? (col.blankValue ?? null) : Number(raw);
+    if (raw === '') {
+      row[col.field] = col.blankValue ?? null;
+    } else {
+      let n = Number(raw);
+      if (min != null && Number.isFinite(Number(min))) n = Math.max(Number(min), n);
+      if (max != null && Number.isFinite(Number(max))) n = Math.min(Number(max), n);
+      row[col.field] = n;
+      // Show the clamp. Writing a different number than the one on screen is how a value
+      // silently disagrees with its own control.
+      if (n !== Number(raw)) input.value = n;
+    }
     changed();
     if (resort) resort();
   });
