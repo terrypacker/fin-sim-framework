@@ -209,6 +209,13 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="mortgageMaturityYear"]').value          = this._node?.mortgageMaturityYear          ?? '';
     el.querySelector('[data-id="mortgageDeductibleFraction"]').value    = this._node?.mortgageDeductibleFraction    ?? '';
     el.querySelector('[data-id="mortgageBookingFxRate"]').value         = this._node?.mortgageBookingFxRate         ?? '';
+    // The cash pool the mortgage direct-debits (design 54 P4). The data path has always
+    // existed — `synthesizeLoanForProperty` copies it onto the loan's `paymentSourceKey`,
+    // which `resolveLoanCashKey` reads first — but only a STANDALONE loan account had a
+    // control for it, and a property mortgage never has one, so the field was unreachable
+    // for the case it was added for: an offset mortgage, where it decides whether the
+    // offset is drained (and so whether the interest-bearing principal rises).
+    this._populatePaymentSourceSelect(el, this._accounts, this._node?.mortgagePaymentSourceKey ?? null);
     // The IO-expiry / re-amortisation branch needs a term to amortise over, and an IO
     // mortgage derives its own payment, so the payment field goes inert. Both are
     // easy to get silently wrong, so say so under the fields rather than in a tooltip.
@@ -382,6 +389,8 @@ export class RealPropertyEditor extends BaseComponent {
         return f == null ? null : Math.min(1, Math.max(0, f));
       })(),
       mortgageBookingFxRate:         nullableNum('mortgageBookingFxRate'),
+      mortgagePaymentSourceKey:
+        el.querySelector('[data-id="mortgagePaymentSourceKey"]')?.value || null,
       landValueRatio:       +el.querySelector('[data-id="landValueRatio"]').value,
       annualDepreciationOverride:
         el.querySelector('[data-id="annualDepreciationOverride"]').value === ''
@@ -474,6 +483,46 @@ export class RealPropertyEditor extends BaseComponent {
       opt.value       = a.stateKey;
       opt.textContent = a.name || a.stateKey;
       if (a.stateKey === selectedKey || a.id === selectedKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  /**
+   * Fill the mortgage payment-source select — the pool the monthly payment debits.
+   *
+   * Same stateKey-only rule as the two selects above, for the same design-72 §2 reason.
+   * Two extra exclusions:
+   *   · LOANS. A liability is never a source of cash (design 54 §8), and the drawdown
+   *     walk skips `type === 'loan'` outright, so offering one would author a payment
+   *     source that silently resolves to the country cash pool instead.
+   *   · this property's OWN synthesized loan, which cannot pay itself.
+   *
+   * Blank is the useful default and stays first: it means "a same-currency offset linked
+   * to this property if one exists, else the flagged transaction account / country
+   * savings pool" — precedence 2 and 3 of `resolveLoanCashKey`. A stored key that no
+   * longer names a live account is preserved as a "(missing)" option rather than silently
+   * re-defaulting the mortgage's payment source on the next save, matching the loan
+   * account editor.
+   */
+  _populatePaymentSourceSelect(el, accounts, selectedKey) {
+    const sel = el.querySelector('[data-id="mortgagePaymentSourceKey"]');
+    if (!sel) return;
+    const ownLoanKey = this._node?.stateKey ? `${this._node.stateKey}Loan` : null;
+    sel.innerHTML = '<option value="">— default (linked offset, else cash pool) —</option>';
+    let matched = false;
+    for (const a of (accounts ?? [])) {
+      if (!a?.stateKey || a.type === 'loan' || a.stateKey === ownLoanKey) continue;
+      const opt       = document.createElement('option');
+      opt.value       = a.stateKey;
+      opt.textContent = a.name || a.stateKey;
+      if (a.stateKey === selectedKey) { opt.selected = true; matched = true; }
+      sel.appendChild(opt);
+    }
+    if (selectedKey && !matched) {
+      const opt       = document.createElement('option');
+      opt.value       = selectedKey;
+      opt.textContent = `${selectedKey} (missing)`;
+      opt.selected    = true;
       sel.appendChild(opt);
     }
   }

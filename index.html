@@ -1017,6 +1017,10 @@
           <input type="number" data-id="mortgageDeductibleFraction" step="0.05" min="0" max="1" placeholder="blank = auto (rental)" title="Income-producing share of the borrowed money's USE, 0..1 (s8-1; Munro; TR 95/33) — design 86 G3. Blank keeps the default rule: fully deductible while the property is renting, nil otherwise. It also decides the §988(e) business share, so it moves the exchange gain/loss treatment too."/>
         </div>
         <div class="node-field">
+          <label>Payment From</label>
+          <select data-id="mortgagePaymentSourceKey" title="The cash pool the monthly mortgage payment debits. Blank = default: a same-currency offset linked to this property when one exists, otherwise the flagged transaction account / country savings pool. Paying from the offset is what a real offset facility direct-debits, and it is not cosmetic — draining the offset raises the interest-bearing principal. When the chosen pool cannot cover the payment the shortfall runs the normal replenish path (sell down, book the tax, escalate cross-border), so an empty offset does not stall the loan."></select>
+        </div>
+        <div class="node-field">
           <label>§988 Booking FX</label>
           <input type="number" data-id="mortgageBookingFxRate" step="0.0001" placeholder="blank = rate at first payment" title="Foreign units per USD on the date the debt was incurred (design 86 G7). A non-USD mortgage held by a US person realizes ordinary exchange gain or loss on each principal repayment, measured against this rate. Blank stamps the rate at the first payment, which treats the loan as incurred then and so UNDERSTATES §988 for a loan already outstanding at t0."/>
         </div>
