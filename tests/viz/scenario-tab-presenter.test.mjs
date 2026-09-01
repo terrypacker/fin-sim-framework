@@ -378,6 +378,81 @@ test('Rebuild proceeds once every authored mix sums to 1', () => {
   assert.strictEqual(view.reportInvalidMixes.mock.calls.length, 0);
 });
 
+// The design 97 twin: a pool size the compiler rejects fails in exactly the same place,
+// so it is guarded in exactly the same place.
+const BAD_POOLS = [
+  { name: 'liquidityGraph', type: 'LiquidityGraph', value: {
+    pools: [{ id: 'offset', spendOrder: 1, target: { mode: 'PERCENT', value: 100 },
+              claims: [{ key: 'auOffsetAccount' }] }],
+  } },
+];
+
+test('Rebuild is refused when a pool size is out of range for its mode', () => {
+  const { presenter, view } = withMixParams(BAD_POOLS);
+  presenter._initScenario = jest.fn();
+  view.reportInvalidPools = jest.fn();
+
+  document.getElementById('loadScenarioBtn').dispatchEvent(new Event('click'));
+
+  assert.strictEqual(presenter._initScenario.mock.calls.length, 0);
+  const [action, , problems] = view.reportInvalidPools.mock.calls[0];
+  assert.strictEqual(action, 'Rebuild');
+  assert.match(problems[0].message, /is a FRACTION of the book/);
+});
+
+test('a graph is validated against ITS OWN accounts, not the outgoing scenario\'s', () => {
+  // The guard runs BEFORE _initScenario, so on a switch (or an upload-then-select) the
+  // services still hold the previous scenario's accounts. Validating against those
+  // reported every claim in the INCOMING graph as naming a dead account — a refusal that
+  // named a scenario the user had just left, for a config that is perfectly valid.
+  const { presenter, view } = withMixParams([
+    { name: 'liquidityGraph', type: 'LiquidityGraph', value: { pools: [
+      { id: 'offset', spendOrder: 1, capacity: { mode: 'OFFSET_CAP' },
+        claims: [{ key: 'usOffsetAccount' }] }] } },
+  ]);
+  presenter._activeScenario.accounts = [
+    { stateKey: 'usOffsetAccount', type: 'offset', offsetsPropertyKey: 'usHouseProperty' },
+  ];
+  view.accountsProvider = () => [{ stateKey: 'someOtherScenariosAccount', type: 'savings' }];
+  presenter._initScenario = jest.fn();
+  view.reportInvalidPools = jest.fn();
+
+  document.getElementById('loadScenarioBtn').dispatchEvent(new Event('click'));
+
+  assert.strictEqual(view.reportInvalidPools.mock.calls.length, 0,
+    JSON.stringify(view.reportInvalidPools.mock.calls[0]?.[2] ?? []));
+  assert.strictEqual(presenter._initScenario.mock.calls.length, 1);
+});
+
+test('an account added since the last save still counts — the two lists are unioned', () => {
+  const { presenter, view } = withMixParams([
+    { name: 'liquidityGraph', type: 'LiquidityGraph', value: { pools: [
+      { id: 'cash',   spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'fresh',  spendOrder: 2, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+        claims: [{ key: 'justAddedAccount' }] }] } },
+  ]);
+  presenter._activeScenario.accounts = [{ stateKey: 'usSavingsAccount', type: 'savings' }];
+  view.accountsProvider = () => [
+    { stateKey: 'usSavingsAccount', type: 'savings' },
+    { stateKey: 'justAddedAccount', type: 'savings' },
+  ];
+  view.reportInvalidPools = jest.fn();
+
+  assert.deepStrictEqual(presenter._graphProblems(), []);
+  assert.ok(presenter._graphAccounts().some(a => a.stateKey === 'justAddedAccount'));
+});
+
+test('Save warns before persisting an invalid pool size, and honours a cancel', () => {
+  const { presenter, view, registry } = withMixParams(BAD_POOLS);
+  view.confirmSaveInvalidPools = jest.fn(() => false);
+  const save = jest.spyOn(registry, 'save');
+
+  presenter._view.onSave();
+
+  assert.strictEqual(view.confirmSaveInvalidPools.mock.calls.length, 1);
+  assert.strictEqual(save.mock.calls.length, 0);
+});
+
 test('a refused Load still renders the params form — it is the only place to fix it', () => {
   const { presenter, view } = withMixParams(BAD_GLIDEPATH);
   presenter._initScenario = jest.fn();

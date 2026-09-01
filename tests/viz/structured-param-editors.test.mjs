@@ -574,6 +574,52 @@ test('LiquidityGraph: renaming a pool re-renders the claim table so nothing is o
   assert.strictEqual(poolSel.value, 'cash');
 });
 
+test('LiquidityGraph: a PERCENT size is bounded to a FRACTION, and 100 is clamped', () => {
+  // The bug this closes: `target: { mode: PERCENT, value: 100 }` saves, then throws inside
+  // ScenarioLoader on the NEXT load — before any tab renders — so the scenario can only be
+  // repaired from the load-error overlay. The cell now carries the compiler's own bound.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'offset', spendOrder: 10, target: { mode: 'PERCENT', value: 0.05 },
+              claims: [{ key: 'auOffsetAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const size = cell(host, 'targetValue');
+  assert.strictEqual(size.max, '1');
+  assert.strictEqual(size.min, '0');
+
+  type(size, '100', 'change');
+  assert.strictEqual(param.value.pools[0].target.value, 1, 'clamped to the mode\'s range');
+  assert.strictEqual(size.value, '1', 'and the cell shows what was written');
+});
+
+test('LiquidityGraph: the size bound follows the mode it sits beside', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, target: { mode: 'PERCENT', value: 0.05 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  pick(cell(host, 'targetMode'), 'AMOUNT');
+  // AMOUNT is a currency figure: a 1 ceiling there would forbid every value worth typing.
+  assert.strictEqual(cell(host, 'targetValue').max, '');
+  type(cell(host, 'targetValue'), '250000', 'change');
+  assert.strictEqual(param.value.pools[0].target.value, 250000);
+
+  pick(cell(host, 'targetMode'), 'YEARS_OF_SPEND');
+  assert.strictEqual(cell(host, 'targetValue').max, '50');
+});
+
+test('LiquidityGraph: a capacity size takes its bound from the capacity mode', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, capacity: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const cap = cell(host, 'capacityValue');
+  assert.strictEqual(cap.max, '50');
+  type(cap, '999', 'change');
+  assert.strictEqual(param.value.pools[0].capacity.value, 50);
+});
+
 test('LiquidityGraph: emptying the pools normalises to null', () => {
   const param = { name: 'liquidityGraph', value: {
     pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],

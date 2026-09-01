@@ -263,6 +263,9 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .sle-mix-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .sle-cell       { display: flex; flex-direction: column; gap: 3px; }
+/* `display:flex` beats the UA's [hidden] rule, so a derived-mode spec (BALANCE,
+   OFFSET_CAP — no value to type) would keep showing its input without this. */
+.sle-cell[hidden] { display: none; }
 .sle-cell-label { font-size: 10px; letter-spacing: 0.05em; color: var(--text-dim); }
 .sle-cell-input {
   width: 100%;
@@ -279,6 +282,11 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .sle-mix-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 10px; }
 .sle-mix-sum  { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
 .sle-mix-sum.sle-bad { color: var(--red); font-weight: 600; }
+
+/* A pool size spec is two controls (mode, value), not four weights, so it gets its own
+   track count rather than sitting in three quarters of an allocation grid. */
+.sle-spec { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sle-cell-input.sle-bad { border-color: var(--red); }
 
 .sle-save   { margin-top: 6px; }
 .sle-others { display: flex; flex-wrap: wrap; gap: 8px; }
