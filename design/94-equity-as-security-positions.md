@@ -2926,10 +2926,28 @@ instrument's per-unit value has **separated from its sleeve's** — §6.2's per-
 overlay diverging an instrument from its market, on data authored entirely through the UI.
 That path did not exist before this step.
 
-**Unrelated defect seen on the way, not fixed here:** a saved layout with the Graph tab
-closed leaves `#graphRoot` absent, and `WorkbenchApp`'s `ConfigGraphView` construction throws
-uncaught at boot — taking the rest of the boot (including the scenario list) with it. It
-reproduces on `main` and has nothing to do with securities.
+**Unrelated defect found on the way, and FIXED — and it was not one panel but twelve:** a
+saved layout with the Graph tab closed left `#graphRoot` absent, and
+`WorkbenchApp.initScenario()`'s `getElementById` handed `null` to `ConfigGraphView`, which
+dereferences it immediately. The throw was uncaught at boot, so everything after it was
+skipped — including the scenario list, which made the app read as "no scenarios" with the
+cause nowhere near it.
+
+A plugin's `render()` runs on its first MOUNT, so a closed panel has no DOM; but these
+panels do not OWN the components they display — the views, presenters, the animator and the
+editor factory are all built at `initScenario()` regardless of whether anyone is looking.
+Sweeping every tab showed **11 more panels with the same fatal shape** (`config-list`,
+`inspector`, `timeline`, `exec-history`, `lineage`, and the three Monte-Carlo and three
+Optimize panes), plus `chart`, where the symptom was milder and worse to diagnose: the chart
+captured `null`, guarded on it, and stayed dead for the session even after the tab was
+reopened.
+
+`WorkbenchRuntime.paneHost()` now owns these elements — session lifetime rather than
+visibility lifetime — and `hostPanePlugin()` is what the panels adopt them with. Pinned by
+`tests/viz/workbench-boot-with-closed-tabs.test.mjs`, which boots the real app once per
+closed tab: the bug arrives by ADDING a panel, so a per-panel unit test would not have
+caught the next one. Nothing to do with securities; recorded here because this is where it
+surfaced.
 
 ## 11. How this gets guarded
 

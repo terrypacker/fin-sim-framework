@@ -34,6 +34,71 @@ export class WorkbenchRuntime {
     this.breakpoints = new Set();
 
     this._simAdapter = null;    // set by WorkbenchShell after scenario is ready
+    this._paneHosts  = new Map();   // see paneHost()
+  }
+
+  /**
+   * The DOM host for a panel, owned by the RUNTIME rather than by the plugin.
+   *
+   * ### The bug this exists to make unreachable
+   *
+   * A workbench plugin's `render()` runs on its first MOUNT, so a panel the user has
+   * CLOSED has no DOM at all. Most of these panels are thin shims whose only job is to
+   * mint an id'd div; the real component is built by `WorkbenchApp.initScenario()`, which
+   * found it with `getElementById`. So a saved layout with any of those tabs closed handed
+   * `null` to a constructor that dereferences it, and the throw was uncaught at boot —
+   * skipping everything after it, including the scenario list. The app read as "no
+   * scenarios" with the cause in a layout key, which is nowhere near where anyone looks.
+   *
+   * The invariant that fixes it: **the element's lifetime follows the SESSION, not the
+   * panel's visibility.** That is the runtime's lifetime, and it is also the lifetime of
+   * the things that hold the element — the presenters, the graph renderer, the animator
+   * and the editor factory are all built at `initScenario()` regardless of what is on
+   * screen, and they keep working across Rebuild.
+   *
+   * ### Why a PAIR, and why the ids stay
+   *
+   * `outer` is what the panel displays and `inner` is what the component fills. They are
+   * separate because several consumers insert siblings ABOVE the content —
+   * `ConfigGraphView` does `panel.insertBefore(bar, graphRoot)` — so the content div needs
+   * a parent from the moment it EXISTS, not from the moment it is displayed. A bare
+   * detached div moves the same crash one line down.
+   *
+   * The `id` is kept on `inner` even though nothing needs to look it up any more: the
+   * stylesheets select on it (`#graphRoot`, `#mcConfigPane`, …), and it is what makes a
+   * detached host recognisable in a debugger.
+   *
+   * @param {string} id                      the element id, unique per panel
+   * @param {object} [opts]
+   * @param {string} [opts.outerClass='wb-plugin-fill']
+   * @param {string} [opts.innerClass='wb-plugin-fill']
+   * @returns {{ outer: HTMLElement, inner: HTMLElement }} the same pair on every call
+   */
+  paneHost(id, { outerClass = 'wb-plugin-fill', innerClass = 'wb-plugin-fill' } = {}) {
+    let host = this._paneHosts.get(id);
+    if (!host) {
+      const outer = document.createElement('div');
+      if (outerClass) outer.className = outerClass;
+      const inner = document.createElement('div');
+      inner.id = id;
+      if (innerClass) inner.className = innerClass;
+      outer.appendChild(inner);
+      host = { outer, inner };
+      this._paneHosts.set(id, host);
+    }
+    return host;
+  }
+
+  /**
+   * The config graph's host — `paneHost` with the graph's own classes, and named because
+   * it has three callers (the app, the plugin, and the view that inserts a filter bar
+   * above the root).
+   *
+   * @returns {{ outer: HTMLElement, root: HTMLElement }}
+   */
+  graphHost() {
+    const { outer, inner } = this.paneHost('graphRoot', { outerClass: 'wb-graph-outer', innerClass: '' });
+    return { outer, root: inner };
   }
 
   /**

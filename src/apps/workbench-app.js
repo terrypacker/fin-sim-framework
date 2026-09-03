@@ -273,6 +273,20 @@ export class WorkbenchApp extends BaseComponent {
 
   // ── Scenario lifecycle ────────────────────────────────────────────────────
 
+  /**
+   * The DOM host for a panel, from the runtime rather than from the document.
+   *
+   * `getElementById` was wrong here for a reason that is easy to re-introduce: a workbench
+   * plugin's `render()` runs on its first MOUNT, so a tab the user has CLOSED contributes
+   * no DOM — and the components below are built at `initScenario()` whether or not anyone
+   * is looking at them. Eleven panels used to hand `null` into a constructor that
+   * dereferences it, and the throw was uncaught at boot, taking the scenario list with it.
+   * See `WorkbenchRuntime.paneHost`.
+   */
+  _paneHost(id, opts) {
+    return this._wbShell.runtime.paneHost(id, opts).inner;
+  }
+
   initScenario() {
     //TODO Clean up for #146
     const registry = ServiceRegistry.getInstance();
@@ -283,7 +297,10 @@ export class WorkbenchApp extends BaseComponent {
       parent:                  null,
       graph:                   registry.graph,
       graphQueryApi:           registry.graphQueryApi,
-      graphRoot:               document.getElementById('graphRoot'),
+      // From the runtime, not `getElementById`: the element exists from boot, whereas
+      // the Graph PANEL only renders its DOM on first mount — so a saved layout with that
+      // tab closed used to hand `null` to a view that dereferences it (see `graphHost()`).
+      graphRoot:               this._wbShell.runtime.graphHost().root,
       displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
       bus:                     registry.bus,
       displaySettings:         this.displaySettings,
@@ -312,7 +329,7 @@ export class WorkbenchApp extends BaseComponent {
     // ── Configuration list (left panel) ──────────────────────────────────────
     this.configList = new ConfigurationListComponent({
       parent:        this,
-      container:     document.getElementById('configGroupNodes'),
+      container:     this._paneHost('configGroupNodes'),
       graphQueryApi: registry.graphQueryApi,
       bus:           registry.bus,
       // Design 94 step 10. Securities are cfg data on the scenario record, not service
@@ -633,14 +650,14 @@ export class WorkbenchApp extends BaseComponent {
 
     // ── Graph node inspector panel (left column EDIT sub-tab) ─────────────────
     this._graphNodeInspector = new GraphNodeInspectorPanel({
-      container: document.getElementById('graphNodeEditPane'),
+      container: this._paneHost('graphNodeEditPane'),
       onShowTab: () => this._showGraphEditTab(),
     });
     this._graphNodeInspector.setEditorFactory(editorFactory);
 
     // ── Graph node execution history (right column GRAPH group) ───────────────
     this._graphNodeExecHistory = new GraphNodeExecHistory({
-      container:      document.getElementById('graphNodeHistoryPane'),
+      container:      this._paneHost('graphNodeHistoryPane'),
       graphRenderer:  this.configGraphView.graphRenderer,
       graphQueryApi:  registry.graphQueryApi,
       schemaRegistry: registry.schemaRegistry,
@@ -648,7 +665,7 @@ export class WorkbenchApp extends BaseComponent {
     });
 
     this._graphNodeLineage = new GraphNodeLineage({
-      container:     document.getElementById('graphNodeLineagePane'),
+      container:     this._paneHost('graphNodeLineagePane'),
       graphQueryApi: registry.graphQueryApi,
     });
 
@@ -754,7 +771,7 @@ export class WorkbenchApp extends BaseComponent {
 
     const chartController = new ChartController();
     const chartView = new ChartView({
-      container: $('chartContainer'),
+      container: this._paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' }),
       simStart:  this.scenario.simStart,
       simEnd:    this.scenario.simEnd,
       series:    this.chartSeries ?? undefined,
@@ -795,7 +812,7 @@ export class WorkbenchApp extends BaseComponent {
 
     this.timelinePresenter = new TimelinePresenter({
       controller:    new TimelineController(),
-      view:          new TimelineView({ container: $('timelineContainer') }),
+      view:          new TimelineView({ container: this._paneHost('timelineContainer', { outerClass: 'wb-pane-host', innerClass: 'tl-container' }) }),
       appBus:        this.appBus,
       onDetail:      (entry) => this._statePanelView.showNodeDetail(entry),
       onTaxDocument: (entry, journal) => {
@@ -877,14 +894,14 @@ export class WorkbenchApp extends BaseComponent {
     // ── Monte Carlo ───────────────────────────────────────────────────────────
     this.mcPresenter = new MonteCarloPresenter({
       controller: new MonteCarloController(),
-      view:       new MonteCarloView(),
+      view:       new MonteCarloView({ hostFor: (id) => this._paneHost(id, { innerClass: '' }) }),
       scenario:   this.scenario,
       appBus:     this.appBus,
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
 
     // ── Scenario Compare ─────────────────────────────────────────────────────
-    const comparePaneEl = document.getElementById('scenarioComparePane');
+    const comparePaneEl = this._paneHost('scenarioComparePane');
     if (comparePaneEl) {
       this.comparePresenter = new ScenarioComparePresenter({
         containerEl:      comparePaneEl,
@@ -893,8 +910,8 @@ export class WorkbenchApp extends BaseComponent {
     }
 
     // ── Decision Graph ────────────────────────────────────────────────────────
-    const dgConfigEl   = document.getElementById('dgConfigPane');
-    const dgResultsEl  = document.getElementById('dgResultsPane');
+    const dgConfigEl   = this._paneHost('dgConfigPane');
+    const dgResultsEl  = this._paneHost('dgResultsPane');
     if (dgConfigEl && dgResultsEl) {
       this.dgPresenter = new DecisionGraphPresenter({
         configContainerEl:  dgConfigEl,
@@ -914,7 +931,7 @@ export class WorkbenchApp extends BaseComponent {
     // ── Optimization ──────────────────────────────────────────────────────────
     this.optPresenter = new OptimizationPresenter({
       controller: new OptimizationController(),
-      view:       new OptimizationView(),
+      view:       new OptimizationView({ hostFor: (id) => this._paneHost(id, { innerClass: '' }) }),
       scenario:   this.scenario,
       appBus:     this.appBus,
     });

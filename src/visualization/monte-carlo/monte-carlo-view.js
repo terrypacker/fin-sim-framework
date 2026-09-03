@@ -18,11 +18,21 @@ import { BaseComponent } from '../components/base-component.js';
  * directly into these panes and manage their own content.
  */
 export class MonteCarloView extends BaseComponent {
-  constructor() {
+  /**
+   * @param {{ hostFor?: (id: string) => HTMLElement }} [opts]
+   *   Resolver for the three pane elements. `WorkbenchApp` passes
+   *   `WorkbenchRuntime.paneHost`, whose lifetime is the SESSION — a plugin's `render()`
+   *   runs on its first MOUNT, so looking these up in the document returned `null` for
+   *   anyone whose layout had the tab closed, and the panel constructors below
+   *   dereference it. Falls back to `getElementById` so a caller with real DOM (a test,
+   *   an embedder) needs no runtime.
+   */
+  constructor({ hostFor = null } = {}) {
     super();
-    this._configPane  = document.getElementById('mcConfigPane');
-    this._resultsPane = document.getElementById('mcResultsPane');
-    this._runsPane    = document.getElementById('mcRunsPane');
+    const host = hostFor ?? ((id) => document.getElementById(id));
+    this._configPane  = host('mcConfigPane');
+    this._resultsPane = host('mcResultsPane');
+    this._runsPane    = host('mcRunsPane');
   }
 
   /** Container for McConfigPanel */

@@ -1,11 +1,12 @@
-import { WorkbenchComponent } from '../../component.js';
+import { hostPanePlugin } from './host-pane-plugin.js';
 
-export class TimelinePlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
-  render() {
-    const el = document.createElement('div');
-    el.id = 'timelineContainer';
-    el.className = 'tl-container';
-    return el;
-  }
-}
+/**
+ * Displays the `#timelineContainer` host; the runtime owns it. See `hostPanePlugin`.
+ *
+ * `wb-pane-host` rather than the default `wb-plugin-fill`: the timeline manages its own
+ * overflow, and a wrapper with `overflow-y: auto` would give it a second scrollbar.
+ */
+export const TimelinePlugin = hostPanePlugin('timelineContainer', {
+  outerClass: 'wb-pane-host',
+  innerClass: 'tl-container',
+});

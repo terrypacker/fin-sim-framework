@@ -1,13 +1,4 @@
-import { WorkbenchComponent } from '../../component.js';
+import { hostPanePlugin } from './host-pane-plugin.js';
 
-export class OptConfigPlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
-  render() {
-    const root = document.createElement('div');
-    root.className = 'wb-plugin-fill';
-    const inner = document.createElement('div');
-    inner.id = 'optConfigPane';
-    root.appendChild(inner);
-    return root;
-  }
-}
+/** Displays the `#optConfigPane` host; the runtime owns it. See `hostPanePlugin`. */
+export const OptConfigPlugin = hostPanePlugin('optConfigPane', { innerClass: '' });

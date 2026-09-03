@@ -244,6 +244,17 @@
 
 /* ── Plugin containers ───────────────────────────────────── */
 
+/* A runtime-owned pane host that must not introduce a scroll context of its own —
+   the panel inside it manages its own overflow (the timeline, for one). See
+   `WorkbenchRuntime.paneHost`. */
+.wb-pane-host {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .wb-plugin-fill {
   height: 100%;
   width: 100%;

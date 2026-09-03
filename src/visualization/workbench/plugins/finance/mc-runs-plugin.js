@@ -1,14 +1,4 @@
-import { WorkbenchComponent } from '../../component.js';
+import { hostPanePlugin } from './host-pane-plugin.js';
 
-export class McRunsPlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
-  render() {
-    const root = document.createElement('div');
-    root.className = 'wb-plugin-fill';
-    const inner = document.createElement('div');
-    inner.id = 'mcRunsPane';
-    inner.className = 'wb-plugin-fill';
-    root.appendChild(inner);
-    return root;
-  }
-}
+/** Displays the `#mcRunsPane` host; the runtime owns it. See `hostPanePlugin`. */
+export const McRunsPlugin = hostPanePlugin('mcRunsPane', { innerClass: '' });

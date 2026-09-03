@@ -1,11 +1,24 @@
 import { WorkbenchComponent } from '../../component.js';
 
+/**
+ * ChartPlugin — the chart's chip strip, failure banner and ECharts viz.
+ *
+ * Unlike the plain shims this keeps a `render()` of its own, because the pane holds three
+ * children rather than one. The VIZ div still comes from `WorkbenchRuntime.paneHost()`:
+ * `ChartView` captures it at `initScenario()` and guards with `if (!this.container) return`,
+ * so minting it here meant that a reader whose layout had this tab closed got a chart that
+ * was permanently dead for the session — silently, and even after reopening the tab. Same
+ * root cause as the boot crash, milder symptom.
+ */
 export class ChartPlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
+  constructor(runtime) {
+    super();
+    this._runtime = runtime;
+  }
 
   render() {
-    const root = document.createElement('div');
-    root.className = 'wb-chart-root';
+    const { outer: root, inner: vizWrap } =
+      this._runtime.paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' });
 
     // Active-series chip strip (R7.3) — shows charted paths with click-to-remove.
     const activeSeries = document.createElement('div');
@@ -26,14 +39,9 @@ export class ChartPlugin extends WorkbenchComponent {
       <span id="failureBannerDate" class="failure-banner-date"></span>
     `;
 
-    // ECharts owns this div — no canvas needed.
-    const vizWrap = document.createElement('div');
-    vizWrap.className = 'wb-chart-viz';
-    vizWrap.id = 'chartContainer';
-
-    root.appendChild(activeSeries);
-    root.appendChild(failureBanner);
-    root.appendChild(vizWrap);
+    // Prepended so the order stays chips → banner → viz: the viz div is already the
+    // host's child. Idempotent because the host outlives this panel's mounts.
+    if (!root.querySelector('#chartActiveSeries')) root.prepend(activeSeries, failureBanner);
 
     return root;
   }

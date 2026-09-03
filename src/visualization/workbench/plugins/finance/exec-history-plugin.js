@@ -1,14 +1,4 @@
-import { WorkbenchComponent } from '../../component.js';
+import { hostPanePlugin } from './host-pane-plugin.js';
 
-export class ExecHistoryPlugin extends WorkbenchComponent {
-  constructor(_runtime) { super(); }
-  render() {
-    const root = document.createElement('div');
-    root.className = 'wb-plugin-fill';
-    const inner = document.createElement('div');
-    inner.id = 'graphNodeHistoryPane';
-    inner.className = 'wb-plugin-fill';
-    root.appendChild(inner);
-    return root;
-  }
-}
+/** Displays the `#graphNodeHistoryPane` host; the runtime owns it. See `hostPanePlugin`. */
+export const ExecHistoryPlugin = hostPanePlugin('graphNodeHistoryPane');
