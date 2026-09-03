@@ -434,6 +434,44 @@ export function depositKeyFor(pool, byKey) {
   return pool.claims.find(c => CASH_LIKE_TYPES.has(byKey.get(c.key)?.type))?.key ?? null;
 }
 
+/**
+ * The (account, allocation) a TRANSFER executor BUYS into — design 97 §12.4a.
+ *
+ * The original §12.4 split had exactly two shapes: value moves INSIDE the book (the
+ * rebalancer, a target-mix shift) or it moves into a cash-like account (a deposit). What
+ * neither can say is the one the offset makes natural — **cash held OUTSIDE the book buying
+ * into the book**: the offset is not rebalanceable, so executor 1 cannot see it, and the
+ * destination is a sleeve, so `depositKeyFor` finds nowhere to put the money. "Buy the dip
+ * with the offset" therefore failed validation rather than running, which is the reverse of
+ * the g→o harvest edge the same graph already expresses.
+ *
+ * A purchase destination is deliberately the NARROWEST shape that has one unambiguous
+ * reading:
+ *  - **one claim** — two accounts, or two sleeves, and there is no unique split for the
+ *    money, the same reason a pool `target` and a `fractionOfSource` REBALANCE edge each
+ *    demand a single class;
+ *  - **a BROKERAGE account** — a deposit into a wrapper (IRA / 401k / Roth / super) is a
+ *    CONTRIBUTION, which has eligibility and a cap and is not this feature's to invent;
+ *  - **exactly one named sleeve** — the allocation the cash becomes. An unnarrowed claim
+ *    would mean "buy the account's current mix", which is a second, silently different
+ *    policy wearing the same edge.
+ *
+ * The purchase itself is a real one: `PoolFlowApplyReducer` routes it through the same
+ * `replenishSavings` seam as every other flow (so the SOURCE side still books its disposal,
+ * its withdrawal tax and its §988 leg) and the credit opens a properly dated vintage lot in
+ * the named sleeve — a new cost basis and a new holding period, which is what buying is.
+ *
+ * @returns {{key: string, allocation: string}|null}
+ */
+export function purchaseTargetFor(pool, byKey) {
+  const claims = pool?.claims ?? [];
+  if (claims.length !== 1) return null;
+  const [claim] = claims;
+  if (byKey.get(claim.key)?.type !== ACCOUNT_TYPE.BROKERAGE) return null;
+  if (!Array.isArray(claim.sleeves) || claim.sleeves.length !== 1) return null;
+  return { key: claim.key, allocation: claim.sleeves[0] };
+}
+
 /** Classify each flow and validate what its executor requires. Mutates `flows` in place. */
 function assignExecutors(pools, flows, byKey) {
   const byId = new Map(pools.map(p => [p.id, p]));
@@ -454,11 +492,12 @@ function assignExecutors(pools, flows, byKey) {
         }
       }
     }
-    if (f.executor === FLOW_EXECUTOR.TRANSFER && !depositKeyFor(to, byKey)) {
-      err(`flow '${f.id}' has to move CASH into '${f.to}', but that pool claims no cash-like `
-        + '(checking / savings / offset) account. Moving value into a holdings sleeve is a '
-        + 'PURCHASE, which only the rebalancer can do — and it can only do it when BOTH ends '
-        + 'of the flow are brokerage accounts.');
+    if (f.executor === FLOW_EXECUTOR.TRANSFER && !depositKeyFor(to, byKey) && !purchaseTargetFor(to, byKey)) {
+      err(`flow '${f.id}' has to move CASH into '${f.to}', and that pool is neither of the two `
+        + 'things a transfer can land in: it claims no cash-like (checking / savings / offset) '
+        + 'account to DEPOSIT into, and it is not a single BROKERAGE account narrowed to a '
+        + 'single sleeve to BUY into. Give it a cash-like claim, or narrow it to one brokerage '
+        + 'sleeve — across two accounts or two sleeves there is no unique split for the money.');
     }
   }
 }

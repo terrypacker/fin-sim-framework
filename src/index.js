@@ -213,7 +213,7 @@ import { SPLIT_MODE, DEPOSITABLE_ROLES, isDepositable, _resetSplitWarnings, spli
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
-import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, FLOW_EXECUTOR, depositKeyFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems } from './finance/pools/liquidity-graph.js';
+import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems } from './finance/pools/liquidity-graph.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
 import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
@@ -1283,6 +1283,7 @@ export const Finance = {
   POOL_DRAWDOWN_BASIS,
   FLOW_EXECUTOR,
   depositKeyFor,
+  purchaseTargetFor,
   normalizeLiquidityGraph,
   compileToDrawdownSequence,
   poolsClaimingClass,

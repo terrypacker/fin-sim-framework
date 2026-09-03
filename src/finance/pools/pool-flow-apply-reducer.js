@@ -12,7 +12,7 @@ import { Reducer, PRIORITY }      from '../../simulation-framework/reducers.js';
 import { RecordBalanceAction }    from '../../simulation-framework/actions.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { currencyOf }             from '../fx/to-base-currency.js';
-import { depositKeyFor }          from './liquidity-graph.js';
+import { depositKeyFor, purchaseTargetFor } from './liquidity-graph.js';
 
 /**
  * DESIGN 97 §12.4 — EXECUTOR 2, the cross-account pool flow.
@@ -66,8 +66,16 @@ export class PoolFlowApplyReducer extends Reducer {
     const dst = this.graph?.pools?.find(p => p.id === to);
     if (!src || !dst || !(amountBase > 0)) return this.newState(state);
 
+    // Two shapes of destination (design 97 §12.4a). A pool with a cash-like claim is a
+    // DEPOSIT; a pool that is one brokerage account narrowed to one sleeve is a PURCHASE of
+    // that sleeve — the offset buying the dip, which has no cash-like account to land in and
+    // is not reachable by executor 1 because the offset is not in the rebalanceable book.
+    // Both raise the money the same way, through the scoped `replenishSavings` draw; they
+    // differ only in what the credit becomes.
     const depositKey = depositKeyFor(dst, this._byKey);
-    const target     = state[depositKey];
+    const purchase   = depositKey ? null : purchaseTargetFor(dst, this._byKey);
+    const targetKey  = depositKey ?? purchase?.key ?? null;
+    const target     = targetKey ? state[targetKey] : null;
     if (!target) return this.newState(state);
 
     // `amountBase` is in the valuation base currency (that is the only currency in which
@@ -81,13 +89,14 @@ export class PoolFlowApplyReducer extends Reducer {
     // The scope: this pool's claims, minus the deposit account itself. Drawing the target of
     // the transfer to fund the transfer is a no-op that still books a disposal.
     const scopedSources = src.claims
-      .filter(c => c.key !== depositKey)
+      .filter(c => c.key !== targetKey)
       .map(c => ({ key: c.key, sleeves: c.sleeves ?? null }));
     if (!scopedSources.length) return this.newState(state);
 
     let result;
     try {
-      result = this.accountService.replenishSavings(state, depositKey, want, date, { scopedSources });
+      result = this.accountService.replenishSavings(state, targetKey, want, date,
+        { scopedSources, depositAllocation: purchase?.allocation ?? null });
     } catch (e) {
       // A scoped draw does not throw InsufficientFunds by construction, but if a future
       // change makes it, the accruals still have to reach the tax engine — an aborted refill
@@ -96,7 +105,7 @@ export class PoolFlowApplyReducer extends Reducer {
       result = e.partial ?? {};
     }
     const { drawnKeys = [], pendingTaxActions = [], crossBorderTransfers = [] } = result;
-    const balanceActions = [...new Set([...drawnKeys, depositKey])].map(k => new RecordBalanceAction(`${k}.balance`, k));
+    const balanceActions = [...new Set([...drawnKeys, targetKey])].map(k => new RecordBalanceAction(`${k}.balance`, k));
     return this.newState(state, {}, [...balanceActions, ...crossBorderTransfers, ...pendingTaxActions]);
   }
 

@@ -716,6 +716,58 @@ test('LiquidityGraph: a NEGATIVE return threshold survives the control', () => {
   assert.deepStrictEqual(param.value.flows[0].gate, { sourceReturnOver: -0.1 });
 });
 
+test('LiquidityGraph: a RETURN clause offers no basis — it must not read as "(not found)"', () => {
+  // A return clause reads the pool's own prior-year return; there is no second series it
+  // could be measured against, which is why `normalizeGate` REFUSES a `drawdownBasis` on a
+  // gate with no drawdown clause. A fixed two-option list therefore left the cell holding a
+  // value no option matched, and `buildSelect` renders that — correctly, and alarmingly — as
+  // "(not found)", which reads as a saved setting the app has lost.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'offset', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'o2g', from: 'offset', to: 'growth', amount: { fractionOfSource: 0.25 },
+              gate: { targetReturnUnder: -0.1 } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const basis = cell(host, 'gateBasis');
+  assert.strictEqual(basis.value, '');
+  assert.doesNotMatch([...basis.options].map(o => o.textContent).join(' '), /not found/);
+  // …and the reason is on screen rather than left as a blank the author reads as an omission.
+  assert.match([...basis.options].map(o => o.textContent).join(' '), /n\/a/);
+  // Touching an unrelated cell must not invent a basis for it either.
+  type(cell(host, 'priority'), '1', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate, { targetReturnUnder: -0.1 });
+});
+
+test('LiquidityGraph: switching a clause kind re-bases the row both ways', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'offset', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'o2g', from: 'offset', to: 'growth', amount: { fractionOfSource: 0.25 },
+              gate: { sourceDrawdownUnder: 0.05, drawdownBasis: 'INDEX' } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cell(host, 'gateBasis').value, 'INDEX');
+
+  // drawdown → return: the stale INDEX would otherwise sit in a cell whose list no longer
+  // offers it, which is the "(not found)" again, arrived at by editing instead of by loading.
+  pick(cell(host, 'gateKind'), 'targetReturnUnder');
+  const afterReturn = cell(host, 'gateBasis');
+  assert.strictEqual(afterReturn.value, '');
+  assert.doesNotMatch([...afterReturn.options].map(o => o.textContent).join(' '), /not found/);
+  assert.deepStrictEqual(param.value.flows[0].gate, { targetReturnUnder: 0.05 });
+
+  // …and back: a drawdown clause with no basis defaults to BALANCE, which is what the gate
+  // itself does, so the cell agrees with the run rather than showing a blank.
+  pick(cell(host, 'gateKind'), 'targetDrawdownOver');
+  assert.strictEqual(cell(host, 'gateBasis').value, 'BALANCE');
+  assert.deepStrictEqual(param.value.flows[0].gate, { targetDrawdownOver: 0.05 });
+});
+
 test('LiquidityGraph: OR # branches compose, and a per-clause dwell rides on the row', async () => {
   const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
   // The rule design 97 §20.15 was built for, authored the way the app offers it: "within 5%

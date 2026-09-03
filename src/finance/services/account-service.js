@@ -16,7 +16,7 @@ import { computeConversionRecapture } from '../account-rules/us/roth-conversion-
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
-import { rescaleHoldingsToBalance, instrumentOf } from '../holdings/holding-utils.js';
+import { rescaleHoldingsToBalance, instrumentOf, distributeHoldingsCredit } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
 import { disposalTermFields } from '../holdings/holding-period.js';
@@ -364,6 +364,74 @@ export class AccountService extends AssetService {
   // ─── Ledger operations ────────────────────────────────────────────────────
 
   /**
+   * Credit `amount` into a target account, optionally as a PURCHASE of one named sleeve
+   * (design 97 §12.4a).
+   *
+   * With no `allocation` this is `transaction()` and nothing else — the pro-rata credit
+   * every draw has always made, so every pre-existing path is byte-identical.
+   *
+   * With one, the money is not spread across the account's sleeves: it BUYS the named class.
+   * That distinction is not cosmetic. `transaction()`'s credit adds value and basis to the
+   * EXISTING lots in proportion to what they hold, which blends the new money's acquisition
+   * date into lots bought decades earlier — on a disposal path that reads holding periods
+   * (US §1222 short/long, the AU 12-month discount, AU CPI indexation) a purchase booked that
+   * way silently ages itself. `distributeHoldingsCredit` is the seam that already gets this
+   * right for reinvested dividends and wrapper deposits: it opens a dated vintage lot whose
+   * cost basis is the cash spent, and compacts seasoned vintages back down.
+   *
+   * The credit is confined to the lots of the named sleeve and spliced back at the position
+   * of the first one, so the rest of the array — and therefore every FIFO walk over it —
+   * keeps its order.
+   *
+   * @param {object} targetAccount
+   * @param {number} amount      - positive, in the target account's own currency
+   * @param {Date|number} date
+   * @param {string|null} allocation - ALLOCATION class to buy, or null for the plain credit
+   * @param {number} [auCpiLevel=1] - AU CPI level to stamp on the new lot (design 57 §6.3)
+   */
+  _creditTarget(targetAccount, amount, date, allocation = null, auCpiLevel = 1) {
+    if (!allocation) { this.transaction(targetAccount, amount, date); return; }
+
+    const holdings = Array.isArray(targetAccount.holdings) ? targetAccount.holdings : [];
+    const ms       = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
+    const mine     = holdings.filter(h => h?.allocation === allocation);
+    targetAccount.balance = (targetAccount.balance ?? 0) + amount;
+
+    if (mine.length === 0) {
+      // The sleeve does not exist yet — the purchase OPENS it. Built the same way
+      // `_bootstrapDefaultHolding` builds one, because a lot whose rateKey does not match
+      // its allocation is invisible to the return series that is supposed to move it, which
+      // is the failure that would make a dip-buy sit flat for the rest of the run.
+      targetAccount.holdings = [...holdings, new Holding({
+        id:           this._generateHoldingId(),
+        allocation,
+        marketValue:  amount,
+        costBasis:    amount,
+        rateKey:      resolveRateKey(targetAccount.country, allocation, targetAccount.role),
+        purchaseDate: ms != null ? new Date(ms) : null,
+        acquisitionPriceLevel: auCpiLevel,
+        label:        'Pool flow purchase',
+      })];
+      return;
+    }
+
+    const bought = distributeHoldingsCredit(mine, amount, {
+      stateKey:   targetAccount.stateKey ?? 'acct',
+      year:       ms != null ? new Date(ms).getUTCFullYear() : null,
+      purchaseMs: ms,
+      priceLevel: auCpiLevel,
+      label:      'Pool flow purchase',
+    });
+    let placed = false;
+    const next = [];
+    for (const h of holdings) {
+      if (h?.allocation !== allocation) { next.push(h); continue; }
+      if (!placed) { next.push(...bought); placed = true; }
+    }
+    targetAccount.holdings = next;
+  }
+
+  /**
    * Perform a transaction on an account.
    * Positive amount → credit; negative amount → debit.
    *
@@ -709,6 +777,13 @@ export class AccountService extends AssetService {
     const scopedSources = (typeof opts === 'object' && Array.isArray(opts.scopedSources) && opts.scopedSources.length)
       ? opts.scopedSources
       : null;
+    // Design 97 §12.4a — a scoped draw whose CREDIT is a PURCHASE rather than a deposit.
+    // `depositAllocation` names the sleeve of `targetKey` the raised cash becomes, and is
+    // honoured only alongside a scoped source list: it is the pool-flow executor buying into
+    // the book with cash held OUTSIDE it (the offset buying the dip), which is the one caller
+    // that has a sleeve to name. Absent — every other caller — leaves the credit exactly
+    // where it was, `transaction()`'s pro-rata spread, so no existing path moves by a cent.
+    const depositAllocation = (typeof opts === 'object' && scopedSources) ? (opts.depositAllocation ?? null) : null;
     const targetAccount = state[targetKey];
     const country       = targetAccount.country;
     const currency      = targetAccount.currency?.code ?? country;
@@ -919,7 +994,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state, depositAllocation
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -937,7 +1012,7 @@ export class AccountService extends AssetService {
         // `drawSelection` untouched when the entry names none, so an unsequenced run and
         // an unnarrowed entry both stay on the byte-identical path.
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), withSleeveInclude(drawSelection, sleeves), auCpiLevel, state
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), withSleeveInclude(drawSelection, sleeves), auCpiLevel, state, depositAllocation
         );
       }
     } else {
@@ -989,7 +1064,7 @@ export class AccountService extends AssetService {
             const weight = equal ? (1 / avail.length) : (s.amt / total);
             const want = Math.min(target * weight, remaining);
             const got  = this._drawPenaltyFree(
-              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state
+              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection, auCpiLevel, state, depositAllocation
             );
             remaining     -= got;
             drawnThisPass += got;
@@ -1152,7 +1227,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (!isDeferredTaxable(account)) continue;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel, state
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection, auCpiLevel, state, depositAllocation
         );
       }
     }
@@ -1498,7 +1573,7 @@ export class AccountService extends AssetService {
    * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
    * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null, auCpiLevel = 1, state = null) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null, auCpiLevel = 1, state = null, depositAllocation = null) {
     if (want < 1e-9) return 0;
     // Gross up the source-side need by the fee so a full draw nets `want` at the
     // target after the wire cost is paid.
@@ -1558,7 +1633,7 @@ export class AccountService extends AssetService {
         ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection, terms: termCtx, securities: state?.securities ?? null })
         : null;
 
-      this.transaction(targetAccount, +credited, date);
+      this._creditTarget(targetAccount, +credited, date, depositAllocation, auCpiLevel);
       this.transaction(account,       -withdraw, date);
       pushTransfer(account, key, withdraw, credited, fee); // journal the cross-currency leg (no-op same-ccy)
 
@@ -1740,7 +1815,7 @@ export class AccountService extends AssetService {
       const withdraw = Math.min(wantSrc, available); // source currency
       const credited = withdraw * fx - fee;          // target currency, net of fee
       if (credited <= 0) return 0;
-      this.transaction(targetAccount, +credited, date);
+      this._creditTarget(targetAccount, +credited, date, depositAllocation, auCpiLevel);
       this.transaction(account,       -withdraw, date);
       pushTransfer(account, key, withdraw, credited, fee);
       account.contributionBasis -= withdraw;
