@@ -43,6 +43,19 @@ import { identityGroupOf } from '../holdings/security.js';
  *   purpose           - 'LOSS' | 'GAIN'  (informational; no branch on this field)
  *   residency         - 'US' | 'AU'  (passed to STOCK_WITHDRAWAL_TAX)
  */
+/**
+ * `base`, or `base-2`, `base-3`… — the first form no lot in `holdings` already uses.
+ *
+ * Mirrors the rebalancer's `_freshHoldingId`; deterministic, so replay is unaffected.
+ */
+function _freshLotId(holdings, base) {
+  const existing = new Set((holdings ?? []).map(h => h?.id).filter(Boolean));
+  if (!existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
 export class StockHarvestApplyReducer extends Reducer {
   static type        = 'StockHarvestApplyReducer';
   static description = 'Tax-harvest sell+rebuy: signed realized gain/loss on a target holding, immediate substitute rebuy, chains STOCK_WITHDRAWAL_TAX with the signed gain.';
@@ -149,7 +162,14 @@ export class StockHarvestApplyReducer extends Reducer {
       // position-level fields a fresh buy inherits; every instrument field comes from the
       // security it names, so nothing about the sold instrument rides along.
       const fresh = promoteToUnitised({
-        id:            `tlh-${substituteSecurityId}-${toMs(date) ?? 0}`,
+        // Disambiguated against the account's own lots, exactly as the rebalancer's
+        // `_freshHoldingId` is. A harvest can fire more than once on one account on one day
+        // — several source lots, one policy — and `tlh-<security>-<ms>` is the SAME id each
+        // time. Two lots sharing an id is not cosmetic: `HoldingTransactReducer` matches on
+        // it, so each one's growth, dividends and coupons land on whichever it finds first
+        // and the other's are lost or doubled. Found by the `wash-sale-two-books` golden
+        // (design 94 §8.1p), which is the first fixture to harvest twice in a day.
+        id:            _freshLotId(afterSell, `tlh-${substituteSecurityId}-${toMs(date) ?? 0}`),
         allocation:    source.allocation,
         rateKey:       sec?.rateKey ?? source.rateKey ?? null,
         securityId:    substituteSecurityId,
@@ -275,6 +295,11 @@ export class StockHarvestApplyReducer extends Reducer {
         ...(state.washPendingLosses ?? []),
         {
           ms:         toMs(date) ?? 0,
+          // §1223(3), for a TAXABLE replacement matched later (design 94 §8.1p): the
+          // replacement's holding period includes the SOLD lot's, so the resolver needs to
+          // know how long these shares were held. Null when the source carries no date —
+          // the basis still transfers, the period simply does not tack.
+          heldFromMs: toMs(source.purchaseDate) ?? null,
           group,
           units:      +unitsLeft.toFixed(6),
           shortLoss:  lossShort,

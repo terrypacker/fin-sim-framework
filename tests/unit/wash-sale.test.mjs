@@ -132,7 +132,212 @@ describe('resolving a return\'s wash sales (§8.1i)', () => {
 
   test('nothing pending ⇒ nothing resolved, and no allocation', () => {
     assert.deepEqual(resolve({ securities: REGISTRY }),
-      { disallowedShort: 0, disallowedLong: 0, ledger: [], remaining: [] });
+      { disallowedShort: 0, disallowedLong: 0, ledger: [], remaining: [], basisAdjustments: [] });
+  });
+});
+
+describe('§1091(d) + §1223(3): a TAXABLE replacement DEFERS the loss (§8.1p)', () => {
+  // Rev. Rul. 2008-5 is the exception, not the rule. §1091(d)'s ordinary case moves the
+  // disallowed loss into the replacement's BASIS — the taxpayer keeps it and gets it back on
+  // the eventual sale — and §1223(3) tacks the sold shares' holding period onto it so a wash
+  // can never turn a long-term position into a short-term one. Both are cross-ACCOUNT here:
+  // the harvester's own same-day rebuy is settled on the spot by §8.1j.
+
+  /** A US brokerage holding `units` of `securityId`, bought `dayOffset` days from the sale. */
+  const brokerageWith = (securityId, units, dayOffset, over = {}) => ({
+    role: ACCOUNT_ROLES.US_STOCK, country: 'US', balance: units * 100,
+    holdings: [{
+      id: 'brk-lot', securityId, allocation: 'EQUITY', units, pricePerUnit: 100,
+      marketValue: units * 100, costBasis: units * 100,
+      purchaseDate: new Date(SALE + dayOffset * DAY), ...over,
+    }],
+  });
+
+  const withBrokerage = ({ pending, account, brokerage }) => ({
+    securities: REGISTRY,
+    washPendingLosses: pending,
+    ...(account   ? { iraAccount: account }        : {}),
+    ...(brokerage ? { taxableAccount: brokerage }  : {}),
+  });
+
+  const file = (st) => {
+    const wash = resolve(st);
+    // The apply reducer is what writes basis, so the assertion runs through it rather than
+    // over the resolver's report — the report is a plan, and a plan that no reducer honours
+    // is the shape of gap §8.1o was written about.
+    const action = { type: 'US_TAX_FILE_APPLY', taxYear: 2032, delta: 0,
+                     disallowed: wash.disallowedShort + wash.disallowedLong,
+                     ledger: wash.ledger, remaining: wash.remaining,
+                     basisAdjustments: wash.basisAdjustments };
+    return { wash, next: new UsTaxFileApplyReducer().reduce(st, action) };
+  };
+
+  test('the loss is disallowed, and lands in the replacement lot\'s basis', () => {
+    const st = withBrokerage({ pending: [entry()], brokerage: brokerageWith('sec-emp', 100, 1) });
+    const { wash, next } = file(st);
+
+    assert.equal(wash.disallowedLong, 5_000, '§1091(a) disallows it either way');
+    assert.equal(wash.ledger[0].deferred, 5_000, 'and §1091(d) says where it went');
+    // 100 units at 100 = 10,000 of basis, plus the 5,000 the sale could not deduct.
+    assert.equal(next.taxableAccount.holdings[0].costBasis, 15_000);
+  });
+
+  test('an IRA replacement DESTROYS it — the basis goes nowhere', () => {
+    // The contrast that makes the branch above meaningful. Same sale, same shares, same
+    // disallowance; the money simply ceases to exist.
+    const st = withBrokerage({ pending: [entry()], account: iraWith('sec-emp', 100, 1) });
+    const { wash, next } = file(st);
+    assert.equal(wash.disallowedLong, 5_000);
+    assert.equal(wash.ledger[0].deferred, undefined, 'nothing is deferred');
+    assert.deepEqual(wash.basisAdjustments, []);
+    assert.equal(next.iraAccount.holdings[0].costBasis, 10_000, 'Rev. Rul. 2008-5: not increased');
+  });
+
+  test('§1223(3): the replacement is back-dated by the sold shares\' holding period', () => {
+    // Sold after 400 days held; replaced 10 days later. The replacement must read as having
+    // been held those 400 days too, or the wash would have converted long-term into short.
+    const st = withBrokerage({
+      pending:   [entry({ heldFromMs: SALE - 400 * DAY })],
+      brokerage: brokerageWith('sec-emp', 100, 10),
+    });
+    const { next } = file(st);
+    const tacked = next.taxableAccount.holdings[0].purchaseDate.getTime();
+    assert.equal(tacked, SALE + 10 * DAY - 400 * DAY);
+  });
+
+  test('no holding period on the entry ⇒ basis still moves, the date does not', () => {
+    // An entry written before the sold lot had a date. The deferral is the money and must
+    // not be forfeited over a missing field; the tack is the bonus and is simply skipped.
+    const st = withBrokerage({
+      pending:   [entry({ heldFromMs: null })],
+      brokerage: brokerageWith('sec-emp', 100, 1),
+    });
+    const { next } = file(st);
+    assert.equal(next.taxableAccount.holdings[0].costBasis, 15_000);
+    assert.equal(next.taxableAccount.holdings[0].purchaseDate.getTime(), SALE + DAY);
+  });
+
+  test('a PARTIAL match splits the lot: only the matched shares take the basis', () => {
+    // 100 sold, 250 bought. §1.1091-1(d) matches 100 of the 250, and the other 150 are an
+    // ordinary purchase — raising their basis too would hand the taxpayer a deduction
+    // nobody paid for, and tacking their date would age shares that were never sold.
+    const st = withBrokerage({ pending: [entry()], brokerage: brokerageWith('sec-emp', 250, 1) });
+    const { next } = file(st);
+    const lots = next.taxableAccount.holdings;
+    assert.equal(lots.length, 2, 'the lot bifurcates');
+
+    const matched   = lots.find(h => h.id === 'brk-lot-1091');
+    const untouched = lots.find(h => h.id === 'brk-lot');
+    assert.equal(+matched.units.toFixed(6), 100);
+    assert.equal(+untouched.units.toFixed(6), 150);
+    // The lot's 25,000 of basis splits 100/250 : 150/250 — 10,000 and 15,000 — and only the
+    // matched half takes the 5,000 the sale could not deduct.
+    assert.equal(matched.costBasis, 10_000 + 5_000);
+    assert.equal(untouched.costBasis, 15_000);
+    // Value is conserved by the split — only BASIS moved.
+    assert.equal(+(matched.marketValue + untouched.marketValue).toFixed(2), 25_000);
+  });
+
+  test('the shares are still consumed across kinds — one pool, two consequences', () => {
+    // 100 sold; 60 replaced in an IRA and 100 in the brokerage, the IRA's bought first. Per
+    // §1.1091-1(c)/(d) acquisition order, the IRA takes 60 and the brokerage 40 — so 60% of
+    // the loss is destroyed and 40% is deferred, and the ledger says which is which.
+    const st = withBrokerage({
+      pending:   [entry()],
+      account:   iraWith('sec-emp', 60, 1),
+      brokerage: brokerageWith('sec-emp', 100, 5),
+    });
+    const { wash, next } = file(st);
+    assert.equal(wash.disallowedLong, 5_000, 'the whole loss is disallowed either way');
+    assert.equal(wash.ledger[0].deferred, 2_000, '40 of the 100 shares were taxable');
+    const matched = next.taxableAccount.holdings.find(h => h.id === 'brk-lot-1091');
+    assert.equal(+matched.units.toFixed(6), 40);
+    assert.equal(matched.costBasis, 4_000 + 2_000);
+  });
+
+  test('a replacement SOLD before April: the disallowance stands, the deferral is tallied', () => {
+    // The cost of resolving four months late. §1091(a) does not depend on still holding the
+    // replacement, so the loss is gone from the return either way — but there is no lot left
+    // to carry the basis, and that must be visible rather than silently dropped.
+    const st = withBrokerage({ pending: [entry()], brokerage: brokerageWith('sec-emp', 100, 1) });
+    const wash = resolve(st);
+    const gone = { ...st, taxableAccount: { ...st.taxableAccount, holdings: [] } };
+    const next = new UsTaxFileApplyReducer().reduce(gone, {
+      type: 'US_TAX_FILE_APPLY', taxYear: 2032, delta: 0, disallowed: 5_000,
+      ledger: wash.ledger, remaining: wash.remaining, basisAdjustments: wash.basisAdjustments,
+    });
+    assert.equal(next.washDeferralUnplaced, 5_000);
+  });
+
+  test('an AU-domiciled brokerage is NOT a replacement — the AU basis is measured differently', () => {
+    // `costBasis` is the origin/US basis and `costBaseByCountry.AU` is Australia's own
+    // (s855-45). There is no §1091 in Australia, so a US rule must not raise a basis the AU
+    // return reads. Deliberate under-disallowance, same direction as the 401(k) exclusion.
+    const au = { ...brokerageWith('sec-emp', 100, 1), country: 'AU', role: ACCOUNT_ROLES.AU_STOCK };
+    const st = withBrokerage({ pending: [entry()], brokerage: au });
+    const { wash } = file(st);
+    assert.equal(wash.disallowedLong, 0, 'no match at all — the loss stands');
+    assert.deepEqual(wash.basisAdjustments, []);
+  });
+});
+
+describe('replacement shares are consumed — §1.1091-1(e) (§8.1o)', () => {
+  // "The acquisition of any share of stock or any security which results in the
+  // nondeductibility of a loss ... shall be disregarded in determining the deductibility of
+  // any other loss." One IRA purchase can therefore wash ONE sale of the same size, not every
+  // sale in the ledger — and until §8.1o the resolver re-counted the same shares for each
+  // pending entry it saw.
+  const twoSales = (over = {}) => [
+    entry({ stateKey: 'brokerage', ...over }),
+    entry({ stateKey: 'usStockAccount', ...over }),
+  ];
+
+  test('100 replacement shares wash ONE 100-share sale, not both', () => {
+    const r = resolve(stateWith({ pending: twoSales(), account: iraWith('sec-emp', 100, 1) }));
+    assert.equal(r.disallowedLong, 5_000, 'the second sale has nothing left to be washed by');
+    assert.equal(r.ledger.length, 1);
+  });
+
+  test('200 replacement shares wash both', () => {
+    const r = resolve(stateWith({ pending: twoSales(), account: iraWith('sec-emp', 200, 1) }));
+    assert.equal(r.disallowedLong, 10_000);
+    assert.equal(r.ledger.length, 2);
+  });
+
+  test('150 shares wash the first sale whole and half the second', () => {
+    // §1.1091-1(c): the acquired shares are matched with an equal number of the shares sold.
+    const r = resolve(stateWith({ pending: twoSales(), account: iraWith('sec-emp', 150, 1) }));
+    assert.equal(r.disallowedLong, 7_500);
+    assert.deepEqual(r.ledger.map(e => e.matchedFraction), [1, 0.5]);
+  });
+
+  test('§1.1091-1(b): the EARLIEST disposition has first call on the shares', () => {
+    // Written to the ledger newest-first, resolved oldest-first. The rebalancer writes on
+    // 1 January and the harvester on 31 December, so both orders occur in one run.
+    const late  = entry({ ms: SALE - 5 * DAY,  stateKey: 'late'  });
+    const early = entry({ ms: SALE - 25 * DAY, stateKey: 'early' });
+    // Bought between the two sales, so it is inside BOTH 61-day windows; only the earlier
+    // disposition may have it.
+    const r = resolve(stateWith({ pending: [late, early],
+                                  account: iraWith('sec-emp', 100, -15) }));
+    assert.equal(r.ledger.length, 1);
+    assert.equal(r.ledger[0].stateKey, 'early');
+  });
+
+  test('a different identity group draws on its own shares only', () => {
+    const mixed = [entry({ group: 'sec-emp' }), entry({ group: 'sec-alt' })];
+    const r = resolve(stateWith({ pending: mixed, account: iraWith('sec-emp', 100, 1) }));
+    assert.equal(r.disallowedLong, 5_000);
+    assert.equal(r.ledger[0].group, 'sec-emp');
+  });
+
+  test('an entry filed NEXT year consumes nothing this year', () => {
+    // It is carried to its own return, where the same lots are re-tested — the shares are not
+    // spent here on a loss this filing is not allowed to disallow.
+    const later = entry({ ms: Date.UTC(2033, 5, 1), stateKey: 'later' });
+    const r = resolve(stateWith({ pending: [later, entry()], account: iraWith('sec-emp', 100, 1) }));
+    assert.equal(r.disallowedLong, 5_000);
+    assert.deepEqual(r.remaining, [later]);
   });
 });
 

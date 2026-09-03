@@ -59,10 +59,15 @@ export const US_TAX = {
       // due on the amendment; `disallowed` is the §1091 loss that caused it. Declared because
       // pickPayload keeps only declared fields, and a tax correction nobody can drill from the
       // journal is the shape this repo has been bitten by.
+      // `basisAdjustments` — §8.1p's §1091(d) transfers: which lot each disallowed dollar was
+      // moved INTO, and the §1223(3) date it was tacked to. Undeclared it was dropped from
+      // the journal while still being applied to state, which is the worst of both: the
+      // deferral happened and nothing could be drilled to show where it went.
       { type: 'US_TAX_FILE_APPLY', cc: 'US',
         fields: { taxYear: ValueType.number(), delta: ValueType.currency('USD'),
                   disallowed: ValueType.currency('USD'), ledger: ValueType.any(),
-                  remaining: ValueType.any(), capitalLoss: ValueType.any() } },
+                  remaining: ValueType.any(), capitalLoss: ValueType.any(),
+                  basisAdjustments: ValueType.any() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can

@@ -287,7 +287,8 @@ export class RebalanceToTargetApplyReducer extends Reducer {
  *   consumed. That under-writes rather than over-disallows, which is the safe direction, and it
  *   cannot arise for a lot that names a security: the migration unitises those (§9.2).
  *
- * @returns {object[]} zero or more `{ ms, group, units, shortLoss, longLoss, stateKey }`
+ * @returns {object[]} zero or more
+ *          `{ ms, heldFromMs, group, units, shortLoss, longLoss, stateKey }`
  */
 function _washPendingEntries({ allocation, country, matching, fifo, state, stateKey, ms }) {
   if (allocation !== ALLOCATION.EQUITY || country === 'AU' || ms == null) return [];
@@ -313,9 +314,15 @@ function _washPendingEntries({ allocation, country, matching, fifo, state, state
     if (!(units > 0) || proceeds <= 0) continue;
     const lotLoss = basis - proceeds;                 // positive ⇒ this lot sold at a loss
     if (lotLoss <= 0) continue;
-    const rec = byGroup.get(group) ?? { units: 0, loss: 0 };
+    const rec = byGroup.get(group) ?? { units: 0, loss: 0, heldFromMs: null };
     rec.units += units;
     rec.loss  += lotLoss;
+    // §1223(3) (design 94 §8.1p) — how long the sold shares were held, which a TAXABLE
+    // replacement tacks onto its own period. A leg consumes several lots, so the EARLIEST
+    // is taken: it is the FIFO order the sale actually followed, and it is the reading that
+    // cannot shorten a holding period the taxpayer really had.
+    const heldMs = toMs(h.purchaseDate);
+    if (heldMs != null) rec.heldFromMs = rec.heldFromMs == null ? heldMs : Math.min(rec.heldFromMs, heldMs);
     byGroup.set(group, rec);
     totalLoss += lotLoss;
   }
@@ -332,7 +339,8 @@ function _washPendingEntries({ allocation, country, matching, fifo, state, state
     const shortLoss = +(lossShort * share).toFixed(2);
     const longLoss  = +(lossLong  * share).toFixed(2);
     if (shortLoss <= 0 && longLoss <= 0) continue;
-    out.push({ ms, group, units: +rec.units.toFixed(6), shortLoss, longLoss, stateKey });
+    out.push({ ms, heldFromMs: rec.heldFromMs, group, units: +rec.units.toFixed(6),
+               shortLoss, longLoss, stateKey });
   }
   return out;
 }

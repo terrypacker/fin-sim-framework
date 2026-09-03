@@ -13,6 +13,7 @@ import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { TaxSettleService }  from '../../tax-settle-service.js';
 import { PENDING_RETURN_KEY } from '../tax-settle-classes.js';
 import { resolveWashSales }  from './wash-sale.js';
+import { resize }            from '../../holdings/holding-utils.js';
 
 /**
  * FILING the return, as an event distinct from the tax year ENDING (design 94 §8.1l).
@@ -113,6 +114,9 @@ export class UsTaxFileHandler extends HandlerEntry {
       disallowed,
       ledger:    wash.ledger,
       remaining: wash.remaining,
+      // §1091(d) — where the disallowed loss GOES when the replacement was taxable
+      // (design 94 §8.1p). Empty for a purely sheltered wash, which destroys it instead.
+      basisAdjustments: wash.basisAdjustments ?? [],
       // The corrected §1212(b) pools replace what the settle wrote. Safe because nothing
       // between 31 December and 15 April touches them: they move only at a US settle.
       capitalLoss: asAmended.capitalLoss ?? null,
@@ -154,6 +158,9 @@ export class UsTaxFileApplyReducer extends Reducer {
         ...action.ledger.map(e => ({ ...e, filedYear: action.taxYear })),
       ];
     }
+    // §1091(d) + §1223(3) — the deferral half (design 94 §8.1p).
+    const deferral = _applyBasisTransfers(state, action.basisAdjustments);
+    Object.assign(patch, deferral.patch);
     const cl = action.capitalLoss;
     if (cl?.closingShort != null) patch.usShortTermCapitalLossCarryforward = +cl.closingShort.toFixed(2);
     if (cl?.closingLong  != null) patch.usLongTermCapitalLossCarryforward  = +cl.closingLong.toFixed(2);
@@ -168,4 +175,118 @@ export class UsTaxFileApplyReducer extends Reducer {
       ? this.newState(next, {}, [{ type: 'US_TAX_PAYMENT_DEBIT', amount: action.delta }])
       : this.newState(next);
   }
+}
+
+/**
+ * §1091(d) and §1223(3): move each disallowed loss into the taxable replacement it was
+ * matched against (design 94 §8.1p).
+ *
+ * ── why this happens HERE and not at the sale ────────────────────────────────
+ *
+ * The harvester's own wash is settled on the spot (§8.1j) because it sells and rebuys in one
+ * action, in one account, on one day — both lots in hand. Every other wash in this engine is
+ * cross-account: the rebalancer sells in the taxable book and a different action, on a
+ * different account, buys the replacement, with no ordering guarantee between them. So the
+ * pairing is only knowable once the window has closed, which is what the April filing IS.
+ *
+ * ── the cost of resolving late, stated rather than discovered ────────────────
+ *
+ * Four months pass between the sale and the filing, and the replacement lot may have been
+ * sold, swept or compacted in the meantime. A basis increase with nowhere to land is a
+ * deferral silently lost, so it is COUNTED: `washDeferralUnplaced` accumulates the dollars
+ * that found no lot. It should normally be zero; a non-zero value is not a crash, it is the
+ * model telling you the deferral it could not honour. The disallowance itself stands either
+ * way — §1091(a) does not depend on the taxpayer still holding the replacement.
+ *
+ * ── partial matches split the lot ────────────────────────────────────────────
+ *
+ * A replacement lot can be larger than the shares matched against it, and only the matched
+ * shares take the basis and the tacked date. Raising the whole lot's basis would give
+ * unmatched shares a basis nobody paid for; tacking the whole lot's date would age shares
+ * that were never sold. So the lot is bifurcated with `resize`, which conserves value and
+ * basis exactly, and the matched half carries the adjustment.
+ *
+ * @returns {{ patch: object }} account patches, plus the unplaced tally when there is one
+ */
+function _applyBasisTransfers(state, adjustments) {
+  if (!Array.isArray(adjustments) || adjustments.length === 0) return { patch: {} };
+  // Copy-on-write, once per account: the source array is never touched, and two adjustments
+  // landing on one account both see the other's work (design 94 §8.1o's live-alias trap in
+  // miniature — a second adjustment reading `state` again would discard the first).
+  const touched = new Map();
+  const holdingsFor = (stateKey) => {
+    if (!touched.has(stateKey)) {
+      const hs = state[stateKey]?.holdings;
+      if (!Array.isArray(hs)) return null;
+      touched.set(stateKey, [...hs]);
+    }
+    return touched.get(stateKey);
+  };
+  let unplaced = 0;
+
+  for (const adj of adjustments) {
+    const holdings = holdingsFor(adj.stateKey);
+    if (holdings == null) { unplaced += adj.amount; continue; }
+    const i = holdings.findIndex(h => h?.id === adj.holdingId);
+    if (i < 0) { unplaced += adj.amount; continue; }
+
+    const lot   = holdings[i];
+    const units = lot.units ?? 0;
+    // Whole-lot match (or a lot with no unit count to split on): adjust it in place.
+    if (!(units > 0) || adj.units >= units - 1e-9) {
+      holdings[i] = _withTransfer(lot, adj);
+    } else {
+      const f = adj.units / units;
+      // The matched shares carry the transfer; the rest is the same lot, smaller. A distinct
+      // id is mandatory — HoldingTransactReducer matches on it, so two lots sharing one id
+      // would cross-credit each other's earnings. Disambiguated because one lot can be split
+      // TWICE in a filing: two entries may each match part of it, and the second split would
+      // otherwise mint the same `-1091` id as the first.
+      holdings[i] = _withTransfer({ ...resize(lot, f), id: _freshLotId(holdings, `${lot.id}-1091`) }, adj);
+      holdings.splice(i + 1, 0, resize(lot, 1 - f));
+    }
+  }
+
+  const patch = {};
+  for (const [stateKey, holdings] of touched) {
+    patch[stateKey] = { ...state[stateKey], holdings };
+  }
+  // Absent when nothing was unplaced, so a run that never loses a deferral gains no key.
+  if (unplaced > 0) {
+    patch.washDeferralUnplaced = +((state.washDeferralUnplaced ?? 0) + unplaced).toFixed(2);
+  }
+  return { patch };
+}
+
+/** `base`, or the first `base-2`, `base-3`… no lot already uses. Deterministic, so replay holds. */
+function _freshLotId(holdings, base) {
+  const existing = new Set((holdings ?? []).map(h => h?.id).filter(Boolean));
+  if (!existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+/**
+ * One lot, with the disallowed loss added to its basis and its holding period tacked back.
+ *
+ * `costBasis` is the origin/US basis. `costBaseByCountry.AU` is Australia's own and is left
+ * ALONE: there is no §1091 in Australia (§8.1d), so an AU disposal must still measure the
+ * loss the taxpayer really has. Only a US entry in that map — if one is ever written — moves
+ * with the US basis.
+ */
+function _withTransfer(lot, adj) {
+  const out = { ...lot, costBasis: +((lot.costBasis ?? 0) + adj.amount).toFixed(2) };
+  if (lot.costBaseByCountry?.US != null) {
+    out.costBaseByCountry = { ...lot.costBaseByCountry,
+                              US: +(lot.costBaseByCountry.US + adj.amount).toFixed(2) };
+  }
+  // §1223(3). Null when the sold lot carried no acquisition date, and never moved FORWARD:
+  // tacking can only lengthen a holding period, never shorten one.
+  if (adj.tackMs != null) {
+    const current = lot.purchaseDate instanceof Date ? lot.purchaseDate.getTime()
+                  : lot.purchaseDate != null ? new Date(lot.purchaseDate).getTime() : null;
+    if (current == null || adj.tackMs < current) out.purchaseDate = new Date(adj.tackMs);
+  }
+  return out;
 }

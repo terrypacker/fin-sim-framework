@@ -22,6 +22,10 @@
  * These pin the sell leg's new entries. The last test is the end-to-end one: it drives the
  * SHIPPED `resolveWashSales` over the state the reducer produced, so the assertion is about what
  * the taxpayer's return actually loses rather than about the shape of a ledger row.
+ *
+ * It stops at the resolver. `wash-sale-filing-composition.test.mjs` (§8.1o) carries the same
+ * fact pattern the rest of the way — classifier, settle, April filing — and asserts the balance
+ * due, which is the claim this section actually makes.
  */
 
 import { test } from 'node:test';

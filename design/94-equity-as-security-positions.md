@@ -1747,7 +1747,8 @@ go on the payload, because the payload was never the right seam.
    §8.1j's named gap and carries the same cost — it needs a replacement lot located later to
    write basis onto. It is a timing effect; this one is permanent. The permanent half is closed
    and §8.1j's entry stands, now widened to name the rebalancer as well as the 1-January
-   neighbour.
+   neighbour. **Reachability under the shipped default location policy, and the seam it would
+   need, are worked out in §8.1o; the branch itself is BUILT at §8.1p.**
 
 5. **The entry is dated `purchaseMs`, not `eventMs`** — the same date, through the same fallback
    chain, that the buy legs stamp on the replacement lot. §1091's window is ±30 days, so a sale
@@ -1771,7 +1772,8 @@ consumed, and no entry is written — a green-looking fixture measuring nothing.
 - **Double-matching.** §1.1091-1(e) says shares that disallowed one loss are disregarded for
   another. §8.1j already nets its on-the-spot disallowance out of the §8.1i entry; a rebalance
   entry is separate shares and should compose, but the two writers now share one ledger and that
-  has to be tested rather than assumed.
+  has to be tested rather than assumed. **Tested at §8.1o — and it failed: replacement shares
+  were counted afresh for every entry and never consumed.**
 - **Over-disallowance from innocent replacements.** `_shelteredReplacements` counts *every*
   IRA/Roth equity lot bought in the window — an ordinary contribution or a rebalance internal to
   the wrapper, not only a relocation. That is already true for harvester entries; the rebalancer's
@@ -1808,6 +1810,295 @@ If the disallowance is real and unmodelled, **the LOCATED planner books a tax be
 down year in which it relocates a class into a covered wrapper**, whether or not anyone ever
 authors a feature in this space. That is a correctness question about a default policy, not an
 optional lever — which is what makes it worth a section rather than a backlog line.
+
+#### 8.1o Two writers, one ledger — the double-match, and the filing tie  ✅ (2026-09-02)
+
+**Status**: §8.1n's two named residuals, taken in turn. The test gap is closed; a defect the
+gap was hiding is **found and fixed**; the §1091(d) taxable branch is **measured for
+reachability and specified** below, and **built at §8.1p**. The reason no existing golden
+moved was itself a finding — the whole §1091 path had no whole-state coverage — and the
+`wash-sale-harvest` golden added at the end of this section closes it. 5,958 unit + 1,250 viz
+tests green.
+
+##### The gap §8.1n admitted, restated precisely
+
+> My tests cover reducer → resolver, not reducer → April filing → assessed delta.
+
+Between `resolveWashSales` returning a number and a taxpayer paying one there are three more
+pieces, each with its own suite and **none of them wired to the others by any test**:
+
+| link | what has to hold | whose suite |
+|---|---|---|
+| the classifier | `STOCK_WITHDRAWAL_TAX` books the rebalancer's SIGNED loss into `usCapitalGainsYTD` | design 90 §4 |
+| the settle | schedules the April filing AND snapshots the return's inputs, both gated on the same `washPendingLosses` the sell leg just wrote | §8.1l/m |
+| the filing | recomputes the filed year with the loss removed, and assesses the difference | §8.1l/m |
+
+Each link is asserted somewhere against a HAND-BUILT input. Nothing asserted that the output
+of one is a valid input to the next — and that is exactly the shape of defect the composition
+hides, because every suite stays green while the chain delivers zero.
+
+`tests/unit/wash-sale-filing-composition.test.mjs` runs the whole chain over one state object:
+rebalance sell → classify the chained tax action → 31-December settle (schedule + snapshot) →
+15-April filing → apply → payment. It asserts on the balance due and the §1212(b) pools rather
+than on any intermediate shape. Stubbing `_washPendingEntries` back to its pre-§8.1n behaviour
+fails three of its four tests, which is the working-detector check design 90 §10 asks for.
+
+##### What the composition test found on its way through
+
+The end-to-end arm exposes something the resolver-level assertion could not see, because it is
+a property of the RETURN and not of the ledger: **in a year with no offsetting gains, the
+disallowance is mostly not cash.** §1211(b) had let only the statutory ordinary-income
+allowance through; §1212(b) carried the rest. So the April filing claws back a small payment
+and **deletes the carryforward pool** — the money is real but it moves as a pool that is not
+there next year, not as a bill. In a year with gains to absorb, the same disallowance is
+charged at the full long-term rate immediately. Both arms are pinned, because a test that only
+ever measured the first would read "the wash sale is worth almost nothing" and a test that only
+measured the second would overstate it by an order of magnitude.
+
+##### The defect the gap was hiding: replacement shares were never consumed
+
+§8.1n listed double-matching first among "three things to be careful of", and said the two
+writers now sharing one ledger "has to be tested rather than assumed". Tested, it fails.
+
+`resolveWashSales` computed, for each pending entry independently, the total replacement units
+in its group inside the window. Nothing was deducted. So **one IRA purchase disallowed a
+same-sized loss in EVERY pending entry naming its group** — two equal sales lost twice the
+replacement's worth of loss to a lot that can only cover one of them. The over-disallowance is
+bounded only by how many losses the year realized, and it always runs against the taxpayer.
+
+§1.1091-1(e), verbatim from `docs/us-tax/CFR-26-1.1091-1-Wash-Sales.txt`:
+
+> The acquisition of any share of stock or any security which results in the nondeductibility
+> of a loss under the provisions of this section shall be disregarded in determining the
+> deductibility of any other loss.
+
+The same regulation supplies the ordering the fix needs, which is why this is a transcription
+rather than a judgement call:
+
+- **(b)** where more than one loss is claimed in the taxable year, the section is applied to
+  them "in the order in which the stock or securities ... were disposed of (beginning with the
+  earliest disposition)";
+- **(c)/(d)** acquisitions are matched "in accordance with the order of their acquisition
+  (beginning with the earliest acquisition)".
+
+So: replacement lots carry a remaining count, oldest acquisition first; entries are resolved
+oldest disposition first; each entry takes only what earlier entries left. (b)'s same-day
+tie-break — order of ORIGINAL acquisition of the shares sold — is not reachable, because an
+entry records the sale and not the sold lot's purchase date; a stable sort keeps same-day
+entries in the order the reducers wrote them, which is their sale order within the day. Stated
+rather than hidden, and it can only matter when one day's sales exceed the replacement pool.
+
+An entry belonging to a LATER year consumes nothing: it is carried to its own filing, where the
+same lots are re-tested. That is a consequence of §8.1l's per-year resolution, and it means a
+replacement lot can still be counted once in each of two filings — the same seasoned-lot
+limitation §8.1i already records, now with a second way to reach it.
+
+**Why it was latent.** With the harvester as the only writer, entries are one sale per harvest
+and a book that harvests once a year has nothing to collide with. §8.1n added a writer whose
+legs consume every lot of an allocation in an account, and a semiannual rebalance plus a
+December harvest puts several same-group entries into one filing. The pre-existing bug became
+reachable at the moment the ledger's second writer landed — which is the general shape worth
+remembering: **widening who writes to a shared ledger re-prices every assumption the ledger's
+reader made while it had one writer.**
+
+Six tests in `wash-sale.test.mjs` ("replacement shares are consumed"). Three of them fail
+against the old resolver; the other three (whole match, per-group isolation, later-year
+carry) pass either way and are there to pin that the fix did not over-correct.
+
+##### The §1091(d) taxable branch — reachable, and still open  *(built at §8.1p)*
+
+§8.1n scoped itself to the sheltered branch and left the taxable one as §8.1j's standing gap.
+It is **reachable under the shipped default**: `DEFAULT_LOCATION_POLICY` ranks EQUITY as Roth,
+then the US taxable book, then the AU taxable book — so a relocation can sell equity in one
+TAXABLE account and buy it in another, on the same day, in the same identity group. It is not
+reachable within ONE account, because a rebalance never sells and buys the same allocation
+there.
+
+Why it is not closed here, stated as a cost rather than a preference:
+
+1. **The seam that made §8.1n cheap does not exist for it.** The harvester's immediate wash
+   (§8.1j) works because sell and rebuy are one action in one account, so both lots are in
+   hand. §8.1n's sheltered case needs no basis write-back at all. The taxable case needs BOTH
+   halves — a disallowance and a §1091(d) basis increase with a §1223(3) holding-period
+   tack-on — and the replacement is established by a DIFFERENT action, on a different account,
+   whose ordering within the day is not guaranteed.
+2. **So it has to resolve late, and a late resolution can miss its target.** At the April
+   filing the disallowed amount and its group are known, but the lot it must be written onto
+   may have been sold, split, compacted or swept in the intervening months. A basis increase
+   with nowhere to land is a silent loss of the deferral — a wrong number that still balances,
+   which is the failure mode this design keeps naming.
+3. **It is timing, not money.** The permanent half is closed. This half defers a loss and gives
+   it back on the eventual sale; its value is the time cost of the deferral, not the loss.
+
+The seam, if it is built: the sell leg already writes an entry with group, units and character.
+A taxable §1091(d) needs (a) `_shelteredReplacements`' taxable sibling, restricted to lots the
+run can still identify at filing time, and (b) a write-back step in `UsTaxFileApplyReducer`
+that raises the surviving replacement lot's `costBasis` by the disallowed amount and back-dates
+its `purchaseDate` to the sold lot's, exactly as the harvester's immediate branch does. Item
+(b) is where the risk is, and it should not be attempted without a conservation check: the
+disallowed dollars must appear in some lot's basis or be explicitly recorded as forfeited.
+
+**Built at §8.1p, on that seam, with that conservation check** — `washDeferralUnplaced` is the
+"explicitly recorded as forfeited" half. Read §8.1p for what the fact pattern actually turned
+out to require, which none of the three attempts above would have produced.
+
+##### The reason none of this moved a golden — and the golden that fixes it
+
+**No golden fixture contained a wash-sale entry at all.** `washPendingLosses` and
+`washSaleLedger` appeared in none of them, so the entire §1091 path — the two reducers that
+write the ledger, the resolver, and the April filing that assesses it — had zero whole-state
+coverage, and a defect in it shipped green through the repo's strongest gate. That is exactly
+what the double-match above did.
+
+`wash-sale-harvest` closes it. Three things have to be true at once before a fixture can reach
+§1091, which is why none of the other ten does:
+
+| requirement | how the golden meets it |
+|---|---|
+| the plan must HARVEST | `TAX_LOSS_HARVEST` is on — it is in no other golden's plan |
+| there must be a LOSS to harvest | a dated crash puts the book under water; a book that only appreciates gives the harvester nothing to sell |
+| the replacement must be substantially identical AND land in a wrapper the authority reaches | the taxable brokerage, the IRA and the Roth all hold one authored security while the harvester rotates into a second one in the same market |
+
+That last row is the part worth keeping: two authored securities in one market are the only way
+a book can express "economically similar, legally distinct" (§8.1c) — and therefore the only
+way it can express the opposite either. The reference goldens hold nothing but the four
+synthetic market securities, where every equity lot is substantially identical to every other
+by construction, so they cannot pose the question at all.
+
+What the run then contains, all of it in the fixture: the **rebalancer** writing entries as it
+relocates equity into the wrappers (§8.1n) and the **harvester** writing them at year-end
+(§8.1i); one filing that disallows and assesses a real balance due, paid the following April;
+three further filings that correctly disallow **nothing** — the unmatched entry retires, the
+snapshot is still retired, no payment is chained; and an entry still pending at simEnd because
+its return has not been filed yet. It also brings the shock family and the first
+`SECTION_988_GAIN` any fixture has reached into the coverage manifest, which lifted the
+golden-coverage floor from 51 to 88 action types. Cost: ~150 ms.
+
+`wash-sale-golden.test.mjs` is its paired test, and it exists because of how this particular
+subject fails: **breaking §1091 makes the golden look healthier.** A disallowance that silently
+stops firing removes a tax payment and raises terminal net worth, which is the shape of a
+fixture diff a reader is inclined to accept. So the paired test names the mechanism instead —
+both writers present, a filing that disallows, the April payment, the zero-delta filings, the
+carried entry. Stubbing the resolver's matcher fails three of its seven tests; removing
+§8.1n's writer fails five.
+
+It has a twin: `wash-sale-two-books` (§8.1p) is the same plan with one more taxable account,
+so the same loss is matched against a TAXABLE replacement and deferred instead of destroyed. A
+diff between the pair isolates §1091's two consequences rather than two households.
+
+**One thing it does NOT reach**: the share-consumption rule this section fixed. The golden puts
+two same-group entries in one filing, but only one of them has a replacement in its window, so
+the fixture is byte-identical with and without the fix (verified by running it against the old
+resolver). `wash-sale.test.mjs` is the detector for that, and this is worth stating rather than
+assuming — a golden that touches a rule is not the same as a golden that would notice it
+breaking.
+
+#### 8.1p Step 7b, finally — the §1091(d) taxable branch  ✅ (2026-09-02)
+
+**Status**: BUILT. The half R2 held at §8.1f–g and §8.1j named as its standing gap: a loss
+whose substantially identical replacement is bought in a TAXABLE account. §1091(a) disallows it
+on the return exactly as the sheltered case does; §1091(d) then moves the disallowed loss into
+the replacement's BASIS and §1223(3) tacks the sold shares' holding period onto it, so the
+taxpayer gets it back on the eventual sale. 5,972 unit + 1,250 viz tests green; the two
+wash-sale goldens are the only fixtures that move, and one of them is new.
+
+##### The seam, and why it is the April filing
+
+§8.1j settles the harvester's own wash at the moment of sale, and can, because that reducer
+sells and rebuys in one action, in one account, on one day — both lots in hand. **Every other
+wash in this engine is cross-account.** The rebalancer sells in the taxable book while a
+different action, on a different account, buys the replacement, with no ordering guarantee
+between them within the day. The pairing is only knowable once the window has closed, and that
+is what the April filing already is (§8.1l). So `resolveWashSales` now returns
+`basisAdjustments` alongside the disallowance, and `UsTaxFileApplyReducer` writes them.
+
+Four decisions inside that, each of which could have been made wrongly and still balanced:
+
+1. **One pool, two consequences.** §1091 does not rank replacements by where they sit — a
+   share is a share, and §1.1091-1(c)/(d) match them in order of acquisition regardless. So
+   the sheltered and taxable lots are ONE pool, consumed in acquisition order, and the wrapper
+   decides only what happens to the money afterwards. This is a behaviour change to the
+   sheltered branch as well: a taxable replacement acquired earlier now takes shares that
+   previously fell to an IRA lot, which is the reg's answer, not a preference.
+2. **§1223(3) as arithmetic.** The replacement is back-dated by the sold shares' holding
+   period: `replacementPurchase − (saleDate − soldAcquisition)`. For a same-day sell-and-rebuy
+   this reduces to the sold lot's own purchase date, which is exactly what §8.1j stamps — the
+   two are the same rule, and one of them is now visibly the general case of the other. It
+   requires the sold lot's acquisition date, so both writers stamp `heldFromMs` on the entry;
+   absent, the basis still moves and only the tack is skipped, because the deferral is the
+   money and must not be forfeited over a missing field.
+3. **A partial match splits the lot.** A replacement lot can be larger than the shares matched
+   against it. Raising the whole lot's basis would hand the taxpayer basis nobody paid for;
+   tacking the whole lot's date would age shares that were never sold. So the lot is
+   bifurcated with `resize` — which conserves value and basis exactly — and only the matched
+   half carries the adjustment. Both halves need distinct ids, and the `-1091` suffix is
+   itself disambiguated, because one lot can be split twice in a single filing when two
+   entries each match part of it. That is not hypothetical: the new golden does it.
+4. **US-domiciled taxable only.** `costBasis` is the origin/US basis while
+   `costBaseByCountry.AU` carries Australia's own (s855-45). There is no §1091 in Australia
+   (§8.1d), so raising `costBasis` on an AU-situs lot would let a US rule silently re-price an
+   AU disposal. Deliberate under-disallowance, in the same direction as the 401(k) exclusion.
+
+##### What resolving late costs, made visible instead of silent
+
+Four months pass between the sale and the filing, and the replacement lot may have been sold,
+swept or compacted meanwhile. A basis increase with nowhere to land is a deferral silently
+lost — so it is counted: `washDeferralUnplaced` accumulates the dollars that found no lot. It
+is written only when non-zero, so a run that never loses one gains no state key, and both
+goldens measure zero. The disallowance itself stands either way; §1091(a) does not depend on
+the taxpayer still holding the replacement.
+
+##### The golden twin, and the fact pattern nobody would have guessed
+
+`wash-sale-two-books` is `wash-sale-harvest` plus **one account**: a second US brokerage seeded
+with the OTHER security. That single difference is the whole mechanism, and it is worth
+stating because the first four attempts to reach this branch all failed:
+
+- the harvester cannot produce it — `resolveSubstitute` deliberately rotates into a legally
+  DISTINCT partner (§8.1h), so its own rebuy is never substantially identical to what it sold;
+- the rebalancer buying in the taxable book cannot produce it either, in these plans: the
+  taxable account funds the spending, so it sells rather than buys;
+- a second brokerage holding the SAME security does not produce it — both books then rotate
+  the same way and neither's rebuy matches the other's sale.
+
+What does produce it: **two taxable books harvesting past each other.** Seed the second book
+with `sec-alt`, and on 31 December one book sells `sec-core` and buys `sec-alt` while the other
+sells `sec-alt` and buys `sec-core` — each rebuy is the other sale's substantially identical
+replacement, same day, taxable account. That is not a contrivance; it is what a household with
+two brokerage accounts and one harvesting policy does every year, and it is precisely the case
+§8.1j described and held.
+
+##### The measurement that corrects the intuition
+
+The two halves are worth very different amounts, and the difference is the horizon:
+
+| | measured on `wash-sale-two-books` |
+|---|---|
+| loss disallowed in the filed year | \$110,443, across three matched entries |
+| cash it costs that April | \$681 — the rest was absorbed by §1211(b)/§1212(b) |
+| effect of the basis transfer on the END state | 123 fields move; terminal net worth by about \$154 on a \$6.7m book |
+
+**"Timing, not money" is exactly right, and on a finite horizon it means "nearly free".** The
+transfer only becomes money when the re-based lot is disposed of, and most of these are not,
+inside the run. So the honest reading of this build is: it makes the model CORRECT, and it
+should not be expected to move a study's headline. R2 was right to hold it and right about why.
+
+##### Two defects the new golden found on its way in
+
+- **The harvester minted colliding lot ids.** `tlh-<security>-<ms>` is the same id every time,
+  and a harvest can fire several times on one account on one day — several source lots, one
+  policy. Two lots sharing an id is not cosmetic: `HoldingTransactReducer` matches on it, so
+  each lot's growth, dividends and coupons land on whichever it finds first. Fixed by the same
+  disambiguation the rebalancer's `_freshHoldingId` already used. It had never been reached
+  because no fixture harvested twice in a day.
+- **`basisAdjustments` was applied but undrillable.** `pickPayload` keeps only DECLARED fields,
+  so until the type registry named it the journal recorded a filing whose basis transfers were
+  invisible — the deferral happened and nothing could show where it went. The third time this
+  repo has been bitten by that shape; declared now.
+
+Left open, and small: the harvester leaves a **zero-value dust lot** behind after a full
+harvest (the rebalancer sweeps its own, `_sweepDust`; the harvester does not). Value-conserving
+and inert, but it is the immortal-dust pattern design 61 already fixed once.
 
 ### 8.2 Dividend character
 

@@ -8,35 +8,38 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { identityGroupOf }   from '../../holdings/security.js';
 import { ACCOUNT_ROLES }     from '../../state/account-roles.js';
 
 /**
- * Rev. Rul. 2008-5: a loss washed into the taxpayer's own IRA or Roth IRA is DESTROYED, not
- * deferred (design 94 §8.1i, step 7a.2) — the matching arithmetic, as a pure function.
+ * §1091, as a pure function: which of the year's realized losses the wash-sale rule
+ * disallows, and — since design 94 §8.1p — what happens to the money afterwards.
  *
- * ── what it implements, and what it deliberately does not ────────────────────
+ * ── the rule has TWO consequences, and they differ by WHERE the replacement sits ──
  *
- * §1091 has two consequences and this reducer implements exactly one of them. The ordinary
- * wash — replacement bought in a TAXABLE account — disallows the loss and moves it into the
- * replacement's basis under §1091(d), with the holding period tacked on under §1223(3). That
- * is a TIMING effect, it is the expensive half to build, and R2 (§8.1f–g) held it as 7b.
+ * §1091(a) disallows the loss whoever bought the replacement. What happens next does not:
  *
- * The IRA case has no §1091(d) half at all. Rev. Rul. 2008-5's holding, verbatim:
+ *   - **A TAXABLE replacement.** §1091(d) moves the disallowed loss into the replacement's
+ *     BASIS and §1223(3) tacks the sold shares' holding period onto it, so the loss is
+ *     recovered on the eventual sale. TIMING, not money — the taxpayer keeps it, later.
+ *     Built as `basisAdjustments` below and applied by `UsTaxFileApplyReducer` (§8.1p).
+ *   - **An IRA or Roth IRA replacement.** Rev. Rul. 2008-5's holding, verbatim:
  *
- *   > "The loss on the Sale of stock is disallowed under § 1091. A's basis in the individual
- *   >  retirement account or Roth IRA **is not increased** by virtue of § 1091(d)."
+ *       > "The loss on the Sale of stock is disallowed under § 1091. A's basis in the
+ *       >  individual retirement account or Roth IRA **is not increased** by virtue of
+ *       >  § 1091(d)."
  *
- * Disallowed, and nothing anywhere gets the basis. So this is a subtraction, and that is why
- * it is the small half with all the permanent money in it.
+ *     Disallowed, and nothing anywhere gets the basis. A subtraction, and that is why the
+ *     sheltered half — the smaller one — is the half with all the permanent money in it
+ *     (§8.1i, step 7a.2).
  *
- * **IRA and Roth IRA only.** Pub. 550 ch. 4's trigger #4 and the ruling both name those two.
- * A 401(k) or an Australian super fund is NOT covered by anything in `docs/`, and this repo
- * does not extend a rule past its source — so a replacement bought inside a 401(k) is left
- * alone here even though the same "command over the property never left" reasoning would
- * plainly reach it. That is a deliberate under-disallowance, and it is why the modelled
- * number is smaller than §8.1f's upper bound.
+ * **IRA and Roth IRA only, for the sheltered branch.** Pub. 550 ch. 4's trigger #4 and the
+ * ruling both name those two. A 401(k) or an Australian super fund is NOT covered by anything
+ * in `docs/`, and this repo does not extend a rule past its source — so a replacement bought
+ * inside a 401(k) is left alone even though the same "command over the property never left"
+ * reasoning would plainly reach it. That is a deliberate under-disallowance, and it is why the
+ * modelled number is smaller than §8.1f's upper bound. The same discipline bounds the taxable
+ * branch: US-domiciled brokerage only, for the basis reason given at `TAXABLE_ROLES`.
  *
  * ── when it is applied ───────────────────────────────────────────────────────
  *
@@ -77,22 +80,37 @@ import { ACCOUNT_ROLES }     from '../../state/account-roles.js';
  */
 export function resolveWashSales(state, fromMs, toMs) {
   const pending = state?.washPendingLosses;
-  const empty   = { disallowedShort: 0, disallowedLong: 0, ledger: [], remaining: [] };
+  const empty   = { disallowedShort: 0, disallowedLong: 0, ledger: [], remaining: [],
+                    basisAdjustments: [] };
   if (!Array.isArray(pending) || pending.length === 0) return empty;
 
-  const replacements = _shelteredReplacements(state);
+  // §1.1091-1(e): replacement shares are CONSUMED — each carries its own remaining count and
+  // an entry may only match what earlier entries left (see `_matchUnits`). §1.1091-1(c)/(d)
+  // match acquisitions "in accordance with the order of their acquisition
+  // (beginning with the earliest acquisition)", so the pool is walked oldest lot first.
+  const replacements = _replacementLots(state)
+    .map(r => ({ ...r, left: r.units }))
+    .sort((a, b) => a.ms - b.ms);
   const remaining = [];
   const ledger    = [];
+  const basisAdjustments = [];
   let disShort = 0;
   let disLong  = 0;
 
-  for (const entry of pending) {
-    // Not this return's problem — a sale in a later year is filed a year from now.
+  // §1.1091-1(b): where more than one loss is claimed in the year, the section is applied to
+  // them "in the order in which the stock or securities ... were disposed of (beginning with
+  // the earliest disposition)". Its same-day tie-break — order of original ACQUISITION — is
+  // not reachable here, because an entry records the sale, not the sold lot's purchase date;
+  // `sort` is stable, so same-day entries keep the order the reducers wrote them in, which is
+  // the sale order within the day. Sorting a copy leaves the caller's `washPendingLosses`
+  // (and the `remaining` written back from it) in its own order.
+  for (const entry of [...pending].sort((a, b) => (a.ms ?? 0) - (b.ms ?? 0))) {
+    // Not this return's problem — a sale in a later year is filed a year from now. It also
+    // consumes nothing here: the shares are re-tested, against the same lots, at ITS filing.
     if (entry.ms < fromMs || entry.ms > toMs) { remaining.push(entry); continue; }
 
-    const matched = replacements
-      .filter(r => r.group === entry.group && Math.abs(r.ms - entry.ms) <= WINDOW_MS)
-      .reduce((s, r) => s + r.units, 0);
+    const takes   = _matchUnits(replacements, entry);
+    const matched = takes.reduce((s2, t) => s2 + t.units, 0);
     if (matched <= 0) continue;                     // no wash — the loss stands, entry retires
 
     const frac  = Math.min(1, matched / Math.max(entry.units, 1e-9));
@@ -101,11 +119,82 @@ export function resolveWashSales(state, fromMs, toMs) {
     if (short <= 0 && long <= 0) continue;
     disShort += short;
     disLong  += long;
+
+    // ── §1091(d): where the replacement is TAXABLE, the loss is deferred, not destroyed ──
+    //
+    // The disallowance above is the same either way — §1091(a) disallows on this return
+    // whoever bought the replacement. What differs is where the money goes afterwards, and
+    // that is decided share by share: the dollars matched against IRA/Roth shares are gone
+    // (Rev. Rul. 2008-5), and the dollars matched against a taxable lot move into ITS basis.
+    // Apportioned by units, because units are what §1091(b) matches.
+    const deferred = [];
+    for (const take of takes) {
+      if (take.lot.kind !== 'TAXABLE') continue;
+      const amount = +(((short + long) * take.units) / matched).toFixed(2);
+      if (amount <= 0) continue;
+      deferred.push(amount);
+      basisAdjustments.push({
+        stateKey:  take.lot.stateKey,
+        holdingId: take.lot.holdingId,
+        units:     +take.units.toFixed(6),
+        amount,
+        // §1223(3): the replacement's holding period INCLUDES the sold lot's, so the
+        // replacement is back-dated by however long the sold shares were held. For a
+        // same-day sell-and-rebuy this reduces to the sold lot's own purchase date, which
+        // is exactly what the harvester's immediate branch (§8.1j) stamps — the two rules
+        // agree because they are the same rule.
+        tackMs:    entry.heldFromMs == null ? null
+                 : take.lot.ms - Math.max(0, entry.ms - entry.heldFromMs),
+      });
+    }
+    const deferredTotal = +deferred.reduce((s2, a) => s2 + a, 0).toFixed(2);
+
     ledger.push({ ms: entry.ms, group: entry.group, stateKey: entry.stateKey,
-                  matchedFraction: +frac.toFixed(4), disallowedShort: short, disallowedLong: long });
+                  matchedFraction: +frac.toFixed(4), disallowedShort: short, disallowedLong: long,
+                  // Absent when nothing was deferred, following this file's absent-is-absent
+                  // discipline: a `deferred: 0` on every sheltered wash would put a field in
+                  // every fixture that has one.
+                  ...(deferredTotal > 0 ? { deferred: deferredTotal } : {}) });
   }
   return { disallowedShort: +disShort.toFixed(2), disallowedLong: +disLong.toFixed(2),
-           ledger, remaining };
+           ledger, remaining, basisAdjustments };
+}
+
+/**
+ * The replacement shares one entry may claim — and DEDUCTS them, so the next entry cannot
+ * claim the same ones (design 94 §8.1o).
+ *
+ * §1.1091-1(e), verbatim in `docs/us-tax/CFR-26-1.1091-1-Wash-Sales.txt`: "The acquisition of
+ * any share of stock or any security which results in the nondeductibility of a loss under the
+ * provisions of this section shall be disregarded in determining the deductibility of any other
+ * loss." Without that deduction a single 100-share IRA purchase disallowed a 100-share loss in
+ * EVERY pending entry naming its group — two $5,000 sales
+ * losing $10,000 to a replacement that can only cover one of them. The over-disallowance is
+ * bounded only by how many losses the year realized.
+ *
+ * It was latent while the harvester was the ledger's only writer (its entries are one sale
+ * per harvest, and a book with one harvest a year has nothing to collide with). §8.1n gave
+ * the ledger a second writer whose legs consume every lot of an allocation, and a semiannual
+ * rebalance plus a December harvest puts several same-group entries in one filing.
+ *
+ * No units cap the entry itself: `entry.units` is what was SOLD, and taking less than the
+ * whole of it is what `matchedFraction` expresses.
+ *
+ * @returns {Array<{lot: object, units: number}>} which lots were drawn on, and for how many
+ *          shares — the taxable ones need naming because §1091(d) writes basis onto them.
+ */
+function _matchUnits(replacements, entry) {
+  let need = Math.max(0, entry.units ?? 0);
+  const takes = [];
+  for (const r of replacements) {
+    if (need <= 0) break;
+    if (r.left <= 0 || r.group !== entry.group || Math.abs(r.ms - entry.ms) > WINDOW_MS) continue;
+    const take = Math.min(r.left, need);
+    r.left -= take;
+    need   -= take;
+    takes.push({ lot: r, units: take });
+  }
+  return takes;
 }
 
 /** §1.1091-1(a)'s 61-day period, as a half-width: 30 days either side of the sale. */
@@ -128,28 +217,51 @@ const SHELTERED_ROLES = new Set([
 // wrong reading for a couple filing separately, and that is stated rather than hidden.
 
 /**
- * Every equity position in an IRA/Roth as `{ group, ms, units }`.
+ * The roles a §1091(d) basis transfer can be written onto: an ordinary TAXABLE brokerage
+ * (design 94 §8.1p).
+ *
+ * US-domiciled only, and the country test is not decoration. `costBasis` is the origin/US
+ * basis while `costBaseByCountry.AU` carries Australia's own (s855-45, design 36 §12.2), so
+ * raising `costBasis` on an AU-situs lot would move a basis Australia measures differently —
+ * a US rule silently re-pricing an AU disposal. §1091 is resolved against the US return; an
+ * AU-domiciled replacement is left alone, in the same direction as the 401(k) exclusion above.
+ */
+const TAXABLE_ROLES = new Set([ACCOUNT_ROLES.US_STOCK]);
+
+/**
+ * Every equity position that can be a §1091 replacement, as
+ * `{ group, ms, units, kind, stateKey, holdingId }`.
  *
  * Read off the LOTS rather than from an event log, because a purchase leaves exactly one
  * durable trace in this engine — a lot with a `purchaseDate` — and that trace is still there
- * a year later, which is what makes the lagged resolution possible at all.
+ * a year later, which is what makes the lagged resolution possible at all. It is also what
+ * lets the taxable branch write basis back: the lot the shares were bought into is named, so
+ * the April filing can find it.
  *
  * A lot that was added to rather than opened keeps its original `purchaseDate`, so new money
- * into a seasoned IRA position is not seen. That under-matches, in the same direction as the
+ * into a seasoned position is not seen. That under-matches, in the same direction as the
  * 401(k) exclusion, and is recorded in §8.1i rather than papered over.
+ *
+ * **The two kinds are one pool.** §1091 does not rank replacements by where they sit: a share
+ * is a share, and §1.1091-1(c)/(d) match them in order of acquisition regardless. The wrapper
+ * decides only the CONSEQUENCE — destroyed under Rev. Rul. 2008-5, deferred into basis under
+ * §1091(d) — which is why `kind` is carried on the lot rather than resolved by two passes.
  */
-function _shelteredReplacements(state) {
+function _replacementLots(state) {
   const out = [];
-  for (const account of Object.values(state ?? {})) {
+  for (const [stateKey, account] of Object.entries(state ?? {})) {
     if (!account || typeof account !== 'object' || !Array.isArray(account.holdings)) continue;
-    if (!SHELTERED_ROLES.has(account.role)) continue;
+    const kind = SHELTERED_ROLES.has(account.role) ? 'SHELTERED'
+               : (TAXABLE_ROLES.has(account.role) && account.country === 'US') ? 'TAXABLE'
+               : null;
+    if (kind == null) continue;
     for (const h of account.holdings) {
       if (h?.allocation !== 'EQUITY' || !(h.units > 0)) continue;
       const group = identityGroupOf(h, state.securities ?? null);
       if (group == null || h.purchaseDate == null) continue;
       const ms = h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime();
       if (!Number.isFinite(ms)) continue;
-      out.push({ group, ms, units: h.units });
+      out.push({ group, ms, units: h.units, kind, stateKey, holdingId: h.id });
     }
   }
   return out;

@@ -46,6 +46,10 @@
  *    future reader needs when a fixture diff lands on their desk.
  */
 
+import { Holding }      from '../../src/finance/holdings/holding.js';
+import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
+import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
+import { RATE_KEYS }  from '../../src/finance/economic-regimes/rate-keys.js';
 import { UsSingleHomeownerScenario } from '../../src/scenarios/us-single-homeowner-scenario.js';
 import { AuSingleHomeownerScenario } from '../../src/scenarios/au-single-homeowner-scenario.js';
 
@@ -387,6 +391,148 @@ export const GOLDEN_SPECS = [
       lot('usStockAccount', 'h-us-equity').securityId   = 'sec-emp';
       lot('k401Account',    'h-401k-equity').securityId = 'sec-emp';
       lot('usStockAccount', 'h-intl-equity').securityId = 'sec-exus';
+    },
+  },
+  {
+    name:        'wash-sale-harvest',
+    description:
+      'Design 94 §8.1o. The whole §1091 path — both reducers that write '
+      + '`washPendingLosses`, the April `TAX_FILE_US` that resolves it, and the balance due '
+      + 'it assesses — had NO whole-state coverage at all: `washPendingLosses` and '
+      + '`washSaleLedger` appeared in no fixture, so a defect anywhere in it shipped green '
+      + 'through the repo\'s strongest gate, and one did (§8.1o\'s double-match). Three '
+      + 'things had to be true at once before a fixture could reach it, which is why no '
+      + 'existing golden does. The plan must HARVEST, so TAX_LOSS_HARVEST is on. It must '
+      + 'have a LOSS to harvest, so a 2029 crash puts the book under water. And the '
+      + 'replacement must be substantially identical AND land in a wrapper the cited '
+      + 'authority reaches (Rev. Rul. 2008-5: IRA and Roth only), so the taxable brokerage, '
+      + 'the IRA and the Roth all hold `sec-core` while the harvester rotates into '
+      + '`sec-alt` — two authored securities in one market, which is the only way a book '
+      + 'can express "economically similar, legally distinct" (§8.1c) and therefore the '
+      + 'only way it can also express the opposite. What the run then contains: the '
+      + 'REBALANCER writing entries as it relocates equity into the wrappers (§8.1n) and '
+      + 'the HARVESTER writing them at year-end (§8.1i), a filing that disallows and '
+      + 'assesses a real balance due paid the following April, three more filings that '
+      + 'correctly disallow NOTHING (the un-matched entry retires, the snapshot is still '
+      + 'retired, no payment is chained), and an entry still pending at simEnd because its '
+      + 'return has not been filed yet. Paired with wash-sale-golden.test.mjs, which '
+      + 'asserts those facts directly — the fixture pins them, but only that test says '
+      + 'which of them is the point. It does NOT reach §8.1o\'s share-consumption rule: '
+      + 'the two same-group entries it puts in one filing compete for a pool only one of '
+      + 'them can draw on, so the fixture is identical with and without that fix. '
+      + 'wash-sale.test.mjs is the detector for it.',
+    params: {
+      behavioralStrategies:      ['TAX_LOSS_HARVEST', 'TARGET_ALLOCATION'],
+      allocationStrategy:        'STATIC',
+      // GLIDEPATH, not STATIC: a static mix relocates once and then sits still, and a
+      // rebalancer that never trades again writes no §1091 entry after year one. A moving
+      // target keeps equity crossing the taxable/wrapper boundary every year, which is the
+      // §8.1n fact pattern — and it is what a real de-risking plan does anyway.
+      allocationSchedule:        'GLIDEPATH',
+      allocationGlidepath: [
+        { age: 62, weights: { EQUITY: 0.45, BOND: 0.55, CASH: 0, GOLD: 0 } },
+        { age: 72, weights: { EQUITY: 0.75, BOND: 0.25, CASH: 0, GOLD: 0 } },
+      ],
+      // The GLIDEPATH fallback if the anchors ever stop bracketing the run's ages.
+      rebalanceTargetAllocation: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
+      // The loss. Without a shock the book only ever appreciates, the harvester finds
+      // nothing to sell, and every §1091 path in the engine stays unreachable — which is
+      // exactly the state the other ten goldens are in.
+      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2029-06-01' }],
+      // Big enough that the Roth holds BOTH classes: a wrapper already at 100% equity is
+      // pinned, never buys, and so can never be anyone's replacement.
+      rothBalance: 900_000,
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2033, 0, 1)),
+    mutateCfg: (cfg) => {
+      // Two securities in ONE market, in different identity groups. `resolveSubstitute`
+      // prefers a legally distinct partner (§8.1h), so this is also what stops the
+      // harvester constructing the wash itself — the disallowance in this fixture comes
+      // from the WRAPPER buying, which no substitute choice can avoid.
+      cfg.securities = [
+        { id: 'sec-core', symbol: 'CORE', name: 'US total market (core)',
+          rateKey: 'EQUITY_US', beta: 1, idioVol: 0 },
+        { id: 'sec-alt',  symbol: 'ALT',  name: 'US large cap (alternate index)',
+          rateKey: 'EQUITY_US', beta: 1, idioVol: 0 },
+      ];
+      const acct = key => cfg.accounts.find(a => a.stateKey === key);
+      acct('usStockAccount').holdings.find(h => h.id === 'h-us-equity').securityId = 'sec-core';
+      // The two covered wrappers, each holding `sec-core` and a bond sleeve to fund a buy
+      // of it. `_shelteredReplacements` reads a lot's `purchaseDate`, and a rebalance buy
+      // establishes a fresh dated lot inheriting the sleeve's security — so a wrapper that
+      // holds this security is the only kind that can produce a dated replacement at all.
+      acct('iraAccount').balance  = 300_000;
+      acct('iraAccount').holdings = [
+        new Holding({ id: 'h-ira-equity', label: 'IRA Equity', allocation: ALLOCATION.EQUITY,
+          rateKey: RATE_KEYS.EQUITY_US, marketValue: 150_000, costBasis: 150_000,
+          securityId: 'sec-core' }),
+        new Holding({ id: 'h-ira-bond', label: 'IRA Bond', allocation: ALLOCATION.BOND,
+          rateKey: RATE_KEYS.FIXED_INCOME_US, marketValue: 150_000, costBasis: 150_000 }),
+      ];
+      acct('rothAccount').holdings = [
+        new Holding({ id: 'h-roth-equity', label: 'Roth Equity', allocation: ALLOCATION.EQUITY,
+          rateKey: RATE_KEYS.EQUITY_US, marketValue: 300_000, costBasis: 300_000,
+          securityId: 'sec-core' }),
+        new Holding({ id: 'h-roth-bond', label: 'Roth Bond', allocation: ALLOCATION.BOND,
+          rateKey: RATE_KEYS.FIXED_INCOME_US, marketValue: 600_000, costBasis: 600_000 }),
+      ];
+    },
+  },
+  {
+    name:        'wash-sale-two-books',
+    description:
+      'Design 94 §8.1p — the §1091(d) TWIN of `wash-sale-harvest`, and the other half of the '
+      + 'rule. Where that golden matches a loss against an IRA/Roth and Rev. Rul. 2008-5 '
+      + 'DESTROYS it, this one matches against a taxable brokerage, where §1091(d) moves the '
+      + 'loss into the replacement\'s BASIS and §1223(3) tacks the sold shares\' holding '
+      + 'period onto it — disallowed today, recovered on the eventual sale. Same plan, same '
+      + 'crash, same two securities; the only difference is one added account, so a diff '
+      + 'between the pair isolates the CONSEQUENCE rather than the household. The added '
+      + 'account is a second US brokerage seeded with the OTHER security, and that is the '
+      + 'whole mechanism: `resolveSubstitute` rotates each book into a legally distinct '
+      + 'partner (§8.1h), so on 31 December one book sells `sec-core` and buys `sec-alt` '
+      + 'while the other sells `sec-alt` and buys `sec-core` — each rebuy is the other '
+      + 'sale\'s substantially identical replacement, on the same day, in a taxable account. '
+      + 'Two harvesters rotating past each other is not a contrivance: it is what a '
+      + 'household with two brokerage accounts and one harvesting policy does every year, '
+      + 'and it is the fact pattern §8.1j named and held. The fixture holds the basis '
+      + 'transfers themselves — a matched lot bifurcated at `-1091` with the disallowed loss '
+      + 'added to its basis and its purchase date back-dated — plus a filing that both '
+      + 'defers the loss AND assesses a balance due, because §1091(a) removes the deduction '
+      + 'whichever account bought the replacement. Paired with wash-sale-golden.test.mjs.',
+    params: {
+      // Identical to `wash-sale-harvest`; see it for why each of these is load-bearing.
+      behavioralStrategies:      ['TAX_LOSS_HARVEST', 'TARGET_ALLOCATION'],
+      allocationStrategy:        'STATIC',
+      allocationSchedule:        'GLIDEPATH',
+      allocationGlidepath: [
+        { age: 62, weights: { EQUITY: 0.45, BOND: 0.55, CASH: 0, GOLD: 0 } },
+        { age: 72, weights: { EQUITY: 0.75, BOND: 0.25, CASH: 0, GOLD: 0 } },
+      ],
+      rebalanceTargetAllocation: { EQUITY: 0.7, BOND: 0.3, CASH: 0, GOLD: 0 },
+      shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2029-06-01' }],
+      rothBalance: 900_000,
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2033, 0, 1)),
+    mutateCfg: (cfg) => {
+      specByName('wash-sale-harvest').mutateCfg(cfg);
+      // The second taxable book, holding the OTHER security. Drawn down late (priority 6) so
+      // it is still there to harvest in the crash years — a book spent before the crash
+      // cannot be anyone's replacement.
+      cfg.accounts.push({
+        __type: 'BrokerageAccount', stateKey: 'spouseStockAccount',
+        name: 'US Stock (spouse)', role: ACCOUNT_ROLES.US_STOCK,
+        balance: 500_000, contributionBasis: 500_000,
+        ownerId: 'spouse', drawdownPriority: 6,
+        country: 'US', currency: { code: 'USD' },
+        holdings: [new Holding({
+          id: 'h-spouse-equity', label: 'Spouse Equity', allocation: ALLOCATION.EQUITY,
+          rateKey: RATE_KEYS.EQUITY_US, marketValue: 500_000, costBasis: 500_000,
+          securityId: 'sec-alt',
+        })],
+      });
     },
   },
 ];

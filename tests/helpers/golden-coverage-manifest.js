@@ -123,6 +123,25 @@ export const COVERED = [
   'SUPER_SACRIFICE_APPLY',
   'SUPER_EARNINGS_APPLY',
   'SUPER_EARNINGS_TAX',
+  // design 94 §8.1o — the `wash-sale-harvest` golden. The §1091 family: the harvester's
+  // sell-and-rebuy, and the April filing that resolves the windows the 31-December settle
+  // could not see and assesses the balance due. Before it, `washPendingLosses` and
+  // `washSaleLedger` appeared in NO fixture, so the whole path — two writing reducers, the
+  // resolver and the filing — was guarded by unit tests alone.
+  'STOCK_HARVEST_APPLY',
+  'US_TAX_FILE_APPLY',
+  // The same golden's dated crash, which is what puts a loss in the book to harvest. The
+  // shock family came along with it: the regime is added and recomputed, and the level
+  // break revalues the holdings.
+  'ADD_REGIME_APPLY',
+  'RECOMPUTE_REGIMES',
+  'REVALUE_ASSET_APPLY',
+  // And, from the same golden, the first currency gain any fixture reaches: once the plan
+  // draws on the AU savings account, each withdrawal settles a §988 amount on the pool —
+  // in this run a run of personal-use DISALLOWED losses under §988(e), then small gains as
+  // the rate comes back. Its SIBLINGS remain gaps: an authored `fxBasisRate` is still what
+  // FX_STEP / FX_TRANSFER / INTL_TRANSFER need.
+  'SECTION_988_GAIN',
   'SUPER_WITHDRAWAL_EARNINGS_TAX',
   'US_HOUSE_SALE_APPLY',
   'US_HOUSE_SALE_TAX',
@@ -238,23 +257,16 @@ export const KNOWN_GAPS = [
   'FX_STEP_APPLY',
   'FX_TRANSFER_APPLY',
   'INTL_TRANSFER_APPLY',
-  'SECTION_988_GAIN',
-
-  // ── design 94 §8.1l — the April filing of the prior US return. Reachable only from a
-  // scenario running TAX_LOSS_HARVEST with a §1091 window open, which no golden does: the
-  // harvester is not part of any fixture's plan. Covered by wash-sale.test.mjs end to end.
-  'US_TAX_FILE_APPLY',
 
   // ── Stochastic paths, economic regimes and shocks (designs 67, 74, 75)
   // Off by default, so nothing exercises them. A seeded golden is still deterministic
   // (one RNG, fixed seed) and would guard the shock-revaluation and regime-fan paths.
-  'ADD_REGIME_APPLY',
   // EQUITY_RETURN_STEP_APPLY left this list at design 94 step 5: `two-security-concentration`
-  // runs with `equityReturnStochastic` on, which is what the note above asked for.
+  // runs with `equityReturnStochastic` on, which is what the note above asked for. The
+  // SHOCK family left it at §8.1o: `wash-sale-harvest` authors a dated crash, because a
+  // book that only ever appreciates gives a tax-loss harvester nothing to sell.
   'PROPERTY_RETURN_STEP_APPLY',
-  'RECOMPUTE_REGIMES',
   'REMOVE_REGIME_APPLY',
-  'REVALUE_ASSET_APPLY',
   'YIELD_CURVE_STEP_APPLY',
 
   // ── Allocation, rebalancing, holdings surgery and bond mechanics (designs 61, 65, 66, 82)

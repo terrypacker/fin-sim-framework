@@ -101,9 +101,18 @@ test('golden coverage: KNOWN_GAPS holds nothing already covered or long gone', (
  * floor, which is the ratchet: adding a feature without a golden pushes the
  * percentage down, and that is meant to be an explicit decision.
  */
-const COVERAGE_FLOOR = 51; // action types fired by the golden set, 2026-08-13
+const COVERAGE_FLOOR = 88; // action types fired by the golden set, 2026-09-02
                            // (45 → 51: cross-border-disposals added the CAPITAL_GAINS
                            //  family, which no golden had ever reached)
+                           // (51 → 82: the goldens added since — payroll limits, the bond
+                           //  and TIPS ladders, both single-homeowner plans, the AU super
+                           //  streams and two-security-concentration. The floor was never
+                           //  raised with them, so the ratchet had 31 types of slack in it
+                           //  and would not have caught a golden going quiet.)
+                           // (82 → 88: `wash-sale-harvest` — the §1091 pair
+                           //  STOCK_HARVEST_APPLY + US_TAX_FILE_APPLY, the three shock
+                           //  types its crash needs, and the first SECTION_988_GAIN any
+                           //  fixture has reached.)
 
 test(`golden coverage: at least ${COVERAGE_FLOOR} action types are exercised end to end`, () => {
   const pct = ((100 * fired.size) / universe.size).toFixed(0);
