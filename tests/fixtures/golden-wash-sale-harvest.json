@@ -20,6 +20,7 @@
     "EQUITY_INTL_EX_US": -0.565,
     "EQUITY_US": -0.555
    },
+   "severity": 0.51,
    "shockId": "MARKET_CRASH_2008_LITE",
    "startDate": "2029-06-01T00:00:00.000Z",
    "tags": [],
@@ -48,6 +49,7 @@
     "FIXED_INCOME_AU": -0.02,
     "FIXED_INCOME_US": -0.034
    },
+   "severity": 0.51,
    "shockId": "MARKET_CRASH_2008_LITE",
    "startDate": "2029-06-01T00:00:00.000Z",
    "tags": [],
@@ -1264,6 +1266,13 @@
  "propertyReturnDev": {},
  "propertyReturnDriftComp": {},
  "propertyReturnMarketDev": 0,
+ "regimeActions": {
+  "rebalance_to_target": {
+   "firedForShocks": [
+    "MARKET_CRASH_2008_LITE"
+   ]
+  }
+ },
  "rothAccount": {
   "allowsEarlyWithdrawal": true,
   "balance": 618473.46,

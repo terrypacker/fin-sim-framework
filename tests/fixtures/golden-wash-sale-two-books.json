@@ -20,6 +20,7 @@
     "EQUITY_INTL_EX_US": -0.565,
     "EQUITY_US": -0.555
    },
+   "severity": 0.51,
    "shockId": "MARKET_CRASH_2008_LITE",
    "startDate": "2029-06-01T00:00:00.000Z",
    "tags": [],
@@ -48,6 +49,7 @@
     "FIXED_INCOME_AU": -0.02,
     "FIXED_INCOME_US": -0.034
    },
+   "severity": 0.51,
    "shockId": "MARKET_CRASH_2008_LITE",
    "startDate": "2029-06-01T00:00:00.000Z",
    "tags": [],
@@ -567,7 +569,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 243392.666073,
+ "cumulativeTaxesPaid": 243338.968473,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -1104,8 +1106,8 @@
   "iraAccount": 454694.41,
   "k401Account": 453794.07,
   "monthly_expenses": 7164.31377917,
-  "netLiquidity": 3154438,
-  "netWorth": 6671014.77,
+  "netLiquidity": 3154247.61,
+  "netWorth": 6670824.39,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
   "rothAccount": 618473.46,
@@ -1118,7 +1120,7 @@
   "superAccount": 385184.74,
   "super_earnings": 37298.7,
   "tlh_skipped_no_substitute": 2,
-  "usSavingsAccount": 491409.30716,
+  "usSavingsAccount": 491218.92476,
   "usStockAccount": 86516.6,
   "us_savings_interest": 655.17,
   "us_stock_earnings": 107310.82
@@ -1268,6 +1270,13 @@
  "propertyReturnDev": {},
  "propertyReturnDriftComp": {},
  "propertyReturnMarketDev": 0,
+ "regimeActions": {
+  "rebalance_to_target": {
+   "firedForShocks": [
+    "MARKET_CRASH_2008_LITE"
+   ]
+  }
+ },
  "rothAccount": {
   "allowsEarlyWithdrawal": true,
   "balance": 618473.46,
@@ -2223,7 +2232,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 501669.190747,
+  "balance": 501478.808347,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2237,7 +2246,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 501669.190747,
+    "costBasis": 501478.808347,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2248,7 +2257,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 501669.190747,
+    "marketValue": 501478.808347,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",

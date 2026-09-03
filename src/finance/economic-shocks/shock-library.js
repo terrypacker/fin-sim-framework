@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { REGIME_TAG } from '../economic-regimes/regime-tag.js';
+
 /**
  * Predefined financial shock library.
  *
@@ -42,6 +44,36 @@
  *    82 % of COVID's. So the fast episodes are level breaks and the slow ones are mostly
  *    drag — which is why the numbers below look so different from each other.
  *
+ * ── Tags, and the STRESS WINDOW (design 29 §4.1) ─────────────────────────────────
+ * A preset may tag itself. Tags are what the behavioral layer gates on — `PANIC_SELL`,
+ * `CASH_BUCKET_DRAWDOWN`, `DOWNTURN_ROTH_CONVERSION`, `CONTRIBUTION_SUSPENSION` and
+ * `OPPORTUNISTIC_REBALANCE` all read `regime.tags` and do nothing without one, so an
+ * untagged library was a library in which every one of those strategies was configurable
+ * and inert. Design 29 §4.1 always said the library sets them; it just never did.
+ *
+ * Tags are declared on ONE leg, and that leg's `durationMonths` IS the stress window —
+ * the tag does not decay with the recovery factor, it is simply present or absent while
+ * its regime lives. That makes the choice of leg a real modelling statement, so each
+ * tagged preset carries a dedicated `stress` leg with NO adjustments of its own: its only
+ * job is to state how long the household behaves as though it is in a crisis. Hanging the
+ * tag on the equity leg instead would have inherited that leg's recovery window, which is
+ * chosen to fit a PRICE PATH and is much longer — 120 months on the dot-com bust, whose
+ * bust phase was 30.
+ *
+ * The window is the measured peak→trough (MEASUREMENTS §1), floored at 12 months so that
+ * it always spans at least one period boundary — the strategies are evaluated on period
+ * advance, and a 2-month window (COVID, as measured) could otherwise be stepped over
+ * entirely.
+ *
+ * Which tag, and why not all of them:
+ *   ECONOMIC_STRESS      every broad-market equity preset except MILD_CORRECTION.
+ *   PANIC_SELL_TRIGGER   only the SHARP falls — GFC, COVID, dot-com. Panic-selling is an
+ *                        entry reaction; nobody panics into year six of a lost decade, and
+ *                        the strategy fires once per shock anyway.
+ *   (none)               MILD_CORRECTION, the control arm that must not break a plan; the
+ *                        housing preset, which is not a market-wide event; and the three
+ *                        curve shocks, which have no equity leg at all.
+ *
  * `severity` is each preset's measured trough depth, and scales the whole shock (level and
  * drag together) when an MC sweep or the optimizer overwrites it.
  *
@@ -74,6 +106,15 @@ export const SHOCK_LIBRARY = Object.freeze({
       ],
     },
     legs: [
+      // Stress window: 17 months, the measured S&P and OECD peak→trough (MEASUREMENTS §1).
+      // Not the equity leg's 72 and emphatically not the rates leg's 84 — the easing
+      // outlived the crash by years, and a household is not in crisis posture because the
+      // funds rate is still at zero.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER],
+        recovery: { profile: 'L', durationMonths: 17 },
+      },
       {
         id: 'equity',
         regime: {
@@ -94,7 +135,16 @@ export const SHOCK_LIBRARY = Object.freeze({
           // S&P 500 dividends per share fell 22.3 % peak-to-trough (MEASUREMENTS §3). The
           // AU figure is the US figure: there is no AU dividend series on disk, and the
           // ASX's financials-heavy payout almost certainly fell further. Flagged, not measured.
-          dividendAdjustment: { EQUITY_US: -0.22, EQUITY_AU: -0.22 },
+          // The two INTERNATIONAL sleeves carry the US figure for the same reason. Naming
+          // only US and AU was not a claim that a global fund kept paying through 2008-09 —
+          // it was a hole: `effectiveDividendAdjustments` is keyed by the HOLDING's rate key
+          // (holdings-earnings.js), so an unnamed sleeve took the price hit and went on
+          // paying its full yield. EQUITY_INTL_EX_AU is ~70 % US by construction, so the US
+          // figure is close to right there; EQUITY_INTL_EX_US is asserted, like the AU one.
+          dividendAdjustment: {
+            EQUITY_US: -0.22, EQUITY_AU: -0.22,
+            EQUITY_INTL_EX_AU: -0.22, EQUITY_INTL_EX_US: -0.22,
+          },
           // The AUD fell 36 % against the USD in four months and was still 18.4 % down a
           // year on. +0.25 on a 1.55 base is ~16 %, between the spike and the 12-month.
           fxAdjustment:    { USD_AUD: 0.25 },
@@ -150,6 +200,14 @@ export const SHOCK_LIBRARY = Object.freeze({
       ],
     },
     legs: [
+      // 23 months — the 1973-74 nominal peak→trough (MEASUREMENTS §1), which is the part
+      // of the decade that felt like a crash. No panic tag: a ten-year real-terms grind is
+      // not an event anyone panic-sells into, and PanicSell only ever fires on entry.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS],
+        recovery: { profile: 'L', durationMonths: 23 },
+      },
       {
         id: 'equity',
         regime: {
@@ -227,6 +285,14 @@ export const SHOCK_LIBRARY = Object.freeze({
       ],
     },
     legs: [
+      // The sharpest entry in the library — the panic case if there is one. Measured
+      // peak→trough is 2 months and back-to-peak 7; the window is FLOORED at 12 so a
+      // period-advance-evaluated strategy cannot step straight over it.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER],
+        recovery: { profile: 'L', durationMonths: 12 },
+      },
       {
         id: 'equity',
         regime: {
@@ -245,8 +311,12 @@ export const SHOCK_LIBRARY = Object.freeze({
         id: 'markets',
         regime: {
           // S&P dividends per share fell 2.3 % (MEASUREMENTS §3). The old −30 % / −20 %
-          // was the single largest calibration error in this library.
-          dividendAdjustment: { EQUITY_US: -0.03, EQUITY_AU: -0.03 },
+          // was the single largest calibration error in this library. Every sleeve carries
+          // the measured figure — see the GFC preset for why the intl keys must be named.
+          dividendAdjustment: {
+            EQUITY_US: -0.03, EQUITY_AU: -0.03,
+            EQUITY_INTL_EX_AU: -0.03, EQUITY_INTL_EX_US: -0.03,
+          },
           // CPI YoY FELL to 0.2 % by May 2020 (§4). The 2021-22 inflation was 18 months
           // later, and this framework cannot start a leg late (design 21 §23) — so this
           // preset models the disinflation that actually accompanied the crash, and the
@@ -282,18 +352,51 @@ export const SHOCK_LIBRARY = Object.freeze({
    * dividend trim this preset used to carry is gone. 100 % of the fall was inside three
    * months, so it is a pure level break with a fast rebound.
    *
-   * US-only, deliberately: it is the one preset that isolates a single sleeve.
+   * US-LED, deliberately: it is the one preset that does not move every sleeve, and the
+   * only one that leaves EQUITY_AU and EQUITY_INTL_EX_US untouched.
+   *
+   * `EQUITY_INTL_EX_AU` moves with it, though, because that sleeve is a global-ex-Australia
+   * basket — roughly 70 % US by weight — and a US correction is most of what it holds. It
+   * is priced at the framework's own market-factor loading for the sleeve
+   * (`DEFAULT_EQUITY_BETA`, 0.95), not at a fresh guess: −0.115 × 0.95 and −0.418 × 0.95.
+   * Leaving it out meant an AU household whose growth sleeve is a global fund felt nothing
+   * at all from the library's control-arm correction.
+   *
+   * It IS tagged `ECONOMIC_STRESS`, and the control-arm property is preserved by the
+   * SEVERITY THRESHOLD rather than by the omission (design 21 §24). At `severity` 0.115 it
+   * sits below every strategy's 0.25 default, so nothing fires and the arm behaves exactly
+   * as an untagged one — but the decision now lives where it can be tuned and swept. A
+   * household modelled as jumpy can lower its own threshold and see the dip bite, and an MC
+   * sweep that pushes this preset's severity to 0.4 correctly starts suspending, where a
+   * hard-coded absence of a tag would have stayed silent at any depth.
    */
   MILD_CORRECTION: {
     shockId:   'MILD_CORRECTION',
     name:      'Mild Correction (−11.5 % US equity)',
     severity:  0.115,
     levelEffects: {
-      equityRevaluation: { rateKeys: ['EQUITY_US'], multiplier: -0.115 },
+      equityRevaluation: [
+        { rateKeys: ['EQUITY_US'],           multiplier: -0.115 },
+        { rateKeys: ['EQUITY_INTL_EX_AU'],   multiplier: -0.109 },
+      ],
     },
-    regime: {
-      returnAdjustment: { EQUITY_US: -0.418 },
-    },
+    // The legs form, purely so the stress window can be stated separately from the price
+    // path: measured peak→trough is 3 months (floored to 12, §1), against the 24 the
+    // rebound needs. The equity leg is what this preset always was.
+    legs: [
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS],
+        recovery: { profile: 'L', durationMonths: 12 },
+      },
+      {
+        id: 'equity',
+        regime: {
+          returnAdjustment: { EQUITY_US: -0.418, EQUITY_INTL_EX_AU: -0.397 },
+        },
+        recovery: { profile: 'V_REBOUND', durationMonths: 24, reboundStart: 0.12, reboundPeak: 0.55 },
+      },
+    ],
     recovery: { profile: 'V_REBOUND', durationMonths: 24, reboundStart: 0.12, reboundPeak: 0.55 },
   },
 
@@ -386,6 +489,16 @@ export const SHOCK_LIBRARY = Object.freeze({
     // completely different clocks — and sharing one recovery curve handed back the bond
     // rally this episode is famous for (design 21 §18.6).
     legs: [
+      // 30 months: the measured peak→trough, and the reason this preset exists — a bust
+      // long enough to exhaust a two-year bucket. The tag goes here rather than on either
+      // equity leg because posture is a household property, not a per-sleeve one, and
+      // because the US leg's 120-month price window would have claimed a decade of crisis
+      // for a 30-month bust.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER],
+        recovery: { profile: 'L', durationMonths: 30 },
+      },
       {
         // US and international ex-AU: −43.7 % over 30 months, back to the prior peak at 81.
         id: 'equity',
@@ -416,7 +529,12 @@ export const SHOCK_LIBRARY = Object.freeze({
         regime: {
           // Dividends held up: S&P 500 dividends per share fell just 6.4 % (MEASUREMENTS §3)
           // — the damage was concentrated in companies that paid none. A trim, not a collapse.
-          dividendAdjustment: { EQUITY_US: -0.064, EQUITY_AU: -0.05 },
+          // The intl sleeves take the US figure; AU keeps its own, milder −5 % (the ASX had
+          // no tech bubble to deflate).
+          dividendAdjustment: {
+            EQUITY_US: -0.064, EQUITY_AU: -0.05,
+            EQUITY_INTL_EX_AU: -0.064, EQUITY_INTL_EX_US: -0.064,
+          },
           // Mild, not GFC-scale: the USD bid of 2000-01 was largely handed back by 2002, and
           // realized USD/AUD volatility barely moved (×1.03, MEASUREMENTS §7).
           fxAdjustment:    { USD_AUD: 0.08 },
@@ -494,6 +612,18 @@ export const SHOCK_LIBRARY = Object.freeze({
       ],
     },
     legs: [
+      // The one preset whose stress window really is the whole thing: the measured real
+      // peak→trough is 103 months and the preset asserts a flat decade. Note what that
+      // means downstream — a household running CONTRIBUTION_SUSPENSION here stops
+      // contributing for ten years. Faithful to a preset built around the ABSENCE of a
+      // recovery, and the harshest window in the library; check it is what you meant
+      // before reading an arm that combines the two. No panic tag, for the same reason
+      // as stagflation.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS],
+        recovery: { profile: 'L', durationMonths: 120 },
+      },
       {
         id: 'equity',
         regime: {
@@ -508,7 +638,10 @@ export const SHOCK_LIBRARY = Object.freeze({
           returnAdjustment: {
             EQUITY_US: -0.057, EQUITY_INTL_EX_AU: -0.057, EQUITY_INTL_EX_US: -0.045, EQUITY_AU: -0.005,
           },
-          dividendAdjustment: { EQUITY_US: -0.10, EQUITY_AU: -0.05 },
+          dividendAdjustment: {
+            EQUITY_US: -0.10, EQUITY_AU: -0.05,
+            EQUITY_INTL_EX_AU: -0.10, EQUITY_INTL_EX_US: -0.10,
+          },
           fxAdjustment:    { USD_AUD: 0.04 },
           fxVolAdjustment: { USD_AUD: 0.25 },
         },

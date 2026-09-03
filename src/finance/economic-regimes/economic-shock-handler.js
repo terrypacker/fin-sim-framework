@@ -100,7 +100,24 @@ export class EconomicShockHandler extends HandlerEntry {
           // additive shape delta the YieldCurveReducer composes onto baseYieldCurve, scaled
           // by this regime's recovery factor. Null for non-curve shocks (a no-op there).
           yieldCurveTwist:        leg.regime?.yieldCurveTwist        ?? null,
-          tags:                   shock.tags ?? [],
+          // Tags are read PER LEG, falling back to the shock. A leg is a regime with its
+          // own window, and a tag names the window a behavioral strategy lives inside —
+          // so stamping one shock-level tag onto every leg would say the wrong thing.
+          // The GFC's `rates` leg runs 84 months against its equity leg's 72; tagged
+          // shock-wide, `ContributionSuspension` would halt contributions for the whole
+          // easing cycle, years after the crash it is reacting to had ended. Each preset
+          // therefore tags ONE leg — the one whose window IS the episode's stress.
+          tags:                   leg.tags ?? shock.tags ?? [],
+          // The episode's measured trough depth, carried onto EVERY leg (it is a property
+          // of the shock, not of one leg's clock). This is the magnitude channel that sits
+          // beside the tags: a tag says which KIND of stress is in play, `severity` says how
+          // hard, and a strategy can then gate on a threshold instead of the library having
+          // to grow a tag per intensity (design 21 §24).
+          //
+          // It is already the SWEPT value here — `applySeverity` rewrites it before the
+          // event is scheduled — which is the whole reason the magnitude lives on this
+          // channel and not in the tag vocabulary, which a sweep cannot reach.
+          severity:               shock.severity ?? null,
         },
       });
     }

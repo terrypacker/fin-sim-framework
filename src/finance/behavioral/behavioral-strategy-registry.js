@@ -33,6 +33,19 @@ import {
 } from '../../scenarios/intl-retirement-scenario.js';
 
 /**
+ * The shared half of every severity-threshold param's description (design 21 §24). The
+ * strategy-specific sentence goes in front of it; this part is the same wherever a
+ * threshold appears, and saying it once is what stops the two copies drifting apart.
+ */
+const SEVERITY_THRESHOLD_DESCRIPTION =
+  'The shock preset\'s `severity` is its measured trough depth (0-1) and is the MC/optimizer '
+  + 'knob, so a threshold stated here tracks a severity sweep instead of being frozen into the '
+  + 'regime tag. At the 0.25 default a mild correction (0.115) and COVID (0.19) pass through '
+  + 'untouched, while a GFC (0.51), a lost decade (0.51) or a dot-com bust (0.35) trips it. A '
+  + 'shock carrying no severity (a custom or curve shock) always qualifies — an absent number '
+  + 'is missing information, not evidence of mildness. Set 0 to react to every tagged shock.';
+
+/**
  * Registry of pluggable behavioral strategies (design/29).
  *
  * Each entry exposes:
@@ -68,9 +81,20 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
   },
 
   CONTRIBUTION_SUSPENSION: {
-    handlers:    (_context) => [],
-    reducers:    (_context) => [new ContributionSuspensionToggleReducer()],
-    paramSchema: ()         => [],
+    handlers: (_context) => [],
+    reducers: (context) => [new ContributionSuspensionToggleReducer({
+      minSeverity: context.parameters.contributionSuspensionMinSeverity ?? 0.25,
+    })],
+    paramSchema: () => [
+      {
+        key: 'contributionSuspensionMinSeverity', label: 'Suspend Contributions Above Severity',
+        type: 'Number', group: 'Behavioral', mc: false, opt: true,
+        defaultValue: 0.25,
+        description: 'Halting contributions is not what a household does over every dip. '
+          + SEVERITY_THRESHOLD_DESCRIPTION,
+        visibleWhen: { param: 'behavioralStrategies', includes: 'CONTRIBUTION_SUSPENSION' },
+      },
+    ],
   },
 
   TAX_LOSS_HARVEST: {
@@ -506,9 +530,20 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
   },
 
   CASH_BUCKET_DRAWDOWN: {
-    handlers:    (_context) => [],
-    reducers:    (_context) => [new CashBucketDrawdownReducer()],
-    paramSchema: ()         => [],
+    handlers: (_context) => [],
+    reducers: (context) => [new CashBucketDrawdownReducer({
+      minSeverity: context.parameters.cashBucketDrawdownMinSeverity ?? 0.25,
+    })],
+    paramSchema: () => [
+      {
+        key: 'cashBucketDrawdownMinSeverity', label: 'Defend Bucket Above Severity',
+        type: 'Number', group: 'Behavioral', mc: false, opt: true,
+        defaultValue: 0.25,
+        description: 'The bucket earns its keep in a deep, long drawdown, not by re-sequencing '
+          + 'every withdrawal over an ordinary dip. ' + SEVERITY_THRESHOLD_DESCRIPTION,
+        visibleWhen: { param: 'behavioralStrategies', includes: 'CASH_BUCKET_DRAWDOWN' },
+      },
+    ],
   },
 
   TAX_GAIN_HARVEST: {

@@ -736,13 +736,29 @@ add a positive adjustment).
   preset an offset account's implicit yield *falls* at the same time the bond sleeve *gains*.
   That divergence is the whole reason the preset belongs in the bond/offset study.
 
-### 18.5 Known gap, deliberately not closed here
+### 18.5 Known gap — CLOSED (2026-09-03)
 
-`MARKET_CRASH_2008_LITE`, `COVID_2020_LITE` and `MILD_CORRECTION` name only `EQUITY_US` /
-`EQUITY_AU` and so **miss the two international sleeves entirely** (`EQUITY_INTL_EX_US`,
+`MARKET_CRASH_2008_LITE`, `COVID_2020_LITE` and `MILD_CORRECTION` named only `EQUITY_US` /
+`EQUITY_AU` and so **missed the two international sleeves entirely** (`EQUITY_INTL_EX_US`,
 `EQUITY_INTL_EX_AU`, added by design 90 §7.2). A household holding an international sleeve
-takes no level hit from those presets. Fixing it moves goldens and is out of scope for this
-addendum; `DOTCOM_2000_LITE` names all four.
+took no level hit from those presets.
+
+Closed in two passes:
+
+- The **level and drag** half went with the §21 recalibration: every broad-market preset now
+  carries a per-market `equityRevaluation` array and a per-sleeve `returnAdjustment`.
+- The **dividend** half survived it, and was the more misleading of the two.
+  `effectiveDividendAdjustments` is keyed by the **holding's own** rate key, so a sleeve a
+  preset does not name is not "unaffected by choice" — it takes the price hit and goes on
+  paying its full yield through the crash. All four crash presets now name all four sleeves;
+  the international figures are the US figure, flagged like the AU one (§20.2).
+- `MILD_CORRECTION` stays deliberately US-**led**, but now also moves `EQUITY_INTL_EX_AU`:
+  that sleeve is a global-ex-Australia basket, ~70 % US by weight, priced at the framework's
+  own `DEFAULT_EQUITY_BETA` of 0.95 rather than a fresh guess. It still leaves `EQUITY_AU`
+  and `EQUITY_INTL_EX_US` alone, which is the property that makes it the control arm.
+
+Detector: `shock-library-tags-and-sleeves.test.mjs` SHOCKTAG-6/7, which fail if a future
+preset names one equity sleeve without naming the rest.
 
 ---
 
@@ -1079,3 +1095,154 @@ the numbers checkable, and it also makes them specific in a way a forecast is no
 presets composed together do not produce "a worse crash" so much as an arithmetic sum of two
 particular decades. The framework's honest use is **comparing strategies across a shared set
 of shock arms**, not quoting an absolute outcome from any one of them.
+
+
+---
+
+## 24. Regime tags and the intensity axis — `regime.severity`
+
+**Status**: Built (2026-09-03). Tests: `regime-severity-threshold.test.mjs`,
+`shock-library-tags-and-sleeves.test.mjs`. Related: design 29 §4.1.
+
+### 24.1 The defect this closes, and the one it does not
+
+Two separate things were wrong with the way a shock reached the behavioral layer.
+
+**No library preset carried tags at all.** Six strategies gate on `regime.tags` —
+`PANIC_SELL`, `CASH_BUCKET_DRAWDOWN`, `DOWNTURN_ROTH_CONVERSION`,
+`CONTRIBUTION_SUSPENSION`, `OPPORTUNISTIC_REBALANCE`, and the crash-entry path of
+`TARGET_ALLOCATION` (`resolveRegimeTarget`). With every preset untagged, all six were
+configurable and inert: a user could enable PanicSell, run a GFC arm, and watch nothing
+happen. Design 29 §4.1 had always said the library sets them.
+
+**And the tags carried no magnitude**, which is what §24.2 is about. Once presets are tagged,
+`MILD_CORRECTION` and `MARKET_CRASH_2008_LITE` say the identical thing to a strategy, and an
+11.5 % dip suspends contributions exactly as a 51 % drawdown does.
+
+### 24.2 Why intensity is a scalar and not a graded tag
+
+The obvious fix is to grade the vocabulary — `STRESS_LOW/MED/HIGH`, or `STRESS_1`…`STRESS_10`
+— and let a strategy fire above a rung. Three things argue against it, and the third is
+decisive.
+
+**Tags are a KIND channel, and they are already load-bearing as one.**
+`REGIME_TARGET_PRIORITY` (design 61 Lever C) is an ordered list of tag *names*, and
+`regimeTargets` is a scenario-authored map keyed by them: a user writes
+`{ ECONOMIC_STRESS: {…}, PANIC_SELL_TRIGGER: {…}, NORMAL: {…} }` and resolution is "first
+active match in priority order wins". Split the stress tag three ways and that authored
+surface goes from two mixes to six; ten ways and it is twenty. Every `tags.includes(X)` in
+the behavioral layer also becomes a hand-rolled ordered comparison. `regime-tag.js` already
+states the bar: *add a tag only when a strategy actually consumes it.*
+
+**The framework did not lack a magnitude channel — it had a surplus of half-wired ones.**
+`shock.severity` is the measured trough depth and the single MC/optimizer knob (§21.5);
+`regime.currentFactor` is position on the recovery curve, and `PanicSellReducer` already
+reads it as an intensity proxy; and design 29 §3.1 specifies a `panicSellSeverity` "regime
+property" that exists nowhere in the code. A fourth number would have made that worse.
+
+**A declared level cannot be swept, and that is the killer.** `applySeverity` rescales a
+shock's level effects and every leg's drag, and returns `{...shock, severity}` — **tags pass
+through untouched**. So a preset that declared its own intensity as `STRESS_HIGH` would still
+claim to be severe after an MC sweep had scaled it down to a mild dip: an arm suspending
+contributions through an 8 % correction because a label said it should. That is the same
+failure the library's untagged state produced in reverse — a column differing for a reason
+that is not the crash shape, except frozen where the sweep cannot reach it.
+
+### 24.3 The change
+
+**One field.** `EconomicShockHandler` stamps `severity: shock.severity ?? null` onto every
+regime it creates, beside `shockId`. Severity is a property of the episode, not of one leg's
+clock, so every leg carries it, and it is already the **swept** value by the time the handler
+sees it. This also retires design 29 §3.1's `panicSellSeverity` rather than adding a second
+field next to it.
+
+**One helper.** `regime-stress.js` exposes `regimeMeetsSeverity` / `stressRegimes` /
+`isStressed`, so the predicate is written once rather than re-inlined per strategy.
+
+**Thresholds live on the STRATEGY, not on the shock.** `contributionSuspensionMinSeverity`
+and `cashBucketDrawdownMinSeverity` (both default 0.25) are ordinary param-schema entries, so
+they are per-scenario, visible in the UI, and available to the optimizer. "Only suspend
+contributions in a medium-to-high stress environment" is then a number the household owns.
+
+**Unrated shocks always qualify.** A regime whose `severity` is null clears any threshold.
+That is deliberate: an absent number is missing information, not evidence of mildness, and an
+author who put a tag on an unrated custom shock made a statement a default threshold has no
+standing to overrule. It also keeps every pre-existing custom shock behaving as it did.
+
+### 24.4 The stress WINDOW, and why tags sit on their own leg
+
+A tag does **not** decay with the recovery factor — it is present or absent while its regime
+lives — so the tagged leg's `durationMonths` *is* the stress window. Since §19 a shock's tags
+are read per leg (`leg.tags ?? shock.tags`), and each tagged preset carries a dedicated
+`stress` leg with **no rate adjustments at all**, whose only job is to state that window.
+
+Hanging the tag on the equity leg instead would have inherited a window chosen to fit a
+**price path**, which is much longer: the dot-com equity leg runs 120 months for a 30-month
+bust. Hanging it on the shock would have been worse still — the handler stamps shock-level
+tags onto every leg, so the GFC's 84-month easing leg would have kept `ContributionSuspension`
+on for the whole easing cycle, years after the crash it was reacting to had ended.
+
+Windows are the measured peak→trough (`MEASUREMENTS.md` §1), floored at 12 months because the
+strategies are evaluated on period advance and COVID's measured 2 months could otherwise be
+stepped straight over.
+
+| preset | severity | stress window | tags |
+|---|---|---|---|
+| `MARKET_CRASH_2008_LITE` | 0.51 | 17 mo | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `LOST_DECADE_2000` | 0.51 | 120 mo | `ECONOMIC_STRESS` |
+| `STAGFLATION_1970S_LITE` | 0.43 | 23 mo | `ECONOMIC_STRESS` |
+| `DOTCOM_2000_LITE` | 0.35 | 30 mo | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `COVID_2020_LITE` | 0.19 | 12 mo (measured 2) | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `MILD_CORRECTION` | 0.115 | 12 mo (measured 3) | `ECONOMIC_STRESS` |
+| `SF_BAY_HOUSING_CRASH`, the three curve shocks | — | — | none |
+
+Only the **sharp** falls carry `PANIC_SELL_TRIGGER`: panic-selling is an entry reaction and
+the strategy fires once per shock, so nobody panics into year six of a lost decade.
+
+`MILD_CORRECTION` is tagged, and its control-arm property is held by the **threshold** rather
+than by the omission. At 0.115 it sits under every default and nothing fires, so the arm
+behaves exactly as an untagged one — but the decision now lives where it can be tuned and
+swept. A household modelled as jumpy lowers its own threshold and sees the dip bite; an MC
+sweep pushing this preset to 0.4 correctly starts suspending, where a missing tag would have
+stayed silent at any depth.
+
+### 24.5 What the ladder produces
+
+One number and one param, against the whole library at the 0.25 default:
+
+| preset | severity | panics? | suspends? |
+|---|---|---|---|
+| GFC | 0.51 | yes | yes |
+| Lost decade | 0.51 | no | yes |
+| Stagflation | 0.43 | no | yes |
+| Dot-com | 0.35 | yes | yes |
+| COVID | 0.19 | yes | **no** |
+| Mild | 0.115 | no | no |
+
+The COVID row is the one worth defending rather than explaining away: households did not stop
+contributing through a crash that round-tripped in seven months, and the model now says so
+without anybody hand-tagging it.
+
+### 24.6 The honest weakness, and the second axis
+
+**Depth is not felt stress.** COVID ranks fifth of six on severity and was the sharpest panic
+in the library. A single scalar mis-ranks it, and the only thing rescuing the ordering above
+is that panic is carried by the *kind* tag, which does not consult depth at all.
+
+That is a real limit, and the right response if it starts to matter is a **second axis**, not
+more rungs on this one. Two candidates, both currently unmodelled:
+
+- **Sharpness** — what fraction of the fall lands immediately. The library already knows this
+  per episode (8 % of the GFC's fall was instantaneous against 82 % of COVID's, §21.4) and it
+  is exactly the quantity that separates a panic from a grind. It is presently *implicit*, in
+  the split between `levelEffects` and the drag; making it explicit would let a strategy read
+  "how fast did this arrive" as directly as it now reads "how deep did it go", and would let
+  `PANIC_SELL_TRIGGER` be derived rather than hand-assigned per preset.
+- **Income shock** — the axis a contribution suspension arguably responds to in the first
+  place. A household stops contributing because a job looks unsafe, not because a chart fell;
+  the framework has no unemployment or income-interruption model, so portfolio depth is
+  standing in for something it is not.
+
+Both would compose the same way severity does: another scalar on the regime, another
+threshold on the strategy, no new tags. That is the property worth preserving — the reason to
+keep the tag vocabulary small is precisely so that adding an axis later stays cheap.

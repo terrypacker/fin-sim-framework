@@ -9,14 +9,15 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { REGIME_TAG }        from '../economic-regimes/regime-tag.js';
+import { isStressed }        from '../economic-regimes/regime-stress.js';
 
 /**
  * CashBucketDrawdownReducer — behavioral strategy (design/29 §3.7, Increment 6).
  *
  * Sequence-of-returns protection. Toggles
  * `state.regimeActions['drawdown_source_override'] = { active: boolean }`
- * while PANIC_SELL_TRIGGER or ECONOMIC_STRESS is active.
+ * while a PANIC_SELL_TRIGGER or ECONOMIC_STRESS regime at or above `minSeverity` is active
+ * (design 21 §24 — the tag says which KIND of downturn, `severity` says how hard).
  *
  * ReplenishSavingsReducer reads the `active` flag and, when true, re-sorts
  * withdrawal sources to prefer cash/fixed income before equities — preventing
@@ -28,19 +29,24 @@ import { REGIME_TAG }        from '../economic-regimes/regime-tag.js';
  */
 export class CashBucketDrawdownReducer extends Reducer {
   static type        = 'CashBucketDrawdownReducer';
-  static description = 'Toggles drawdown_source_override active flag: cash/bonds drawn before equities while stress regime is active (design/29 §3.7).';
+  static description = 'Toggles drawdown_source_override active flag: cash/bonds drawn before equities while a stress regime at or above minSeverity is active (design/29 §3.7).';
 
-  constructor() {
+  /**
+   * @param {object}      [opts]
+   * @param {number|null} [opts.minSeverity] - trough depth below which the household keeps
+   *   its normal drawdown order. Defends the bucket where it earns its keep (a deep,
+   *   long drawdown) without re-sequencing every withdrawal over an ordinary dip. Null
+   *   disables the gate.
+   */
+  constructor({ minSeverity = null } = {}) {
     super('Cash Bucket Drawdown', PRIORITY.PRE_PROCESS);
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    this.minSeverity = minSeverity;
   }
 
   reduce(state, _action) {
     const regimes   = state.activeRegimes ?? [];
-    const stressed  = regimes.some(r =>
-      r.tags?.includes(REGIME_TAG.PANIC_SELL_TRIGGER) ||
-      r.tags?.includes(REGIME_TAG.ECONOMIC_STRESS)
-    );
+    const stressed  = isStressed(regimes, { minSeverity: this.minSeverity });
 
     const current = state.regimeActions?.drawdown_source_override?.active ?? false;
     if (stressed === current) return this.newState(state);

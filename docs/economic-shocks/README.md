@@ -58,6 +58,64 @@ and `LOST_DECADE_2000` both use this. Sharing one curve made the bond rally roun
 construction — the framework deleting the exact protection the episode is famous for
 (design 21 §19).
 
+### Tags, and the stress window
+
+A preset may **tag** itself, and the tags are the only thing the behavioral layer
+(`design/29`) gates on. `PANIC_SELL`, `CASH_BUCKET_DRAWDOWN`, `DOWNTURN_ROTH_CONVERSION`,
+`CONTRIBUTION_SUSPENSION` and the crash-entry path of `OPPORTUNISTIC_REBALANCE` /
+`TARGET_ALLOCATION` all read `regime.tags`; an untagged shock leaves every one of them
+configurable and inert.
+
+Tags sit on **one leg**, and that leg's `durationMonths` is the **stress window** — a tag
+does not decay with the recovery factor, it is present or absent while its regime lives. So
+each tagged preset carries a dedicated `stress` leg with no rate adjustments of its own,
+whose only job is to state how long the household behaves as though it is in a crisis. The
+window is the measured peak→trough (`MEASUREMENTS.md` §1), floored at 12 months so it always
+spans a period boundary — the strategies are evaluated on period advance, and COVID's
+measured 2 months could otherwise be stepped straight over.
+
+| preset | stress window | tags |
+|---|---|---|
+| `MARKET_CRASH_2008_LITE` | 17 mo | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `COVID_2020_LITE` | 12 mo (measured 2) | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `DOTCOM_2000_LITE` | 30 mo | `ECONOMIC_STRESS`, `PANIC_SELL_TRIGGER` |
+| `STAGFLATION_1970S_LITE` | 23 mo | `ECONOMIC_STRESS` |
+| `LOST_DECADE_2000` | 120 mo | `ECONOMIC_STRESS` |
+| `MILD_CORRECTION` | 12 mo (measured 3) | `ECONOMIC_STRESS` |
+| `SF_BAY_HOUSING_CRASH`, the three curve shocks | — | none |
+
+Only the **sharp** falls carry `PANIC_SELL_TRIGGER`: panic-selling is an entry reaction, and
+nobody panics into year six of a lost decade. `LOST_DECADE_2000`'s 120-month window is the
+harshest in the library: read an arm that combines it with `CONTRIBUTION_SUSPENSION` knowing
+the household stops contributing for ten years.
+
+### How hard, as opposed to what kind — `regime.severity`
+
+A tag says which KIND of downturn is in play. **`severity` says how hard**, and it is a
+separate channel on purpose (design 21 §24). Every regime a shock creates carries the
+shock's measured trough depth, and strategies gate on a threshold they own:
+`contributionSuspensionMinSeverity` and `cashBucketDrawdownMinSeverity`, both defaulting to
+**0.25**. So "only suspend contributions in a medium-to-high stress environment" is a number
+you set, not a label the library fixed.
+
+| preset | severity | panics? | suspends? |
+|---|---|---|---|
+| GFC | 0.51 | yes | yes |
+| Lost decade | 0.51 | no | yes |
+| Stagflation | 0.43 | no | yes |
+| Dot-com | 0.35 | yes | yes |
+| COVID | 0.19 | yes | **no** |
+| Mild | 0.115 | no | no |
+
+This is why the intensity is **not** a graded tag (`STRESS_LOW/MED/HIGH`): `severity` is the
+MC/optimizer knob, and `applySeverity` leaves tags untouched. A preset that declared its own
+intensity as a label would still claim to be severe after a sweep had scaled it to a mild
+dip. `MILD_CORRECTION` is therefore tagged like the rest, and held back by its depth rather
+than by the absence of a tag — sweep it to 0.4 and it correctly starts suspending.
+
+A shock with **no** severity (a custom or curve shock) clears any threshold: an absent number
+is missing information, not evidence of mildness.
+
 ### Severity
 
 `severity` is the single MC/optimizer knob, and each preset's value is **its measured trough
@@ -258,15 +316,20 @@ market USD/AUD history for the 1970s. The major-currencies dollar index fell **1
 
 ### `MILD_CORRECTION` — Mild Correction
 
-**What it does.** −11.5 % on `EQUITY_US` only, with a fast rebound that regains the prior
-peak in 12 months. No FX, no rates, no inflation, **no dividend cut**.
+**What it does.** −11.5 % on `EQUITY_US` and −10.9 % on `EQUITY_INTL_EX_AU`, with a fast
+rebound that regains the prior peak in 12 months. No FX, no rates, no inflation, **no
+dividend cut**, and **no tags** — see §1.
 
 **Why this shape.** The low-severity control arm: the thing that should *not* break a plan,
 and therefore the baseline every other preset is read against. Calibrated to 2018 Q4 —
 S&P −11.5 % over 3 months, back to peak in 7, Nasdaq −23.6 % (M §1). 100 % of the fall was
 inside three months, so it is a pure level break. Dividends **did not move at all** (M §3),
-so the −10 % trim the preset used to carry is gone. US-only is deliberate: it is the one
-preset that isolates a single sleeve.
+so the −10 % trim the preset used to carry is gone. US-**led** is deliberate: it is the one
+preset that leaves `EQUITY_AU` and `EQUITY_INTL_EX_US` alone. `EQUITY_INTL_EX_AU` does move,
+because that sleeve is a global-ex-Australia basket — roughly 70 % US by weight — and
+leaving it out meant an AU household whose growth sleeve is a global fund felt nothing at
+all from the library's control arm. It is priced at the framework's own market-factor
+loading for the sleeve (`DEFAULT_EQUITY_BETA` = 0.95), not at a fresh guess.
 
 ---
 
@@ -352,10 +415,15 @@ particular directions, so they are worth knowing before quoting one.
 Three figures in the library are **not measured**, and are flagged in place so nobody
 "verifies" them against the wrong series:
 
-- **Every AU `dividendAdjustment` is the US figure.** There is no free scripted AU dividend
+- **Every AU and INTERNATIONAL `dividendAdjustment` is the US figure.** There is no free scripted AU dividend
   series — the RBA path that would carry it 404s (see `SOURCES.md`). The COVID case is the
   one most likely wrong in a known direction: APRA's 2020 capital guidance cut bank payouts
-  hard, and banks are a far larger share of the ASX than of the S&P.
+  hard, and banks are a far larger share of the ASX than of the S&P. The two international
+  sleeves carry the US figure for the same reason. `EQUITY_INTL_EX_AU` is ~70 % US by
+  construction so it is close to right; `EQUITY_INTL_EX_US` is asserted. Naming only US and
+  AU, as the library used to, was not the cheaper claim — `effectiveDividendAdjustments` is
+  keyed by the *holding's* rate key, so an unnamed sleeve took the price hit and went on
+  paying its full yield straight through the crash.
 - **The 1970s FX leg.** The AUD floated on **12 December 1983**; every earlier USD/AUD
   observation is an administered rate. The claim is trade-weighted (major-currencies dollar
   −10.7 % over 1973–80, M §7b) — sign supported, magnitude asserted.
