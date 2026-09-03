@@ -6,6 +6,7 @@
  */
 
 import { ScenarioPlugin }    from './scenario-plugin.js';
+import { ParametersPlugin } from './parameters-plugin.js';
 import { ConfigGraphPlugin } from './config-graph-plugin.js';
 import { ConfigListPlugin }  from './config-list-plugin.js';
 import { InspectorPlugin }   from './inspector-plugin.js';
@@ -35,7 +36,7 @@ import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
 import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
 
-export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
+export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
          McConfigPlugin, McResultsPlugin, McRunsPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
@@ -47,6 +48,7 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
   { id: 'scenario',     title: 'Scenario',      component: ScenarioPlugin    },
+  { id: 'parameters',   title: 'Parameters',    component: ParametersPlugin  },
   { id: 'mc-config',    title: 'Monte Carlo',   component: McConfigPlugin    },
   { id: 'opt-config',   title: 'Optimize',      component: OptConfigPlugin   },
   { id: 'config-list',  title: 'Nodes',         component: ConfigListPlugin  },
@@ -85,7 +87,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'allocation', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

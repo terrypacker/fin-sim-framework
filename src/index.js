@@ -527,7 +527,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -1948,6 +1948,7 @@ export const Workbench = {
 
 export const FinancePlugins = {
   ScenarioPlugin,
+  ParametersPlugin,
   ConfigGraphPlugin,
   ConfigListPlugin,
   InspectorPlugin,

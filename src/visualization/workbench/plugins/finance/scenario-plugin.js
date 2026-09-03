@@ -1,5 +1,9 @@
 import { WorkbenchComponent } from '../../component.js';
 
+/**
+ * Scenario panel — scenario selection, identity, simulation period, and
+ * whole-scenario storage. The parameter list lives in ParametersPlugin.
+ */
 export class ScenarioPlugin extends WorkbenchComponent {
   constructor(_runtime) { super(); }
   render() {
@@ -35,16 +39,6 @@ export class ScenarioPlugin extends WorkbenchComponent {
       <label>End</label>
       <input type="date" id="simEndInput"/>
     </div>
-    <div class="node-header">Parameters</div>
-    <div class="param-filter-row">
-      <input id="paramsFilter" class="param-filter" type="text"
-             placeholder="Filter parameters (e.g. inflation, wage, retirement)…" />
-      <div id="paramsFilterFields" class="param-filter-fields"></div>
-    </div>
-    <div id="paramsList"></div>
-    <div class="wb-scenario-param-add">
-      <button class="btn btn-sm" id="addParamBtn">+ Add Parameter</button>
-    </div>
     <div class="node-header">Storage</div>
     <div class="node-body">
       <button class="btn" id="rebuildBtn">&#x21BA; Rebuild Simulation</button>
@@ -53,11 +47,6 @@ export class ScenarioPlugin extends WorkbenchComponent {
       <label class="btn btn-sm wb-upload-label">
         Upload JSON
         <input type="file" id="uploadJsonFileInput" accept=".json" class="wb-hidden" />
-      </label>
-      <button class="btn btn-sm" id="downloadCsvBtn">Download Params CSV</button>
-      <label class="btn btn-sm wb-upload-label">
-        Upload Params CSV
-        <input type="file" id="uploadCsvFileInput" accept=".csv,text/csv" class="wb-hidden" />
       </label>
     </div>
     `;
