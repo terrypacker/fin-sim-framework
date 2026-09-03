@@ -46,6 +46,7 @@ import { AccountEditor }              from '../visualization/accounts/account-ed
 import { RealPropertyEditor }         from '../visualization/assets/real-property-editor.js';
 import { CollectibleEditor }          from '../visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor }        from '../visualization/assets/company-equity-editor.js';
+import { SecurityEditor }             from '../visualization/assets/security-editor.js';
 import { BequestEditor }              from '../visualization/assets/bequest-editor.js';
 import { RealProperty }               from '../finance/assets/real-property.js';
 import { Collectible }                from '../finance/assets/collectible.js';
@@ -80,6 +81,8 @@ import { createAllocationSampler }   from '../finance/allocation-reporting/alloc
 import { withBalances }             from '../finance/spending-reporting/account-flow-tie.js';
 import { scenarioParamValues, primeRatesOf } from '../finance/param-schema-utils.js';
 import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
+import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage }
+  from '../scenarios/scenario-securities.js';
 import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 import { showScenarioLoadError }     from '../visualization/scenario/scenario-load-error-overlay.js';
@@ -312,6 +315,15 @@ export class WorkbenchApp extends BaseComponent {
       container:     document.getElementById('configGroupNodes'),
       graphQueryApi: registry.graphQueryApi,
       bus:           registry.bus,
+      // Design 94 step 10. Securities are cfg data on the scenario record, not service
+      // records on the config graph (see `scenario-securities.js` for why), so the list
+      // is handed its rows rather than querying the graph for a kind nothing registers.
+      // `kind` is stamped here because it is what the modal's editor factory dispatches
+      // on — the rows are plain specs everywhere else.
+      itemsByKind: {
+        security: () => listScenarioSecurities(registry.scenarioService?.getActive?.())
+          .map(sec => ({ ...sec, kind: 'security', name: sec.name || sec.symbol || sec.id })),
+      },
     });
 
     this.configList.onItemClick = (node) => this._openNodeInInspector(node);
@@ -329,6 +341,8 @@ export class WorkbenchApp extends BaseComponent {
         this._editModal.open({ kind: 'company', id: null, name: 'New Company Equity' });
       } else if (kind === 'bequest') {
         this._editModal.open({ kind: 'bequest', id: null, name: 'New Inheritance' });
+      } else if (kind === 'security') {
+        this._editModal.open({ kind: 'security', id: null, name: 'New Security' });
       } else {
         const newNode = this.configPresenter.createNode(kind, null);
         this._editModal.open(newNode);
@@ -516,6 +530,60 @@ export class WorkbenchApp extends BaseComponent {
           onDelete: (id) => {
             registry.companyEquityService.deleteCompanyEquity(id);
             this._editModal.close();
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      // ── design 94 step 10: the securities editor ──────────────────────────────
+      //
+      // Not a service record (see `scenario-securities.js`): the save writes straight to
+      // the ACTIVE SCENARIO RECORD, which is design 15's source of truth and the only
+      // place `cfg.securities` lives. Like every param edit, it reaches the running sim
+      // on the next Rebuild — but it reaches the security PICKERS immediately, because
+      // those read `scenarioSecurityRegistry(getActive())` at render time.
+      if (node?.kind === 'security') {
+        const scenario = registry.scenarioService?.getActive?.() ?? null;
+        const editor = new SecurityEditor({
+          container,
+          node,
+          existingIds: listScenarioSecurities(scenario).map(s => s.id),
+          onSave: (spec) => {
+            try {
+              upsertScenarioSecurity(scenario, spec);
+            } catch (e) {
+              // The registry's own rules, surfaced where they can still be fixed. A
+              // scenario that fails to build its registry does not open at all.
+              window.alert(e.message);
+              return;
+            }
+            this._editModal.close();
+            this.configList?.render();
+            // The drawdown-order param resolves its options from this list at render
+            // time (design 94 §10.2c), so a security authored here must show up there
+            // without a Rebuild.
+            this.scenarioTabPresenter?.refreshParams();
+          },
+          onDelete: (id) => {
+            // Positions naming it are deliberately NOT rewritten — see
+            // `deleteScenarioSecurity`. Say how many there are, because the lot keeps
+            // pointing at an id that now resolves to nothing and silently falls back to
+            // its own inline fields.
+            const held = scenarioSecurityUsage(scenario, id);
+            if (held.length) {
+              const where = held.map(h => `${h.name} (${h.lots})`).join(', ');
+              const ok = window.confirm(
+                `${held.reduce((n, h) => n + h.lots, 0)} position(s) still name '${id}' — ${where}.\n\n`
+                + 'They are not rewritten: a position is a position IN something, and changing that in '
+                + 'place would relabel history (design 94 §11). Each will fall back to its own inline '
+                + 'fields until you re-point it. Delete anyway?');
+              if (!ok) return;
+            }
+            deleteScenarioSecurity(scenario, id);
+            this._editModal.close();
+            this.configList?.render();
+            this.scenarioTabPresenter?.refreshParams();
           },
         });
         editor.render();

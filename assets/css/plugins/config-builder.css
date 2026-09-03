@@ -623,6 +623,48 @@
   vertical-align: middle;
 }
 
+/* ── Security editor (design 94 step 10) ──
+   The DECLARE toggle rides in the field caption: a Security says only what it declares,
+   and "declared null" is a different statement from "silent" (design 94 §4 rule 2). */
+.sec-section-head {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0 2px;
+  margin-top: 4px;
+}
+
+.sec-declare {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.node-field .sec-declare input[type="checkbox"] {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+}
+
+.node-field input:disabled,
+.node-field select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.node-error {
+  font-size: 10px;
+  color: var(--red);
+  padding: 6px 4px;
+  line-height: 1.4;
+}
+
 /* ── EnumMulti checkbox-group param editor ── */
 .enum-multi-editor {
   display: flex;
@@ -648,6 +690,72 @@
   margin: 0;
   accent-color: var(--accent-primary);
 }
+
+/* ── Ordered multi-select param editor (design 94 step 10) ──
+   The SET editor above shows membership; this one shows SEQUENCE, because
+   `drawdownSecurityOrder` is an order and a column of ticks cannot display one. */
+.ordered-enum-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0;
+  width: 100%;
+}
+
+.ordered-enum-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ordered-enum-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: grab;
+}
+
+.ordered-enum-row.is-dragging { opacity: 0.5; }
+
+.ordered-enum-row--missing { border-color: var(--warning-dim); color: var(--warning); }
+
+.ordered-enum-rank {
+  min-width: 14px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.ordered-enum-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ordered-enum-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.ordered-enum-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent-primary); }
+.ordered-enum-btn:disabled { opacity: 0.3; cursor: default; }
+
+.ordered-enum-empty,
+.enum-multi-empty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.ordered-enum-add select { width: 100%; }
 
 /* ── AgeBandList param editor (design/33) ── */
 .age-band-list-editor {

@@ -909,11 +909,12 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // Step 9 resolves them from the scenario record at render time
     // (`scenarioSecurityRegistry`), which is the same composition the run itself uses.
     //
-    // ⚠️ The EnumMulti control expresses order by CHECK ORDER (see
-    // `_buildEnumMultiEditor`): ticking appends. Workable, and under-serving a parameter
-    // that is an ORDER — a drag-orderable control is the honest fix.
+    // `ordered: true` (design 94 step 10) routes this to the reorderable control rather
+    // than the checkbox group. The group expressed order by CHECK ORDER — ticking appends
+    // — which cannot express a re-order at all, and, worse, does not SHOW the order it is
+    // storing. This param is a sequence, so it gets a control that says so.
     key: 'drawdownSecurityOrder', label: 'Drawdown Security Order',
-    type: 'EnumMulti', group: 'Spending',
+    type: 'EnumMulti', group: 'Spending', ordered: true,
     options: [], optionsFrom: 'securities',
     mc: false, opt: false, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownSecurityOrder,
     description: 'Which SECURITIES to raise cash out of first, in order, before the ones not '

@@ -1,0 +1,128 @@
+/* ── Securities Plugin (design 94 step 10) ───────────────────────────────────
+   The cross-account instrument rollup. Visually a sibling of the holdings grid —
+   deliberately, since the two answer the same shape of question at two scopes, and
+   a reader who learned one table should not have to learn a second. */
+
+.sec-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.sec-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sec-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sec-spacer { flex: 1; }
+
+.sec-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.sec-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.sec-csv-btn:hover { border-color: var(--blue-text); color: var(--blue-text); }
+
+.sec-body { flex: 1; overflow: auto; }
+
+.sec-placeholder {
+  color: var(--text-muted);
+  padding: 16px 12px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.sec-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sec-th {
+  padding: 4px 8px;
+  text-align: left;
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+
+.sec-th--num { text-align: right; }
+
+.sec-td {
+  padding: 3px 8px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.sec-td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sec-td--muted { color: var(--text-muted); font-style: italic; }
+
+.sec-row { cursor: pointer; }
+.sec-row:hover { background: var(--bg-subtle); }
+
+.sec-caret {
+  display: inline-block;
+  width: 10px;
+  color: var(--text-muted);
+}
+
+.sec-name { white-space: nowrap; }
+
+/* The per-account breakdown: indented and dimmed, so a glance separates the parts
+   from the instrument total they add up to. */
+.sec-detail-row td {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.sec-detail-name { padding-left: 26px !important; }
+
+.sec-total-row td {
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+.sec-pos { color: var(--diff-added); }
+.sec-neg { color: var(--diff-removed); }

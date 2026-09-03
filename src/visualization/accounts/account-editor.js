@@ -14,6 +14,7 @@ import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
 import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
+import { rateKeyOptionsHtml } from './rate-key-options.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Liability types: `balance` is debt owed (positive), net worth subtracts it, and
@@ -33,26 +34,9 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
 const ALLOCATIONS      = [...ALLOCATION_VALUES];
 
-// Rate Key choices for the holdings editor, grouped by asset category. A holding's
-// rateKey selects which market-return series drives its growth (state.effective*
-// Rates[rateKey]) and is the handle shocks/regimes author effects on. The class
-// keys (the four MARKET keys — design 90 §7.2) are all valid override
-// targets (see rate-keys.js). Blank = leave unset (the account resolves a default
-// at creation). A free-text typo silently fell back to a generic rate — this list
-// makes the valid set discoverable and prevents that.
-const RATE_KEY_GROUPS = [
-  { label: 'Equity — domestic',      keys: [RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU] },
-  // Design 90 §7.2 — grouped by MARKET, not by account wrapper. A wrapper-specific rate
-  // is now a per-account override (`<marketKey>::<stateKey>`) rather than a key of its own.
-  { label: 'Equity — international', keys: [RATE_KEYS.EQUITY_INTL_EX_US, RATE_KEYS.EQUITY_INTL_EX_AU] },
-  { label: 'Fixed income',           keys: [RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU] },
-  { label: 'Savings',                keys: [RATE_KEYS.SAVINGS_US, RATE_KEYS.SAVINGS_AU] },
-  { label: 'Gold',                   keys: [RATE_KEYS.GOLD] },
-  { label: 'Real estate / other',    keys: [RATE_KEYS.REAL_ESTATE_US, RATE_KEYS.REAL_ESTATE_AU, RATE_KEYS.COLLECTIBLE] },
-];
-// Flat set of known keys, for detecting an out-of-enum (custom/legacy) value so the
-// dropdown preserves it instead of silently dropping it on edit.
-const KNOWN_RATE_KEYS = new Set(RATE_KEY_GROUPS.flatMap(g => g.keys));
+// Rate Key choices live in `rate-key-options.js` — shared with the securities editor,
+// which picks the same key for an INSTRUMENT that this one picks for a lot (design 94
+// step 10). Two lists composed slightly differently would drift.
 
 /**
  * Default native currency for an account, by type then country. Fixed-country
@@ -1308,15 +1292,6 @@ function _escape(s) {
 }
 
 /**
- * Build the <option>/<optgroup> markup for a holding's Rate Key select.
- * Blank first (leave unset), then the known keys grouped by category. An
- * out-of-enum current value (custom/legacy) is preserved as a selected option so
- * editing a holding never silently drops it.
- *
- * @param {string} selected - the holding's current rateKey ('' when unset)
- * @returns {string} inner HTML for the <select>
- */
-/**
  * The Rate Key cell — a picker, or the security's own market shown read-only.
  *
  * `rateKey` is on the INSTRUMENT side of design 94 §5.1's partition, so once a lot names
@@ -1331,24 +1306,8 @@ function _escape(s) {
  */
 function _rateKeyCellHtml(h, override) {
   if (override === undefined) {
-    return `<select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select>`;
+    return `<select class="h-input" data-f="rateKey">${rateKeyOptionsHtml(h.rateKey ?? '')}</select>`;
   }
   return `<input class="h-input h-input--inherited" value="${_escape(override ?? '—')}" disabled`
     + ` title="From the security this position names — design 94 §5.1"/>`;
-}
-
-function _rateKeyOptionsHtml(selected) {
-  const cur   = selected ?? '';
-  const blank = `<option value=""${cur === '' ? ' selected' : ''}>— none —</option>`;
-  const groups = RATE_KEY_GROUPS.map(g => {
-    const opts = g.keys.map(k =>
-      `<option value="${_escape(k)}"${k === cur ? ' selected' : ''}>${_escape(k)}</option>`
-    ).join('');
-    return `<optgroup label="${_escape(g.label)}">${opts}</optgroup>`;
-  }).join('');
-  // Preserve an unrecognized current value (never drop what the user had).
-  const custom = (cur !== '' && !KNOWN_RATE_KEYS.has(cur))
-    ? `<optgroup label="Custom"><option value="${_escape(cur)}" selected>${_escape(cur)}</option></optgroup>`
-    : '';
-  return blank + groups + custom;
 }

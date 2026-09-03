@@ -52,6 +52,7 @@ import { ASSET_CLASS_COLOR, ASSET_CLASS_COLOR_DARK, colorForSeriesKey } from './
 import { createAllocationSampler, summarizeSamples, lastYearEndIndex, samplesToRows, samplesToTargetRows } from './finance/allocation-reporting/allocation-sampler.js';
 import { ASSET_CLASS, ASSET_CLASS_VALUES, LIABILITY_CLASSES, assetClassForAllocation, exposureCountryForRateKey } from './finance/allocation-reporting/asset-class.js';
 import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
+import { rollupBySecurity, totalSecurityRollup } from './finance/allocation-reporting/security-rollup.js';
 import { buildTargetCube, targetedStateKeys, driftAgainstTarget } from './finance/allocation-reporting/target-cube.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
 import { Asset, assertSpeculativeConsistency, isSpeculative } from './finance/assets/asset.js';
@@ -365,6 +366,7 @@ import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PR
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
+import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage } from './scenarios/scenario-securities.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { AU_BANKING } from './scenarios/toolsets/au-banking-toolset.js';
@@ -433,11 +435,13 @@ import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
+import { RATE_KEY_GROUPS, KNOWN_RATE_KEYS, rateKeyOptionsHtml } from './visualization/accounts/rate-key-options.js';
 import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
 import { BequestEditor } from './visualization/assets/bequest-editor.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
 import { _mainResidenceMode, _mainResidenceFields, RealPropertyEditor } from './visualization/assets/real-property-editor.js';
+import { UNREAD_SECURITY_FIELDS, SecurityEditor } from './visualization/assets/security-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
@@ -527,7 +531,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -795,6 +799,8 @@ export const Finance = {
   thresholdProbabilities,
   mixByOutcome,
   outcomeGapAt,
+  rollupBySecurity,
+  totalSecurityRollup,
   buildTargetCube,
   targetedStateKeys,
   driftAgainstTarget,
@@ -1740,6 +1746,10 @@ export const Scenarios = {
   synthesizeWeightedPriorities,
   ScenarioLoader,
   ScenarioRegistry,
+  listScenarioSecurities,
+  upsertScenarioSecurity,
+  deleteScenarioSecurity,
+  scenarioSecurityUsage,
   ScenarioSerializer,
   ScenarioStorage,
   AU_BANKING,
@@ -1791,6 +1801,9 @@ export const Services = {
 export const Visualization = {
   AccountEditor,
   AccountsController,
+  RATE_KEY_GROUPS,
+  KNOWN_RATE_KEYS,
+  rateKeyOptionsHtml,
   APP_EVENTS,
   AppDisplaySettings,
   BequestEditor,
@@ -1799,6 +1812,8 @@ export const Visualization = {
   _mainResidenceMode,
   _mainResidenceFields,
   RealPropertyEditor,
+  UNREAD_SECURITY_FIELDS,
+  SecurityEditor,
   ChartController,
   ChartPresenter,
   ChartView,
@@ -1973,6 +1988,7 @@ export const FinancePlugins = {
   CrossActionQueryPlugin,
   HoldingsPlugin,
   AllocationPlugin,
+  SecuritiesPlugin,
   SpendingPlugin,
   LiquidityPoolsPlugin,
   PaychequePlugin,

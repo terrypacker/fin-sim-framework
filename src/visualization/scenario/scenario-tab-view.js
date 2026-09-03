@@ -1754,15 +1754,21 @@ function _dynamicEnumOptions(param, scenario) {
 }
 
 /**
- * ⚠️ ORDER is expressed by CHECK ORDER, which is a real limitation and is why it is
- * written down. `selected` is seeded from the stored array in its stored order and a
- * newly ticked box APPENDS, so the value keeps a meaningful sequence — but there is no
- * way to re-order without unticking. For a set-valued param (`behavioralStrategies`)
- * that is exactly right; for an order-valued one (`drawdownSecurityOrder`, design 94
- * §10 item 3) it is a control that under-serves the parameter. A drag-orderable variant
- * is the honest fix and is not step 9's.
+ * A SET of options, expressed as checkboxes.
+ *
+ * Order rides on CHECK ORDER here — `selected` is seeded from the stored array in its
+ * stored order and a newly ticked box appends — which is exactly right for a set-valued
+ * param (`behavioralStrategies`: the strategies run, and "which ones" is the whole
+ * question). It under-serves an ORDER-valued one, because there is no way to move an
+ * entry without unticking everything after it. Design 94 step 9 recorded that as a
+ * limitation; step 10 answers it with `ordered: true`, which routes to
+ * {@link _buildOrderedEnumEditor} instead. The two are different controls because they
+ * are different parameters, not one control with a flag: the ordered one has no notion
+ * of "unticked but present", and the set one has no notion of position.
  */
 function _buildEnumMultiEditor(param, onChange, scenario = null) {
+  if (param.ordered === true) return _buildOrderedEnumEditor(param, onChange, scenario);
+
   const container = document.createElement('div');
   container.className = 'enum-multi-editor';
 
@@ -1803,4 +1809,157 @@ function _buildEnumMultiEditor(param, onChange, scenario = null) {
   });
 
   return container;
+}
+
+// ─── Ordered multi-select editor ──────────────────────────────────────────────
+
+/**
+ * An ORDER over a set of options — design 94 step 10, closing §10.2c.
+ *
+ * `drawdownSecurityOrder` is a sequence: "sell the employer stock before the index fund"
+ * is a statement about position, and the checkbox group could only express it as the
+ * order the boxes happened to be ticked in. Re-ordering meant unticking everything after
+ * the entry you wanted to move — a control that is not wrong so much as unusable, and
+ * one whose value the reader cannot even SEE, since a column of ticked boxes shows
+ * membership and not sequence.
+ *
+ * So the selected entries are rendered as a numbered list in their stored order, moved
+ * with the arrows or by dragging, and removed with ✕; unselected options live in an Add
+ * picker below. Three notes on what that costs:
+ *
+ * - **The value is the LIST, in list order.** `param.value` is rewritten from the DOM on
+ *   every mutation, so what the reader sees is the value — there is no separate selection
+ *   set that could drift from it.
+ * - **Drag state lives in this closure, not on `dataTransfer`.** jsdom has no
+ *   DataTransfer, so a control that stored the dragged index there would be untestable
+ *   in this repo's test environment — and a reorder control nobody can test is how the
+ *   arrows silently stop working.
+ * - **An option the scenario no longer offers is KEPT and marked.** A security deleted
+ *   from `cfg.securities` while it was in the order would otherwise vanish from the
+ *   control on the next render while remaining in the saved value: the panel and the run
+ *   would disagree, silently, in the direction that is hardest to notice.
+ */
+function _buildOrderedEnumEditor(param, onChange, scenario = null) {
+  const container = document.createElement('div');
+  container.className = 'ordered-enum-editor';
+
+  const options = _dynamicEnumOptions(param, scenario)
+    ?? (Array.isArray(param.options) ? param.options : []);
+  // Same coercion as the set editor, and for the same reason: a param retyped from
+  // Text/Enum arrives on already-saved scenarios as a bare string, and reading that as []
+  // would DISCARD the user's real setting on the first click.
+  let value = Array.isArray(param.value) ? [...param.value]
+    : (param.value == null || param.value === '') ? [] : [param.value];
+
+  let dragFrom = null;   // index being dragged; see the header note on dataTransfer
+
+  const commit = (next) => {
+    value = next;
+    param.value = [...next];
+    render();
+    onChange?.();
+  };
+
+  const move = (from, to) => {
+    if (to < 0 || to >= value.length || from === to) return;
+    const next = [...value];
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    commit(next);
+  };
+
+  function render() {
+    container.replaceChildren();
+
+    if (options.length === 0 && param.optionsFrom) {
+      const note = document.createElement('span');
+      note.className   = 'enum-multi-empty';
+      note.textContent = 'no securities in this scenario';
+      container.appendChild(note);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'ordered-enum-list';
+    list.dataset.role = 'list';
+
+    value.forEach((opt, i) => {
+      const row = document.createElement('div');
+      row.className   = 'ordered-enum-row';
+      row.draggable   = true;
+      row.dataset.opt = opt;
+      row.dataset.i   = String(i);
+
+      const rank = document.createElement('span');
+      rank.className   = 'ordered-enum-rank';
+      rank.textContent = `${i + 1}`;
+
+      const name = document.createElement('span');
+      name.className   = 'ordered-enum-name';
+      name.textContent = opt;
+      // Kept rather than dropped — see the header note.
+      if (options.length && !options.includes(opt)) {
+        row.classList.add('ordered-enum-row--missing');
+        name.title = 'Not offered by this scenario any more. Kept because it is still in the '
+                   + 'saved value: dropping it here would leave the panel and the run disagreeing.';
+        name.textContent = `${opt} (not in this scenario)`;
+      }
+
+      const up = _iconBtn('↑', 'Move earlier', () => move(i, i - 1));
+      up.disabled = i === 0;
+      const down = _iconBtn('↓', 'Move later', () => move(i, i + 1));
+      down.disabled = i === value.length - 1;
+      const del = _iconBtn('✕', 'Remove from the order', () => commit(value.filter((_, j) => j !== i)));
+
+      row.addEventListener('dragstart', () => { dragFrom = i; row.classList.add('is-dragging'); });
+      row.addEventListener('dragend',   () => { dragFrom = null; row.classList.remove('is-dragging'); });
+      row.addEventListener('dragover',  (e) => e.preventDefault());
+      row.addEventListener('drop',      (e) => { e.preventDefault(); if (dragFrom != null) move(dragFrom, i); });
+
+      row.append(rank, name, up, down, del);
+      list.appendChild(row);
+    });
+
+    if (value.length === 0) {
+      const empty = document.createElement('span');
+      empty.className   = 'ordered-enum-empty';
+      empty.textContent = 'none — no bias; the draw follows the sleeve order alone';
+      list.appendChild(empty);
+    }
+    container.appendChild(list);
+
+    const remaining = options.filter(o => !value.includes(o));
+    if (remaining.length) {
+      const adder = document.createElement('div');
+      adder.className = 'ordered-enum-add';
+
+      const select = document.createElement('select');
+      select.dataset.role = 'add';
+      select.innerHTML = [`<option value="">— add —</option>`,
+        ...remaining.map(o => `<option value="${_escAttr(o)}">${_escAttr(o)}</option>`)].join('');
+      // Appends, because a new entry has no position until the author gives it one, and
+      // guessing one (front? by id?) would be a silent editorial decision about money.
+      select.addEventListener('change', () => {
+        if (select.value) commit([...value, select.value]);
+      });
+
+      adder.appendChild(select);
+      container.appendChild(adder);
+    }
+  }
+
+  render();
+  return container;
+}
+
+function _iconBtn(glyph, title, onClick) {
+  const b = document.createElement('button');
+  b.type        = 'button';
+  b.className   = 'ordered-enum-btn';
+  b.textContent = glyph;
+  b.title       = title;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function _escAttr(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }

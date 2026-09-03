@@ -959,6 +959,14 @@ export class ScenarioLoader {
       if (s.options)     entry.options     = s.options;
       if (s.optionDefaults) entry.optionDefaults = s.optionDefaults;
       if (s.dynamicOptionsFrom) entry.dynamicOptionsFrom = s.dynamicOptionsFrom;
+      // `optionsFrom` names a SCENARIO COLLECTION the choices are read from at render
+      // time (design 94 §10.2c: the securities registry). Without it here the flag never
+      // reached the entry the params panel renders, and the picker resolved an empty
+      // list on every path — a control that draws nothing, which reads as "this scenario
+      // has no securities" rather than as a lost field.
+      if (s.optionsFrom) entry.optionsFrom = s.optionsFrom;
+      // `ordered` promotes a multi-select from a SET to a SEQUENCE (design 94 step 10).
+      if (s.ordered)     entry.ordered     = s.ordered;
       if (s.visibleWhen) entry.visibleWhen = s.visibleWhen;
       if (s.hidden)      entry.hidden      = s.hidden;
       // Money param metadata (design 10 §Phase 5): seed the chosen currency from
@@ -1033,6 +1041,15 @@ export class ScenarioLoader {
       // entries extend this param's selectable options live in the UI).
       if (s.dynamicOptionsFrom)  p.dynamicOptionsFrom = s.dynamicOptionsFrom;
       else if (p.dynamicOptionsFrom) delete p.dynamicOptionsFrom;
+      // optionsFrom / ordered are schema-owned for the same reason `options` is: they
+      // describe the CONTROL, not the user's selection (which lives in `value`). Both
+      // arrived after scenarios were already saved, so backfilling only when absent would
+      // leave every existing scenario rendering the old control — which for `optionsFrom`
+      // means an empty picker and for `ordered` means an order the user cannot reorder.
+      if (s.optionsFrom)         p.optionsFrom = s.optionsFrom;
+      else if (p.optionsFrom)    delete p.optionsFrom;
+      if (s.ordered)             p.ordered     = s.ordered;
+      else if (p.ordered)        delete p.ordered;
       // visibleWhen is schema-owned UI metadata (conditional param visibility),
       // so re-sync it too — adopt new conditions and clear ones the schema dropped.
       if (s.visibleWhen)         p.visibleWhen = s.visibleWhen;

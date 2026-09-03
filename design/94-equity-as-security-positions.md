@@ -1,5 +1,10 @@
 # 94 — Equity as security positions (design 93's Option C)
 
+**Status** (2026-09-02): **COMPLETE — steps 0–10 BUILT.** Step 10 (§10.3) closed §10.2e's
+three loose ends: the securities editor, an order-valued multi-select control, and the
+cross-account Securities panel. What follows is the second pass's status, kept for the
+reasoning it records.
+
 **Status** (2026-08-26): **SECOND PASS; step 0 spiked and reverted, steps 1, 2, 2a and 3 BUILT.**
 Steps 4–5 are specified tightly enough to build; steps 6–9 are not. §9.5 has the step-0 spike's
 outcome — it confirmed §9.3, demonstrated §9.4 as a live defect, and found a third thing
@@ -2757,7 +2762,9 @@ drifted projections supply.
 **Recorded limitation, not worked around:** the `EnumMulti` control expresses order by CHECK
 ORDER (ticking appends), so there is no way to re-order without unticking. For a set-valued
 param that is right; for an order-valued one it under-serves the parameter. A drag-orderable
-variant is the honest fix and is not step 9's.
+variant is the honest fix and is not step 9's. ✅ **ANSWERED at step 10** — `ordered: true`
+routes to a reorderable control (§10.3b). Step 10 also found that `optionsFrom` never reached
+the param entry at all, so the resolver described above was dead on every path.
 
 #### 10.2d Two defects the work uncovered
 
@@ -2772,7 +2779,7 @@ variant is the honest fix and is not step 9's.
   `??` is right for a VALUE, and the two are only distinguishable when something declares an
   empty one. Found by the test that asserted the fallback, not by looking at the code.
 
-#### 10.2e What step 9 did not build, and why it is not blocking
+#### 10.2e What step 9 did not build, and why it is not blocking  — ✅ **all three built at step 10 (§10.3)**
 
 **There is no UI to CREATE a security.** `cfg.securities` is authored data, like
 `cfg.corporateActions` — deliberately not a service record (§4: a Security is plain frozen
@@ -2789,10 +2796,140 @@ and so the first thing a securities editor should be measured against.
 Also untouched, and named so it is not mistaken for an oversight:
 
 - **The snapshot table does not total units.** Summing counts of different instruments
-  produces a number that looks like a quantity and is not one.
+  produces a number that looks like a quantity and is not one. ✅ **ANSWERED at step 10**, by
+  changing the GROUPING rather than the rule: the Securities panel totals units *within* an
+  instrument across accounts, and still never across instruments (§10.3c).
 - **The unit columns are hidden, not em-dashed, for a scalar book.** Both modes are
   first-class (design 93 §5); a column of dashes says "missing data" about a representation
   that is deliberate.
+
+### 10.3 Step 10 implementation record  ✅ (2026-09-02)
+
+§10.2e's three named gaps, closed. 5,997 unit + 1,302 viz tests green; **no golden moved** —
+every change here is an editor, a control or a read.
+
+#### 10.3a The securities editor, and why it is still not a service
+
+§10.2e said a CRUD editor "would need a graph node kind, a modal, and a launch point". It
+got the modal and the launch point and **not** the node kind, and that is the decision worth
+recording rather than the code.
+
+Every other editable record in this app is a service record on the config graph, and the
+`ConfigurationList` reads its rows from `graphQueryApi.getByKind`. The obvious way to make a
+`Security` appear there is to give it a service. That would have been wrong twice over:
+§4's first rule is that the registry is plain frozen data **shared by reference** across
+every snapshot of a run (which is what took the workbench clone cost from +7.2% to +0.5%),
+and a live service copy alongside `cfg.securities` is a second store of the same truth —
+the shape this repo has already been bitten by in `state.people`'s three drifted projections
+and in `cfg.params` vs `cfg.parameters`.
+
+So the list takes an **injected row provider** for that one kind, and
+`src/scenarios/scenario-securities.js` is the only writer. It writes to the active scenario
+record, which is design 15's source of truth and where `serializeScenario` was already
+reading `securities` from — so Save, Download, Rebuild and the run agree with no second
+harvest step. `snapshotServices` does not touch the key, so the Save path cannot clobber it.
+
+Three properties the form is built around, each of which is a defect if inverted:
+
+- **Absent is not null, expressed as a control.** `instrumentOf` merges
+  `{ ...holding, ...security }`, so a key merely PRESENT wins — an explicit `null` included
+  (§4 rule 2). A form that wrote every box it rendered would silence every lot's inline
+  value the moment a security was named. Every instrument field therefore carries a DECLARE
+  toggle: off writes no key; on with an empty box writes an explicit `null`. The tri-state
+  is the merge rule made visible, and a `??`-shaped form cannot express it.
+- **Only fields the ENGINE reads are offered.** §10.2b's rule, applied to authoring. Five of
+  `SECURITY_FIELDS` have no reader anywhere today — `qualifiedDividends`, `frankingCredit`,
+  `currency`, `country`, `isGold` — and are exported as `UNREAD_SECURITY_FIELDS` with a test
+  asserting the complement, so adding one to the entity without a reader is a decision
+  somebody has to make in the editor rather than an accident. They are not DROPPED: the save
+  starts from the record and edits it, so a value authored in JSON round-trips untouched.
+- **The id is settable once.** A rename would orphan every lot naming it, silently, because
+  `instrumentOf` falls back to the lot when a `securityId` resolves to nothing.
+
+Delete does **not** rewrite the positions that name it, and says so at the point of deletion
+with a count. Clearing the field on every lot from the editor is §11's fourth walk — *no
+reducer may change a position's `securityId`* — committed one layer up.
+
+The `idioVol` box carries §6.2's warning in its own tooltip, because it is the one field on
+this form whose effect is not local: the draw set is the REGISTRY, so **declaring an unheld
+security with idiosyncratic vol perturbs the whole run.** Authoring UI is exactly where that
+price gets paid without anyone reading §6.2.
+
+#### 10.3b The ordered control — and the defect it uncovered
+
+`ordered: true` routes an `EnumMulti` to a reorderable list (numbered rows, arrows, drag,
+and an Add picker) instead of the checkbox group. The group stays, because
+`behavioralStrategies` is a SET and position means nothing in it; these are two controls
+because they are two kinds of parameter, not one control with a flag.
+
+Two implementation notes with reasons:
+
+- **Drag state lives in the editor's closure, not on `dataTransfer`.** jsdom has no
+  DataTransfer, so the other choice is a reorder control that cannot be tested — which is
+  how the arrows silently stop working.
+- **An option the scenario no longer offers is KEPT and marked**, not dropped. A security
+  deleted while it was in the order would otherwise vanish from the control while remaining
+  in the saved value: the panel and the run disagreeing, silently.
+
+**And the useful finding: `optionsFrom` never reached the param entry.** §10.2c resolved
+`drawdownSecurityOrder`'s options from the scenario registry at render time, and nothing in
+`_mergeParamSchema` copied the flag off the schema onto `cfg.params` — `options`,
+`visibleWhen`, `node` and `dynamicOptionsFrom` are each re-synced there by name, and this
+one was not. So `_dynamicEnumOptions` returned null on **every** path and the picker drew an
+empty list, on a fresh load as much as on a saved scenario.
+
+The symptom is why it survived step 9's tests: an empty picker reads as *this scenario has
+no securities* — a plausible answer — rather than as a lost field. It is the same family as
+the stale-persisted-`node` defect, and the fix is the same shape: `optionsFrom` and `ordered`
+are schema-owned metadata about the CONTROL (the user's selection lives in `value`), so they
+are re-synced rather than backfilled, and cleared when the schema drops them.
+
+#### 10.3c Units are totalled — by changing the grouping, not the rule
+
+§10.2e recorded "the snapshot table does not total units" as a limitation, and the refusal
+was right. But it left a real question unanswerable — *how many shares of this do I own?* —
+because a plan holds one instrument across several wrappers and no view crossed them.
+
+A per-SECURITY rollup is the grouping in which the sum is legitimate. So the rule does not
+change, it becomes precise: **units total within a security and never across securities.**
+`security-rollup.js` implements it over the allocation cube (not its own walk of `state` —
+the cube is where `securityId` joined the bucket key, where FX conversion happens once, and
+where THE INVARIANT is guarded), and `SecuritiesPlugin` renders it: one row per instrument,
+expandable to the per-account breakdown whose counts sum to it.
+
+The footer totals money and prints `n/a` under Units — not a blank, which reads as missing
+data. `totalSecurityRollup` has no `units` field at all, so the rule lives where the next
+author will hit it rather than in a comment.
+
+Three smaller decisions:
+
+- **`units` is null unless every contributing bucket has one**, extending the cube's own
+  rule across accounts. A partial sum is an undercount presented as a count.
+- **`avgPrice` is `marketValue / units`, and is labelled as a blended value, not a price.**
+  §4 put the price on the POSITION, so across two accounts there is no single one.
+- **The money headers name the currency the cells are actually rendered in.**
+  `formatAmount` converts to the reader's display currency, so a header hard-coded to the
+  cube's base labels an AUD column "USD" the moment the reader switches — which is exactly
+  how the guardrail FX defect read.
+
+Units are also the one figure on the panel that needs no conversion caveat: a count crosses
+currencies untouched, which is why the cross-account sum is worth having at all.
+
+#### 10.3d Verified in the running app, not only in jsdom
+
+The reference plan, in a fresh browser profile: author `sec-emp` (β silent, `idioVol` 0.25)
+from Nodes → Securities; it appears in the drawdown-order picker without a Rebuild
+(§10.2c's resolver, now that the flag reaches the entry); point two lots in two different
+wrappers at it; Rebuild and step forward eighteen months. The panel reports ONE row with
+the two wrappers' counts summed under it and the breakdown adding back to it, and the
+instrument's per-unit value has **separated from its sleeve's** — §6.2's per-security
+overlay diverging an instrument from its market, on data authored entirely through the UI.
+That path did not exist before this step.
+
+**Unrelated defect seen on the way, not fixed here:** a saved layout with the Graph tab
+closed leaves `#graphRoot` absent, and `WorkbenchApp`'s `ConfigGraphView` construction throws
+uncaught at boot — taking the rest of the boot (including the scenario list) with it. It
+reproduces on `main` and has nothing to do with securities.
 
 ## 11. How this gets guarded
 
@@ -2830,6 +2967,20 @@ Design 93's tooling transfers almost unchanged, which is a good sign for the des
   cursor), and that securities are iterated in sorted `id` order so authoring order cannot
   change which uniform each one consumes.
 - **The registry-sharing tests** from §6.4.
+- **The authoring rules, at the keystroke that breaks them** ✅ **BUILT at step 10**
+  (`tests/unit/scenario-securities.test.mjs`): `scenarioSecurityRegistry` throws on a
+  duplicate id and on the reserved `sec-auto-` prefix, and it throws at LOAD — on a scenario
+  that no longer opens. The editor validates the whole resulting set through the same
+  builder before committing, so the bad edit is never written.
+- **The declare tri-state** ✅ **BUILT at step 10**
+  (`tests/viz/editors/security-editor.test.mjs`): silent writes no key, declared-empty writes
+  an explicit `null`, and an existing explicit null reads back as DECLARED. That last one is
+  the case a `??`-shaped form gets wrong every time — it shows the box unticked and then
+  deletes the author's statement on the first save.
+- **The unread-field complement** ✅ **BUILT at step 10** (same file): every `SECURITY_FIELDS`
+  entry is either offered by the editor or listed in `UNREAD_SECURITY_FIELDS`. Adding a field
+  to the entity without a reader is then a decision, not an accident — §10.2b's rule turned
+  into a gate.
 - **A golden holding two securities in the same allocation** ✅ **BUILT at step 5**
   (`two-security-concentration`, §9.8a) — the coverage equivalent of
   design 93 §7's dated-bond golden, and for the same reason: without one, every per-security
@@ -2929,13 +3080,15 @@ and so the two silent hazards are fixed before the change that makes them reacha
 | 8 | ✅ **DONE** — corporate actions beyond splits: rename, spin-off, merger (stock / boot / all-cash), return of capital | medium | §7.1 has R3, §7.2 the record. **No golden moved** — the toolset is inert with nothing authored, which is F5 compliance rather than luck. The e2e run found the sheltered-wrapper error the unit tests could not (§10.1c again) |
 | 9 | ✅ **DONE** — reporting: the cube names the instrument (+ a By-security view and CSV columns); UI: the holdings editor's security picker with inherited instrument fields, the snapshot table's Security/Units/Price columns, and `drawdownSecurityOrder`'s options | medium | §10.2 has the record. No golden moved. It found two defects — the holdings panel never passed the registry, and `??` was the wrong operator for a display label — and corrected §10.1e's assumption that the picker needed an editor first |
 
+| 10 | ✅ **DONE** — §10.2e's three gaps: the securities editor (a node kind in the list, not a service), `ordered: true` for an order-valued multi-select, and the cross-account Securities panel that totals units per instrument | medium | §10.3 has the record. **No golden moved.** It found `optionsFrom` never reaching the param entry, which made step 9's dynamic picker dead on every path |
+
 Step 8's five kinds close §7's table except for the two it names as out of scope in §7.2e
 (stock dividends under §305(b), and §368 qualification), both of which need facts a scenario
 does not carry.
 
-**Design 94 is complete.** Steps 0–5 are the substrate; 6–9 are the value. What remains is
-recorded rather than scheduled: the securities EDITOR (§10.2e), a drag-orderable control for
-`drawdownSecurityOrder` (§10.2c), §8.3's other half (`LOT_STRATEGY.SPECIFIC` is still the
+**Design 94 is complete.** Steps 0–5 are the substrate; 6–9 are the value; 10 is the
+authoring surface that makes 6–9 reachable without hand-editing JSON. What remains is
+recorded rather than scheduled: §8.3's other half (`LOT_STRATEGY.SPECIFIC` is still the
 MIN_GAIN proxy), and the three follow-ups F1–F3 plus F4/F5 in §12.
 
 **Splitting the release at step 5 is deliberate**:

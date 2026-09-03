@@ -31,6 +31,7 @@ import { DgResultsPlugin }         from './dg-results-plugin.js';
 import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 import { HoldingsPlugin }          from './holdings-plugin.js';
 import { AllocationPlugin }        from './allocation-plugin.js';
+import { SecuritiesPlugin }        from './securities-plugin.js';
 import { SpendingPlugin }          from './spending-plugin.js';
 import { LiquidityPoolsPlugin }    from './liquidity-pools-plugin.js';
 import { PaychequePlugin }         from './paycheque-plugin.js';
@@ -43,7 +44,7 @@ export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, 
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
          DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
-         AllocationPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin };
+         AllocationPlugin, SecuritiesPlugin, SpendingPlugin, LiquidityPoolsPlugin, PaychequePlugin, MpcCockpitPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -61,6 +62,7 @@ export const FINANCE_PLUGINS = [
   { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
   { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin    },
   { id: 'allocation',   title: 'Allocation',    component: AllocationPlugin  },
+  { id: 'securities',   title: 'Securities',    component: SecuritiesPlugin  },
   { id: 'spending',     title: 'Spending',      component: SpendingPlugin    },
   { id: 'pools',        title: 'Liquidity Pools', component: LiquidityPoolsPlugin },
   { id: 'paycheque',    title: 'Paycheque',     component: PaychequePlugin   },
@@ -87,7 +89,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'parameters', 'timeline', 'chart', 'allocation', 'securities', 'spending', 'pools', 'paycheque', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

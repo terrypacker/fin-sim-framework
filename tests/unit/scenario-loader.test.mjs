@@ -694,6 +694,45 @@ test('toolset params: visibleWhen drift — saved param missing the condition ga
   assert.strictEqual(cut.value, 0.25, 'drift-sync must preserve the user value');
 });
 
+// ── design 94 step 10: the control metadata that decides what a param RENDERS ──
+//
+// `options` is schema-owned because the choices belong to the schema and the user's
+// selection lives in `value`. `optionsFrom` and `ordered` are the same kind of thing and
+// were not carried, which is a defect with no visible symptom: the param still renders,
+// still saves, and just draws the wrong control.
+
+test('toolset params: optionsFrom reaches the param entry (design 94 §10.2c)', () => {
+  // Step 9 gave `drawdownSecurityOrder` `optionsFrom: 'securities'` so the picker could
+  // resolve the scenario's own registry at render time — and nothing copied the flag onto
+  // the entry the panel renders, so `_dynamicEnumOptions` returned null on EVERY path and
+  // the control drew an empty list. That reads as "this scenario has no securities", not
+  // as a lost field, which is why it survived step 9's tests.
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario;   // the scenario schema owns this key
+  loadIntoFreshServices(cfg);
+
+  const order = cfg.params.find(p => p.name === 'drawdownSecurityOrder');
+  assert.ok(order, 'drawdownSecurityOrder should be present');
+  assert.strictEqual(order.optionsFrom, 'securities');
+  assert.strictEqual(order.ordered, true, 'an ORDER-valued param must render the reorderable control');
+});
+
+test('toolset params: optionsFrom / ordered drift onto a scenario saved before them', () => {
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario;
+  // Saved when the param was still a plain checkbox group with a fixed (empty) list.
+  cfg.params = [
+    { name: 'drawdownSecurityOrder', label: 'Drawdown Security Order', type: 'EnumMulti',
+      group: 'Spending', options: [], value: ['sec-auto-EQUITY_US'] },
+  ];
+  loadIntoFreshServices(cfg);
+
+  const order = cfg.params.find(p => p.name === 'drawdownSecurityOrder');
+  assert.strictEqual(order.optionsFrom, 'securities');
+  assert.strictEqual(order.ordered, true);
+  assert.deepStrictEqual(order.value, ['sec-auto-EQUITY_US'], 'drift-sync must preserve the user value');
+});
+
 // ── Custom drawdown strategies (user-authored by-role orderings) ───────────────
 //
 // customDrawdownStrategies is a DrawdownStrategyList param: [{ name, roles }].

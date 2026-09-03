@@ -17,6 +17,7 @@ const KIND_LABELS = {
   collectible:     'Collectibles',
   company:         'Company Equity',
   bequest:         'Inheritance',
+  security:        'Securities',
   event:           'Events',
   handler:         'Handlers',
   action:          'Actions',
@@ -32,6 +33,14 @@ const KIND_LABELS = {
  */
 const _spec = (n) => (n?.speculative === true ? 'Speculative' : '');
 
+/**
+ * Singulars the trailing-'s' rule gets wrong. "Securities" → "Securitie" is the sort of
+ * label nobody edits back, so the exception is declared rather than the rule bent.
+ */
+const KIND_SINGULARS = {
+  security: 'Security',
+};
+
 const KIND_SUBTITLES = {
   person:          (n) => n.citizen?.join('/') ?? '',
   account:         (n) => n.type ?? '',
@@ -39,6 +48,9 @@ const KIND_SUBTITLES = {
   collectible:     (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
   company:         (n) => [n.country, _spec(n)].filter(Boolean).join(' · '),
   bequest:         (n) => [n.decedentName, n.inheritanceYear ? `→ ${n.inheritanceYear}` : 'inert'].filter(Boolean).join(' '),
+  // A Security's subtitle is the market it tracks: it is the field that decides which
+  // lots may legally name it (assertAllocationMatch) and the one an author gets wrong.
+  security:        (n) => [n.symbol, n.rateKey].filter(Boolean).join(' · '),
   event:           (n) => n.eventType ?? '',
   handler:         (n) => n.handlerClass ?? '',
   action:          (n) => n.actionClass  ?? '',
@@ -64,10 +76,18 @@ export class ConfigurationListComponent extends BaseComponent {
    *   bus:           import('../../simulation-framework/event-bus.js').EventBus,
    * }}
    */
-  constructor({ parent, container, graphQueryApi, bus }) {
+  constructor({ parent, container, graphQueryApi, bus, itemsByKind = null }) {
     super({ parent });
     this._container     = container;
     this._graphQueryApi = graphQueryApi;
+    // Kinds whose records are NOT graph nodes (design 94 step 10). A `Security` is plain
+    // frozen cfg data on the scenario record, deliberately not a service record — §4's
+    // first rule is that the registry is shared by reference across every snapshot of a
+    // run, which is only safe because nothing can write to it. Giving it a service (and
+    // therefore a second live copy) to make this list work would have re-created the
+    // two-stores problem this repo has already been bitten by; supplying the rows instead
+    // costs one lookup and keeps the scenario record the only place they live.
+    this._itemsByKind   = itemsByKind ?? {};
     this._selectedKind  = 'person';
     this._filter        = '';
 
@@ -153,16 +173,26 @@ export class ConfigurationListComponent extends BaseComponent {
   }
 
   _addLabel(kind) {
+    const explicit = KIND_SINGULARS[kind];
+    if (explicit) return `+ Add ${explicit}`;
     const label = KIND_LABELS[kind] ?? kind;
     // For multi-word labels (Real Property) keep as-is; for plural labels strip trailing 's'.
     if (label.includes(' ')) return `+ Add ${label}`;
     return `+ Add ${label.replace(/s$/, '')}`;
   }
 
+  /** Rows for a kind: an injected provider if one is registered, else the graph. */
+  _itemsFor(kind) {
+    const provider = this._itemsByKind[kind];
+    if (!provider) return this._graphQueryApi.getByKind(kind);
+    try { return provider() ?? []; }
+    catch { return []; }   // a malformed scenario record must not blank the whole list
+  }
+
   _renderList() {
     this._listEl.innerHTML = '';
 
-    const items = this._graphQueryApi.getByKind(this._selectedKind)
+    const items = this._itemsFor(this._selectedKind)
       .filter(n => !this._filter || (n.name ?? '').toLowerCase().includes(this._filter));
 
     if (items.length === 0) {

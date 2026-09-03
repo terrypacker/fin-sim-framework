@@ -1257,6 +1257,27 @@
   </div>
 </template>
 
+<!-- ── SECURITY EDITOR TEMPLATE (design 94 step 10) ───────────────────
+     A Security is the INSTRUMENT a position is held in — plain, frozen cfg data
+     shared by reference across every snapshot of a run, NOT a service record. So this
+     form edits `cfg.securities` on the active scenario record directly, and its rows
+     are built in JS from one field table (`security-editor.js`) rather than written
+     out here: that table is also what decides which fields the ENGINE actually reads,
+     and a hand-written row here could drift from it into a control that moves nothing. -->
+<template id="tpl-security-editor">
+  <div data-security-editor>
+    <div class="node">
+      <div class="node-header"><span>SECURITY</span></div>
+      <div class="node-body" data-id="fields"></div>
+      <div class="node-error" data-id="error" style="display:none"></div>
+      <div class="node-buttons">
+        <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
+        <button class="btn btn-sm btn-warn" data-id="deleteBtn" style="display:none">Delete</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
