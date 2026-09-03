@@ -753,6 +753,33 @@ const GATE_BASIS_OPTIONS = Object.freeze([
   ['INDEX',   'return index (flow-neutral)'],
 ]);
 
+/**
+ * The basis options for ONE row, because a RETURN clause has no series to choose.
+ *
+ * `sourceReturnOver` / `targetReturnUnder` read the pool's own prior-year return; there is no
+ * second series they could be measured against, which is why `normalizeGate` REFUSES a
+ * `drawdownBasis` on a gate with no drawdown clause ("it would round-trip a setting that
+ * decides nothing"). The table therefore has to offer the empty choice on such a row rather
+ * than the two real ones — a fixed two-option list left the cell holding a value no option
+ * matched, and `buildSelect` renders that, correctly and alarmingly, as "(not found)".
+ *
+ * The blank is labelled rather than empty: a bare "—" in a column headed "Measured against"
+ * reads as a setting the author forgot, and this one is a setting the clause cannot have.
+ */
+const GATE_BASIS_NA_OPTIONS = Object.freeze([['', 'n/a — a return clause']]);
+
+/**
+ * Does this clause kind measure a pool against a trailing high, and so name a series?
+ *
+ * One predicate, used by the options list, the row-normalizer and the save path, because
+ * three copies of `includes('drawdown')` is three chances for the cell, the row and the
+ * saved gate to disagree about what a clause is.
+ */
+const isDrawdownClause = (kind) => String(kind ?? '').toLowerCase().includes('drawdown');
+
+const gateBasisOptionsFor = (row) =>
+  (isDrawdownClause(row?.gateKind) ? GATE_BASIS_OPTIONS : GATE_BASIS_NA_OPTIONS);
+
 // design 97 §12.6. PERIOD is the default; ANNUAL restricts an edge to the first period of the
 // calendar year. Authorable because a market gate reads an ANNUAL signal (the equity tick runs
 // once a year), so an edge free to fire on every advance is re-deciding on an unchanged
@@ -1040,6 +1067,26 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     }
     return moved;
   };
+
+  /**
+   * Keep each row's basis in step with its own clause kind.
+   *
+   * A kind change leaves the basis cell holding the previous kind's value, and the two
+   * directions fail differently: a drawdown row switched to a RETURN keeps an 'INDEX' that no
+   * longer means anything (and that `rowsToGate` already declines to save), while a return row
+   * switched to a DRAWDOWN keeps a blank where the gate genuinely defaults to BALANCE. Neither
+   * loses data — the save path is the authority on what reaches the graph — but both put a
+   * value on screen that disagrees with the row it sits in, which is the same class of thing
+   * as the "(not found)" this pass exists to stop.
+   */
+  const normalizeGateBases = () => {
+    let moved = false;
+    for (const c of gateClauses) {
+      const want = isDrawdownClause(c.gateKind) ? (c.gateBasis || 'BALANCE') : '';
+      if (c.gateBasis !== want) { c.gateBasis = want; moved = true; }
+    }
+    return moved;
+  };
   const gateEditor = buildRowListEditor({
     rows: gateClauses,
     columns: [
@@ -1049,12 +1096,16 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       // (§17.1) and because it is what makes "add one more alternative" one more row.
       { field: 'branch',    label: 'OR #',   type: 'number', step: '1', min: '1', width: '0.5fr' },
       { field: 'gateNegate', label: 'Sense', type: 'select', options: GATE_SENSE_OPTIONS, width: '0.8fr' },
-      { field: 'gateKind',  label: 'Clause', type: 'select', options: GATE_OPTIONS, width: '1.8fr' },
+      // `rerender`: the Measured-against cell beside this one offers a different list per
+      // clause kind, so a kind change has to redraw the row or the basis cell keeps the
+      // options of the kind it no longer is.
+      { field: 'gateKind',  label: 'Clause', type: 'select', options: GATE_OPTIONS,
+        rerender: true, width: '1.8fr' },
       // No min of 0: a RETURN threshold is legitimately negative ("harvest unless the market
       // is down more than 10%"), while a drawdown fraction is not. The normalizer enforces
       // the per-kind range; the control must not pre-empt it with the tighter one.
       { field: 'gateValue', label: 'X',      type: 'number', step: '0.01', min: '-1', max: '1', width: '0.6fr' },
-      { field: 'gateBasis', label: 'Measured against', type: 'select', options: GATE_BASIS_OPTIONS, width: '1.8fr' },
+      { field: 'gateBasis', label: 'Measured against', type: 'select', options: gateBasisOptionsFor, width: '1.8fr' },
       // The lever design 97 §20.13 measured as the one that moves the answer: the three
       // drawdown thresholds landed within $13k of each other, while the same gate family
       // differing only in how long it stays shut spread by $460k. Years, never periods —
@@ -1066,7 +1117,14 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
                         gateBasis: 'INDEX', gateYears: 1 }),
     addLabel:  '+ Add Gate Clause',
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
-    onChange:  () => { const moved = renumberBranches(); sync(); if (moved) gateEditor.refresh(); },
+    onChange:  () => {
+      // Both, never short-circuited: each is a repair the table owes the author.
+      const renumbered = renumberBranches();
+      const rebased    = normalizeGateBases();
+      const moved      = renumbered || rebased;
+      sync();
+      if (moved) gateEditor.refresh();
+    },
   });
 
   const poolsEditor = buildRowListEditor({
@@ -1161,7 +1219,7 @@ function gateNodeToRow(node) {
     gateNegate: '',
     gateKind:  kind,
     gateValue: node[kind],
-    gateBasis: kind.toLowerCase().includes('drawdown') ? (node.drawdownBasis ?? 'BALANCE') : '',
+    gateBasis: isDrawdownClause(kind) ? (node.drawdownBasis ?? 'BALANCE') : '',
     gateYears: node.sustainedYears ?? 1,
   };
 }
@@ -1194,7 +1252,7 @@ function rowsToGate(rows) {
     const clause = { [r.gateKind]: r.gateValue };
     // Only when they are not the defaults, for the reason `cadence` is: an authored default on
     // every clause would make every previously-saved graph differ from itself on the next save.
-    if (r.gateBasis === 'INDEX' && r.gateKind.toLowerCase().includes('drawdown')) clause.drawdownBasis = 'INDEX';
+    if (r.gateBasis === 'INDEX' && isDrawdownClause(r.gateKind)) clause.drawdownBasis = 'INDEX';
     // The dwell rides on the node the row IS — which, for a negated row, is the `not` holding
     // the clause: "the source has NOT been within 5% of its high for two years".
     const node = r.gateNegate === 'NOT' ? { not: clause } : clause;

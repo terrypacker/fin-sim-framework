@@ -451,6 +451,79 @@ test('POOL-8: a cross-account flow raises the disposal tax action, not just a ba
   assert.ok(tax[0].gain > 0, 'and it must carry the realized gain');
 });
 
+// ─── POOL-8c: §12.4a — the offset BUYS into the book ────────────────────────────────
+
+test('POOL-8c: a flow out of an offset buys the destination sleeve as a fresh, dated lot', () => {
+  const svc   = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'offset', spendOrder: 10, claims: [{ key: 'offsetAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    // The dip-buy: no cash-like destination anywhere, so this edge is a PURCHASE.
+    flows: [{ id: 'o2g', from: 'offset', to: 'growth', amount: { fractionOfSource: 0.25 },
+              gate: { targetReturnUnder: -0.1 } }],
+  }, ACCOUNTS);
+  const offset = new OffsetAccount(400_000, { offsetsPropertyKey: 'house', country: 'US', currency: USD });
+  const broker = new BrokerageAccount(600_000, { country: 'US', currency: USD, drawdownPriority: 4 });
+  broker.holdings = [
+    new Holding({ id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 500_000, costBasis: 200_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' }),
+    new Holding({ id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 100_000, costBasis: 100_000, purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' }),
+  ];
+  const state = { offsetAccount: offset, usStockAccount: broker, personBirthDate: new Date(1970, 0, 1),
+                  monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 } };
+
+  new PoolFlowApplyReducer({ accountService: svc, graph, accounts: ACCOUNTS })
+    .reduce(state, { type: 'POOL_FLOW_APPLY', flowId: 'o2g', from: 'offset', to: 'growth', amountBase: 100_000 }, new Date('2030-06-30'));
+
+  assert.equal(Math.round(offset.balance), 300_000);
+  assert.equal(Math.round(broker.balance), 700_000);
+  // The money became EQUITY, and ONLY equity — a pro-rata credit would have put a sixth of
+  // it in the bond sleeve, which is a purchase the author never asked for.
+  const eq   = broker.holdings.filter(h => h.allocation === ALLOCATION.EQUITY);
+  const bond = broker.holdings.find(h => h.allocation === ALLOCATION.BOND);
+  assert.equal(Math.round(eq.reduce((sum, h) => sum + h.marketValue, 0)), 600_000);
+  assert.equal(Math.round(bond.marketValue), 100_000);
+  // A PURCHASE opens a lot dated at the purchase, with basis equal to the cash spent.
+  // Blending it into the 2010 lot would have aged it: the §1222 short/long split, the AU
+  // 12-month discount and the AU CPI indexation all read that date.
+  const fresh = eq.find(h => h.id !== 'eq');
+  assert.ok(fresh, 'the buy must open its own vintage lot');
+  assert.equal(Math.round(fresh.marketValue), 100_000);
+  assert.equal(Math.round(fresh.costBasis),   100_000);
+  assert.equal(new Date(fresh.purchaseDate).getUTCFullYear(), 2030);
+  // …and the un-appreciated 2010 lot is untouched: an offset draw is not a disposal.
+  assert.equal(broker.holdings.find(h => h.id === 'eq').costBasis, 200_000);
+});
+
+test('POOL-8d: buying a sleeve the destination account does not yet hold OPENS it', () => {
+  const svc   = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'offset',  spendOrder: 10, claims: [{ key: 'offsetAccount' }] },
+      { id: 'reserve', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    ],
+    flows: [{ id: 'o2r', from: 'offset', to: 'reserve', amount: { fractionOfSource: 1 } }],
+  }, ACCOUNTS);
+  const offset = new OffsetAccount(50_000, { offsetsPropertyKey: 'house', country: 'US', currency: USD });
+  const broker = new BrokerageAccount(100_000, { country: 'US', currency: USD, role: 'us-stock', drawdownPriority: 4 });
+  broker.holdings = [new Holding({ id: 'eq', allocation: ALLOCATION.EQUITY, marketValue: 100_000, costBasis: 100_000, purchaseDate: D(2010), rateKey: 'EQUITY_US' })];
+  const state = { offsetAccount: offset, usStockAccount: broker, personBirthDate: new Date(1970, 0, 1),
+                  monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 } };
+
+  new PoolFlowApplyReducer({ accountService: svc, graph, accounts: ACCOUNTS })
+    .reduce(state, { type: 'POOL_FLOW_APPLY', flowId: 'o2r', from: 'offset', to: 'reserve', amountBase: 20_000 }, new Date('2030-06-30'));
+
+  const bond = broker.holdings.find(h => h.allocation === ALLOCATION.BOND);
+  assert.ok(bond, 'the purchase must open the sleeve it names');
+  assert.equal(Math.round(bond.marketValue), 20_000);
+  // A lot whose rateKey does not match its allocation is invisible to the series that is
+  // supposed to move it — it would sit flat for the rest of the run.
+  assert.equal(bond.rateKey, 'FIXED_INCOME_US');
+  assert.equal(Math.round(broker.balance), 120_000);
+  assert.equal(Math.round(broker.holdings.reduce((sum, h) => sum + h.marketValue, 0)), 120_000);
+});
+
 test('POOL-8b: a scoped draw does not reach past its source pool', () => {
   const svc   = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
   const graph = normalizeLiquidityGraph({
@@ -616,11 +689,20 @@ test('POOL-10: every config error in §12.7 throws at config time', () => {
     { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
     { id: 'b', spendOrder: 2, claims: [{ key: 'auSavingsAccount' }] },
   ], flows: [{ id: 'ab', from: 'a', to: 'b' }] }, /has no `target`/);
-  // a transfer into a pool with nowhere to deposit
+  // a transfer into a pool with nowhere to deposit AND no single sleeve to buy (§12.4a):
+  // across two sleeves there is no unique split for the money.
   throws({ pools: [
     { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
-    { id: 'b', spendOrder: 2, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 1 },
-  ], flows: [{ id: 'ab', from: 'a', to: 'b' }] }, /claims no cash-like/);
+    { id: 'b', spendOrder: 2, claims: [{ key: 'usStockAccount', sleeves: ['BOND', 'EQUITY'] }] },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', amount: { fractionOfSource: 0.5 } }] },
+    /neither of the two things a transfer can land in/);
+  // …nor into an UNNARROWED brokerage claim: "buy the account's current mix" is a second,
+  // silently different policy wearing the same edge, so it has to be said explicitly.
+  throws({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }] },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'usStockAccount' }] },
+  ], flows: [{ id: 'ab', from: 'a', to: 'b', amount: { fractionOfSource: 0.5 } }] },
+    /neither of the two things a transfer can land in/);
   // a drawdown BASIS with no drawdown clause to govern (§20.14): it would round-trip a
   // setting that decides nothing, so every saved graph would differ from itself.
   throws({ pools: [

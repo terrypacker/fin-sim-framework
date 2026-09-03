@@ -709,6 +709,43 @@ same rebalanceable book:
 **A gated in-portfolio edge is a veto; a cross-account edge is a transaction.** Stating it that
 way is what keeps executor (1) free.
 
+### 12.4a The third shape: cash outside the book BUYING into it
+
+§12.4's two executors between them could not say the thing an offset makes natural. **Cash held
+outside the rebalanceable book buying into the book** is neither: executor 1 cannot see the
+offset (the rebalancer's account list is tax-advantaged and taxable-brokerage roles only), and
+executor 2 had nowhere to put the money, because its credit is a DEPOSIT and a sleeve is not an
+account. So `offset → growth` — the exact mirror of the `growth → offset` harvest edge the same
+graph already expresses, and the one every "buy the dip with the offset" reading wants — failed
+validation instead of running.
+
+A TRANSFER destination may therefore also be a **purchase target**: a pool that is *one*
+brokerage account narrowed to *one* sleeve. Each half of that is load-bearing.
+
+- **One claim, one sleeve.** Across two accounts or two classes there is no unique split for the
+  money, which is the same reason a pool `target` and a `fractionOfSource` in-portfolio edge each
+  demand a single class. An unnarrowed claim would have to mean "buy the account's current mix",
+  a second policy wearing the same edge.
+- **A brokerage, never a wrapper.** A deposit into an IRA / 401(k) / Roth / super is a
+  CONTRIBUTION, with eligibility rules and a cap. That is not this feature's to invent.
+- **The source side is unchanged.** The money is still raised by the scoped `replenishSavings`
+  draw, so the disposal, its withdrawal tax and its §988 leg all fire exactly as they do for
+  spending. §12.4's rule is untouched: the *credit* is what differs, not the draw.
+- **The credit opens a dated lot.** `transaction()`'s pro-rata credit adds value and basis to the
+  lots an account already holds, which blends the new money's acquisition date into positions
+  bought decades earlier — and three separate disposal paths read that date (US §1222 short/long,
+  the AU 12-month discount, AU CPI indexation). A purchase booked that way silently ages itself,
+  so the credit routes through `distributeHoldingsCredit` — the seam reinvested dividends and
+  wrapper deposits already use — which opens a vintage lot whose cost basis is the cash spent.
+  Buying a sleeve the account does not yet hold OPENS it, with the rateKey its allocation
+  resolves to; a lot whose rateKey does not match its class is invisible to the series meant to
+  move it and would sit flat for the rest of the run.
+
+The gate vocabulary needs nothing new: the dip is the DESTINATION's market state, so
+`targetReturnUnder` / `targetDrawdownOver` (with `drawdownBasis: INDEX`) already say it, and
+`sustainedYears` still says how long. Note only that the source-side clauses are inert on a cash
+pool (§20.18) — measure the pool that has the market.
+
 ### 12.5 Cycles are allowed; simultaneous opposing edges are not
 
 `growth → reserve` and `reserve → growth` are both wanted (harvest, and buy the dip), so the
