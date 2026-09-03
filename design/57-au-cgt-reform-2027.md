@@ -462,6 +462,63 @@ the pool test with the double-counted figure.
 
 ---
 
+### ✅ Part 7 (2026-09-03) — HOLDING lots get the back-cast Part 4 gave scalar assets
+
+Part 4 closed the back-cast for scalar assets — a dwelling, a vested equity stake, a bar of
+bullion — and left account **lots** on the stamped-level-only rule. That asymmetry was never a
+decision. It survived because a lot had no way to *state* an acquisition: `Holding.purchaseDate`
+has been read by five engine paths since design 62 (FIFO/HIFO order, the per-country long/short
+split, the Division 115 12-month gate, the §1091 61-day window, and this indexation clock), but
+nothing outside the bond-ladder builder could ever write one. Every authored lot booted `null`,
+which `_purchaseTs` reads as epoch 0 — oldest under FIFO, long-term in both countries, past every
+gate. Right by accident for a position genuinely held for decades, and wrong for a recent one.
+
+So an AU-resident-at-boot plan took the reform's **penalty** — no Division 115 discount, the 30%
+floor — on the stated rationale that cost-base indexation relieves the inflationary part of the
+whole holding period, while its equity and bond lots were structurally denied that relief. Note
+the scope: a US→AU mover is unaffected, because `recordResidencyChange` stamps
+`acquisitionPriceLevel` at the move (s855-45) and takes branch 1 either way.
+
+**Delivered:**
+
+1. **An `Acquired` date on every detail-bearing holding row** (`account-editor.js`) — EQUITY,
+   GOLD and BOND. Rendered through `field`, deliberately **not** `instrumentField`: design 94
+   §5.1 keeps acquisition on the *position* and `SECURITY_FIELDS` carries no such key. Two lots
+   of one security bought years apart are two tax lots, which is the entire reason a lot exists;
+   letting an instrument declare when you bought it would erase that. Empty round-trips as
+   `null`, never a materialised epoch-0 `Date` — see item 3 for why that distinction is
+   load-bearing.
+2. **`_indexFactor` in `holdings-fifo.js`** — the per-lot factor, extracted from the inline
+   expression it was, now with the same two branches `auIndexedCostBase` has used for scalar
+   assets since Part 4: a stamped `acquisitionPriceLevel` gives the exact ratio, and an authored
+   lot with a *date* but no level back-casts `(1 + cpiRate) ^ years`. Branch order matters — the
+   stamped level is observed, the back-cast is a proxy — so the level always wins. `cpiRate` joins
+   the `indexation` context and is threaded from `auCpiRate(state)` at all four sites that build
+   one (the US and AU brokerage disposals, the rebalancer's sell leg, and the drawdown walk).
+   Absent `cpiRate` reproduces the pre-change numbers exactly.
+3. **Silence still means no relief.** A lot with neither a stamped level nor an acquisition date
+   indexes at factor 1, exactly as before. This is the same line Part 4 drew, and holding it here
+   needed a real change: `_purchaseTs` collapses a missing date to 0, so a naive back-cast would
+   compound CPI over ~60 years and hand every boot lot enormous relief off a **missing field**.
+   `_purchaseMs` now returns `null` for an absent date and the back-cast is gated on that null;
+   `_purchaseTs` is defined in terms of it, so FIFO ordering and the 12-month gate are untouched.
+
+**Nothing moved.** Goldens are byte-identical, and necessarily so: in-sim lots take branch 1
+(`lotVintage` and `_creditTarget` both stamp a level), and authored lots have no date to back-cast
+from until an author sets one. `test:unit` 5995 + `test:viz` 1327 GREEN, with 5 new cases in
+`holdings-cost-basis-fifo.test.mjs` (the back-cast, the undated lot, level-beats-back-cast, the
+absent-`cpiRate` identity, and the <12mo gate) and a new
+`tests/viz/editors/holding-acquisition-date.test.mjs` (6 cases, including a chatty-registry
+control proving the date stays editable on a lot that *is* inheriting other fields).
+
+**Still open after this:** the US collectibles rules a gold ETF turns on are themselves a
+long/short test — §1(h)(4)'s 28% rate reaches *long-term* collectible gain, and a short-term one
+is ordinary income — and they are not modelled. `collectibleGainByCountryAndTerm` already tallies
+the character (design 90 §3); the rates module does not yet branch on it. The date those rules
+need is the date this part makes authorable, so the field is in place ahead of the rule.
+
+---
+
 #### 📋 Original Part 2 plan (kept for provenance)
 
 **Part 1 (the two coupled bugs) is committed on a branch.** Part 2 makes the reform *accurate*:

@@ -48,13 +48,16 @@ import { instrumentOf }            from './holding-utils.js';
  * no consumed lot is collectible, so non-gold callers are unaffected.
  *
  * CGT cost-base indexation (design 57 §6.3): when `indexation = { level, asOfMs,
- * country }` is supplied, the realized cost base for that country is ALSO tallied
- * with each lot's basis scaled by a per-lot CPI index factor
- * `max(1, level / lot.acquisitionPriceLevel)`, but only for lots held at least 12
- * months (`asOfMs − purchaseDate`). Lots with no `acquisitionPriceLevel` (or held
- * <12 months) index at factor 1, so `realizedIndexedBasisByCountry[country]` then
- * equals the un-indexed `realizedBasisByCountry[country]`. The result is `{}` when
- * no indexation context is passed, so non-AU / pre-2027 callers are unaffected.
+ * country, cpiRate }` is supplied, the realized cost base for that country is ALSO
+ * tallied with each lot's basis scaled by a per-lot CPI index factor (`_indexFactor`),
+ * but only for lots held at least 12 months (`asOfMs − purchaseDate`). The factor is
+ * `max(1, level / lot.acquisitionPriceLevel)` for a lot carrying a stamped level, and
+ * — when `cpiRate` is supplied — a back-cast `(1 + cpiRate) ^ years` for an authored
+ * lot that has an acquisition DATE but no stamped level, matching what
+ * `auIndexedCostBase` already does for scalar assets. A lot with NEITHER, and any lot
+ * held <12 months, indexes at factor 1, so `realizedIndexedBasisByCountry[country]`
+ * then equals the un-indexed `realizedBasisByCountry[country]`. The result is `{}`
+ * when no indexation context is passed, so non-AU / pre-2027 callers are unaffected.
  *
  * @param {Array}  holdings - account.holdings (not mutated)
  * @param {number} amount   - market-value dollars to consume; must be > 0
@@ -97,7 +100,7 @@ import { instrumentOf }            from './holding-utils.js';
  * from its own deemed-acquisition date where one was stamped, else `purchaseDate`.
  *
  * @param {Object}  [opts={}]
- * @param {{ level?: number, asOfMs: number, country: string }|null} [opts.indexation=null]
+ * @param {{ level?: number, asOfMs: number, country: string, cpiRate?: number }|null} [opts.indexation=null]
  * @param {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, sleeveScore?: Function, lotStrategy?: string, sleeveInclude?: Set<string> }|null} [opts.selection=null]
  *   The design-65 selection policy; null ⇒ FIFO (identical to the historic behavior).
  *   `sleeveInclude` (design 97) narrows the draw to those ALLOCATION classes: lots outside
@@ -116,6 +119,53 @@ import { instrumentOf }            from './holding-utils.js';
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 const TWELVE_MONTHS_MS = YEAR_MS;
+
+/**
+ * The AU CGT cost-base indexation factor for ONE lot (design 57 §6.3), ≥ 1 always —
+ * indexation ratchets a basis up and can never manufacture or deepen a capital loss.
+ *
+ * Two ways to know the price level the lot was acquired at, in the same order and for
+ * the same reasons as `auIndexedCostBase` uses for a scalar asset (a house, a vested
+ * equity stake, a bar of bullion):
+ *
+ *   1. **A stamped `acquisitionPriceLevel`** — written by an in-sim purchase, by a
+ *      reinvestment vintage lot (`lotVintage`) and by the s855-45 residency step-up.
+ *      The factor is the plain ratio `level(sale) / level(acquisition)`.
+ *
+ *   2. **A back-cast from the lot's acquisition DATE.** A lot the plan already owned when
+ *      the run began has a real acquisition date but no stamped level: the accumulator is
+ *      1.0 at sim start and knows nothing about the years before it. Compounding the run's
+ *      CPI rate over the holding period recovers the missing factor.
+ *
+ * Branch 2 is new, and it closes an inconsistency rather than adding a concession. Design
+ * 57 Part 2 Item B taxes the WHOLE gain of an asset held across 1 July 2027 under the new
+ * regime — no Division 115 discount, a 30% floor — on the stated rationale that cost-base
+ * indexation already relieves the inflationary part of the whole holding period. Scalar
+ * assets have taken the back-cast since design 57 Part 4; LOTS were the one family that
+ * did not, purely because the account editor had no way to author a `purchaseDate` on
+ * them. They therefore took the reform's penalty without the relief that pays for it.
+ *
+ * **Silence still means no relief.** A lot with neither a stamped level nor an acquisition
+ * date indexes at factor 1, exactly as before. §6.3 sketches an alternative (bootstrapped
+ * lots get the sim-start level, 1.0) that would index such a lot from t0, but granting
+ * relief off a MISSING field is the worse inconsistency, and it is not what the ATO asks
+ * for. Relief follows a stated acquisition.
+ *
+ * @param {number|null|undefined} lotLevel - the lot's `acquisitionPriceLevel`
+ * @param {number|null} acqMs              - its (deemed) acquisition date, or null if undated
+ * @param {{ level?: number, cpiRate?: number, asOfMs: number }} indexation
+ * @returns {number} the factor, ≥ 1
+ */
+function _indexFactor(lotLevel, acqMs, indexation) {
+  if (lotLevel != null && lotLevel > 0 && indexation.level > 0) {
+    return Math.max(1, indexation.level / lotLevel);
+  }
+  const cpiRate = indexation.cpiRate ?? 0;
+  if (acqMs == null || cpiRate <= 0) return 1;
+  const heldMs = indexation.asOfMs - acqMs;
+  if (!(heldMs > 0)) return 1;
+  return Math.max(1, (1 + cpiRate) ** (heldMs / YEAR_MS));
+}
 
 /** `{ short: 0, long: 0 }` for each requested country. */
 function _emptyTermTally(countries) {
@@ -235,12 +285,11 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
       // the lot was stepped up on the resident's move (design 62 §4) — the ATO restarts
       // the clock at the residency date, not the original purchase. Falls back to the
       // purchase date for lots never stepped up.
-      const acqTs     = h.acquisitionDateByCountry?.[idxCountry] ?? _purchaseTs(h);
+      const acqMs     = h.acquisitionDateByCountry?.[idxCountry] ?? _purchaseMs(h);
+      const acqTs     = acqMs ?? 0;
       const held12mo  = (indexation.asOfMs - acqTs) >= TWELVE_MONTHS_MS;
       // CPI index factor ≥ 1 (indexation only ratchets the basis up; never a loss).
-      const factor    = (held12mo && lotLevel != null && lotLevel > 0 && indexation.level > 0)
-        ? Math.max(1, indexation.level / lotLevel)
-        : 1;
+      const factor    = held12mo ? _indexFactor(lotLevel, acqMs, indexation) : 1;
       // Cash is never indexed either: ratcheting a currency balance's basis up would
       // manufacture a capital LOSS out of inflation on money that cannot have one.
       const idxBasisShare = isCash ? take : cb * fraction;
@@ -408,16 +457,31 @@ export function consumeHoldings(holdings, amount, { indexation = null, selection
  *
  * @param {Array}  holdings
  * @param {number} amount
- * @param {{ level?: number, asOfMs: number, country: string }|null} [indexation=null]
+ * @param {{ level?: number, asOfMs: number, country: string, cpiRate?: number }|null} [indexation=null]
  */
 export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   return consumeHoldings(holdings, amount, { indexation });
 }
 
-function _purchaseTs(h) {
-  if (!h?.purchaseDate) return 0;
+/**
+ * Epoch ms of a lot's `purchaseDate`, or **null when it has none** — an authored lot
+ * that was never given an acquisition date, which is every lot this codebase booted
+ * before the account editor could set one.
+ *
+ * The null is the point. `_purchaseTs` collapses it to 0 so an undated lot sorts as the
+ * oldest under FIFO and clears the ≥12-month gate, which is the behaviour every caller
+ * has always had. But the design-57 §6.3 CPI back-cast must NOT fire on a missing field:
+ * relief follows a STATED acquisition (see `auIndexedCostBase`, which draws the same
+ * line for scalar assets), and back-casting from epoch 0 would index a 1970 cost base.
+ */
+function _purchaseMs(h) {
+  if (!h?.purchaseDate) return null;
   const t = h.purchaseDate instanceof Date
     ? h.purchaseDate.getTime()
     : new Date(h.purchaseDate).getTime();
-  return Number.isNaN(t) ? 0 : t;
+  return Number.isNaN(t) ? null : t;
+}
+
+function _purchaseTs(h) {
+  return _purchaseMs(h) ?? 0;
 }

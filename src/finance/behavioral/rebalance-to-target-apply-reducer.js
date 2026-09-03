@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
-import { disposalTermFields }   from '../holdings/holding-period.js';
+import { disposalTermFields, auCpiRate } from '../holdings/holding-period.js';
 import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
@@ -164,7 +164,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         // Selection stays null, which is exactly what the wrapper passed, so lot
         // choice (and therefore every realized figure) is unchanged.
         const r = consumeHoldings(matching, take, {
-          indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU' },
+          indexation: { level: auLevel, asOfMs: auAsOfMs, country: 'AU', cpiRate: auCpiRate(state) },
           terms:      { asOfMs: auAsOfMs, countries: ['US', 'AU'] },
           securities: state.securities ?? null,
         });

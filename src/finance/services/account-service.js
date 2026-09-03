@@ -19,7 +19,7 @@ import { resolveDefaultAllocation, resolveRateKey, resolveEquityMarketMix } from
 import { rescaleHoldingsToBalance, instrumentOf, distributeHoldingsCredit } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
-import { disposalTermFields } from '../holdings/holding-period.js';
+import { disposalTermFields, auCpiRate } from '../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling, withSleeveInclude } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
@@ -1616,7 +1616,7 @@ export class AccountService extends AssetService {
       // path that raises 98% of a real plan's disposals.
       const saleMs = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
       const auCtx = residency === 'AU'
-        ? { asOfMs: saleMs, country: 'AU', level: auCpiLevel }
+        ? { asOfMs: saleMs, country: 'AU', level: auCpiLevel, cpiRate: auCpiRate(state) }
         : null;
       // Signed, charactered gain (design 90 §9 step 2). Note this is NOT gated on
       // residency the way `auCtx` above is: the US §1222 short/long split applies to

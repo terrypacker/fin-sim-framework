@@ -166,3 +166,60 @@ test('FIFO indexation: factor is clamped ≥1 (deflation never lowers basis)', (
   const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU' });
   assert.equal(r.realizedIndexedBasisByCountry.AU, 800);   // max(1, 1.5/2.0) = 1
 });
+
+// ─── CPI back-cast for an authored lot (design 57 §6.3 / §Part 4) ────────────
+//
+// A lot the plan already owned when the run began has a real acquisition date but no
+// stamped `acquisitionPriceLevel`: the accumulator is 1.0 at sim start and knows nothing
+// about the years before it. Scalar assets (a house, a vested stake, bullion) have
+// back-cast the missing factor from the acquisition date since design 57 Part 4; lots
+// could not, because nothing could author a `purchaseDate` on one. These pin the rule
+// now that the account editor can.
+//
+// The gate is a STATED acquisition, not a stamped level: relief follows a date the
+// author supplied, and an undated lot still indexes at 1.
+
+test('FIFO indexation back-cast: an authored lot with a DATE but no level indexes off cpiRate', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: null, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000,
+    { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU', cpiRate: 0.03 });
+  // 10 years at 3% ⇒ 1.03^10 = 1.343916…; basis 800 × that.
+  const years  = (D(2030).getTime() - D(2020).getTime()) / (365 * 24 * 60 * 60 * 1000);
+  const want   = 800 * (1.03 ** years);
+  // The tally is rounded to cents, so compare to the cent rather than to the float.
+  assert.ok(Math.abs(r.realizedIndexedBasisByCountry.AU - want) < 0.01,
+    `${r.realizedIndexedBasisByCountry.AU} vs ${want}`);
+  assert.ok(r.realizedIndexedBasisByCountry.AU > 800);   // relief actually granted
+  assert.equal(r.realizedBasisByCountry.AU, 800);        // un-indexed tally untouched
+});
+
+test('FIFO indexation back-cast: an UNDATED lot is still not indexed', () => {
+  // The regression this guards: `_purchaseTs` reads a null date as epoch 0, so a naive
+  // back-cast would compound CPI over ~60 years and hand a boot lot enormous relief off
+  // a MISSING field. Silence must stay silence.
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: null, date: null });
+  const r = consumeHoldingsFifo([lot], 1000,
+    { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU', cpiRate: 0.03 });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);
+});
+
+test('FIFO indexation back-cast: a stamped level still WINS over the back-cast', () => {
+  // Branch order matters — the stamped level is observed, the back-cast is a proxy.
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: 1.0, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000,
+    { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU', cpiRate: 0.30 });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 1200);  // 800 × 1.5/1.0, not 1.30^10
+});
+
+test('FIFO indexation back-cast: absent cpiRate reproduces the pre-change numbers', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: null, date: D(2020) });
+  const r = consumeHoldingsFifo([lot], 1000, { level: 1.5, asOfMs: D(2030).getTime(), country: 'AU' });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);
+});
+
+test('FIFO indexation back-cast: a dated lot held <12mo is still not indexed', () => {
+  const lot = auLot({ id: 'a', mv: 1000, basis: 800, auBasis: 800, level: null, date: D(2030, 0, 1) });
+  const r = consumeHoldingsFifo([lot], 1000,
+    { level: 1.5, asOfMs: D(2030, 5, 1).getTime(), country: 'AU', cpiRate: 0.03 });
+  assert.equal(r.realizedIndexedBasisByCountry.AU, 800);
+});

@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldings } from '../../holdings/holdings-fifo.js';
-import { disposalTermFields } from '../../holdings/holding-period.js';
+import { disposalTermFields, auCpiRate } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
@@ -300,7 +300,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // Design 90 §9 step 2 — the signed, §1222-charactered split rides alongside the
     // AU indexation context. Unlike `indexation` it is not AU-specific: the US
     // short/long test applies to every disposal a US person makes.
-    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection, terms: { asOfMs, countries: ['US', 'AU'] }, securities: state.securities ?? null });
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU', cpiRate: auCpiRate(state) }, selection, terms: { asOfMs, countries: ['US', 'AU'] }, securities: state.securities ?? null });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): the realized AU basis sums each lot's

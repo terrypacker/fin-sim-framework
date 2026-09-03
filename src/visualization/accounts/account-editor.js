@@ -771,6 +771,38 @@ export class AccountEditor extends BaseComponent {
         `<input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/>`));
     }
 
+    // ── Acquisition date — a POSITION field, and deliberately not an instrument one ──
+    //
+    // Note this goes through `field`, NOT `instrumentField`. Design 94 §5.1 puts the
+    // acquisition date on the position, and `SECURITY_FIELDS` carries no such key: two
+    // lots of one security, bought years apart, are two different tax lots and that is
+    // the whole reason a lot exists. Routing this through the inherited path would let
+    // an instrument dictate when you bought it.
+    //
+    // `purchaseDate` has always been read by the engine — FIFO/HIFO order
+    // (`holdings-selection`), the per-country long/short split and the AU Division 115
+    // ≥12-month gate (`holdings-fifo`, `holding-period`), the §1091 61-day window
+    // (`wash-sale.js`, which SKIPS a lot with no date) and the design 57 §6.3 CPI
+    // back-cast. Until now nothing but the bond-ladder builder could write it, so every
+    // authored lot booted null, which `_purchaseTs` reads as epoch 0: oldest under FIFO,
+    // long-term in both countries, past every gate. Right by accident for a position
+    // genuinely held for decades, and wrong for a recent one — an RSU vest sold early
+    // took long-term rates it had not earned.
+    //
+    // Shown for every detail-bearing allocation including GOLD. The US collectibles
+    // rules that a gold ETF turns on are a long/short test too (§1(h)(4)'s 28% rate
+    // reaches LONG-term collectible gain; a short-term one is ordinary), and those rules
+    // are not modelled yet — but the date they need is the same date, so authoring it
+    // now is what the modelling will read later.
+    const purchaseVal = h.purchaseDate
+      ? (h.purchaseDate instanceof Date ? h.purchaseDate.toISOString().slice(0, 10) : String(h.purchaseDate).slice(0, 10))
+      : '';
+    parts.push(field('Acquired',
+      `<input class="h-input" type="date" data-f="purchaseDate" value="${purchaseVal}"/>`,
+      'Acquisition date of this lot — drives FIFO order, the long-term/short-term split '
+      + '(US >1yr, AU >=12mo) and the AU CGT cost-base indexation. Empty means "carried in '
+      + 'from before the run", which is treated as held since forever.'));
+
     if (incomeField) {
       const title = incomeField === 'dividendYield' ? 'Dividend yield' : 'Coupon rate';
       parts.push(instrumentField(title, incomeField,
@@ -915,6 +947,13 @@ export class AccountEditor extends BaseComponent {
             // Store a normalized 2-letter code; empty ⇒ null (out-of-state).
             const v = input.value.trim().toUpperCase();
             this._holdings[i].issuingState = v || null;
+          } else if (field === 'purchaseDate') {
+            // Empty ⇒ null, i.e. "carried in from boot" — NOT epoch 0 written out as a
+            // real date. The distinction is load-bearing: `_purchaseMs` in holdings-fifo
+            // returns null for an absent date and the design 57 §6.3 CPI back-cast is
+            // gated on that null, so materialising a 1970 date here would index a lot's
+            // cost base over fifty-odd years of inflation it never lived through.
+            this._holdings[i].purchaseDate = input.value ? new Date(input.value) : null;
           } else if (field === 'maturityDate') {
             // design 66 §G4: an empty date ⇒ perpetual fund; a date ⇒ individual bond.
             this._holdings[i].maturityDate = input.value ? new Date(input.value) : null;
