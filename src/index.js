@@ -367,6 +367,7 @@ import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField } from './scenarios/params
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
+import { applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage } from './scenarios/scenario-securities.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -494,6 +495,7 @@ import { groupMergeTargets, routeEdge, computeFanOutOffsets, computeLaneOffsets 
 import { fmtCompact, fmtWhole } from './visualization/money-format.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
+import { flattenParams, buildParamStats, paramRowsForRun, fmtParamValue, fmtParamDelta } from './visualization/monte-carlo/mc-run-params.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
 import { MonteCarloController } from './visualization/monte-carlo/monte-carlo-controller.js';
 import { MonteCarloPresenter } from './visualization/monte-carlo/monte-carlo-presenter.js';
@@ -1755,6 +1757,7 @@ export const Scenarios = {
   ScenarioParamGenerator,
   synthesizeWeightedPriorities,
   ScenarioLoader,
+  applyParamBagToConfig,
   ScenarioRegistry,
   listScenarioSecurities,
   upsertScenarioSecurity,
@@ -1900,6 +1903,11 @@ export const Visualization = {
   fmtWhole,
   McConfigPanel,
   McResultsPanel,
+  flattenParams,
+  buildParamStats,
+  paramRowsForRun,
+  fmtParamValue,
+  fmtParamDelta,
   McRunsPanel,
   MonteCarloController,
   MonteCarloPresenter,

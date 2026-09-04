@@ -11,8 +11,9 @@
 import { ScenarioRunner }             from '../../simulation-framework/scenario.js';
 import { createDistribution }         from '../../simulation-framework/distributions.js';
 import { ServiceRegistry }            from '../../services/service-registry.js';
-import { IntlRetirementScenario, applyRealPropertySaleYearParams, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
+import { applyParamBagToConfig }      from '../../scenarios/scenario-param-apply.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
@@ -524,16 +525,9 @@ export class IntlRetirementMcRunner {
         });
 
         const cfg = structuredClone(cfgTemplate);
-        // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
-        cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
-        // Patch real property sale years — toolsets read from cfg.realProperties, not cfg.parameters.
-        applyRealPropertySaleYearParams(cfg, params);
-        // Also update cfg.params entries if already populated (schema-drift guard path).
-        if (Array.isArray(cfg.params)) {
-          for (const p of cfg.params) {
-            if (params[p.name] !== undefined) p.value = params[p.name];
-          }
-        }
+        // Both param stores, alias-aware — shared with the workbench's Replay button so a
+        // replayed run applies the SAME bag the same way. See applyParamBagToConfig.
+        applyParamBagToConfig(cfg, params);
         new ScenarioLoader().load(cfg, registry);
 
         return scenario.sim;

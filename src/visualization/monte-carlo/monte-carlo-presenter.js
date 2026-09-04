@@ -48,6 +48,7 @@ export class MonteCarloPresenter {
     // so a run always describes the plan as it stands rather than as it was loaded.
     this._configPanel.onResolveScenarioCenters = ()  => this._scenarioCenters();
     this._runsPanel.onRunSelected        = (run)     => this.onReplayRun?.(run);
+    this._runsPanel.onClearReplaySeed    = ()        => this.onClearReplaySeed?.();
     this._resultsPanel.onMetricChange = (metric) => {
       if (this._lastResult) {
         this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, metric);
@@ -60,6 +61,8 @@ export class MonteCarloPresenter {
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
+    /** Set by WorkbenchApp: unpin the replay seed and rebuild. */
+    this.onClearReplaySeed = null;
 
     // Re-render results in the active display currency on change (design 10 §Phase 4).
     if (appBus) {
@@ -85,6 +88,26 @@ export class MonteCarloPresenter {
 
   /** Returns the last { runs, summary } result, or null if no run yet. */
   getLastResult() { return this._lastResult; }
+
+  /**
+   * Re-present a result computed BEFORE the current presenter existed.
+   *
+   * Replaying a run rebuilds the scenario, and the rebuild recreates this presenter —
+   * so the batch the user was reading vanished at the exact moment they asked to look
+   * into one of its runs, and the only way back was to re-run it. WorkbenchApp carries
+   * the result across the rebuild and hands it back here.
+   *
+   * @param {{runs: Array, summary: object}} result
+   * @param {number|null} [replaySeed] the run the live scenario is now pinned to
+   */
+  restoreResult(result, replaySeed = null) {
+    if (!result?.runs) return;
+    this._lastResult = result;
+    this._resultsPanel.showResults(result.summary, result.runs);
+    this._runsPanel.setReplaySeed(replaySeed);
+    this._runsPanel.showResults(result.summary, result.runs, this._resultsPanel._metric);
+    this._configPanel.setStatus(`Showing ${result.runs.length} runs from the last batch.`);
+  }
 
   // ── Private ───────────────────────────────────────────────────────────────────
 

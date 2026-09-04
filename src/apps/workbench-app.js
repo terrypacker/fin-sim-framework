@@ -23,6 +23,7 @@ import { $, fmtUTC }                   from '../visualization/ui-utils.js';
 import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
 import { EventBus }                      from '../simulation-framework/event-bus.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
+import { applyParamBagToConfig }      from '../scenarios/scenario-param-apply.js';
 import { ScenarioSerializer }         from '../scenarios/scenario-serializer.js';
 import { ParamFieldLinks }            from '../visualization/scenario/param-field-links.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
@@ -184,6 +185,12 @@ export class WorkbenchApp extends BaseComponent {
     this._graphNodeInspector   = null;
     this._graphNodeExecHistory = null;
     this._graphNodeLineage     = null;
+
+    // { seed, scenarioId } while an MC run is being replayed; null otherwise.
+    // Survives Rebuild so the replayed world holds still — see _activeReplaySeed.
+    this._replaySeed           = null;
+    // { result, scenarioId } — the last MC batch, carried across a rebuild.
+    this._mcResultCarry        = null;
 
     // App-lifetime event bus — shared across all app-level services and components.
     this.appBus = new EventBus();
@@ -698,7 +705,17 @@ export class WorkbenchApp extends BaseComponent {
     // reconstruct closing balances from the journal — would make its flow-ties-to-stock
     // check compare the journal against itself. Sharing the sampler also means the two
     // panels read the same instant rather than two instants that agree.
+    //
+    // `seed` is normally null — "caller said nothing" — which lets the scenario's own
+    // `randomSeed` parameter fill it in (ScenarioLoader._applyRandomSeed) and otherwise
+    // falls back to 1. It is non-null ONLY while an MC/optimizer run is being replayed,
+    // and that is the whole point of `_replaySeed`: every in-loop stochastic process (FX,
+    // the yield curve, equity return paths, regime draws, house repairs) draws from
+    // `sim.rng`, so a replay that did not carry the run's seed reproduced the run's
+    // SCALARS on a DIFFERENT random path. A failing MC path replayed as a passing one,
+    // with nothing on screen to say why — see _replayMcRun.
     this.scenario.buildSim({
+      seed: this._activeReplaySeed(),
       sampler: withBalances(createAllocationSampler({
         displayNameFor: (stateKey) => registry.schemaRegistry.displayNameFor(stateKey),
       })),
@@ -899,6 +916,15 @@ export class WorkbenchApp extends BaseComponent {
       appBus:     this.appBus,
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
+    this.mcPresenter.onClearReplaySeed = () => this.clearReplaySeed();
+    // Hand back the batch the previous presenter was showing (see destroyScenario).
+    // Scoped to the scenario it was run on: a batch describes ONE plan, and re-presenting
+    // it under a different scenario's name would be a chart that lies about its subject.
+    if (this._mcResultCarry?.scenarioId === (activeConfig?.id ?? null)) {
+      this.mcPresenter.restoreResult(this._mcResultCarry.result, this._activeReplaySeed());
+    } else {
+      this._mcResultCarry = null;
+    }
 
     // ── Scenario Compare ─────────────────────────────────────────────────────
     const comparePaneEl = this._paneHost('scenarioComparePane');
@@ -976,6 +1002,14 @@ export class WorkbenchApp extends BaseComponent {
    */
   destroyScenario() {
     const registry = ServiceRegistry.getInstance();
+
+    // Carry the Monte Carlo batch across the rebuild. Every panel is recreated by
+    // initScenario, so without this the results disappear the moment the user replays a
+    // run from them — which is precisely when they still want the list to compare against.
+    // Keyed to the scenario it was run on (`_loadedCfg`, not getActive(), for the same
+    // reason the harvest below is).
+    const mcResult = this.mcPresenter?.getLastResult?.();
+    if (mcResult) this._mcResultCarry = { result: mcResult, scenarioId: this._loadedCfg?.id ?? null };
 
     // Harvest in-flight free-field domain edits (currency, holdings, names, …)
     // into the scenario record BEFORE reset so Rebuild rebuilds what the user
@@ -1167,14 +1201,26 @@ export class WorkbenchApp extends BaseComponent {
   // ── MC / Opt replay ───────────────────────────────────────────────────────
 
   /**
-   * Rebuild the scenario using the exact params from a MC run, then switch
-   * to the Timeline plugin so the user can step through the replayed simulation.
+   * Rebuild the scenario as one Monte Carlo iteration ran it, then switch to the
+   * Timeline plugin so the user can step through the replayed simulation.
    *
-   * Design 15: applies the replay params to the active scenario's cfg.params
-   * (the typed UI array). ScenarioLoader's param→node cascade propagates them
-   * into persons/accounts during the next initScenario.
+   * An MC iteration is TWO things — a param bag and a seed — and a replay that carries
+   * only the first is not a replay of anything. `run.seed` is the ScenarioRunner
+   * iteration index that MC hands to `buildSim({ seed })`, and it selects the entire
+   * in-loop random path: FX under a MEAN_REVERTING process, the yield curve, equity
+   * return paths, regime draws, house repair draws. Without it a replay ran at the
+   * scenario's own `randomSeed` (or 1), so the two paths a user is most likely to
+   * replay — the failures — were exactly the ones least likely to reproduce.
+   *
+   * The seed is STICKY across Rebuilds of the same scenario (see `_activeReplaySeed`)
+   * so the replayed world holds still while it is being examined. `clearReplaySeed()`
+   * returns to the scenario's own seed.
    */
   _replayMcRun(run) {
+    const registry = ServiceRegistry.getInstance();
+    this._replaySeed = run.seed != null
+      ? { seed: run.seed, scenarioId: registry.scenarioService.getActive()?.id ?? null }
+      : null;
     this._applyParamsToActive(run.params);
     this.destroyScenario();
     this.initScenario();
@@ -1193,19 +1239,59 @@ export class WorkbenchApp extends BaseComponent {
   }
 
   /**
-   * Write replay/candidate params into the active scenario's typed cfg.params
-   * array so the next Rebuild reflects them. Only keys present in cfg.params
-   * are touched — keys without a matching typed entry are dropped because they
-   * have no path into the scenario otherwise.
+   * Drop any replay seed and rebuild at the scenario's own seed.
+   * @returns {boolean} true if a seed was in effect and the scenario was rebuilt.
+   */
+  clearReplaySeed() {
+    if (!this._replaySeed) return false;
+    this._replaySeed = null;
+    this.destroyScenario();
+    this.initScenario();
+    return true;
+  }
+
+  /** The seed currently pinned by a replay, or null. */
+  replaySeed() { return this._activeReplaySeed(); }
+
+  /**
+   * The seed a rebuild should use: a replay's seed, or null to mean "caller said
+   * nothing" so `randomSeed` / the default can apply.
+   *
+   * Scoped to the scenario it was captured on, and DISCARDED when the active scenario
+   * changes. A Rebuild and a scenario switch reach `initScenario()` through the same
+   * callback, so the scenario id is the only thing that tells them apart — and pinning
+   * one scenario's MC seed onto a different scenario is precisely the silent-wrong-path
+   * failure this whole change is about.
+   * @private
+   */
+  _activeReplaySeed() {
+    if (!this._replaySeed) return null;
+    const activeId = ServiceRegistry.getInstance().scenarioService.getActive()?.id ?? null;
+    if (this._replaySeed.scenarioId !== activeId) { this._replaySeed = null; return null; }
+    return this._replaySeed.seed;
+  }
+
+  /**
+   * Write replay/candidate params into the active scenario record.
+   *
+   * Delegates to the SAME function an MC iteration uses (`applyParamBagToConfig`), which
+   * is the fix for a replay that used to apply a strict subset of the bag: it walked
+   * `cfg.params` matching `params[p.name]`, which silently dropped every aliased key
+   * (all the account balances, both wages, both house sale years), every nested key
+   * (`shocks[N].severity`, `people.<key>.lifeExpectancy`) and every key with no typed
+   * entry. See applyParamBagToConfig for why both param stores have to be written.
+   *
+   * This mutates the live active record, as it always has. Nothing here writes to
+   * localStorage — but the record IS the object `ScenarioRegistry._persistUserScenarios`
+   * later serializes, so for a user scenario these values reach storage on the next
+   * action that saves anything (a scenario switch, a delete, an upload, Save to Browser).
    */
   _applyParamsToActive(params) {
     if (!params) return;
     const registry = ServiceRegistry.getInstance();
     const active   = registry.scenarioService.getActive();
-    if (!Array.isArray(active?.params)) return;
-    for (const p of active.params) {
-      if (params[p.name] !== undefined) p.value = params[p.name];
-    }
+    if (!active) return;
+    applyParamBagToConfig(active, params);
   }
 
   // ── UI utilities ──────────────────────────────────────────────────────────

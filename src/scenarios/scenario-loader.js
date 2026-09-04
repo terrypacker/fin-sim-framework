@@ -656,18 +656,7 @@ export class ScenarioLoader {
    * @private
    */
   _applyParamAliases(cfg) {
-    const aliases = new Map();
-    const classes = cfg.scenarioClass ? [cfg.scenarioClass] : [...SCENARIO_CLASS_BY_ID.values()];
-    for (const cls of classes) {
-      const map = cls?.getParamAliases?.() ?? null;
-      if (!map) continue;
-      for (const [legacy, target] of Object.entries(map)) {
-        // `target === null` is a RETIRED key (no successor) — kept in the map so the
-        // entry is deleted rather than lingering as an orphan param. Distinguish
-        // "absent" from "present with a null target" via has(), not truthiness.
-        if (!aliases.has(legacy)) aliases.set(legacy, target);
-      }
-    }
+    const aliases = ScenarioLoader.paramAliasesFor(cfg);
     if (aliases.size === 0) return;
 
     // Typed params: rename legacy → generated key. Drop a legacy entry when the
@@ -697,6 +686,37 @@ export class ScenarioLoader {
         delete cfg.parameters[legacy];
       }
     }
+  }
+
+  /**
+   * The `{ legacyKey → generatedKey }` alias map that applies to this cfg.
+   *
+   * Extracted from `_applyParamAliases` so callers OUTSIDE the loader can resolve the
+   * same renames the loader will perform. `applyParamBagToConfig` needs it: a param bag
+   * from Monte Carlo or the optimizer is keyed by the LEGACY names (`stockBalance`,
+   * `usHouseSaleYear`), while the typed `cfg.params` entries have already been renamed
+   * to their generated successors — so matching a bag key against `p.name` alone silently
+   * drops every aliased lever.
+   *
+   * When `cfg.scenarioClass` is unresolved (user scenarios, whose scenarioId is `u:N`)
+   * the maps of all registered classes are unioned, mirroring the schemaNode fallback.
+   * A `null` target is RETIRED and is kept in the map so callers can tell "absent" from
+   * "present with no successor" via `has()`.
+   *
+   * @param {object} cfg
+   * @returns {Map<string, string|null>}
+   */
+  static paramAliasesFor(cfg) {
+    const aliases = new Map();
+    const classes = cfg?.scenarioClass ? [cfg.scenarioClass] : [...SCENARIO_CLASS_BY_ID.values()];
+    for (const cls of classes) {
+      const map = cls?.getParamAliases?.() ?? null;
+      if (!map) continue;
+      for (const [legacy, target] of Object.entries(map)) {
+        if (!aliases.has(legacy)) aliases.set(legacy, target);
+      }
+    }
+    return aliases;
   }
 
   /**
