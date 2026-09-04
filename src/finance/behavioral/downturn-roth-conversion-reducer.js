@@ -16,7 +16,7 @@ const ACTION_KEY = 'downturn_roth_conversion';
 /**
  * DownturnRothConversionReducer — behavioral strategy (design/29 §3.6, Increment 3).
  *
- * On the period advance where a PANIC_SELL_TRIGGER or ECONOMIC_STRESS regime
+ * When a PANIC_SELL_TRIGGER or ECONOMIC_STRESS regime
  * first becomes active (not previously fired for this shock), emit a
  * ROTH_CONVERSION_APPLY action for `downturnConversionAmount`. Idempotent:
  * fires once per regime entry, tracked via state.regimeActions[ACTION_KEY].
@@ -26,6 +26,14 @@ const ACTION_KEY = 'downturn_roth_conversion';
  * taxable ordinary income in-year (the existing chain handles that).
  *
  * Runs at PRE_PROCESS + 4 (after RegimeApplyReducer which updates activeRegimes).
+ *
+ * Trigger (design/29 §3): the regime's own lifecycle, not the calendar. Reducing
+ * only the period advances made this fire at the next 1 Jan or 1 Jul instead —
+ * measured at 1 to 5 months after the shock, and up to a year in a US-only plan.
+ * `RECOMPUTE_REGIMES` is the load-bearing one of the three regime actions: it is
+ * what the shock handler emits after AddRegimeReducer (CASH_FLOW) has pushed the
+ * regime, and what each monthly ECONOMIC_RECOVERY_TICK emits thereafter, so it is
+ * the first action on which the new stack is visible to a PRE_PROCESS reducer.
  */
 export class DownturnRothConversionReducer extends Reducer {
   static type        = 'DownturnRothConversionReducer';
@@ -39,7 +47,10 @@ export class DownturnRothConversionReducer extends Reducer {
    */
   constructor({ iraKey = 'iraAccount', rothKey = 'rothAccount', downturnConversionAmount = 20000 } = {}) {
     super('Downturn Roth Conversion', PRIORITY.PRE_PROCESS + 4);
-    this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    this.reducedActionTypes   = [
+      'US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE',
+      'ADD_REGIME_APPLY', 'REMOVE_REGIME_APPLY', 'RECOMPUTE_REGIMES',
+    ];
     this.generatedActionTypes = ['ROTH_CONVERSION_APPLY'];
     this.iraKey                    = iraKey;
     this.rothKey                   = rothKey;

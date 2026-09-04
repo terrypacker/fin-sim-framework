@@ -177,3 +177,101 @@ test('SPEND-RA-12: cut and revert correct when inflation ran while regime was ac
   const reverted = afterInflation.discretionary / 0.80;
   assert.ok(Math.abs(s.expenses.discretionary - reverted) < 0.01);
 });
+
+// ── Full cut (regimeAwareCutPct = 1) ─────────────────────────────────────────
+//
+// A 100% cut multiplies the slice by zero. Dividing zero back out produced NaN,
+// which propagated into monthlyExpenses and never washed out — the run spent
+// NaN for the rest of its life. These pin the recovery path.
+
+test('SPEND-RA-13: a full cut zeroes discretionary and leaves essential spending intact', () => {
+  const full = new RegimeAwareSpendingReducer({ regimeAwareCutPct: 1.0 });
+  const next = full.reduce(baseState({ activeRegimes: [stressRegime()] }), US_ADV);
+
+  assert.strictEqual(next.expenses.discretionary, 0);
+  assert.ok(Math.abs(next.expenses.essential - 7_000) < 0.01);
+  assert.ok(Math.abs(next.monthlyExpenses - 7_000) < 0.01);
+});
+
+test('SPEND-RA-14: a full cut reverts to the pre-cut level, not NaN', () => {
+  const full = new RegimeAwareSpendingReducer({ regimeAwareCutPct: 1.0 });
+
+  let s = full.reduce(baseState({ activeRegimes: [stressRegime()] }), US_ADV);
+  s = full.reduce({ ...s, activeRegimes: [] }, US_ADV);
+
+  assert.ok(Number.isFinite(s.expenses.discretionary));
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000) < 0.01);
+  assert.ok(Math.abs(s.monthlyExpenses - 10_000) < 0.01);
+});
+
+test('SPEND-RA-15: a full cut reverts to the INFLATED pre-cut level', () => {
+  const full             = new RegimeAwareSpendingReducer({ regimeAwareCutPct: 1.0 });
+  const inflationReducer = new InflationAdjustReducer();
+
+  let s = baseState({ activeRegimes: [stressRegime()] });
+  s = { ...s, inflationRates: { US: 0.03, AU: 0.03 }, inflationAccumulator: { US: 1.0, AU: 1.0 } };
+
+  s = full.reduce(s, US_ADV);              // discretionary → 0, essential 7000
+  s = inflationReducer.reduce(s, US_ADV);  // essential → 7210, discretionary stays 0
+
+  s = full.reduce({ ...s, activeRegimes: [] }, US_ADV);
+
+  // Both slices inflate at the same residence rate, so essential's growth is an
+  // exact stand-in for the discretionary growth the zeroed slice never got.
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000 * 1.03) < 0.01);
+  assert.ok(Math.abs(s.monthlyExpenses - 10_000 * 1.03) < 0.01);
+});
+
+test('SPEND-RA-16: a full cut survives a second regime cycle', () => {
+  const full = new RegimeAwareSpendingReducer({ regimeAwareCutPct: 1.0 });
+
+  let s = baseState({ activeRegimes: [stressRegime()] });
+  for (const regimes of [[stressRegime()], [], [stressRegime()], []]) {
+    s = full.reduce({ ...s, activeRegimes: regimes }, US_ADV);
+  }
+
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000) < 0.01);
+  assert.ok(Math.abs(s.monthlyExpenses - 10_000) < 0.01);
+});
+
+// ── Trigger timing (the one-year lag) ────────────────────────────────────────
+//
+// Listening only to the annual period advance made the cut land late by the gap
+// to the next boundary — 1 Jan (US) or 1 Jul (AU). A shock dated 1 Jan pushes
+// its regime via ADD_REGIME_APPLY from its own event, which shares that date and
+// `order: 0` with PERIOD_ADVANCE_US, so which ran first was a queue tiebreak.
+// When the advance won, the household spent its pre-crash budget for six months.
+
+test('SPEND-RA-17: the cut fires on ADD_REGIME_APPLY, not only on a period advance', () => {
+  const s    = baseState({ activeRegimes: [stressRegime()] });
+  const next = reducer.reduce(s, { type: 'ADD_REGIME_APPLY' });
+
+  assert.ok(Math.abs(next.expenses.discretionary - 3_000 * 0.80) < 0.01);
+  assert.strictEqual(next.regimeActions.spending_discretionary_cut.active, true);
+});
+
+test('SPEND-RA-18: the revert fires on the recovery tick that drops the regime', () => {
+  let s = reducer.reduce(baseState({ activeRegimes: [stressRegime()] }), { type: 'ADD_REGIME_APPLY' });
+
+  // RegimeApplyReducer has already dropped the recovered regime by the time this
+  // reducer sees the same RECOMPUTE_REGIMES — it owns the stack two priorities up.
+  s = reducer.reduce({ ...s, activeRegimes: [] }, { type: 'RECOMPUTE_REGIMES' });
+
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000) < 0.01);
+  assert.strictEqual(s.regimeActions.spending_discretionary_cut.active, false);
+});
+
+test('SPEND-RA-19: the regime actions are declared as reduced action types', () => {
+  for (const t of ['ADD_REGIME_APPLY', 'REMOVE_REGIME_APPLY', 'RECOMPUTE_REGIMES']) {
+    assert.ok(reducer.reducedActionTypes.includes(t), `missing ${t}`);
+  }
+});
+
+test('SPEND-RA-20: mixing regime actions and period advances still cuts exactly once', () => {
+  let s = baseState({ activeRegimes: [stressRegime()] });
+  s = reducer.reduce(s, { type: 'ADD_REGIME_APPLY' });   // cut
+  s = reducer.reduce(s, { type: 'RECOMPUTE_REGIMES' });  // still active — no-op
+  s = reducer.reduce(s, US_ADV);                          // still active — no-op
+
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000 * 0.80) < 0.01);
+});

@@ -21,11 +21,19 @@ const ACTION_KEY = 'opportunistic_rebalance';
  * `rebalanceDriftBand` vs `targetAllocation`, emits OPPORTUNISTIC_REBALANCE_APPLY
  * to move value from over-weight to under-weight allocations within that account.
  *
- * Also triggers on PANIC_SELL_TRIGGER / ECONOMIC_STRESS regime entry
- * (idempotent via state.regimeActions[ACTION_KEY].firedForShocks).
+ * Also triggers on PANIC_SELL_TRIGGER / ECONOMIC_STRESS regime entry, on the tick
+ * the regime enters (idempotent via state.regimeActions[ACTION_KEY].firedForShocks).
  *
  * MVP scope: within-account rebalance only for tax-advantaged accounts (free).
  * Taxable rebalancing is deferred (would realize gains).
+ *
+ * Trigger (design/29 §3): the regime's own lifecycle, not the calendar. Reducing
+ * only the period advances made this fire at the next 1 Jan or 1 Jul instead —
+ * measured at 1 to 5 months after the shock, and up to a year in a US-only plan.
+ * `RECOMPUTE_REGIMES` is the load-bearing one of the three regime actions: it is
+ * what the shock handler emits after AddRegimeReducer (CASH_FLOW) has pushed the
+ * regime, and what each monthly ECONOMIC_RECOVERY_TICK emits thereafter, so it is
+ * the first action on which the new stack is visible to a PRE_PROCESS reducer.
  */
 export class OpportunisticRebalanceReducer extends Reducer {
   static type        = 'OpportunisticRebalanceReducer';
@@ -39,7 +47,10 @@ export class OpportunisticRebalanceReducer extends Reducer {
    */
   constructor({ taxAdvantaged = [], targetAllocation = { EQUITY: 0.60, BOND: 0.40 }, rebalanceDriftBand = 0.05 } = {}) {
     super('Opportunistic Rebalance', PRIORITY.PRE_PROCESS + 4);
-    this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    this.reducedActionTypes   = [
+      'US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE',
+      'ADD_REGIME_APPLY', 'REMOVE_REGIME_APPLY', 'RECOMPUTE_REGIMES',
+    ];
     this.generatedActionTypes = ['OPPORTUNISTIC_REBALANCE_APPLY'];
     this.taxAdvantaged        = taxAdvantaged;
     this.targetAllocation     = targetAllocation;

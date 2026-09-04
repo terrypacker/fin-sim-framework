@@ -25,7 +25,7 @@ const TAX_ADVANTAGED_ROLES = new Set([
 /**
  * PanicSellReducer — behavioral strategy (design/29 §3.1, Increment 5).
  *
- * On period advance where a PANIC_SELL_TRIGGER regime first becomes active,
+ * When a PANIC_SELL_TRIGGER regime first becomes active,
  * rotates `panicFraction × severity × marketValue` of each EQUITY holding
  * to CASH — once per regime entry (idempotent via state.regimeActions).
  *
@@ -38,6 +38,14 @@ const TAX_ADVANTAGED_ROLES = new Set([
  * MVP uses BEHAVIORAL_PANIC_SELL_APPLY for all accounts to keep the
  * implementation self-contained. The taxable path is wired structurally
  * but deferred to a follow-up (requires AccountService + cash-pool wiring).
+ *
+ * Trigger (design/29 §3): the regime's own lifecycle, not the calendar. Reducing
+ * only the period advances made this fire at the next 1 Jan or 1 Jul instead —
+ * measured at 1 to 5 months after the shock, and up to a year in a US-only plan.
+ * `RECOMPUTE_REGIMES` is the load-bearing one of the three regime actions: it is
+ * what the shock handler emits after AddRegimeReducer (CASH_FLOW) has pushed the
+ * regime, and what each monthly ECONOMIC_RECOVERY_TICK emits thereafter, so it is
+ * the first action on which the new stack is visible to a PRE_PROCESS reducer.
  */
 export class PanicSellReducer extends Reducer {
   static type        = 'PanicSellReducer';
@@ -50,7 +58,10 @@ export class PanicSellReducer extends Reducer {
    */
   constructor({ allAccounts = [], panicFraction = 0.30 } = {}) {
     super('Panic Sell', PRIORITY.PRE_PROCESS + 4);
-    this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    this.reducedActionTypes   = [
+      'US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE',
+      'ADD_REGIME_APPLY', 'REMOVE_REGIME_APPLY', 'RECOMPUTE_REGIMES',
+    ];
     this.generatedActionTypes = ['BEHAVIORAL_PANIC_SELL_APPLY'];
     this.allAccounts  = allAccounts;
     this.panicFraction = panicFraction;
