@@ -20,6 +20,8 @@ import { HiStateTaxRates2029 } from './hi/hi-state-tax-rates-2029.js';
 import { HiStateTaxRates2030 } from './hi/hi-state-tax-rates-2030.js';
 import { HiStateTaxRates2031 } from './hi/hi-state-tax-rates-2031.js';
 import { SdStateTaxRates2024 } from './sd/sd-state-tax-rates-2024.js';
+import { InflationAdjustedStateTaxRates } from './inflation-adjusted-state-tax-rates.js';
+import { bracketIndexationFactor, BRACKET_INDEX_SERIES } from '../inflation-adjusted-tax-rates.js';
 
 const ZERO_RESULT = Object.freeze({
   stateCode: null, filingStatus: null, taxableIncome: 0,
@@ -112,6 +114,32 @@ export class StateTaxSettleService {
     const period  = state.currentPeriods?.US;
     const taxYear = period ? new Date(period.startMs).getUTCFullYear() : available[available.length - 1];
     const best    = available.filter(y => y <= taxYear).pop() ?? available[0];
-    return this._modules[`${stateCode}_${best}`];
+    return this._inflationWrap(this._modules[`${stateCode}_${best}`], state);
+  }
+
+  /**
+   * Index a state table's thresholds for the inflation elapsed since ITS OWN year,
+   * mirroring what `TaxSettleService._inflationWrap` does federally.
+   *
+   * States file on the US calendar year but index on their own legislatures'
+   * schedules, so this rides the US_STATE series — CPI plus `usStateBracketIndexSpread`
+   * — rather than the federal one. The module's own year is the anchor, which means
+   * every published year (Act 46's whole 2024→2031 Hawaii phase-in, Nebraska's LB 754
+   * glide) is applied exactly as published, and only years past a state's last
+   * registered table are projected. See `InflationAdjustedStateTaxRates` for why
+   * projecting at all is a convention rather than a transcription of law.
+   *
+   * A no-income-tax state (SD) is returned unwrapped: there is nothing to index and
+   * wrapping would only add an object to every settle.
+   *
+   * @param {BaseStateTaxRatesModule} baseModule
+   * @param {object} state
+   * @returns {BaseStateTaxRatesModule}
+   */
+  _inflationWrap(baseModule, state) {
+    if (!baseModule.hasIncomeTax) return baseModule;
+    const factor = bracketIndexationFactor(state, BRACKET_INDEX_SERIES.US_STATE, baseModule.year);
+    if (factor <= 1.0) return baseModule;
+    return new InflationAdjustedStateTaxRates(baseModule, factor);
   }
 }

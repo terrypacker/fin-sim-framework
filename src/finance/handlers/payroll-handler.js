@@ -14,7 +14,9 @@ import { ACCOUNT_ROLES }                          from '../state/account-roles.j
 import { ageAt }                                  from '../mpc/harvest.js';
 import { splitWage }                              from '../payroll/wage-splits.js';
 import { monthlyK401 }                            from '../payroll/k401-limits.js';
-import { ficaOnWage }                             from '../tax/us/fica-rates.js';
+import { ficaOnWage, LAST_PUBLISHED_FICA_YEAR }    from '../tax/us/fica-rates.js';
+import { bracketIndexationFactor, BRACKET_INDEX_SERIES }
+  from '../tax/inflation-adjusted-tax-rates.js';
 import { monthlyAuSuper, auFinancialYearOf }      from '../payroll/au-super-caps.js';
 
 /**
@@ -267,6 +269,16 @@ export function computePayroll({ date, state, stateRegistry, us = {}, au = {},
   // so a run that never passes the horizon reads the transcribed tables exactly.
   const usIndexFactor = state.limitIndexAccumulator?.US ?? 1;
   const auIndexFactor = state.limitIndexAccumulator?.AU ?? 1;
+  // The §3121(a)(1) wage base past SSA's published range. This MUST be the same
+  // projection `InflationAdjustedUsTaxRates` applies to `_ficaWageBase`, because the
+  // annual settle charges FICA against that figure and credits this withholding
+  // against the charge. When the two disagreed — withholding on a base frozen at the
+  // last published year, the charge on an indexed one — every high earner was
+  // under-withheld by the gap × 6.2%, arriving as a balance due indistinguishable
+  // from a rounding residual. Anchored at the published year for the same reason the
+  // brackets are: the transcribed figures already are what SSA announced.
+  const ficaIndexFactor = bracketIndexationFactor(
+    state, BRACKET_INDEX_SERIES.US_FICA, LAST_PUBLISHED_FICA_YEAR);
 
   for (const [personKey, person] of Object.entries(state.people ?? {})) {
     if (!isEarning(person, date)) continue;
@@ -325,7 +337,7 @@ export function computePayroll({ date, state, stateRegistry, us = {}, au = {},
       // earner, and a withholding that kept going would over-withhold and need the
       // refund path phase 5 does not build.
       const ytdWages = state.usSsWagesByPersonYTD?.[personKey] ?? 0;
-      entry.withholding = ficaOnWage(wage, ytdWages, taxYear).total;
+      entry.withholding = ficaOnWage(wage, ytdWages, taxYear, ficaIndexFactor).total;
     }
 
     // ── Stage 4: split what actually reaches the household ───────────────────

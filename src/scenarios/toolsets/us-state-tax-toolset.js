@@ -80,11 +80,34 @@ export const US_STATE_TAX = {
         defaultValue: null,
         description: 'Destination US state for the Jan-1 state move (design 34 §9).',
       },
+      {
+        // Its own series, not the federal one: states file on the US calendar year but
+        // index on their own legislatures' schedules — and NEITHER modeled state
+        // indexes at all. Hawaii's Act 46 schedule and Nebraska's LB 754 glide are
+        // fixed nominal figures that stop, so 0 (track CPI) is a projection this model
+        // chooses, not law. Set it negative to model the real statutory outcome, where
+        // bracket creep raises the effective rate every year with no policy change.
+        // `opt: false` — see usFederalBracketIndexSpread.
+        key: 'usStateBracketIndexSpread', label: 'US State Bracket Indexation Spread',
+        type: 'Number', group: 'US Tax', mc: true, opt: false,
+        defaultValue: 0,
+        description: 'Annual rate at which US STATE tax brackets and standard deductions are '
+          + 'projected to rise past each state\'s last published table, expressed as a spread '
+          + 'ADDED TO inflation (0 = track CPI, -0.03 against 3% inflation = frozen brackets, '
+          + 'which is what HI and NE law actually says). Published years are always used as '
+          + 'legislated.',
+      },
     ];
   },
 
   state(context) {
-    return _getStateContributions(context).statePatches;
+    return {
+      ..._getStateContributions(context).statePatches,
+      // The US_STATE bracket-index series — see InflationAdjustReducer. Shallow-merged
+      // with US_TAX's US entry and AU_TAX's AU entry by the compiler.
+      bracketIndexSpreads:     { US_STATE: context.parameters.usStateBracketIndexSpread ?? 0 },
+      bracketIndexAccumulator: { US_STATE: 1.0 },
+    };
   },
 
   schedules(context) {

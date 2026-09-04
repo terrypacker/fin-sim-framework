@@ -388,6 +388,12 @@ export class StateSchemaRegistry {
     // design 95 §10 phase 9 — cumulative inflation SINCE each country's last published
     // contribution-limit year. Unitless, like the two accumulators above.
     this.register('limitIndexAccumulator',       ParameterValueType.decimal(4));
+    // Tax-bracket projection series (US / US_STATE / AU): the level now, and the level
+    // at each period year — the anchor history the bracket wrap divides by so a
+    // PUBLISHED table is not indexed for indexation it already contains. Unitless.
+    this.register('bracketIndexAccumulator',       ParameterValueType.decimal(4));
+    this.register('bracketIndexAccumulatorByYear', ParameterValueType.decimal(4));
+    this.registerPattern('bracketIndexSpreads.*',  ParameterValueType.rate());
     this.registerPattern('cpiRates.*',           ParameterValueType.rate());
 
     // Bond mark-to-market snapshot (design 28 §5)

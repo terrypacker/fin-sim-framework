@@ -90,6 +90,54 @@ export const US_TAX = {
         defaultValue: undefined,
         description: 'Override filing status auto-detection (true = single, false = MFJ)',
       },
+      {
+        // Past the newest published table this model has to ASSUME how the brackets
+        // move. §1(f) does index them (to C-CPI-U), so 0 — plain CPI — is the
+        // faithful default here, unlike the AU and state series where indexation is
+        // not law at all. The spread exists because C-CPI-U is not household
+        // inflation and because a bracket freeze is a live policy scenario: set it
+        // to −(inflation rate) to model one.
+        //
+        // `opt: false` deliberately. This is uncertainty about future POLICY, not a
+        // lever the household pulls; an optimizer free to choose it would "solve"
+        // any plan by legislating generous brackets.
+        key: 'usFederalBracketIndexSpread', label: 'US Federal Bracket Indexation Spread',
+        type: 'Number', group: 'US Tax', mc: true, opt: false,
+        defaultValue: 0,
+        description: 'Annual rate at which US FEDERAL tax brackets, the standard deduction, '
+          + 'the FICA wage base and the FEIE cap are projected to rise past the newest '
+          + 'published table, expressed as a spread ADDED TO inflation (0 = track CPI, '
+          + '-0.03 against 3% inflation = frozen brackets). Published years are always used '
+          + 'as legislated. Does NOT move the FICA wage base or the FEIE cap — those have '
+          + 'their own spreads.',
+      },
+      {
+        // Its own series because §230 SSA indexes the base to the national AVERAGE
+        // WAGE INDEX, not to prices — historically CPI plus roughly the economy's real
+        // wage growth. 0 is the conservative default (no invented constant, and every
+        // existing run stays byte-identical); a run wanting fidelity sets ~+0.005.
+        // This drives BOTH the annual FICA charge and the monthly payroll withholding;
+        // see computePayroll, where the two must agree or the gap becomes a phantom
+        // balance due. `opt: false` — see usFederalBracketIndexSpread.
+        key: 'usFicaWageBaseIndexSpread', label: 'US FICA Wage Base Indexation Spread',
+        type: 'Number', group: 'US Tax', mc: true, opt: false,
+        defaultValue: 0,
+        description: 'Annual rate at which the Social Security contribution and benefit base '
+          + '(\u00a73121(a)(1)) is projected to rise past the last SSA announcement, as a spread '
+          + 'ADDED TO inflation. The real base tracks the SSA average wage index, which runs '
+          + 'above CPI, so a positive spread (~0.005) is more faithful than 0.',
+      },
+      {
+        // Same chained CPI as the brackets in law, but a separate act of Congress:
+        // modelling a bracket freeze must not silently freeze the FEIE cap too.
+        // `opt: false` — see usFederalBracketIndexSpread.
+        key: 'usFeieCapIndexSpread', label: 'US FEIE Cap Indexation Spread',
+        type: 'Number', group: 'US Tax', mc: true, opt: false,
+        defaultValue: 0,
+        description: 'Annual rate at which the \u00a7911 foreign earned income exclusion cap is '
+          + 'projected to rise past the newest published table, as a spread ADDED TO inflation '
+          + '(0 = track CPI, matching how \u00a7911(b)(2)(D)(ii) indexes it today).',
+      },
     ];
   },
 
@@ -100,6 +148,15 @@ export const US_TAX = {
       : context.people.length <= 1;
     return {
       ...capture.statePatches,
+      // Tax-bracket projection series (see InflationAdjustReducer). Seeded here for
+      // the federal series and in US_STATE_TAX / AU_TAX for theirs; the compiler
+      // shallow-merges all three so each toolset contributes only its own key.
+      bracketIndexSpreads: {
+        US:       context.parameters.usFederalBracketIndexSpread ?? 0,
+        US_FICA:  context.parameters.usFicaWageBaseIndexSpread   ?? 0,
+        US_FEIE:  context.parameters.usFeieCapIndexSpread        ?? 0,
+      },
+      bracketIndexAccumulator: { US: 1.0, US_FICA: 1.0, US_FEIE: 1.0 },
       usOrdinaryIncomeYTD: 0,
       usNegativeIncomeYTD: 0,
       usCapitalGainsYTD:   0,

@@ -239,3 +239,93 @@ test('settle service returns zero when no state configured or primary is abroad'
   // SD configured → zero.
   assert.equal(svc.computeStateTax(stateWith({ residencyState: 'SD', stateOrdinaryIncomeYTD: 100_000 })).netLiability, 0);
 });
+
+// ── Inflation indexing past the published horizon ─────────────────────────────
+//
+// A state module is registered only for the years its legislature published, and a
+// 40-year run spends most of its life past the last one. Without a wrap, Hawaii's
+// terminal 2031 table was applied at fixed nominal thresholds to nominal income
+// growing 3% a year, so the state effective rate climbed for four decades with no
+// policy behind it. The wrap is anchored at the module's OWN year, which is what
+// keeps Act 46's whole 2024→2031 phase-in on its statutory figures.
+
+/** US_STATE bracket-index history for a run at 3% starting in `startYear`. */
+function usLevels(startYear, endYear, rate = 0.03) {
+  const out = {};
+  let level = 1.0;
+  for (let y = startYear; y <= endYear; y++) { out[y] = level; level *= 1 + rate; }
+  return { US_STATE: out };
+}
+
+function inflatedStateAt(year, extra = {}, startYear = 2024) {
+  const levels = usLevels(startYear, 2070);
+  return {
+    people: { p1: { residency: 'US', residencyState: 'HI' } },
+    currentPeriods: { US: { startMs: Date.UTC(year, 0, 1) } },
+    bracketIndexAccumulator:       { US_STATE: levels.US_STATE[year] },
+    bracketIndexAccumulatorByYear: levels,
+    ...extra,
+  };
+}
+
+test('state: every PUBLISHED year uses its statutory table unindexed (Act 46 phase-in)', () => {
+  const svc = new StateTaxSettleService();
+  for (const year of [2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031]) {
+    const wrapped   = svc._getModule('HI', inflatedStateAt(year));
+    const statutory = svc._modules[`HI_${year}`];
+    assert.equal(wrapped, statutory,
+      `HI ${year} is legislated (Act 46) — it must be used exactly as published, not wrapped`);
+  }
+});
+
+test('state: years past the last published table are indexed from THAT table\'s year', () => {
+  const svc = new StateTaxSettleService();
+  const statutory = svc._modules.HI_2031;
+  const at2035    = svc._getModule('HI', inflatedStateAt(2035));
+
+  assert.equal(at2035.year, 2031, 'still files on the terminal Act 46 table');
+  // Four years past 2031 — not eleven past the 2024 sim start.
+  near(at2035._stdDeduction_mfj, statutory._stdDeduction_mfj * 1.03 ** 4);
+  near(at2035._brackets_mfj.at(-1)[0], statutory._brackets_mfj.at(-1)[0] * 1.03 ** 4);
+  // Rates and treatment flags are not money amounts and must survive untouched.
+  assert.deepEqual(at2035._brackets_mfj.map(([, r]) => r), statutory._brackets_mfj.map(([, r]) => r));
+  assert.equal(at2035._capitalGainsAltRate,      statutory._capitalGainsAltRate);
+  assert.equal(at2035._capitalGainsMode,         statutory._capitalGainsMode);
+  assert.equal(at2035._pensionExclusionFraction, statutory._pensionExclusionFraction);
+  assert.equal(at2035._taxesSocialSecurity,      statutory._taxesSocialSecurity);
+  assert.equal(at2035.stateCode, 'HI');
+});
+
+test('state: indexing removes the pure-artefact bracket creep on constant REAL income', () => {
+  const svc = new StateTaxSettleService();
+  // The same real income, expressed in each year's dollars.
+  const real = 200_000;
+  const rateIn = (year) => {
+    const level = 1.03 ** (year - 2024);
+    const r = svc.computeStateTax(
+      inflatedStateAt(year, { stateOrdinaryIncomeYTD: real * level }),
+    );
+    return r.netLiability / (real * level);
+  };
+  // 2031 is published, 2045 is projected 14 years past it. A constant real income
+  // must face a near-constant effective rate; before the wrap it climbed.
+  assert.ok(Math.abs(rateIn(2045) - rateIn(2031)) < 0.0005,
+    `effective rate drifted: ${rateIn(2031)} → ${rateIn(2045)}`);
+});
+
+test('state: a no-income-tax state is never wrapped', () => {
+  const svc = new StateTaxSettleService();
+  const s = { ...inflatedStateAt(2050), people: { p1: { residency: 'US', residencyState: 'SD' } } };
+  assert.equal(svc._getModule('SD', s), svc._modules.SD_2024);
+  assert.equal(svc.computeStateTax({ ...s, stateOrdinaryIncomeYTD: 1_000_000 }).netLiability, 0);
+});
+
+test('state: no recorded price history leaves the old un-indexed behaviour intact', () => {
+  const svc = new StateTaxSettleService();
+  // No bracket series at all (an old snapshot, or a run with zero inflation).
+  const s = {
+    people: { p1: { residency: 'US', residencyState: 'HI' } },
+    currentPeriods: { US: { startMs: Date.UTC(2040, 0, 1) } },
+  };
+  assert.equal(svc._getModule('HI', s), svc._modules.HI_2031);
+});

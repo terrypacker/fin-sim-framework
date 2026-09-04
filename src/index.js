@@ -107,6 +107,7 @@ import { PropertyReturnTickHandler } from './finance/economic-regimes/property-r
 import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
+import { STRESS_TAGS, regimeMeetsSeverity, stressRegimes, isStressed } from './finance/economic-regimes/regime-stress.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
 import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
@@ -308,7 +309,7 @@ import { applyBracketsDetailed, applyBrackets, marginalBracketRate, subtractBand
 import { characterizeCapitalGain, characterizeAuCapitalGain, signedAuCapitalGain, auRealCapitalGain, basketCapGainPatch } from './finance/tax/capital-gain-character.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { FxTimeline, convertAtRate } from './finance/tax/fx-timeline.js';
-import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
+import { BRACKET_INDEX_SERIES, bracketIndexationFactor, InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
 import { RESIDENCY_COST_BASE_STEP_UP, stepsUpCostBaseOnResidency } from './finance/tax/residency-cost-base-policy.js';
 import { BaseStateTaxRatesModule } from './finance/tax/state/base-state-tax-rates-module.js';
@@ -320,6 +321,7 @@ import { HiStateTaxRates2028 } from './finance/tax/state/hi/hi-state-tax-rates-2
 import { HiStateTaxRates2029 } from './finance/tax/state/hi/hi-state-tax-rates-2029.js';
 import { HiStateTaxRates2030 } from './finance/tax/state/hi/hi-state-tax-rates-2030.js';
 import { HiStateTaxRates2031 } from './finance/tax/state/hi/hi-state-tax-rates-2031.js';
+import { InflationAdjustedStateTaxRates } from './finance/tax/state/inflation-adjusted-state-tax-rates.js';
 import { NeStateTaxRates2024 } from './finance/tax/state/ne/ne-state-tax-rates-2024.js';
 import { NeStateTaxRates2025 } from './finance/tax/state/ne/ne-state-tax-rates-2025.js';
 import { SdStateTaxRates2024 } from './finance/tax/state/sd/sd-state-tax-rates-2024.js';
@@ -336,7 +338,7 @@ import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, PENDING_
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
-import { FICA_SS_RATE, FICA_MEDICARE_RATE, FICA_WAGE_BASE_BY_YEAR, ficaWageBase, ficaOnWage } from './finance/tax/us/fica-rates.js';
+import { FICA_SS_RATE, FICA_MEDICARE_RATE, FICA_WAGE_BASE_BY_YEAR, LAST_PUBLISHED_FICA_YEAR, ficaWageBase, ficaOnWage } from './finance/tax/us/fica-rates.js';
 import { UsTaxFileHandler, UsTaxFileApplyReducer } from './finance/tax/us/tax-file-classes.js';
 import { US_CONTRIBUTION_LIMITS_BY_YEAR, FIRST_PUBLISHED_YEAR, LAST_PUBLISHED_YEAR, usContributionLimits, catchUpAllowance } from './finance/tax/us/us-contribution-limits.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
@@ -938,6 +940,10 @@ export const Finance = {
   PRIME_KEY_BY_COUNTRY,
   RecoveryCurves,
   RegimeApplyReducer,
+  STRESS_TAGS,
+  regimeMeetsSeverity,
+  stressRegimes,
+  isStressed,
   REGIME_TAG,
   RemoveRegimeReducer,
   RevalueAssetReducer,
@@ -1485,6 +1491,8 @@ export const Finance = {
   DynamicTaxReducer,
   FxTimeline,
   convertAtRate,
+  BRACKET_INDEX_SERIES,
+  bracketIndexationFactor,
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
   UsPeriodAdvanceReducer,
@@ -1502,6 +1510,7 @@ export const Finance = {
   HiStateTaxRates2029,
   HiStateTaxRates2030,
   HiStateTaxRates2031,
+  InflationAdjustedStateTaxRates,
   NeStateTaxRates2024,
   NeStateTaxRates2025,
   SdStateTaxRates2024,
@@ -1552,6 +1561,7 @@ export const Finance = {
   FICA_SS_RATE,
   FICA_MEDICARE_RATE,
   FICA_WAGE_BASE_BY_YEAR,
+  LAST_PUBLISHED_FICA_YEAR,
   ficaWageBase,
   ficaOnWage,
   UsTaxFileHandler,

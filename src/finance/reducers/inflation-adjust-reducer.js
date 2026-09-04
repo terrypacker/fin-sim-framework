@@ -19,7 +19,11 @@ import { LAST_PUBLISHED_FY }   from '../tax/au/au-super-limits.js';
  * Reads state.inflationRates[cc] to determine the annual rate for the
  * advancing country.  On each advance it:
  *
- *   - Updates state.inflationAccumulator[cc] (cumulative factor from sim start).
+ *   - Updates state.inflationAccumulator[cc] (cumulative factor from sim start)
+ *     and state.bracketIndexAccumulator / …ByYear for the tax-bracket projection
+ *     series (US, US_STATE, AU), whose rate is CPI plus the
+ *     per-series spread in state.bracketIndexSpreads, and whose history lets the bracket wrap index
+ *     BETWEEN two years rather than only from sim start.
  *   - If cc === 'US': inflates each person's monthlyWage and socialSecurityMonthly
  *     (both are USD amounts tied to US economic conditions), and inflates
  *     state.monthlyExpenses once per year at the *residence* country's rate.
@@ -44,7 +48,7 @@ const LIMIT_PUBLISHED_HORIZON = {
 };
 
 export class InflationAdjustReducer extends Reducer {
-  static description = 'Applies annual inflation to wages, Social Security, and expenses on each US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE; maintains state.inflationAccumulator per country.';
+  static description = 'Applies annual inflation to wages, Social Security, and expenses on each US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE; maintains state.inflationAccumulator, state.cpiAccumulator and the bracketIndex* projection series per country.';
   static type        = 'InflationAdjustReducer';
   static actionType  = null;
 
@@ -62,7 +66,19 @@ export class InflationAdjustReducer extends Reducer {
     // inflation `rate`, so cpiAccumulator stays byte-identical to inflationAccumulator
     // until a distinct CPI is chosen.
     const cpiRate = state.cpiRates?.[cc] ?? rate;
-    if (rate === 0 && cpiRate === 0) return this.newState(state);
+    // The tax-bracket projection series: CPI plus a per-series spread (see below).
+    const seriesKeys   = cc === 'US'
+      ? ['US', 'US_STATE', 'US_FICA', 'US_FEIE']
+      : ['AU'];
+    const bracketRates = Object.fromEntries(
+      seriesKeys.map(k => [k, rate + (state.bracketIndexSpreads?.[k] ?? 0)]));
+    // Nothing moves only when EVERY series this advance drives is flat. Testing the
+    // wage rate alone would strand a scenario that holds CPI at zero while still
+    // projecting brackets upward on a positive spread — or, more usefully, one that
+    // has inflation but freezes brackets on a spread of exactly −CPI.
+    if (rate === 0 && cpiRate === 0 && seriesKeys.every(k => bracketRates[k] === 0)) {
+      return this.newState(state);
+    }
 
     const factor    = 1 + rate;
     const cpiFactor = 1 + cpiRate;
@@ -75,6 +91,56 @@ export class InflationAdjustReducer extends Reducer {
       ...(state.cpiAccumulator ?? {}),
       [cc]: ((state.cpiAccumulator?.[cc]) ?? 1.0) * cpiFactor,
     };
+
+    // ── Bracket-index series, by period year ────────────────────────────────
+    //
+    // The series the TAX-BRACKET projection rides, separate from
+    // `inflationAccumulator` on two counts.
+    //
+    // 1. Its RATE is `CPI + spread`, and the spread is a parameter. Beyond the last
+    //    table an authority has published, this model has to assume something about
+    //    how thresholds move, and outside the US that assumption is not law: neither
+    //    the AU federal brackets nor Hawaii's or Nebraska's are statutorily indexed
+    //    at all, so "brackets keep pace with CPI" is an editable projection rather
+    //    than a transcription. Expressed as a SPREAD so the default — 0 — means
+    //    exactly CPI and leaves every existing run byte-identical, and so the
+    //    assumption tracks whatever inflation path the run actually takes instead of
+    //    pinning a constant that silently diverges under an economic-regimes sweep.
+    //    A negative spread models partial indexation; a spread of −CPI, a freeze.
+    //
+    // 2. Its ANCHOR is the rates table's own year, not sim start. A published table
+    //    already contains the authority's indexation up to its year, so indexing it
+    //    from sim start double-counts every year in between. That is why this is a
+    //    recorded HISTORY (`level(Y) / level(moduleYear)` — see
+    //    `bracketIndexationFactor`) rather than a scalar: the divisor is the level in
+    //    the table's own year, and under an economic-regimes run — or any non-zero
+    //    spread — the realised rate differs year to year, so it cannot be
+    //    re-projected as `(1+r)^n` after the fact.
+    //
+    // There are FIVE series rather than one per country because a real authority
+    // indexes each group of figures on its own schedule — see BRACKET_INDEX_SERIES.
+    // The four US ones all advance with the US period (everything US files on the
+    // calendar year); what differs is the rate each may be given.
+    //
+    // Keyed the same way `currentPeriods[cc].startMs` yields: US calendar year, AU
+    // financial-year START year. The `prevYear` write self-seeds the sim's first year
+    // at 1.0 on the first advance, so no separate seeding site is needed, and a state
+    // carrying no history at all degrades to the sim-start anchor rather than breaking.
+    const periodYear = new Date(state.currentPeriods?.[cc]?.startMs ?? NaN).getUTCFullYear();
+
+    const bracketIndexAccumulator       = { ...(state.bracketIndexAccumulator ?? {}) };
+    const bracketIndexAccumulatorByYear = { ...(state.bracketIndexAccumulatorByYear ?? {}) };
+    for (const key of seriesKeys) {
+      const prior = (state.bracketIndexAccumulator?.[key]) ?? 1.0;
+      bracketIndexAccumulator[key] = prior * (1 + bracketRates[key]);
+      if (Number.isFinite(periodYear)) {
+        const levels   = { ...(state.bracketIndexAccumulatorByYear?.[key] ?? {}) };
+        const prevYear = periodYear - 1;
+        if (levels[prevYear] === undefined) levels[prevYear] = prior;
+        levels[periodYear] = bracketIndexAccumulator[key];
+        bracketIndexAccumulatorByYear[key] = levels;
+      }
+    }
 
     // ── Statutory contribution limits (design 95 §10, phase 9) ───────────────
     //
@@ -91,7 +157,6 @@ export class InflationAdjustReducer extends Reducer {
     // measuring the gap between two assumptions rather than a policy outcome. That is
     // also why this reads the realised per-year rate rather than projecting a constant
     // — under an economic-regimes run the caps track the path the wages actually took.
-    const periodYear = new Date(state.currentPeriods?.[cc]?.startMs ?? NaN).getUTCFullYear();
     const horizon    = LIMIT_PUBLISHED_HORIZON[cc];
     const pastHorizon = Number.isFinite(periodYear) && horizon != null && periodYear > horizon;
     const limitIndexAccumulator = pastHorizon
@@ -100,6 +165,7 @@ export class InflationAdjustReducer extends Reducer {
       : state.limitIndexAccumulator;
 
     const updates = { inflationAccumulator, cpiAccumulator,
+                      bracketIndexAccumulator, bracketIndexAccumulatorByYear,
                       ...(pastHorizon ? { limitIndexAccumulator } : {}) };
 
     if (cc === 'US') {

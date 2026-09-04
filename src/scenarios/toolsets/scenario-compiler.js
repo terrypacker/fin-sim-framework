@@ -237,6 +237,8 @@ function _frameworkSubstrateReducers(services) {
  *   inflationRates     — US_RETIREMENT contributes { US }, AU_RETIREMENT { AU }, etc.
  *   inflationAccumulator — same pattern as inflationRates
  *   limitIndexAccumulator — same pattern again (design 95 §10)
+ *   bracketIndexSpreads / bracketIndexAccumulator[ByYear] — US_TAX contributes
+ *                          { US }, US_STATE_TAX { US_STATE }, AU_TAX { AU }
  *
  * @param {object} acc     — accumulator (mutated in place)
  * @param {object} patches — new patches from a single toolset
@@ -254,6 +256,13 @@ function _mergeStatePatches(acc, patches) {
     // Anchored at each country's last PUBLISHED limit year rather than at sim start,
     // which is why it is a third accumulator and not a reuse of the two above.
     'limitIndexAccumulator',
+    // Tax-bracket projection series. THREE toolsets each contribute one key —
+    // US_TAX { US }, US_STATE_TAX { US_STATE }, AU_TAX { AU } — so a plain overwrite
+    // would leave whichever compiled last as the only series in state, silently
+    // stranding the others at their sim-start default.
+    'bracketIndexSpreads',
+    'bracketIndexAccumulator',
+    'bracketIndexAccumulatorByYear',
   ]);
   for (const [key, value] of Object.entries(patches)) {
     if (SHALLOW_MERGE_KEYS.has(key) && acc[key] != null && typeof acc[key] === 'object'

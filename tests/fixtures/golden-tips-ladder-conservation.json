@@ -1,7 +1,7 @@
 {
  "activeRegimes": [],
  "auCapitalGainsYTD": 0,
- "auCgtEffectiveRate": 0.379534275204,
+ "auCgtEffectiveRate": 0.385181186704,
  "auDeductibleSuperYTD": 0,
  "auDiscountAllowanceYTD": 0,
  "auDiscountApportionedBaseYTD": 0,
@@ -154,7 +154,7 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 123861.215338,
+  "primary": 123811.055338,
   "spouse": 49214.5395438
  },
  "auPersonRealCapitalGainsYTD": {
@@ -174,7 +174,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 116614.790338,
+  "primary": 116564.630338,
   "spouse": 49186.3945438
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -412,6 +412,77 @@
    }
   ]
  },
+ "bracketIndexAccumulator": {
+  "AU": 1.26677008139,
+  "US": 1.26677008139,
+  "US_FEIE": 1.26677008139,
+  "US_FICA": 1.26677008139,
+  "US_STATE": 1.26677008139
+ },
+ "bracketIndexAccumulatorByYear": {
+  "AU": {
+   "2025": 1,
+   "2026": 1.03,
+   "2027": 1.0609,
+   "2028": 1.092727,
+   "2029": 1.12550881,
+   "2030": 1.1592740743,
+   "2031": 1.19405229653,
+   "2032": 1.22987386542,
+   "2033": 1.26677008139
+  },
+  "US": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139
+  },
+  "US_FEIE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139
+  },
+  "US_FICA": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139
+  },
+  "US_STATE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139
+  }
+ },
+ "bracketIndexSpreads": {
+  "AU": 0,
+  "US": 0,
+  "US_FEIE": 0,
+  "US_FICA": 0,
+  "US_STATE": 0
+ },
  "collectibleAccount": {
   "acquisitionDateByCountry": {
    "AU": 1940630400000
@@ -466,7 +537,7 @@
  "cumulativeConsumptionUtility": 189.514370804,
  "cumulativeConsumptionUtilityCount": 96,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 539244.610932,
+ "cumulativeTaxesPaid": 539218.870492,
  "currentPeriods": {
   "AU": {
    "endMs": 2035324800000,
@@ -1274,8 +1345,8 @@
   "k401Account": 420979.69,
   "k401_earnings": 12021.45,
   "monthly_expenses": 7379.24319255,
-  "netLiquidity": 3056309.43,
-  "netWorth": 5803676.05,
+  "netLiquidity": 3056246.08,
+  "netWorth": 5803612.7,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
   "rothAccount": 617226.79,
@@ -1286,9 +1357,9 @@
   "spouseSuperAccount": 198480.43,
   "superAccount": 373737.4,
   "super_earnings": 11146.38,
-  "usSavingsAccount": 1248634.39324,
+  "usSavingsAccount": 1245262.04792,
   "usStockAccount": 221618.32,
-  "us_savings_interest": 3098.23,
+  "us_savings_interest": 3089.82,
   "us_stock_earnings": 10553.25
  },
  "monthlyExpenses": 7600.62048833,
@@ -2542,7 +2613,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 1147608.16468,
+  "balance": 1147544.81512,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2556,7 +2627,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 1147608.16468,
+    "costBasis": 1147544.81512,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2567,7 +2638,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 1147608.16468,
+    "marketValue": 1147544.81512,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2720,7 +2791,7 @@
   },
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 89207.5849586,
+ "usTaxPaidOnUsSourceAud": 89200.0138286,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

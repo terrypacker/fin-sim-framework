@@ -42,8 +42,12 @@
  * household from the moment their combined pay passes it.
  *
  * Source: `docs/us-tax/SSA-COLA-Fact-Sheet-2026.txt` (Maximum Taxable Earnings).
- * Transcribed from the authority, never projected — the base moves with the SSA
- * average wage index, not with this model's inflation assumption.
+ * Transcribed from the authority within the published range. Past it the base must be
+ * PROJECTED — holding it flat for the decades a retirement run covers understates the
+ * OASDI charge on every high earner — and the projection rides its own US_FICA series
+ * precisely because the base moves with the SSA average wage index rather than with
+ * this model's price inflation. The factor is passed IN rather than read from state so
+ * this stays a leaf module with no imports; `bracketIndexationFactor` computes it.
  */
 
 /** IRC §3101(a) — employee OASDI. */
@@ -62,16 +66,23 @@ const _YEARS = Object.keys(FICA_WAGE_BASE_BY_YEAR).map(Number).sort((a, b) => a 
 const _FIRST = _YEARS[0];
 const _LAST  = _YEARS[_YEARS.length - 1];
 
+/** The last calendar year SSA has published a contribution and benefit base for. */
+export const LAST_PUBLISHED_FICA_YEAR = _LAST;
+
 /**
  * The contribution and benefit base in force for `taxYear`.
  *
- * Clamps to the published range at both ends rather than extrapolating: beyond the
- * last published year the base is held flat, which understates it visibly instead of
- * inventing a figure. Design 95 phase 9 adds projection.
+ * Clamps to the published range at both ends and applies `indexFactor` to whatever it
+ * lands on. Inside the range the caller passes 1 (or nothing) and the transcribed
+ * figure is returned exactly; past it the caller passes the US_FICA projection factor
+ * anchored at `LAST_PUBLISHED_FICA_YEAR`.
+ *
+ * @param {number} taxYear
+ * @param {number} [indexFactor=1] projection factor for years past the published range
  */
-export function ficaWageBase(taxYear) {
+export function ficaWageBase(taxYear, indexFactor = 1) {
   const y = Number.isFinite(taxYear) ? Math.min(Math.max(taxYear, _FIRST), _LAST) : _LAST;
-  return FICA_WAGE_BASE_BY_YEAR[y];
+  return FICA_WAGE_BASE_BY_YEAR[y] * indexFactor;
 }
 
 /**
@@ -81,14 +92,20 @@ export function ficaWageBase(taxYear) {
  * charge: OASDI stops mid-year at the base for a high earner, and a withholding that
  * kept going would over-withhold and need a refund the model has no path for.
  *
+ * The `indexFactor` is not optional in spirit: it MUST be the same projection the
+ * annual charge uses, or the two disagree past the published range and the difference
+ * silently becomes a balance due that looks like a rounding residual — the exact
+ * failure this module's header exists to prevent.
+ *
  * @param {number} wage        this month's gross wage
  * @param {number} ssWagesYTD  this person's SS-covered wages already booked this year
  * @param {number} taxYear
+ * @param {number} [indexFactor=1] US_FICA projection factor, per `ficaWageBase`
  * @returns {{ss: number, medicare: number, total: number}}
  */
-export function ficaOnWage(wage, ssWagesYTD, taxYear) {
+export function ficaOnWage(wage, ssWagesYTD, taxYear, indexFactor = 1) {
   if (!(wage > 0)) return { ss: 0, medicare: 0, total: 0 };
-  const base      = ficaWageBase(taxYear);
+  const base      = ficaWageBase(taxYear, indexFactor);
   const alreadyOn = Math.min(Math.max(0, ssWagesYTD), base);
   const ssPortion = Math.max(0, Math.min(wage, base - alreadyOn));
   const ss        = +(ssPortion * FICA_SS_RATE).toFixed(2);

@@ -88,6 +88,24 @@ export const AU_TAX = {
         description: 'Annual ATO CPI rate used to index AU capital-gains cost bases (FY2027+). '
           + 'Leave unset to track the AU inflation rate.',
       },
+      {
+        // Distinct from auCpiRate above, which indexes CGT COST BASES under the FY2027
+        // reform. This one projects the INCOME TAX BRACKETS past FY2027-28, the newest
+        // legislated table.
+        //
+        // Australia does not index its brackets at all — bracket creep is the statutory
+        // outcome, periodically undone by an ad-hoc cut like Stage 3. So 0 (track CPI)
+        // is this model's assumption that some future government keeps doing that, NOT
+        // a transcription. A spread of -(inflation rate) models the law as written.
+        // `opt: false` — see usFederalBracketIndexSpread.
+        key: 'auBracketIndexSpread', label: 'AU Bracket Indexation Spread',
+        type: 'Number', group: 'AU Tax', mc: true, opt: false,
+        defaultValue: 0,
+        description: 'Annual rate at which AU income tax brackets and the Medicare levy '
+          + 'threshold are projected to rise past FY2027-28, expressed as a spread ADDED TO '
+          + 'inflation (0 = track CPI, -0.03 against 3% inflation = frozen brackets, which is '
+          + 'what AU law actually says). Published years are always used as legislated.',
+      },
     ];
   },
 
@@ -101,6 +119,10 @@ export const AU_TAX = {
       // falls back to the effective AU inflation rate (no golden movement).
       cpiRates:                         (auCpiRate != null ? { AU: auCpiRate } : {}),
       cpiAccumulator:                   { AU: 1.0 },
+      // The AU bracket-index series — see InflationAdjustReducer. Shallow-merged with
+      // US_TAX's US entry and US_STATE_TAX's US_STATE entry by the compiler.
+      bracketIndexSpreads:              { AU: context.parameters?.auBracketIndexSpread ?? 0 },
+      bracketIndexAccumulator:          { AU: 1.0 },
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
       auDiscountableGainsYTD:           0,   // CGT 50%-discount-eligible slice (design 62 §4)

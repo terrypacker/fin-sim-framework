@@ -110,6 +110,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // byte-for-byte until a distinct CPI is chosen.
     this.cpiRates             = {};
     this.cpiAccumulator       = { US: 1.0, AU: 1.0 };
+    // Tax-bracket projection series (InflationAdjustReducer): the rate each rides is
+    // CPI plus its spread, and the spread is 0 — track CPI — until a scenario sets
+    // one. US_STATE is separate from US because states file on the US calendar year
+    // but index on their own legislatures' schedules.
+    this.bracketIndexSpreads     = { US: 0, AU: 0, US_STATE: 0, US_FICA: 0, US_FEIE: 0 };
+    this.bracketIndexAccumulator = { US: 1.0, AU: 1.0, US_STATE: 1.0,
+                                     US_FICA: 1.0, US_FEIE: 1.0 };
     this.monthlyExpenses      = monthlyExpenses ?? 6_000;
 
     // Spending strategy substrate (design/26).

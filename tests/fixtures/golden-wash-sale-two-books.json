@@ -515,6 +515,72 @@
    }
   ]
  },
+ "bracketIndexAccumulator": {
+  "AU": 1.22987386542,
+  "US": 1.22987386542,
+  "US_FEIE": 1.22987386542,
+  "US_FICA": 1.22987386542,
+  "US_STATE": 1.22987386542
+ },
+ "bracketIndexAccumulatorByYear": {
+  "AU": {
+   "2025": 1,
+   "2026": 1.03,
+   "2027": 1.0609,
+   "2028": 1.092727,
+   "2029": 1.12550881,
+   "2030": 1.1592740743,
+   "2031": 1.19405229653,
+   "2032": 1.22987386542
+  },
+  "US": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542
+  },
+  "US_FEIE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542
+  },
+  "US_FICA": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542
+  },
+  "US_STATE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542
+  }
+ },
+ "bracketIndexSpreads": {
+  "AU": 0,
+  "US": 0,
+  "US_FEIE": 0,
+  "US_FICA": 0,
+  "US_STATE": 0
+ },
  "collectibleAccount": {
   "acquisitionDateByCountry": {
    "AU": 1940630400000
@@ -569,7 +635,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 243338.968473,
+ "cumulativeTaxesPaid": 244619.007029,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -716,7 +782,7 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 13411.5511331
+  "2032": 14691.5896886
  },
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
@@ -1106,8 +1172,8 @@
   "iraAccount": 454694.41,
   "k401Account": 453794.07,
   "monthly_expenses": 7164.31377917,
-  "netLiquidity": 3154247.61,
-  "netWorth": 6670824.39,
+  "netLiquidity": 3152967.57,
+  "netWorth": 6669544.35,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
   "rothAccount": 618473.46,
@@ -1120,7 +1186,7 @@
   "superAccount": 385184.74,
   "super_earnings": 37298.7,
   "tlh_skipped_no_substitute": 2,
-  "usSavingsAccount": 491218.92476,
+  "usSavingsAccount": 489938.886205,
   "usStockAccount": 86516.6,
   "us_savings_interest": 655.17,
   "us_stock_earnings": 107310.82
@@ -2194,7 +2260,7 @@
   "foreignGeneralIncomeYTD": 0,
   "foreignPassiveCapGainsYTD": -40130.76,
   "foreignPassiveIncomeYTD": -38803.7535484,
-  "ftcCurrentForeignTax": 31091.1172352,
+  "ftcCurrentForeignTax": 32371.1557907,
   "ftcCurrentGeneral": 0,
   "ftcCurrentPassive": 0,
   "ftcCurrentResourced": 0,
@@ -2232,7 +2298,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 501478.808347,
+  "balance": 500198.769792,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2246,7 +2312,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 501478.808347,
+    "costBasis": 500198.769792,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2257,7 +2323,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 501478.808347,
+    "marketValue": 500198.769792,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",

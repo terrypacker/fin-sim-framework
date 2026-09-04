@@ -154,8 +154,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 185438.006732,
-  "spouse": 65341.7877409
+  "primary": 185384.141732,
+  "spouse": 65221.7127409
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -174,7 +174,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 163648.591732,
+  "primary": 163714.801732,
   "spouse": 54204.9227409
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -184,7 +184,7 @@
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 945423.26,
+  "balance": 934609.24,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -192,7 +192,7 @@
   },
   "drawdownPriority": 0,
   "fxBasisRate": 1.55,
-  "fxBasisUsd": 609950.490323,
+  "fxBasisUsd": 602973.703226,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -200,7 +200,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 945423.264305,
+    "costBasis": 934609.244131,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -211,7 +211,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 945423.264305,
+    "marketValue": 934609.244131,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -405,6 +405,97 @@
    }
   ]
  },
+ "bracketIndexAccumulator": {
+  "AU": 1.42576088685,
+  "US": 1.42576088685,
+  "US_FEIE": 1.42576088685,
+  "US_FICA": 1.42576088685,
+  "US_STATE": 1.42576088685
+ },
+ "bracketIndexAccumulatorByYear": {
+  "AU": {
+   "2025": 1,
+   "2026": 1.03,
+   "2027": 1.0609,
+   "2028": 1.092727,
+   "2029": 1.12550881,
+   "2030": 1.1592740743,
+   "2031": 1.19405229653,
+   "2032": 1.22987386542,
+   "2033": 1.26677008139,
+   "2034": 1.30477318383,
+   "2035": 1.34391637934,
+   "2036": 1.38423387072,
+   "2037": 1.42576088685
+  },
+  "US": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139,
+   "2035": 1.30477318383,
+   "2036": 1.34391637934,
+   "2037": 1.38423387072,
+   "2038": 1.42576088685
+  },
+  "US_FEIE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139,
+   "2035": 1.30477318383,
+   "2036": 1.34391637934,
+   "2037": 1.38423387072,
+   "2038": 1.42576088685
+  },
+  "US_FICA": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139,
+   "2035": 1.30477318383,
+   "2036": 1.34391637934,
+   "2037": 1.38423387072,
+   "2038": 1.42576088685
+  },
+  "US_STATE": {
+   "2026": 1,
+   "2027": 1.03,
+   "2028": 1.0609,
+   "2029": 1.092727,
+   "2030": 1.12550881,
+   "2031": 1.1592740743,
+   "2032": 1.19405229653,
+   "2033": 1.22987386542,
+   "2034": 1.26677008139,
+   "2035": 1.30477318383,
+   "2036": 1.34391637934,
+   "2037": 1.38423387072,
+   "2038": 1.42576088685
+  }
+ },
+ "bracketIndexSpreads": {
+  "AU": 0,
+  "US": 0,
+  "US_FEIE": 0,
+  "US_FICA": 0,
+  "US_STATE": 0
+ },
  "collectibleAccount": {
   "acquisitionDateByCountry": {
    "AU": 1940630400000
@@ -459,7 +550,7 @@
  "cumulativeConsumptionUtility": 284.26578966,
  "cumulativeConsumptionUtilityCount": 144,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 758850.457663,
+ "cumulativeTaxesPaid": 758744.723072,
  "currentPeriods": {
   "AU": {
    "endMs": 2161555200000,
@@ -930,10 +1021,10 @@
  },
  "metrics": {
   "auFixedIncomeAccount": 1614.76,
-  "auSavingsAccount": 945423.26,
+  "auSavingsAccount": 934609.24,
   "auStockAccount": 193295.5,
   "au_fixed_income_interest": 5.36,
-  "au_savings_interest": 3532.09,
+  "au_savings_interest": 3491.69,
   "au_stock_dividend": 7434.44,
   "au_stock_earnings": 10520.44,
   "bond_coupons": 720,
@@ -946,8 +1037,8 @@
   "k401Account": 598406.85,
   "k401_earnings": 22100.95,
   "monthly_expenses": 8305.40322435,
-  "netLiquidity": 6613457.98,
-  "netWorth": 7097531.25,
+  "netLiquidity": 6613185,
+  "netWorth": 7097258.26,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0,
   "rothAccount": 180175.33,
@@ -958,9 +1049,9 @@
   "spouseSuperAccount": 250104.53,
   "superAccount": 500209.03,
   "super_earnings": 14045.51,
-  "usSavingsAccount": 3653459.35396,
+  "usSavingsAccount": 3657911.44481,
   "usStockAccount": 223884.31,
-  "us_savings_interest": 9110.87,
+  "us_savings_interest": 9121.97,
   "us_stock_earnings": 7696.53
  },
  "monthlyExpenses": 8554.56532108,
@@ -1541,7 +1632,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 3642535.76723,
+  "balance": 3649239.56935,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1555,7 +1646,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 3642535.76723,
+    "costBasis": 3649239.56935,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1566,7 +1657,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 3642535.76723,
+    "marketValue": 3649239.56935,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1779,7 +1870,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 80992.3224488,
+ "usTaxPaidOnUsSourceAud": 80989.2984788,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

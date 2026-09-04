@@ -15,9 +15,12 @@ import { AuTaxRates2024 } from './tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from './tax/au/au-tax-rates-2027.js';
+import { LAST_PUBLISHED_FICA_YEAR } from './tax/us/fica-rates.js';
 import {
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
+  bracketIndexationFactor,
+  BRACKET_INDEX_SERIES,
 } from './tax/inflation-adjusted-tax-rates.js';
 
 // Per-person AU maps whose non-zero balance means a person accrued AU tax
@@ -371,9 +374,20 @@ export class TaxSettleService {
   // ─── Private ───────────────────────────────────────────────────────────────
 
   /**
-   * Wrap a rates module with inflation-adjusted brackets when
-   * state.inflationAccumulator[cc] > 1.0.  Returns the base module unchanged
-   * when no accumulator is present or the factor is effectively 1.
+   * Wrap a rates module with inflation-adjusted brackets when inflation has elapsed
+   * SINCE THE MODULE'S OWN YEAR.  Returns the base module unchanged when the factor
+   * is effectively 1 — which is now the case for every year that has its own
+   * statutory table, not merely the sim's first year.
+   *
+   * The anchor is the point: `bracketIndexationFactor` divides the bracket-index level
+   * now by the level in `baseModule.year`, so a published table is used at its
+   * published thresholds. Anchoring at sim start (what this did before) double-indexed
+   * every registered AU year after the sim's first — FY2026-27 and FY2027-28 are
+   * legislated and were being inflated on top of their own indexation.
+   *
+   * The rate the projection rides is CPI plus the per-country bracket-index spread
+   * (`usFederalBracketIndexSpread` / `auBracketIndexSpread`), which is why a US and an
+   * AU table past their horizons can diverge from each other and from wage inflation.
    *
    * @param {string} cc
    * @param {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule} baseModule
@@ -381,10 +395,34 @@ export class TaxSettleService {
    * @returns {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule}
    */
   _inflationWrap(cc, baseModule, state) {
-    const factor = state.inflationAccumulator?.[cc] ?? 1.0;
-    if (factor <= 1.0) return baseModule;
-    if (cc === 'US') return new InflationAdjustedUsTaxRates(baseModule, factor);
-    if (cc === 'AU') return new InflationAdjustedAuTaxRates(baseModule, factor);
+    const year = baseModule.year;
+    if (cc === 'AU') {
+      const factor = bracketIndexationFactor(state, BRACKET_INDEX_SERIES.AU, year);
+      return factor > 1.0 ? new InflationAdjustedAuTaxRates(baseModule, factor) : baseModule;
+    }
+    if (cc === 'US') {
+      // Three series, because the three groups of figures on a US table are indexed
+      // by three different mechanisms — see BRACKET_INDEX_SERIES. They coincide until
+      // a scenario sets a spread on one of them, which is exactly when collapsing
+      // them would start quietly moving figures nobody asked to move.
+      const factors = {
+        bracket: bracketIndexationFactor(state, BRACKET_INDEX_SERIES.US, year),
+        // Anchored at SSA's published year, NOT the rates module's. The module sets
+        // `_ficaWageBase` from `ficaWageBase(year)`, which clamps to the last SSA
+        // announcement — so registering a US 2027 table while SSA has published only
+        // through 2026 would leave the module carrying the 2026 figure while an
+        // anchor of `year` believed it was already a 2027 one, dropping a year of
+        // projection. It is also the anchor the payroll withholding uses, and the two
+        // must agree by construction rather than by the two years happening to match.
+        fica: bracketIndexationFactor(state, BRACKET_INDEX_SERIES.US_FICA,
+                                      LAST_PUBLISHED_FICA_YEAR),
+        // The FEIE cap IS a per-rates-module figure (§911; each year module carries
+        // its own), so the module's year is its anchor.
+        feie: bracketIndexationFactor(state, BRACKET_INDEX_SERIES.US_FEIE, year),
+      };
+      if (Object.values(factors).every(f => f <= 1.0)) return baseModule;
+      return new InflationAdjustedUsTaxRates(baseModule, factors);
+    }
     return baseModule;
   }
 
