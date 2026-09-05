@@ -8,37 +8,33 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { InMemoryStorage } from "../storage/in-memory-storage.js";
+import { getAppStorage } from '../storage/create-storage.js';
+import { STORAGE_KEYS }  from '../storage/storage-keys.js';
 
+/**
+ * Persists user scenarios through a StorageAdapter.
+ *
+ * The largest of the four persisted stores by a wide margin — a single
+ * production scenario serializes to ~350 KB — and the reason the app outgrew
+ * localStorage's ~5 MB origin cap.
+ */
 export class ScenarioStorage {
-  static STORAGE_KEY = 'fin-sim-scenarios';
-  _storage_instance = null;
+  static STORAGE_KEY = STORAGE_KEYS.SCENARIOS;
 
-  _getStorageInstance() {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        // sanity test
-        const key = '__storage_test__';
-        localStorage.setItem(key, '1');
-        localStorage.removeItem(key);
-
-        this._storage_instance = localStorage;
-      } else {
-        this._storage_instance = new InMemoryStorage();
-      }
-    } catch {
-      this._storage_instance = new InMemoryStorage();
-    }
-    return this._storage_instance;
+  /**
+   * @param {import('../storage/storage-adapter.js').StorageAdapter} [storage]
+   *        defaults to the shared app storage; pass one explicitly to isolate.
+   */
+  constructor(storage = getAppStorage()) {
+    this._storage = storage;
   }
-
 
   load() {
     try {
-      const raw = this._getStorageInstance().getItem(ScenarioStorage.STORAGE_KEY);
+      const raw = this._storage.getItem(ScenarioStorage.STORAGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch (e) {
-      console.warn('Failed to load scenarios from localStorage:', e);
+      console.warn('[ScenarioStorage] Failed to load scenarios:', e);
     }
     return { scenarios: [] };
   }
@@ -49,6 +45,10 @@ export class ScenarioStorage {
    * @param data
    */
   save(data) {
-    this._getStorageInstance().setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(data));
+    try {
+      this._storage.setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn('[ScenarioStorage] Failed to save scenarios:', e);
+    }
   }
 }

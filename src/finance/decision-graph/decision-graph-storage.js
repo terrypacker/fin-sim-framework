@@ -8,51 +8,39 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { InMemoryStorage } from '../../storage/in-memory-storage.js';
+import { getAppStorage } from '../../storage/create-storage.js';
+import { STORAGE_KEYS }  from '../../storage/storage-keys.js';
 
 /**
- * Persists DecisionGraph configs to localStorage (falls back to in-memory).
+ * Persists DecisionGraph configs through a StorageAdapter.
  * Mirrors ScenarioStorage.
  */
 export class DecisionGraphStorage {
-  static STORAGE_KEY = 'fin-sim-decision-graphs';
-  _storageInstance = null;
+  static STORAGE_KEY = STORAGE_KEYS.DECISION_GRAPHS;
 
-  _getStorageInstance() {
-    if (this._storageInstance) return this._storageInstance;
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const key = '__dg_storage_test__';
-        localStorage.setItem(key, '1');
-        localStorage.removeItem(key);
-        this._storageInstance = localStorage;
-      } else {
-        this._storageInstance = new InMemoryStorage();
-      }
-    } catch {
-      this._storageInstance = new InMemoryStorage();
-    }
-    return this._storageInstance;
+  /**
+   * @param {import('../../storage/storage-adapter.js').StorageAdapter} [storage]
+   *        defaults to the shared app storage; pass one explicitly to isolate.
+   */
+  constructor(storage = getAppStorage()) {
+    this._storage = storage;
   }
 
   load() {
     try {
-      const raw = this._getStorageInstance().getItem(DecisionGraphStorage.STORAGE_KEY);
+      const raw = this._storage.getItem(DecisionGraphStorage.STORAGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch (e) {
-      console.warn('[DecisionGraphStorage] Failed to load from localStorage:', e);
+      console.warn('[DecisionGraphStorage] Failed to load:', e);
     }
     return { graphs: [] };
   }
 
   save(data) {
     try {
-      this._getStorageInstance().setItem(
-        DecisionGraphStorage.STORAGE_KEY,
-        JSON.stringify(data),
-      );
+      this._storage.setItem(DecisionGraphStorage.STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn('[DecisionGraphStorage] Failed to save to localStorage:', e);
+      console.warn('[DecisionGraphStorage] Failed to save:', e);
     }
   }
 }

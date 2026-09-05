@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
+import { makeLeafEntry }              from './leaf-entry.js';
 import { IntlRetirementMcRunner }     from '../monte-carlo/intl-retirement-mc-runner.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../monte-carlo/intl-retirement-mc-config.js';
 
@@ -93,12 +93,13 @@ export class DecisionGraphRunner {
       // per-draw callback is never invoked (e.g. mock runners).
       if (onProgress) onProgress((i + 1) * n, leaves.length * n, i + 1, leaves.length);
 
+      const leafId = `dg-leaf:${i}`;
       results.push({
-        id:           `dg-leaf:${i}`,
+        id:           leafId,
         label:        leaf.label,
         optionVector: leaf.optionVector,
         params:       leaf.params,
-        entry:        this._makeLeafEntry(baseEntry, leaf, i),
+        entry:        makeLeafEntry(baseEntry, leaf, leafId),
         mcSummary:    summary,
       });
     }
@@ -203,30 +204,4 @@ export class DecisionGraphRunner {
     }
   }
 
-  /**
-   * Create a plain-object "leaf entry" compatible with ScenarioCompareRunner.run().
-   * Uses ScenarioSerializer to strip live class refs from the base entry.
-   */
-  _makeLeafEntry(baseEntry, leaf, leafIndex) {
-    const entry = ScenarioSerializer.serializeScenario(baseEntry);
-    entry.id    = `dg-leaf:${leafIndex}`;
-    entry.name  = leaf.label;
-    entry.layer = 'analysis-leaf';
-
-    // serializeScenario returns params as a direct reference (not a clone), so
-    // we must clone before mutating to avoid corrupting baseEntry.params in place.
-    entry.params = (entry.params ?? []).map(p => ({ ...p }));
-
-    if (Array.isArray(entry.params)) {
-      for (const p of entry.params) {
-        if (p.name in leaf.params) p.value = leaf.params[p.name];
-      }
-      const existingNames = new Set(entry.params.map(p => p.name));
-      for (const [name, value] of Object.entries(leaf.params)) {
-        if (!existingNames.has(name)) entry.params.push({ name, value });
-      }
-    }
-
-    return entry;
-  }
 }

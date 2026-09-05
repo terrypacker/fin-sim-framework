@@ -8,10 +8,11 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { InMemoryStorage } from '../../storage/in-memory-storage.js';
+import { getAppStorage } from '../../storage/create-storage.js';
+import { STORAGE_KEYS }  from '../../storage/storage-keys.js';
 
 /**
- * Persists MPC decision records to localStorage (falls back to in-memory).
+ * Persists MPC decision records through a StorageAdapter.
  * Mirrors ScenarioStorage / DecisionGraphStorage.
  *
  * Its OWN key (design 39 §13, H4). Decision records must never enter
@@ -20,44 +21,31 @@ import { InMemoryStorage } from '../../storage/in-memory-storage.js';
  * page reload.
  */
 export class DecisionRecordStorage {
-  static STORAGE_KEY = 'fin-sim-decisions';
-  _storageInstance = null;
+  static STORAGE_KEY = STORAGE_KEYS.DECISION_RECORDS;
 
-  _getStorageInstance() {
-    if (this._storageInstance) return this._storageInstance;
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const key = '__decision_storage_test__';
-        localStorage.setItem(key, '1');
-        localStorage.removeItem(key);
-        this._storageInstance = localStorage;
-      } else {
-        this._storageInstance = new InMemoryStorage();
-      }
-    } catch {
-      this._storageInstance = new InMemoryStorage();
-    }
-    return this._storageInstance;
+  /**
+   * @param {import('../../storage/storage-adapter.js').StorageAdapter} [storage]
+   *        defaults to the shared app storage; pass one explicitly to isolate.
+   */
+  constructor(storage = getAppStorage()) {
+    this._storage = storage;
   }
 
   load() {
     try {
-      const raw = this._getStorageInstance().getItem(DecisionRecordStorage.STORAGE_KEY);
+      const raw = this._storage.getItem(DecisionRecordStorage.STORAGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch (e) {
-      console.warn('[DecisionRecordStorage] Failed to load from localStorage:', e);
+      console.warn('[DecisionRecordStorage] Failed to load:', e);
     }
     return { records: [] };
   }
 
   save(data) {
     try {
-      this._getStorageInstance().setItem(
-        DecisionRecordStorage.STORAGE_KEY,
-        JSON.stringify(data),
-      );
+      this._storage.setItem(DecisionRecordStorage.STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
-      console.warn('[DecisionRecordStorage] Failed to save to localStorage:', e);
+      console.warn('[DecisionRecordStorage] Failed to save:', e);
     }
   }
 }

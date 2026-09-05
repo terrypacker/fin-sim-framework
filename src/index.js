@@ -89,6 +89,7 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
+import { makeLeafEntry, resolveLeafEntry } from './finance/decision-graph/leaf-entry.js';
 import { TAX_CLASS, taxClassForRole, defaultRateProvider, afterTaxOptionsFromParams, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, computeNetWorthInclSpeculative, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
@@ -435,7 +436,12 @@ import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, SimulationHorizonError, TELEMETRY_LEVELS, Simulation } from './simulation-framework/simulation.js';
 import { deepClone, cloneState, snapshotForDiff, MutationTracker, diffStates } from './simulation-framework/state-utils.js';
 import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js';
+import { getAppStorage, hydrateAppStorage, clearMigratedLegacyKeys, _resetAppStorage } from './storage/create-storage.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
+import { IndexedDbStorage } from './storage/indexed-db-storage.js';
+import { LocalStorageAdapter } from './storage/local-storage-adapter.js';
+import { StorageAdapter } from './storage/storage-adapter.js';
+import { STORAGE_KEYS, ALL_STORAGE_KEYS } from './storage/storage-keys.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { RATE_KEY_GROUPS, KNOWN_RATE_KEYS, rateKeyOptionsHtml } from './visualization/accounts/rate-key-options.js';
@@ -897,6 +903,8 @@ export const Finance = {
   DecisionGraphResultStorage,
   DecisionGraphRunner,
   DecisionGraphStorage,
+  makeLeafEntry,
+  resolveLeafEntry,
   TAX_CLASS,
   taxClassForRole,
   defaultRateProvider,
@@ -1695,7 +1703,16 @@ export const Engine = {
   diffStates,
   ValueType,
   TypeRegistry,
+  getAppStorage,
+  hydrateAppStorage,
+  clearMigratedLegacyKeys,
+  _resetAppStorage,
   InMemoryStorage,
+  IndexedDbStorage,
+  LocalStorageAdapter,
+  StorageAdapter,
+  STORAGE_KEYS,
+  ALL_STORAGE_KEYS,
 };
 
 export const Scenarios = {

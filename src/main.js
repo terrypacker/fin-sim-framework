@@ -27,8 +27,17 @@ import '../assets/css/plugins/mpc-cockpit.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';
+import { hydrateAppStorage, getAppStorage, clearMigratedLegacyKeys }
+  from './storage/create-storage.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // MUST complete before anything constructs ServiceRegistry: the scenario,
+  // decision-graph and decision-record registries all load from storage in their
+  // constructors, so an un-hydrated adapter would read as an empty profile and
+  // then persist that emptiness over the user's real data.
+  const storage = await hydrateAppStorage();
+  console.info(`[storage] backend: ${storage.backendName}`);
+
   const app = new SimulationWorkbench();
   app.initView();
   app.initScenario();
@@ -36,4 +45,5 @@ document.addEventListener('DOMContentLoaded', () => {
   // Expose debug handles for console benchmarking.
   window.ServiceRegistry = ServiceRegistry;
   window.__app = app;
+  window.__storage = { getAppStorage, clearMigratedLegacyKeys };
 });

@@ -20,6 +20,7 @@ import assert    from 'node:assert/strict';
 
 import { DecisionGraph, DecisionPoint } from '../../src/finance/decision-graph/decision-graph-models.js';
 import { DecisionGraphStorage }         from '../../src/finance/decision-graph/decision-graph-storage.js';
+import { InMemoryStorage }      from '../../src/storage/in-memory-storage.js';
 
 // ── DecisionGraph / DecisionPoint model ───────────────────────────────────
 
@@ -95,7 +96,7 @@ test('DecisionGraph defaults are applied when not provided', () => {
 // ── DecisionGraphStorage round-trips ─────────────────────────────────────
 
 test('DecisionGraphStorage saves and loads a graph', () => {
-  const storage = new DecisionGraphStorage(); // uses InMemoryStorage in Node
+  const storage = new DecisionGraphStorage(new InMemoryStorage());
 
   const dg = new DecisionGraph({
     id: 'dg:0', name: 'Test', baseScenarioId: 'p:intl-retirement',
@@ -118,7 +119,7 @@ test('DecisionGraphStorage saves and loads a graph', () => {
 });
 
 test('DecisionGraphStorage saves and loads multiple graphs', () => {
-  const storage = new DecisionGraphStorage();
+  const storage = new DecisionGraphStorage(new InMemoryStorage());
 
   const graphs = [
     new DecisionGraph({ id: 'dg:0', name: 'First',  baseScenarioId: 'x', decisionPoints: [] }),
@@ -134,13 +135,13 @@ test('DecisionGraphStorage saves and loads multiple graphs', () => {
 });
 
 test('DecisionGraphStorage returns empty graphs array when nothing stored', () => {
-  const storage = new DecisionGraphStorage();
+  const storage = new DecisionGraphStorage(new InMemoryStorage());
   const loaded = storage.load();
   assert.deepEqual(loaded, { graphs: [] });
 });
 
 test('DecisionGraphStorage overwrites previous data on save', () => {
-  const storage = new DecisionGraphStorage();
+  const storage = new DecisionGraphStorage(new InMemoryStorage());
 
   storage.save({ graphs: [new DecisionGraph({ id: 'dg:0', name: 'Old', baseScenarioId: 'x' })] });
   storage.save({ graphs: [new DecisionGraph({ id: 'dg:0', name: 'New', baseScenarioId: 'x' })] });

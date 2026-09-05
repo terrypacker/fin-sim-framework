@@ -8,37 +8,28 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { InMemoryStorage } from '../../storage/in-memory-storage.js';
+import { getAppStorage } from '../../storage/create-storage.js';
+import { STORAGE_KEYS }  from '../../storage/storage-keys.js';
 
 /**
- * Persists the last DecisionGraphResult per DG id to localStorage.
+ * Persists the last DecisionGraphResult per DG id through a StorageAdapter.
  *
  * Only used when the analysis has persistLeaves: true.
- * Falls back to in-memory when localStorage is unavailable.
  */
 export class DecisionGraphResultStorage {
-  static STORAGE_KEY = 'fin-sim-dg-results';
+  static STORAGE_KEY = STORAGE_KEYS.DG_RESULTS;
 
-  _getStorage() {
-    if (this._storage) return this._storage;
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const k = '__dgr_test__';
-        localStorage.setItem(k, '1');
-        localStorage.removeItem(k);
-        this._storage = localStorage;
-      } else {
-        this._storage = new InMemoryStorage();
-      }
-    } catch {
-      this._storage = new InMemoryStorage();
-    }
-    return this._storage;
+  /**
+   * @param {import('../../storage/storage-adapter.js').StorageAdapter} [storage]
+   *        defaults to the shared app storage; pass one explicitly to isolate.
+   */
+  constructor(storage = getAppStorage()) {
+    this._storage = storage;
   }
 
   _loadAll() {
     try {
-      const raw = this._getStorage().getItem(DecisionGraphResultStorage.STORAGE_KEY);
+      const raw = this._storage.getItem(DecisionGraphResultStorage.STORAGE_KEY);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -47,7 +38,7 @@ export class DecisionGraphResultStorage {
 
   _saveAll(all) {
     try {
-      this._getStorage().setItem(DecisionGraphResultStorage.STORAGE_KEY, JSON.stringify(all));
+      this._storage.setItem(DecisionGraphResultStorage.STORAGE_KEY, JSON.stringify(all));
     } catch (e) {
       console.warn('[DecisionGraphResultStorage] Failed to save:', e);
     }
@@ -58,11 +49,38 @@ export class DecisionGraphResultStorage {
     return this._loadAll()[dgId] ?? null;
   }
 
-  /** Persist result for dgId. Overwrites any previous value. */
+  /**
+   * Persist result for dgId. Overwrites any previous value.
+   *
+   * Each leaf's `entry` is a ~350 KB serialized copy of the base scenario, so a
+   * 50-leaf result would persist ~17 MB of near-identical config. It is dropped
+   * here: `makeLeafEntry` is pure, and `baseScenarioId` + the leaf's own
+   * `params` — both still stored — are everything needed to rebuild it. Readers
+   * go through `resolveLeafEntry(leaf, baseEntry)`, which rebuilds on demand.
+   */
   saveResult(dgId, result) {
     const all = this._loadAll();
-    all[dgId] = result;
+    all[dgId] = DecisionGraphResultStorage.stripLeafEntries(result);
     this._saveAll(all);
+  }
+
+  /**
+   * A copy of `result` with `entry` removed from every leaf.
+   *
+   * Leaves that never carried an `entry` are passed through untouched — the key
+   * is omitted, not set to undefined, so a stripped result of an entry-less
+   * result deep-equals the original.
+   */
+  static stripLeafEntries(result) {
+    if (!result || !Array.isArray(result.leaves)) return result;
+    return {
+      ...result,
+      leaves: result.leaves.map(leaf => {
+        if (!leaf || !('entry' in leaf)) return leaf;
+        const { entry, ...rest } = leaf;
+        return rest;
+      }),
+    };
   }
 
   /** Remove persisted result for dgId. */

@@ -11,6 +11,7 @@
 import { BaseComponent }          from '../components/base-component.js';
 import { DecisionGraphRunner }    from '../../finance/decision-graph/decision-graph-runner.js';
 import { buildDecisionGraphCsv }  from '../../finance/decision-graph/decision-graph-csv.js';
+import { resolveLeafEntry }       from '../../finance/decision-graph/leaf-entry.js';
 import { ServiceRegistry }        from '../../services/service-registry.js';
 import { withBom }               from '../../utils/csv.js';
 
@@ -207,8 +208,11 @@ export class DgResultsPanel extends BaseComponent {
       cmpBtn.textContent = 'Compare';
       cmpBtn.title = 'Compare this leaf vs base scenario';
       this.listen(cmpBtn, 'click', () => {
-        if (this.onCompareLeaf && leaf.entry && this._baseEntry) {
-          this.onCompareLeaf(leaf.entry, this._baseEntry);
+        // Reloaded results have no inline leaf.entry — rebuild it from the base
+        // scenario on click, so persisted and fresh results behave identically.
+        const leafEntry = resolveLeafEntry(leaf, this._baseEntry);
+        if (this.onCompareLeaf && leafEntry && this._baseEntry) {
+          this.onCompareLeaf(leafEntry, this._baseEntry);
         }
       });
       actionCell.appendChild(cmpBtn);
@@ -272,8 +276,11 @@ export class DgResultsPanel extends BaseComponent {
       cmpBtn.className = 'dg-compare-btn';
       cmpBtn.textContent = 'Compare';
       this.listen(cmpBtn, 'click', () => {
-        if (this.onCompareLeaf && leaf.entry && this._baseEntry) {
-          this.onCompareLeaf(leaf.entry, this._baseEntry);
+        // Reloaded results have no inline leaf.entry — rebuild it from the base
+        // scenario on click, so persisted and fresh results behave identically.
+        const leafEntry = resolveLeafEntry(leaf, this._baseEntry);
+        if (this.onCompareLeaf && leafEntry && this._baseEntry) {
+          this.onCompareLeaf(leafEntry, this._baseEntry);
         }
       });
       actionCell.appendChild(cmpBtn);

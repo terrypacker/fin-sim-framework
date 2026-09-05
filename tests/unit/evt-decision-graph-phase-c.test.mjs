@@ -19,6 +19,8 @@ import { DecisionGraph, DecisionPoint }      from '../../src/finance/decision-gr
 import { DecisionGraphResultStorage }        from '../../src/finance/decision-graph/decision-graph-result-storage.js';
 import { buildDecisionGraphCsv }             from '../../src/finance/decision-graph/decision-graph-csv.js';
 import { DecisionGraphRunner }               from '../../src/finance/decision-graph/decision-graph-runner.js';
+import { makeLeafEntry, resolveLeafEntry }   from '../../src/finance/decision-graph/leaf-entry.js';
+import { InMemoryStorage }                  from '../../src/storage/in-memory-storage.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,15 +60,9 @@ test('persistLeaves: true is stored when set explicitly', () => {
 // ── Task 9: DecisionGraphResultStorage ────────────────────────────────────────
 
 function makeStorage() {
-  // Force in-memory backend (no localStorage in Node).
-  const s = new DecisionGraphResultStorage();
-  const mem = new Map();
-  s._getStorage = () => ({
-    getItem:    k => mem.get(k) ?? null,
-    setItem:    (k, v) => mem.set(k, v),
-    removeItem: k => mem.delete(k),
-  });
-  return s;
+  // Own backend per store: the default is a process-wide shared adapter, so a
+  // fresh DecisionGraphResultStorage no longer implies fresh state.
+  return new DecisionGraphResultStorage(new InMemoryStorage());
 }
 
 test('ResultStorage: loadResult returns null for unknown id', () => {
@@ -240,4 +236,122 @@ test('CSV: multiple leaves ranked correctly — best leaf is rank 1', () => {
   // Row 1 (rank 1) should have p50 = 2000000 → rounded = 2000000
   assert.ok(rows[1].startsWith('1,'), `rank 1 row: ${rows[1]}`);
   assert.ok(rows[1].includes('2000000'), `rank 1 row has p50=2000000: ${rows[1]}`);
+});
+
+// ── Leaf-entry stripping: persisted results must not carry serialized scenarios ─
+//
+// A leaf entry is a full serialized scenario (~350 KB in production), so a
+// 50-leaf result would persist ~17 MB — enough to blow the localStorage quota on
+// its own. saveResult drops them; resolveLeafEntry rebuilds on demand.
+
+function makeBaseEntry() {
+  return {
+    id: 'p:strip-test', name: 'Base', layer: 'scenario',
+    simStart: '2026-01-01T00:00:00.000Z',
+    simEnd:   '2027-01-01T00:00:00.000Z',
+    params:   [{ name: 'k401Balance', value: 300_000, type: 'Number', label: '401k' }],
+    persons: [], accounts: [], events: [], handlers: [], actions: [], reducers: [],
+    toolsets: [], initialState: {},
+  };
+}
+
+/** Run a 2-leaf DG with a stubbed MC runner; returns { result, baseEntry }. */
+async function runTwoLeafDg() {
+  const baseEntry = makeBaseEntry();
+  const runner = new DecisionGraphRunner({
+    scenarioRegistry: { get: () => baseEntry },
+    mcRunnerFactory:  () => ({
+      async run() {
+        return { runs: [], summary: { mean: 0, p10: 0, p50: 0, p90: 0, successRate: 1, failureCount: 0 } };
+      },
+    }),
+  });
+  const result = await runner.run({
+    id: 'dg:strip', baseScenarioId: 'p:strip-test',
+    decisionPoints: [{
+      id: 'bal', label: 'Balance', paramKey: 'k401Balance',
+      options: [{ value: 200_000, label: '200k' }, { value: 400_000, label: '400k' }],
+      weights: null,
+    }],
+    objective: 'finalBalance', mcDrawsPerLeaf: 1, mcSeed: 42,
+  });
+  return { result, baseEntry };
+}
+
+test('stripLeafEntries removes entry from every leaf', () => {
+  const result = makeResult([], [makeLeaf(0, 100, 1), makeLeaf(1, 200, 1)]);
+  const stripped = DecisionGraphResultStorage.stripLeafEntries(result);
+
+  assert.equal(stripped.leaves.length, 2);
+  for (const leaf of stripped.leaves) {
+    assert.ok(!('entry' in leaf), 'persisted leaf must not carry an entry');
+  }
+  // Everything needed to rebuild survives.
+  assert.equal(stripped.baseScenarioId, 'p:test');
+  assert.deepEqual(stripped.leaves.map(l => l.id), ['dg-leaf:0', 'dg-leaf:1']);
+  assert.deepEqual(stripped.leaves.map(l => l.params), [{}, {}]);
+  // The input is not mutated.
+  assert.ok('entry' in result.leaves[0], 'stripLeafEntries must not mutate its input');
+});
+
+test('stripLeafEntries leaves an entry-less result deep-equal to the original', () => {
+  const result = { graphId: 'dg:0', leaves: [{ id: 'dg-leaf:0' }] };
+  assert.deepEqual(DecisionGraphResultStorage.stripLeafEntries(result), result);
+});
+
+test('stripLeafEntries passes through a result with no leaves array', () => {
+  assert.deepEqual(DecisionGraphResultStorage.stripLeafEntries({ v: 1 }), { v: 1 });
+  assert.equal(DecisionGraphResultStorage.stripLeafEntries(null), null);
+});
+
+test('ResultStorage: saveResult strips leaf entries', () => {
+  const s = makeStorage();
+  s.saveResult('dg:0', makeResult([], [makeLeaf(0, 100, 1)]));
+  const loaded = s.loadResult('dg:0');
+  assert.ok(!('entry' in loaded.leaves[0]), 'loaded leaf must not carry an entry');
+});
+
+test('resolveLeafEntry returns the inline entry when present', () => {
+  const inline = { id: 'dg-leaf:0' };
+  assert.equal(resolveLeafEntry({ id: 'dg-leaf:0', entry: inline }, makeBaseEntry()), inline);
+});
+
+test('resolveLeafEntry returns null when the entry is absent and no baseEntry is given', () => {
+  assert.equal(resolveLeafEntry({ id: 'dg-leaf:0', params: {} }, null), null);
+  assert.equal(resolveLeafEntry(null, makeBaseEntry()), null);
+});
+
+test('a rebuilt leaf entry is identical to the one the runner produced', async () => {
+  const { result, baseEntry } = await runTwoLeafDg();
+
+  // This is the invariant the whole optimization rests on: dropping `entry` at
+  // save time loses nothing, because it is fully derivable from what remains.
+  for (const leaf of result.leaves) {
+    const rebuilt = makeLeafEntry(baseEntry, leaf, leaf.id);
+    assert.deepEqual(rebuilt, leaf.entry,
+      `rebuilt entry for ${leaf.id} must equal the runner's inline entry`);
+  }
+});
+
+test('leaf entries survive a full save → load → resolve round-trip', async () => {
+  const { result, baseEntry } = await runTwoLeafDg();
+  const original = result.leaves.map(l => l.entry);
+
+  const s = makeStorage();
+  s.saveResult('dg:strip', result);
+  const loaded = s.loadResult('dg:strip');
+
+  loaded.leaves.forEach((leaf, i) => {
+    assert.ok(!('entry' in leaf), 'stored leaf must not carry an entry');
+    assert.deepEqual(resolveLeafEntry(leaf, baseEntry), original[i],
+      `resolved entry for ${leaf.id} must equal the pre-save entry`);
+  });
+});
+
+test('stripping a leaf entry is a large saving on the persisted payload', async () => {
+  const { result } = await runTwoLeafDg();
+  const full     = JSON.stringify(result).length;
+  const stripped = JSON.stringify(DecisionGraphResultStorage.stripLeafEntries(result)).length;
+  assert.ok(stripped < full / 2,
+    `stripped payload (${stripped}) should be well under half of full (${full})`);
 });
