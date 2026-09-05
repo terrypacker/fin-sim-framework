@@ -36,3 +36,33 @@ const US_EARLY_WITHDRAWAL_RULES = Object.freeze({
 export function getUsEarlyWithdrawalRules(accountType, _year) {
   return US_EARLY_WITHDRAWAL_RULES[accountType] ?? null;
 }
+
+/**
+ * Is `allowsEarlyWithdrawal: true` MEANINGFUL on this account type? (design 97 §22.8.)
+ *
+ * The flag is read in two places that do not agree by construction, and the disagreement is
+ * the reason this predicate is exported rather than each caller testing the table itself:
+ *
+ *  - `AccountService.replenishSavings` Phase 2 tests the flag and then looks the rules up,
+ *    so a type with no entry reaches `if (!rules) continue` and **cannot be drawn early at
+ *    any flag value**;
+ *  - `net-liquidity.js#isAccessible` used to believe the flag unconditionally, ahead of any
+ *    type or age test.
+ *
+ * So a `super` account carrying the flag would have moved `computeNetLiquidity` — the MPC /
+ * optimizer CONTROL metric (design 88 §5) — while moving no dollar in any drawdown path: a
+ * lever that changes the metric and not the money, in the metric whose scope is hardest to
+ * check. Super's `false` is therefore STRUCTURAL, not authored: it is a statement about which
+ * rules table has an entry.
+ *
+ * Real early release of Australian super (hardship, compassionate grounds, DASP) is not a
+ * 10 % penalty — DASP is a punitive flat withholding — so modelling it means a rules ENTRY
+ * with its own rate, at which point this predicate starts returning true for super on its
+ * own. That is the intended way for the answer to change; flipping the boolean is not.
+ *
+ * @param {string} accountType - ACCOUNT_TYPE value
+ * @returns {boolean}
+ */
+export function supportsEarlyWithdrawal(accountType) {
+  return getUsEarlyWithdrawalRules(accountType) != null;
+}

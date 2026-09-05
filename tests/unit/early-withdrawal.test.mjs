@@ -22,6 +22,10 @@
  * EW-7  pendingTaxActions       — returned and chainable by callers
  * EW-8  Rules from module       — getEarlyWithdrawalRules on UsAccountModule
  * EW-9  Super not eligible      — allowsEarlyWithdrawal false, never drawn early
+ * EW-13 The flag round-trips    — the household's opt-OUT survives save/load; the
+ *                                 default is not written; super is excluded entirely
+ * EW-14 minimumAge is statute   — never exported, class is the authority, a file that
+ *                                 disagrees loses audibly
  */
 
 import { test } from 'node:test';
@@ -39,6 +43,9 @@ import {
 import { getUsEarlyWithdrawalRules }  from '../../src/finance/account-rules/us/us-early-withdrawal-rules.js';
 import { UsAccountModule2026 }        from '../../src/finance/account-rules/us/us-account-module-2026.js';
 import { ACCOUNT_TYPE }               from '../../src/finance/assets/account.js';
+import { supportsEarlyWithdrawal } from '../../src/finance/account-rules/us/us-early-withdrawal-rules.js';
+import { ScenarioSerializer }      from '../../src/scenarios/scenario-serializer.js';
+import { computeNetLiquidity }     from '../../src/finance/derived-metrics/net-liquidity.js';
 
 /** Builds a minimal AccountService (no graph wiring needed for unit tests). */
 function makeSvc() {
@@ -800,4 +807,162 @@ test('EW-12: an unseasoned conversion lot IS recaptured, and only it', () => {
   assert.ok(Math.abs(target.balance     - 55_000)    < 0.01, 'the deficit is covered exactly');
   // 40% of the conversion was IRA earnings, so 40% of the slice is s99B income.
   assert.ok(Math.abs(conv.auAssessableAmount - 6_666.67) < 0.05);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EW-13: the flag round-trips, DEVIATION-ONLY (design 97 §22.8)
+//
+// `allowsEarlyWithdrawal` was written by nobody and read by nobody, so it was always
+// the class default and an authored value reverted on the first save/load cycle —
+// "never take an early withdrawal from the 401(k)" was not merely un-editable, it was
+// unsayable. What is persisted is only the household's opt-OUT: for these types the
+// class default IS the law (`supportsEarlyWithdrawal`), so writing `true` would persist
+// a REGULATION as config — the same mistake as persisting `minimumAge` (EW-14).
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EW-13: an authored allowsEarlyWithdrawal:false survives a save/load round trip', () => {
+  for (const Ctor of [FourOhOneKAccount, RothAccount, TraditionalIRAAccount]) {
+    const acct = new Ctor(1_000, { stateKey: 'w', allowsEarlyWithdrawal: false });
+    const json = ScenarioSerializer._serializeAccount(acct);
+    assert.strictEqual(json.allowsEarlyWithdrawal, false,
+      `${Ctor.name} must EXPORT the opt-out`);
+    assert.strictEqual(ScenarioSerializer._makeAccount(json).allowsEarlyWithdrawal, false,
+      `${Ctor.name} must read the authored false back, not the class default`);
+  }
+});
+
+test('EW-13: the class default is NOT written — the law is not config', () => {
+  const acct = new FourOhOneKAccount(1_000, { stateKey: 'w' });
+  const json = ScenarioSerializer._serializeAccount(acct);
+  assert.ok(!('allowsEarlyWithdrawal' in json),
+    'an un-opted-out account says nothing; absent means "the law applies"');
+  assert.strictEqual(ScenarioSerializer._makeAccount(json).allowsEarlyWithdrawal, true);
+});
+
+test('EW-13: a scenario saved BEFORE the write side existed keeps its class default', () => {
+  // The legacy shape: the retirement ledger block with no `allowsEarlyWithdrawal` key.
+  // Absent must mean "the constructor decides", or every previously saved plan moves.
+  const legacy = ScenarioSerializer._serializeAccount(
+    new FourOhOneKAccount(1_000, { stateKey: 'w' }));
+  legacy.minimumAge = 59.5;            // the shape older files carry
+  delete legacy.allowsEarlyWithdrawal;
+  assert.strictEqual(ScenarioSerializer._makeAccount(legacy).allowsEarlyWithdrawal, true);
+  assert.strictEqual(ScenarioSerializer._makeAccount(legacy).minimumAge, 59.5);
+
+  const legacySuper = ScenarioSerializer._serializeAccount(
+    new SuperannuationAccount(1_000, { stateKey: 's' }));
+  assert.ok(!('allowsEarlyWithdrawal' in legacySuper));
+  assert.strictEqual(ScenarioSerializer._makeAccount(legacySuper).allowsEarlyWithdrawal, false);
+});
+
+test('EW-9: super is NOT given the flag on export — no rules entry, so nothing can draw it', () => {
+  const s = new SuperannuationAccount(1_000, { stateKey: 's' });
+  assert.ok(!('allowsEarlyWithdrawal' in ScenarioSerializer._serializeAccount(s)),
+    'exporting it would offer a lever that moves the control metric and no money');
+  assert.strictEqual(supportsEarlyWithdrawal(ACCOUNT_TYPE.SUPER), false);
+  for (const t of [ACCOUNT_TYPE.ROTH, ACCOUNT_TYPE.TRADITIONAL_IRA, ACCOUNT_TYPE.FOUR_OH_ONE_K]) {
+    assert.strictEqual(supportsEarlyWithdrawal(t), true);
+  }
+});
+
+test('EW-9: a hand-edited export claiming early access to super is DROPPED, not honoured', () => {
+  const json = ScenarioSerializer._serializeAccount(
+    new SuperannuationAccount(1_000, { stateKey: 's' }));
+  json.allowsEarlyWithdrawal = true;   // what the write side refuses to produce
+
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warned.push(a.join(' '));
+  try {
+    assert.strictEqual(ScenarioSerializer._makeAccount(json).allowsEarlyWithdrawal, false);
+  } finally { console.warn = realWarn; }
+  assert.ok(warned.some(w => w.includes('allowsEarlyWithdrawal')),
+    'the drop has to be audible — a silently ignored flag reads as one that worked');
+});
+
+test('EW-9: the liquidity metric refuses the flag on super even in hand-built state', () => {
+  // The config guard is not a choke point: state entries are also built as plain objects
+  // (`_accountToStatePlain`, the bequest seeds) and never pass through the serializer.
+  // Before this, `isAccessible` believed the flag ahead of any type or age test, so this
+  // account counted as reachable control-metric liquidity that no draw could ever move.
+  const state = {
+    superAccount: {
+      balance: 100_000, type: ACCOUNT_TYPE.SUPER, minimumAge: 60,
+      allowsEarlyWithdrawal: true, drawdownPriority: 1, ownerId: 'primary',
+      currency: USD,
+    },
+    people: { primary: { birthDate: new Date(1990, 0, 1) } },
+  };
+  const atAge35 = new Date(2025, 0, 1);
+  assert.strictEqual(computeNetLiquidity(state, atAge35), 0,
+    'under the preservation age super is not reachable, whatever the flag says');
+
+  // And the same account IS counted once the age gate genuinely opens.
+  assert.strictEqual(computeNetLiquidity(state, new Date(2055, 0, 1)), 100_000);
+});
+
+test('EW-9: replenishSavings still cannot draw super early — the metric now agrees with it', () => {
+  const svc    = makeSvc();
+  const date   = new Date(2025, 0, 1);
+  const target = new CheckingAccount(0, { stateKey: 'target', country: 'AU', currency: AUD, drawdownPriority: 0 });
+  const sup    = new SuperannuationAccount(100_000, {
+    stateKey: 'sup', drawdownPriority: 1, contributionBasis: 40_000, earningsBasis: 60_000,
+  });
+  sup.allowsEarlyWithdrawal = true;   // the divergence, forced on directly
+  const state = { target, sup, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AU' } } };
+
+  assert.throws(() => svc.replenishSavings(state, 'target', 10_000, date));
+  assert.strictEqual(sup.balance, 100_000, 'not a cent left the wrapper');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EW-14: `minimumAge` is a STATUTE, not a setting (design 97 §22.9)
+//
+// It was written into every save and read back over the class default, so the law
+// lived in the file. Nothing ever deviated (measured: 784 of 784 wrapper accounts
+// across 341 scenario files), which is what made it pure duplication — and a stale-law
+// trap, because the day the age changes every saved scenario keeps the old gate and
+// looks entirely correct.
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EW-14: minimumAge is not exported — the class is the authority', () => {
+  for (const [Ctor, age] of [[FourOhOneKAccount, 59.5], [RothAccount, 59.5],
+                             [TraditionalIRAAccount, 60], [SuperannuationAccount, 60]]) {
+    const acct = new Ctor(1_000, { stateKey: 'w' });
+    const json = ScenarioSerializer._serializeAccount(acct);
+    assert.ok(!('minimumAge' in json), `${Ctor.name} must not persist its statutory age`);
+    assert.strictEqual(ScenarioSerializer._makeAccount(json).minimumAge, age,
+      `${Ctor.name} must get its age from the class on load`);
+  }
+});
+
+test('EW-14: an older file carrying the age still loads to the same gate', () => {
+  // Every file on disk matches the class, so this is the no-op it has to be.
+  const legacy = { __type: 'FourOhOneKAccount', type: '401k', stateKey: 'w', balance: 1_000,
+                   contributionBasis: 0, earningsBasis: 0, minimumAge: 59.5 };
+  assert.strictEqual(ScenarioSerializer._makeAccount(legacy).minimumAge, 59.5);
+});
+
+test('EW-14: a file DISAGREEING with the statute loses, audibly', () => {
+  // A pre-change save from a build with a different age, or a hand edit. Either way the
+  // statute wins; the point of the warning is that the author is told the file said
+  // otherwise, rather than finding a wrapper that unlocked on an unexpected date.
+  const stale = { __type: 'FourOhOneKAccount', type: '401k', stateKey: 'w', balance: 1_000,
+                  contributionBasis: 0, earningsBasis: 0, minimumAge: 55 };
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warned.push(a.join(' '));
+  let acct;
+  try { acct = ScenarioSerializer._makeAccount(stale); } finally { console.warn = realWarn; }
+
+  assert.strictEqual(acct.minimumAge, 59.5, 'the statute wins over the stored number');
+  assert.ok(warned.some(w => w.includes('minimumAge')), 'and the divergence is said out loud');
+});
+
+test('EW-14: code may still build a genuine statutory exception', () => {
+  // The constructor path is deliberately untouched: a real per-account exception (a
+  // separation-from-service 401(k), say) has to be expressible SOMEWHERE. What is gone is
+  // a free number surviving a save — such an exception belongs in the rules module as a
+  // NAMED rule that resolves to an age, which is a different design (§22.10).
+  assert.strictEqual(new FourOhOneKAccount(0, { minimumAge: 55 }).minimumAge, 55);
 });

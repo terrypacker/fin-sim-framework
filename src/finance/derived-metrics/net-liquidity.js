@@ -9,6 +9,7 @@
  */
 
 import { getBirthDate } from '../residency-utils.js';
+import { supportsEarlyWithdrawal } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
@@ -18,7 +19,8 @@ const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
  *
  * Rules mirror AccountService.replenishSavings:
  *   - No minimumAge             → always accessible
- *   - allowsEarlyWithdrawal     → accessible at any age (with possible penalty)
+ *   - allowsEarlyWithdrawal, on a type an early withdrawal can actually REACH
+ *                               → accessible at any age (with possible penalty)
  *   - minimumAge + no early withdrawal + date provided
  *       → accessible only if the owner's age >= minimumAge
  *   - minimumAge + no early withdrawal + no date
@@ -31,7 +33,18 @@ const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
  */
 function isAccessible(account, state, date) {
   if (account.minimumAge == null) return true;
-  if (account.allowsEarlyWithdrawal) return true;
+  // Design 97 §22.8 — the flag alone is NOT enough, and the asymmetry is the point.
+  // `replenishSavings` Phase 2 tests the flag and then looks up the rules, so a type with no
+  // entry reaches `if (!rules) continue` and cannot be drawn early at any flag value. This
+  // line used to believe the flag unconditionally, so a `super` carrying it would have been
+  // counted as reachable by the CONTROL metric (design 88 §5) while no drawdown path could
+  // move a dollar of it.
+  //
+  // Enforced HERE and not only at the config boundary because a config guard is not a choke
+  // point: state entries are also built as plain objects (`_accountToStatePlain`, the
+  // bequest seeds), and those never pass through the serializer. Inert today — every account
+  // that carries the flag either has a rule or has no `minimumAge` and returned above.
+  if (account.allowsEarlyWithdrawal && supportsEarlyWithdrawal(account.type)) return true;
 
   if (!date) return false;
 
@@ -69,9 +82,12 @@ export function isDrawdownAccessible(account, state, date) {
  *     `drawdownPriority === null` are explicitly excluded from drawdown).
  *   - The account must be currently accessible per its age-gate rules:
  *       * No minimumAge → always included
- *       * allowsEarlyWithdrawal=true → included at any age (e.g. IRA, 401k, Roth)
+ *       * allowsEarlyWithdrawal=true AND the type has an early-withdrawal rule
+ *         → included at any age (IRA, 401k, Roth)
  *       * allowsEarlyWithdrawal=false + minimumAge set (e.g. AU Superannuation)
- *         → included only once the owner is old enough
+ *         → included only once the owner is old enough. Super stays here whatever
+ *           the flag says: no rules entry, so no drawdown path can reach it
+ *           (design 97 §22.8).
  *
  * This value reaches zero at the same moment an OutOfFunds event fires.
  *

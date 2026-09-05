@@ -10,6 +10,9 @@ Tests: `tests/unit/evt-drawdown-sequence.test.mjs` (7), `tests/unit/evt-years-of
 §19 closed the "do not sell equity in a down market" requirement; **§20 reopens it** on a
 different footing, answers it (§20.9), and records three engine defects the reopening found and
 fixed — each silent, each producing believable numbers.
+**§22 (PROPOSED)** adds the accessibility axis: a pool that claims an age-gated wrapper spends
+it correctly and *measures* it wrongly, and early access at a penalty is currently decided by a
+constructor rather than authored.
 Study: `scripts/lab/sequence-risk/`. Probes: `scripts/probes/probe-pool-gate-foresight.mjs`,
 `probe-offset-payment-drain.mjs`, `probe-return-autocorrelation.mjs`.
 **Related**: `design/53-account-basis-refactor-and-offset.md` (offset accounts),
@@ -2630,3 +2633,399 @@ first dated holdings in it were §20.19's ladder rungs. Tests in `holding.test.m
 clickable legend below. Tests: `tests/unit/pool-history.test.mjs` (10),
 `tests/viz/liquidity-pools-plugin.test.mjs` (17), `evt-liquidity-pools.test.mjs` POOL-5e/5f.
 
+
+---
+
+## 22. The age-gated wrappers in a pool — the accessibility axis (5 Sep 2026)
+
+**Status**: PROPOSED, except §22.8–§22.9 which are **BUILT**. §22.2 is CONFIG-ONLY and
+works today; §§22.3–22.5 are the remaining code; §22.10 is a filed follow-up.
+
+§18.6 rule 4 established that a wrapper the graph does not claim is not "spent last", it is
+usually **never spent**, and gave the placement a name (`POOL_KIND.WRAPPERS`) in the study
+generator. This section asks the question that rule leaves open: what happens when a pool
+claims one — and the answer is that the **spend** side is already correct and the
+**measurement** side is silently wrong, in the same direction and for the same reason §9.3(a)
+measured as a cover figure of *0.0 years, in every year*.
+
+The requirement, stated in the author's terms: a pool must be able to hold retirement equity
+and know the difference between **equity available now** and **equity available once the age
+gate opens**, with early access **at a penalty** as a separately authored option.
+
+### 22.1 What is already true, and is easy to mistake for a gap
+
+Three things work today and need no code. They are recorded first because each of them looks
+like a missing feature until you follow the draw.
+
+**(a) A pool may claim a wrapper.** `normalizeClaims` validates a claim against the account
+list and nothing else — the IRA / 401(k) / Roth / super types are as claimable as a brokerage.
+
+**(b) The age gate is already enforced on the spend side.** The compiled `drawdownSequence`
+governs the *order* of the penalty-free Phase 1 walk only. `_penaltyFreeAvailable`
+(`account-service.js`) returns **0** for an under-age wrapper — except a Roth, which returns
+its `contributionBasis` — so a claimed wrapper sitting anywhere in the order is simply skipped
+until its gate opens, and the walk moves to the next entry. Placing the pool FIRST therefore
+means *"spend it as soon as it is accessible"*, never *"withdraw it early"*. This is §3.1
+rule 5 restated, and it is the half of the requirement that is already built.
+
+**(c) The remainder rule keeps an unclaimed wrapper reachable.** `_applyDrawdownSequence`
+appends everything the sequence did not claim in ordinary `drawdownPriority` order, so
+declining to claim the wrappers does not strand them — it places them, badly and invisibly,
+which is §18.6 rule 4's point.
+
+### 22.2 The config-only shape: a wrappers pool of its own, NOT wrappers inside `growth`
+
+The intuitive authoring — add the wrapper accounts to the existing `growth` pool, because
+that is where the equity is — **does not load**. `assignExecutors` stamps `REBALANCE` only
+when `isPortfolioPool` holds at *both* ends, and that predicate is `type === BROKERAGE` for
+every claim. Adding one wrapper to `growth` reclassifies every edge out of it to `TRANSFER`,
+and a `TRANSFER` needs a destination that is either cash-like or a single brokerage account
+narrowed to a single sleeve. A bond-reserve pool spanning several brokerages is neither, so
+the harvest edge fails validation:
+
+> flow 'growth-to-buffer' has to move CASH into 'buffer', and that pool is neither of the two
+> things a transfer can land in […]
+
+That is the *good* failure. The bad one is the sibling edge that does **not** throw: an edge
+from `growth` into a pool holding an offset or savings account stays legal after the
+reclassification, and once the age gate opens it starts selling wrapper equity and routing it
+into cash — an ordinary-income distribution taken to top up a facility, authored by nobody,
+produced by adding an account to a pool.
+
+**So the wrappers get a node of their own, with a `spendOrder` and nothing else** — no
+`target`, no `capacity`, no flows in or out. Claimed WHOLE (see §22.6). This changes the draw
+order and nothing else, which is what makes it a clean axis, and it is exactly what
+`POOL_KIND.WRAPPERS` builds in `scripts/lib/pool-graph.mjs`.
+
+Placement is the real decision, and §18.6's corollary decides it: a pool placed **after** a
+pool that never runs dry is not a low-priority pool, it is an unclaimed one. `growth` is the
+residual pool on most plans, so `spendOrder` *after* growth reproduces today's behaviour and
+is worth authoring only as a control arm. The position that says something is **before**
+growth: take the wrappers once they are accessible, in preference to realising gains on the
+taxable book.
+
+**The consequence to author deliberately, not discover**: before the gate opens, a wrappers
+pool placed ahead of `growth` is not inert. Phase 1 finds the Roth `contributionBasis` — the
+one wrapper slice with no age gate at all — and will spend it ahead of taxable equity, years
+early. If that is not the intent, the Roths belong in a **second** pool placed after `growth`.
+Two pools, four claims each, is the whole fix; that this is expressible at all is the pools
+concept working.
+
+### 22.3 The gap: `pool-metrics.js` has no concept of accessibility
+
+`poolMetrics` sums `claimValueNative` over the claims with no age test anywhere. The moment a
+pool claims a wrapper, four figures start counting money that cannot fund a dollar of spending
+for as long as the gate holds — a decade or more on a plan that retires early, which is
+precisely the plan that authors buckets:
+
+| figure | what it does now | why it matters |
+|---|---|---|
+| `balance` / `yearsOfCover` | counts locked balances | the cover schedule — the feature's headline number — overstates by the whole wrapper book. §9.3(a) measured the mirror image of this defect at **0.0 years in every year**, and it was invisible until plotted |
+| `available` (`balance − floor`) | sizes a flow's `givable` | an edge sourced from a wrapper pool is sized against money Phase 1 cannot reach |
+| `headroom` / `_bookBase` | PERCENT targets and ceilings | same blindness, one level up |
+| the scoped draw's `shortfall` | **discarded** by `PoolFlowApplyReducer` | the resulting under-fill is recorded nowhere, so the symptom is a refill that quietly does less than it says |
+
+The under-fill is *safe* — the scoped draw is Phase-1-only by construction (§12.4), so it can
+never pay a penalty to hide a shortfall — but safe and silent is this design's named failure
+mode, not its defence.
+
+**The fix reuses an authority that already exists.** `isAccessible` /
+`isDrawdownAccessible` in `src/finance/derived-metrics/net-liquidity.js` answers exactly this
+question and is already the single source of truth for "is this account lever-reachable right
+now" (design 88 §5). Export the age predicate and have `poolMetrics` return, alongside the
+untouched `balance`:
+
+- **`accessible`** — Σ of what a Phase 1 draw would really find in this pool now;
+- **`locked`** — the remainder;
+- **`unlocksAt`** — the earliest date any locked claim opens (owner birth date + `minimumAge`).
+
+Then `yearsOfCover` and `available` read `accessible`. `balance` keeps meaning what it has
+always meant — what the pool holds — so nothing already reading the cube changes meaning, and
+the panel can show the pair. A pool with no wrapper claim is byte-identical.
+
+**The one trap in building it**: accessibility is not a boolean per account. An under-age Roth
+yields its `contributionBasis`, so the answer is an **amount**. Mirror `_penaltyFreeAvailable`
+rather than re-deriving the rule beside it — a metrics copy that says "a Roth is locked" would
+report cover the draw does produce, which is the same class of defect pointing the other way.
+
+### 22.4 The penalty gate: it exists, it is always on, and it is not authorable
+
+Phase 2 draws with a 10 % penalty when `account.allowsEarlyWithdrawal` is true, computing the
+penalty, the basis split and the tax actions correctly. What it lacks is any way to say *no*:
+
+- `allowsEarlyWithdrawal` is **neither written by `_serializeAccount` nor read back by the
+  revive path**. It is therefore always the class default — `true` for 401(k), Roth and IRA,
+  `false` for super — and cannot be authored, edited or round-tripped. A saved plan and a
+  rebuilt one agree only because neither can differ.
+- So on any plan that exhausts its pools before the gate opens, the engine takes the Roth
+  contribution basis clean and then pays 10 % penalties on 401(k) / IRA / Roth earnings, and
+  the pool panel says nothing about it.
+
+Two additions, in this order:
+
+1. **Round-trip `allowsEarlyWithdrawal`** through `_serializeAccount` and the revive opts —
+   defaulting to the class value when absent so every saved scenario is unchanged. Without
+   this, anything built on top of it is decided by a constructor. See §22.8 for the
+   provenance of the omission and for why the round-trip is **not** symmetric across the
+   four wrapper types.
+2. **`access` on the pool**, because the policy is a property of *how this pool is being used*,
+   not of the account:
+
+   ```
+   { id: 'wrappers', spendOrder: 35,
+     access: { mode: 'PENALTY_FREE' },        // the default
+     claims: [...] }
+   ```
+
+   `ALLOW_PENALTY` is the opt-in. It decides two things and they must be the same switch:
+   whether `accessible` (§22.3) includes the penalised slice, and whether this pool's claims
+   may be drawn in Phase 2. Splitting them is how a pool comes to report cover it will not
+   deliver.
+
+Authoring it on the pool also gets the composition right for free: the same 401(k) can be
+`PENALTY_FREE` while it sits in a reserve node and `ALLOW_PENALTY` in a last-resort node, which
+an account-level flag cannot say.
+
+### 22.5 The editor — what exists, and the two traps that read as "there is no input"
+
+The control surface is `buildLiquidityGraphEditor` (`structured-param-editors.js`), and it
+**can** author a wrappers pool today: `+ Add Pool` for the node, `+ Add Claim` for each
+account, and `accountsProvider` supplies every account unfiltered, so the wrappers are in the
+Account dropdown. Reported as unauthorable in practice, and the reason is that the two
+defaults conspire to make the successful path look like a failed one:
+
+1. **`+ Add Pool` defaults `spendOrder` to `(pools.length + 1) * 10`** — i.e. *after* every
+   existing pool. On a four-pool graph the new node lands at 50, behind `growth`, which is
+   §18.6's corollary exactly: the arm that is indistinguishable from not having authored it.
+   The author adds the pool, rebuilds, sees no change, and concludes the input is missing.
+   **Fix**: default a new pool's `spendOrder` to blank (`never`, which the placeholder already
+   says) so the position is a decision, not an accident.
+2. **`+ Add Claim` defaults its `pool` cell to `pools[0]`**, not to the pool just added, so the
+   first claim silently lands in bucket 1. **Fix**: default to the last pool in the table.
+
+Neither is the real absence, which is this: **nothing in the editor says anything about
+accessibility**, because §§22.3–22.4 do not exist yet. The columns that close it are one
+`access` select on the Pools table, and — read-only, on the panel rather than the editor — the
+`accessible` / `locked` / `unlocksAt` triple from §22.3. A pool editor that can name a
+retirement account but cannot say *when* the money in it arrives is a vocabulary with a hole
+in it, and that is what the author actually hit.
+
+### 22.6 What NOT to do — sleeve-narrowing a wrapper
+
+The natural request is "claim the EQUITY sleeve of the 401(k)", and `normalizeClaims` refuses
+it. The refusal is correct and should stay: `_drawPenaltyFree` calls `consumeHoldings` only
+for `type === BROKERAGE`, and a wrapper draw debits the balance and lets `transaction()` spread
+the debit pro-rata across the lots. A sleeve narrowing there would enforce nothing while
+reading, in the config, exactly like a pool boundary — and `sleeveOptionsFor` already keeps it
+off the screen rather than leaving it to be typed and discovered at Rebuild.
+
+The cost is small and worth stating: a whole-account claim on a Roth that also holds a cash or
+gold sleeve puts those in the pool too. Making it exact is not a claims-syntax change, it is
+routing the wrapper draw through `consumeHoldings` — a much larger change with a CGT-free
+wrapper on the other side of it, and it is not required by anything here.
+
+### 22.7 Phasing
+
+1. **§22.2, config only.** The wrappers pool, placed on purpose. Zero code, and it makes the
+   placement explicit instead of an artefact of `drawdownPriority`.
+2. **§22.3.** `accessible` / `locked` / `unlocksAt`, off the `net-liquidity.js` authority, plus
+   the panel showing the pair. Until the cover figure is honest, every conclusion drawn from a
+   wrapper-claiming pool is measured against money that is not there.
+3. **§22.5's two editor defaults.** Cheap, and they are what makes step 1 land.
+4. **§22.4.** The serializer round-trip, then `access`. Smallest behavioural change of the
+   four, and approximable meanwhile by placing the wrappers last.
+
+### 22.8 Why `allowsEarlyWithdrawal` was not on the export — an omission, and the asymmetry that had to survive fixing it — BUILT (5 Sep 2026)
+
+Asked directly, and worth the answer in full because the naive fix has a failure mode.
+
+**It is not a decision. No commit ever considered it.** `git log -S allowsEarlyWithdrawal --
+src/scenarios/scenario-serializer.js` is empty: the field was never added and never removed.
+The provenance is design 53 Phase 2 step 4, which planned the serializer work as *"the
+`in account` guards already degrade gracefully; **confirm** the retirement classes still
+hydrate the fields"*. The confirmation step was satisfied by the fields that were already in
+the block. `minimumAge` was; `allowsEarlyWithdrawal`, defined two lines below it in the same
+constructor, was not, and a confirm-only step cannot find a field nobody wrote.
+
+The natural home already exists and already writes the sibling half of the same gate: the
+`'contributionBasis' in account` block in `_serializeAccount` emits `minimumAge`.
+`minimumAge` says *when the door opens*; `allowsEarlyWithdrawal` says *whether there is a door
+before then*. Splitting one gate across "serialized" and "constructor-derived" is the whole
+defect.
+
+**A live inconsistency proves nobody noticed.** `scenario-loader.js` authors
+`allowsEarlyWithdrawal: true` explicitly on every promoted inherited-retirement record
+(design 63 §15). `_makeAccount` never reads it into `opts`. The value survives only because
+`TraditionalIRAAccount`'s class default happens to be `true` as well. Code that authors a
+value its reader ignores is the signature of an omission, not of a policy.
+
+**Measured** — serialize → revive, per type:
+
+| authored | in the export? | after reload |
+|---|---|---|
+| 401(k) default `true` | no | `true` |
+| 401(k) `false` | no | **`true`** |
+| Roth `false` | no | **`true`** |
+| IRA `false` | no | **`true`** |
+| super `true` | no | **`false`** |
+
+Every non-default value reverts to the class default, silently, on one save/load cycle. So
+"never take an early withdrawal from the 401(k)" — a reasonable and, for an early retiree, a
+large modelling choice — is not merely un-editable, it is **unsayable**.
+
+#### The asymmetry: export it for the three US wrappers, NOT for super
+
+The tempting fix is to write and read the field for all four types, symmetrically with
+`minimumAge`. That would create a way to author a believable wrong number, and the mechanism
+is worth stating precisely because it is invisible:
+
+- **Phase 2 cannot draw super at any flag value.** After the `allowsEarlyWithdrawal` test it
+  looks up `earlyWithdrawalRulesFn(account.type)`, and `US_EARLY_WITHDRAWAL_RULES` has entries
+  for Roth / IRA / 401(k) only. A super account reaches `if (!rules) continue`.
+- **But `net-liquidity.js` believes the flag unconditionally.** `isAccessible` returns true on
+  `account.allowsEarlyWithdrawal` before it ever looks at the type or the age.
+
+So an authored `super: allowsEarlyWithdrawal = true` would move `computeNetLiquidity` — which
+is **the control metric** (design 88 §5), the pool the MPC and the optimizer believe they can
+steer — while moving no dollar in any drawdown path. A lever that changes the metric and not
+the money, in the one metric whose scope is hardest to check, is the §20.18 failure class with
+a bigger blast radius.
+
+The author's instinct ("it should be for non-super accounts") is therefore right, and this is
+the mechanism behind it. Super's `false` is **structural, not authored**: it is a statement
+about which rules table has an entry, and it belongs in the class where it is.
+
+Nor is the real-world case an argument against this. Early release of Australian super does
+exist — severe financial hardship, compassionate grounds, and the departing-Australia
+superannuation payment, which a US/AU household will ask about — but none of them is a 10 %
+penalty. DASP is a punitive flat withholding. Modelling any of them means a **rules entry**
+with its own rate, not this boolean, and the boolean would quietly produce the wrong tax if
+pointed at it.
+
+#### The change — BUILT (5 Sep 2026)
+
+1. **`supportsEarlyWithdrawal(type)`**, exported from `us-early-withdrawal-rules.js` beside
+   the table it reads. One predicate, because the whole defect is two readers disagreeing
+   about what the flag means, and a second copy of "which types have a rule" would be a third.
+2. **`_serializeAccount`** emits the flag in the existing retirement block beside
+   `minimumAge` — for the three types that have a rule.
+3. **`_makeAccount`** reads it into `opts` **only when present**, so every scenario saved
+   before this change keeps its class default and no existing plan moves by a cent. An
+   authored `true` on a type with no rule is dropped with a `console.warn` rather than
+   honoured — warned and not thrown because this runs at LOAD, and refusing to open a
+   scenario over a flag that decides nothing is the worse failure.
+   **Revised the same day** — the write side persists only the DEVIATION; see §22.9.
+4. **`net-liquidity.js#isAccessible`** now requires `supportsEarlyWithdrawal(account.type)`
+   alongside the flag. This is the guard that actually closes the hazard, and it is separate
+   from (3) on the `cash-sleeve-has-no-capital-gain` lesson: **a config boundary is not a
+   choke point.** State entries are also built as plain objects — `_accountToStatePlain`, the
+   bequest seeds — and never pass through the serializer at all, so a serializer-only guard
+   protects the one path that was already hardest to get wrong. Inert today: every account
+   carrying the flag either has a rule, or has no `minimumAge` and returned on the line above.
+
+Tests: `tests/unit/early-withdrawal.test.mjs` EW-13 (round trip: an authored `false`
+survives; the class default is unchanged; a pre-change save keeps its default) and three new
+EW-9 cases (super is absent from the export; a hand-edited `true` is dropped *audibly*; the
+metric and `replenishSavings` now agree on a hand-built state). 6134 unit + 1351 viz green.
+
+**Still open**: the account editor (`account-editor.js`) exposes neither `minimumAge` nor this
+flag, so the value is authorable in an export and not yet in the UI. That is the same gap as
+§22.5's, one level down, and it is the next thing to close.
+
+### 22.9 Regulation is not configuration — `minimumAge` withdrawn from the export, `allowsEarlyWithdrawal` narrowed to the opt-out — BUILT (5 Sep 2026)
+
+§22.8 fixed a round trip and, in doing so, walked into the question behind it, raised by the
+author on reading the result: *what would anyone ever set these to?*
+
+The answer sorts the two fields onto opposite sides of a line this design had not drawn:
+
+> **A statutory rule belongs to the rules module. A household's decision belongs to the
+> config. A field that persists the first is duplication waiting to go stale; a field that
+> cannot express the second is a missing lever.**
+
+`minimumAge` is the first. `allowsEarlyWithdrawal` is *both*, which is why it was confusing.
+
+#### `minimumAge` — the statute was living in the file
+
+Written on every save and read back over the class default, so a saved scenario carried its
+own copy of the law. Measured before touching it: **341 scenario files, 784 wrapper accounts,
+zero deviations** from the class default. Every authored `minimumAge` in source
+(`intl-retirement-scenario.js`, `au-single-homeowner-scenario.js`, `account-builder.js`)
+likewise equals it — so the same four numbers live in three places in code and a fourth in
+every export.
+
+That is not merely redundant, it is the `param-node-cascade-drift` shape: the day the age
+changes in the rules, every saved scenario silently keeps the old gate and looks entirely
+correct, because a wrapper unlocking on the wrong date produces a perfectly believable plan.
+
+**Withdrawn from both sides of the serializer.** The class is the authority. A file that
+still carries the age (every file written before this) loads to the identical gate, so nothing
+on disk moves; a file that *disagrees* loses to the statute and says so with a `console.warn`,
+because the two ways to get there — a save from a build with a different age, or a hand edit —
+are both things the author needs told rather than left to discover as a date that came out
+wrong. The **constructor** `opts.minimumAge` path is deliberately untouched: a genuine
+exception has to be expressible somewhere in code (§22.10).
+
+#### `allowsEarlyWithdrawal` — three jobs, one name
+
+1. *"This type legally permits early access, with a penalty"* — a **legal fact**. The class
+   default already states it correctly per type, and for these four types the default is
+   exactly `supportsEarlyWithdrawal(type)`. Not a setting.
+2. *"This household will take that penalty on this account"* — a **policy**, and the only
+   thing worth authoring. It has one meaningful value: `false`, ring-fencing an account.
+3. A **workaround** — see §22.10.
+
+§22.8 shipped (1) and (2) together by exporting whatever the account held. Exporting `true`
+is persisting the regulation as config: the same mistake as `minimumAge`, one field over.
+
+**Narrowed to deviation-only.** The write side emits the flag only when it is `false` on a
+type that supports early withdrawal. Absent therefore means *"the law applies"*, which is what
+an unauthored account should say, and the only value that ever appears in a file is a decision
+somebody actually made. The read side is unchanged — it still accepts what it finds and still
+drops a `true` on an unsupported type — because a read side has to cope with files the write
+side did not produce.
+
+Tests: `early-withdrawal.test.mjs` EW-13 (revised: the default is *not* written; the opt-out
+survives) and EW-14 (four cases: the age is never exported; an older file loads to the same
+gate; a disagreeing file loses audibly; the constructor exception still builds). 6138 unit +
+1351 viz green.
+
+### 22.10 Follow-up — the inherited wrapper's age gate, and the shape a real exception needs
+
+**Not built. Filed here because §22.9 makes it visible rather than because it is new.**
+
+An inherited IRA has no owner age gate — distributions are penalty-free at any age, which is
+why `scenario-loader.js` sets `allowsEarlyWithdrawal: true` on every promoted
+inherited-retirement record (design 63 §15). But the record revives through
+`TraditionalIRAAccount`, whose constructor is written for a *living owner*, so:
+
+```
+inherited IRA →  minimumAge = 60   allowsEarlyWithdrawal = true
+```
+
+The 60 is wrong, and the flag is there to punch through it. So job (3) of §22.9's list: the
+policy field is being used to correct a statutory one. Both halves are then saying something
+false, and they cancel — which is why nothing has ever misbehaved, and why it would not stay
+that way. `drawdownPriority: null` keeps these accounts out of the discretionary walk today
+(they drain on the SECURE 10-year stream), so the cancellation is currently unobservable; it
+stops being unobservable the moment an inherited wrapper is claimed by a pool (§22.2) or
+reached by any path that consults the gate directly.
+
+**The honest values are `minimumAge: null` and no flag** — an account with no gate needs
+nothing to bypass. That is a design-63 change (the promoted-record shape, its revive, and the
+`inherited-*` roles) and does not belong in a serializer pass.
+
+#### And the shape a real exception needs
+
+Withdrawing the free number raises the fair question of what happens when a per-account age
+genuinely differs. Candidates exist — separation from service for that employer's plan, a
+lower age for some public-safety employment, an AU preservation age that is a function of
+birth year rather than a flat 60, and the inherited case above.
+
+**None of them is a number in a box.** Each is a *named statutory exception that resolves to
+an age*, usually from facts the model already holds (an employment end date, a birth date).
+So the successor to the deleted field is not an editable age, it is a rule selector in
+`us-early-withdrawal-rules.js` and its AU sibling — and until one is written, none of these is
+modellable, which is the correct state for a rule nobody has yet transcribed from a primary
+source. Per this repo's standing rule, that transcription comes from the authority into
+`docs/`, not from memory.

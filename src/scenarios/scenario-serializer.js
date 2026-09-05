@@ -23,6 +23,7 @@ import {
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
   reconcileLedgerToBalance,
 } from '../finance/assets/investment-account.js';
+import { supportsEarlyWithdrawal } from '../finance/account-rules/us/us-early-withdrawal-rules.js';
 import { Holding } from '../finance/holdings/holding.js';
 import { rescaleHoldingsToBalance, holdingsOutOfSync } from '../finance/holdings/holding-utils.js';
 import { RealProperty }  from '../finance/assets/real-property.js';
@@ -720,7 +721,25 @@ export class ScenarioSerializer {
       d.contributionBasis = account.contributionBasis;
       d.earningsBasis     = account.earningsBasis ?? 0;
       d.derivedIncomeBasis = account.derivedIncomeBasis ?? 0;
-      d.minimumAge        = account.minimumAge    ?? null;
+      // `minimumAge` is deliberately NOT written — design 97 §22.9. It is a statutory
+      // constant supplied by the account class, not a per-account setting, and a persisted
+      // copy is a stale-law trap: the day the age changes, every saved scenario keeps the
+      // old gate and looks entirely correct. Measured before removing it: 341 scenario
+      // files, 784 wrapper accounts, ZERO deviations from the class default.
+      //
+      // Design 97 §22.8 — the other half of the age gate, and the half that IS a household
+      // decision. `minimumAge` says when the door opens by law; this says whether the
+      // household will use the penalised door before then.
+      //
+      // DEVIATION-ONLY, and that is the whole point of the shape. For these four types the
+      // class default IS `supportsEarlyWithdrawal(type)` — the law — so the only value with
+      // anything to say is the household's opt-OUT ("ring-fence this account; never take the
+      // 10 % hit on it"). Writing `true` would be persisting the REGULATION as config, which
+      // is the same mistake as persisting `minimumAge`, one field over. Absent therefore
+      // means "the law applies", which is what an unauthored account should say.
+      if (supportsEarlyWithdrawal(account.type) && account.allowsEarlyWithdrawal === false) {
+        d.allowsEarlyWithdrawal = false;
+      }
       // Roth rollover (conversion) buckets — only emitted when present so
       // accounts without conversions round-trip unchanged.
       if (account.rolloverContribBasis  != null) d.rolloverContribBasis  = account.rolloverContribBasis;
@@ -1238,9 +1257,36 @@ export class ScenarioSerializer {
       opts.contributionBasis = d.contributionBasis;
       opts.earningsBasis     = d.earningsBasis ?? 0;
       opts.derivedIncomeBasis = d.derivedIncomeBasis ?? 0;
-      // Only set minimumAge when the serialized value is non-null; otherwise let
-      // the subclass constructor apply its own default (59.5, 60, etc.).
-      if (d.minimumAge != null) opts.minimumAge = d.minimumAge;
+      // `minimumAge` is NOT read back — design 97 §22.9. The subclass constructor is the
+      // authority (59.5 / 60), so a file carrying the age gets the law rather than its own
+      // stale copy of it. Older files all carry the matching value (measured: 784 of 784),
+      // so nothing on disk changes behaviour; a file that DISAGREES is warned about after
+      // the account is built, below, rather than silently honoured or silently ignored.
+      //
+      // The constructor `opts.minimumAge` path is untouched: code may still build an
+      // account at a non-standard age, which is what a genuine statutory exception would
+      // need. What is gone is the free number surviving a save.
+      // Design 97 §22.8 — read back only when PRESENT, so every scenario saved before the
+      // write side existed keeps its class default and no existing plan moves by a cent.
+      //
+      // The guard is the write side's rule enforced against a file the write side did not
+      // produce: a hand-edited export, or one from a future build. An authored `true` on a
+      // type an early withdrawal cannot reach is dropped rather than honoured, because the
+      // one thing it would otherwise change is `computeNetLiquidity` — the control metric.
+      // Warned, not thrown: this runs at LOAD, and refusing to open a scenario over a flag
+      // that decides nothing is a worse failure than ignoring it out loud.
+      if (d.allowsEarlyWithdrawal !== undefined) {
+        if (supportsEarlyWithdrawal(d.type) || d.allowsEarlyWithdrawal !== true) {
+          opts.allowsEarlyWithdrawal = d.allowsEarlyWithdrawal;
+        } else {
+          console.warn(
+            `ScenarioSerializer: account '${d.stateKey ?? d.name ?? d.id}' is type '${d.type}' and `
+            + 'carries `allowsEarlyWithdrawal: true`, but no early-withdrawal rule exists for that '
+            + 'type — `replenishSavings` Phase 2 could never draw it, while the liquidity metric '
+            + 'would count it as reachable. Ignoring the flag. To model an early release, add a '
+            + 'rules entry with its own rate (design 97 §22.8).');
+        }
+      }
     }
     // LoanAccount (liability) opts (design 54).
     if (d.__type === 'LoanAccount') {
@@ -1295,6 +1341,19 @@ export class ScenarioSerializer {
         account = new Account((d.balance ?? d.initialValue) ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
+    // Design 97 §22.9 — a file whose stored age gate DISAGREES with the law the class
+    // supplies. The class wins (that is the point of no longer reading the field), but the
+    // divergence is said out loud: it is either a file written before the age changed, or a
+    // hand-edited one, and both are things the author needs to know rather than discover as
+    // a wrapper that unlocked on a different date than they expected.
+    if (d.minimumAge != null && account.minimumAge != null && d.minimumAge !== account.minimumAge) {
+      console.warn(
+        `ScenarioSerializer: account '${d.stateKey ?? d.name ?? d.id}' stores minimumAge `
+        + `${d.minimumAge}, but a '${d.type}' has a statutory gate of ${account.minimumAge}. `
+        + 'The statute wins — the age is no longer read from the file (design 97 §22.9). A real '
+        + 'per-account exception belongs in the rules module as a named exception, not as a '
+        + 'number on the account.');
+    }
     if (d.costBaseStepUpByCountry != null) account.costBaseStepUpByCountry = { ...d.costBaseStepUpByCountry };
     if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
     if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
