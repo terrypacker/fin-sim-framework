@@ -11,7 +11,7 @@ number the app would produce.
 ```
 scripts/
   lib/                shared modules — imported, never run directly
-  scenario/           run · diff · sweep · audit one or more scenarios
+  scenario/           run · diff · sweep · audit · import one or more scenarios
   lab/                decision analysis: grids, frontiers, spending traces
   montecarlo/         Monte Carlo arm runners and reporters
   probes/             targeted engine-fidelity probes and prototypes
@@ -163,6 +163,51 @@ average. The reporter prints medians and low percentiles only.
 | `diff-scenarios.mjs` (`npm run diff`) | why do these two scenarios differ? |
 | `sweep-scenario.mjs` (`npm run sweep`) | which way does one param push, and is the response smooth? |
 | `audit-scenario.mjs` | is this scenario internally consistent? |
+| `import-quicken.mjs` (`npm run import:quicken`) | what does my real portfolio look like as a scenario? |
+
+### import-quicken.mjs
+
+Turns a Quicken **"Investing - Portfolio Value - By Account"** export — taken **with
+lots** — into a scenario's accounts: balances, one holding per real tax lot with its own
+basis and acquisition date, and the `Security` records those lots are positions in.
+
+```sh
+npm run import:quicken -- \
+  --csv  scenarios/quicken/export-with-lots.csv \
+  --map  scenarios/quicken/mapping.json \
+  --into scenarios/quicken/plan.json \
+  --out  scenarios/quicken/plan-imported.json
+```
+
+Omit `--out` for a dry run: it prints the whole report — a before/after balance table,
+the holding-period split, and every data-quality finding — and writes nothing.
+
+**The lots export is not optional.** Short vs. long term is computed per lot from
+`purchaseDate`. The plain export has no dates, which `holdings-fifo.js` reads as
+"carried in from boot" — oldest, always long-term, and so a silent understatement of tax
+on everything recently bought.
+
+**The mapping file is required** because the export cannot answer two questions. It
+never names a `stateKey`, and its `Type` column (`Stock` / `Mutual Fund` / `Bond` /
+`Other`) is not the asset class this engine branches on — VXUS is `EQUITY_INTL_EX_US`,
+a gold ETF is `GOLD` with `isGold`, a money-market fund is `CASH`. An account or an
+instrument that resolves to nothing is a hard **error**: guessing there does not produce
+an approximate plan, it produces a confident one that taxes bullion at the equity rate.
+
+Quicken's own setup gaps are **warnings**, not errors, so a portfolio still being entered
+can be imported: a cost basis Quicken records as `Add` (unknown) defaults to market value
+and says so, and the negative cash a placeholder entry leaves behind is reported as the
+plug it is.
+
+`--into` leaves every account the mapping does not name exactly as it was, and appends
+the import as a **second** scenario rather than replacing the first, so the two can be
+diffed. It also does three things that are easy to miss: blanks `cfg.initialState` (a
+full second copy of every account), re-syncs the `contributionBasis` params that own that
+field at load (design 32), and moves `simStart` to the export's snapshot date
+(`--keep-sim-start` opts out).
+
+Follow every import with `node scripts/scenario/audit-scenario.mjs <out>` — it checks the
+holdings-sum-vs-balance invariant this tool is written around.
 
 `sweep-scenario` is the bug-finding one. A lever that steps sharply at one value is
 either a real threshold (a bracket edge, a residency boundary, an age gate) or a bug,

@@ -27,6 +27,7 @@
     "scenario": "node scripts/scenario/run-scenario.mjs",
     "diff": "node scripts/scenario/diff-scenarios.mjs",
     "sweep": "node scripts/scenario/sweep-scenario.mjs",
+    "import:quicken": "node scripts/scenario/import-quicken.mjs",
     "export:tax": "node scripts/tax/export-tax-csv.mjs",
     "crossfoot": "node scripts/tax/crossfoot-drill-reports.mjs",
     "section988:ingest": "node scripts/tax/section988-ingest.mjs",
