@@ -450,3 +450,144 @@ test('getStored follows a save — it is the stored copy, not a frozen snapshot'
 
   assert.strictEqual(r.getStored('u:0').params[0].value, 0.25);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Snapshot isolation: the persisted document must not alias the live graph
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// `getUserScenarios()` returns the live graph nodes the editors mutate in place.
+// The registry used to retain those references in a `_scenarioData` field, so the
+// "persisted" document was an alias of the live graph between saves — correct only
+// because ScenarioStorage.save() serializes synchronously at call time. These tests
+// pin the isolation as a property of the registry, so a future backend that stores
+// objects instead of strings fails here rather than silently persisting live edits.
+
+function storedNow() {
+  return JSON.parse(localStorage.getItem(ScenarioStorage.STORAGE_KEY));
+}
+
+test('editing a live node after save does not change what is already stored', () => {
+  setStorageData({ scenarios: [{ id: 'u:0', name: 'Original', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+
+  r.save(r.get('u:0'), true);
+  assert.strictEqual(storedNow().scenarios[0].name, 'Original');
+
+  // What _applyParamsToActive does on every MC replay: mutate the live record.
+  r.get('u:0').name = 'Edited In Flight';
+
+  assert.strictEqual(storedNow().scenarios[0].name, 'Original',
+    'an in-flight edit must not reach storage until something saves');
+});
+
+test('getStored returns a snapshot, not the live node', () => {
+  setStorageData({ scenarios: [{ id: 'u:0', name: 'Original', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.save(r.get('u:0'), true);
+
+  const live = r.get('u:0');
+  const stored = r.getStored('u:0');
+  assert.notStrictEqual(stored, live, 'getStored must not return the live graph node');
+
+  live.name = 'Edited In Flight';
+  assert.strictEqual(r.getStored('u:0').name, 'Original',
+    'getStored must still answer "what would a reload load?"');
+  assert.strictEqual(stored.name, 'Original', 'a previously returned snapshot must not mutate');
+});
+
+test('mutating a getStored snapshot cannot corrupt storage or the live graph', () => {
+  setStorageData({ scenarios: [{ id: 'u:0', name: 'Original', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.save(r.get('u:0'), true);
+
+  const snapshot = r.getStored('u:0');
+  snapshot.name = 'Vandalised';
+  snapshot.accounts = [{ id: 'injected' }];
+
+  assert.strictEqual(r.get('u:0').name, 'Original', 'live node unaffected');
+  assert.strictEqual(storedNow().scenarios[0].name, 'Original', 'storage unaffected');
+});
+
+test('a later save picks up edits made since the previous save', () => {
+  setStorageData({ scenarios: [{ id: 'u:0', name: 'Original', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+
+  r.get('u:0').name = 'Edited';
+  r.save(r.get('u:0'), true);
+
+  assert.strictEqual(storedNow().scenarios[0].name, 'Edited',
+    'the snapshot is taken at save() time, so a save must capture current state');
+});
+
+test('the persisted list is rebuilt from the graph, not from a retained copy', () => {
+  setStorageData({
+    scenarios: [
+      { id: 'u:0', name: 'Keep',   simStart: '2026-01-01', simEnd: '2041-01-01' },
+      { id: 'u:1', name: 'Remove', simStart: '2026-01-01', simEnd: '2041-01-01' },
+    ],
+  });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+
+  r.delete('u:1');
+
+  const ids = storedNow().scenarios.map(s => s.id);
+  assert.deepEqual(ids, ['u:0'], 'a deleted scenario must not survive in the persisted document');
+});
+
+test('lastUsed is omitted, not written as null, for a profile that never chose one', () => {
+  setStorageData({ scenarios: [{ id: 'u:0', name: 'S', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = new ScenarioRegistry(new ScenarioStorage(), new Graph());
+
+  r.save(r.get('u:0'), false);   // active=false → never persists a lastUsed
+
+  assert.ok(!('lastUsed' in storedNow()),
+    'the stored shape must match what a pre-change profile wrote');
+});
+
+// ─── Retention: the registry must not hold onto the payload it hands to save ───
+//
+// The tests above pass on the pre-change registry too — ScenarioStorage.save
+// serializes at call time, so nothing was observably broken. Only the first test
+// here discriminates: the old registry re-sent one retained `_scenarioData`
+// object on every save. The second is a property test that held before and after;
+// it is here to keep holding.
+
+/** A storage double that records the payload objects it is given, by reference. */
+function makeRecordingStorage() {
+  const payloads = [];
+  let stored = { scenarios: [] };
+  return {
+    payloads,
+    load: () => stored,
+    save: (data) => { payloads.push(data); stored = JSON.parse(JSON.stringify(data)); },
+  };
+}
+
+test('each save receives a distinct payload object, not one retained and re-sent', () => {
+  const storage = makeRecordingStorage();
+  const r = new ScenarioRegistry(storage, new Graph());
+  r.loadPrebuilt([makePrebuilt('alpha')]);
+
+  r.save({ id: 'u:0', name: 'A', prebuilt: false, order: 1 }, true);
+  r.save({ id: 'u:1', name: 'B', prebuilt: false, order: 2 }, true);
+
+  assert.ok(storage.payloads.length >= 2, 'expected multiple saves');
+  const unique = new Set(storage.payloads);
+  assert.strictEqual(unique.size, storage.payloads.length,
+    'the registry must build a fresh payload per save, not mutate and re-send one object');
+});
+
+test('the payload reflects the graph at save time, not a retained node list', () => {
+  const storage = makeRecordingStorage();
+  const r = new ScenarioRegistry(storage, new Graph());
+  r.loadPrebuilt([makePrebuilt('alpha')]);
+
+  r.save({ id: 'u:0', name: 'First', prebuilt: false, order: 1 }, true);
+
+  // updateNode REPLACES the node object, so any retained reference is now stale.
+  r.save({ id: 'u:0', name: 'Replaced', prebuilt: false, order: 1 }, true);
+
+  const last = storage.payloads.at(-1);
+  assert.strictEqual(last.scenarios.find(s => s.id === 'u:0').name, 'Replaced',
+    'the payload must be read from the graph, not from a retained node reference');
+});

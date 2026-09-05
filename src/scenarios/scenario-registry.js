@@ -32,7 +32,12 @@ export class ScenarioRegistry {
   constructor(scenarioStorage, graph) {
     this._scenarioStorage = scenarioStorage;
     this._graph           = graph;
-    this._scenarioData    = {};
+    /**
+     * The active scenario id, as persisted. A plain string — deliberately NOT a
+     * retained copy of the storage document. See _persist().
+     * @type {string|null}
+     */
+    this._lastUsed        = null;
     this._init();
   }
 
@@ -45,20 +50,25 @@ export class ScenarioRegistry {
    * may have truncated dates — re-canonicalize through ScenarioSerializer.toDateStr.
    */
   _init() {
-    this._scenarioData = this._scenarioStorage.load();
+    const data = this._scenarioStorage.load();
+    this._lastUsed = data.lastUsed ?? null;
     // One-time cleanup (design/39 Step 5c): early MPC builds wrote decision records
     // into the scenario layer, so they leaked into `fin-sim-scenarios` storage and
     // got re-stamped to u:<N> on reload — un-loadable junk in the picker. Decision
     // records now live in their own `decision` layer and never touch this storage;
     // purge any already-persisted ones (mpc:-origin id or derived flag) and re-save.
-    const cleaned = this._scenarioData.scenarios.filter(
+    const cleaned = data.scenarios.filter(
       s => !(s?.derived || (typeof s?.id === 'string' && s.id.startsWith('mpc:'))),
     );
-    if (cleaned.length !== this._scenarioData.scenarios.length) {
-      this._scenarioData.scenarios = cleaned;
-      this._scenarioStorage.save(this._scenarioData);
+    if (cleaned.length !== data.scenarios.length) {
+      // Writes `cleaned` directly, NOT via _persist(): the graph has no scenario
+      // nodes yet, so _persist() would read back an empty list and erase the file.
+      this._scenarioStorage.save({
+        scenarios: cleaned,
+        ...(this._lastUsed ? { lastUsed: this._lastUsed } : {}),
+      });
     }
-    this._scenarioData.scenarios.forEach((s, i) => {
+    cleaned.forEach((s, i) => {
       if (!s.id || !s.id.startsWith('u:')) s.id = 'u:' + i;
       s.prebuilt = false;
       s.layer   = 'scenario';
@@ -66,7 +76,7 @@ export class ScenarioRegistry {
       s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
       this._graph.addNode(s);
     });
-    const lastUsed = this._scenarioData.lastUsed;
+    const lastUsed = this._lastUsed;
     if (lastUsed?.startsWith('u:') && this._graph.getNode(lastUsed)) {
       this._graph.getNode(lastUsed).active = true;
     }
@@ -133,7 +143,7 @@ export class ScenarioRegistry {
 
     if (active) return;
 
-    const lastUsed = this._scenarioData.lastUsed;
+    const lastUsed = this._lastUsed;
     if (lastUsed?.startsWith('p:') && this._graph.getNode(lastUsed)) {
       this.save(this._graph.getNode(lastUsed), true);
       return;
@@ -290,12 +300,42 @@ export class ScenarioRegistry {
   }
 
   _persistLastUsed(id) {
-    this._scenarioData.lastUsed = id;
-    this._scenarioStorage.save(this._scenarioData);
+    this._lastUsed = id;
+    this._persist();
   }
 
   _persistUserScenarios() {
-    this._scenarioData.scenarios = this.getUserScenarios();
-    this._scenarioStorage.save(this._scenarioData);
+    this._persist();
+  }
+
+  /**
+   * Write the current user scenarios and active id to storage.
+   *
+   * The payload is built fresh per call and **not retained**. This class used to
+   * keep it in a `_scenarioData` field whose `.scenarios` held the live graph
+   * nodes from the previous save — nodes `Graph.updateNode` may since have
+   * replaced, so the retained document could go stale as well as alias.
+   *
+   * Note what this does NOT do: the array still holds live node references for
+   * the duration of the call. `ScenarioStorage.save()`'s `JSON.stringify` is
+   * still the moment the snapshot is taken, and that is the right place for it —
+   * a deep copy here would only duplicate the serialization the store performs
+   * immediately afterwards. (`structuredClone` is not an option regardless: live
+   * scenario nodes carry a `scenarioClass` function, which JSON drops silently
+   * and structured clone rejects with DataCloneError.)
+   *
+   * So the contract is: the caller may hand `save()` live objects, and `save()`
+   * must snapshot them before returning. The complementary half is
+   * `ScenarioStorage.load()` returning a fresh copy — `_init` mutates what it
+   * loads and installs it as graph nodes. Both halves are documented on those
+   * methods; a backend that stored objects rather than strings would break them.
+   */
+  _persist() {
+    this._scenarioStorage.save({
+      scenarios: this.getUserScenarios(),
+      // Omitted rather than written as null when unset, so a profile that has
+      // never selected a scenario stores exactly what it always did.
+      ...(this._lastUsed ? { lastUsed: this._lastUsed } : {}),
+    });
   }
 }
