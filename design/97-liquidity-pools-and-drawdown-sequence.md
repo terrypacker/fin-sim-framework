@@ -773,6 +773,52 @@ same rebalanceable book:
 **A gated in-portfolio edge is a veto; a cross-account edge is a transaction.** Stating it that
 way is what keeps executor (1) free.
 
+### 12.4b A gate belongs to its SOURCE POOL, not to its edge
+
+The single most misleading thing about the authoring surface, found by a reader who set two
+different thresholds on two edges out of one pool and could not work out why the looser one
+never fired.
+
+A gate is written on an edge and reads as a property of it. The **veto it produces names the
+source pool** — `poolRefillPlan.vetoed` is a list of pool ids, and `_applyVeto` raises the
+target of every ALLOCATION class that pool claims to at least what is currently held. That is
+not an over-broad implementation of a per-edge rule. It is the rule. §12.4's opening paragraph
+is the reason: the drift band will refill a bond target by selling equity, and the bond sleeve
+then funds spending, so the plan sold equity in a downturn by a second route. If the veto
+covered only the gated edge, gating `growth → offset` would leave the rebalancer free to sell
+the same EQUITY to hit a BOND target and move the money out of `growth` anyway. The veto has to
+cover **every route out of the pool** or the laundering hole reopens.
+
+**Therefore the tightest gate on any edge out of a source pool is that source's effective gate,
+and every looser one is unreachable.** Two different thresholds out of one source is not an
+authorable policy, and writing one produces a plan that does not do what it says.
+
+Two properties make this worth a warning rather than a docs line:
+
+- **Nothing records the non-event.** `gatedFlows` attributes the veto to the edge whose gate
+  shut. The edge it *also* suppressed is not mentioned, because from the reducer's side nothing
+  happened to it.
+- **The unvetoed classes go to ZERO, not to less.** `_applyVeto` floors each vetoed class at its
+  held fraction; when the vetoed pool holds most of the book, `floorSum` reaches 1 and the
+  function returns a mix of the vetoed classes alone. On the reference plan a source pool gated
+  at 0.05 for one destination and 0.10 for another turned an authored multi-year bond reserve
+  into a bond target of **zero**, for years, while the pool cube went on reporting the target it
+  wanted — a believable wrong number of exactly the shape §12.7 exists to prevent.
+
+`warnDivergentGatesFromOneSource` therefore warns at config time when two edges out of one
+source carry gates that differ **in shape** — a gate is a composed tree (§20.15), so a
+difference in clause kind, basis or dwell is as unreachable as one in threshold. Warned, not
+thrown: the graph is legal and the behaviour is correct; it is the authoring that is not what it
+looks like. The remedy is one gate for all edges out of a source, or separate source pools with
+disjoint claims.
+
+**What was tried and rejected.** Scoping the veto to `FLOW_EXECUTOR.REBALANCE` edges — on the
+reading that §12.4's "a gated in-portfolio edge is a veto; a cross-account edge is a
+transaction" scopes the veto rather than describing how each edge executes. It does not, and
+POOL-6 already pinned the opposite on a cross-account edge: *"it VETOES the source's sale, so
+the drift band cannot launder the same trade."* The change reopens the laundering hole for every
+TRANSFER edge. Recorded because the reading is a natural one and the sentence invites it.
+
 ### 12.4a The third shape: cash outside the book BUYING into it
 
 §12.4's two executors between them could not say the thing an offset makes natural. **Cash held

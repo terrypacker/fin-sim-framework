@@ -715,6 +715,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
 
   warnMarketClausesWithoutAMarket(pools, flows, byKey);
   warnUntradeableRebalanceFlows(pools, flows, byKey);
+  warnDivergentGatesFromOneSource(flows);
 
   // A destination with no target can never be filled `toTarget` — it would move zero every
   // period, which reads in the journal as "the refill is broken" rather than "the pool has
@@ -805,6 +806,47 @@ function warnMarketClausesWithoutAMarket(pools, flows, byKey) {
  * Skipped entirely when the caller supplied no roles (several call sites pass
  * `{stateKey, type}` projections): an absent role is not evidence of an untradeable one.
  */
+/**
+ * Two edges out of ONE source pool carrying DIFFERENT gate thresholds (design 97 §12.4b).
+ *
+ * A gate reads as a property of its edge. It is not: the veto it produces names the SOURCE
+ * POOL, and it has to, or the laundering hole this whole reducer exists to close reopens —
+ * with `growth → offset` gated shut, a rebalancer still free to sell EQUITY to hit a BOND
+ * target moves the same money out of growth by a second route. So the veto covers every route
+ * out of the pool, and **the tightest gate on any edge out of a source is that source's
+ * effective gate**. The looser one is unreachable.
+ *
+ * Warned, not thrown, because it is a legal graph and the behaviour is correct — it is the
+ * AUTHORING that is not what it looks like. And the failure is silent and severe: the looser
+ * threshold never fires, nothing records that it did not, and when the veto binds
+ * `_applyVeto`'s `floorSum` can reach 1, which sends the unvetoed classes to ZERO rather than
+ * shrinking them. On the reference plan that turned an authored 4-year bond reserve into no
+ * bond target at all, for years, while the pool cube went on reporting the target it wanted.
+ *
+ * Compared on the SHAPE of the gate, not on a single number: a gate is a composed tree
+ * (§20.15) and two edges may differ in clause kind, basis or dwell as easily as in threshold.
+ * Any difference has the same consequence, so any difference is worth saying.
+ */
+function warnDivergentGatesFromOneSource(flows) {
+  const bySource = new Map();
+  for (const flow of flows) {
+    if (!flow.gate) continue;
+    if (!bySource.has(flow.from)) bySource.set(flow.from, []);
+    bySource.get(flow.from).push(flow);
+  }
+  for (const [source, edges] of bySource) {
+    if (edges.length < 2) continue;
+    const shapes = new Set(edges.map(f => JSON.stringify(f.gate)));
+    if (shapes.size < 2) continue;
+    console.warn(
+      `liquidityGraph: pool '${source}' is the source of ${edges.length} gated edges `
+      + `(${edges.map(f => `'${f.id}'`).join(', ')}) whose gates DIFFER. A gate vetoes the sale `
+      + `of its SOURCE POOL — it must, or the rebalancer launders the same sale through another `
+      + `route — so the TIGHTEST of these governs all of them and the others never take effect. `
+      + `Give the edges one gate, or move them onto separate source pools with disjoint claims.`);
+  }
+}
+
 function warnUntradeableRebalanceFlows(pools, flows, byKey) {
   const anyRole = [...byKey.values()].some(a => a?.role != null);
   if (!anyRole) return;
