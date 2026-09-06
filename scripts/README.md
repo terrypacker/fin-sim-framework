@@ -199,6 +199,20 @@ can be imported: a cost basis Quicken records as `Add` (unknown) defaults to mar
 and says so, and the negative cash a placeholder entry leaves behind is reported as the
 plug it is.
 
+**One currency per export.** The report prints no currency column — the only evidence is
+the sign on the money cells (`$` vs `A$`), so a file that mixes them is rejected rather
+than summed. A household with both runs the tool twice, the second `--into` the first's
+output with `--replace` (which patches `--index` in place instead of appending another
+copy); `securities` merge by id across the two runs. Set `currencySign` in the mapping to
+have a file/mapping mismatch caught before it becomes a balance.
+
+```sh
+npm run import:quicken -- --csv "…/Quicken Export US.csv" --map …/mapping.json \
+  --into "…/fin-sim-scenarios.json" --out /tmp/step1.json --id u:quicken-0904
+npm run import:quicken -- --csv "…/Quicken Export AU.csv" --map …/mapping-au.json \
+  --into /tmp/step1.json --index 1 --replace --keep-sim-start --out …/imported.json
+```
+
 `--into` leaves every account the mapping does not name exactly as it was, and appends
 the import as a **second** scenario rather than replacing the first, so the two can be
 diffed. It also does three things that are easy to miss: blanks `cfg.initialState` (a

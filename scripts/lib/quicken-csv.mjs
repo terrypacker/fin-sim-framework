@@ -72,6 +72,17 @@ const PLACEHOLDER_DATE = 'Placeholder';
 const UNKNOWN_MONEY = 'Add';
 
 /**
+ * The currency sign that prefixes every money cell: `$`, `A$`, `US$`, `€`, `£`, `¥`.
+ *
+ * Anchored at the start and bounded to three letters so it cannot eat a stray letter out
+ * of the middle of a cell and turn a malformed value into a plausible number.
+ */
+const CURRENCY_SIGN = /^[A-Za-z]{0,3}[$€£¥]/;
+
+/** Every currency sign seen in a money cell, so the parse can report what it dropped. */
+const currencySignOf = (raw) => CURRENCY_SIGN.exec(String(raw ?? '').trim().replace(/^-|^\(/, ''))?.[0] ?? null;
+
+/**
  * Split one CSV line on commas, honouring `"…"` quoting and `""` escapes.
  *
  * Hand-rolled rather than pulled from a dependency because the money columns are
@@ -107,6 +118,15 @@ const unescapeHtml = (s) => String(s ?? '')
 /**
  * `"$1,267,004.52"` → `1267004.52`; `"-$135,930.10"` → `-135930.1`; `"Add"` → `null`.
  *
+ * The currency sign is stripped rather than matched on `$`, because a Quicken file whose
+ * home currency is not USD writes `A$320,952.90` — and a `$`-only strip leaves the `A`,
+ * so `Number()` returns NaN and every money column in an AU export silently becomes
+ * `null`. That is the worst failure available here: the importer reads a null basis as
+ * "unknown", applies the unknown-basis policy, and writes a zero-value account with no
+ * error. The CSV carries no currency column, so the sign is dropped, not interpreted —
+ * `parseQuickenPortfolio` reports which signs it saw as `currencySigns` and the account's
+ * currency stays the scenario's to declare.
+ *
  * Returns `null` for anything that is not a number, which is the whole point — see
  * trap 2 in the header. A caller that wants a number must decide what an absent one
  * means rather than receiving a plausible zero.
@@ -118,7 +138,7 @@ export function parseMoney(raw) {
   const s = String(raw ?? '').trim();
   if (s === '' || s === UNKNOWN_MONEY) return null;
   const neg = s.startsWith('-') || /^\(.*\)$/.test(s);
-  const n = Number(s.replace(/[()\-$,\s]/g, ''));
+  const n = Number(s.replace(/[()\-,\s]/g, '').replace(CURRENCY_SIGN, ''));
   if (!Number.isFinite(n)) return null;
   return neg ? -n : n;
 }
@@ -179,7 +199,12 @@ export function parseBondName(name) {
  * Parse a Quicken "Portfolio Value - By Account" export (with lots).
  *
  * @param {string} text - the raw file contents
- * @returns {{ asOf: string|null, createdOn: string|null, accounts: Array<object> }}
+ * @returns {{ asOf: string|null, createdOn: string|null, currencySigns: string[],
+ *   accounts: Array<object> }}
+ *   `currencySigns` is every distinct sign the money columns carried (`$`, `A$`, …).
+ *   The export has no currency column, so this is the only evidence of which currency
+ *   the figures are in — more than one sign in one file means the report mixes them and
+ *   the totals cannot be summed.
  *   Each account is `{ name, cash, cashRaw, marketValue, costBasis, positions[] }`;
  *   each position `{ name, symbol, type, price, shares, costBasis, basisUnknown,
  *   marketValue, lots[] }`; each lot `{ purchaseDate, placeholder, shares, costBasis,
@@ -211,6 +236,7 @@ export function parseQuickenPortfolio(text) {
   }
 
   const accounts = [];
+  const currencySigns = new Set();
   let account = null, position = null;
 
   for (const line of lines.slice(headerIdx + 1)) {
@@ -220,6 +246,11 @@ export function parseQuickenPortfolio(text) {
     const name = unescapeHtml(label.trim());
     if (name === '' ) continue;
     if (/^Totals$/i.test(name)) break;   // the grand-total footer closes the data
+
+    for (const col of [COL.MARKET_VALUE, COL.COST_BASIS]) {
+      const sign = currencySignOf(fields[col]);
+      if (sign) currencySigns.add(sign);
+    }
 
     const depth = label.length - label.trimStart().length;
 
@@ -277,5 +308,5 @@ export function parseQuickenPortfolio(text) {
     throw new Error(`quicken-csv: unexpected indentation depth ${depth} on row "${name}".`);
   }
 
-  return { asOf, createdOn, accounts };
+  return { asOf, createdOn, currencySigns: [...currencySigns], accounts };
 }

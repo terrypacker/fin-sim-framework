@@ -62,6 +62,15 @@
  * (design 32), so writing only the account field leaves the old basis to reassert
  * itself against a new balance and break `contributionBasis + earningsBasis = balance`.
  *
+ * ─── more than one export ──────────────────────────────────────────────────────────
+ *
+ * A household with two Quicken files (one per currency — the export has no currency
+ * column, so one file is one currency) runs the tool twice, the second `--into` the
+ * first's output. Two things make that work: `securities` MERGE by id rather than being
+ * replaced, and `--replace` patches the scenario at `--index` in place instead of
+ * appending another copy of it. Without `--replace` the second run leaves a three-record
+ * file whose middle record is a half-imported intermediate.
+ *
  * **`simStart` moves to the snapshot date.** A portfolio export is stated as of a day.
  * Splicing a September snapshot into a plan that begins in January silently claims the
  * year's first eight months happened twice. `--keep-sim-start` opts out.
@@ -85,6 +94,7 @@ const opts = parseFlags(process.argv.slice(2), {
   id: { type: 'string', help: 'id for the new scenario record' },
   index: { type: 'number', default: 0, help: 'which scenario in --into to splice' },
   keepSimStart: { type: 'flag', help: 'do NOT move simStart to the export snapshot date' },
+  replace: { type: 'flag', help: 'patch --index in place instead of appending a copy (chained imports)' },
   force: { type: 'flag', help: 'write even though errors were reported' },
 });
 
@@ -198,10 +208,15 @@ const simStart = !opts.keepSimStart && parsed.asOf ? `${parsed.asOf}T00:00:00.00
 let out;
 if (target) {
   const imported = structuredClone(target);
-  imported.id = opts.id ?? `${target.id ?? 'u:0'}-quicken`;
-  imported.name = opts.name ?? `${target.name ?? 'Scenario'} (Quicken ${parsed.asOf ?? 'import'})`;
-  imported.order = (target.order ?? 0) + 1;
-  imported.active = false;
+  if (!opts.replace) {
+    imported.id = opts.id ?? `${target.id ?? 'u:0'}-quicken`;
+    imported.name = opts.name ?? `${target.name ?? 'Scenario'} (Quicken ${parsed.asOf ?? 'import'})`;
+    imported.order = (target.order ?? 0) + 1;
+    imported.active = false;
+  } else {
+    if (opts.id) imported.id = opts.id;
+    if (opts.name) imported.name = opts.name;
+  }
 
   const patchByKey = new Map(result.accounts.map(a => [a.stateKey, a]));
   imported.accounts = (imported.accounts ?? []).map((a) => {
@@ -210,7 +225,23 @@ if (target) {
     const { stateKey, ...fields } = patch;
     return { ...a, ...fields };
   });
-  imported.securities = result.securities;
+  // Securities MERGE by id; they are not replaced wholesale. Accounts the mapping does
+  // not name are left alone (above), and the same has to hold here or a two-file import
+  // — the US export, then the AU one — has the second run delete the first's securities
+  // and leave every US holding's `securityId` dangling. A redefinition of the same id is
+  // the mapping disagreeing with itself, so it is reported rather than last-wins.
+  {
+    const byId = new Map((imported.securities ?? []).map(x => [x.id, x]));
+    for (const sec of result.securities) {
+      const prior = byId.get(sec.id);
+      if (prior && JSON.stringify(prior) !== JSON.stringify(sec)) {
+        console.log(`  ⚠ security "${sec.id}" already exists in the target with different fields `
+          + `— the mapping's definition wins.`);
+      }
+      byId.set(sec.id, sec);
+    }
+    imported.securities = [...byId.values()];
+  }
 
   // The param half of the design-32 pair. Both stores, or the account field is inert.
   const wanted = new Map(result.contributionBasisPatches.map(p => [p.stateKey, p.value]));
@@ -224,7 +255,21 @@ if (target) {
   imported.initialState = {};
   if (simStart) imported.simStart = simStart;
 
-  out = { ...file, scenarios: [...file.scenarios, imported] };
+  const scenarios = opts.replace
+    ? file.scenarios.map((sc, i) => (i === opts.index ? imported : sc))
+    : [...file.scenarios, imported];
+
+  // Two records with one id is not a diffable pair, it is a collision on import. The
+  // usual cause is a chained second run given the same --id without --replace.
+  const ids = scenarios.map(sc => sc.id).filter(Boolean);
+  const dupe = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dupe) {
+    console.error(`\nimport-quicken: two scenarios would share the id "${dupe}". Pass a distinct `
+      + `--id, or --replace to patch --index ${opts.index} in place.\n`);
+    process.exit(2);
+  }
+
+  out = { ...file, scenarios };
 } else {
   out = {
     scenarios: [{

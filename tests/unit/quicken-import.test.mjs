@@ -110,6 +110,70 @@ test('parseMoney: Add is null, not zero — the whole point of the distinction',
   assert.equal(parseMoney(''), null);
 });
 
+test('parseMoney reads a non-USD sign — the AU export is A$, and $-only strips to NaN', () => {
+  // The failure this pins is not a wrong number, it is a silent `null`: `A$320,952.90`
+  // with the `A` left behind is NaN, every money column in an AU file becomes null, and
+  // the importer reads null basis as "unknown" and writes a $0 account with no error.
+  assert.equal(parseMoney('A$320,952.90'), 320952.9);
+  assert.equal(parseMoney('-A$2,270.20'), -2270.2);
+  assert.equal(parseMoney('US$1,000.00'), 1000);
+  assert.equal(parseMoney('€1.234,00'.replace(/\./g, '').replace(',', '.')), 1234);
+  assert.equal(parseMoney('£250.00'), 250);
+  // Bounded: the sign is a prefix, not "any letters anywhere", so junk stays null.
+  assert.equal(parseMoney('N/A'), null);
+  assert.equal(parseMoney('1,000 AUD'), null);
+});
+
+test('the parse reports which currency signs it saw — the export has no currency column', () => {
+  assert.deepEqual(parseQuickenPortfolio(CSV).currencySigns, ['$']);
+});
+
+test('an export that mixes currency signs is an error, not a summed total', () => {
+  const mixed = CSV.replace('"$1,000.00","$200.00"', '"A$1,000.00","A$200.00"');
+  const r = buildImport(parseQuickenPortfolio(mixed), MAPPING, { targetAccounts: TARGET });
+  assert.ok(r.errors.some(e => /mixes currencies/.test(e.message)));
+});
+
+test('mapping.currencySign that disagrees with the file is an error', () => {
+  const r = buildImport(parseQuickenPortfolio(CSV), { ...MAPPING, currencySign: 'A$' },
+    { targetAccounts: TARGET });
+  assert.ok(r.errors.some(e => /currencySign/.test(e.message)));
+});
+
+test('a lot with no market value is an error, never an implicit $0', () => {
+  // Cost basis has a policy because Quicken legitimately omits it. Market value never is
+  // legitimately absent, so a null there means the column did not parse.
+  const broken = CSV.replace('"$4,000.00","$5,000.00"', '"$4,000.00",""');
+  const r = buildImport(parseQuickenPortfolio(broken), MAPPING, { targetAccounts: TARGET });
+  assert.ok(r.errors.some(e => /no market value/.test(e.message)));
+});
+
+test('an exact $0.00 cost basis is silent on a wrapper — no role there reads lot basis', () => {
+  // A Roth's tax is computed from the ACCOUNT ledgers, not from a lot: rebalances are
+  // gated `taxable &&`, withdrawals scale rather than dispose, and the after-tax metric's
+  // basis split is on the TAXABLE_BASIS branch. A broker reporting no basis inside a
+  // wrapper is the common case, so warning there is noise that trains the eye to skip it.
+  const zeroed = CSV.replace('"$9,000.00","$12,000.00"', '"$0.00","$12,000.00"')
+    .replace('"$9,000.00","$12,000.00"', '"$0.00","$12,000.00"');
+  const r = buildImport(parseQuickenPortfolio(zeroed), MAPPING,
+    { targetAccounts: TARGET.map(a => (a.stateKey === 'rothAccount' ? { ...a, role: 'roth-ira' } : a)) });
+  assert.ok(!r.warnings.some(w => w.stateKey === 'rothAccount' && /cost basis is exactly/.test(w.message)));
+});
+
+test('an exact $0.00 cost basis is warned about — it is not the Add placeholder', () => {
+  const zeroed = CSV.replace('"$6,000.00","$8,000.00"', '"$0.00","$8,000.00"')
+    .replace('"$4,000.00","$5,000.00"', '"$0.00","$5,000.00"')
+    .replace('"$2,000.00","$3,000.00"', '"$0.00","$3,000.00"');
+  const r = buildImport(parseQuickenPortfolio(zeroed), MAPPING,
+    { targetAccounts: TARGET.map(a => (a.stateKey === 'usStockAccount' ? { ...a, role: 'us-stock' } : a)) });
+  assert.equal(r.errors.length, 0);
+  assert.ok(r.warnings.some(w => /cost basis is exactly/.test(w.message)));
+  // And it is taken literally, because Quicken stated it as a figure.
+  const lots = r.accounts.find(a => a.stateKey === 'usStockAccount').holdings
+    .filter(h => h.securityId === 'bigx');
+  assert.ok(lots.every(h => h.costBasis === 0));
+});
+
 test('parseUsDate emits a bare ISO date, and rejects Placeholder', () => {
   assert.equal(parseUsDate('3/13/2026'), '2026-03-13');
   assert.equal(parseUsDate('12/1/2026'), '2026-12-01');

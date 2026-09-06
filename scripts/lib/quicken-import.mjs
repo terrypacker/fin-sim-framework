@@ -80,6 +80,7 @@ import { parseBondName }    from './quicken-csv.mjs';
 import { scenarioSecurityRegistry, SYNTHETIC_SECURITY_PREFIX }
   from '../../src/finance/holdings/security.js';
 import { CLASS_KEYS_BY_ALLOCATION } from '../../src/finance/holdings/default-allocations.js';
+import { TAX_CLASS, taxClassForRole } from '../../src/finance/derived-metrics/after-tax.js';
 
 /**
  * The prefix every lot this importer mints carries.
@@ -177,6 +178,15 @@ function lotToHolding({ position, lot, spec, index, accountName, stateKey, polic
   const warn = (message) => warnings.push({ stateKey, message });
   const fail = (message) => errors.push({ stateKey, message });
   const allocation = spec.allocation;
+  // A missing market value is NOT a zero position. It means the money column did not
+  // parse — an unrecognised currency sign, a reworded Quicken literal — and defaulting
+  // it produces an account that imports cleanly at $0. Cost basis has a policy because
+  // Quicken legitimately omits it; market value never is legitimately absent.
+  if (lot.marketValue == null) {
+    fail(
+      `${accountName} / ${position.symbol ?? position.name}: lot ${index + 1} has no market value `
+      + `(the Market Value column did not parse). Importing it would silently value the lot at $0.`);
+  }
   const marketValue = round2(lot.marketValue ?? 0);
 
   let costBasis;
@@ -315,6 +325,21 @@ export function buildImport(parsed, mapping, { targetAccounts = [] } = {}) {
     for (const m of validateSpec(key, spec)) fail(null, m);
   }
 
+  // The export carries no currency column: every figure in one file is in one currency,
+  // and which one is only visible in the sign the money cells were printed with. Two
+  // signs means the report already mixed them, and nothing downstream converts — the
+  // balances would be summed as if they were the same money.
+  if (parsed.currencySigns?.length > 1) {
+    fail(null, `the export mixes currencies (${parsed.currencySigns.join(', ')}). Quicken prints `
+      + `no currency column, so nothing here can tell which figure is which — export one `
+      + `currency per file.`);
+  }
+  if (mapping?.currencySign && parsed.currencySigns?.length
+      && !parsed.currencySigns.includes(mapping.currencySign)) {
+    fail(null, `mapping.currencySign is "${mapping.currencySign}" but the export's money columns `
+      + `are printed "${parsed.currencySigns.join(', ')}". One of the two is about a different file.`);
+  }
+
   if (mapping?.asOf && parsed.asOf && mapping.asOf !== parsed.asOf) {
     fail(null, `mapping.asOf is ${mapping.asOf} but the CSV was taken ${parsed.asOf}. `
       + `Update the mapping, or you are importing a different snapshot than you think.`);
@@ -395,6 +420,30 @@ export function buildImport(parsed, mapping, { targetAccounts = [] } = {}) {
         }
         securities.set(record.id, record);
       }
+      // A cost basis of exactly $0.00 against a real market value is not the same claim
+      // as Quicken's "Add" placeholder — it parses as a number, so `unknownBasisPolicy`
+      // never sees it and the whole position imports as gain.
+      //
+      // Reported ONLY on an account whose role actually reads a holding's `costBasis`,
+      // because on a wrapper nothing does and the warning would be noise on the very
+      // accounts where a broker most often reports no basis. A Roth's tax — US
+      // §408A(d)(1) and AU s99B alike — is computed from the ACCOUNT ledgers
+      // (`contributionBasis` / `earningsBasis` / `derivedIncomeBasis`), never from a
+      // lot: its rebalances are gated `taxable &&` so they realize nothing, its
+      // withdrawals `scaleHoldings` rather than dispose through `consumeHoldings`, and
+      // the after-tax metric's `_unrealizedGainSplit` sits on the TAXABLE_BASIS branch
+      // only. `taxClassForRole` is imported rather than re-listed so this cannot drift
+      // from the map that decides it.
+      const readsLotBasis = taxClassForRole(target?.role) === TAX_CLASS.TAXABLE_BASIS;
+      if (readsLotBasis && position.costBasis === 0 && !position.basisUnknown
+          && (position.marketValue ?? 0) > 0) {
+        warn(stateKey, `${qa.name} / ${position.symbol ?? position.name}: cost basis is exactly `
+          + `$0.00 against ${round2(position.marketValue)} of market value, so the position imports `
+          + `as 100% unrealized gain — and this account's role (${target.role}) is one whose CGT is `
+          + `computed from lot basis. Quicken states the $0.00 as a figure, not as its "Add" `
+          + `placeholder, so the importer takes it literally. Enter the acquisition in Quicken.`);
+      }
+
       if (position.lots.length === 0) {
         warn(stateKey, `${qa.name} / ${position.symbol ?? position.name}: no lot rows. Export WITH `
           + `lots, or this position's holding period and basis are lost.`);
