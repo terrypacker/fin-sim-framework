@@ -298,7 +298,9 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
         ? 'No simulation is loaded.'
         : this._reducer()
           ? 'The graph is wired but has stamped no pool yet — step or run the simulation.'
-          : 'This scenario authors no liquidity graph, or the LIQUIDITY_POOLS strategy is not selected.';
+          : 'This scenario authors no liquidity graph, or it is switched off '
+            + '(liquidityGraphEnabled: false), or the LIQUIDITY_POOLS strategy is not selected — '
+            + 'note that the last of those stops only the refill flows.';
       return;
     }
 

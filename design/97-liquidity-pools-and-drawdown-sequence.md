@@ -3136,3 +3136,106 @@ So the successor to the deleted field is not an editable age, it is a rule selec
 modellable, which is the correct state for a rule nobody has yet transcribed from a primary
 source. Per this repo's standing rule, that transcription comes from the authority into
 `docs/`, not from memory.
+
+## 23. Turning the pools OFF — `liquidityGraphEnabled` (6 Sep 2026)
+
+### The defect
+
+The graph has **three** consumers, and `behavioralStrategies` gates exactly one of them:
+
+| Consumer | Site | Gated by `LIQUIDITY_POOLS`? |
+| --- | --- | --- |
+| The spend order — the graph compiles to `state.drawdownSequence` (§12) | the toolset's state projection | **no** |
+| The rebalancer — a pool `target` sizes the classes its pools claim; a gate vetoes the refill sale (§12.2, §12.4 executor 1) | `TARGET_ALLOCATION`'s reducers | **no** |
+| The refill flows — the (s, S) triggers, the market gates, the transfers | `LIQUIDITY_POOLS`'s reducers | yes |
+
+So deselecting the strategy stops the refills and leaves the household still walking the
+buckets on a book the pool targets are still sizing. §12.2's error text already said this
+out loud — it had to, because the same asymmetry made the "two authorities" throw fire on a
+config whose second authority nothing read — but saying it in an error message is not the
+same as offering a way out. The only actual off switch was clearing the `liquidityGraph`
+param, which means **deleting the structure you want back** the moment the control arm is
+finished.
+
+Worse, `liquidityGraph`'s `visibleWhen` was gated on the strategy. Uncheck it and the graph
+editor disappears *while the graph keeps driving the run* — the panel refuses to show you
+the thing that is still deciding your draw order.
+
+### The switch
+
+`liquidityGraphEnabled` (Boolean, default true), checked in **`resolveLiquidityGraph`** —
+the one function all three consumers already share, and the reason §12 insisted on a single
+normalization site in the first place. `false` returns `null` before the normalizer runs, so
+every design-97 line goes inert at once: the spend order falls back to `drawdownPriority`,
+the rebalancer's `poolGraph` is null, and `LIQUIDITY_POOLS` contributes no reducers.
+
+Three properties that are the whole design:
+
+1. **Absent is ON.** Only the exact `false` switches off, so every existing scenario is
+   byte-identical. POOL-20b pins `undefined`, `true` and `null` as live.
+2. **The graph is KEPT.** That is the point — this is the pools-off control arm without
+   losing the structure. `scripts/lib/pool-arms.mjs`'s `POOL_LESS` shape (an empty pool
+   order) remains the right tool for a generated study; this is the switch for a hand-authored
+   scenario you want to run both ways.
+3. **A switched-off graph still validates.** `collectAuthoredGraphProblems` deliberately
+   calls the un-gated `_normalizeFromParams`, not `resolveLiquidityGraph`. The switch is a
+   run-time "ignore this", not an authoring-time "this is fine" — if it silenced the
+   validator, flipping it back on would surface an error the editor never showed.
+
+One consequence worth stating: with the graph off, an authored `drawdownSequence` **stops
+being a rival authority** and becomes live (POOL-20c). It has to — a config that turns the
+pools off and hand-writes the order instead is exactly the config someone reaches for, and
+refusing to load it would make the switch useless.
+
+### Visibility
+
+- `liquidityGraphEnabled` is `visibleWhen: { param: 'liquidityGraph', exists: true }` — shown
+  whenever a graph is authored, **never** gated on the strategy selection. Gating it on the
+  checkbox would reproduce the exact trap it closes: you would deselect the strategy, lose the
+  switch from the panel, and the pools would still be driving the run.
+- `liquidityGraph` is now `anyOf: [strategy selected, graph exists]`, so an authored graph is
+  always editable regardless of the strategy.
+- `poolFlowsEnabled` gains an AND on `liquidityGraphEnabled notEquals false` — the refill
+  switch says nothing once the whole graph is off.
+
+`poolFlowsEnabled` and `liquidityGraphEnabled` are **not** the same axis and both are worth
+having: the first is §16.3's arm-vs-control switch for a study *of the refill rule* (pools,
+targets and spend order stay live, no edge fires); the second is the whole feature off.
+
+### Tests
+
+`POOL-20a-d` in `tests/unit/evt-liquidity-pools.test.mjs`. POOL-20a is the load-bearing one:
+it runs three years with the switch off and asserts the whole `sim.state` is byte-identical
+to the same scenario with no graph at all — which is how the rebalancer consumer gets tested
+without reaching into its internals. If pool targets had still sized the book, three years of
+rebalancing would have moved balances and the compare would fail.
+
+### The second half: a saved scenario ignored the switch
+
+The switch worked on a freshly-built scenario and did **nothing** on a saved one — which is
+every real scenario. The mechanism:
+
+1. `BaseScenario.buildSim()` seeds `sim.state` from the saved `cfg.initialState`, which on a
+   scenario saved while the pools were on already carries `liquidityGraph` and the compiled
+   `drawdownSequence`.
+2. `ScenarioLoader` then compiles the toolsets, and `ScenarioCompiler` merges its patches with
+   `Object.assign` — which **adds** a key and can never remove one.
+3. So the projection correctly emitted neither key, and the stale copies simply stayed.
+
+The observable result was the worst of the three states: the flow reducers and the rebalancer
+went dark (both read *params*, so the switch reached them) while the draw order kept walking
+the buckets off a *state* key nobody had re-derived. A half-off run is harder to reason about
+than either end, and nothing in the output says which half you got.
+
+Fixed with `ScenarioLoader._evictStaleDerivedState`: after the compile, any key in
+`TOOLSET_DERIVED_STATE_KEYS` that the projection did **not** emit is deleted from `sim.state`.
+The list is `['liquidityGraph', 'drawdownSequence']` and is deliberately narrow — only keys
+the projection owns outright, where a copy in a saved snapshot is a cache and never an
+authority. POOL-20e pins the eviction; POOL-20f pins the other direction, that a key the
+projection *did* emit is left alone (otherwise re-opening a pooled scenario would lose its
+draw order entirely).
+
+This is the same shape as every other stale-persisted-node bug in this codebase, and worth
+generalising the next time one appears: `Object.assign` semantics mean **a projection can
+only ever add to a saved snapshot**, so any field that stops being emitted needs an explicit
+eviction or it lives forever.

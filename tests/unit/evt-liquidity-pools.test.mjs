@@ -26,6 +26,7 @@
  * POOL-9  one authority : a pool target overrides the schedule for its class only
  * POOL-10 validation    : every config error in §12.7 throws
  * POOL-11 determinism   : a legal cycle replays byte-identically
+ * POOL-20 master switch : `liquidityGraphEnabled: false` darkens all THREE consumers
  */
 
 import { test } from 'node:test';
@@ -1683,4 +1684,150 @@ test('POOL-17: an interest-bearing account may not hold EQUITY or GOLD', async (
   assert.throws(() => assertInterestBearingHoldings(acct('GOLD')), /GOLD/);
   // An empty account is fine — that is every scenario that has one and does not use it.
   assert.doesNotThrow(() => assertInterestBearingHoldings({ stateKey: 'k', role: 'fixed-income', holdings: [] }));
+});
+
+// ─── POOL-20: the master switch (design 97 §12.5) ──────────────────────────────────
+//
+// The trap this closes: the graph has THREE consumers and `behavioralStrategies` gates
+// exactly one of them. Deselecting LIQUIDITY_POOLS stops the refill flows while the graph
+// keeps compiling to `state.drawdownSequence` and keeps sizing the rebalancer, so a run
+// meant to be pools-off is still walking the buckets. `liquidityGraphEnabled: false` is the
+// one switch in front of all three — it is checked in `resolveLiquidityGraph`, which is the
+// only thing those three consumers share.
+
+test('POOL-20a: the switch makes the graph identical to no graph at all', () => {
+  const graph = {
+    pools: [
+      { id: 'cash',    spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+        target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+      { id: 'reserve', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'YEARS_OF_SPEND', value: 4 } },
+      { id: 'growth',  spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2c', from: 'growth', to: 'cash', trigger: { belowTargetFraction: 0.5 } }],
+  };
+  const strategies = ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'];
+  const span = { simStart: '2026-01-01', simEnd: '2029-01-01', stepTo: '2029-01-01' };
+
+  const off = loadScenarioSim({
+    params: { behavioralStrategies: strategies, liquidityGraph: graph, liquidityGraphEnabled: false },
+    ...span,
+  });
+  const none = loadScenarioSim({ params: { behavioralStrategies: strategies }, ...span });
+
+  // Consumer 1 — the state projection: no graph on state, and no compiled spend order, so
+  // `replenishSavings` falls back to the `drawdownPriority` walk.
+  assert.equal('liquidityGraph'   in off.sim.state, false);
+  assert.equal('drawdownSequence' in off.sim.state, false);
+  // Consumer 2 — the flow reducers stamped no cube because they were never constructed.
+  assert.equal('liquidityPools'   in off.sim.state, false);
+  // Consumer 3 — the rebalancer. Nothing here asserts on its internals: if the pool targets
+  // had still sized the book, three years of rebalancing would have moved the balances and
+  // the whole-state compare below would fail. That is the assertion.
+  assert.equal(JSON.stringify(off.sim.state), JSON.stringify(none.sim.state));
+});
+
+test('POOL-20b: absent is ON — an existing scenario is byte-identical', () => {
+  // The switch must be free to add. `undefined` and an explicit `true` both mean live, and
+  // only the exact `false` turns it off (`!== false` would have made `null` an off switch).
+  const params = { liquidityGraph: REFERENCE, behavioralStrategies: ['LIQUIDITY_POOLS'] };
+  assert.ok(resolveLiquidityGraph(params, ACCOUNTS));
+  assert.ok(resolveLiquidityGraph({ ...params, liquidityGraphEnabled: true },  ACCOUNTS));
+  assert.ok(resolveLiquidityGraph({ ...params, liquidityGraphEnabled: null },  ACCOUNTS));
+  assert.equal(resolveLiquidityGraph({ ...params, liquidityGraphEnabled: false }, ACCOUNTS), null);
+});
+
+test('POOL-20c: with the graph off, an authored drawdownSequence stops being a rival', () => {
+  // §12.2's "two authorities on one field" throw exists because the graph COMPILES to
+  // `drawdownSequence`. Switched off it compiles to nothing, so the hand-authored sequence
+  // is the only authority and must be allowed — otherwise the switch would refuse to load
+  // the very config someone reaches for when they turn the pools off.
+  const params = {
+    liquidityGraph: REFERENCE,
+    drawdownSequence: [{ key: 'usSavingsAccount' }],
+    behavioralStrategies: ['LIQUIDITY_POOLS'],
+  };
+  assert.throws(() => resolveLiquidityGraph(params, ACCOUNTS), /drawdownSequence/);
+  assert.equal(resolveLiquidityGraph({ ...params, liquidityGraphEnabled: false }, ACCOUNTS), null);
+
+  const { sim } = loadScenarioSim({
+    params: { ...params, liquidityGraphEnabled: false },
+    simStart: '2026-01-01', simEnd: '2026-06-01',
+  });
+  assert.deepEqual(sim.state.drawdownSequence, [{ key: 'usSavingsAccount', sleeves: null }]);
+});
+
+test('POOL-20d: a switched-off graph still reports its authoring problems', () => {
+  // The switch is a run-time "ignore this", not an authoring-time "this is fine". If it
+  // silenced the validator, flipping it back on would surface an error the editor never
+  // showed — and the recovery overlay would have nothing to key the bad cell on.
+  const bad = { pools: [{ id: 'cash', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }],
+    target: { mode: 'PERCENT', value: 100 } }] };
+  const on  = collectAuthoredGraphProblems({ liquidityGraph: bad }, ACCOUNTS);
+  const off = collectAuthoredGraphProblems({ liquidityGraph: bad, liquidityGraphEnabled: false }, ACCOUNTS);
+  assert.ok(on.length > 0, 'the control: this graph really is bad');
+  assert.deepEqual(off, on);
+});
+
+test('POOL-20e: the switch survives a SAVED scenario\'s stale initialState', () => {
+  // The bug the switch had on every real (i.e. saved) scenario. `buildSim()` seeds sim.state
+  // from cfg.initialState BEFORE the compiler runs, and the compiler merges with
+  // Object.assign — which adds keys but never removes them. So a scenario saved while the
+  // pools were ON came back with `drawdownSequence` already on state, the projection
+  // correctly emitted nothing, and the stale copy just stayed: the flows and the rebalancer
+  // went dark (they read params) while the DRAW ORDER was still pooled. Half-off is worse
+  // than either end.
+  const params = {
+    behavioralStrategies: ['LIQUIDITY_POOLS', 'TARGET_ALLOCATION'],
+    liquidityGraph: {
+      pools: [
+        { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+        { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+      ],
+    },
+  };
+  const span = { simStart: '2026-01-01', simEnd: '2026-06-01' };
+
+  // What a save of the pools-ON run leaves behind.
+  const saved = loadScenarioSim({ params, ...span });
+  assert.equal(saved.sim.state.drawdownSequence.length, 2, 'the control: ON compiles a sequence');
+  const stale = {
+    liquidityGraph:   structuredClone(saved.sim.state.liquidityGraph),
+    drawdownSequence: structuredClone(saved.sim.state.drawdownSequence),
+  };
+
+  // Re-open that save with the switch flipped. Both keys must be EVICTED, not inherited.
+  const { sim } = loadScenarioSim({
+    params: { ...params, liquidityGraphEnabled: false },
+    mutateCfg: (cfg) => { cfg.initialState = { ...(cfg.initialState ?? {}), ...stale }; },
+    ...span,
+  });
+  assert.equal('liquidityGraph'   in sim.state, false);
+  assert.equal('drawdownSequence' in sim.state, false);
+});
+
+test('POOL-20f: eviction only removes what the projection DID NOT emit', () => {
+  // The eviction list is narrow on purpose. A stale `drawdownSequence` must not be dropped
+  // when the projection has one of its own to put there — otherwise re-opening a saved
+  // pooled scenario would lose its draw order entirely, which is the opposite failure.
+  const params = {
+    behavioralStrategies: ['LIQUIDITY_POOLS'],
+    liquidityGraph: { pools: [
+      { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ] },
+  };
+  const { sim } = loadScenarioSim({
+    params,
+    mutateCfg: (cfg) => {
+      cfg.initialState = { ...(cfg.initialState ?? {}),
+        drawdownSequence: [{ key: 'auSavingsAccount', sleeves: null }] };   // a stale, WRONG order
+    },
+    simStart: '2026-01-01', simEnd: '2026-06-01',
+  });
+  // Present, and the freshly compiled one — the stale single entry lost, as it should.
+  assert.deepEqual(sim.state.drawdownSequence, [
+    { key: 'usSavingsAccount', sleeves: null },
+    { key: 'usStockAccount',   sleeves: ['EQUITY'] },
+  ]);
 });

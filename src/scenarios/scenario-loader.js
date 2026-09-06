@@ -123,6 +123,13 @@ export function synthesizeWeightedPriorities(node, parameters = {}, presentRoles
 }
 
 /**
+ * Keys `_evictStaleDerivedState` is allowed to remove — see that method. Both are compiled
+ * by the toolset state projection from the `liquidityGraph` / `drawdownSequence` params
+ * (design 97 §12), so a copy in a saved `initialState` is a cache, never an authority.
+ */
+const TOOLSET_DERIVED_STATE_KEYS = Object.freeze(['liquidityGraph', 'drawdownSequence']);
+
+/**
  * ScenarioLoader — single entry point for restoring a scenario configuration
  * into the simulation services.
  *
@@ -885,6 +892,31 @@ export class ScenarioLoader {
   }
 
   /**
+   * State keys that are DERIVED by the toolset state projection every load and are never
+   * authored by hand. `buildSim()` seeds `sim.state` from the saved `cfg.initialState`
+   * BEFORE the compiler runs, and the compiler merges its patches with `Object.assign` —
+   * which can add a key but never remove one. So a key the projection deliberately stopped
+   * emitting survives from the previous save and silently keeps driving the run.
+   *
+   * That is not hypothetical: design 97 §23's `liquidityGraphEnabled: false` makes
+   * `resolveLiquidityGraph` return null, so the projection emits neither key — and on a
+   * saved scenario the pool spend order came straight back off the stale snapshot. The
+   * switch turned off the flow reducers and the rebalancer (both read params) while the
+   * draw order stayed pooled: a half-off run, which is worse than either state.
+   *
+   * The rule is narrow on purpose: only keys the projection OWNS outright. An authored
+   * value that happens to live in state is not eligible.
+   * @private
+   */
+  _evictStaleDerivedState(services, statePatches) {
+    const sim = services.simulationRegistry?.getPrimary?.();
+    if (!sim?.state) return;
+    for (const key of TOOLSET_DERIVED_STATE_KEYS) {
+      if (!(key in statePatches) && (key in sim.state)) delete sim.state[key];
+    }
+  }
+
+  /**
    * Compile the toolset declarations into the services, then snapshot the
    * resulting graph back onto cfg and normalize cfg.params against the combined
    * scenario + toolset param schema.
@@ -894,6 +926,7 @@ export class ScenarioLoader {
     const { paramSchema: toolsetParamSchema, statePatches } =
       new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
     cfg.initialState = statePatches;
+    this._evictStaleDerivedState(services, statePatches);
 
     // Snapshot the compiled graph back to cfg so the config is a complete
     // serialized representation usable by newScenario() and import/export.

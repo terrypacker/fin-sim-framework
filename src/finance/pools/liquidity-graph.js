@@ -923,6 +923,26 @@ function hasTargetAllocation(p) {
 
 export function resolveLiquidityGraph(params, accounts = []) {
   const p = params ?? {};
+  // §12.5 — the master switch. Checked HERE, in front of the normalizer, because this
+  // function is the one thing all three consumers share: the toolset's state projection
+  // (which compiles the spend order), TARGET_ALLOCATION's rebalancer (which reads pool
+  // targets and gates) and LIQUIDITY_POOLS' flow reducers. A null from here makes every
+  // design-97 line inert at once, which is what deselecting the strategy looks like it
+  // does and does not. Absent is ON, so an existing scenario is byte-identical.
+  if (p.liquidityGraphEnabled === false) return null;
+  return _normalizeFromParams(p, accounts);
+}
+
+/**
+ * The normalizer call with the option set derived from a params bag — the half of
+ * {@link resolveLiquidityGraph} that is NOT subject to the master switch.
+ *
+ * Split out for `collectAuthoredGraphProblems`: the authoring UI has to keep reporting a
+ * bad row while the graph is switched off, or the switch becomes a way to hide errors and
+ * the editor goes quiet on a graph that will not compile the moment it is switched back on.
+ * @private
+ */
+function _normalizeFromParams(p, accounts) {
   return normalizeLiquidityGraph(p.liquidityGraph, accounts, {
     drawdownMode:        p.drawdownMode,
     hasDrawdownSequence: Array.isArray(p.drawdownSequence) && p.drawdownSequence.length > 0,
@@ -983,7 +1003,10 @@ export function collectAuthoredGraphProblems(params, accounts = []) {
 
   if (!accounts?.length) return problems;
   try {
-    resolveLiquidityGraph(p, accounts);
+    // NOT `resolveLiquidityGraph` — see `_normalizeFromParams`. A graph switched off with
+    // `liquidityGraphEnabled: false` still has to report its problems, because the switch
+    // is a run-time "ignore this", not an authoring-time "this is fine".
+    _normalizeFromParams(p, accounts);
   } catch (e) {
     problems.push({ param: 'liquidityGraph', index: null, field: null, pool: null, message: e.message });
   }

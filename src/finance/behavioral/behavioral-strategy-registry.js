@@ -632,7 +632,38 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'sitting beside it (authoring both throws). Blank (the default) = no pools, byte-identical '
           + 'to before. In-portfolio refills are executed by the TARGET_ALLOCATION rebalancer, so select '
           + 'that strategy too unless every flow is cross-account.',
-        visibleWhen: { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+        // Visible when the strategy is selected OR a graph is already authored. The second
+        // arm matters: an authored graph keeps compiling the spend order and sizing the
+        // rebalancer with LIQUIDITY_POOLS deselected, and hiding the editor in exactly that
+        // state left the run being driven by a thing the panel would not show. Use
+        // `liquidityGraphEnabled: false` to switch it off; that is what deselecting the
+        // strategy looks like it does.
+        visibleWhen: { anyOf: [
+          { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+          { param: 'liquidityGraph', exists: true },
+        ] },
+      },
+      {
+        // The MASTER switch (design 97 §12.5). Gated on the GRAPH existing, never on the
+        // LIQUIDITY_POOLS selection: the whole point is that it governs the two consumers
+        // that strategy never reached, so hiding it behind that checkbox would reproduce
+        // the exact trap it exists to close — you would deselect the strategy, lose the
+        // switch from the panel, and the pools would still be driving the run.
+        key: 'liquidityGraphEnabled', label: 'Liquidity Pools Enabled',
+        type: 'Boolean', group: 'Spending', mc: false, opt: false,
+        defaultValue: true,
+        description: 'The whole-graph OFF switch. Deselecting the LIQUIDITY_POOLS strategy stops '
+          + 'only the refill flows — the graph still compiles to the drawdown sequence and still '
+          + 'sizes the rebalancer, because those two read the graph directly and never look at the '
+          + 'strategy list. Setting this false makes all three go dark at once: `resolveLiquidityGraph` '
+          + 'returns null, so the spend order falls back to `drawdownPriority` (or to an authored '
+          + '`drawdownSequence`, which stops being a second authority once the graph is off) and every '
+          + 'pool target, gate and capacity rule is inert. The graph is KEPT — this is how you run a '
+          + 'pools-off control without deleting the structure and losing it. It still has to compile: '
+          + 'the authoring UI reports a bad pool while the switch is off, so flipping it back on cannot '
+          + 'surface an error you were never shown. Contrast `poolFlowsEnabled`, which turns off only '
+          + 'the refill edges and leaves the pools, their sizing and the spend order live.',
+        visibleWhen: { param: 'liquidityGraph', exists: true },
       },
       {
         key: 'poolFlowsEnabled', label: 'Pool Refill Flows Enabled',
@@ -642,7 +673,11 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'and the spend order stay live, refill flows do not fire. This is the arm-vs-control switch '
           + 'a study of the refill rule needs — the alternative is deleting the flows in one arm, which '
           + 'also changes the pool sizing and makes the two arms differ in two ways at once.',
-        visibleWhen: { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+        // AND — the refill switch says nothing once the whole graph is off.
+        visibleWhen: [
+          { param: 'behavioralStrategies', includes: 'LIQUIDITY_POOLS' },
+          { param: 'liquidityGraphEnabled', notEquals: false },
+        ],
       },
     ],
   },
