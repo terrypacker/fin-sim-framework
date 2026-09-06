@@ -170,7 +170,71 @@ function resolveSize(spec, ctx, poolState) {
     case POOL_TARGET_MODE.YEARS_OF_SPEND: return spec.value * spendForSpec(spec, ctx, poolState);
     case POOL_TARGET_MODE.PERCENT:        return spec.value * (ctx.bookBase ?? 0);
     case POOL_TARGET_MODE.AMOUNT:         return spec.value;
+    // YEARS_OF_SPEND_REMAINDER needs the OTHER pools' figures, which do not exist yet on this
+    // per-pool pass. Left null here and filled by `resolveRemainderTargets` below; null is the
+    // honest intermediate, and the rebalancer already reads a null target as "this pool sizes
+    // nothing" rather than "size it to zero" (rebalance-to-target-reducer.js:365).
     default:                              return null;
+  }
+}
+
+/**
+ * Second pass: resolve every `YEARS_OF_SPEND_REMAINDER` target against the first pass.
+ *
+ * Design 97 §12.2b. A remainder pool holds whatever of an AGGREGATE cover target the pools it
+ * names do not already provide, so it cannot be resolved until they are — which is why this is
+ * a pass over `allPoolMetrics`' output rather than another case in `resolveSize`.
+ *
+ * **An UNCAPPED pool contributes its `target` when it has one, its balance when it does not.
+ * A CAPPED pool always contributes its `utilised` cover.**
+ *
+ * The first half is the claim/cover distinction: a target is what the refill flows keep true,
+ * so a cash pool sitting under it between refills must not move this target — reacting would
+ * start a rebalance to fix what an edge is already fixing.
+ *
+ * The second half is why a capped pool is different, and it took the reference plan to show it.
+ * A pool with a real ceiling cannot promise its target: the ceiling is not something a flow can
+ * lift. An offset that should "hold as much as possible" is nonetheless authored WITH a target
+ * — a `toTarget` edge into a pool with none is rejected at config time, since it would move
+ * nothing every period — so its target is a number far above what it can hold, and counting it
+ * would peg this remainder at zero forever.
+ *
+ * Its CAPACITY is no better, which is the part that is not obvious. On the reference plan the
+ * offset reached a year with balance 0 and capacity ~$149k: the loan was still outstanding, so
+ * the room existed, but the `growth → offset` refill was gated shut because the growth pool sat
+ * 34% below its high. Crediting that room as cover under-provisioned the bond pool by the full
+ * amount PRECISELY IN A DOWN MARKET — inverted from what a reserve is for. An empty pool is not
+ * cover, however much room it has. So a capped pool counts `utilised` = min(balance, capacity),
+ * the same figure §12.1 already defines as the cover this feature reports.
+ *
+ * Chains were rejected at config time, so one pass is enough and the order cannot matter.
+ *
+ * @param {object} out   - `allPoolMetrics` output, keyed by pool id; MUTATED in place
+ * @param {Array}  pools - the graph's normalized pools
+ * @param {object} ctx   - the metrics context (for the spend line)
+ */
+function resolveRemainderTargets(out, pools, ctx) {
+  for (const pool of pools) {
+    const spec = pool.target;
+    if (spec?.mode !== POOL_TARGET_MODE.YEARS_OF_SPEND_REMAINDER) continue;
+    const m = out[pool.id];
+    if (!m) continue;
+    const aggregate = spec.value * spendForSpec(spec, ctx, m);
+    let covered = 0;
+    for (const ref of spec.after) {
+      const r = out[ref];
+      if (!r) continue;                       // validated at config time; defensive here
+      // `capped` distinguishes a REAL ceiling (OFFSET_CAP / AMOUNT / YEARS_OF_SPEND) from
+      // `capacity` being the balance restated, and `poolMetrics` already records which.
+      covered += r.capped
+        ? (r.utilised ?? 0)
+        : (Number.isFinite(r.target) ? r.target : (r.balance ?? 0));
+    }
+    m.target    = Math.max(0, aggregate - covered);
+    // Everything downstream of `target` on this record was computed with it null, so the two
+    // would disagree — and `shortfall` is what a `toTarget` refill moves. Recomputed, not
+    // patched, so there is one expression of each.
+    m.shortfall = Math.max(0, m.target - m.balance);
   }
 }
 
@@ -233,6 +297,10 @@ export function poolMetrics(state, pool, ctx) {
     // this is `min(parked, owed)` — design 97 §12.1's figure, in the field that means it —
     // and for every other capacity mode it is the balance, clamped at the ceiling.
     utilised:  capped ? Math.min(balance, capacity) : balance,
+    // Whether `capacity` is a REAL ceiling or just the balance restated. §12.2b's remainder
+    // clamp needs the distinction, and re-deriving it from the pool spec at the read site is
+    // how the two come to disagree.
+    capped,
     capped,
     target,
     floor,
@@ -249,7 +317,10 @@ export function poolMetrics(state, pool, ctx) {
 /** Metrics for every pool, keyed by id. */
 export function allPoolMetrics(state, graph, ctx) {
   const out = {};
-  for (const pool of graph?.pools ?? []) out[pool.id] = poolMetrics(state, pool, ctx);
+  const pools = graph?.pools ?? [];
+  for (const pool of pools) out[pool.id] = poolMetrics(state, pool, ctx);
+  // §12.2b — remainder targets read the pass above, so they resolve after all of it.
+  resolveRemainderTargets(out, pools, ctx);
   return out;
 }
 

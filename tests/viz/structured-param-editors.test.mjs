@@ -620,6 +620,87 @@ test('LiquidityGraph: a capacity size takes its bound from the capacity mode', (
   assert.strictEqual(param.value.pools[0].capacity.value, 50);
 });
 
+// ── §12.2b, the remainder target ───────────────────────────────────────────────
+
+/** cash (1yr) + offset (capped) + bond (remainder), the shape the mode was built for. */
+const REM_VALUE = () => ({ pools: [
+  { id: 'cash',   spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+    claims: [{ key: 'usSavingsAccount' }] },
+  { id: 'offset', spendOrder: 20, capacity: { mode: 'OFFSET_CAP' },
+    target: { mode: 'AMOUNT', value: 9000000 }, claims: [{ key: 'auOffsetAccount' }] },
+  { id: 'bond',   spendOrder: 30, target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5,
+    after: ['cash', 'offset'] }, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+] });
+
+test('LiquidityGraph: a remainder target round-trips its `after` through the checkset', () => {
+  // `after` used to fall through `extraKeys` as opaque carried data — round-tripped but not
+  // authorable. Drawn now, which means it must ALSO be excluded from the carried set or the
+  // sync writes it twice and the two copies drift.
+  const param = { name: 'liquidityGraph', value: REM_VALUE() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const boxes = [...host.querySelectorAll('[data-id^="targetAfter:"]')];
+  const on    = boxes.filter(b => b.checked).map(b => b.value);
+  assert.deepStrictEqual(on, ['cash', 'offset'], 'both referenced pools read back ticked');
+
+  // Untick one and the authored value follows.
+  const off = boxes.find(b => b.value === 'cash');
+  off.checked = false; off.dispatchEvent(new Event('change'));
+  const bond = param.value.pools.find(p => p.id === 'bond');
+  assert.deepStrictEqual(bond.target.after, ['offset']);
+  assert.strictEqual(bond.target.mode, 'YEARS_OF_SPEND_REMAINDER');
+  assert.strictEqual(bond.target.value, 5);
+});
+
+test('LiquidityGraph: only non-remainder OTHER pools are offered — the throw is unreachable', () => {
+  // Chaining remainders throws (the resolution order would decide the answer) and so does
+  // naming yourself. Neither is typable here: the options are the compiler's rule, on screen.
+  const value = REM_VALUE();
+  value.pools[0].target = { mode: 'YEARS_OF_SPEND_REMAINDER', value: 2, after: ['offset'] };
+  const param = { name: 'liquidityGraph', value };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const offered = [...host.querySelectorAll('[data-id^="targetAfter:"]')].map(b => b.value);
+  // 'bond' and 'cash' are both remainders now, so neither is offered to the other; and no
+  // pool is offered to itself. That leaves 'offset' twice — once per remainder row.
+  assert.deepStrictEqual(offered, ['offset', 'offset']);
+});
+
+test('LiquidityGraph: the `after` cell is blank on every other target mode', () => {
+  const param = { name: 'liquidityGraph', value: {
+    pools: [{ id: 'cash', spendOrder: 10, target: { mode: 'YEARS_OF_SPEND', value: 1 },
+              claims: [{ key: 'usSavingsAccount' }] },
+             { id: 'bond', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(host.querySelectorAll('[data-id^="targetAfter:"]').length, 0);
+  // Selecting the mode draws it — `rerender` on the mode cell is what makes that happen, and
+  // without it the row keeps a cell that cannot be filled in.
+  pick(cells(host, 'targetMode')[1], 'YEARS_OF_SPEND_REMAINDER');
+  const offered = [...host.querySelectorAll('[data-id^="targetAfter:"]')].map(b => b.value);
+  assert.deepStrictEqual(offered, ['cash'], 'the other pool, not itself');
+});
+
+test('LiquidityGraph: renaming a pool unticks the reference rather than hiding it', () => {
+  // Only live ids are drawn in the checkset, so a stale reference would be invisible on screen
+  // and still throw at Rebuild — the "invisible until it throws" shape this editor exists to
+  // remove. `sync` prunes it and `rerender` on the id cell makes the prune visible.
+  const param = { name: 'liquidityGraph', value: REM_VALUE() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cells(host, 'id')[0], 'cash-renamed', 'change');
+  const bond = param.value.pools.find(p => p.id === 'bond');
+  assert.deepStrictEqual(bond.target.after, ['offset'], 'the dead reference is gone');
+  const boxes = [...host.querySelectorAll('[data-id^="targetAfter:"]')];
+  assert.ok(boxes.some(b => b.value === 'cash-renamed' && !b.checked),
+    'and the new id is offered, unticked, where the user can see it');
+});
+
+test('LiquidityGraph: the remainder size cell is bounded in YEARS, not currency', () => {
+  const param = { name: 'liquidityGraph', value: REM_VALUE() };
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const size  = cells(host, 'targetValue')[2];
+  assert.strictEqual(size.max, '50');
+  assert.match(size.title, /AGGREGATE/);
+});
+
 test('LiquidityGraph: emptying the pools normalises to null', () => {
   const param = { name: 'liquidityGraph', value: {
     pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],
