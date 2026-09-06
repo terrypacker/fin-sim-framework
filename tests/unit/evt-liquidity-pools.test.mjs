@@ -44,6 +44,7 @@ import { CheckingAccount, OffsetAccount, LoanAccount, USD, AUD, ACCOUNT_TYPE } f
 import { BrokerageAccount }     from '../../src/finance/assets/investment-account.js';
 import { Holding }              from '../../src/finance/holdings/holding.js';
 import { ALLOCATION }           from '../../src/finance/holdings/allocation.js';
+import { RebalanceToTargetReducer } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { EventBus }             from '../../src/simulation-framework/event-bus.js';
 import { Graph }                from '../../src/graph/graph.js';
 import { GraphQueryApi }        from '../../src/graph/graph-query-api.js';
@@ -1590,11 +1591,12 @@ const REFILL_GRAPH = (bondKey) => ({
   flows: [{ id: 'g2b', from: 'growth', to: 'bonds' }],
 });
 
-test('POOL-19: two edges out of one source with different gates warns — the looser is dead', () => {
-  // §12.4b. The gate reads as a property of its edge; the veto it produces names the SOURCE
-  // POOL, and must, or the rebalancer launders the gated sale through another route. So the
-  // tightest gate on any edge out of a source governs all of them, and an author who sets 0.10
-  // on one and 0.05 on another has written a 0.10 that can never fire.
+test('POOL-19: two SOURCE-scoped edges out of one source with different gates warns', () => {
+  // §12.4b, narrowed by §12.4c. The gate reads as a property of its edge; the veto it produces
+  // names the SOURCE POOL, and must, or the rebalancer launders the gated sale through another
+  // route. So the tightest gate governs the VETO — but NOT the firing: each edge still fires on
+  // its own gate, which is why the message no longer claims the looser one "never takes
+  // effect". Measured: a looser gate on a cross-account TRANSFER edge moved $989k.
   const warnings = capturingWarnings(() => normalizeLiquidityGraph({ pools: [
     { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
     { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
@@ -1608,7 +1610,10 @@ test('POOL-19: two edges out of one source with different gates warns — the lo
   const hit = warnings.filter(w => /gates DIFFER/.test(w));
   assert.equal(hit.length, 1);
   assert.match(hit[0], /pool 'growth' is the source of 2 gated edges/);
-  assert.match(hit[0], /TIGHTEST of these governs all of them/);
+  assert.match(hit[0], /TIGHTEST of these governs the VETO/);
+  // The remedy list must name the scope, or the warning sends the author to the two remedies
+  // that predate the one that actually fits.
+  assert.match(hit[0], /gate\.scope: 'EDGE'/);
 });
 
 test('POOL-19b: identical gates out of one source are silent — the control', () => {
@@ -1830,4 +1835,176 @@ test('POOL-20f: eviction only removes what the projection DID NOT emit', () => {
     { key: 'usSavingsAccount', sleeves: null },
     { key: 'usStockAccount',   sleeves: ['EQUITY'] },
   ]);
+});
+
+// ─── §12.4c — gate.scope: what a closed gate VETOES ──────────────────────────────────
+//
+// The defect these pin: authoring two thresholds on two edges out of one source produces a
+// plan that does not do what it says, and under SOURCE scoping the looser one is not merely
+// weakened — for an in-portfolio edge it is unreachable. EDGE scoping makes it reachable and,
+// separately, cannot collapse a class the author never gated.
+
+const SCOPE_ACCOUNTS = () => ({
+  brokerage: { balance: 1_000_000, currency: USD, type: ACCOUNT_TYPE.BROKERAGE, drawdownPriority: 4,
+               holdings: [{ allocation: 'EQUITY', marketValue: 1_000_000 }] },
+  offsetAcct: { balance: 50_000, currency: USD, type: ACCOUNT_TYPE.OFFSET, drawdownPriority: 0 },
+  monthlyExpenses: 10_000,
+  currentPeriods: { US: { startMs: Date.UTC(2030, 0, 1) } },
+});
+
+const scopeGraph = (scopes = {}) => normalizeLiquidityGraph({
+  pools: [
+    { id: 'buffer', claims: [{ key: 'brokerage', sleeves: ['BOND'] }], spendOrder: 10,
+      target: { mode: 'AMOUNT', value: 300_000 } },
+    { id: 'offset', claims: [{ key: 'offsetAcct' }], spendOrder: 20,
+      target: { mode: 'AMOUNT', value: 200_000 } },
+    { id: 'growth', claims: [{ key: 'brokerage', sleeves: ['EQUITY'] }], spendOrder: 30 },
+  ],
+  flows: [
+    { id: 'g2b', from: 'growth', to: 'buffer', amount: { toTarget: true }, priority: 10,
+      gate: { sourceDrawdownUnder: 0.40, drawdownBasis: 'INDEX', ...(scopes.g2b ? { scope: scopes.g2b } : {}) } },
+    { id: 'g2o', from: 'growth', to: 'offset', amount: { toTarget: true }, priority: 10,
+      gate: { sourceDrawdownUnder: 0.10, drawdownBasis: 'INDEX', ...(scopes.g2o ? { scope: scopes.g2o } : {}) } },
+  ],
+}, [
+  { stateKey: 'brokerage',  type: ACCOUNT_TYPE.BROKERAGE },
+  { stateKey: 'offsetAcct', type: ACCOUNT_TYPE.OFFSET },
+]);
+
+test('POOL-27a: SOURCE is the default and is DROPPED, so a pre-12.4c graph round-trips', () => {
+  const g = scopeGraph({ g2b: 'SOURCE' });
+  // An authored default must not make a saved graph differ from itself on the next save —
+  // the same rule `sustainedYears: 1` and `drawdownBasis` follow.
+  assert.equal(g.flows.find(f => f.id === 'g2b').gate.scope, undefined);
+  assert.equal(scopeGraph({ g2b: 'EDGE' }).flows.find(f => f.id === 'g2b').gate.scope, 'EDGE');
+});
+
+test('POOL-27b: an unknown scope, and a NESTED one, both throw', () => {
+  assert.throws(() => scopeGraph({ g2b: 'POOL' }), /scope 'POOL' is unknown/);
+  // A gate takes ONE veto decision, so a per-branch scope is a behaviour the run cannot
+  // deliver. Rejected loudly rather than hoisted, which would be a second way to write it.
+  assert.throws(() => normalizeLiquidityGraph({
+    pools: [{ id: 'a', claims: [{ key: 'brokerage', sleeves: ['BOND'] }], spendOrder: 10 },
+            { id: 'b', claims: [{ key: 'brokerage', sleeves: ['EQUITY'] }], spendOrder: 20 }],
+    flows: [{ id: 'f', from: 'b', to: 'a', amount: { fractionOfSource: 0.5 }, priority: 10,
+              gate: { anyOf: [{ sourceDrawdownUnder: 0.2, scope: 'EDGE' }, { sourceReturnOver: 0.1 }] } }],
+  }, [{ stateKey: 'brokerage', type: ACCOUNT_TYPE.BROKERAGE }]), /scope is nested/);
+});
+
+test('POOL-27c: `scope` alone is not a condition — it cannot make an empty gate', () => {
+  assert.throws(() => normalizeLiquidityGraph({
+    pools: [{ id: 'a', claims: [{ key: 'brokerage', sleeves: ['BOND'] }], spendOrder: 10 },
+            { id: 'b', claims: [{ key: 'brokerage', sleeves: ['EQUITY'] }], spendOrder: 20 }],
+    flows: [{ id: 'f', from: 'b', to: 'a', amount: { fractionOfSource: 0.5 }, priority: 10,
+              gate: { scope: 'EDGE', sustainedYears: 3 } }],
+  }, [{ stateKey: 'brokerage', type: ACCOUNT_TYPE.BROKERAGE }]), /no condition to sustain/);
+});
+
+/** Run one period with the growth pool 25% below its index high — between the two thresholds. */
+function runScoped(graph) {
+  const reducer = new PoolFlowReducer({ graph, expensesCurrency: 'USD' });
+  const before = {
+    ...SCOPE_ACCOUNTS(),
+    // A prior index high 33% above the current index ⇒ ~25% drawdown: g2o (0.10) is SHUT,
+    // g2b (0.40) is OPEN. That gap is the whole subject of §12.4c.
+    // `marketReturn: 0` deliberately. `_returnIndices` COMPOUNDS the prior year's return onto
+    // the seeded index, so seeding a -0.25 here would carry the index to 0.75 and the drawdown
+    // to 43.7% — both gates shut, and the test would pass for the wrong reason. Held flat, the
+    // drawdown is exactly the seeded 25%: between the two thresholds, which is the whole point.
+    liquidityPools: {
+      growth: { returnIndex: 1.0, returnIndexHigh: 1.3333, high: 2_000_000, balance: 1_000_000,
+                marketReturnYear: 2029, marketReturn: 0 },
+    },
+  };
+  const { next, ...after } = reducer.reduce(
+    before, { type: 'US_PERIOD_ADVANCE', date: new Date(Date.UTC(2030, 0, 1)) },
+    new Date(Date.UTC(2030, 0, 1)));
+  return after;
+}
+
+test('POOL-27d: a SOURCE-scoped gate vetoes the pool; an EDGE-scoped one does NOT', () => {
+  const src = runScoped(scopeGraph());                              // both default to SOURCE
+  assert.deepEqual(src.poolRefillPlan.vetoed, ['growth']);
+  assert.ok(src.poolRefillPlan.gated.some(g => g.id === 'g2o'), 'g2o should be shut at 25%');
+
+  // With g2o EDGE-scoped, the shut edge no longer floors the source. It is still GATED — the
+  // non-event is recorded either way, which is what `_applyEdgeVeto` reads.
+  const edge = runScoped(scopeGraph({ g2o: 'EDGE' }));
+  assert.deepEqual(edge.poolRefillPlan.vetoed, []);
+  assert.ok(edge.poolRefillPlan.gated.some(g => g.id === 'g2o'));
+  // `offset` claims no sleeve, so it is not cappable — the EDGE scope's honest limit, and it
+  // must not log a decision that was never taken. `capped` is absent, not an empty array.
+  assert.equal(edge.poolRefillPlan.capped, undefined);
+
+  // A cappable destination DOES record it: g2b's destination narrows a BOND sleeve.
+  const onBuffer = runScoped(scopeGraph({ g2b: 'EDGE', g2o: 'EDGE' }));
+  assert.deepEqual(onBuffer.poolRefillPlan.vetoed, []);
+  assert.deepEqual(onBuffer.poolRefillPlan.capped, undefined,
+    'g2b is OPEN at 25% — a gate that did not shut caps nothing');
+});
+
+test('POOL-27e: mixing scopes out of one source keeps only the SOURCE-scoped veto', () => {
+  const mixed = runScoped(scopeGraph({ g2b: 'EDGE' }));   // g2b EDGE, g2o still SOURCE
+  // g2b is OPEN at 25% so it contributes nothing either way; g2o is SOURCE-scoped and shut.
+  assert.deepEqual(mixed.poolRefillPlan.vetoed, ['growth']);
+});
+
+test('POOL-27f: the divergent-gate warning fires for SOURCE, and is SILENT for EDGE', () => {
+  const seen = [];
+  const ow = console.warn;
+  console.warn = (m) => seen.push(String(m));
+  try {
+    scopeGraph();                                   // two SOURCE gates, different thresholds
+    assert.equal(seen.filter(m => /gates DIFFER/.test(m)).length, 1);
+    seen.length = 0;
+    scopeGraph({ g2b: 'EDGE', g2o: 'EDGE' });       // independent by construction
+    assert.equal(seen.filter(m => /gates DIFFER/.test(m)).length, 0,
+      'two EDGE-scoped gates are independent; warning would train the author to ignore it');
+  } finally { console.warn = ow; }
+});
+
+test('POOL-27h: a MIXED set still warns — one SOURCE-scoped gate governs the whole pool', () => {
+  // The trap this exists for: the author sets ONE edge to EDGE, believes the two are now
+  // independent, and the SOURCE-scoped sibling goes on flooring the source. Measured on the
+  // reference plan, that authoring is byte-identical to both-at-SOURCE — buffer $0k for six
+  // years — so silence here would be the panel reporting a policy that is not running.
+  const seen = [];
+  const ow = console.warn;
+  console.warn = (m) => seen.push(String(m));
+  try {
+    scopeGraph({ g2b: 'EDGE' });                    // g2b EDGE, g2o still SOURCE
+    assert.equal(seen.filter(m => /gates DIFFER/.test(m)).length, 1);
+  } finally { console.warn = ow; }
+});
+
+test('POOL-27g: EDGE caps the destination; SOURCE floors the source and can zero an UNGATED class', () => {
+  const graph = scopeGraph();
+  const reducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'brokerage', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.7, BOND: 0.2, CASH: 0.1 },
+    poolGraph: graph, baseCurrency: 'USD',
+  });
+  const wanted   = { EQUITY: 0.55, BOND: 0.35, CASH: 0.10 };
+  // What the book actually holds: the reserve has been spent, so growth's class is ~all of it.
+  const actual   = { EQUITY: 1.00, BOND: 0.00, CASH: 0.00 };
+  const gated    = [{ id: 'g2b', from: 'growth', to: 'buffer', reason: 'x', wanted: 1 }];
+
+  // SOURCE — floors EQUITY at 0.99 ⇒ floorSum >= 1 ⇒ every other class zeroed, CASH included,
+  // and no gate in this graph ever mentioned cash. That is `pool-veto-floor-collapse`.
+  const bySource = reducer._applyVeto(wanted, { poolRefillPlan: { vetoed: ['growth'], gated } }, actual);
+  assert.equal(bySource.BOND, 0);
+  assert.equal(bySource.CASH, 0);
+
+  // EDGE — caps BOND (the gated edge's destination) at what is held, and CASH, which nothing
+  // gated, can only GAIN weight. Capping has no analogue of the floor collapse.
+  const edgeGraph = scopeGraph({ g2b: 'EDGE' });
+  const edgeReducer = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'brokerage', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.7, BOND: 0.2, CASH: 0.1 },
+    poolGraph: edgeGraph, baseCurrency: 'USD',
+  });
+  const byEdge = edgeReducer._applyVeto(wanted, { poolRefillPlan: { vetoed: [], gated, capped: ['buffer'] } }, actual);
+  assert.equal(byEdge.BOND, 0, 'BOND is capped at what is held — its edge is the gated one');
+  assert.ok(byEdge.CASH > 0.10, `CASH must gain, not collapse; got ${byEdge.CASH}`);
+  assert.ok(Math.abs(Object.values(byEdge).reduce((a, b) => a + b, 0) - 1) < 1e-9);
 });

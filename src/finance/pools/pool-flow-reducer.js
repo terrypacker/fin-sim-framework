@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ageAsOf }           from '../behavioral/rebalance-to-target-reducer.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
-import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS } from './liquidity-graph.js';
+import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE } from './liquidity-graph.js';
 import { poolContext, allPoolMetrics, householdReserve } from './pool-metrics.js';
 
 /**
@@ -83,6 +83,10 @@ export class PoolFlowReducer extends Reducer {
     this._vetoable = new Set((graph?.pools ?? [])
       .filter(p => (p.claims ?? []).some(c => c.sleeves?.length))
       .map(p => p.id));
+    // §12.4c — the same test on the DESTINATION side. An EDGE-scoped gate into a pool that
+    // claims no ALLOCATION class (an offset, a savings facility) caps nothing, which is the
+    // scope's honest limit and must not be logged as a decision.
+    this._cappable = this._vetoable;
   }
 
   /**
@@ -106,6 +110,15 @@ export class PoolFlowReducer extends Reducer {
       }
     }
     return total;
+  }
+
+  /**
+   * What a flow's closed gate vetoes (§12.4c). Read off the gate ROOT, where `normalizeGate`
+   * is the only place it may be written; absent ⇒ SOURCE, which is what every graph authored
+   * before §12.4c means and why they are byte-identical.
+   */
+  _scopeOf(flow) {
+    return flow?.gate?.scope ?? POOL_GATE_SCOPE.SOURCE;
   }
 
   /** Is a flow's gate open this period? The root of the composed evaluation (§20.15). */
@@ -382,6 +395,7 @@ export class PoolFlowReducer extends Reducer {
     const inflow     = {};
     const outflow    = {};
     const vetoed     = new Set();
+    const capped     = new Set();   // §12.4c — EDGE-scoped: destinations the rebalancer may not grow
     const transfers  = [];
     const fired      = [];
     const adjust     = {};
@@ -420,7 +434,22 @@ export class PoolFlowReducer extends Reducer {
           // the first thing the author went looking at (§20.18).
           if (want > 0) {
             gatedFlows.push({ id: flow.id, from: flow.from, to: flow.to, reason: gate.reason, wanted: +want.toFixed(2) });
-            if (this._vetoable.has(flow.from)) vetoed.add(flow.from);
+            // §12.4c — `vetoed` is the SOURCE-scoped list and keeps its exact meaning. An
+            // EDGE-scoped gate vetoes too, but at its DESTINATION, and `_applyVeto` reads
+            // that off `gated` (which already carries the edge's `to`) rather than from a
+            // second list here. Adding an EDGE-scoped source to BOTH would floor the source
+            // and cap the destination — twice the constraint the author asked for.
+            if (this._scopeOf(flow) === POOL_GATE_SCOPE.SOURCE) {
+              if (this._vetoable.has(flow.from)) vetoed.add(flow.from);
+            } else if (this._cappable.has(flow.to)) {
+              // The EDGE half of the same decision. Recorded HERE rather than re-derived by
+              // the rebalancer from `gated` + a flow lookup, because the panel needs it too
+              // and two derivations of one decision is how they come to disagree — the same
+              // reason `vetoed` is a list and not a predicate. `_cappable` mirrors
+              // `_vetoable`: a destination that narrows no sleeve names no class, so capping
+              // it would log a decision that was never taken (§20.18's phantom-veto rows).
+              capped.add(flow.to);
+            }
           }
           continue;
         }
@@ -550,6 +579,9 @@ export class PoolFlowReducer extends Reducer {
       poolRefillPlan: {
         shortfall: Object.fromEntries(this.graph.pools.map(p => [p.id, +(metrics[p.id].shortfall ?? 0).toFixed(2)])),
         vetoed:    [...vetoed],
+        // Spread, not a bare `[]`: a graph with no EDGE-scoped gate must gain NO state key at
+        // all, so no whole-state fixture grows a line to say nothing ("absent is absent").
+        ...(capped.size ? { capped: [...capped] } : {}),
         gated:     gatedFlows,
         // Per-pool target shifts for executor 1 (in-portfolio `fractionOfSource` edges).
         adjust:    Object.fromEntries(Object.entries(adjust).map(([k, v]) => [k, +v.toFixed(2)])),

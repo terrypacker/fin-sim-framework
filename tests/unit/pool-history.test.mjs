@@ -355,3 +355,43 @@ test('RES-9: the reserve columns reach the CSV fact table, repeated per pool row
   assert.equal(rows[0].reserveAccessible, 400_000);
   assert.equal(rows[0].reserveYears, 3.333);
 });
+
+
+// ─── §12.4c — the EDGE veto is on the panel's ledger too ─────────────────────────────
+
+test('RES-10: a `capped` pool logs a veto row of its own, from the OTHER end', () => {
+  const h = buildPoolHistory({ journal: [
+    entry('2030-01-01', [
+      { field: 'liquidityPools', before: null, after: { buffer: CUBE(), growth: CUBE() } },
+      { field: 'poolRefillPlan', before: null,
+        after: { shortfall: {}, vetoed: ['growth'], capped: ['buffer'], gated: [] } },
+    ]),
+  ] });
+  const vetoes = h.events.filter(e => e.kind === POOL_EVENT_KIND.VETOED);
+  assert.equal(vetoes.length, 2, 'a SOURCE veto and an EDGE cap are two decisions, not one');
+
+  // The direction is the whole distinction: `from` = may not be SOLD, `to` = may not be GROWN.
+  const sold  = vetoes.find(e => e.from === 'growth');
+  const grown = vetoes.find(e => e.to === 'buffer');
+  assert.ok(sold && grown);
+  assert.equal(sold.to, null);
+  assert.equal(grown.from, null);
+  assert.match(sold.reason,  /sale of growth vetoed/);
+  assert.match(grown.reason, /fill of buffer capped/);
+});
+
+test('RES-11: a run with no EDGE-scoped gate carries no `capped` — absent, not empty', () => {
+  const h = buildPoolHistory({ journal: [
+    entry('2030-01-01', [
+      { field: 'liquidityPools', before: null, after: { growth: CUBE() } },
+      { field: 'poolRefillPlan', before: null, after: { shortfall: {}, vetoed: ['growth'], gated: [] } },
+    ]),
+  ] });
+  assert.deepEqual(h.periods[0].capped, []);
+  assert.equal(h.events.filter(e => e.kind === POOL_EVENT_KIND.VETOED).length, 1);
+  // The per-pool CSV flags stay distinct: a pool that could not be SOLD is not a pool that
+  // could not be GROWN, and merging them would make the scope unreadable off the fact table.
+  const row = poolHistoryRows(h).find(r => r.pool === 'growth');
+  assert.equal(row.vetoed, 1);
+  assert.equal(row.capped, 0);
+});

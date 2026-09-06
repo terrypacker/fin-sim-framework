@@ -793,6 +793,14 @@ cover **every route out of the pool** or the laundering hole reopens.
 and every looser one is unreachable.** Two different thresholds out of one source is not an
 authorable policy, and writing one produces a plan that does not do what it says.
 
+> **Narrowed by §12.4c (6 Sep 2026), on both halves.** *(a)* Only the **veto** is pool-wide;
+> each edge's own firing is always governed by its own gate. "Unreachable" is exact for an
+> in-portfolio REBALANCE edge, whose firing *is* a rebalance leg — and false for a
+> cross-account TRANSFER edge, which still fires on its own looser gate (measured: \$7,919k
+> against \$6,930k). *(b)* Two thresholds out of one source **is** now an authorable policy,
+> via `gate.scope: EDGE`. Everything below describes `scope: SOURCE`, which remains the
+> default and the stricter reading.
+
 Two properties make this worth a warning rather than a docs line:
 
 - **Nothing records the non-event.** `gatedFlows` attributes the veto to the edge whose gate
@@ -818,6 +826,143 @@ transaction" scopes the veto rather than describing how each edge executes. It d
 POOL-6 already pinned the opposite on a cross-account edge: *"it VETOES the source's sale, so
 the drift band cannot launder the same trade."* The change reopens the laundering hole for every
 TRANSFER edge. Recorded because the reading is a natural one and the sentence invites it.
+
+### 12.4c `gate.scope` — the veto is about the SOURCE or about the EDGE, and only the author knows which — BUILT (6 Sep 2026)
+
+§12.4b is right that a gate's veto has to be pool-wide, and it states that as though it were
+the only coherent reading. It is not. It is one of **two** author intents, and the vocabulary
+had no way to say which was meant:
+
+| intent | what it constrains | expressible before |
+|---|---|---|
+| *"do not **sell** this pool while it is down"* | the SOURCE's sleeves | yes — the only reading |
+| *"do not **fill** that pool from this one while it is down"* | the DESTINATION's classes | no |
+
+They are different trades, not two phrasings of one. `growth → buffer` is an allocation change
+that stays inside the market book; `growth → offset` moves money *out* of it to retire debt.
+"Keep rebalancing into bonds in a drawdown, but do not deleverage at the bottom" is a coherent
+policy and the engine could not hold it.
+
+`gate.scope` names the choice. `SOURCE` is the default and is byte-identical to everything
+shipped before it; `EDGE` is the opt-in.
+
+#### What EDGE actually does
+
+`_applyVeto` floors every class the vetoed SOURCE claims at its held fraction — "you may not
+reduce equity". The identical laundering trade can be blocked from the other end: **cap every
+class the gated edge's DESTINATION claims at its held fraction** — "you may not grow bonds".
+The drift band cannot make the trade either way; what differs is the collateral.
+
+Measured on the reference plan (dated stagflation, −43% index drawdown), authoring
+`growth→buffer` at 0.40 and `growth→offset` at 0.10 — the authoring §12.4b tells you not to
+write:
+
+| | terminal NW | buffer 2031 | 2033 | resolved mix 2031 |
+|---|---|---|---|---|
+| SOURCE, both 0.10 | \$6,930k | \$0k | \$0k | **C0 / B0** |
+| SOURCE, buf 0.40 / off 0.10 | \$6,930k | \$0k | \$0k | C0 / B0 |
+| EDGE, buf 0.40 / off 0.10 | \$6,400k | **\$583k** | **\$788k** | C7 / B24 |
+
+The middle row is the defect: under SOURCE scoping that authoring is **byte-identical** to
+both-at-0.10. The 0.40 is not "weaker than intended", it is unreachable. Under EDGE scoping the
+buffer rebuilds while the offset edge stays shut, which is what was written down.
+
+#### The second reason, which is the better one
+
+Look at the mix column. SOURCE scoping resolves to **C0 / B0** — flooring the source's classes
+drove CASH to zero as collateral damage, and no gate in that graph ever mentioned cash. That is
+`pool-veto-floor-collapse`: once the reserve is spent, the vetoed pool holds ~100 % of the book,
+`floorSum` reaches 1, and `_applyVeto` returns a mix of the vetoed classes alone — every other
+target zeroed, for as long as the gate holds. Six consecutive years on this plan.
+
+**EDGE scoping cannot produce it.** Capping is monotone downward on the named classes and
+redistributes upward to the rest, so a class the author never gated can only ever gain weight.
+Same arm, same crash: `C9 / B0` — BOND capped because its edge is gated, cash untouched because
+it is not. The floor-collapse is a property of flooring, not of vetoing.
+
+That makes EDGE the safer scope and SOURCE the stricter one, which is the opposite of how the
+pair reads at first glance, and is the sentence to keep.
+
+#### The limit, and why this is authored rather than the new default
+
+**EDGE scoping only closes the routes the author drew.** An offset pool claims no ALLOCATION
+class, so gating `growth → offset` under EDGE constrains the rebalancer not at all — equity may
+still be sold into bonds that period. If the intent genuinely is "do not sell equity at any
+price while down 30 %", SOURCE is the correct scope and must stay available. A reader who takes
+EDGE as strictly better will author a plan that sells in exactly the market they were trying to
+avoid selling into.
+
+This is **not** the proposal §12.4b records as tried and rejected. That one scoped the veto by
+EXECUTOR — only `FLOW_EXECUTOR.REBALANCE` edges veto at all — which deletes the veto outright
+for every TRANSFER edge and reopens POOL-6's hole. Here every gated edge still vetoes; only the
+target of the veto moves. The hole EDGE leaves is the narrower one named in the paragraph above,
+and it is visible in the graph rather than implicit in the executor assignment.
+
+#### What §12.4b got wrong, corrected here
+
+`warnDivergentGatesFromOneSource` says the tightest gate "governs all of them and the others
+never take effect". Only the second half of that is conditional, and measuring it is what
+found this section:
+
+- each edge's own **firing** is always governed by its own gate;
+- only the **veto** is pool-wide.
+
+For an in-portfolio REBALANCE edge, firing *is* a rebalance leg, so the veto overrides its gate
+entirely and "never takes effect" is exact. For a cross-account TRANSFER edge, firing is a
+separate transaction, so a looser gate still fires: `buf 0.10 / off 0.40` measured \$7,919k
+against both-at-0.10's \$6,930k. The warning's wording was true of the case it was written from
+and false in general.
+
+The warning is therefore now raised **only when the divergent gates are all `SOURCE`-scoped**,
+because that is exactly when one silently governs another. Two `EDGE`-scoped gates out of one
+source are independent by construction and warning about them would train the author to ignore
+the message that still matters.
+
+#### Surface
+
+**One new field, and the reason is the panel.** The logic alone needs none — `poolRefillPlan.gated`
+already carries each gated edge's `to`, and the prototype that produced the table above read
+nothing else. But `poolRefillPlan.vetoed` is what the flow log and the provenance strip count,
+and an EDGE-scoped gate never enters it, so shipping the logic alone would make the panel report
+an EDGE-scoped policy as **a rebalancer running unconstrained** — a believable wrong number, on
+the one screen an author would check to see whether the scope they just set is running.
+
+So `poolRefillPlan.capped` is stamped beside `vetoed`, by the same reducer in the same pass, and
+BOTH `_applyEdgeVeto` and the panel read it. Two derivations of one decision is how they come to
+disagree; that is the same argument `vetoed` itself is a list rather than a predicate.
+
+- `capped` is spread, not defaulted to `[]` — a graph with no EDGE-scoped gate gains no state
+  key at all, so no whole-state fixture grows a line to say nothing;
+- `_cappable` mirrors `_vetoable`: a destination narrowing no sleeve names no class, so an
+  EDGE-scoped gate into an offset or a savings pool caps nothing and **logs nothing**. That is
+  the scope's honest limit, and logging it would be §20.18's phantom-veto rows again;
+- recorded only for an edge whose `want > 0`, so a shut edge that wanted nothing caps nothing —
+  correct (no demand, no trade to launder), and it makes an EDGE veto demand-driven where a
+  SOURCE veto is not.
+
+On the panel the two share `POOL_EVENT_KIND.VETOED`, because they are one event seen from
+opposite ends, and the direction carries the meaning: **`from` names the pool that may not be
+SOLD, `to` names the pool that may not be GROWN.** The provenance strip counts them apart
+("N rebalance vetoes (source) · N fill caps (edge)") and the CSV keeps `vetoed` and `capped` as
+separate flags — merging them would make the scope unreadable off the fact table.
+
+In the editor: a `Vetoes` select on the gate clause table, labelled by what the gate DOES
+("selling the source pool" / "filling the destination pool") rather than by the enum name, since
+the difficulty this control exists for is that the two are different POLICIES over one topology.
+The scope lives on the gate ROOT but the table is one row per CLAUSE, so an edit propagates to
+every row of its flow (`syncGateScopes`, the same repair idiom as `renumberBranches`) — otherwise
+a two-clause gate silently saves whichever row happened to say EDGE.
+
+- `POOL_GATE_SCOPE = { SOURCE, EDGE }`, `gate.scope` normalized and defaulted at the config
+  boundary, on the gate ROOT only — a scope on a nested `anyOf`/`allOf` clause would read as
+  though branches could scope differently, which the single `vetoed` decision cannot express;
+- `poolRefillPlan.vetoed` keeps its meaning (SOURCE-scoped pools) and `gated` gains nothing;
+- `_applyVeto` gains the cap branch, applied after the floor branch so a graph mixing both
+  scopes composes;
+- one `Scope` select on the gate clause table, on the root row of each flow's gate.
+
+Tests: POOL-27a–h (`tests/unit/evt-liquidity-pools.test.mjs`), RES-10/11
+(`tests/unit/pool-history.test.mjs`), plus the editor and panel suites under `tests/viz/`.
 
 ### 12.4a The third shape: cash outside the book BUYING into it
 

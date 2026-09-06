@@ -130,6 +130,28 @@ export const POOL_DRAWDOWN_BASIS = Object.freeze({
   INDEX:   'INDEX',
 });
 
+/**
+ * What a closed gate VETOES (design 97 §12.4c). Two different author intents, not two
+ * phrasings of one — see the design section before changing the default.
+ */
+export const POOL_GATE_SCOPE = Object.freeze({
+  /**
+   * "Do not SELL this pool while it is down." Floors every class the SOURCE claims at what it
+   * currently holds. The default, and byte-identical to everything shipped before §12.4c —
+   * including its collateral: once the source holds most of the book the floor sums to 1 and
+   * every other target is zeroed (`pool-veto-floor-collapse`).
+   */
+  SOURCE: 'SOURCE',
+  /**
+   * "Do not FILL that pool from this one while it is down." Caps every class the gated edge's
+   * DESTINATION claims at what it currently holds. Blocks the same laundering trade from the
+   * other end, and cannot collapse an ungated class — but only closes the routes the author
+   * actually drew (an offset claims no class, so it constrains the rebalancer not at all).
+   */
+  EDGE:   'EDGE',
+});
+
+const GATE_SCOPES    = new Set(Object.values(POOL_GATE_SCOPE));
 const VALID_SLEEVES  = new Set(DRAWDOWN_SLEEVE_CLASSES);
 const TARGET_MODES   = new Set(Object.values(POOL_TARGET_MODE));
 const CAPACITY_MODES = new Set(Object.values(POOL_CAPACITY_MODE));
@@ -347,6 +369,23 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
     if (!kid) err(`flow '${flowId}' ${where}.not has no conditions; it would never be true`);
     out.not = kid;
   }
+  // §12.4c — the veto's target. ROOT ONLY: the run takes ONE veto decision per gate, so a
+  // scope on an `anyOf` branch would read as though branches could veto differently, and the
+  // author would be owed a behaviour the single decision cannot deliver. Rejected loudly for
+  // that reason rather than silently hoisted, which would be a second way to write the root.
+  if (raw.scope != null) {
+    if (depth > 0) {
+      err(`flow '${flowId}' ${where}.scope is nested. A gate takes ONE veto decision, so the `
+        + 'scope belongs on the gate root — move it there.');
+    }
+    const sc = String(raw.scope).toUpperCase();
+    if (!GATE_SCOPES.has(sc)) {
+      err(`flow '${flowId}' ${where}.scope '${raw.scope}' is unknown. Valid: ${[...GATE_SCOPES].join(', ')}`);
+    }
+    // SOURCE is the default and is DROPPED, so an authored SOURCE does not make a saved graph
+    // differ from itself on the next save — the same rule `sustainedYears: 1` follows below.
+    if (sc !== POOL_GATE_SCOPE.SOURCE) out.scope = sc;
+  }
   // Dwell. `1` is the default and is dropped, so an authored 1 does not make a saved graph
   // differ from itself on the next save.
   if (raw.sustainedYears != null) {
@@ -362,7 +401,7 @@ function normalizeGate(raw, flowId, depth = 0, where = 'gate') {
 
 /** Does this normalized node say anything at all? (`sustainedYears` alone says nothing.) */
 function hasCondition(node) {
-  return Object.keys(node).some(k => k !== 'sustainedYears');
+  return Object.keys(node).some(k => k !== 'sustainedYears' && k !== 'scope');
 }
 
 /**
@@ -835,15 +874,28 @@ function warnDivergentGatesFromOneSource(flows) {
     bySource.get(flow.from).push(flow);
   }
   for (const [source, edges] of bySource) {
-    if (edges.length < 2) continue;
+    // §12.4c — only SOURCE-scoped gates can silently govern one another. Two EDGE-scoped
+    // gates out of one source are independent by construction, and warning about them would
+    // train the author to ignore the message in the case that still matters. A MIXED set is
+    // still warned: the SOURCE-scoped one governs the source, which is exactly the surprise.
+    // Silent only when NO edge out of this source is SOURCE-scoped. One SOURCE-scoped gate is
+    // enough to govern the whole pool, so a MIXED set is the case that most needs saying: the
+    // author who sets one edge to EDGE believing it is now independent still has the other
+    // edge flooring the source. Measured on the reference plan — buffer EDGE 0.40 beside
+    // offset SOURCE 0.10 is byte-identical to both-at-SOURCE-0.10 ($6,930k, buffer $0k).
+    const sourceScoped = edges.filter(f => (f.gate?.scope ?? POOL_GATE_SCOPE.SOURCE) === POOL_GATE_SCOPE.SOURCE);
+    if (sourceScoped.length === 0 || edges.length < 2) continue;
     const shapes = new Set(edges.map(f => JSON.stringify(f.gate)));
     if (shapes.size < 2) continue;
     console.warn(
       `liquidityGraph: pool '${source}' is the source of ${edges.length} gated edges `
       + `(${edges.map(f => `'${f.id}'`).join(', ')}) whose gates DIFFER. A gate vetoes the sale `
       + `of its SOURCE POOL — it must, or the rebalancer launders the same sale through another `
-      + `route — so the TIGHTEST of these governs all of them and the others never take effect. `
-      + `Give the edges one gate, or move them onto separate source pools with disjoint claims.`);
+      + `route — so the TIGHTEST of these governs the VETO and a looser one cannot reach the `
+      + `rebalancer. (Each edge still FIRES on its own gate, which is why a cross-account `
+      + `transfer edge is not fully suppressed; an in-portfolio one is — §12.4c.) `
+      + `Give the edges one gate, set \`gate.scope: 'EDGE'\` so each vetoes its own destination, `
+      + `or move them onto separate source pools with disjoint claims.`);
   }
 }
 

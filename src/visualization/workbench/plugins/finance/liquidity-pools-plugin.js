@@ -23,7 +23,7 @@ export const POOL_CSV_COLUMNS = Object.freeze([
   'date', 'year', 'pool', 'label',
   'balance', 'capacity', 'utilised', 'target', 'yearsOfCover', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
-  'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed',
+  'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed', 'capped',
   // Per-PERIOD figures, repeated on every pool's row (§22.3 extended). Last, so a reader
   // scanning the per-pool columns is not interrupted by three that do not vary with `pool`.
   'reserveAccessible', 'reserveLocked', 'reserveYears',
@@ -351,6 +351,10 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     const fired  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.FIRED);
     const gated  = hist.events.filter(e => e.kind === POOL_EVENT_KIND.GATED);
     const vetoed = hist.events.filter(e => e.kind === POOL_EVENT_KIND.VETOED);
+    // §12.4c — split by which END of the decision was constrained. Reporting one total would
+    // hide the whole point of the scope: a SOURCE veto stops a sale, an EDGE cap stops a fill,
+    // and an author checking whether their `scope: EDGE` is running needs to see it separately.
+    const capped = vetoed.filter(e => e.to != null);
     // §12.4's two executors, counted apart. A cross-account edge is a TRANSACTION; an
     // in-portfolio edge is a VETO on a rebalance leg, which the rebalancer executes and which
     // emits no per-edge action. Both are on the cube's `firedFlows` now, but they are not the
@@ -358,7 +362,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     const transfers = fired.filter(e => e.executor === 'TRANSFER');
     notes.push(`<strong>${fired.length} fired</strong> (${transfers.length} cross-account,
                 ${fired.length - transfers.length} in-portfolio) ·
-                <strong>${gated.length} gated</strong> · ${vetoed.length} rebalance vetoes`);
+                <strong>${gated.length} gated</strong> · ${vetoed.length - capped.length} rebalance vetoes
+                (source)${capped.length ? ` · ${capped.length} fill caps (edge)` : ''}`);
     if (!hist.firedFromCube && (reducer?.graph?.flows ?? []).some(f => f.executor !== 'TRANSFER')) {
       // The pre-`firedFlows` fallback. Saying nothing here would let a zero read as "this
       // in-portfolio edge never fired" when the truth is that this run cannot record it.

@@ -784,6 +784,16 @@ const GATE_BASIS_NA_OPTIONS = Object.freeze([['', 'n/a — a return clause']]);
  */
 const isDrawdownClause = (kind) => String(kind ?? '').toLowerCase().includes('drawdown');
 
+/**
+ * §12.4c. Labelled by what the gate DOES, not by the enum name: "SOURCE"/"EDGE" alone reads as
+ * a topology choice, and the whole difficulty this control exists for is that the two are
+ * different POLICIES over the same topology.
+ */
+const GATE_SCOPE_OPTIONS = Object.freeze([
+  ['SOURCE', 'selling the source pool'],
+  ['EDGE',   'filling the destination pool'],
+]);
+
 const gateBasisOptionsFor = (row) =>
   (isDrawdownClause(row?.gateKind) ? GATE_BASIS_OPTIONS : GATE_BASIS_NA_OPTIONS);
 
@@ -1110,6 +1120,29 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     }
     return moved;
   };
+  /**
+   * One gate, one scope (§12.4c). The scope is a property of the gate ROOT and the table is
+   * one row per clause, so an edit on any row has to reach the rest of its flow — otherwise
+   * `rowsToGate` picks a winner the author cannot see, and a two-clause gate would silently
+   * save whichever row happened to say EDGE.
+   *
+   * The row that CHANGED is the one that differs from what this flow last agreed on, which is
+   * why the previous value is remembered rather than re-read from the graph: by the time this
+   * runs the graph has not been rebuilt yet.
+   */
+  const lastScope = new Map();
+  const syncGateScopes = () => {
+    let moved = false;
+    for (const id of new Set(gateClauses.map(c => c.flow))) {
+      const mine = gateClauses.filter(c => c.flow === id);
+      const prev = lastScope.get(id);
+      const changed = mine.find(c => c.gateScope !== prev);
+      const want = (prev == null || !changed) ? (mine[0]?.gateScope ?? 'SOURCE') : changed.gateScope;
+      for (const c of mine) if (c.gateScope !== want) { c.gateScope = want; moved = true; }
+      lastScope.set(id, want);
+    }
+    return moved;
+  };
   const gateEditor = buildRowListEditor({
     rows: gateClauses,
     columns: [
@@ -1134,17 +1167,23 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       // differing only in how long it stays shut spread by $460k. Years, never periods —
       // this reducer fires twice a year in a cross-border plan (§20.15).
       { field: 'gateYears', label: 'for N yrs', type: 'number', step: '1', min: '1', width: '0.7fr' },
+      // §12.4c. One per GATE, not per clause — `syncGateScopes` propagates an edit to every
+      // row of the same flow, so the table can never show one gate with two scopes. SOURCE is
+      // the stricter reading and stays the default; see the design section before assuming
+      // EDGE is simply safer.
+      { field: 'gateScope', label: 'Vetoes', type: 'select', options: GATE_SCOPE_OPTIONS, width: '1.4fr' },
     ],
     newRow:    () => ({ flow: gateableFlowIds()[0] ?? null, branch: 1, gateNegate: '',
                         gateKind: 'sourceDrawdownUnder', gateValue: 0.05,
-                        gateBasis: 'INDEX', gateYears: 1 }),
+                        gateBasis: 'INDEX', gateYears: 1, gateScope: 'SOURCE' }),
     addLabel:  '+ Add Gate Clause',
     emptyText: 'No gate clauses — every flow fires whenever its trigger and amount allow.',
     onChange:  () => {
-      // Both, never short-circuited: each is a repair the table owes the author.
+      // All three, never short-circuited: each is a repair the table owes the author.
+      const scoped     = syncGateScopes();
       const renumbered = renumberBranches();
       const rebased    = normalizeGateBases();
-      const moved      = renumbered || rebased;
+      const moved      = scoped || renumbered || rebased;
       sync();
       if (moved) gateEditor.refresh();
     },
@@ -1276,7 +1315,10 @@ function gateToRows(flowId, gate) {
     for (const node of nodes) {
       const row = gateNodeToRow(node);
       if (!row) return null;
-      rows.push({ flow: flowId, branch: i + 1, ...row });
+      // §12.4c — the scope lives on the gate ROOT, but the table is one row per CLAUSE, so it
+      // is repeated onto every row of this flow and kept in step by `syncGateScopes`. Repeating
+      // beats a per-flow sub-table: §17.1's whole argument is that the row component stays flat.
+      rows.push({ flow: flowId, branch: i + 1, gateScope: gate.scope ?? 'SOURCE', ...row });
     }
   }
   return rows;
@@ -1301,7 +1343,12 @@ function rowsToGate(rows) {
   if (!byBranch.size) return undefined;
   const branches = [...byBranch.entries()].sort((a, b) => a[0] - b[0])
     .map(([, nodes]) => (nodes.length === 1 ? nodes[0] : { allOf: nodes }));
-  return branches.length === 1 ? branches[0] : { anyOf: branches };
+  const root = branches.length === 1 ? branches[0] : { anyOf: branches };
+  // One scope per gate, on the root — `normalizeGate` rejects a nested one, so writing it
+  // anywhere else would make a graph the editor produced fail to load. SOURCE is the default
+  // and is left off, so a graph authored before §12.4c round-trips byte-identically.
+  const scope = rows.find(r => r.gateScope === 'EDGE') ? 'EDGE' : null;
+  return scope ? { ...root, scope } : root;
 }
 
 /** One flow row → the authored edge shape `normalizeLiquidityGraph` reads. */

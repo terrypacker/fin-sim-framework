@@ -418,8 +418,29 @@ export class RebalanceToTargetReducer extends Reducer {
    * zero for gross value to be conserved, and surgery on one leg breaks that invariant.
    */
   _applyVeto(mix, state, actualFractions) {
+    if (!mix) return mix;
+    // Floor first, then cap (§12.4c): a graph may mix the two scopes, and the cap has to see
+    // the mix the floor left or the two would each renormalise a different denominator.
+    const floored = this._applySourceVeto(mix, state, actualFractions);
+    return this._applyEdgeVeto(floored, state, actualFractions);
+  }
+
+  /**
+   * `scope: SOURCE` — "do not SELL this pool while it is down" (§12.4/§12.4c).
+   *
+   * Raising the target rather than deleting the sell leg is deliberate — legs must sum to
+   * zero for gross value to be conserved, and surgery on one leg breaks that invariant.
+   *
+   * The `floorSum >= 1` branch is the one to read twice. Once the vetoed pool holds nearly
+   * the whole book — which is what spending a reserve down produces — the floor reaches 1 and
+   * every UNGATED class is zeroed with it, for as long as the gate holds. That is a real
+   * measured behaviour (`pool-veto-floor-collapse`: BOND and CASH at 0.0 % for six consecutive
+   * years, on a graph whose gates never mentioned cash), and it is the strictness this scope
+   * is FOR, not a defect in it — but it is why §12.4c exists and why EDGE is the safer scope.
+   */
+  _applySourceVeto(mix, state, actualFractions) {
     const vetoed = state?.poolRefillPlan?.vetoed;
-    if (!Array.isArray(vetoed) || vetoed.length === 0 || !mix) return mix;
+    if (!Array.isArray(vetoed) || vetoed.length === 0) return mix;
     const byId = new Map((this.poolGraph?.pools ?? []).map(p => [p.id, p]));
     const held = new Map();
     for (const id of vetoed) {
@@ -438,6 +459,60 @@ export class RebalanceToTargetReducer extends Reducer {
     const others = Object.entries(out).filter(([c]) => !held.has(c) && out[c] > 0);
     const otherSum = others.reduce((s, [, w]) => s + w, 0);
     if (otherSum > 0) for (const [c, w] of others) out[c] = (1 - floorSum) * (w / otherSum);
+    return totalizeMix(out);
+  }
+
+  /**
+   * `scope: EDGE` — "do not FILL that pool from this one while it is down" (§12.4c).
+   *
+   * The mirror of the floor: cap every class the gated edge's DESTINATION claims at what the
+   * portfolio currently holds, so the drift band cannot grow the pool the gate just refused to
+   * fill. It blocks the identical laundering trade from the other end.
+   *
+   * Two properties follow from capping rather than flooring, and both are the point:
+   *
+   *  - **an ungated class can only ever GAIN weight**, so this can never collapse a target the
+   *    author did not gate — the `floorSum >= 1` failure has no analogue here;
+   *  - **it constrains only the routes the author drew.** A pool claiming no ALLOCATION class
+   *    (an offset, a cash facility) caps nothing, so gating an edge into one leaves the
+   *    rebalancer free. That is the honest cost of the scope and the reason SOURCE stays the
+   *    default — see §12.4c before reading EDGE as strictly safer.
+   *
+   * Driven off `poolRefillPlan.capped`, the EDGE-scoped sibling of `vetoed`, stamped by
+   * `PoolFlowReducer` in the same pass. Re-deriving it here from `gated` plus a flow lookup
+   * also works and is what the prototype did — but the panel needs the same list, and two
+   * derivations of one decision is how they come to disagree. One consequence to keep: it is
+   * recorded only for an edge whose `want > 0`, so a shut edge that wanted nothing caps
+   * nothing. Correct (no demand, no trade to launder), and it makes an EDGE veto demand-driven
+   * where a SOURCE veto is not.
+   */
+  _applyEdgeVeto(mix, state, actualFractions) {
+    const capped = state?.poolRefillPlan?.capped;
+    if (!Array.isArray(capped) || capped.length === 0) return mix;
+    const byId = new Map((this.poolGraph?.pools ?? []).map(p => [p.id, p]));
+    const cap = new Map();
+    for (const id of capped) {
+      for (const cls of (byId.get(id)?.claims ?? []).flatMap(c => c.sleeves ?? [])) {
+        // The TIGHTEST cap wins when two gated edges name one destination class, mirroring
+        // the floor's `Math.max` — both mean "the most restrictive statement governs".
+        cap.set(cls, Math.min(cap.get(cls) ?? Infinity, actualFractions?.[cls] ?? 0));
+      }
+    }
+    if (!cap.size) return mix;
+    const out = { ...mix };
+    let freed = 0;
+    for (const [cls, c] of cap) {
+      const now = out[cls] ?? 0;
+      if (now > c) { freed += now - c; out[cls] = c; }
+    }
+    if (freed <= 0) return mix;      // nothing was above its cap; the mix is already legal
+    const others = Object.entries(out).filter(([c]) => !cap.has(c) && out[c] > 0);
+    const otherSum = others.reduce((s, [, w]) => s + w, 0);
+    // Nowhere to put the freed weight (every other class is zero) ⇒ leave it with the capped
+    // classes rather than emit a mix that does not sum to 1. `totalizeMix` then restores the
+    // pre-cap proportions, which is the honest "this cap cannot be expressed" outcome.
+    if (otherSum <= 0) return mix;
+    for (const [c, w] of others) out[c] = w + freed * (w / otherSum);
     return totalizeMix(out);
   }
 

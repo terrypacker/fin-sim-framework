@@ -183,9 +183,22 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
         reason: `rebalance sale of ${poolId} vetoed this period`,
       });
     }
+    // §12.4c — the EDGE-scoped half of the same decision, and it must be here or the panel
+    // reports an EDGE-scoped policy as a rebalancer running unconstrained. Same KIND, because
+    // it is the same event seen from the other end: `from` names the pool that may not be
+    // SOLD, `to` names the pool that may not be GROWN.
+    for (const poolId of plan?.capped ?? []) {
+      events.push({
+        seq: entry.seq ?? events.length, at, year,
+        kind: POOL_EVENT_KIND.VETOED,
+        flowId: null, from: null, to: poolId, amount: null, wanted: null,
+        reason: `rebalance fill of ${poolId} capped this period`,
+      });
+    }
 
     periods.push({ seq: entry.seq ?? periods.length, at, year, pools,
-                   reserve: { ...reserve }, vetoed: [...(plan?.vetoed ?? [])] });
+                   reserve: { ...reserve }, vetoed: [...(plan?.vetoed ?? [])],
+                   capped: [...(plan?.capped ?? [])] });
   }
 
   // Pool order: the author's spend order when the graph is at hand, first-seen otherwise.
@@ -240,6 +253,9 @@ export function poolHistoryRows(history) {
         drawdown:  m.drawdown,
         gated:     (m.gatedFlows ?? []).map(g => g.id).join(' '),
         vetoed:    p.vetoed.includes(id) ? 1 : 0,
+        // The two are NOT interchangeable and must not be merged into one column: `vetoed`
+        // means this pool could not be sold, `capped` means it could not be grown (§12.4c).
+        capped:    p.capped?.includes(id) ? 1 : 0,
         // Per-PERIOD, not per-pool, so they repeat down every pool's row. Repeating beats a
         // second table: the one question this CSV gets opened to answer is why a pool reads
         // zero cover, and the answer is on the same row.

@@ -333,6 +333,30 @@ test('the reserve reaches the cover chart as its own series, not as a pool', () 
   assert.equal(hist.periods.at(-1).reserve.yearsOfCover, 5.2);
 });
 
+test('the provenance strip counts SOURCE vetoes and EDGE fill-caps APART', () => {
+  // One total would hide the scope entirely: an author checking whether their `scope: EDGE`
+  // is actually running has nothing else on the panel to look at.
+  const { plugin } = mountPlugin(simOf([
+    entry('2030-01-01', [
+      { field: 'liquidityPools', before: null,
+        after: { offset: CUBE(), growth: CUBE({ target: null }) } },
+      { field: 'poolRefillPlan', before: null,
+        after: { shortfall: {}, vetoed: ['growth'], capped: ['offset'], gated: [] } },
+    ]),
+  ]));
+  const prov = q(plugin, 'provenance').textContent;
+  assert.match(prov, /1 rebalance vetoes\s*\(source\)/);
+  assert.match(prov, /1 fill caps \(edge\)/);
+  plugin.unmount();
+});
+
+test('a run with no EDGE-scoped gate says nothing about fill caps', () => {
+  // Absent, not "0 fill caps": a zero would read as a policy that ran and never bound.
+  const { plugin } = mountPlugin(simOf(RUN));
+  assert.doesNotMatch(q(plugin, 'provenance').textContent, /fill caps/);
+  plugin.unmount();
+});
+
 test('switching views does not re-read the journal', () => {
   const { plugin } = mountPlugin(simOf(RUN));
   const first = plugin._history();

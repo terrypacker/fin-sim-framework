@@ -1043,3 +1043,89 @@ test('LiquidityGraph: an AMOUNT capacity is authorable, so the graph it writes b
   assert.deepStrictEqual(param.value.pools[0].capacity, { mode: 'AMOUNT', value: 250000 });
   assert.doesNotThrow(() => normalizeLiquidityGraph(param.value, ACCOUNTS));
 });
+
+// ── §12.4c, gate.scope ─────────────────────────────────────────────────────────
+
+/** Two edges out of one source — the shape §12.4c exists for. */
+const SCOPE_PARAM = (gate) => ({ name: 'liquidityGraph', value: {
+  pools: [
+    { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 300000 },
+      claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    { id: 'offset', spendOrder: 20, target: { mode: 'AMOUNT', value: 200000 },
+      claims: [{ key: 'auOffsetAccount' }] },
+    { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+  ],
+  flows: [
+    { id: 'g2b', from: 'growth', to: 'buffer', amount: { toTarget: true },
+      gate: gate ?? { sourceDrawdownUnder: 0.4, drawdownBasis: 'INDEX' } },
+    { id: 'g2o', from: 'growth', to: 'offset', amount: { toTarget: true },
+      gate: { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' } },
+  ],
+} });
+
+test('LiquidityGraph: the Vetoes cell defaults to SOURCE and writes EDGE onto the gate ROOT', async () => {
+  const { normalizeLiquidityGraph } = await import('../../src/finance/pools/liquidity-graph.js');
+  const param = SCOPE_PARAM();
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  // An unscoped gate reads as SOURCE — the cell must show the effective value, not a blank
+  // that leaves the author guessing which way an absent field falls.
+  assert.strictEqual(cell(host, 'gateScope').value, 'SOURCE');
+
+  pick(cell(host, 'gateScope'), 'EDGE');
+  // The ROOT, because `normalizeGate` rejects a nested scope — writing it beside the clause
+  // would produce a graph the editor itself cannot load.
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { sourceDrawdownUnder: 0.4, drawdownBasis: 'INDEX', scope: 'EDGE' });
+  // The sibling edge is untouched: that independence is the whole feature.
+  assert.deepStrictEqual(param.value.flows[1].gate,
+    { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' });
+  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS));
+});
+
+test('LiquidityGraph: SOURCE is not written back — a pre-12.4c graph stays byte-identical', () => {
+  const param = SCOPE_PARAM();
+  const before = JSON.parse(JSON.stringify(param.value.flows[0].gate));
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  // Re-picking the default must not author it. An authored default makes every saved graph
+  // differ from itself on the next save, which is the rule `sustainedYears: 1` follows.
+  pick(cell(host, 'gateScope'), 'SOURCE');
+  assert.deepStrictEqual(param.value.flows[0].gate, before);
+});
+
+test('LiquidityGraph: one gate, one scope — an edit reaches every clause of that flow', () => {
+  // The scope lives on the gate ROOT but the table is one row per CLAUSE. Without the
+  // propagation the save path picks a winner the author cannot see, and a two-clause gate
+  // silently saves whichever row happened to say EDGE.
+  const param = SCOPE_PARAM({ allOf: [{ sourceReturnOver: 0 }, { sourceDrawdownUnder: 0.4 }] });
+  const host  = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  const scopes = cells(host, 'gateScope');
+  assert.ok(scopes.length >= 3, 'two clauses for g2b plus one for g2o');
+
+  pick(scopes[0], 'EDGE');
+  const after = cells(host, 'gateScope');
+  assert.strictEqual(after[0].value, 'EDGE');
+  assert.strictEqual(after[1].value, 'EDGE', 'the sibling clause of the SAME gate follows');
+  assert.strictEqual(after[2].value, 'SOURCE', 'the other flow does not');
+  assert.strictEqual(param.value.flows[0].gate.scope, 'EDGE');
+  assert.strictEqual(param.value.flows[1].gate.scope, undefined);
+});
+
+test('LiquidityGraph: a scope on a gate the table cannot draw survives untouched', () => {
+  // `rawGate` keeps an inexpressible gate verbatim. Its scope must ride along, or opening the
+  // editor would silently downgrade an EDGE-scoped composed gate to SOURCE.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 },
+        claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', amount: { toTarget: true },
+              gate: { scope: 'EDGE',
+                      anyOf: [{ allOf: [{ sourceReturnOver: 0 }, { sourceDrawdownUnder: 0.1 }] },
+                              { not: { targetDrawdownOver: 0.2 } }] } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  type(cell(host, 'priority'), '3', 'change');
+  assert.strictEqual(param.value.flows[0].gate.scope, 'EDGE');
+});
