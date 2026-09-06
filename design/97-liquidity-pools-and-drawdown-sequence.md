@@ -640,6 +640,67 @@ config-time *warning* when a pool's claims name only accounts that the location 
 prefer for that pool's classes. Warning, not throw: it is a plausible authoring, just almost
 never the intended one.
 
+### 12.2b Remainder targets — an aggregate held across several pools
+
+§12.2's three modes all size a pool from its own spec. That is enough until a pool's
+**capacity** moves on a schedule nobody authored, and one does: an offset, whose `OFFSET_CAP`
+is `min(balance, linked loan)` and falls as the loan amortises. Nothing refills it, because it
+is the ceiling that dropped and not the balance — so a plan holding "five years of reserve"
+across cash, bonds and an offset watches that five years decay, and no per-node target can see
+it happen. §6.3 called the amortising cap a reporting problem; it is also a sizing one.
+
+`YEARS_OF_SPEND_REMAINDER` is the fourth mode:
+
+```js
+{ mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['cash', 'offset'] }
+⇒ max(0, 5 × spend − Σ contribution(after))
+```
+
+**An UNCAPPED pool contributes its `target` when it has one and its balance when it does not;
+a CAPPED pool always contributes its `utilised` cover.**
+
+The first half is the claim/cover distinction. A target is the pool's *claim* about what it
+will hold and the refill flows are what keep that claim true, so a cash pool sitting under its
+target between refills must not move this one — reacting would start a rebalance to fix
+something an edge is already fixing, and the two would fight.
+
+The second half is why a pool with a real ceiling is different, and it took the reference plan
+to show it. Such a pool cannot promise its target, because the ceiling is not something a flow
+can lift — and an offset that should hold "as much as possible" is nonetheless authored WITH a
+target, since a `toTarget` edge into a pool with none is rejected at config time. Its target is
+therefore a number far above what it can hold, and counting it would peg the remainder at zero
+forever.
+
+Its *capacity* is no better, which is the part that is not obvious. On the reference plan the
+offset reached a year with balance 0 and roughly a year of capacity: the loan was outstanding
+so the room was real, but the `growth → offset` refill was gated shut with the growth pool a
+third below its high. Crediting that room as cover under-provisioned the remainder pool by the
+full amount **precisely in a down market** — inverted from what a reserve is for. An empty pool
+is not cover, however much room it has. So a capped pool counts `utilised` = min(balance,
+capacity), the figure §12.1 already defines as the cover this feature reports.
+
+**Chains throw.** A remainder that names another remainder would let the resolution order
+decide the answer, and a graph is a set, not an ordered list. Naming yourself throws for the
+same reason in miniature. With chains excluded, resolution is one pass over the per-pool pass
+and the order cannot matter — which is why it lives in `allPoolMetrics` rather than as another
+case in `resolveSize`, where the other pools' figures do not yet exist.
+
+**The clamp is at zero.** An aggregate that is over-covered is not a reason to sell down to the
+remainder; a negative target would read as "empty this sleeve", which nobody authored.
+
+**In the editor** the mode adds one cell to the Pools table: `Remainder of`, a checkset of the
+other pools. It is drawn only for this mode, and it offers only pools that are not themselves
+remainders and not the row itself — the two config errors above are therefore not typable,
+which is §17's whole reason for replacing the JSON textarea. `after` had been falling through
+`extraKeys` as opaque carried data (round-tripped, but unauthorable), so drawing it also means
+excluding it from that carried set or the sync writes it twice. Renaming a pool prunes the
+reference and re-renders, because only live ids are drawn: left alone, a stale reference would
+be invisible on screen and still throw at Rebuild.
+
+`shortfall` is recomputed in the same pass. It is what a `toTarget` refill moves, and it is
+first computed while this target is still null — left stale, every refill into a remainder pool
+would move zero.
+
 ### 12.3 Flows — `FINDINGS.md` §6.4, closed
 
 An edge is `{ id, from, to, priority, trigger, gate, amount, cadence }`.

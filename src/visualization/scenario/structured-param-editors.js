@@ -691,12 +691,19 @@ export function buildRateKeyMapEditor(param) {
 const SLEEVE_OPTIONS = Object.freeze(
   ALLOCATION_VALUES.filter(a => a !== 'OTHER').map(a => [a, a]));
 
+// `YEARS_OF_SPEND_REMAINDER` reads as a longer sentence than the other three because it is
+// one: it sizes this pool from an AGGREGATE held across several, which is a different kind of
+// statement from "this pool holds N years" and should not look like a variant of it.
 const TARGET_MODE_OPTIONS = Object.freeze([
-  ['',               '— none —'],
-  ['YEARS_OF_SPEND', 'years of spend'],
-  ['PERCENT',        '% of book'],
-  ['AMOUNT',         'amount'],
+  ['',                         '— none —'],
+  ['YEARS_OF_SPEND',           'years of spend'],
+  ['PERCENT',                  '% of book'],
+  ['AMOUNT',                   'amount'],
+  ['YEARS_OF_SPEND_REMAINDER', 'remainder of N years across pools'],
 ]);
+
+/** The target modes whose `after` cell is meaningful. One entry today; a list so it reads. */
+const TARGET_NEEDS_AFTER = Object.freeze(['YEARS_OF_SPEND_REMAINDER']);
 
 const CAPACITY_MODE_OPTIONS = Object.freeze([
   ['BALANCE',        'balance (no ceiling)'],
@@ -888,6 +895,9 @@ const CAPACITY_NEEDS_VALUE = Object.freeze(['AMOUNT', 'YEARS_OF_SPEND']);
 const SIZE_BOUNDS = Object.freeze({
   PERCENT:        { min: '0', max: '1',  step: '0.01', title: 'A FRACTION of the book — 0.05 is 5%.' },
   YEARS_OF_SPEND: { min: '0', max: '50', step: '0.5',  title: 'Years of spending.' },
+  YEARS_OF_SPEND_REMAINDER: { min: '0', max: '50', step: '0.5',
+    title: 'The AGGREGATE, in years of spending, held across this pool and the ones ticked '
+         + 'beside it. This pool holds whatever of it they do not.' },
   AMOUNT:         { min: '0', max: null, step: '1000', title: 'A figure in the valuation base currency.' },
   BALANCE:        null,
   OFFSET_CAP:     null,
@@ -914,6 +924,9 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     spendOrder:  Number.isFinite(Number(p?.spendOrder)) ? Number(p.spendOrder) : null,
     targetMode:  p?.target?.mode ?? '',
     targetValue: Number.isFinite(Number(p?.target?.value)) ? Number(p.target.value) : null,
+    // §12.2b. Drawn, not carried, so it can be ticked rather than hand-authored — which means
+    // it also has to come OUT of `targetExtra` below, or the sync writes it twice.
+    targetAfter: Array.isArray(p?.target?.after) ? [...p.target.after] : [],
     capacity:    p?.capacity?.mode ?? 'BALANCE',
     // The capacity of an AMOUNT / YEARS_OF_SPEND pool. Without this cell those two modes are
     // selectable and unauthorable: `sizeSpec` requires a value for every non-derived mode, so
@@ -921,7 +934,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     capacityValue: Number.isFinite(Number(p?.capacity?.value)) ? Number(p.capacity.value) : null,
     // Carried, not drawn — see `extraKeys`.
     floor:         p?.floor ?? null,
-    targetExtra:   extraKeys(p?.target,   ['mode', 'value']),
+    targetExtra:   extraKeys(p?.target,   ['mode', 'value', 'after']),
     capacityExtra: extraKeys(p?.capacity, ['mode', 'value']),
     // Round-tripped untouched: `ui` is opaque to the engine and belongs to the editor that
     // effort 2 will build (design 97 §14). Dropping it here would silently discard a layout.
@@ -975,7 +988,17 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
         ...(p.label ? { label: p.label } : {}),
         ...(p.spendOrder != null ? { spendOrder: p.spendOrder } : {}),
         ...(p.targetMode
-          ? { target: { mode: p.targetMode, value: p.targetValue ?? 0, ...(p.targetExtra ?? {}) } }
+          ? { target: { mode: p.targetMode, value: p.targetValue ?? 0,
+                        // Pruned to pools that still exist: renaming one otherwise leaves a
+                        // reference that is INVISIBLE in the checkset (only live ids are drawn)
+                        // and throws at Rebuild — the exact "invisible until it throws" shape
+                        // this editor exists to remove. Dropping it unticks a box the user can
+                        // see instead.
+                        ...(TARGET_NEEDS_AFTER.includes(p.targetMode)
+                          ? { after: (p.targetAfter ?? []).filter(
+                                id => id !== p.id && kept.some(q => q.id === id)) }
+                          : {}),
+                        ...(p.targetExtra ?? {}) } }
           : {}),
         ...(p.capacity && p.capacity !== 'BALANCE'
           ? { capacity: { mode: p.capacity,
@@ -1130,16 +1153,31 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
   const poolsEditor = buildRowListEditor({
     rows: pools,
     columns: [
-      { field: 'id',          label: 'Id',       type: 'text',   placeholder: 'reserve', width: '1fr' },
+      // `rerender` so a rename redraws the sibling rows' `Remainder of` checksets: only live
+      // ids are drawn there, so without it a renamed pool leaves a tick the user cannot see
+      // and cannot untick. `sync` prunes the reference; this is what makes the prune visible.
+      { field: 'id',          label: 'Id',       type: 'text',   placeholder: 'reserve',
+        rerender: true, width: '1fr' },
       { field: 'label',       label: 'Label',    type: 'text',   placeholder: 'Bucket 2', width: '1.3fr' },
       { field: 'spendOrder',  label: 'Spend #',  type: 'number', step: '10', placeholder: 'never', width: '0.7fr' },
       // `rerender` on both mode cells: the Size cell beside each one takes its bounds from
       // the mode, so a mode change has to redraw the row or the new mode keeps the old range.
       { field: 'targetMode',  label: 'Target',   type: 'select', options: TARGET_MODE_OPTIONS,
-        rerender: true, width: '1.2fr' },
+        rerender: true, width: '1.6fr' },
       { field: 'targetValue', label: 'Size',     type: 'number',
         step: sizeAttr('targetMode', 'step'), min: sizeAttr('targetMode', 'min'),
         max:  sizeAttr('targetMode', 'max'),  title: sizeAttr('targetMode', 'title'), width: '0.7fr' },
+      // §12.2b. Blank for every other target mode — `buildCheckSet` renders `emptyText` when a
+      // row has no options, which is what a non-remainder row wants anyway.
+      { field: 'targetAfter', label: 'Remainder of', type: 'checkset', width: '1.6fr',
+        emptyText: '—',
+        options: (row) => (TARGET_NEEDS_AFTER.includes(row?.targetMode)
+          ? pools.filter(q => q.id && q.id !== row?.id
+              // A remainder naming another remainder throws (the resolution ORDER would decide
+              // the answer), so it is not offered — the same rule the compiler enforces, kept
+              // off the screen rather than explained after the fact.
+              && !TARGET_NEEDS_AFTER.includes(q.targetMode)).map(q => [q.id, q.label || q.id])
+          : []) },
       { field: 'capacity',    label: 'Capacity', type: 'select', options: CAPACITY_MODE_OPTIONS,
         rerender: true, width: '1.5fr' },
       // Blank on BALANCE / OFFSET_CAP, whose ceiling is derived from live state.
@@ -1148,7 +1186,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
         max:  sizeAttr('capacity', 'max'),  title: sizeAttr('capacity', 'title'), width: '0.7fr' },
     ],
     newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
-                        targetMode: '', targetValue: null, capacity: 'BALANCE',
+                        targetMode: '', targetValue: null, targetAfter: [], capacity: 'BALANCE',
                         capacityValue: null, floor: null, targetExtra: null,
                         capacityExtra: null, ui: null }),
     addLabel:  '+ Add Pool',

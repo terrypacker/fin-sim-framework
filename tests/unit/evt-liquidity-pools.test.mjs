@@ -35,7 +35,7 @@ import {
   normalizeLiquidityGraph, compileToDrawdownSequence, resolveLiquidityGraph,
   collectAuthoredGraphProblems, FLOW_EXECUTOR, POOL_CAPACITY_MODE,
 } from '../../src/finance/pools/liquidity-graph.js';
-import { poolMetrics, poolContext, loanForOffset } from '../../src/finance/pools/pool-metrics.js';
+import { poolMetrics, allPoolMetrics, poolContext, loanForOffset } from '../../src/finance/pools/pool-metrics.js';
 import { PoolFlowReducer }      from '../../src/finance/pools/pool-flow-reducer.js';
 import { PoolFlowApplyReducer } from '../../src/finance/pools/pool-flow-apply-reducer.js';
 import { AccountService }       from '../../src/finance/services/account-service.js';
@@ -720,6 +720,167 @@ test('POOL-10: every config error in §12.7 throws at config time', () => {
   throws(P(), /COMPILES to that field/, ACCOUNTS, { hasDrawdownSequence: true });
   throws(P({ claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 4 }),
          /poolCashYears/, ACCOUNTS, { hasLegacyPoolYears: true });
+});
+
+// ─── §12.2b — the REMAINDER target ────────────────────────────────────────────────
+//
+// The shape: a fixed aggregate of cover held across several pools, with ONE absorbing what
+// the others do not provide. It exists because an offset's OFFSET_CAP falls as its loan
+// amortises and nothing refills it — the ceiling dropped, not the balance — so a per-node
+// target cannot see the reserve decaying underneath it.
+
+/** cash 1yr target + an offset capped by its loan + a bond pool taking the remainder of 5yr. */
+const REM_GRAPH = (over = {}) => ({ pools: [
+  { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+    target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+  { id: 'offset', spendOrder: 20, claims: [{ key: 'offsetAccount' }],
+    capacity: { mode: 'OFFSET_CAP' } },
+  { id: 'bond',   spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+    target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['cash', 'offset'], ...over } },
+] });
+
+/** monthlyExpenses 10k ⇒ 120k/yr. cash/bond are balances; offset is capped by `loan`. */
+function remState({ cash = 120_000, offset = 300_000, loan = 240_000, bond = 0 } = {}) {
+  const brokerage = new BrokerageAccount(bond, { country: 'US', currency: USD });
+  brokerage.holdings = bond > 0
+    ? [new Holding({ allocation: ALLOCATION.BOND, marketValue: bond, costBasis: bond })] : [];
+  return {
+    usSavingsAccount: new CheckingAccount(cash, { country: 'US', currency: USD }),
+    offsetAccount:    new OffsetAccount(offset, { offsetsPropertyKey: 'house', country: 'AU', currency: AUD }),
+    houseLoan:        new LoanAccount(loan, { linkedPropertyKey: 'house', country: 'AU', currency: AUD }),
+    usStockAccount:   brokerage,
+    monthlyExpenses: 10_000,
+    effectiveExchangeRates: { USD_AUD: 1 },
+  };
+}
+
+const remTarget = (state, over) => {
+  const g = normalizeLiquidityGraph(REM_GRAPH(over), ACCOUNTS);
+  return allPoolMetrics(state, g, poolContext(state)).bond.target;
+};
+
+test('POOL-18: a remainder target is the aggregate less what the named pools cover', () => {
+  // 5yr = 600k. cash claims 1yr = 120k. offset is capped at the loan = 240k (2yr).
+  // ⇒ bond holds the remaining 240k, i.e. 2 years.
+  assert.equal(remTarget(remState()), 240_000);
+});
+
+test('POOL-18b: as the offset cap amortises away, the remainder pool grows to hold the gap', () => {
+  // This is the whole point: nothing refills the offset, because it is the CEILING that fell.
+  // Without the mode the aggregate reserve decays and no per-node target can see it happen.
+  assert.equal(remTarget(remState({ loan: 240_000 })), 240_000);   // offset covers 2yr ⇒ bond 2yr
+  assert.equal(remTarget(remState({ loan: 120_000 })), 360_000);   // offset covers 1yr ⇒ bond 3yr
+  assert.equal(remTarget(remState({ loan:       0 })), 480_000);   // offset gone     ⇒ bond 4yr
+  // The aggregate is conserved throughout: cash 1yr + offset + bond == 5yr, every time.
+  for (const loan of [240_000, 120_000, 0]) {
+    const st = remState({ loan });
+    const m  = allPoolMetrics(st, normalizeLiquidityGraph(REM_GRAPH(), ACCOUNTS), poolContext(st));
+    assert.equal(m.cash.target + m.offset.utilised + m.bond.target, 600_000);
+  }
+});
+
+test('POOL-18c: a referenced pool counts its TARGET, so a drained cash pool moves nothing', () => {
+  // The decision behind the mode. A target is the pool\'s claim about what it holds and the
+  // refill flows are what keep that claim true; reacting to a cash pool that is briefly under
+  // it would start a rebalance to fix something a flow is already fixing.
+  assert.equal(remTarget(remState({ cash: 120_000 })), 240_000);
+  assert.equal(remTarget(remState({ cash:  36_000 })), 240_000);   // 0.3yr of cash — unchanged
+  assert.equal(remTarget(remState({ cash:       0 })), 240_000);
+});
+
+test('POOL-18d: a referenced pool with NO target counts its utilised cover, not its balance', () => {
+  // The offset has no target, so only what it actually covers counts — and `utilised` is
+  // min(balance, cap): cash parked above the debt suppresses no interest and is cover for
+  // nobody, which is the same reading POOL-4 pinned for the metric itself.
+  assert.equal(remTarget(remState({ offset: 300_000, loan: 240_000 })), 240_000);
+  // Balance far above the cap changes nothing — the ceiling is what counts.
+  assert.equal(remTarget(remState({ offset: 900_000, loan: 240_000 })), 240_000);
+  // Balance BELOW the cap does count, because then the balance is the binding side.
+  assert.equal(remTarget(remState({ offset:  60_000, loan: 240_000 })), 420_000);
+});
+
+test('POOL-18d2: a CAPPED pool counts real cover, so a huge authored target is inert', () => {
+  // The case that makes the mode usable at all. A `toTarget` refill edge into a pool with no
+  // target is rejected at config time, so an offset that should "hold as much as possible" must
+  // still carry one — authored far above its ceiling, with the refill filling to whichever
+  // binds. Counting that authored figure as cover would peg the remainder at zero forever and
+  // invert the feature: the reserve would decay exactly as it does without it.
+  const withTarget = { target: { mode: 'AMOUNT', value: 9_000_000 } };
+  const g = normalizeLiquidityGraph({ pools: [
+    { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+      target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+    { id: 'offset', spendOrder: 20, claims: [{ key: 'offsetAccount' }],
+      capacity: { mode: 'OFFSET_CAP' }, ...withTarget },
+    { id: 'bond',   spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['cash', 'offset'] } },
+  ] }, ACCOUNTS);
+  const at = (loan) => {
+    const st = remState({ loan });
+    return allPoolMetrics(st, g, poolContext(st)).bond.target;
+  };
+  // The 9M target is ignored in favour of real cover, so the remainder tracks the amortisation.
+  assert.equal(at(240_000), 240_000);
+  assert.equal(at(120_000), 360_000);
+  assert.equal(at(0),       480_000);
+  // And an UNCAPPED pool still counts its claim, not its balance — that distinction is what
+  // keeps the drained-cash thrash POOL-18c rules out from coming back.
+  const st = remState({ cash: 0 });
+  assert.equal(allPoolMetrics(st, g, poolContext(st)).bond.target, 240_000);
+});
+
+test('POOL-18d3: an EMPTY capped pool contributes nothing, however much room it has', () => {
+  // Found on the reference plan, not by reading the code. The offset reached a year with
+  // balance 0 and ~$149k of capacity — the loan was outstanding so the room was real, but the
+  // `growth → offset` refill was gated shut with the growth pool 34% below its high. Counting
+  // the room as cover under-provisioned the bond pool by that amount PRECISELY IN A DOWN
+  // MARKET, which is inverted from what a reserve is for.
+  const g = normalizeLiquidityGraph({ pools: [
+    { id: 'cash',   spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+      target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+    { id: 'offset', spendOrder: 20, claims: [{ key: 'offsetAccount' }],
+      capacity: { mode: 'OFFSET_CAP' }, target: { mode: 'AMOUNT', value: 9_000_000 } },
+    { id: 'bond',   spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['cash', 'offset'] } },
+  ] }, ACCOUNTS);
+  // Offset DRAINED but its loan — and so its room — still substantial.
+  const st = remState({ offset: 0, loan: 240_000 });
+  const m  = allPoolMetrics(st, g, poolContext(st));
+  assert.equal(m.offset.capacity, 240_000);   // the room is real
+  assert.equal(m.offset.utilised, 0);         // the cover is not
+  assert.equal(m.bond.target, 480_000);       // ⇒ bonds carry the full remaining 4 years
+});
+
+test('POOL-18e: the remainder clamps at zero — an over-covered aggregate never goes negative', () => {
+  // A negative target would read as "sell the bond sleeve to nothing", which is a policy
+  // nobody authored; the reserve simply being ahead of plan is not a reason to act.
+  assert.equal(remTarget(remState({ loan: 900_000, offset: 900_000 })), 0);
+});
+
+test('POOL-18f: shortfall is recomputed with the resolved target, not left from the null pass', () => {
+  // `shortfall` is what a `toTarget` refill moves, and it is computed on the first pass when
+  // this target is still null. Stale there ⇒ every refill into a remainder pool moves zero.
+  const st = remState({ bond: 100_000 });
+  const m  = allPoolMetrics(st, normalizeLiquidityGraph(REM_GRAPH(), ACCOUNTS), poolContext(st));
+  assert.equal(m.bond.target, 240_000);
+  assert.equal(m.bond.shortfall, 140_000);
+});
+
+test('POOL-18g: the remainder target\'s config errors', () => {
+  const bad = (over, re) => assert.throws(
+    () => normalizeLiquidityGraph(REM_GRAPH(over), ACCOUNTS), re);
+  bad({ after: undefined }, /needs a non-empty `after`/);
+  bad({ after: [] },        /needs a non-empty `after`/);
+  bad({ after: ['cash', 'cash'] }, /names the same pool twice/);
+  bad({ after: ['cash', 'nope'] }, /not a pool in this graph/);
+  bad({ after: ['cash', 'bond'] }, /names itself/);
+  // Chained remainders: the resolution ORDER would decide the answer, and a graph is a set.
+  assert.throws(() => normalizeLiquidityGraph({ pools: [
+    { id: 'a', spendOrder: 1, claims: [{ key: 'usSavingsAccount' }],
+      target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['b'] } },
+    { id: 'b', spendOrder: 2, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 3, after: ['c'] } },
+    { id: 'c', spendOrder: 3, claims: [{ key: 'auSavingsAccount' }], target: 1 },
+  ] }, ACCOUNTS), /which is itself a remainder/);
 });
 
 test('POOL-10c2: the §12.2 conflict needs a rebalancer to be a conflict at all', () => {

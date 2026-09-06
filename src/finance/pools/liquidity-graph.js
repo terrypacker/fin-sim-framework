@@ -61,6 +61,22 @@ export const POOL_TARGET_MODE = Object.freeze({
   PERCENT:        'PERCENT',
   /** a fixed figure in the valuation base currency. */
   AMOUNT:         'AMOUNT',
+  /**
+   * Design 97 §12.2b — the RESIDUAL of an aggregate cover target held across several pools.
+   *
+   * `{ mode, value, after: [poolId, …] }` ⇒ `max(0, value × spend − Σ contribution(after))`.
+   * The case it exists for: a pool whose CAPACITY falls on a schedule nobody authored — an
+   * offset, whose `OFFSET_CAP` is `min(balance, linked loan)` and shrinks as the loan
+   * amortises. Nothing refills it, because it is the ceiling that dropped, not the balance;
+   * so without this the aggregate reserve silently decays and no per-node target can see it.
+   *
+   * A referenced pool contributes its TARGET when it has one, and its `utilised` cover when
+   * it does not. That asymmetry is the decision, not an accident: a target IS the pool's
+   * claim about what it will hold and the refill flows are what keep that claim true, so a
+   * cash pool drained between refills must not move this target and start a rebalance. A
+   * pool with no target makes no such claim, and only what it actually holds is cover.
+   */
+  YEARS_OF_SPEND_REMAINDER: 'YEARS_OF_SPEND_REMAINDER',
 });
 
 /** Which spend line a YEARS_OF_SPEND target reads (design 97 §12.2). */
@@ -147,7 +163,20 @@ function sizeSpec(raw, what, allowed, defaultMode) {
   // itself, and min(balance, linked loan) respectively).
   const derived = mode === POOL_CAPACITY_MODE.BALANCE || mode === POOL_CAPACITY_MODE.OFFSET_CAP;
   if (!derived) out.value = num(spec.value, `${what}.value`, { min: 0 });
-  if (mode === POOL_TARGET_MODE.YEARS_OF_SPEND || mode === POOL_CAPACITY_MODE.YEARS_OF_SPEND) {
+  if (mode === POOL_TARGET_MODE.YEARS_OF_SPEND_REMAINDER) {
+    const after = spec.after;
+    if (!Array.isArray(after) || after.length === 0) {
+      err(`${what} needs a non-empty \`after\` naming the pools whose cover it is the remainder of. `
+        + 'Without one it is just YEARS_OF_SPEND wearing a longer name.');
+    }
+    if (after.some(id => typeof id !== 'string' || !id)) err(`${what}.after must be pool ids`);
+    if (new Set(after).size !== after.length) {
+      err(`${what}.after names the same pool twice, which would double-count its cover`);
+    }
+    out.after = [...after];
+  }
+  if (mode === POOL_TARGET_MODE.YEARS_OF_SPEND || mode === POOL_CAPACITY_MODE.YEARS_OF_SPEND
+      || mode === POOL_TARGET_MODE.YEARS_OF_SPEND_REMAINDER) {
     const basis = spec.spendBasis ?? POOL_SPEND_BASIS.LIVE;
     if (!SPEND_BASES.has(basis)) err(`${what}.spendBasis must be one of ${[...SPEND_BASES].join(', ')}`);
     out.spendBasis = basis;
@@ -537,6 +566,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
   // Global claim ledger: key → Set<sleeve> | true. Overlap ACROSS pools is the new error.
   const claimedAll = new Map();
   const targetedPools = [];
+  const targetModeById = new Map();
 
   for (const raw of rawPools) {
     if (!raw || typeof raw !== 'object') err('every pool must be an object');
@@ -571,6 +601,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
                   ?? { mode: POOL_CAPACITY_MODE.BALANCE };
     if (target) {
       targetedPools.push(id);
+      targetModeById.set(id, target.mode);
       // A size target on a pool is realised by the rebalancer as a fraction of the book
       // allocated to that pool's ALLOCATION classes (design 97 §12.2, executor 1). Across
       // two classes there is no unique split, and inventing one (equal? by authored weight?)
@@ -608,6 +639,29 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
       // place to keep layout and a second store would drift (design 97 §14).
       ...(raw.ui != null ? { ui: raw.ui } : {}),
     });
+  }
+
+  // §12.2b — a REMAINDER target's references, checked once every pool id is known. Done as a
+  // whole-graph pass rather than inside `sizeSpec` for the same reason the claim-overlap check
+  // is: the pool being referenced may not have been read yet when this one is normalized.
+  for (const pool of pools) {
+    if (pool.target?.mode !== POOL_TARGET_MODE.YEARS_OF_SPEND_REMAINDER) continue;
+    for (const ref of pool.target.after) {
+      if (ref === pool.id) {
+        err(`pool '${pool.id}' names itself in its remainder target's \`after\`: its own size `
+          + 'would be an input to itself.');
+      }
+      if (!ids.has(ref)) {
+        err(`pool '${pool.id}' remainder target names '${ref}', which is not a pool in this graph. `
+          + `Known pools: ${[...ids].map(x => `'${x}'`).join(', ')}`);
+      }
+      if (targetModeById.get(ref) === POOL_TARGET_MODE.YEARS_OF_SPEND_REMAINDER) {
+        err(`pool '${pool.id}' remainder target names '${ref}', which is itself a remainder. `
+          + 'Chaining them makes the resolution order decide the answer, and a graph is not an '
+          + 'ordered list — give the referenced pool a target of its own, or reference what it '
+          + 'references.');
+      }
+    }
   }
 
   // Two authorities on the rebalancer's target (design 97 §12.2) — but only when there IS a
