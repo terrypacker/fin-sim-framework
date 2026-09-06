@@ -226,3 +226,132 @@ test('HIST-8: replaying a real reducer\'s diffs reproduces its state exactly', (
   assert.equal(tie.ok, true, JSON.stringify(tie.mismatches));
   assert.ok(tie.checked > 0);
 });
+
+// ─── the household reserve (design 97 §22.3, extended) ───────────────────────────────
+//
+// The line exists because the pool cube and the household's real cover diverge, and the
+// divergence is invisible from either number alone. These pin the divergence itself, not
+// just the plumbing: a test that only checked the field round-trips would pass on a metric
+// that silently counted the wrong money.
+
+const RESERVE_ACCOUNTS = () => ({
+  // Claimed by the pool: bonds in a taxable brokerage.
+  usBrokerage: { balance: 100_000, currency: USD, type: ACCOUNT_TYPE.BROKERAGE, drawdownPriority: 4,
+                 holdings: [{ allocation: 'BOND', marketValue: 100_000 }] },
+  // NOT claimed by any pool, and past its age gate: the reserve the cube cannot see.
+  k401:        { balance: 400_000, currency: USD, type: ACCOUNT_TYPE.K401, drawdownPriority: 2,
+                 minimumAge: 59.5, allowsEarlyWithdrawal: false,
+                 holdings: [{ allocation: 'BOND', marketValue: 300_000 },
+                            { allocation: 'EQUITY', marketValue: 100_000 }] },
+  people:         { primary: { birthDate: new Date('1950-01-01') } },
+  monthlyExpenses: 10_000,                                   // $120k/yr
+  currentPeriods: { US: { startMs: Date.UTC(2030, 0, 1) } },
+});
+
+const RESERVE_GRAPH = () => normalizeLiquidityGraph({
+  pools: [{ id: 'buffer', claims: [{ key: 'usBrokerage', sleeves: ['BOND'] }], spendOrder: 10 }],
+  flows: [],
+}, [{ stateKey: 'usBrokerage', type: ACCOUNT_TYPE.BROKERAGE }]);
+
+const runReserve = (state, graph, dateMs = Date.UTC(2030, 0, 1)) => {
+  const reducer = new PoolFlowReducer({ graph, expensesCurrency: 'USD' });
+  const before  = { ...state, currentPeriods: { US: { startMs: dateMs } } };
+  const { next, ...after } = reducer.reduce(
+    before, { type: 'US_PERIOD_ADVANCE', date: new Date(dateMs) }, new Date(dateMs));
+  return { before, after };
+};
+
+test('RES-1: the reserve counts BOND+CASH the pools do not claim — the whole point of the line', () => {
+  const { after } = runReserve(RESERVE_ACCOUNTS(), RESERVE_GRAPH());
+
+  // The pool sees only its own claim; the household sees the wrapper's bonds too.
+  assert.equal(after.liquidityPools.buffer.balance, 100_000);
+  assert.equal(after.liquidityPools.buffer.yearsOfCover, 0.833);
+  assert.equal(after.liquidityReserve.accessible, 400_000);   // 100k taxable + 300k wrapper BOND
+  assert.equal(after.liquidityReserve.locked, 0);
+  // 400k / 120k — the divergence this whole feature exists to show: 0.8y vs 3.3y.
+  assert.equal(after.liquidityReserve.yearsOfCover, 3.333);
+});
+
+test('RES-2: EQUITY is never reserve, however liquid the account holding it is', () => {
+  const state = RESERVE_ACCOUNTS();
+  // Move the wrapper wholly into equity. A reserve line that counted "accessible money"
+  // rather than accessible CASH+BOND would not move at all.
+  state.k401.holdings = [{ allocation: 'EQUITY', marketValue: 400_000 }];
+  const { after } = runReserve(state, RESERVE_GRAPH());
+  assert.equal(after.liquidityReserve.accessible, 100_000);
+});
+
+test('RES-3: an age-gated account is LOCKED, not counted — and the gate is the drawdown one', () => {
+  const state = RESERVE_ACCOUNTS();
+  state.people.primary.birthDate = new Date('1990-01-01');    // 40 in 2030, under the gate
+  const { after } = runReserve(state, RESERVE_GRAPH());
+  assert.equal(after.liquidityReserve.accessible, 100_000);
+  assert.equal(after.liquidityReserve.locked, 300_000);
+  // Cover is what is SPENDABLE, so the locked bonds must not appear in it.
+  assert.equal(after.liquidityReserve.yearsOfCover, 0.833);
+});
+
+test('RES-4: a wrapper carrying a balance but NO lots contributes nothing', () => {
+  const state = RESERVE_ACCOUNTS();
+  state.k401.holdings = [];        // balance 400k, no allocation to read
+  const { after } = runReserve(state, RESERVE_GRAPH());
+  // Counting it whole would report a 401(k) as a bond reserve. Only cash-like types may
+  // count on their balance alone.
+  assert.equal(after.liquidityReserve.accessible, 100_000);
+});
+
+test('RES-5: a savings account with no lots DOES count — its balance is cash by definition', () => {
+  const state = RESERVE_ACCOUNTS();
+  state.savings = { balance: 60_000, currency: USD, type: ACCOUNT_TYPE.SAVINGS,
+                    drawdownPriority: 0, holdings: [] };
+  const { after } = runReserve(state, RESERVE_GRAPH());
+  assert.equal(after.liquidityReserve.accessible, 460_000);
+});
+
+test('RES-6: an account opted OUT of drawdown is not cover', () => {
+  const state = RESERVE_ACCOUNTS();
+  state.k401.drawdownPriority = null;         // the drawdown chain will never touch it
+  const { after } = runReserve(state, RESERVE_GRAPH());
+  assert.equal(after.liquidityReserve.accessible, 100_000);
+  assert.equal(after.liquidityReserve.locked, 300_000);
+});
+
+test('RES-7: the reserve replays off the journal and TIES to live state', () => {
+  const graph = RESERVE_GRAPH();
+  let state = RESERVE_ACCOUNTS();
+  const journal = [];
+  for (const year of [2030, 2031]) {
+    const { before, after } = runReserve(state, graph, Date.UTC(year, 0, 1));
+    journal.push(entry(`${year}-01-01`, diffStates(before, after)));
+    state = after;
+  }
+  const h = buildPoolHistory({ journal, graph });
+  assert.equal(h.hasReserve, true);
+  assert.equal(h.periods.at(-1).reserve.accessible, 400_000);
+  // The tie is what makes the panel quotable: a drifted reserve is exactly as misleading as
+  // a drifted pool, so it is checked on the same terms.
+  const tie = tiePoolHistory(h, state);
+  assert.equal(tie.ok, true, JSON.stringify(tie.mismatches));
+});
+
+test('RES-8: a run recorded BEFORE the field existed reports hasReserve=false, not a zero line', () => {
+  const h = buildPoolHistory({ journal: [entry('2030-01-01', [
+    { field: 'liquidityPools', before: null, after: { cash: CUBE() } },
+  ])] });
+  // A flat zero line would read as "you have no reserve", which is a different claim from
+  // "this run did not record one".
+  assert.equal(h.hasReserve, false);
+  assert.equal(h.periods[0].reserve.accessible, undefined);
+});
+
+test('RES-9: the reserve columns reach the CSV fact table, repeated per pool row', () => {
+  const graph = RESERVE_GRAPH();
+  const state = RESERVE_ACCOUNTS();
+  const { before, after } = runReserve(state, graph);
+  const h = buildPoolHistory({ journal: [entry('2030-01-01', diffStates(before, after))], graph });
+  const rows = poolHistoryRows(h);
+  assert.ok(rows.length > 0);
+  assert.equal(rows[0].reserveAccessible, 400_000);
+  assert.equal(rows[0].reserveYears, 3.333);
+});

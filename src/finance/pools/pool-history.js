@@ -79,6 +79,10 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
 
   let cube    = {};                    // running reconstruction of state.liquidityPools
   let plan    = {};                    // running reconstruction of state.poolRefillPlan
+  // The household reserve, replayed exactly like the cube. Carried forward on a period with
+  // no diff for the same reason every cube field is: the reducer writes it every period, so
+  // an absent diff means the number did not move.
+  let reserve = {};
   const periods = [];
   const events  = [];
   const fromActions = [];              // FIRED rows read from POOL_FLOW_APPLY (the fallback)
@@ -95,6 +99,12 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
         touched = true;
       } else if (field.startsWith('liquidityPools.')) {
         _setPath(cube, field.split('.').slice(1), diff.after);
+        touched = true;
+      } else if (field === 'liquidityReserve') {
+        reserve = _clone(diff.after ?? {});
+        touched = true;
+      } else if (field.startsWith('liquidityReserve.')) {
+        _setPath(reserve, field.split('.').slice(1), diff.after);
         touched = true;
       } else if (field === 'poolRefillPlan') {
         plan = _clone(diff.after ?? {});
@@ -174,7 +184,8 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
       });
     }
 
-    periods.push({ seq: entry.seq ?? periods.length, at, year, pools, vetoed: [...(plan?.vetoed ?? [])] });
+    periods.push({ seq: entry.seq ?? periods.length, at, year, pools,
+                   reserve: { ...reserve }, vetoed: [...(plan?.vetoed ?? [])] });
   }
 
   // Pool order: the author's spend order when the graph is at hand, first-seen otherwise.
@@ -198,8 +209,11 @@ export function buildPoolHistory({ journal, graph = null } = {}) {
   if (!sawFiredField) events.push(...fromActions);
 
   events.sort((a, b) => a.seq - b.seq || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+  // Distinguishes a run with no reserve figure (recorded before the field existed) from one
+  // whose reserve is genuinely zero — the panel must not draw the first as a flat zero line.
+  const hasReserve = periods.some(p => p.reserve?.accessible != null);
   return { periods, events, poolIds, labels, flowIds, firedFromCube: sawFiredField,
-           hasCube: periods.length > 0 };
+           hasCube: periods.length > 0, hasReserve };
 }
 
 /**
@@ -226,6 +240,12 @@ export function poolHistoryRows(history) {
         drawdown:  m.drawdown,
         gated:     (m.gatedFlows ?? []).map(g => g.id).join(' '),
         vetoed:    p.vetoed.includes(id) ? 1 : 0,
+        // Per-PERIOD, not per-pool, so they repeat down every pool's row. Repeating beats a
+        // second table: the one question this CSV gets opened to answer is why a pool reads
+        // zero cover, and the answer is on the same row.
+        reserveAccessible: p.reserve?.accessible ?? null,
+        reserveLocked:     p.reserve?.locked ?? null,
+        reserveYears:      p.reserve?.yearsOfCover ?? null,
       });
     }
   }
@@ -265,6 +285,28 @@ export function poolSeries(history, field, poolIds = null) {
 }
 
 /**
+ * The household reserve as a series, on the same axis `poolSeries` returns.
+ *
+ * Separate from `poolSeries` because it is not a pool: it is measured across the whole book,
+ * including accounts no pool claims, which is the entire reason it exists (§22.3 extended).
+ * Folding it into the pool map would put it in every per-pool total the panel and CSV take.
+ *
+ * @returns {{labels: string[], years: number[], accessible: Array, locked: Array,
+ *            yearsOfCover: Array}}
+ */
+export function reserveSeries(history) {
+  const points = history?.periods ?? [];
+  const pick = (f) => points.map(p => p.reserve?.[f] ?? null);
+  return {
+    labels:       points.map(p => p.at.toISOString().slice(0, 10)),
+    years:        points.map(p => p.year),
+    accessible:   pick('accessible'),
+    locked:       pick('locked'),
+    yearsOfCover: pick('yearsOfCover'),
+  };
+}
+
+/**
  * Does the journal replay agree with the live state it was replayed from?
  *
  * The one check that makes anything on this panel quotable. The history is a RECONSTRUCTION
@@ -286,6 +328,18 @@ export function tiePoolHistory(history, state) {
   }
   const mismatches = [];
   let checked = 0;
+  // The reserve is replayed from the same diffs and is quotable on the same terms, so it is
+  // tied on the same terms: a drifted reserve line is exactly as misleading as a drifted pool.
+  const liveRes = state?.liquidityReserve;
+  const lastRes = history?.periods?.[history.periods.length - 1]?.reserve;
+  if (liveRes) {
+    for (const f of ['accessible', 'locked', 'yearsOfCover']) {
+      checked++;
+      const a = liveRes[f] ?? null;
+      const b = lastRes?.[f] ?? null;
+      if (a !== b) mismatches.push({ pool: '(household reserve)', field: f, live: a, replayed: b });
+    }
+  }
   for (const id of Object.keys(live)) {
     for (const f of POOL_CUBE_FIELDS) {
       checked++;

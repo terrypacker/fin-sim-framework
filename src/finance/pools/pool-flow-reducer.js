@@ -12,7 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ageAsOf }           from '../behavioral/rebalance-to-target-reducer.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS } from './liquidity-graph.js';
-import { poolContext, allPoolMetrics } from './pool-metrics.js';
+import { poolContext, allPoolMetrics, householdReserve } from './pool-metrics.js';
 
 /**
  * DESIGN 97 §12.3/§12.6 — the REFILL RULE, which `FINDINGS.md` §6.4 called "probably 80 % of
@@ -532,8 +532,19 @@ export class PoolFlowReducer extends Reducer {
       liquidityPools[pool.id] = entry;
     }
 
+    // The household reserve, across the WHOLE book (design 97 §22.3 extended). Stamped here
+    // rather than derived in the panel for the reason every other cube field is: it must
+    // travel through serialization and the journal diff identically, so the panel replays
+    // the number the run actually used instead of recomputing one that can drift from it.
+    const reserve = householdReserve(state, ctx, new Date(asOfMs));
+
     return this.newState(state, {
       liquidityPools,
+      liquidityReserve: {
+        accessible:   +reserve.accessible.toFixed(2),
+        locked:       +reserve.locked.toFixed(2),
+        yearsOfCover: reserve.yearsOfCover != null ? +reserve.yearsOfCover.toFixed(3) : null,
+      },
       // What executor 1 reads. `shortfall` is what the rebalancer should still try to fill;
       // `vetoed` is the set of source pools whose sale it must NOT make this period.
       poolRefillPlan: {

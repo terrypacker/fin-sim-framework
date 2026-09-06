@@ -219,8 +219,8 @@ import { Person, PAYROLL_ELECTION_FIELDS } from './finance/person.js';
 import { POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_CAPACITY_MODE, FLOW_CADENCE, POOL_DRAWDOWN_BASIS, FLOW_EXECUTOR, depositKeyFor, purchaseTargetFor, normalizeLiquidityGraph, compileToDrawdownSequence, poolsClaimingClass, resolveLiquidityGraph, collectAuthoredGraphProblems } from './finance/pools/liquidity-graph.js';
 import { PoolFlowApplyReducer } from './finance/pools/pool-flow-apply-reducer.js';
 import { PoolFlowReducer } from './finance/pools/pool-flow-reducer.js';
-import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
-import { poolMarketReturn, loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext } from './finance/pools/pool-metrics.js';
+import { POOL_CUBE_FIELDS, POOL_EVENT_KIND, buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, latestPools } from './finance/pools/pool-history.js';
+import { poolMarketReturn, loanForOffset, annualSpendBase, poolMetrics, allPoolMetrics, poolContext, RESERVE_CLASSES, householdReserve } from './finance/pools/pool-metrics.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
@@ -1319,6 +1319,7 @@ export const Finance = {
   buildPoolHistory,
   poolHistoryRows,
   poolSeries,
+  reserveSeries,
   tiePoolHistory,
   latestPools,
   poolMarketReturn,
@@ -1327,6 +1328,8 @@ export const Finance = {
   poolMetrics,
   allPoolMetrics,
   poolContext,
+  RESERVE_CLASSES,
+  householdReserve,
   AccountRetitleApplyReducer,
   AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,

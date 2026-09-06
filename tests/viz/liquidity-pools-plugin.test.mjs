@@ -286,6 +286,53 @@ test('the CSV columns are the fact table, headroom and the gate included', () =>
   }
 });
 
+// ─── the household reserve chip (design 97 §22.3, extended) ──────────────────
+
+/** The same run, plus the household reserve — deliberately DISAGREEING with the pools. */
+const RUN_WITH_RESERVE = [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null,
+      after: { offset: CUBE({ balance: 380_000 }), growth: CUBE({ balance: 2_000_000, target: null }) } },
+    { field: 'liquidityReserve', before: null,
+      after: { accessible: 1_250_000, locked: 90_000, yearsOfCover: 5.2 } },
+  ]),
+];
+
+test('the legend carries the household reserve, and it is NOT a pool filter', () => {
+  const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
+  const legend = q(plugin, 'legend');
+  assert.match(legend.textContent, /Household reserve/);
+  assert.match(legend.textContent, /5\.2y/);
+  // The locked half is shown beside it: an age-gated bond is not cover, and a reader who
+  // cannot see it will read the accessible figure as the whole book.
+  assert.match(legend.textContent, /locked/);
+  // No data-key ⇒ `_onLegendClick` cannot reach it, so it can never enter `_hidden` and
+  // silently drop out of the chart the way a pool chip does.
+  const chips = [...legend.querySelectorAll('.pool-legend-item')];
+  const reserveChip = chips.find(c => /Household reserve/.test(c.textContent));
+  assert.ok(reserveChip, 'reserve chip missing');
+  assert.equal(reserveChip.dataset.key, undefined);
+  plugin.unmount();
+});
+
+test('a run with no reserve recorded draws no reserve chip — silence, not a zero', () => {
+  const { plugin } = mountPlugin(simOf(RUN));
+  // A "$0 / 0.0y" chip would assert the household has no reserve, which is a claim this run
+  // cannot make. Absent is the honest rendering.
+  assert.doesNotMatch(q(plugin, 'legend').textContent, /Household reserve/);
+  plugin.unmount();
+});
+
+test('the reserve reaches the cover chart as its own series, not as a pool', () => {
+  const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
+  const hist = plugin._history();
+  assert.equal(hist.hasReserve, true);
+  // It must not be in poolIds: everything keyed there is filterable, totalled and coloured
+  // as a pool, and this is measured across accounts no pool claims.
+  assert.ok(!hist.poolIds.includes('reserve'));
+  assert.equal(hist.periods.at(-1).reserve.yearsOfCover, 5.2);
+});
+
 test('switching views does not re-read the journal', () => {
   const { plugin } = mountPlugin(simOf(RUN));
   const first = plugin._history();

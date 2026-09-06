@@ -10,6 +10,8 @@
 
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
+import { ACCOUNT_TYPE }           from '../assets/account.js';
+import { isDrawdownAccessible }   from '../derived-metrics/net-liquidity.js';
 
 /**
  * DESIGN 97 §12.1 — a pool is not a balance.
@@ -334,5 +336,81 @@ export function poolContext(state, { expensesCurrency = 'RESIDENCE', baseCurrenc
     expensesCurrency,
     bookBase,
     annualSpend: annualSpendBase(state, { expensesCurrency, baseCurrency }),
+  };
+}
+
+/**
+ * The ALLOCATION classes a spending reserve is made of. GOLD and EQUITY are deliberately
+ * out: the question this answers is "how long could I spend without selling equity", and a
+ * volatile sleeve cannot answer it however liquid it is.
+ */
+export const RESERVE_CLASSES = Object.freeze(['CASH', 'BOND']);
+
+/** Account types whose whole balance IS cash — the only ones counted without lots. */
+const RESERVE_CASH_TYPES = new Set([ACCOUNT_TYPE.CHECKING, ACCOUNT_TYPE.SAVINGS, ACCOUNT_TYPE.OFFSET]);
+
+/**
+ * What one account contributes to the household reserve, in its OWN currency.
+ *
+ * Mirrors `claimValueNative`'s holdings-first rule and adds the class filter, with one
+ * deliberate asymmetry: an account with no lots counts only when it is CASH-LIKE. A wrapper
+ * carrying a balance and no holdings has no allocation to read, and counting it whole would
+ * report a 401(k) as a bond reserve.
+ */
+function reserveValueNative(account) {
+  const fromHoldings = holdingsValue(account, RESERVE_CLASSES);
+  if (fromHoldings != null) return fromHoldings;
+  return RESERVE_CASH_TYPES.has(account?.type) ? Math.max(0, account?.balance ?? 0) : 0;
+}
+
+/**
+ * DESIGN 97 §22.3 (extended) — the household's spending reserve, across the WHOLE book.
+ *
+ * The pool cube answers "what is in the pools". On a plan whose taxable accounts drain, that
+ * stops being the same question as "how long can I spend without selling equity": the graph's
+ * bond target is a portfolio-wide MIX weight, so the located planner puts the reserve wherever
+ * there is room — and once that is a wrapper, no pool claims it and every pool reports zero.
+ * Measured on the reference plan: the cube fell 4.8 -> 0.0 years between 2040 and 2055 while
+ * the real accessible reserve never left the 4.9-5.4 year band.
+ *
+ * That gap is not closable by authoring. `liquidity-graph.js` refuses a sleeve narrowing on
+ * any non-BROKERAGE account (§22.6) and `isPortfolioPool` requires every claim to be a
+ * brokerage, so a pool cannot be both "the bond sleeve of my super" and an endpoint of a
+ * REBALANCE edge. Hence a household-level figure alongside the per-pool ones, rather than a
+ * pool that cannot exist.
+ *
+ * `isDrawdownAccessible` is the authority for the age gate — the same one `computeNetLiquidity`
+ * uses (design 88 §5), so the reserve line and the control metric cannot drift apart. It
+ * carries that authority's known coarseness: accessibility there is a per-ACCOUNT boolean, so
+ * an under-age Roth counts WHOLE on the strength of `allowsEarlyWithdrawal`, where a draw
+ * would really find only its `contributionBasis` (§22.3's trap). That overstates in the one
+ * direction this metric should not, so read `accessible` before the age gates open as an upper
+ * bound. Fixing it means returning an AMOUNT from the shared authority, which is §22.3's own
+ * remaining work and belongs there rather than in a second copy of the rule here.
+ *
+ * @param {object}    state
+ * @param {object}    ctx    `poolContext` output — supplies `annualSpend` and `baseCurrency`
+ * @param {Date|null} date   the period instant, for the age gates
+ * @returns {{accessible: number, locked: number, yearsOfCover: number|null}}
+ */
+export function householdReserve(state, ctx, date = null) {
+  let accessible = 0;
+  let locked     = 0;
+  for (const account of Object.values(state ?? {})) {
+    if (!account || typeof account !== 'object') continue;
+    if (typeof account.balance !== 'number') continue;      // not an account-shaped entry
+    const native = reserveValueNative(account);
+    if (!(native > 0)) continue;
+    const base = toBaseCurrency(native, currencyOf(account, ctx.baseCurrency), ctx.baseCurrency, state);
+    // `isDrawdownAccessible` also excludes anything opted OUT of drawdown
+    // (`drawdownPriority: null`), which is correct here for the same reason: money the
+    // drawdown chain will not touch cannot fund a year of spending.
+    if (isDrawdownAccessible(account, state, date)) accessible += base;
+    else locked += base;
+  }
+  return {
+    accessible,
+    locked,
+    yearsOfCover: ctx.annualSpend > 0 ? accessible / ctx.annualSpend : null,
   };
 }

@@ -14,7 +14,7 @@ import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
-import { buildPoolHistory, poolHistoryRows, poolSeries, tiePoolHistory, POOL_EVENT_KIND }
+import { buildPoolHistory, poolHistoryRows, poolSeries, reserveSeries, tiePoolHistory, POOL_EVENT_KIND }
   from '../../../../finance/pools/pool-history.js';
 import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allocation-palette.js';
 
@@ -24,6 +24,9 @@ export const POOL_CSV_COLUMNS = Object.freeze([
   'balance', 'capacity', 'utilised', 'target', 'yearsOfCover', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
   'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed',
+  // Per-PERIOD figures, repeated on every pool's row (§22.3 extended). Last, so a reader
+  // scanning the per-pool columns is not interrupted by three that do not vary with `pool`.
+  'reserveAccessible', 'reserveLocked', 'reserveYears',
 ]);
 
 /**
@@ -418,6 +421,21 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           connectNulls: false, data: cover.series[id],
         });
       }
+      // The household reserve, across the WHOLE book — including accounts no pool claims.
+      // Drawn on this view because it answers the same question the per-pool lines do and
+      // frequently disagrees with all of them: once the taxable accounts drain, the graph's
+      // bond target is realised inside the age-gated wrappers, which no pool can claim
+      // (§22.6), so every pool line falls to zero while the household's cover is unchanged.
+      // Measured on the reference plan: pools 4.8y -> 0.0y while this line held 4.9-5.4y.
+      // Dashed and un-coloured so it never reads as one more pool.
+      if (hist.hasReserve) {
+        const res = reserveSeries(hist);
+        series.push({
+          name: 'Household reserve (all accounts)', type: 'line', showSymbol: false,
+          lineStyle: { width: 2, type: 'dashed', color: ink }, itemStyle: { color: ink },
+          connectNulls: false, z: 3, data: res.yearsOfCover,
+        });
+      }
       yFormat = (v) => `${v}y`;
     } else if (this._view === 'stock') {
       // Three lines per pool, and the pairing is the point: a balance without its target is
@@ -617,9 +635,28 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       return `<span class="pool-legend-item${off ? ' pool-legend-item--off' : ''}" data-key="${_esc(id)}"
         title="${_esc(id)} — click to show or hide this pool"><i style="background:${colorForSeriesKey(id, i, { dark })}"></i>${_esc(hist.labels[id])}${tail}</span>`;
     }).join('');
+
+    // The household reserve gets a chip too, but NOT a filter chip: it is not a pool and
+    // hiding it would imply it is one of them. It sits last and reads as the total the pool
+    // chips should — and often do not — add up to.
+    if (hist.hasReserve) {
+      const r = last.reserve ?? {};
+      if (r.accessible != null) {
+        const lock = r.locked > 0 ? ` <span class="pool-dim">+${_esc(this._money(r.locked))} locked</span>` : '';
+        el.insertAdjacentHTML('beforeend',
+          `<span class="pool-legend-item pool-legend-item--static"
+             title="Accessible CASH + BOND across every account, whether or not a pool claims it. The age gate is the same one the drawdown chain uses.">
+             <i style="background:${dark ? '#94a3b8' : '#52514e'}"></i>Household reserve` +
+          ` <strong>${_esc(this._money(r.accessible))}</strong>` +
+          (r.yearsOfCover != null ? ` <span class="pool-dim">${r.yearsOfCover.toFixed(1)}y</span>` : '') +
+          `${lock}</span>`);
+      }
+    }
   }
 
   _onLegendClick(e) {
+    // The reserve chip carries no `data-key`, so it is not selectable here — which is what
+    // keeps it out of `_hidden` and therefore out of `_visiblePools`.
     const chip = e.target.closest('[data-key]');
     if (!chip) return;
     const key = chip.dataset.key;
@@ -639,6 +676,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       const s = String(v);
       return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
+    // Reserve columns ride on every row: they are a per-PERIOD figure, not a per-pool one, so
+    // repeating them is the only shape that survives a filter or a sort in a spreadsheet.
     const csv = [POOL_CSV_COLUMNS.join(','),
       ...rows.map(r => POOL_CSV_COLUMNS.map(c => cell(r[c])).join(','))].join('\n');
     const blob = new Blob([withBom(csv)], { type: 'text/csv' });
