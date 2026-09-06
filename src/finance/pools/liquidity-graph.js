@@ -507,7 +507,10 @@ function assignExecutors(pools, flows, byKey) {
  *
  * @param {{pools?: Array, flows?: Array}|null} graph
  * @param {Array<{stateKey:string, type?:string, offsetsPropertyKey?:string}>} accounts
- * @param {{ drawdownMode?: string, hasDrawdownSequence?: boolean, hasLegacyPoolYears?: boolean }} [opts]
+ * @param {{ drawdownMode?: string, hasDrawdownSequence?: boolean, hasLegacyPoolYears?: boolean,
+ *   hasRebalancer?: boolean }} [opts] - `hasRebalancer` false ⇒ no TARGET_ALLOCATION, so nothing
+ *   reads a pool target OR the legacy pool years and the §12.2 conflict cannot arise. Defaults
+ *   to true: a caller that cannot see the strategy list gets the strict reading.
  * @returns {{pools: Array, flows: Array}|null} null when absent/empty
  */
 export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
@@ -533,7 +536,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
   const ids        = new Set();
   // Global claim ledger: key → Set<sleeve> | true. Overlap ACROSS pools is the new error.
   const claimedAll = new Map();
-  let anyTarget = false;
+  const targetedPools = [];
 
   for (const raw of rawPools) {
     if (!raw || typeof raw !== 'object') err('every pool must be an object');
@@ -567,7 +570,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
     const capacity = sizeSpec(raw.capacity, `pool '${id}' capacity`, CAPACITY_MODES, POOL_CAPACITY_MODE.BALANCE)
                   ?? { mode: POOL_CAPACITY_MODE.BALANCE };
     if (target) {
-      anyTarget = true;
+      targetedPools.push(id);
       // A size target on a pool is realised by the rebalancer as a fraction of the book
       // allocated to that pool's ALLOCATION classes (design 97 §12.2, executor 1). Across
       // two classes there is no unique split, and inventing one (equal? by authored weight?)
@@ -607,10 +610,22 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
     });
   }
 
-  if (anyTarget && opts.hasLegacyPoolYears) {
+  // Two authorities on the rebalancer's target (design 97 §12.2) — but only when there IS a
+  // rebalancer. Both values are read in exactly one place, TARGET_ALLOCATION's reducers, and
+  // this validator runs in the toolset's state projection, which runs whatever strategies are
+  // selected. Without that strategy neither value reaches anything, so throwing refused to
+  // compile a config over two dead numbers. `hasRebalancer` defaults TRUE so a caller that
+  // cannot know (a bare graph passed straight to the normalizer, the authoring UI) keeps the
+  // strict reading; only `resolveLiquidityGraph`, which can see the strategy list, relaxes it.
+  if (targetedPools.length > 0 && opts.hasLegacyPoolYears && opts.hasRebalancer !== false) {
     err('a pool `target` cannot be combined with `poolCashYears`/`poolBondYears`: both size the '
-      + 'rebalancer\'s target and one would silently win (design 97 §12.2). The graph target is '
-      + 'the successor — drop the legacy params.');
+      + `rebalancer's target and one would silently win (design 97 §12.2). Pools carrying a `
+      + `target: ${targetedPools.map(id => `'${id}'`).join(', ')}. The graph target is the `
+      + 'successor, so either clear `poolCashYears`/`poolBondYears` and size these pools with '
+      + 'their own `target`, or clear the `liquidityGraph` param to use the legacy pair. Note '
+      + 'that DESELECTING the LIQUIDITY_POOLS strategy does not clear the graph — that strategy '
+      + 'governs only the refill flows, while the graph itself still compiles to the drawdown '
+      + 'order and still sizes the rebalancer.');
   }
 
   // ── flows ────────────────────────────────────────────────────────────────────────
@@ -802,12 +817,23 @@ export function poolsClaimingClass(graph, cls) {
  * @param {Array}  accounts  - context.accounts
  * @returns {{pools:Array, flows:Array}|null}
  */
+function hasTargetAllocation(p) {
+  const sel = p?.behavioralStrategies;
+  // Absent is NOT "no strategies" — a params bag that never mentions the field (a test, a
+  // partial config) must keep the strict reading rather than silently lose the guard.
+  if (!Array.isArray(sel)) return true;
+  return sel.includes('TARGET_ALLOCATION');
+}
+
 export function resolveLiquidityGraph(params, accounts = []) {
   const p = params ?? {};
   return normalizeLiquidityGraph(p.liquidityGraph, accounts, {
     drawdownMode:        p.drawdownMode,
     hasDrawdownSequence: Array.isArray(p.drawdownSequence) && p.drawdownSequence.length > 0,
     hasLegacyPoolYears:  Number.isFinite(p.poolCashYears) || Number.isFinite(p.poolBondYears),
+    // Only TARGET_ALLOCATION's reducers read a pool target or the legacy pool years, so with
+    // it deselected the §12.2 "two authorities" conflict has no reader and is not a conflict.
+    hasRebalancer:       hasTargetAllocation(p),
   });
 }
 

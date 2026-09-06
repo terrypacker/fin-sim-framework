@@ -722,6 +722,57 @@ test('POOL-10: every config error in §12.7 throws at config time', () => {
          /poolCashYears/, ACCOUNTS, { hasLegacyPoolYears: true });
 });
 
+test('POOL-10c2: the §12.2 conflict needs a rebalancer to be a conflict at all', () => {
+  // `poolCashYears`/`poolBondYears` and a pool `target` are both read in exactly ONE place —
+  // TARGET_ALLOCATION's reducers. This validator runs in the toolset's state projection,
+  // which runs whichever strategies are selected, so without that strategy the throw refused
+  // to compile a scenario over two numbers nothing reads. The user-visible shape: unchecking
+  // LIQUIDITY_POOLS does not clear the graph, so someone who unchecks it and then reaches for
+  // the legacy pair hits a wall with no live conflict behind it.
+  const G = { pools: [{ id: 'a', spendOrder: 1,
+    claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 4 }] };
+
+  // No rebalancer ⇒ nothing reads either authority ⇒ it compiles.
+  assert.ok(normalizeLiquidityGraph(G, ACCOUNTS, { hasLegacyPoolYears: true, hasRebalancer: false }));
+  // A rebalancer ⇒ both are live ⇒ still throws. This is the case that must NOT regress.
+  throws(G, /poolCashYears/, ACCOUNTS, { hasLegacyPoolYears: true, hasRebalancer: true });
+  // Absent is not "no strategies": a caller that cannot see the strategy list keeps the
+  // strict reading, so the guard cannot be lost by forgetting to pass the flag.
+  throws(G, /poolCashYears/, ACCOUNTS, { hasLegacyPoolYears: true });
+});
+
+test('POOL-10c3: resolveLiquidityGraph reads the rebalancer off behavioralStrategies', () => {
+  const base = { liquidityGraph: { pools: [{ id: 'a', spendOrder: 1,
+    claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 4 }] },
+    poolCashYears: 3 };
+
+  assert.ok(resolveLiquidityGraph({ ...base, behavioralStrategies: ['BOND_LADDER'] }, ACCOUNTS),
+    'no TARGET_ALLOCATION ⇒ no reader ⇒ compiles');
+  assert.throws(
+    () => resolveLiquidityGraph({ ...base, behavioralStrategies: ['TARGET_ALLOCATION'] }, ACCOUNTS),
+    /poolCashYears/);
+  // A params bag that never mentions the field must stay strict.
+  assert.throws(() => resolveLiquidityGraph(base, ACCOUNTS), /poolCashYears/);
+});
+
+test('POOL-10c4: the §12.2 message names the pools and the strategy that does not clear them', () => {
+  // The message used to say only "drop the legacy params", which assumes the reader wanted
+  // the graph. Someone who just unchecked LIQUIDITY_POOLS has no way to connect that to the
+  // stale `liquidityGraph` param still carrying the targets — so both facts are in the text.
+  let msg = '';
+  try {
+    normalizeLiquidityGraph({ pools: [
+      { id: 'cash',   spendOrder: 1, claims: [{ key: 'usStockAccount', sleeves: ['CASH'] }], target: 3 },
+      { id: 'buffer', spendOrder: 2, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }], target: 2 },
+      { id: 'growth', spendOrder: 3, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ] }, ACCOUNTS, { hasLegacyPoolYears: true });
+  } catch (e) { msg = e.message; }
+  assert.match(msg, /'cash', 'buffer'/);          // named, in authored order
+  assert.doesNotMatch(msg, /'growth'/);           // and only the ones that carry a target
+  assert.match(msg, /LIQUIDITY_POOLS strategy does not clear the graph/);
+  assert.match(msg, /clear the `liquidityGraph` param/);   // the other way out, stated
+});
+
 test('POOL-10d: the reported problems are the thrown ones, localized to their field', () => {
   // The authoring UI and the boot-time recovery overlay both need every problem at once,
   // keyed to the cell that carries it — and they must agree with the compiler to the
