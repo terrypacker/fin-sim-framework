@@ -1589,6 +1589,54 @@ const REFILL_GRAPH = (bondKey) => ({
   flows: [{ id: 'g2b', from: 'growth', to: 'bonds' }],
 });
 
+test('POOL-19: two edges out of one source with different gates warns — the looser is dead', () => {
+  // §12.4b. The gate reads as a property of its edge; the veto it produces names the SOURCE
+  // POOL, and must, or the rebalancer launders the gated sale through another route. So the
+  // tightest gate on any edge out of a source governs all of them, and an author who sets 0.10
+  // on one and 0.05 on another has written a 0.10 that can never fire.
+  const warnings = capturingWarnings(() => normalizeLiquidityGraph({ pools: [
+    { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND', value: 2 } },
+    { id: 'offset', spendOrder: 10, claims: [{ key: 'offsetAccount' }],
+      target: { mode: 'AMOUNT', value: 100_000 } },
+  ], flows: [
+    { id: 'g2b', from: 'growth', to: 'buffer', gate: { sourceDrawdownUnder: 0.10 } },
+    { id: 'g2o', from: 'growth', to: 'offset', gate: { sourceDrawdownUnder: 0.05 } },
+  ] }, ACCOUNTS));
+  const hit = warnings.filter(w => /gates DIFFER/.test(w));
+  assert.equal(hit.length, 1);
+  assert.match(hit[0], /pool 'growth' is the source of 2 gated edges/);
+  assert.match(hit[0], /TIGHTEST of these governs all of them/);
+});
+
+test('POOL-19b: identical gates out of one source are silent — the control', () => {
+  // Without this the test above passes on a warning that fires for ANY two gated edges, which
+  // would make it noise on every legal graph that gates more than one route out of a pool.
+  const same = (over) => ({ pools: [
+    { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND', value: 2 } },
+    { id: 'offset', spendOrder: 10, claims: [{ key: 'offsetAccount' }],
+      target: { mode: 'AMOUNT', value: 100_000 } },
+  ], flows: [
+    { id: 'g2b', from: 'growth', to: 'buffer', gate: { sourceDrawdownUnder: 0.10 } },
+    { id: 'g2o', from: 'growth', to: 'offset', gate: { sourceDrawdownUnder: 0.10, ...over } },
+  ] });
+  assert.equal(capturingWarnings(() => normalizeLiquidityGraph(same(), ACCOUNTS))
+    .filter(w => /gates DIFFER/.test(w)).length, 0);
+  // A gate is a composed tree, so a difference in DWELL is as unreachable as one in threshold.
+  assert.equal(capturingWarnings(() => normalizeLiquidityGraph(same({ sustainedYears: 2 }), ACCOUNTS))
+    .filter(w => /gates DIFFER/.test(w)).length, 1, 'a dwell difference is a difference');
+  // And one gated edge out of a source can never be shadowed by a second.
+  assert.equal(capturingWarnings(() => normalizeLiquidityGraph({ pools: [
+    { id: 'growth', spendOrder: 30, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    { id: 'buffer', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+      target: { mode: 'YEARS_OF_SPEND', value: 2 } },
+  ], flows: [{ id: 'g2b', from: 'growth', to: 'buffer', gate: { sourceDrawdownUnder: 0.10 } }] },
+    ACCOUNTS)).filter(w => /gates DIFFER/.test(w)).length, 0);
+});
+
 test('POOL-16: a REBALANCE edge into a role the rebalancer cannot trade warns', () => {
   // `fixed-income` is in neither TAX_ADVANTAGED_ROLES nor TAXABLE_ROLES, so the reducer never
   // sees the account: the edge validates, saves, and moves nothing, for ever, without even a
