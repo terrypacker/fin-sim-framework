@@ -1304,10 +1304,23 @@ function gateNodeToRow(node) {
 /** A flow's gate → clause rows in DNF, or null when it is not expressible as rows. */
 function gateToRows(flowId, gate) {
   if (gate == null) return [];
-  const branches = Array.isArray(gate) ? [{ allOf: gate }]
-    : gate.anyOf ? gate.anyOf : [gate];
+  // §12.4c — `scope` is a property of the gate ROOT, not a clause, so it is split off BEFORE
+  // the leaf test. On a single-clause gate the root IS the leaf, and `gateNodeToRow`'s
+  // unknown-key guard would otherwise see `scope`, refuse the row, and send the whole flow to
+  // `rawGate` — the gate survives (buildFlow returns it verbatim) but the table draws NOTHING,
+  // so an author who set the scope and reopened the editor saw their gate vanish.
+  //
+  // Stripped here rather than added to that guard's `known` set on purpose: the guard's job is
+  // to send anything it cannot faithfully draw to `rawGate`, and a scope nested on a CLAUSE is
+  // exactly such a thing (`normalizeGate` rejects one outright). Widening the leaf's vocabulary
+  // would make a nested scope silently drawable and then silently dropped on save.
+  const isArr = Array.isArray(gate);
+  const scope = (!isArr && gate.scope) || 'SOURCE';
+  const root  = isArr ? gate : Object.fromEntries(Object.entries(gate).filter(([k]) => k !== 'scope'));
+  const branches = isArr ? [{ allOf: root }]
+    : root.anyOf ? root.anyOf : [root];
   // An `anyOf` carrying clauses of its own is an AND-over-an-OR; the table cannot say it.
-  if (gate.anyOf && (gate.not || gate.allOf || GATE_CLAUSE_KINDS.some(k => gate[k] != null))) return null;
+  if (!isArr && root.anyOf && (root.not || root.allOf || GATE_CLAUSE_KINDS.some(k => root[k] != null))) return null;
   const rows = [];
   for (const [i, branch] of branches.entries()) {
     const nodes = Array.isArray(branch) ? branch : (branch?.allOf ?? [branch]);
@@ -1318,7 +1331,7 @@ function gateToRows(flowId, gate) {
       // §12.4c — the scope lives on the gate ROOT, but the table is one row per CLAUSE, so it
       // is repeated onto every row of this flow and kept in step by `syncGateScopes`. Repeating
       // beats a per-flow sub-table: §17.1's whole argument is that the row component stays flat.
-      rows.push({ flow: flowId, branch: i + 1, gateScope: gate.scope ?? 'SOURCE', ...row });
+      rows.push({ flow: flowId, branch: i + 1, gateScope: scope, ...row });
     }
   }
   return rows;

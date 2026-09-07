@@ -1111,6 +1111,56 @@ test('LiquidityGraph: one gate, one scope — an edit reaches every clause of th
   assert.strictEqual(param.value.flows[1].gate.scope, undefined);
 });
 
+test('LiquidityGraph: a SAVED EDGE-scoped gate still draws its clause rows', () => {
+  // The bug this closes: `scope` sits on the gate ROOT, and on a single-clause gate the root
+  // IS the leaf. `gateNodeToRow`'s unknown-key guard therefore saw `scope`, refused the row,
+  // and `gateToRows` sent the whole flow to `rawGate` — so setting both gates to EDGE, saving
+  // and reopening left the gate table EMPTY. The gate itself round-trips (buildFlow returns
+  // `rawGate` verbatim), which is what made it a pure UI disappearance rather than data loss.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 300000 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', amount: { toTarget: true },
+              gate: { sourceDrawdownUnder: 0.4, drawdownBasis: 'INDEX', scope: 'EDGE' } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+
+  assert.strictEqual(cells(host, 'gateKind').length, 1, 'the clause row must still be drawn');
+  assert.strictEqual(cell(host, 'gateKind').value, 'sourceDrawdownUnder');
+  assert.strictEqual(cell(host, 'gateValue').value, '0.4');
+  assert.strictEqual(cell(host, 'gateScope').value, 'EDGE', 'and it shows the saved scope');
+
+  // An unrelated edit must not now rewrite the gate — the round-trip has to be exact.
+  type(cell(host, 'priority'), '3', 'change');
+  assert.deepStrictEqual(param.value.flows[0].gate,
+    { sourceDrawdownUnder: 0.4, drawdownBasis: 'INDEX', scope: 'EDGE' });
+});
+
+test('LiquidityGraph: an EDGE scope on a MULTI-clause gate also redraws', () => {
+  // The allOf/anyOf shapes take a different path through `gateToRows` — the root is not a
+  // leaf there — so they need their own pin rather than an argument that they are similar.
+  const param = { name: 'liquidityGraph', value: {
+    pools: [
+      { id: 'buffer', spendOrder: 10, target: { mode: 'AMOUNT', value: 1 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+      { id: 'growth', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }] },
+    ],
+    flows: [{ id: 'g2b', from: 'growth', to: 'buffer', amount: { toTarget: true },
+              gate: { scope: 'EDGE',
+                      anyOf: [{ sourceDrawdownUnder: 0.4, drawdownBasis: 'INDEX' },
+                              { sourceReturnOver: 0.02 }] } }],
+  } };
+  const host = mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.strictEqual(cells(host, 'gateKind').length, 2);
+  assert.deepStrictEqual(cells(host, 'gateScope').map(c => c.value), ['EDGE', 'EDGE']);
+  type(cell(host, 'priority'), '3', 'change');
+  assert.strictEqual(param.value.flows[0].gate.scope, 'EDGE');
+  assert.strictEqual(param.value.flows[0].gate.anyOf.length, 2);
+});
+
 test('LiquidityGraph: a scope on a gate the table cannot draw survives untouched', () => {
   // `rawGate` keeps an inexpressible gate verbatim. Its scope must ride along, or opening the
   // editor would silently downgrade an EDGE-scoped composed gate to SOURCE.
