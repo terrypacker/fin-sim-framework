@@ -21,7 +21,8 @@ import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allo
 /** The CSV's columns, in order. The fact table's contract — see `poolHistoryRows`. */
 export const POOL_CSV_COLUMNS = Object.freeze([
   'date', 'year', 'pool', 'label',
-  'balance', 'capacity', 'utilised', 'target', 'targetAfforded', 'yearsOfCover', 'high',
+  'balance', 'capacity', 'utilised', 'target', 'targetAfforded',
+  'yearsOfCover', 'yearsOfCoverTarget', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
   'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed', 'capped',
   // Per-PERIOD figures, repeated on every pool's row (§22.3 extended). Last, so a reader
@@ -92,6 +93,13 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     // but hiding a series is a chart affordance, not a claim about what the series is, and
     // rescaling the axis to read the small pools is what the legend filter is FOR.
     this._reserveHidden = false;
+    // Design 97 §23.6 — the FINE filter, where `_hidden` is the coarse one. A legend chip
+    // switches a whole pool off; this switches one of its lines off. Both are needed and
+    // neither subsumes the other: the cover view now draws two lines per pool and the stock
+    // view up to four, so a six-pool graph is a two-dozen-line chart, and "show me every
+    // pool's ASK and nothing else" is not expressible by hiding pools. Keyed by the stable
+    // `<poolId>::<role>` of `_seriesSpecs`.
+    this._hiddenSeries = new Set();
     // Panel-local and deliberately not persisted: the hover popup is the useful half
     // and the cluttering half at once, so this is a mood rather than a preference.
     this._tips         = true;
@@ -114,6 +122,12 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
         <span class="pool-seg" data-pool="logscope" style="display:none">
           <button type="button" data-scope="all" class="on">everything</button>
           <button type="button" data-scope="gated">only what did not fire</button>
+        </span>
+        <span class="pool-series-picker" data-pool="picker">
+          <button type="button" class="pool-csv-btn" data-pool="picker-btn"
+                  title="Choose which individual lines to draw. The legend chips below switch a whole pool on or off; this switches one of its lines.">
+            &#9776; series <span class="pool-dim" data-pool="picker-count"></span></button>
+          <div class="pool-series-menu" data-pool="picker-menu" hidden></div>
         </span>
         <span class="pool-spacer"></span>
         <span class="pool-asof" data-pool="asof">—</span>
@@ -158,6 +172,24 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       this._render();   // only the flows view needs it, but the redraw is cheap
     });
     this._bindOnce('legend', 'click', null, (e) => this._onLegendClick(e));
+    this._bindOnce('picker-btn', 'click', null, (e) => {
+      e.stopPropagation();                       // or the document handler closes it again
+      const menu = this._q('picker-menu');
+      if (menu) menu.hidden = !menu.hidden;
+    });
+    this._bindOnce('picker-menu', 'click', null, (e) => this._onPickerClick(e));
+    // Click-away, on the document: a popover that can only be closed by its own button is one
+    // readers leave open over the chart it is there to declutter.
+    if (!this._onDocClick) {
+      this._onDocClick = (e) => {
+        const picker = this._q('picker');
+        if (picker && !picker.contains(e.target)) {
+          const menu = this._q('picker-menu');
+          if (menu && !menu.hidden) menu.hidden = true;
+        }
+      };
+      document.addEventListener('click', this._onDocClick);
+    }
 
     const seg = this._q('logscope');
     if (seg && !seg._poolBound) {
@@ -188,6 +220,9 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
 
   destroy() {
     window.removeEventListener('resize', this._onResize);
+    // The picker's click-away listener lives on the DOCUMENT, so it outlives the panel unless
+    // it is removed here — and a stale one holds a reference to a destroyed plugin.
+    if (this._onDocClick) { document.removeEventListener('click', this._onDocClick); this._onDocClick = null; }
     this._unsubSimBus?.();
     this._unsubSimBus = null;
     this._disposeChart();
@@ -315,6 +350,11 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     }
 
     this._renderLegend(hist);
+    // The picker is built from the SPECS, not the chart, and therefore here rather than in
+    // `_drawChart`: that method no-ops without a canvas (a docked panel before its first
+    // activation, and jsdom), and a filter that silently does not exist in those states is a
+    // control the reader cannot find. It is also the only way the picker is assertable.
+    this._syncPicker(hist, isLog);
     if (isLog) { this._renderLog(hist); return; }
     this._drawChart(hist);
   }
@@ -371,6 +411,35 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
                 ${fired.length - transfers.length} in-portfolio) ·
                 <strong>${gated.length} gated</strong> · ${vetoed.length - capped.length} rebalance vetoes
                 (source)${capped.length ? ` · ${capped.length} fill caps (edge)` : ''}`);
+    // Design 97 §23.2 — a target the book could not afford, stated for the WHOLE RUN.
+    //
+    // The legend's badge reads the LAST period, like the balance and the cover beside it, and
+    // by the end of a long run the taxable pools have drained and nothing is clamped any more.
+    // So a reader landing on a finished run sees no badge, having just watched a plan spend
+    // thirty years holding an allocation nobody authored. This is the run-level statement, in
+    // the strip that already carries run-level facts, and it is the one place the clamp cannot
+    // be missed by arriving late.
+    const clampedPeriods = new Map();
+    for (const p of hist.periods) {
+      for (const [id, m] of Object.entries(p.pools)) {
+        if (m?.targetAfforded != null) clampedPeriods.set(id, (clampedPeriods.get(id) ?? 0) + 1);
+      }
+    }
+    // FIRST in the list, and it makes the strip WRAP. The strip is `nowrap; overflow-x: auto`,
+    // so a note appended to the end of a long line is off the right edge of a 10px-tall
+    // scroller — present in the DOM and unreadable, which is the failure this note exists to
+    // prevent, reproduced one level up. Same treatment as the untied-replay banner, and for
+    // the same reason: both say the numbers beside them are not what the author asked for.
+    let clampNote = null;
+    if (clampedPeriods.size) {
+      const worst = [...clampedPeriods.entries()].sort((a, b) => b[1] - a[1]);
+      clampNote = `<strong class="pool-warn">${worst.length} pool(s) asked for more than the book could
+        afford</strong> — ${worst.map(([id, n]) =>
+          `${_esc(hist.labels[id] ?? id)} in ${n}/${hist.periods.length} periods`).join(', ')}.
+        Their class saturates the mix and squeezes the others toward zero; see the
+        <em>afforded</em> line on the balance view`;
+      notes.unshift(clampNote);
+    }
     if (!hist.firedFromCube && (reducer?.graph?.flows ?? []).some(f => f.executor !== 'TRANSFER')) {
       // The pre-`firedFlows` fallback. Saying nothing here would let a zero read as "this
       // in-portfolio edge never fired" when the truth is that this run cannot record it.
@@ -381,7 +450,7 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       notes.push(`<span class="pool-warn">no edge ever fired or was gated</span> — check the triggers`);
     }
 
-    el.className = 'pool-provenance';
+    el.className = clampNote ? 'pool-provenance pool-provenance--clamped' : 'pool-provenance';
     el.innerHTML = notes.join(' · ');
   }
 
@@ -406,6 +475,247 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       lineStyle: { width: 2, type: 'dashed', color: ink }, itemStyle: { color: ink },
       connectNulls: false, z: 3, data: reserveSeries(hist).yearsOfCover,
     };
+  }
+
+  /**
+   * Every series this view CAN draw, as `{ key, poolId, roleLabel, series }` — before the
+   * per-series filter is applied.
+   *
+   * One list, two readers: the chart draws the members not in `_hiddenSeries`, and the series
+   * picker lists all of them with their checked state. They were briefly two pieces of code,
+   * and that is the shape where a picker offers a series the chart does not draw (or worse,
+   * silently fails to offer one it does) — the same "two authorities on one thing" the pivot
+   * in `poolSeries` exists to prevent, one level up.
+   *
+   * `key` is `<poolId>::<role>` and is STABLE across views and renders, because it is what a
+   * saved layout persists. The household reserve uses the reserved pool id `__reserve`, which
+   * cannot collide: a real pool id comes from the authored graph, and `normalizeLiquidityGraph`
+   * has no way to emit that name.
+   */
+  _seriesSpecs(hist, ids, { dark, ink, axis }) {
+    const colorOf = (id) => colorForSeriesKey(id, hist.poolIds.indexOf(id), { dark });
+    const out = [];
+    const add = (poolId, role, roleLabel, series) =>
+      out.push({ key: `${poolId}::${role}`, poolId, role, roleLabel, series });
+
+    if (this._view === 'cover') {
+      // The headline question: is the reserve actually there, in the unit a household
+      // thinks in. Unit-free, so pools of very different sizes are comparable on one axis.
+      //
+      // TWO lines per pool, and the gap between them is the point (design 97 §23.4). "Held"
+      // is what a bad decade can actually be paid out of; "asked" is what the author wrote.
+      // A single number cannot distinguish a plan that is short of its own policy from one
+      // whose policy asked for little, and those call for opposite fixes. Where the pool is
+      // also CLAMPED, "asked" is a level the book could never afford — the legend badge and
+      // the stock view's afforded line say so, which is why this view does not carry a third.
+      const held  = poolSeries(hist, 'yearsOfCover',       ids);
+      const asked = poolSeries(hist, 'yearsOfCoverTarget', ids);
+      for (const id of ids) {
+        const c = colorOf(id);
+        add(id, 'cover', 'held', {
+          name: hist.labels[id], type: 'line', showSymbol: false, smooth: false,
+          lineStyle: { width: 1.6, color: c }, itemStyle: { color: c },
+          connectNulls: false, data: held.series[id],
+        });
+        // Absent on a pool with no target: a targetless pool takes the residual and was never
+        // asked for a number, which is not the same as being asked for zero.
+        if (asked.series[id].some(v => v != null)) {
+          add(id, 'coverAsked', 'asked', {
+            name: `${hist.labels[id]} · asked`, type: 'line', showSymbol: false, smooth: false,
+            lineStyle: { width: 1, type: 'dashed', color: c }, itemStyle: { color: c },
+            connectNulls: false, data: asked.series[id],
+          });
+        }
+      }
+      // The household reserve, across the WHOLE book — including accounts no pool claims.
+      // Drawn on this view because it answers the same question the per-pool lines do and
+      // frequently disagrees with all of them: once the taxable accounts drain, the graph's
+      // bond target is realised inside the age-gated wrappers, which no pool can claim
+      // (§22.6), so every pool line falls to zero while the household's cover is unchanged.
+      // Measured on the reference plan: pools 4.8y -> 0.0y while this line held 4.9-5.4y.
+      // Dashed and un-coloured so it never reads as one more pool.
+      const reserveLine = this._reserveCoverSeries(hist, ink);
+      if (reserveLine) add('__reserve', 'cover', 'household', reserveLine);
+    } else if (this._view === 'stock') {
+      // Balance, target and capacity, and the pairing is the point: a balance without its
+      // target is a number, and a balance without its CEILING hides §20.4b — an offset
+      // sitting exactly at a capacity that was defined as its own balance looks correct and
+      // can never be refilled.
+      const bal = poolSeries(hist, 'balance',  ids);
+      const tgt = poolSeries(hist, 'target',   ids);
+      const cap = poolSeries(hist, 'capacity', ids);
+      // A FOURTH line, and only where it exists (design 97 §23.2). A pool asking for more
+      // than the room left in the mix is silently given the room and goes on reporting the
+      // target it wanted — so the dashed target line above can sit for decades at a level the
+      // plan never once held, with nothing on the chart saying so. This is the level the book
+      // could actually afford. It is null in every period where the ask fit, so the line is
+      // ABSENT on a healthy pool and appears exactly when the ask outgrows the portfolio —
+      // which is the event worth seeing, and it arrives gradually rather than on a date.
+      const aff = poolSeries(hist, 'targetAfforded', ids);
+      for (const id of ids) {
+        const c = colorOf(id);
+        add(id, 'balance', 'balance', {
+          name: `${hist.labels[id]}`, type: 'line', showSymbol: false,
+          lineStyle: { width: 1.6, color: c }, itemStyle: { color: c }, data: bal.series[id] });
+        if (tgt.series[id].some(v => v != null)) {
+          add(id, 'target', 'target', {
+            name: `${hist.labels[id]} · target`, type: 'line', showSymbol: false,
+            lineStyle: { width: 1, type: 'dashed', color: c }, itemStyle: { color: c },
+            data: tgt.series[id] });
+        }
+        if (aff.series[id].some(v => v != null)) {
+          // `connectNulls: false` so the gap is honest: the periods where the target fit are
+          // not periods where the afforded level was zero, and a joined line would say they were.
+          add(id, 'afforded', 'afforded', {
+            name: `${hist.labels[id]} · afforded`, type: 'line', showSymbol: false,
+            connectNulls: false, z: 4,
+            lineStyle: { width: 2.2, type: 'solid', color: c, opacity: 0.55 },
+            itemStyle: { color: c }, data: aff.series[id] });
+        }
+        add(id, 'capacity', 'capacity', {
+          name: `${hist.labels[id]} · capacity`, type: 'line', showSymbol: false,
+          lineStyle: { width: 1, type: 'dotted', color: c }, itemStyle: { color: c },
+          data: cap.series[id] });
+      }
+    } else {
+      // Flows: in above the line, out below, and the NON-events marked on the zero line.
+      const inflow  = poolSeries(hist, 'inflow',  ids);
+      const outflow = poolSeries(hist, 'outflow', ids);
+      for (const id of ids) {
+        const c = colorOf(id);
+        add(id, 'in', 'in', {
+          name: `${hist.labels[id]} · in`, type: 'bar', stack: 'in', barMaxWidth: 18,
+          itemStyle: { color: c }, data: inflow.series[id] });
+        add(id, 'out', 'out', {
+          name: `${hist.labels[id]} · out`, type: 'bar', stack: 'out', barMaxWidth: 18,
+          itemStyle: { color: c, opacity: 0.45 },
+          data: outflow.series[id].map(v => (v == null ? null : -v)) });
+      }
+      const marks = this._gateMarks(hist, ids, axis);
+      if (marks.length) {
+        // Not per-pool, so it hangs off the reserve's namespace rather than inventing a
+        // second one. It is still hideable — a run with many gated flows is mostly triangles.
+        add('__reserve', 'gated', 'gate marks', {
+          name: 'gated', type: 'scatter', symbol: 'triangle', symbolSize: 9, z: 6,
+          itemStyle: { color: dark ? '#fbbf24' : '#b45309' },
+          data: marks.map(m => [m.x, 0]),
+          tooltip: { formatter: (p) => (this._tips ? _esc(marks[p.dataIndex].text) : '') },
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The series picker — the FINE filter (design 97 §23.6).
+   *
+   * Rendered from `_seriesSpecs`, so it can only ever offer lines the chart would actually
+   * draw: a pool with no target has no "asked" row, and a pool that was never clamped has no
+   * "afforded" row, in the picker for the same reason they are absent from the chart.
+   *
+   * Grouped by pool and listing ROLES, because that is how the want is phrased — "every
+   * pool's ask and nothing else" is one click per group header away, where a flat list of
+   * two dozen line names is not. The per-role column at the top toggles that role across
+   * every pool at once, which is the axis the legend chips cannot express: a chip is a whole
+   * pool, and the reader who wants one line from each pool has no other way to say it.
+   *
+   * It draws only the pools that are VISIBLE, so the two filters compose in the obvious
+   * direction: hiding a pool from the legend removes its rows here rather than leaving
+   * checkboxes that control nothing.
+   */
+  _renderPicker(specs, hist) {
+    const menu  = this._q('picker-menu');
+    const count = this._q('picker-count');
+    if (!menu) return;
+
+    const shown = specs.filter(sp => !this._hiddenSeries.has(sp.key)).length;
+    if (count) count.textContent = specs.length ? `${shown}/${specs.length}` : '';
+    if (!specs.length) { menu.innerHTML = ''; menu.hidden = true; return; }
+
+    // Roles in the order the specs produced them — the drawing order, so the header row reads
+    // the same way the chart stacks.
+    const roles = [];
+    for (const sp of specs) if (!roles.some(r => r.role === sp.role)) roles.push({ role: sp.role, label: sp.roleLabel });
+
+    const byPool = new Map();
+    for (const sp of specs) {
+      if (!byPool.has(sp.poolId)) byPool.set(sp.poolId, []);
+      byPool.get(sp.poolId).push(sp);
+    }
+
+    const rowFor = (poolId, list) => {
+      const label = poolId === '__reserve' ? 'Household / marks' : (hist.labels[poolId] ?? poolId);
+      const boxes = list.map(sp => {
+        const on = !this._hiddenSeries.has(sp.key);
+        return `<label class="pool-series-box"><input type="checkbox" data-series="${_esc(sp.key)}"
+          ${on ? 'checked' : ''}> ${_esc(sp.roleLabel)}</label>`;
+      }).join('');
+      return `<div class="pool-series-row">
+        <span class="pool-series-name" title="${_esc(poolId)}">${_esc(label)}</span>
+        <span class="pool-series-boxes">${boxes}</span>
+      </div>`;
+    };
+
+    menu.innerHTML =
+      `<div class="pool-series-head">
+         <button type="button" data-series-all="1">all</button>
+         <button type="button" data-series-none="1">none</button>
+         ${roles.map(r => `<button type="button" data-series-role="${_esc(r.role)}"
+             title="Show only this line, on every pool">only ${_esc(r.label)}</button>`).join('')}
+       </div>` +
+      [...byPool.entries()].map(([id, list]) => rowFor(id, list)).join('');
+  }
+
+  _onPickerClick(e) {
+    const specs = this._lastSpecs ?? [];
+    const box = e.target.closest('input[data-series]');
+    if (box) {
+      // Read the checkbox's OWN state rather than toggling the set blind: the click has
+      // already flipped it, and inferring the new value would invert on a keyboard activation.
+      const key = box.dataset.series;
+      if (box.checked) this._hiddenSeries.delete(key); else this._hiddenSeries.add(key);
+      this._render();
+      return;
+    }
+    const btn = e.target.closest('button[data-series-all], button[data-series-none], button[data-series-role]');
+    if (!btn) return;
+    if (btn.dataset.seriesAll)  this._hiddenSeries.clear();
+    if (btn.dataset.seriesNone) for (const sp of specs) this._hiddenSeries.add(sp.key);
+    if (btn.dataset.seriesRole) {
+      // "only <role>" is the click the picker exists for, so it is one button and not a
+      // none-then-tick-eight sequence.
+      for (const sp of specs) {
+        if (sp.role === btn.dataset.seriesRole) this._hiddenSeries.delete(sp.key);
+        else this._hiddenSeries.add(sp.key);
+      }
+    }
+    this._render();
+  }
+
+  /**
+   * Recompute the offered series and refresh the picker.
+   *
+   * The log view draws no series at all, so the control is hidden outright rather than left
+   * showing the previous view's rows — a filter that does nothing is worse than no filter.
+   */
+  _syncPicker(hist, isLog) {
+    const picker = this._q('picker');
+    if (picker) picker.style.display = isLog ? 'none' : '';
+    if (isLog) {
+      const menu = this._q('picker-menu');
+      if (menu) menu.hidden = true;
+      this._lastSpecs = [];
+      return;
+    }
+    const dark = this._dark();
+    const ids  = this._visiblePools(hist);
+    // Held for `_onPickerClick`, which acts on the whole OFFERED set ("none", "only asked")
+    // and must not re-derive it: a second derivation could see a different `_view`.
+    this._lastSpecs = this._seriesSpecs(hist, ids, {
+      dark, ink: dark ? '#94a3b8' : '#52514e',
+      axis: poolSeries(hist, 'balance', ids).labels,
+    });
+    this._renderPicker(this._lastSpecs, hist);
   }
 
   _drawChart(hist) {
@@ -438,91 +748,10 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     const line = dark ? '#334155' : '#e1e0d9';
     const ids  = this._visiblePools(hist);
     const axis = poolSeries(hist, 'balance', ids).labels;
-    const colorOf = (id) => colorForSeriesKey(id, hist.poolIds.indexOf(id), { dark });
 
-    const series = [];
-    let yFormat = (v) => _compact(v);
-
-    if (this._view === 'cover') {
-      // The headline question: is the reserve actually there, in the unit a household
-      // thinks in. Unit-free, so pools of very different sizes are comparable on one axis.
-      const cover = poolSeries(hist, 'yearsOfCover', ids);
-      for (const id of ids) {
-        series.push({
-          name: hist.labels[id], type: 'line', showSymbol: false, smooth: false,
-          lineStyle: { width: 1.6, color: colorOf(id) }, itemStyle: { color: colorOf(id) },
-          connectNulls: false, data: cover.series[id],
-        });
-      }
-      // The household reserve, across the WHOLE book — including accounts no pool claims.
-      // Drawn on this view because it answers the same question the per-pool lines do and
-      // frequently disagrees with all of them: once the taxable accounts drain, the graph's
-      // bond target is realised inside the age-gated wrappers, which no pool can claim
-      // (§22.6), so every pool line falls to zero while the household's cover is unchanged.
-      // Measured on the reference plan: pools 4.8y -> 0.0y while this line held 4.9-5.4y.
-      // Dashed and un-coloured so it never reads as one more pool.
-      const reserveLine = this._reserveCoverSeries(hist, ink);
-      if (reserveLine) series.push(reserveLine);
-      yFormat = (v) => `${v}y`;
-    } else if (this._view === 'stock') {
-      // Three lines per pool, and the pairing is the point: a balance without its target is
-      // a number, and a balance without its CEILING hides §20.4b — an offset sitting exactly
-      // at a capacity that was defined as its own balance looks correct and can never be
-      // refilled.
-      const bal = poolSeries(hist, 'balance',  ids);
-      const tgt = poolSeries(hist, 'target',   ids);
-      const cap = poolSeries(hist, 'capacity', ids);
-      // A FOURTH line, and only where it exists (design 97 §23.2). A pool asking for more
-      // than the room left in the mix is silently given the room and goes on reporting the
-      // target it wanted — so the dashed target line above can sit for decades at a level the
-      // plan never once held, with nothing on the chart saying so. This is the level the book
-      // could actually afford. It is null in every period where the ask fit, so the line is
-      // ABSENT on a healthy pool and appears exactly when the ask outgrows the portfolio —
-      // which is the event worth seeing, and it arrives gradually rather than on a date.
-      const aff = poolSeries(hist, 'targetAfforded', ids);
-      for (const id of ids) {
-        const c = colorOf(id);
-        series.push({ name: `${hist.labels[id]}`, type: 'line', showSymbol: false,
-                      lineStyle: { width: 1.6, color: c }, itemStyle: { color: c }, data: bal.series[id] });
-        if (tgt.series[id].some(v => v != null)) {
-          series.push({ name: `${hist.labels[id]} · target`, type: 'line', showSymbol: false,
-                        lineStyle: { width: 1, type: 'dashed', color: c }, itemStyle: { color: c },
-                        data: tgt.series[id] });
-        }
-        if (aff.series[id].some(v => v != null)) {
-          // `connectNulls: false` so the gap is honest: the periods where the target fit are
-          // not periods where the afforded level was zero, and a joined line would say they were.
-          series.push({ name: `${hist.labels[id]} · afforded`, type: 'line', showSymbol: false,
-                        connectNulls: false, z: 4,
-                        lineStyle: { width: 2.2, type: 'solid', color: c, opacity: 0.55 },
-                        itemStyle: { color: c }, data: aff.series[id] });
-        }
-        series.push({ name: `${hist.labels[id]} · capacity`, type: 'line', showSymbol: false,
-                      lineStyle: { width: 1, type: 'dotted', color: c }, itemStyle: { color: c },
-                      data: cap.series[id] });
-      }
-    } else {
-      // Flows: in above the line, out below, and the NON-events marked on the zero line.
-      const inflow  = poolSeries(hist, 'inflow',  ids);
-      const outflow = poolSeries(hist, 'outflow', ids);
-      for (const id of ids) {
-        const c = colorOf(id);
-        series.push({ name: `${hist.labels[id]} · in`, type: 'bar', stack: 'in', barMaxWidth: 18,
-                      itemStyle: { color: c }, data: inflow.series[id] });
-        series.push({ name: `${hist.labels[id]} · out`, type: 'bar', stack: 'out', barMaxWidth: 18,
-                      itemStyle: { color: c, opacity: 0.45 },
-                      data: outflow.series[id].map(v => (v == null ? null : -v)) });
-      }
-      const marks = this._gateMarks(hist, ids, axis);
-      if (marks.length) {
-        series.push({
-          name: 'gated', type: 'scatter', symbol: 'triangle', symbolSize: 9, z: 6,
-          itemStyle: { color: dark ? '#fbbf24' : '#b45309' },
-          data: marks.map(m => [m.x, 0]),
-          tooltip: { formatter: (p) => (this._tips ? _esc(marks[p.dataIndex].text) : '') },
-        });
-      }
-    }
+    const specs   = this._seriesSpecs(hist, ids, { dark, ink, axis });
+    const series  = specs.filter(sp => !this._hiddenSeries.has(sp.key)).map(sp => sp.series);
+    const yFormat = this._view === 'cover' ? ((v) => `${v}y`) : ((v) => _compact(v));
 
     this._chart.setOption({
       animation: false,

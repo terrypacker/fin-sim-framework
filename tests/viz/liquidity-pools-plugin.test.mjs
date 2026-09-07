@@ -471,3 +471,129 @@ test('an absent targetAfforded draws no line and no badge (old runs stay clean)'
   assert.equal(legend.querySelectorAll('.pool-clamped').length, 0);
   plugin.unmount();
 });
+
+// ─── cover: held vs asked, and the series picker (design 97 §23.4 / §23.6) ───
+
+/** `growth` holds 2.0y against a 5.0y ask; `offset` holds 4.8y and was never given one. */
+const RUN_COVER = [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null,
+      after: {
+        offset: CUBE({ yearsOfCover: 4.8, target: null, yearsOfCoverTarget: null }),
+        growth: CUBE({ yearsOfCover: 2.0, target: 1_000_000, yearsOfCoverTarget: 5.0 }),
+      } },
+  ]),
+];
+
+const pickerRows = (plugin) =>
+  [...q(plugin, 'picker-menu').querySelectorAll('input[data-series]')].map(i => i.dataset.series);
+
+test('the cover view offers held AND asked, and only where a pool was actually asked', () => {
+  const { plugin } = mountPlugin(simOf(RUN_COVER));
+  const keys = pickerRows(plugin);
+  assert.ok(keys.includes('growth::cover'),      'the held line must be offered');
+  assert.ok(keys.includes('growth::coverAsked'), 'the asked line must be offered where a target exists');
+  // A targetless pool takes the residual and was never asked for a number — which is not the
+  // same as being asked for zero, and a flat zero line would assert that it was.
+  assert.ok(keys.includes('offset::cover'));
+  assert.ok(!keys.includes('offset::coverAsked'),
+    'a pool with no target was offered an "asked" line it has no number for');
+  plugin.unmount();
+});
+
+test('unticking one series hides that line and leaves its pool\'s others alone', () => {
+  const { plugin } = mountPlugin(simOf(RUN_COVER));
+  const box = q(plugin, 'picker-menu').querySelector('input[data-series="growth::coverAsked"]');
+  box.checked = false;
+  box.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+  assert.ok(plugin._hiddenSeries.has('growth::coverAsked'));
+  // The whole point of the fine filter: the pool is still drawn, minus one line. A legend
+  // chip could only have removed both.
+  assert.ok(!plugin._hiddenSeries.has('growth::cover'), 'hiding one line hid its sibling too');
+  assert.ok(!plugin._hidden.has('growth'), 'the fine filter must not switch the POOL off');
+  plugin.unmount();
+});
+
+test('"only <role>" keeps that line on every pool and drops the rest — the axis chips cannot express', () => {
+  const { plugin } = mountPlugin(simOf(RUN_COVER));
+  const btn = q(plugin, 'picker-menu').querySelector('button[data-series-role="cover"]');
+  btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+  assert.ok(!plugin._hiddenSeries.has('growth::cover'));
+  assert.ok(!plugin._hiddenSeries.has('offset::cover'));
+  assert.ok(plugin._hiddenSeries.has('growth::coverAsked'), '"only held" left an asked line on');
+  plugin.unmount();
+});
+
+test('the picker offers only VISIBLE pools, so the two filters compose one way', () => {
+  const { plugin } = mountPlugin(simOf(RUN_COVER));
+  plugin._hidden.add('offset');
+  plugin._render();
+  const keys = pickerRows(plugin);
+  assert.ok(keys.every(k => !k.startsWith('offset::')),
+    'a pool hidden from the legend still offered checkboxes that control nothing');
+  assert.ok(keys.some(k => k.startsWith('growth::')));
+  plugin.unmount();
+});
+
+test('the picker counts what is drawn, and vanishes on the log view (which draws no series)', () => {
+  const { plugin } = mountPlugin(simOf(RUN_COVER));
+  assert.match(q(plugin, 'picker-count').textContent, /^3\/3$/);
+
+  plugin._hiddenSeries.add('growth::coverAsked');
+  plugin._render();
+  assert.match(q(plugin, 'picker-count').textContent, /^2\/3$/);
+
+  plugin._view = 'log';
+  plugin._render();
+  assert.equal(q(plugin, 'picker').style.display, 'none', 'the picker survived into the log view');
+  plugin.unmount();
+});
+
+test('yearsOfCoverTarget is on the CSV, beside the cover it must be read against', () => {
+  assert.ok(POOL_CSV_COLUMNS.includes('yearsOfCoverTarget'));
+  assert.equal(POOL_CSV_COLUMNS.indexOf('yearsOfCoverTarget'),
+               POOL_CSV_COLUMNS.indexOf('yearsOfCover') + 1);
+});
+
+test('a run that was EVER clamped says so in the provenance strip, not just in the legend', () => {
+  // The legend badge reads the LAST period, like the balance and the cover beside it. By the
+  // end of a long run the taxable pools have drained and nothing is clamped any more — so a
+  // reader arriving at a finished run sees no badge, having just missed a plan that spent
+  // decades holding an allocation nobody authored. This is the run-level statement.
+  const RUN_ONCE_CLAMPED = [
+    entry('2030-01-01', [
+      { field: 'liquidityPools', before: null,
+        after: { offset: CUBE({ targetAfforded: null }),
+                 growth: CUBE({ target: 2_000_000, targetAfforded: 900_000 }) } },
+    ]),
+    entry('2031-01-01', [
+      // Clamp gone: the ask now fits. The badge disappears; the run-level note must not.
+      { field: 'liquidityPools.growth.targetAfforded', before: 900_000, after: null },
+    ]),
+  ];
+  const { plugin } = mountPlugin(simOf(RUN_ONCE_CLAMPED));
+  const prov = q(plugin, 'provenance');
+  // Normalised: the note is a template literal and wraps mid-phrase in the source.
+  const text = prov.textContent.replace(/\s+/g, ' ');
+
+  assert.ok(/asked for more than the book could afford/.test(text), `provenance was: ${text}`);
+  assert.ok(/1\/2 periods/.test(text), 'the note must say HOW LONG, not just that it happened');
+  // It must WRAP: the strip is `nowrap; overflow-x: auto`, so a note appended to a long line
+  // is present in the DOM and off the right edge of a 10px scroller — the exact failure the
+  // note exists to prevent, one level up.
+  assert.ok(prov.classList.contains('pool-provenance--clamped'));
+  // And the legend, reading the last period, correctly shows nothing.
+  assert.ok(!/of ask/.test(q(plugin, 'legend').textContent));
+  plugin.unmount();
+});
+
+test('an unclamped run leaves the provenance strip alone', () => {
+  const { plugin } = mountPlugin(simOf(RUN));
+  const prov = q(plugin, 'provenance');
+  assert.ok(!/asked for more than the book/.test(prov.textContent));
+  assert.ok(!prov.classList.contains('pool-provenance--clamped'),
+    'an unclamped run made the strip wrap for nothing');
+  plugin.unmount();
+});

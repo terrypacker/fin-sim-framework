@@ -2127,3 +2127,72 @@ test('POOL-22b: a target that FITS reports no clamp (the field is not a warning 
   r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_200_000, null, clamps);
   assert.deepEqual(clamps, [], 'a target that fits is the feature working, not a clamp');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §23.4 — the reserve HELD vs the reserve ASKED FOR
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('POOL-23: yearsOfCoverTarget states the ASK in the same unit as the holding', () => {
+  // One number cannot distinguish a plan short of its own policy from a policy that asked
+  // for little, and those call for opposite fixes. Both, or neither is actionable.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',    spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+        target: { mode: 'YEARS_OF_SPEND', value: 2 } },
+      { id: 'reserve', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    ],
+  }, ACCOUNTS);
+  const savings = new CheckingAccount(60_000, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(300_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'b', allocation: ALLOCATION.BOND, marketValue: 300_000,
+                                   costBasis: 300_000, purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' })];
+  const state = { usSavingsAccount: savings, usStockAccount: broker,
+                  monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 } };
+  const ctx = poolContext(state);                       // 120k/yr
+  const m   = allPoolMetrics(state, graph, ctx);
+
+  assert.equal(m.cash.yearsOfCover, 0.5, 'held: 60k of a 120k spend');
+  assert.equal(m.cash.yearsOfCoverTarget, 2, 'asked: the authored 2 years');
+  // A pool with NO target takes the residual and was never asked for a number. Null, not
+  // zero — zero would assert the author wanted none of it.
+  assert.equal(m.reserve.yearsOfCoverTarget, null);
+});
+
+test('POOL-23b: a REMAINDER target recomputes the ask, like `shortfall` before it', () => {
+  // The trap this pins: a remainder pool's `target` is resolved in a SECOND pass, after every
+  // per-pool metric has been computed against a null target. Anything derived from `target` in
+  // the first pass is therefore stale, and `shortfall` already had to be recomputed there for
+  // exactly this reason. A stale `yearsOfCoverTarget` would read null — a pool that asked for
+  // nothing — on the one pool whose ask is usually the largest in the graph.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'cash',    spendOrder: 10, claims: [{ key: 'usSavingsAccount' }],
+        target: { mode: 'YEARS_OF_SPEND', value: 1 } },
+      { id: 'reserve', spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'YEARS_OF_SPEND_REMAINDER', value: 5, after: ['cash'] } },
+    ],
+  }, ACCOUNTS);
+  const savings = new CheckingAccount(120_000, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(200_000, { country: 'US', currency: USD });
+  broker.holdings = [new Holding({ id: 'b', allocation: ALLOCATION.BOND, marketValue: 200_000,
+                                   costBasis: 200_000, purchaseDate: D(2010), rateKey: 'FIXED_INCOME_US' })];
+  const state = { usSavingsAccount: savings, usStockAccount: broker,
+                  monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 } };
+  const m = allPoolMetrics(state, graph, poolContext(state));
+
+  // 5 years aggregate (600k) minus the 1 year cash already covers ⇒ 4 years of ask.
+  assert.equal(m.reserve.yearsOfCoverTarget, 4, 'the remainder pass left a stale ask');
+  assert.equal(m.reserve.yearsOfCover, 200_000 / 120_000);
+});
+
+test('POOL-23c: the cube CARRIES the ask — the entry is built field by field', () => {
+  // Not a redundant test. `PoolFlowReducer` assembles its cube entry key by key rather than
+  // spreading the metrics, so a new metric reaches `poolMetrics`, the CSV contract and the
+  // panel while the actual runs stay null — which is exactly what happened here, and it looks
+  // like a pool that was never given a target rather than like a missing field.
+  const { reducer, state } = flowFixture({ cash: 200_000 });
+  const out = fire(reducer, state).state;
+  const cash = out.liquidityPools.cash;
+  assert.ok('yearsOfCoverTarget' in cash, 'the cube entry dropped the ask');
+  assert.equal(cash.yearsOfCoverTarget, 2, 'the 240k target against a 120k spend is 2 years');
+});

@@ -237,6 +237,7 @@ function resolveRemainderTargets(out, pools, ctx) {
     // would disagree — and `shortfall` is what a `toTarget` refill moves. Recomputed, not
     // patched, so there is one expression of each.
     m.shortfall = Math.max(0, m.target - m.balance);
+    m.yearsOfCoverTarget = ctx.annualSpend > 0 ? m.target / ctx.annualSpend : null;
   }
 }
 
@@ -312,7 +313,18 @@ export function poolMetrics(state, pool, ctx) {
     // What may be TAKEN OUT without breaching the pool's own floor.
     available: Math.max(0, balance - floor),
     marketReturn: poolMarketReturn(state, pool),
-    yearsOfCover: ctx.annualSpend > 0 ? balance / ctx.annualSpend : null,
+    // The reserve the pool HOLDS, and the reserve it was ASKED to hold, in the same unit.
+    // Two numbers because they answer different questions and routinely disagree by years:
+    // `yearsOfCover` is what a bad decade can actually be paid out of, and
+    // `yearsOfCoverTarget` is what the author wrote. A panel showing only the first says a
+    // plan is short without saying whether it is short of its own policy or short because
+    // the policy asked for little; a panel showing only the second describes an intention.
+    // Null spend gives null rather than zero — an unmeasurable cover is not an absent one.
+    //
+    // A remainder target is not resolved yet at this point (it reads the other pools), so
+    // `resolveRemainderTargets` recomputes this the same way it recomputes `shortfall`.
+    yearsOfCover:       ctx.annualSpend > 0 ? balance / ctx.annualSpend : null,
+    yearsOfCoverTarget: (ctx.annualSpend > 0 && target != null) ? target / ctx.annualSpend : null,
   };
 }
 

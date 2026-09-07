@@ -53,7 +53,8 @@ export const POOL_CUBE_FIELDS = Object.freeze([
   // (design 97 §23.2), and null in every period where the ask fit. Stamped by the rebalancer,
   // not `PoolFlowReducer`, so it is the one cube field whose absence means "fine" rather than
   // "not computed" — see the panel, which draws it only where it exists.
-  'balance', 'capacity', 'utilised', 'target', 'targetAfforded', 'yearsOfCover', 'high',
+  'balance', 'capacity', 'utilised', 'target', 'targetAfforded',
+  'yearsOfCover', 'yearsOfCoverTarget', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
 ]);
 

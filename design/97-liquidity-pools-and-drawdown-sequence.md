@@ -3533,8 +3533,8 @@ is not warranted.
 What the evidence *does* support, in rough order of value:
 
 1. ~~**Surface `targetAfforded` in the pools panel**~~ — **DONE, §23.5.**
-2. **A years-of-cover figure that separates "the reserve I hold" from "the reserve I asked
-   for".** Today they are one number and the gap is invisible.
+2. ~~**A years-of-cover figure separating "the reserve I hold" from "the reserve I asked
+   for"**~~ — **DONE, §23.6.**
 3. **A feasibility check on the exclusion itself**, if a placement lever is ever built: the
    author should be told at config time that a 90 % bond target and a bond-free Roth cannot both
    hold, rather than getting a silently relaxed version of their policy.
@@ -3568,3 +3568,51 @@ saved before this reads clean rather than fully clamped. Pinned by three panel t
 
 Reading the plan that prompted §23.0: the bond pool wears **57% of ask** and the gold pool
 **0% of ask**, in the same strip that already showed both as merely disappointing balances.
+
+### 23.6 Held vs asked, and the series picker (7 Sep 2026)
+
+**`yearsOfCoverTarget`** is the ask, in the same unit as the holding. Both, because one number
+cannot distinguish a plan short of its own policy from a policy that asked for little, and
+those call for opposite fixes. Null on a pool with no target — it takes the residual and was
+never asked for a number, which is not the same as being asked for zero.
+
+Two traps, both hit while building it:
+
+- A **remainder** target resolves in a second pass, after every per-pool metric has been
+  computed against a null target, so anything derived from `target` in the first pass is stale.
+  `shortfall` already had to be recomputed there for exactly this reason. A stale ask would
+  read *null* on the one pool whose ask is usually the largest in the graph.
+- `PoolFlowReducer` assembles its cube entry **key by key** rather than spreading the metrics,
+  so the field reached `poolMetrics`, the CSV contract and the panel while every actual run
+  stayed null — and a null ask is indistinguishable from a pool that was never given a target.
+  POOL-23c exists to make that specific mistake loud.
+
+Read on the plan from §23.0: the bond buffer holds **9.3 years against a 29.0-year ask**. That
+gap was previously a single "9.3y" with nothing to say it was a third of the intent.
+
+**The series picker.** Two lines per pool on the cover view and up to four on the stock view
+makes a seven-pool graph a two-dozen-line chart, and the legend chips are a COARSE filter — a
+chip is a whole pool. "Show me every pool's ask and nothing else" is not expressible by hiding
+pools, so it gets its own control: a popover keyed by the stable `<poolId>::<role>` of
+`_seriesSpecs`, grouped by pool, with an `only <role>` button per role. The two filters compose
+one way — the picker offers only VISIBLE pools, so hiding a pool removes its rows rather than
+leaving checkboxes that control nothing.
+
+`_seriesSpecs` is the point of the refactor: the chart draws the members not in
+`_hiddenSeries` and the picker lists all of them, from ONE list. Two derivations is the shape
+where a picker offers a line the chart does not draw, or silently fails to offer one it does.
+It is built in `_render` rather than `_drawChart`, which no-ops without a canvas — a filter
+that does not exist in a docked-but-never-activated panel is a control the reader cannot find.
+
+**One thing the badge could not do.** The legend reads the LAST period, like the balance and
+cover beside it, so on a finished run — where the taxable pools have drained and nothing is
+clamped any more — there is no badge at all, after a plan spent decades holding an allocation
+nobody authored. The run-level statement therefore leads the provenance strip and makes it
+wrap: *"2 pool(s) asked for more than the book could afford — Bucket 2 — bond buffer in 78/174
+periods, Gold in 78/174 periods."* Appending it instead would have put it off the right edge of
+a 10px `overflow-x: auto` strip — present in the DOM, unreadable, which is this note's own
+failure mode reproduced one level up.
+
+Verified in the running app, not only in jsdom: the panel draws held-vs-asked, the picker's
+"only asked" cuts 12 series to 4 and rescales the axis, and the §23.2 preference-leak warning
+fires once for the gold pool with no other console errors.

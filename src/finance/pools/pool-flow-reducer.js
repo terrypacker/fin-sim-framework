@@ -507,7 +507,13 @@ export class PoolFlowReducer extends Reducer {
         capacity:     +m.capacity.toFixed(2),
         utilised:     +m.utilised.toFixed(2),
         target:       m.target != null ? +m.target.toFixed(2) : null,
-        yearsOfCover: m.yearsOfCover != null ? +m.yearsOfCover.toFixed(3) : null,
+        // The reserve HELD and the reserve ASKED FOR, in the same unit (design 97 §23.4).
+        // Both, because one number cannot distinguish a plan short of its own policy from a
+        // policy that asked for little, and those call for opposite fixes. `asked` is null on
+        // a pool with no target — it takes the residual and was never asked for a number,
+        // which is not the same as being asked for zero.
+        yearsOfCover:       m.yearsOfCover != null ? +m.yearsOfCover.toFixed(3) : null,
+        yearsOfCoverTarget: m.yearsOfCoverTarget != null ? +m.yearsOfCoverTarget.toFixed(3) : null,
         high:         +highs[pool.id].toFixed(2),
         // This period's observation and the year it was taken in — read by a LATER year's
         // gates (see `_priorYearReturns`). Also the only record of what a pool's market was
