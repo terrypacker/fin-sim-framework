@@ -85,6 +85,13 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     this._histCache    = null;
     this._tieCache     = null;
     this._hidden       = new Set();  // pools switched off from the legend
+    // The household reserve is hidden by its own flag rather than by a sentinel in `_hidden`:
+    // everything in that set is a pool id consumed by `_visiblePools`, and a member that is
+    // not one would be a collision waiting for a pool actually named it. It is NOT a pool
+    // (§22.3 extended) — it stays out of `poolIds`, the per-pool totals and the CSV rows —
+    // but hiding a series is a chart affordance, not a claim about what the series is, and
+    // rescaling the axis to read the small pools is what the legend filter is FOR.
+    this._reserveHidden = false;
     // Panel-local and deliberately not persisted: the hover popup is the useful half
     // and the cluttering half at once, so this is a mood rather than a preference.
     this._tips         = true;
@@ -380,6 +387,27 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
 
   _visiblePools(hist) { return hist.poolIds.filter(id => !this._hidden.has(id)); }
 
+  /**
+   * The household reserve's line for the cover view, or null when there is none to draw.
+   *
+   * Its own method so the two reasons it can be absent are testable: ECharts needs a canvas
+   * jsdom does not provide, so `_drawChart` no-ops there and a guard living inside it could
+   * only ever be asserted by reading the source.
+   *
+   * Absent for two DIFFERENT reasons, and they must not be conflated: the run recorded no
+   * reserve (`hasReserve` false — drawing a flat zero would assert the household has none), or
+   * the reader switched it off to rescale the axis. Dashed and un-coloured so that, when it is
+   * drawn, it never reads as one more pool.
+   */
+  _reserveCoverSeries(hist, ink) {
+    if (!hist?.hasReserve || this._reserveHidden) return null;
+    return {
+      name: 'Household reserve (all accounts)', type: 'line', showSymbol: false,
+      lineStyle: { width: 2, type: 'dashed', color: ink }, itemStyle: { color: ink },
+      connectNulls: false, z: 3, data: reserveSeries(hist).yearsOfCover,
+    };
+  }
+
   _drawChart(hist) {
     const host = this._q('chart');
     if (!host || !this._canvasAvailable()) return;
@@ -433,14 +461,8 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       // (§22.6), so every pool line falls to zero while the household's cover is unchanged.
       // Measured on the reference plan: pools 4.8y -> 0.0y while this line held 4.9-5.4y.
       // Dashed and un-coloured so it never reads as one more pool.
-      if (hist.hasReserve) {
-        const res = reserveSeries(hist);
-        series.push({
-          name: 'Household reserve (all accounts)', type: 'line', showSymbol: false,
-          lineStyle: { width: 2, type: 'dashed', color: ink }, itemStyle: { color: ink },
-          connectNulls: false, z: 3, data: res.yearsOfCover,
-        });
-      }
+      const reserveLine = this._reserveCoverSeries(hist, ink);
+      if (reserveLine) series.push(reserveLine);
       yFormat = (v) => `${v}y`;
     } else if (this._view === 'stock') {
       // Three lines per pool, and the pairing is the point: a balance without its target is
@@ -648,9 +670,14 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       const r = last.reserve ?? {};
       if (r.accessible != null) {
         const lock = r.locked > 0 ? ` <span class="pool-dim">+${_esc(this._money(r.locked))} locked</span>` : '';
+        const off  = this._reserveHidden;
+        // `data-reserve`, never `data-key`: the pool filter reads `data-key` and everything it
+        // finds there goes into `_hidden` as a pool id. Two attributes keeps one chip clickable
+        // without making it a pool.
         el.insertAdjacentHTML('beforeend',
-          `<span class="pool-legend-item pool-legend-item--static"
-             title="Accessible CASH + BOND across every account, whether or not a pool claims it. The age gate is the same one the drawdown chain uses.">
+          `<span class="pool-legend-item pool-legend-item--reserve${off ? ' pool-legend-item--off' : ''}"
+             data-reserve="1"
+             title="Accessible CASH + BOND across every account, whether or not a pool claims it. The age gate is the same one the drawdown chain uses. Click to show or hide this line.">
              <i style="background:${dark ? '#94a3b8' : '#52514e'}"></i>Household reserve` +
           ` <strong>${_esc(this._money(r.accessible))}</strong>` +
           (r.yearsOfCover != null ? ` <span class="pool-dim">${r.yearsOfCover.toFixed(1)}y</span>` : '') +
@@ -660,8 +687,13 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
   }
 
   _onLegendClick(e) {
-    // The reserve chip carries no `data-key`, so it is not selectable here — which is what
-    // keeps it out of `_hidden` and therefore out of `_visiblePools`.
+    // The reserve first: it toggles its own flag and never enters `_hidden`, so it can be
+    // switched off like any series while staying out of every per-pool computation.
+    if (e.target.closest('[data-reserve]')) {
+      this._reserveHidden = !this._reserveHidden;
+      this._render();
+      return;
+    }
     const chip = e.target.closest('[data-key]');
     if (!chip) return;
     const key = chip.dataset.key;

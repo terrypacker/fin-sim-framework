@@ -298,7 +298,11 @@ const RUN_WITH_RESERVE = [
   ]),
 ];
 
-test('the legend carries the household reserve, and it is NOT a pool filter', () => {
+const reserveChip = (plugin) =>
+  [...q(plugin, 'legend').querySelectorAll('.pool-legend-item')]
+    .find(c => /Household reserve/.test(c.textContent));
+
+test('the legend carries the household reserve, and it is not keyed as a pool', () => {
   const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
   const legend = q(plugin, 'legend');
   assert.match(legend.textContent, /Household reserve/);
@@ -306,12 +310,61 @@ test('the legend carries the household reserve, and it is NOT a pool filter', ()
   // The locked half is shown beside it: an age-gated bond is not cover, and a reader who
   // cannot see it will read the accessible figure as the whole book.
   assert.match(legend.textContent, /locked/);
-  // No data-key ⇒ `_onLegendClick` cannot reach it, so it can never enter `_hidden` and
-  // silently drop out of the chart the way a pool chip does.
-  const chips = [...legend.querySelectorAll('.pool-legend-item')];
-  const reserveChip = chips.find(c => /Household reserve/.test(c.textContent));
-  assert.ok(reserveChip, 'reserve chip missing');
-  assert.equal(reserveChip.dataset.key, undefined);
+  // `data-reserve`, never `data-key`: the pool filter reads `data-key` and puts everything it
+  // finds there into `_hidden` as a POOL ID. The chip is clickable without being a pool.
+  const chip = reserveChip(plugin);
+  assert.ok(chip, 'reserve chip missing');
+  assert.equal(chip.dataset.key, undefined);
+  assert.equal(chip.dataset.reserve, '1');
+  plugin.unmount();
+});
+
+test('the reserve chip toggles its line off and on, without entering the pool filter', () => {
+  // The workflow this exists for: hiding a large series so the axis rescales and the small
+  // pools become readable. That is a chart affordance, not a claim that the reserve is a pool.
+  const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
+  assert.equal(plugin._reserveHidden, false);
+
+  reserveChip(plugin).click();
+  assert.equal(plugin._reserveHidden, true);
+  assert.ok(reserveChip(plugin).classList.contains('pool-legend-item--off'),
+    'hidden reads as hidden — the chip stays, struck through, so it can be brought back');
+  // It must NOT have leaked into the pool filter: everything in `_hidden` is a pool id, and a
+  // non-pool member would collide with a pool that happened to be named it.
+  assert.equal(plugin._hidden.size, 0);
+  assert.deepEqual(plugin._visiblePools(plugin._history()), plugin._history().poolIds);
+
+  reserveChip(plugin).click();
+  assert.equal(plugin._reserveHidden, false);
+  assert.ok(!reserveChip(plugin).classList.contains('pool-legend-item--off'));
+  plugin.unmount();
+});
+
+test('the reserve LINE leaves the chart when hidden, and is absent for a run without one', () => {
+  const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
+  const hist = plugin._history();
+  const line = plugin._reserveCoverSeries(hist, '#000');
+  assert.ok(line, 'drawn while visible');
+  assert.deepEqual(line.data, [5.2]);
+  assert.equal(line.lineStyle.type, 'dashed', 'never reads as one more pool');
+
+  reserveChip(plugin).click();
+  assert.equal(plugin._reserveCoverSeries(plugin._history(), '#000'), null, 'gone when hidden');
+  plugin.unmount();
+
+  // The other reason it can be absent, which must not be conflated with the first.
+  const { plugin: p2 } = mountPlugin(simOf(RUN));
+  assert.equal(p2._reserveCoverSeries(p2._history(), '#000'), null, 'and when never recorded');
+  p2.unmount();
+});
+
+test('hiding the reserve hides only the reserve — the pool chips still filter pools', () => {
+  const { plugin } = mountPlugin(simOf(RUN_WITH_RESERVE));
+  reserveChip(plugin).click();
+  const poolChip = [...q(plugin, 'legend').querySelectorAll('[data-key]')][0];
+  poolChip.click();
+  assert.equal(plugin._hidden.size, 1, 'the pool filter still works while the reserve is off');
+  assert.equal(plugin._reserveHidden, true, 'and a pool click does not resurrect the reserve');
   plugin.unmount();
 });
 

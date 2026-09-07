@@ -205,10 +205,10 @@
 
 .pool-legend-item:hover { color: var(--text); }
 
-/* The household reserve chip. Not a filter — it is not a pool, and letting it be switched
- * off would imply it is one of them. Ruled off to read as a total rather than a series. */
-.pool-legend-item--static {
-  cursor: default;
+/* The household reserve chip. Ruled off from the pool chips because it is not a pool — it is
+ * measured across accounts no pool claims — but it toggles like one, because hiding a series
+ * to rescale the axis is a chart affordance and says nothing about what the series is. */
+.pool-legend-item--reserve {
   padding-left: 10px;
   margin-left: 4px;
   border-left: 1px solid var(--border, rgba(128,128,128,.3));
