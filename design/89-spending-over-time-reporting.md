@@ -1817,7 +1817,88 @@ accumulator is worth it.** Phase 7 is the thing that makes MC spending routine e
 
 | item | why it is not this phase | where |
 |---|---|---|
-| MC on a worker pool | improves the ordinary run too, so it deserves its own justification; phase 7 must be shippable without it | §21.2 |
+| ~~MC on a worker pool~~ | **BUILT — see §22.** Phase 7 remains shippable without it | §21.2, §22 |
 | Per-year × per-category matrix in the run record | only needed if replay does not answer the drill-down question | §21.3, §21.5 |
 | `mix` has no UI either | same control, and phase 7 should build it for both rather than leave a second one | §21.4 |
 | Spending still not persisted into arm JSON | unchanged from §20.7; a UI panel does not read arm files | §20.7 |
+
+---
+
+## 22. MC on a worker pool  (2026-09-06).  **BUILT.**
+
+§21.7 parked this as needing its own justification rather than being smuggled into phase 7.
+Here it is, built on its own merits — phase 7 is still shippable without it, and is still
+unbuilt.
+
+### 22.1 What was actually true
+
+The in-browser MC ran **entirely on the main thread**. The loop
+(`intl-retirement-mc-runner.js`) yields with `setTimeout(0)` *between* iterations and never
+inside one, so each simulation ran to completion in one uninterrupted task. §21.2 measured what
+that costs at `telemetry: 'off'`; the browser measurement below confirms it.
+
+The precedent §21.2 pointed at — `optimization/parallel/rollout-worker-pool.js`, module workers
+driving sims for the optimiser — was real, and MC simply was not wired to it.
+
+### 22.2 Why MC parallelises more cleanly than the optimiser did
+
+Three properties were already true, none of them arranged for this:
+
+1. **Iterations are independent and INDEX-seeded.** `seed = i + 1` drives the in-loop
+   stochastic path and `makeMcSeededRng(i + 1)` the scalar draws. Sharding by index is
+   therefore **bit-identical** to running in order — not "equivalent in distribution".
+   `tests/unit/mc-worker-pool.test.mjs` asserts whole-batch `deepStrictEqual` against the
+   serial run, which is a far stronger regression test than the optimiser's could be.
+2. **The per-iteration world is already registry-isolated**, and the template is already piped
+   through `ScenarioSerializer.serializeScenario` — which is exactly what makes it
+   `postMessage`-able. Nothing had to be made worker-safe.
+3. **The results are already tiny** (design 78 §4.5): ~45 sampled points of a few numbers per
+   path, not state. An integer goes out per task; a run record comes back.
+
+### 22.3 The build
+
+| piece | what it is |
+|---|---|
+| `finance/parallel/worker-pool.js` | the environment-agnostic half of the rollout pool, extracted — spawn handles, one broadcast `init`, id-keyed tasks, input-ordered `mapTasks`, poison-on-error. `RolloutWorkerPool` now extends it with its public API unchanged. |
+| `monte-carlo/mc-sampling.js` | what a path *records*, split out of the runner so the worker core can import it without importing the batch. The runner re-exports it; `src/index.js` is unchanged apart from additions. |
+| `monte-carlo/parallel/mc-worker-core.js` | the per-iteration world. **The serial path and a worker call the same `buildIterationRunner`**, so they agree by construction rather than by review. |
+| `monte-carlo/parallel/mc-worker{,-pool}.js` | the Vite module-worker entry and `McWorkerPool`. |
+| `IntlRetirementMcRunner` | split into `_prepare` (once, main thread: template, layered base, variables, provenance) and `_runIterations` (serial or pooled). Opt-in via `parallel` / `workerPool`, so every existing caller — lab scripts, decision graph, tests — keeps today's path. |
+| `MonteCarloController` | owns a lazy pool, reused across runs and terminated on presenter teardown. |
+
+**One guard worth naming.** `_OffsetSeedMcRunner` (`decision-graph-runner.js`) overrides
+`_perturb` to give each leaf its own seed space. A worker perturbs from the shared
+`perturbParams` and cannot see that override, so `_poolFor` detects an overridden `_perturb`
+and stays serial. Silently sampling a different world is the failure this exists to prevent;
+putting the offset in the context is the obvious fix if a decision graph ever needs the speed.
+
+### 22.4 Measured, in the browser
+
+Dev server, the default scenario, `hardwareConcurrency` = 8 (so 8 workers).
+
+| | wall clock | worst frame gap |
+|---|---|---|
+| serial, n = 24 | 5.9 s | **233 ms** |
+| pooled, n = 24 (warm) | 3.6 s | 17.7 ms |
+| pooled, n = 96 (warm) | 7.1 s | 17.7 ms |
+
+Two things to read here, and the second matters more than the first.
+
+**The freeze is gone.** The worst gap between animation frames across a whole pooled batch is
+one frame — the main thread is idle while the sims run. Serially it is 233 ms per iteration,
+which is the hitch §21.2 predicted and the reason the `spending` checkbox was unshippable.
+
+**The speedup is ~3.3x at n = 96, not 8x, and it grows with n.** At n = 24 it is only ~1.7x:
+with 8 workers each path is one of three that worker will ever run, so nothing is ever JIT-warm
+— the serial loop's ~246 ms/iteration is a *warmed* steady state and the pool's early paths are
+not. `hardwareConcurrency` also counts efficiency cores, which are not worth a performance core
+each. Worker startup (the scenario module graph, per worker) costs ~0.7 s and is paid once per
+session, which is why the pool is controller-owned rather than per-run.
+
+### 22.5 What this unblocks
+
+§21.2 was the stated reason phase 7 is "not just a checkbox". It no longer is: a 4-second
+iteration on a worker is a 4-second iteration nobody is looking at. The honest framing survives
+— `spending` really is ~7.5x, and the control should still carry that cost in its label — but
+the argument against shipping it has moved from "the app appears hung" to "the run takes a
+while", which is an ordinary trade-off a user can make.

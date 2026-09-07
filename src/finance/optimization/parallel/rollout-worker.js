@@ -23,7 +23,7 @@ self.onmessage = (e) => {
   if (msg.type === 'init') { initProblem(msg.ctx); return; }
   if (msg.type === 'task') {
     try {
-      const result = msg.kind === 'series' ? runSeriesTask(msg.candidate, msg.opts) : runTask(msg.candidate);
+      const result = msg.kind === 'series' ? runSeriesTask(msg.payload, msg.opts) : runTask(msg.payload);
       self.postMessage({ taskId: msg.taskId, result });
     } catch (err) {
       self.postMessage({ taskId: msg.taskId, error: String(err?.stack ?? err) });

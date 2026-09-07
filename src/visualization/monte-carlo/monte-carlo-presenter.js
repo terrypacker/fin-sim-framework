@@ -78,6 +78,9 @@ export class MonteCarloPresenter {
 
   destroy() {
     this._unsubSettings?.();
+    // The controller owns the MC worker pool; a rebuild recreates this presenter, so
+    // without this every Rebuild would leak a poolful of worker threads.
+    this._controller.destroy?.();
     this._configPanel.destroy();
     this._resultsPanel.destroy();
     this._runsPanel.destroy();

@@ -9,135 +9,21 @@
  */
 
 import { ScenarioRunner }             from '../../simulation-framework/scenario.js';
-import { createDistribution }         from '../../simulation-framework/distributions.js';
-import { ServiceRegistry }            from '../../services/service-registry.js';
 import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
-import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
-import { applyParamBagToConfig }      from '../../scenarios/scenario-param-apply.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
-import { get, set }                   from './mc-param-paths.js';
-import { computeNetWorth, computeNetWorthInclSpeculative }
-  from '../derived-metrics/net-worth.js';
-import { computeAfterTaxNetWorth, afterTaxOptionsFromParams } from '../derived-metrics/after-tax.js';
-import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
-import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
-import { buildAllocationCube }        from '../allocation-reporting/allocation-cube.js';
-import { mixPoint, MIX_CLASSES }      from '../allocation-reporting/mix-distribution.js';
-import { buildSpendingCube }         from '../spending-reporting/spending-cube.js';
-import { summarizeSpendingForRun }   from '../spending-reporting/spending-distribution.js';
-import { residencePriceLevel }       from '../spending/expense-price-level.js';
+import { buildIterationRunner, perturbParams } from './parallel/mc-worker-core.js';
+import { McWorkerPool }              from './parallel/mc-worker-pool.js';
 
-/** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
-export function computeNetWorthUsd(state) {
-  return computeNetWorth(state, 'USD');
-}
-
-/**
- * Gross USD value of all real-property holdings in `state` (design 75 §6.4 C). Unlike
- * computeNetWorth this sums the *gross* `value` (not equity), FX-converted to USD, because the
- * house-appreciation PATH we want to characterize is the value series, independent of the
- * mortgage. Returns 0 when no property exists (or all sold ⇒ value 0).
- */
-export function computeHouseValueUsd(state, baseCurrency = 'USD') {
-  let total = 0;
-  for (const val of Object.values(state)) {
-    if (val == null || typeof val !== 'object') continue;
-    if (val.kind !== 'real-property' || typeof val.value !== 'number') continue;
-    // Shared valuation convention (design 82 §5.1a) — the house series and the net
-    // worth it is compared against must price AUD the same way.
-    total += toBaseCurrency(val.value, currencyOf(val, baseCurrency), baseCurrency, state);
-  }
-  return total;
-}
-
-/**
- * Sampler for the per-iteration time series (design 78 §4.5).
- *
- * The metrics an MC path needs are computed here, at sample time, from live state —
- * instead of deep-cloning the entire state so they can be computed later. That is
- * 1,803 full-state clones per iteration replaced by ~45 records of a few numbers, and
- * it is the whole of MC's remaining telemetry cost.
- *
- * Runs at the YEAR-BOUNDARY cadence (design 82 §4): the state after the last event
- * dated in year Y, which is the same instant the lab page and the workbench panel
- * sample, so a share means the same thing in all three. Must not retain references
- * into `state` — it returns numbers only.
- *
- * @param {object} [opts]
- * @param {boolean} [opts.mix=false] also record the asset MIX (design 82 §8.1). Costs
- *        one cube build per sample; see §8.3 on why it is measured, not assumed cheap.
- */
-/**
- * The cadence every MC `timeSeries` — and therefore every `pathShape` — is recorded
- * on (design 82 §4/§8.3). Exported so an arm artifact can STAMP it: the switch off
- * design 78's event cadence re-baselined the recorded series without changing a
- * single run outcome, so an old arm JSON and a new one look equally well-formed and
- * are silently not comparable. A stamp turns "remember not to compare across that
- * boundary" into something a reader can check — see `mc-run.mjs` / `mc-report.mjs`.
- */
-export const MC_SAMPLER_CADENCE = 'year-boundary';
-
-export function createMcSampler({ mix = false, baseCurrency = 'USD' } = {}) {
-  return function sampleTimeSeriesPoint(state, date) {
-    const point = {
-      date:          new Date(date),
-      netWorthUsd:   computeNetWorth(state, baseCurrency),
-      netLiquidity:  computeNetLiquidity(state, date),
-      houseValueUsd: computeHouseValueUsd(state, baseCurrency),
-      // The deflator, sampled WITH the level it deflates (design 97 §18). A trough is a
-      // point on a path, so the price level at that point has to travel with it — a
-      // report cannot reconstruct it afterwards from a per-run average, and the whole
-      // difference between "the reserve held" and "inflation ate it" lives in this
-      // number. Same index `InflationAdjustReducer` inflates `state.monthlyExpenses`
-      // by (the RESIDENCE country's), so real net liquidity is denominated in the same
-      // basket as the spend line it has to cover. 1.0 at simStart => base-year dollars.
-      priceLevel:    residencePriceLevel(state),
-    };
-    if (!mix) return point;
-
-    // Built through the SHARED cube + pivot, never a private sum: design 82 §8.1's
-    // whole point is that an MC share and a lab-page share are the same quantity.
-    // `displayNameFor` is deliberately absent — a mix needs no account labels, and MC
-    // runs on an isolated per-iteration registry with nothing named.
-    const rows = buildAllocationCube(state, { date, baseCurrency });
-    const { grossAssets, mix: shares } = mixPoint(rows, { classes: MIX_CLASSES });
-    point.grossAssetsUsd = grossAssets;
-    point.mix            = shares;
-    return point;
-  };
-}
-
-/**
- * Reduce the sampler's records to one data point per year.
- *
- * Under the year-boundary cadence there is already exactly one record per calendar
- * year, so this is now a re-stamp rather than a reduction: the date is normalized to
- * 1 January of the sampled year so every path's series lands on IDENTICAL timestamps.
- * The MC fan chart groups by exact timestamp (`mc-results-panel._buildFanData`), so a
- * per-path stamp — 31 December for a boundary sample, the horizon for a terminal
- * flush — would split one year into two columns of one path each.
- *
- * The label therefore names the year the state belongs to, not the instant it was read
- * at; that was already true under the event cadence and is unchanged here.
- */
-function extractYearlyTimeSeries(sim) {
-  const byYear = new Map();
-  for (const sample of sim.samples) {
-    byYear.set(sample.date.getUTCFullYear(), sample);
-  }
-  return [...byYear.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([year, sample]) => ({
-      date:          new Date(Date.UTC(year, 0, 1)),
-      netWorthUsd:   sample.netWorthUsd,
-      netLiquidity:  sample.netLiquidity,
-      houseValueUsd: sample.houseValueUsd,
-      priceLevel:    sample.priceLevel,
-      ...(sample.mix ? { grossAssetsUsd: sample.grossAssetsUsd, mix: sample.mix } : {}),
-    }));
-}
+// What a path records lives in ./mc-sampling.js so the worker core can import it
+// without importing this module (which owns the BATCH: param layering, provenance,
+// aggregation). Re-exported here because these were this module's public API before
+// the split — `src/index.js` and existing callers import them from here.
+export {
+  computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler,
+  extractYearlyTimeSeries,
+} from './mc-sampling.js';
 
 /**
  * Path-shape diagnostics for one MC iteration (design 74 §5.2). Computed from the
@@ -316,20 +202,6 @@ function percentile(xs, p) {
 }
 
 /**
- * Standalone seeded PRNG — same algorithm as Simulation.createRNG().
- * Used to produce per-iteration reproducible samples from distributions.
- */
-function makeSeededRng(seed) {
-  let s = seed;
-  return () => {
-    s = Math.trunc(s + 0x6D2B79F5);
-    let t = Math.imul(s ^ s >>> 15, 1 | s);
-    t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-/**
  * Reduce a resolved variable list to a provenance record for the run summary.
  *
  * Answers "what world did these numbers come from?" — the question a failure rate
@@ -418,6 +290,14 @@ export class IntlRetirementMcRunner {
    *        ~3,960 ms on the reference plan — **7.5x**. A `journal`-level run is NOT a
    *        cheaper middle: it produces entries whose `stateDiff` is null, and the cube
    *        silently computes zero. See spending-distribution.js.
+   * @param {boolean} [opts.parallel=false] - Run the iterations on a Web Worker pool
+   *        instead of the main thread (design 89 §21.7). Opt-in, and ignored where
+   *        `Worker` does not exist, so every existing caller keeps its current path.
+   *        The pool is created per `run()` and torn down after it; a caller that runs
+   *        MC repeatedly should pass `workerPool` instead and pay the worker startup
+   *        (the whole scenario module graph, per worker) once.
+   * @param {import('./parallel/mc-worker-pool.js').McWorkerPool} [opts.workerPool] -
+   *        A pool to reuse. Caller-owned: this runner never terminates it.
    */
   constructor({
     n           = 100,
@@ -427,6 +307,8 @@ export class IntlRetirementMcRunner {
     cfgTemplate = null,
     mix         = false,
     spending    = false,
+    parallel    = false,
+    workerPool  = null,
   } = {}) {
     this.n           = n;
     this.mcConfig    = mcConfig;
@@ -435,20 +317,25 @@ export class IntlRetirementMcRunner {
     this.cfgTemplate = cfgTemplate;
     this.mix         = mix;
     this.spending    = spending;
+    this._parallel   = parallel;
+    this._pool       = workerPool;    // caller-owned: never terminated here
+    this._ownsPool   = false;
   }
 
   /**
-   * Run n Monte Carlo iterations asynchronously, yielding to the browser
-   * between each iteration so the UI stays responsive.
+   * Resolve the world every iteration runs in: the serialized template, the layered
+   * base params, the variable list and its provenance.
    *
-   * @param {object}   [baseParams={}]  - Scenario params that override defaults.
-   * @param {Function} [onProgress]     - Called with (completed, total) after each run.
-   * @returns {Promise<{ runs: Array, summary: object }>}
+   * Split out of `run` because this is exactly the part that must happen ONCE, on the
+   * main thread, and then travel to every worker unchanged. A worker that re-derived
+   * any of it would be rolling a different world than its siblings — the failure mode
+   * `rolloutContext` calls "only reproduces single-threaded".
+   *
+   * @returns {{ ctx: import('./parallel/mc-worker-core.js').McIterationContext, provenance: object }}
    */
-  async run(baseParams = {}, onProgress) {
+  _prepare(baseParams = {}) {
     const simStart = this.simStart;
     const simEnd   = this.simEnd;
-    const sampler  = createMcSampler({ mix: this.mix });
 
     // Design 15 §2.3: the active scenario cfg is the per-iteration template.
     // Fallback to a fresh defaults cfg for tests / library consumers that don't
@@ -456,7 +343,8 @@ export class IntlRetirementMcRunner {
     //
     // Pipe through serializeScenario so the template is a plain JSON-safe object
     // (no functions / class refs); registry entries carry `factory` and
-    // `scenarioClass` which `structuredClone` would reject.
+    // `scenarioClass` which `structuredClone` would reject. That is also precisely
+    // what makes the template postMessage-able to a worker.
     const rawTemplate = this.cfgTemplate
       ?? IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd);
     const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
@@ -465,108 +353,6 @@ export class IntlRetirementMcRunner {
     // buildDefaultConfig() has only the bag — so reading the serialized copy would
     // see no params at all for that (very common) source.
     const templateParams = scenarioParamValues(rawTemplate);
-
-    // After-tax scoring options (design 84 §6.4a). Assigned below, once `base` is
-    // resolved — `evaluate` cannot close over it directly because the ScenarioRunner is
-    // constructed before the param layering runs, and `evaluate` only ever fires inside
-    // the iteration loop that follows. These are METRIC params (rate method, assumed
-    // gain fraction), not economic ones, so they are not perturbed per path and one
-    // provider is correct for the whole run.
-    let afterTaxOpts = afterTaxOptionsFromParams({});
-
-    const runner = new ScenarioRunner({
-      createSimulation: (params, seed) => {
-        // Isolated per-iteration registry: never touches the singleton, so the
-        // user's active config graph + UI bindings stay intact across MC runs.
-        const registry = new ServiceRegistry();
-        const scenario = new IntlRetirementScenario({
-          context: registry.simulationContext,
-          params,
-          simStart,
-          simEnd,
-        });
-        // Per-iteration seed so each path draws its OWN in-loop stochastic sequence
-        // (design 74 §5.2). Previously the seed was dropped here and every iteration
-        // ran at the default seed 1 — so with a stochastic path ON, all iterations
-        // drew the IDENTICAL return sequence and sequence-of-returns risk collapsed to
-        // a single ordering. The seed is the ScenarioRunner iteration index (i + 1),
-        // so a run is reproducible and the scalar-param sampling rng (makeSeededRng,
-        // same index) and the in-loop path share the iteration.
-        // telemetry 'off' + a sampler: MC needs no bus, journal or full-state
-        // history snapshots — only the yearly series, which the sampler collects
-        // directly (design 78 §4.5).
-        //
-        // The cadence is 'year-boundary' (design 82 §4/§8.3), NOT the event cadence
-        // design 78 shipped with. Design 78 picked the event cadence for cheapness, and
-        // it lands the "yearly" point at whatever event happened to be last in the year
-        // — mid-something, and drifting with event volume. A MIX is precisely sensitive
-        // to whether the year-end rebalance has fired, so an arbitrary instant is not an
-        // option here; and having MC sample somewhere the lab page and the workbench
-        // panel do not would defeat the shared-modules argument entirely.
-        //
-        // This RE-BASELINES the RECORDED series, and nothing else. The sampler cannot
-        // affect the run, so `scenarioFailed`, `outOfFundsDate`, `cumulativeDeficit` and
-        // `finalNetWorthUsd` are unchanged EXACTLY. What moves is `timeSeries`, and
-        // therefore `pathShape` (CAGR, worst-5yr, max drawdown, the decade split).
-        //
-        // Direction, measured rather than assumed — and the opposite of the intuition:
-        // on the reference plan the year-boundary series is LOWER in 25 of 45 years and
-        // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
-        // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
-        // See design 82 §8.3; an arm JSON from before this change is not comparable.
-        // `spending` forces FULL telemetry, and nothing less will do: the spending cube
-        // reads `stateDiff`, which `silent` mode skips entirely (simulation.js records the
-        // journal regardless of silent, but with a null diff). A 'journal'-level run
-        // therefore yields a well-formed journal whose cube totals zero — the quiet kind
-        // of wrong. Measured 7.5x, which is why this is opt-in (design 89 §20).
-        scenario.buildSim({
-          seed, telemetry: this.spending ? 'full' : 'off', sampler,
-          samplerCadence: MC_SAMPLER_CADENCE,
-        });
-
-        const cfg = structuredClone(cfgTemplate);
-        // Both param stores, alias-aware — shared with the workbench's Replay button so a
-        // replayed run applies the SAME bag the same way. See applyParamBagToConfig.
-        applyParamBagToConfig(cfg, params);
-        new ScenarioLoader().load(cfg, registry);
-
-        return scenario.sim;
-      },
-      evaluate: (sim) => ({
-        // Design 84 §6.4a — MC used to record NOMINAL net worth only, which prices a
-        // Roth dollar at par with a pre-tax one. On any question about WHERE wealth
-        // sits (a decant, a conversion, a wrapper swap) that is the wrong scoreboard
-        // and it favours holding by construction; G1 fixed it on the grid path and the
-        // MC path was never followed. Built from the shared factory so a grid cell, an
-        // optimizer score and an MC path are one number.
-        afterTaxNetWorthUsd: computeAfterTaxNetWorth(sim.state, simEnd, afterTaxOpts),
-        cumulativeTaxesPaid: sim.state.cumulativeTaxesPaid ?? 0,
-        finalNetWorthUsd:  computeNetWorthUsd(sim.state),
-        finalNetWorthInclSpeculative: computeNetWorthInclSpeculative(sim.state, 'USD'),  // design 88 D7
-        finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
-        scenarioFailed:    sim.state.scenarioFailed    ?? false,
-        outOfFundsDate:    sim.state.outOfFundsDate    ?? null,
-        cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
-        deficitMonths:     sim.state.deficitMonths     ?? 0,
-        timeSeries:        extractYearlyTimeSeries(sim),
-        // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
-        // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
-        lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,
-        // Design 89 phase 6. Reduced to ~20 numbers HERE rather than kept as a cube:
-        // ~3,900 rows x n paths is hundreds of megabytes, and the whole reason an MC
-        // iteration records metrics instead of state (design 78 §4.5).
-        ...(this.spending
-          // `services: null` deliberately. The per-iteration registry is scoped to
-          // createSimulation and, on the compiler path, registers no accounts anyway — so
-          // the cube resolves each balance's unit from the account's own `currency.code`
-          // in live state, the fallback phase 2 added when the loan balances turned out to
-          // declare a currency KIND with a null CODE. Verified to give identical totals.
-          ? { spending: summarizeSpendingForRun(buildSpendingCube({
-              journal: sim.journal, state: sim.state, services: null, currency: 'USD',
-            })) }
-          : {}),
-      }),
-    });
 
     // ── The base world every variable is centered on ─────────────────────────
     //
@@ -590,21 +376,110 @@ export class IntlRetirementMcRunner {
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
     const balanceCenters = resolveBalanceCenters(cfgTemplate);
     const base = { ...schemaDefaults, ...templateParams, ...balanceCenters, ...baseParams, endDate: simEnd };
-    afterTaxOpts = afterTaxOptionsFromParams(base);
     const variables  = this.mcConfig.buildVariables(base);
     const provenance = summarizeProvenance(variables, { ownParams: templateParams, schemaDefaults });
 
-    const mcRuns  = [];
+    return {
+      ctx: { cfgTemplate, base, variables, simStart, simEnd, mix: this.mix, spending: this.spending },
+      provenance,
+    };
+  }
+
+  /**
+   * Should this batch run on a worker pool?
+   *
+   * Three ways to answer no, and the third is the interesting one:
+   *   - no pool was asked for (the default: an explicit opt-in keeps every existing
+   *     caller — the lab scripts, the decision-graph runner, every test — on the
+   *     exact path they run on today);
+   *   - the environment has no `Worker` (Node without an injected spawn, SSR);
+   *   - **a subclass overrides `_perturb`**. `_OffsetSeedMcRunner`
+   *     (`decision-graph/decision-graph-runner.js`) does, to give each leaf its own
+   *     seed space. A worker perturbs from the shared `perturbParams`, so it cannot
+   *     see that override and would silently sample a different world. Detecting it
+   *     and staying serial is the honest answer; the alternative — putting the offset
+   *     in the context — is a real option if a decision graph ever needs the speed.
+   */
+  _poolFor(pool) {
+    if (!pool) return null;
+    if (this._perturb !== IntlRetirementMcRunner.prototype._perturb) {
+      console.warn('[IntlRetirementMcRunner] `_perturb` is overridden; running MC serially. '
+        + 'A worker cannot see the override and would sample a different world.');
+      return null;
+    }
+    return pool;
+  }
+
+  /**
+   * Run every iteration, in parallel when a pool is available and serially otherwise.
+   *
+   * The two paths call the SAME `buildIterationRunner`, so they agree by construction
+   * rather than by review: iterations are independent and index-seeded, so a sharded
+   * run is bit-identical to an ordered one.
+   */
+  async _runIterations(ctx, onProgress) {
+    const pool = this._poolFor(this._resolvePool());
+    if (pool) {
+      try {
+        pool.setContext(ctx);
+        // Progress is reported in COMPLETION order (a count, not an index) — the one
+        // thing that genuinely changes when the loop is sharded.
+        return await pool.map(
+          Array.from({ length: this.n }, (_, i) => i),
+          { onSettled: onProgress },
+        );
+      } finally {
+        if (this._ownsPool) { pool.terminate(); this._pool = null; this._ownsPool = false; }
+      }
+    }
+
+    const iter   = buildIterationRunner(ctx);
+    const mcRuns = [];
     for (let i = 0; i < this.n; i++) {
-      const params = this._perturb(base, i, variables);
-      const result = runner.runScenario(params, i + 1);
-      mcRuns.push({ seed: i + 1, params, result });
+      // `this._perturb`, not the shared function, so a subclass override still governs
+      // this path (see `_poolFor`).
+      mcRuns.push(iter.runIteration(i, this._perturb(ctx.base, i, ctx.variables)));
       if (onProgress) onProgress(i + 1, this.n);
       // Yield to the browser so the UI stays responsive and progress is painted.
       await new Promise(resolve => setTimeout(resolve, 0));
     }
+    return mcRuns;
+  }
 
-    const summary = runner.summarize(
+  /**
+   * The pool this batch will use, if any: a caller-supplied one (reused across runs
+   * and terminated by its owner), or one this runner creates and tears down when
+   * `parallel` was requested and the environment actually has workers.
+   */
+  _resolvePool() {
+    if (this._pool) return this._pool;
+    if (!this._parallel || typeof Worker === 'undefined') return null;
+    this._pool     = new McWorkerPool();
+    this._ownsPool = true;
+    return this._pool;
+  }
+
+  /**
+   * Run n Monte Carlo iterations asynchronously.
+   *
+   * Serially by default, yielding to the browser between iterations so the UI stays
+   * responsive; on a worker pool when one is configured (`parallel` / `workerPool`),
+   * which takes the sims off the main thread entirely. The results are identical
+   * either way — see `_runIterations`.
+   *
+   * @param {object}   [baseParams={}]  - Scenario params that override defaults.
+   * @param {Function} [onProgress]     - Called with (completed, total) after each run.
+   *        On the parallel path this counts COMPLETIONS, not indices.
+   * @returns {Promise<{ runs: Array, summary: object }>}
+   */
+  async run(baseParams = {}, onProgress) {
+    const { ctx, provenance } = this._prepare(baseParams);
+    const mcRuns = await this._runIterations(ctx, onProgress);
+
+    // `summarize` is stateless w.r.t. the two closures a ScenarioRunner is built from,
+    // and on the parallel path this thread never builds one — so the aggregation gets
+    // its own bare instance rather than reaching into the iteration runner.
+    const summary = new ScenarioRunner({}).summarize(
       mcRuns,
       r => r.result.finalNetWorthUsd,
       r => ({
@@ -696,17 +571,6 @@ export class IntlRetirementMcRunner {
    *     value (cfg.value ?? cfg.mean) so r.params is self-contained.
    */
   _perturb(baseParams, i, variables) {
-    const rng       = makeSeededRng(i + 1);
-    const perturbed = structuredClone(baseParams);
-
-    for (const cfg of variables) {
-      if (cfg.enabled) {
-        set(perturbed, cfg.paramKey, createDistribution(cfg).sample(rng));
-      } else if (get(baseParams, cfg.paramKey) === undefined) {
-        set(perturbed, cfg.paramKey, cfg.value ?? cfg.mean);
-      }
-    }
-
-    return perturbed;
+    return perturbParams(baseParams, i, variables);
   }
 }

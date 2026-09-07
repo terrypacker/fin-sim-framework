@@ -9,13 +9,7 @@
  */
 
 import { objectiveIsWindowable } from '../optimization-objectives.js';
-
-const MAX_POOL = 8;
-
-function defaultSize() {
-  const c = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
-  return Math.max(1, Math.min(c, MAX_POOL));
-}
+import { WorkerPool }            from '../../parallel/worker-pool.js';
 
 /**
  * The per-epoch context a worker needs to rebuild the problem (design 46 Phase 0.5).
@@ -72,30 +66,10 @@ export function browserRolloutSpawn() {
  * irrelevant — `map` resolves each candidate's promise by id and returns in the
  * caller's order.
  */
-export class RolloutWorkerPool {
+export class RolloutWorkerPool extends WorkerPool {
   constructor({ size, spawn = browserRolloutSpawn() } = {}) {
-    this._size    = size ?? defaultSize();
-    this._spawn   = spawn;
-    this._handles = null;            // lazily started
-    this._idle    = [];
-    this._queue   = [];              // { candidate, resolve, reject }
-    this._pending = new Map();       // taskId → { resolve, reject, handle }
-    this._taskId  = 0;
-    this._context = null;
-    this._fatal   = null;            // a worker-level error poisons the pool
+    super({ size, spawn });
     this._problemRef = null;         // last problem `setProblem` configured for (ref-dedup)
-  }
-
-  _start() {
-    if (this._handles) return;
-    this._handles = [];
-    for (let i = 0; i < this._size; i++) {
-      const h = this._spawn();
-      h.onMessage((msg) => this._onMessage(h, msg));
-      h.onError?.((err) => this._onError(err));
-      this._handles.push(h);
-      this._idle.push(h);
-    }
   }
 
   /**
@@ -109,71 +83,14 @@ export class RolloutWorkerPool {
     this.setContext(rolloutContext(problem));
   }
 
-  /** Broadcast the epoch context; every worker rebuilds its resident problem. */
-  setContext(ctx) {
-    this._context = ctx;
-    this._start();
-    for (const h of this._handles) h.postMessage({ type: 'init', ctx });
-  }
-
   /** Roll a set of candidates to `result`s, aligned to input order. */
-  map(candidates) { return this._dispatch(candidates, 'rollout'); }
+  map(candidates) { return this.mapTasks(candidates, 'rollout'); }
 
   /** Roll a set of candidates to net-worth series (the cockpit fan), input order. */
-  mapSeries(candidates, opts) { return this._dispatch(candidates, 'series', opts); }
+  mapSeries(candidates, opts) { return this.mapTasks(candidates, 'series', { opts }); }
 
-  _dispatch(candidates, kind, opts) {
-    this._start();
-    return Promise.all(candidates.map(c => this._enqueue(c, kind, opts)));
-  }
-
-  _enqueue(candidate, kind, opts) {
-    if (this._fatal) return Promise.reject(this._fatal);
-    return new Promise((resolve, reject) => {
-      this._queue.push({ candidate, kind, opts, resolve, reject });
-      this._pump();
-    });
-  }
-
-  _pump() {
-    while (this._idle.length && this._queue.length) {
-      const h   = this._idle.pop();
-      const job = this._queue.shift();
-      const taskId = this._taskId++;
-      this._pending.set(taskId, { ...job, handle: h });
-      h.postMessage({ type: 'task', kind: job.kind, taskId, candidate: job.candidate, opts: job.opts });
-    }
-  }
-
-  _onMessage(handle, msg) {
-    if (msg == null || msg.taskId == null) return;
-    const job = this._pending.get(msg.taskId);
-    if (!job) return;
-    this._pending.delete(msg.taskId);
-    this._idle.push(handle);
-    if (msg.error) job.reject(new Error(msg.error));
-    else           job.resolve(msg.result);
-    this._pump();
-  }
-
-  _onError(err) {
-    const e = err instanceof Error ? err : new Error(String(err?.message ?? err));
-    this._fatal = e;
-    for (const [, job] of this._pending) job.reject(e);
-    for (const job of this._queue) job.reject(e);
-    this._pending.clear();
-    this._queue = [];
-  }
-
-  /** Tear down all workers. */
   terminate() {
-    if (!this._handles) return;
-    for (const h of this._handles) h.terminate();
-    this._handles = null;
-    this._idle = [];
-    this._queue = [];
-    this._pending.clear();
+    super.terminate();
     this._problemRef = null;   // a respawn must re-broadcast context
-    this._context = null;
   }
 }

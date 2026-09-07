@@ -177,9 +177,12 @@ import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-re
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
+import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng } from './finance/monte-carlo/mc-sampling.js';
+import { perturbParams, buildIterationRunner, initMcContext, runMcIteration } from './finance/monte-carlo/parallel/mc-worker-core.js';
+import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
 import { DecisionRecordRegistry } from './finance/mpc/decision-record-registry.js';
@@ -207,6 +210,7 @@ import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulat
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
+import { defaultPoolSize, WorkerPool } from './finance/parallel/worker-pool.js';
 import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { auFinancialYearOf, monthlyAuSuper } from './finance/payroll/au-super-caps.js';
 import { DEFAULT_MATCH_TIERS, matchedFraction, resolveMatchTiers, monthlyK401 } from './finance/payroll/k401-limits.js';
@@ -1168,6 +1172,7 @@ export const Finance = {
   computeHouseValueUsd,
   MC_SAMPLER_CADENCE,
   createMcSampler,
+  extractYearlyTimeSeries,
   computePathShape,
   summarizeProvenance,
   IntlRetirementMcRunner,
@@ -1176,6 +1181,13 @@ export const Finance = {
   lookupLifeTable,
   get,
   set,
+  makeMcSeededRng,
+  perturbParams,
+  buildIterationRunner,
+  initMcContext,
+  runMcIteration,
+  browserMcSpawn,
+  McWorkerPool,
   rollForwardWithControls,
   recordDecisionRecord,
   readDecisionRecords,
@@ -1257,6 +1269,8 @@ export const Finance = {
   resolveAttributionAsset,
   resolveAttributionFractions,
   accumulateByOwnership,
+  defaultPoolSize,
+  WorkerPool,
   isParamVisible,
   visibleWhenControllers,
   controllableVariables,
