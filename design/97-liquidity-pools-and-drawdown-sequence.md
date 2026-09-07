@@ -3384,3 +3384,187 @@ This is the same shape as every other stale-persisted-node bug in this codebase,
 generalising the next time one appears: `Object.assign` semantics mean **a projection can
 only ever add to a saved snapshot**, so any field that stops being emitted needs an explicit
 eviction or it lives forever.
+
+---
+
+## 23. Claims vs placement — why a pool cannot say where its class SITS (7 Sep 2026)
+
+**Status**: §23.1 measured, §23.2 (both signals) **BUILT** and §23.5 surfaces them in the
+pools panel. The join itself is **NOT built**,
+and §23.4 says why the measurement argues against building it in the form it was asked for.
+
+### 23.0 The report that started it
+
+A plan authored a very large bond pool and found its **Roth IRAs holding bonds** — the single
+worst placement in the book, since a Roth is the most valuable shelter available and a bond is
+the lowest-growth thing that can sit in one. The author's reasonable expectation was that
+naming sleeves in a pool's `claims` decides *where the class is held*, because the claims
+editor offers a sleeve picker on brokerage accounts and its column header reads "which accounts
+and sleeves each pool **holds**".
+
+It does not. A claim's `sleeves` is read in exactly two places — the spend narrowing of §3, and
+the pool→class identification in `_resolvePoolTarget` — and **neither reaches
+`planLocatedTargets`**, which is handed `{stateKey, role, total}` and a ROLE-keyed policy and
+has never heard of the graph. The pool graph names accounts; the location planner names roles;
+nothing joins them.
+
+The impression is easy to form because the two usually *agree*: an author who claims BOND on
+their brokerages, with a `allocationLocationPolicy.BOND` that lists the taxable roles first
+(which §9.3(a) tells them to write), sees bonds land exactly where the claims say. The
+disagreement only shows on a class where the policy prefers something the pool does not claim.
+Measured on the reporting plan: with the bond pool shrunk until the mix had room for equity,
+**every dollar of equity sat in the two Roths and the two accounts that claim EQUITY held
+none of it**, and gold materialised in a super account no pool claims for gold.
+
+Two distinct mechanisms put a class where the author did not ask, and they need different
+fixes — which is why §23.2 builds two signals and not one:
+
+| | mechanism | when it bites |
+|---|---|---|
+| **preference leak** | the policy ranks an unclaimed account AHEAD of every claimed one, so it fills first and the pool gets the spillover | any time policy and claims disagree on rank |
+| **capacity overflow** | the class target exceeds the capacity of the accounts the policy prefers, so it spills into *every* account with room — preference is SOFT and has no exclusion | only when the target is large relative to the book |
+
+The reported case is the second. The bond target had grown past the whole portfolio, so BOND
+saturated the mix, every other class was squeezed to zero, and the overflow had nowhere to go
+but the Roths.
+
+### 23.1 What joining claims to placement would cost — measured
+
+`scripts/probes/probe-claims-as-placement.mjs`, through the §23.3 seam. Three arms
+(CONTROL / Roths may hold anything except BOND / Roths may hold EQUITY only), each at two pool
+sizes: **binding**, the plan's authored bond target, which exceeds the book; and **slack**, a
+target that fits. `relaxed` is the share of the book placed in violation of the exclusion to
+keep every account's composition summing to its own total.
+
+| arm | terminal NW vs CONTROL | relaxed |
+|---|---|---|
+| **binding** — NO-BOND | **−22%** | 34% |
+| **binding** — EQUITY-ONLY | −0.1% | 46% |
+| **slack** — NO-BOND | +1.6% | 32% |
+| **slack** — EQUITY-ONLY | +1.7% | 40% |
+
+Three results, and the first is the one that matters:
+
+1. **When the target is binding, the exclusion is arithmetically impossible.** If the book must
+   be ~90 % bonds and the Roths are ~21 % of the book, the non-Roth accounts cannot hold all of
+   it — some bonds MUST sit in a Roth. No lever can fix this, because it is not a policy
+   question. `relaxed` says so directly.
+2. **"Not bonds" is not "equity", and the difference is expensive.** With equity squeezed to a
+   zero target, forbidding bonds in the Roth left CASH as the only permitted filler, and the
+   planner used it — a Roth stuffed with cash cost **−22 % of terminal net worth**. The tighter
+   EQUITY-ONLY arm was so infeasible it relaxed almost entirely and landed back on CONTROL: a
+   constraint can be strong enough to do nothing.
+3. **When the target is slack, the join buys almost nothing you do not already have.** The
+   default policy puts equity in the Roths unprompted; the exclusion is inert for the first
+   ~15 years of the run and worth ~1.6 % late.
+
+**Feasibility is time-varying, and that is the finding worth carrying.** Per-year violation
+share, slack arm: 0 % every year through the early 2040s, then 3 → 12 → 25 → 44 → 70 → 86 % as
+the run goes on. The cause is the *spend order*, not the location policy: the Roths are spent
+LAST, so every other account drains and the Roths grow to BE the book — and a book that is
+mostly Roth cannot hold bonds outside the Roth. **A placement exclusion and a drawdown order
+are coupled**, and two individually reasonable policies become jointly infeasible as the book
+concentrates. Nothing in the current output says when that crossover happens.
+
+### 23.2 What was built instead — two signals
+
+Neither is a lever; both are the plan telling the author what it actually did.
+
+**(a) `targetAfforded` — the runtime clamp (`RebalanceToTargetReducer`).** A pool asking for
+more than the room left is silently given `room` and goes on reporting the target it wanted.
+That is not a rounding difference: a reserve sized in YEARS_OF_SPEND grows with the spend line
+while the book it is a fraction *of* is drawn down, so a target that was comfortable at outset
+comes to exceed the whole portfolio — at which point its class saturates the mix and squeezes
+every other class to zero. Each clamp is now stamped onto the pool's own cube entry, in the
+same units as `target`, and `null` on every unclamped pool so the field is TOTAL. On the
+reporting plan it reads immediately: the bond pool was getting **52 % of its ask**, and the
+gold pool **0 %** — which is why gold never appeared anywhere the author looked.
+
+Stamped by the rebalancer rather than `PoolFlowReducer`, which owns the rest of the cube,
+because the clamp is a property of the whole mix resolution and only the rebalancer knows it
+happened. Priority ordering (13 then 14) makes the merge safe, and the field rides the normal
+`liquidityPools.<id>.<field>` path, so the journal diff, `pool-history` and the panel pick it
+up with no further wiring. Pinned by POOL-22 / POOL-22b.
+
+**(b) The §12.2 preference-leak warning — finally built.** §12.2 promised a config-time warning
+"when a pool's claims name only accounts that the location policy does not prefer for that
+pool's classes" and it was never written; there were three `warn*` functions in
+`liquidity-graph.js` and this was not one of them. It exists now as
+`warnPoolClassesLocatedElsewhere`, and it is **rank-based**, not membership-based: for the one
+class a targeted pool claims, it asks whether any account the pool does NOT claim is ranked
+ahead of every account it does. The narrow form §12.2 described is subsumed (if nothing claimed
+is preferred, anything preferred leads it), and the rank test additionally catches the common
+authoring — a pool claiming accounts the policy likes *second* — which the narrow test reads as
+fine. Both residencies are checked and named, since only GOLD's list is residency-dependent.
+Warned, not thrown, for §12.2's reason, and it is only a first-order reading: the planner fills
+classes in a fixed order and an earlier class can exhaust an account before this one reaches it,
+so the message says what was *compared* rather than predicting a placement. Pinned by
+POOL-21 / 21b / 21c / 21d.
+
+The two signals discriminate correctly on the reporting plan: the warning fires on the gold
+pool (a genuine preference leak) and stays silent on the bond pool, whose problem is the clamp.
+
+### 23.3 The measurement seam
+
+`planLocatedTargets({ eligibility, stats })` — a HARD `stateKey → Set<ALLOCATION>` permitted
+set, where `locationPolicy` is only a soft preference, plus `RebalanceToTargetReducer`'s
+`locationEligibility`. It is a *permitted* set rather than a forbidden one, so it expresses
+"no bonds here" and "equity only here" equally. Three rules:
+
+1. **Absent ⇒ unconstrained.** Null, or an account the map does not name. This is what makes it
+   inert — no param writes it, and the goldens are byte-identical.
+2. **An account named for no class holds nothing.** An empty Set is a real statement, and must
+   not read as absent.
+3. **Value conservation outranks eligibility.** An account whose composition does not sum to its
+   own total breaks the Phase-2 invariant and silently destroys value, so an infeasible
+   placement is RELAXED and the violating dollars are counted into `stats.relaxed` instead.
+
+Rule 3 is what makes the measurement honest: without it an infeasible arm would look like a
+working policy with a surprising outcome. Pinned by LOC-9 … LOC-12.
+
+### 23.4 Where this leaves the join
+
+The measurement argues against building it as asked. The exclusion is inert while the plan is
+feasible, impossible while it is not, and actively harmful in between — and every one of those
+three regimes is decided by the pool target and the spend order, not by the location policy the
+join would override. Reversing §12.2's "one lever silently rewriting another" on that evidence
+is not warranted.
+
+What the evidence *does* support, in rough order of value:
+
+1. ~~**Surface `targetAfforded` in the pools panel**~~ — **DONE, §23.5.**
+2. **A years-of-cover figure that separates "the reserve I hold" from "the reserve I asked
+   for".** Today they are one number and the gap is invisible.
+3. **A feasibility check on the exclusion itself**, if a placement lever is ever built: the
+   author should be told at config time that a 90 % bond target and a bond-free Roth cannot both
+   hold, rather than getting a silently relaxed version of their policy.
+
+Open, and unmeasured: whether the split should be closed from the OTHER end — pool claims
+generating a *default* `allocationLocationPolicy` rather than overriding it, so the two levers
+start in agreement and the author edits one place. That keeps §12.2's principle (nothing is
+silently rewritten at runtime) while removing the trap that produced this report.
+
+### 23.5 Surfacing the clamp (7 Sep 2026)
+
+`targetAfforded` joins `POOL_CUBE_FIELDS`, immediately beside `target`, which carries it
+through the journal replay, the CSV fact table and `tiePoolHistory` with no further wiring —
+verified on the reporting plan: the replay ties field-for-field against the live cube.
+
+Two readers, deliberately different:
+
+- **The legend chip** states it as a **percentage of the ask** — "57% of ask" — because that
+  is the actionable number. A third dollar figure beside a balance and a cover is one more
+  quantity to hold in mind; a percentage says immediately that the plan is not doing what was
+  authored. Red, where a closed gate is amber: a gate doing its job is this panel's subject,
+  but a target never once met is a plan holding an allocation nobody wrote. The two dollar
+  figures and the instruction ("reduce this pool's target") live in the tooltip.
+- **A fourth line on the stock chart**, drawn only where the field exists, `connectNulls:
+  false`. The gap is the point — the periods where the ask fit are not periods where the
+  afforded level was zero, and a joined line would say they were. The line therefore appears
+  exactly when the ask outgrows the portfolio, which is a gradual crossover and not a date.
+
+`null` means "the target fit", never "afforded nothing" — the opposite state — so every run
+saved before this reads clean rather than fully clamped. Pinned by three panel tests.
+
+Reading the plan that prompted §23.0: the bond pool wears **57% of ask** and the gold pool
+**0% of ask**, in the same strip that already showed both as merely disappointing balances.

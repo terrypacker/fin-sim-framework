@@ -204,3 +204,70 @@ test('LOC-8: PER_ACCOUNT mode drives every account to the uniform mix', () => {
   assert.ok(near(bondFrac('iraAccount'), 0.5, 0.02), `IRA bond frac ${bondFrac('iraAccount')}`);
   assert.ok(near(bondFrac('usStockAccount'), 0.5, 0.02), `taxable bond frac ${bondFrac('usStockAccount')}`);
 });
+
+// ── Design 97 §23 — the placement eligibility seam ────────────────────────────
+//
+// `eligibility` is HARD where the role policy is soft. The three tests below pin the
+// three rules that make it usable: inert when absent, honoured when the book can afford
+// it, and RELAXED (never value-destroying) when it cannot — with the violation counted
+// rather than hidden, because a silently partial constraint is the failure mode.
+
+test('LOC-9: eligibility absent ⇒ byte-identical to no eligibility at all', () => {
+  const target = { EQUITY: 0.5, BOND: 0.3, CASH: 0.1, GOLD: 0.1 };
+  const base = planLocatedTargets({ accounts: ACCOUNTS, portfolioTarget: target });
+  for (const eligibility of [null, undefined, new Map()]) {
+    const plan = planLocatedTargets({ accounts: ACCOUNTS, portfolioTarget: target, eligibility });
+    for (const a of ACCOUNTS) {
+      assert.deepEqual(plan.get(a.stateKey), base.get(a.stateKey),
+        `${a.stateKey}: eligibility ${JSON.stringify(eligibility)} changed an unconstrained plan`);
+    }
+  }
+});
+
+test('LOC-10: a permitted set the book can afford is honoured exactly, and costs nothing elsewhere', () => {
+  // 10% bonds against a 500k book is 50k, and the three non-Roth accounts hold 400k —
+  // so excluding BOND from the Roth is comfortably feasible.
+  const target = { EQUITY: 0.8, BOND: 0.1, CASH: 0.1, GOLD: 0 };
+  const stats = {};
+  const plan = planLocatedTargets({
+    accounts: ACCOUNTS, portfolioTarget: target, stats,
+    eligibility: new Map([['rothAccount', new Set([ALLOCATION.EQUITY, ALLOCATION.CASH])]]),
+  });
+  assert.equal(plan.get('rothAccount')[ALLOCATION.BOND] ?? 0, 0, 'a forbidden class was placed anyway');
+  assert.ok(!stats.relaxed, `feasible constraint reported ${stats.relaxed} relaxed`);
+  for (const a of ACCOUNTS) {
+    assert.ok(near(sumComp(plan.get(a.stateKey)), a.total), `${a.stateKey}: value not conserved`);
+  }
+});
+
+test('LOC-11: an INFEASIBLE permitted set relaxes rather than stranding value, and says so', () => {
+  // 90% bonds against a 500k book is 450k; everything but the Roth holds 400k. 50k of
+  // bonds has nowhere legal to go, so the Roth must take it — value conservation outranks
+  // the exclusion (§23 rule 3) and `stats.relaxed` is the confession.
+  const stats = {};
+  const plan = planLocatedTargets({
+    accounts: ACCOUNTS, portfolioTarget: { EQUITY: 0.1, BOND: 0.9, CASH: 0, GOLD: 0 }, stats,
+    eligibility: new Map([['rothAccount', new Set([ALLOCATION.EQUITY])]]),
+  });
+  for (const a of ACCOUNTS) {
+    assert.ok(near(sumComp(plan.get(a.stateKey)), a.total),
+      `${a.stateKey}: Σ ${sumComp(plan.get(a.stateKey))} != ${a.total} — the exclusion destroyed value`);
+  }
+  assert.ok(stats.relaxed > 0, 'an infeasible exclusion was honoured silently');
+  assert.ok(near(stats.relaxed, plan.get('rothAccount')[ALLOCATION.BOND] ?? 0),
+    'relaxed dollars do not match the forbidden dollars actually placed');
+});
+
+test('LOC-12: an account permitted NOTHING is a real statement, not an absent one', () => {
+  // The empty Set must not read as "unconstrained" — that is the difference between
+  // "this account holds nothing" and a typo, and they cannot look alike.
+  const stats = {};
+  const plan = planLocatedTargets({
+    accounts: ACCOUNTS, portfolioTarget: { EQUITY: 0.5, BOND: 0.5, CASH: 0, GOLD: 0 }, stats,
+    eligibility: new Map([['rothAccount', new Set()]]),
+  });
+  // Nothing may legally sit there, so every dollar in it is relaxed — and it is still full,
+  // because the account's own total is not negotiable.
+  assert.ok(near(sumComp(plan.get('rothAccount')), 100000), 'value not conserved in a nothing-permitted account');
+  assert.ok(near(stats.relaxed, 100000), `expected the whole account relaxed, got ${stats.relaxed}`);
+});

@@ -233,6 +233,19 @@
  * one thing on this panel that is certainly working. */
 .pool-warn { color: var(--amber, #d97706); }
 
+/* A clamped pool target (design 97 §23.2) — the ask exceeded the room in the mix and the
+ * portfolio gave it what it could. RED, where a closed gate is amber, and the distinction is
+ * deliberate: a gate doing what it was authored to do is the panel's subject, but a target
+ * that has never once been met is a plan holding an allocation nobody wrote. The badge reads
+ * as a percentage of the ask, so it is legible without the two dollar figures behind it. */
+.pool-clamped {
+  color: var(--red);
+  background: var(--red-glow, rgba(239, 68, 68, .12));
+  border-radius: 2px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .pool-kind {
   display: inline-block;
   border-radius: 2px;

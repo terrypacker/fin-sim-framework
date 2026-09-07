@@ -14,6 +14,10 @@ import { DRAWDOWN_SLEEVE_CLASSES } from '../holdings/holdings-selection.js';
 // "which accounts can this reducer trade" is how a warning comes to disagree with the
 // thing it warns about. No cycle — `rebalance-to-target-reducer.js` does not import us.
 import { TAX_ADVANTAGED_ROLES, TAXABLE_ROLES } from '../behavioral/rebalance-to-target-reducer.js';
+// Same reason, one level down: the location policy decides WHERE a pool's class lands, and a
+// second transcription of its default preference lists would be a second thing to keep in
+// step. `allocation-location.js` does not import us either.
+import { resolveLocationPolicy } from '../behavioral/allocation-location.js';
 
 /**
  * DESIGN 97 PART II — the LIQUIDITY GRAPH.
@@ -752,6 +756,7 @@ export function normalizeLiquidityGraph(graph, accounts = [], opts = {}) {
   assertNoUnconditionalCycle(flows);
   assignExecutors(pools, flows, byKey);
 
+  warnPoolClassesLocatedElsewhere(pools, byKey, opts);
   warnMarketClausesWithoutAMarket(pools, flows, byKey);
   warnUntradeableRebalanceFlows(pools, flows, byKey);
   warnDivergentGatesFromOneSource(flows);
@@ -899,6 +904,74 @@ function warnDivergentGatesFromOneSource(flows) {
   }
 }
 
+/**
+ * Design 97 §12.2 — the pool that SIZES a class is not the pool that HOLDS it.
+ *
+ * §12.2 promised this warning and it was never built; the measurement in §23.1 is what it
+ * would have caught. The split it polices is real and deliberate: a pool `target` sizes a
+ * class, and `allocationLocationPolicy` decides which accounts that class lands in. Nothing
+ * joins them. So a pool can carry a target of thirty years of bonds, claim four brokerage
+ * accounts, and watch the located planner put the bonds in a Roth — because the planner ranks
+ * accounts by ROLE and has never heard of the graph.
+ *
+ * What is checked: for the one ALLOCATION class a targeted pool claims, is any account the
+ * pool does NOT claim ranked AHEAD of every account it does? If so the planner fills that
+ * account first and the pool receives only what is left over — its `yearsOfCover` then
+ * under-reports a reserve the plan really holds, somewhere else, and the author's spend order
+ * walks past it.
+ *
+ * Rank, not membership, is the test. "The policy does not prefer these accounts at all" is
+ * the narrow case §12.2 described and is subsumed: if nothing claimed is preferred, anything
+ * preferred is ahead of it. The rank test additionally catches the far more common authoring
+ * — a pool claiming accounts the policy likes SECOND — which the narrow test reads as fine.
+ *
+ * Both residencies are checked, and named, because only GOLD's preference list depends on
+ * residency (design 61 §12.2 Q4) and a plan that moves crosses both.
+ *
+ * Warned, not thrown, for §12.2's reason: it is a legal graph and a plausible authoring. It
+ * is also only a first-order reading — the planner fills classes in a fixed order and an
+ * earlier class can exhaust an account before this one reaches it — so the message says what
+ * was compared rather than predicting a placement.
+ */
+function warnPoolClassesLocatedElsewhere(pools, byKey, opts) {
+  // Nothing reads a pool target without the rebalancer, and PER_ACCOUNT drives every account
+  // to the same mix, so there is no cross-account placement to disagree with.
+  if (opts.hasRebalancer === false || opts.locationMode === 'PER_ACCOUNT') return;
+  const accounts = [...byKey.values()].filter(a => a?.role != null
+    && (TAX_ADVANTAGED_ROLES.has(a.role) || TAXABLE_ROLES.has(a.role)));
+  if (!accounts.length) return;                       // roles not supplied — see §20.19
+
+  for (const pool of pools) {
+    if (!pool.target) continue;
+    // A targeted pool carries exactly one class (the `classes.size > 1` error above).
+    const cls = pool.claims.flatMap(c => c.sleeves ?? [])[0];
+    if (!cls) continue;
+    // A whole-account claim holds every class in that account, so it counts as claiming this
+    // one; a narrowed claim counts only if it names the class.
+    const claimsIt = new Set(pool.claims
+      .filter(c => c.sleeves == null || c.sleeves.includes(cls)).map(c => c.key));
+    const claimed = accounts.filter(a => claimsIt.has(a.stateKey));
+    if (!claimed.length) continue;
+
+    for (const residency of ['US', 'AU']) {
+      const pref = resolveLocationPolicy(residency, opts.locationPolicy ?? null)[cls] ?? [];
+      const rank = (role) => { const i = pref.indexOf(role); return i === -1 ? pref.length : i; };
+      const best    = Math.min(...claimed.map(a => rank(a.role)));
+      const leaders = accounts.filter(a => !claimsIt.has(a.stateKey) && rank(a.role) < best);
+      if (!leaders.length) continue;
+      console.warn(
+        `liquidityGraph: pool '${pool.id}' has a \`target\` sizing ${cls}, but for a ${residency} `
+        + `resident the location policy fills ${leaders.map(a => `'${a.stateKey}' (${a.role})`).join(', ')} `
+        + `with ${cls} BEFORE any account the pool claims `
+        + `(${claimed.map(a => `'${a.stateKey}'`).join(', ')}). The pool sizes the class and a `
+        + `different account holds it, so '${pool.id}' will report less cover than the plan `
+        + `actually carries and the spend order will walk past the rest. Put the claimed roles `
+        + `first in \`allocationLocationPolicy.${cls}\`, or claim the accounts the policy prefers.`);
+      break;                                          // one residency's report is enough
+    }
+  }
+}
+
 function warnUntradeableRebalanceFlows(pools, flows, byKey) {
   const anyRole = [...byKey.values()].some(a => a?.role != null);
   if (!anyRole) return;
@@ -1002,6 +1075,10 @@ function _normalizeFromParams(p, accounts) {
     // Only TARGET_ALLOCATION's reducers read a pool target or the legacy pool years, so with
     // it deselected the §12.2 "two authorities" conflict has no reader and is not a conflict.
     hasRebalancer:       hasTargetAllocation(p),
+    // §12.2's placement check needs the same two values the rebalancer is built with, or it
+    // would police a policy the run does not use.
+    locationMode:        p.allocationLocation ?? 'LOCATED',
+    locationPolicy:      p.allocationLocationPolicy ?? null,
   });
 }
 

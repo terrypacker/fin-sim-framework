@@ -297,7 +297,7 @@ export class RebalanceToTargetReducer extends Reducer {
                 scheduleMode = ALLOCATION_SCHEDULE.STATIC, glidepath = null, regimeTargets = null,
                 poolYears = null, expensesCurrency = 'RESIDENCE', baseCurrency = 'USD',
                 locationMode = ALLOCATION_LOCATION.LOCATED, locationPolicy = null,
-                poolGraph = null } = {}) {
+                poolGraph = null, locationEligibility = null } = {}) {
     super('Rebalance To Target', PRIORITY.PRE_PROCESS + 4);
     this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
     this.generatedActionTypes = ['REBALANCE_TO_TARGET_APPLY'];
@@ -321,6 +321,15 @@ export class RebalanceToTargetReducer extends Reducer {
     // the sale that would otherwise refill them. Null ⇒ every line below is inert and this
     // reducer is byte-identical to the pre-97 one.
     this.poolGraph            = poolGraph;
+    // Design 97 §23 measurement seam — a HARD stateKey → Set<ALLOCATION> permitted set,
+    // where `locationPolicy` is only a soft preference. Null (the default) is inert, and no
+    // param writes it: the probe sets it on the instance so the join can be priced before it
+    // is designed into the authoring surface. `_eligibilityRelaxed` accumulates the dollars
+    // placed in violation of it, which is the run's own measure of an infeasible placement.
+    this.locationEligibility  = locationEligibility;
+    this._eligibilityRelaxed  = 0;
+    this._eligibilityCalls    = 0;
+    this._eligibilityBook     = 0;
   }
 
   /**
@@ -346,8 +355,19 @@ export class RebalanceToTargetReducer extends Reducer {
    * authored as 0 years of bonds silently held the AUTHORED bond weight, and a size sweep's
    * bottom row was not a member of its own series. Found by a pool search whose 0-year arm
    * held MORE bonds than its 2-year arm (design 97 §18.3e).
+   *
+   * **`clamped` — the target the book cannot afford (design 97 §23.2).** A pool asking for
+   * more than the room left gets `room`, silently, and goes on reporting the target it
+   * wanted. That is not a rounding difference: a reserve sized in YEARS_OF_SPEND grows with
+   * the spend line while the book it is a fraction OF is being drawn down, so a target that
+   * was comfortable at outset can quietly come to exceed the whole portfolio — at which point
+   * its class saturates the mix, every other class is squeezed to zero, and the plan holds a
+   * 90 % bond book that no authored weight asked for. Nothing in the run says so. Each clamp
+   * is collected here and stamped onto the pool's own cube entry by `reduce`, so the cover
+   * report and the panel can say "asked 30 years, the book affords 12" instead of showing a
+   * target that was never once achieved.
    */
-  _resolvePoolTarget(state, bookBase, fallbackMix) {
+  _resolvePoolTarget(state, bookBase, fallbackMix, clamped = null) {
     const cube = state?.liquidityPools;
     if (!cube || !(bookBase > 0)) return null;
     const pools = [...(this.poolGraph.pools ?? [])]
@@ -364,7 +384,13 @@ export class RebalanceToTargetReducer extends Reducer {
       // Finite, not positive: zero is an authored policy (see the note above), while null,
       // undefined and NaN mean the pool resolved no target at all and must fall through.
       if (!Number.isFinite(targetBase)) continue;
-      const frac = Math.max(0, Math.min(room, targetBase / bookBase));
+      const want = targetBase / bookBase;
+      const frac = Math.max(0, Math.min(room, want));
+      // Only a target the ROOM cut short is a clamp. A target of zero, or one that simply
+      // fits, is the feature working.
+      if (clamped && want > frac + 1e-9) {
+        clamped.push({ id: pool.id, cls, wantFraction: want, gotFraction: frac, targetBase });
+      }
       mix[cls] = (mix[cls] ?? 0) + frac;
       room -= frac;
       taken.add(cls);
@@ -592,13 +618,13 @@ export class RebalanceToTargetReducer extends Reducer {
    * age; REGIME_CONDITIONED ⇒ pick the per-regime mix from state.activeRegimes.
    * Both time-varying modes fall back to the static target when unconfigured.
    */
-  resolveScheduledTarget(state, action, bookBase = 0, actualFractions = null) {
+  resolveScheduledTarget(state, action, bookBase = 0, actualFractions = null, clamped = null) {
     // Design 97 §12.2 — ONE authority. A graph target governs the classes its pools claim
     // and `allocationSchedule` governs the rest; authoring both a graph target and
     // poolCashYears/poolBondYears throws at config time, because one would silently win.
     if (this.poolGraph) {
       const base = this._scheduledMix(state, action, bookBase);
-      const mix  = this._resolvePoolTarget(state, bookBase, base) ?? base;
+      const mix  = this._resolvePoolTarget(state, bookBase, base, clamped) ?? base;
       return this._applyVeto(mix, state, actualFractions);
     }
     return this._scheduledMix(state, action, bookBase);
@@ -677,13 +703,15 @@ export class RebalanceToTargetReducer extends Reducer {
     }
 
     // The portfolio target in effect this period (Lever B time variation).
-    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase, actualFractions);
+    const poolClamps = [];
+    const scheduledTarget = this.resolveScheduledTarget(state, action, bookBase, actualFractions, poolClamps);
 
     // Lever D — locate the portfolio target across accounts (design 61 §4-D). The
     // plan assigns each account a composition summing to its own total, so each
     // account's rebalance still conserves value; the AGGREGATE book hits the target.
     // Recomputed every period from the current residency ⇒ a residency move re-targets
     // lazily and the drift cadence walks holdings there (§OQ4b).
+    const locationStats = this.locationEligibility ? {} : null;
     const locatedPlan = (this.locationMode === ALLOCATION_LOCATION.LOCATED)
       ? planLocatedTargets({
           accounts: present, portfolioTarget: scheduledTarget,
@@ -693,8 +721,15 @@ export class RebalanceToTargetReducer extends Reducer {
           // pin the residency-agnostic gold list and make the whole lever inert.
           policy: this.locationPolicy ?? null,
           residency: _primaryResidency(state),
+          eligibility: this.locationEligibility,
+          stats: locationStats,
         })
       : null;
+    if (locationStats) {
+      this._eligibilityRelaxed += locationStats.relaxed ?? 0;
+      this._eligibilityBook    += bookBase;
+      this._eligibilityCalls   += 1;
+    }
 
     const rebalanceActions = [];
     const newFiredShocks   = [];
@@ -760,6 +795,33 @@ export class RebalanceToTargetReducer extends Reducer {
     // the drawdown sees a fresh target between rebalances. Merge in the fired-shock
     // ledger only when a regime rebalance fired.
     const patch = { ...stampPatch };
+
+    // Design 97 §23.2 — stamp each clamped pool's shortfall onto its own cube entry.
+    //
+    // Written HERE rather than by `PoolFlowReducer`, which owns the rest of the cube, because
+    // this reducer is the only thing that knows the clamp happened: the room a target is cut
+    // to is a property of the whole mix resolution, not of any one pool. Ordering makes it
+    // safe — PoolFlowReducer is priority 13 and this is 14, so the cube already exists on the
+    // same advance — and the field rides the normal `liquidityPools.<id>.<field>` path, so
+    // the journal diff, `pool-history` and the panel all pick it up with no further wiring.
+    //
+    // `targetAfforded` is stated in the same units as `target` (base currency) so a reader
+    // can compare them without knowing the book, and `null` is stamped on every unclamped
+    // pool so the field is TOTAL — a pool that stops being clamped must visibly stop, and an
+    // absent key would read as "not clamped this period" and "never clamped" identically.
+    if (state.liquidityPools) {
+      const clampById = new Map(poolClamps.map(c => [c.id, c]));
+      const cube = {};
+      for (const [id, entry] of Object.entries(state.liquidityPools)) {
+        const hit = clampById.get(id);
+        cube[id] = {
+          ...entry,
+          targetAfforded: hit ? +(hit.gotFraction * bookBase).toFixed(2) : null,
+        };
+      }
+      patch.liquidityPools = cube;
+    }
+
     if (newFiredShocks.length > 0) {
       patch.regimeActions = {
         ...state.regimeActions,

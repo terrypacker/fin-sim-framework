@@ -418,3 +418,56 @@ test('switching views does not re-read the journal', () => {
   assert.equal(plugin._history(), first);
   plugin.unmount();
 });
+
+// ─── the clamped target (design 97 §23.2) ────────────────────────────────────
+//
+// A pool asking for more than the room left in the mix is silently given the room and goes
+// on reporting the target it wanted, so the dashed target line can sit for decades at a
+// level the plan never once held. `targetAfforded` is the level the book could afford; these
+// pin that it reaches BOTH readers — the badge someone actually looks at, and the CSV.
+
+/** `growth` asking for 2m against a book that afforded 900k; `offset` fitting comfortably. */
+const RUN_CLAMPED = [
+  entry('2030-01-01', [
+    { field: 'liquidityPools', before: null,
+      after: {
+        offset: CUBE({ balance: 380_000, targetAfforded: null }),
+        growth: CUBE({ balance: 900_000, target: 2_000_000, targetAfforded: 900_000 }),
+      } },
+  ]),
+];
+
+test('a clamped pool wears its shortfall as a share of the ASK, not a second dollar figure', () => {
+  const { plugin } = mountPlugin(simOf(RUN_CLAMPED));
+  const chips = [...q(plugin, 'legend').querySelectorAll('[data-key]')];
+  const growth = chips.find(c => c.dataset.key === 'growth');
+  const offset = chips.find(c => c.dataset.key === 'offset');
+
+  // 900k afforded of a 2m ask.
+  assert.match(growth.textContent, /45% of ask/,
+    `expected the clamp badge on a clamped pool, got: ${growth.textContent}`);
+  // A pool whose target FIT must stay clean — a badge on every pool is a badge nobody reads.
+  assert.ok(!/of ask/.test(offset.textContent),
+    `an unclamped pool wore a clamp badge: ${offset.textContent}`);
+  // The tooltip carries the two dollar figures the badge deliberately leaves out, and says
+  // what to do about it — the badge is the alarm, the title is the diagnosis.
+  const title = growth.querySelector('.pool-clamped')?.getAttribute('title') ?? '';
+  assert.match(title, /Reduce this pool's target/);
+  plugin.unmount();
+});
+
+test('targetAfforded is on the CSV contract, beside the target it must be read against', () => {
+  assert.ok(POOL_CSV_COLUMNS.includes('targetAfforded'), 'targetAfforded missing from the CSV');
+  assert.equal(POOL_CSV_COLUMNS.indexOf('targetAfforded'), POOL_CSV_COLUMNS.indexOf('target') + 1,
+    'targetAfforded must sit beside `target`: it is meaningless read alone');
+});
+
+test('an absent targetAfforded draws no line and no badge (old runs stay clean)', () => {
+  // Every run saved before §23.2 has no such field. It must read as "the target fit", not as
+  // a zero — a pool afforded nothing and a pool that was never clamped are opposite states.
+  const { plugin } = mountPlugin(simOf(RUN));
+  const legend = q(plugin, 'legend');
+  assert.ok(!/of ask/.test(legend.textContent), 'a run with no clamp data showed a clamp badge');
+  assert.equal(legend.querySelectorAll('.pool-clamped').length, 0);
+  plugin.unmount();
+});

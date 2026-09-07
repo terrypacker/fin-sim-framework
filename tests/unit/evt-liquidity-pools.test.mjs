@@ -2008,3 +2008,122 @@ test('POOL-27g: EDGE caps the destination; SOURCE floors the source and can zero
   assert.ok(byEdge.CASH > 0.10, `CASH must gain, not collapse; got ${byEdge.CASH}`);
   assert.ok(Math.abs(Object.values(byEdge).reduce((a, b) => a + b, 0) - 1) < 1e-9);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §12.2 / §23.2 — the pool that SIZES a class is not the pool that HOLDS it
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Two brokerages and a Roth, with the roles the located planner ranks on. */
+const PLACEMENT_ACCOUNTS = [
+  { stateKey: 'usStockAccount', type: ACCOUNT_TYPE.BROKERAGE, role: 'us-stock' },
+  { stateKey: 'brokerage2',     type: ACCOUNT_TYPE.BROKERAGE, role: 'us-stock' },
+  { stateKey: 'rothAccount',    type: 'roth',                 role: 'roth-ira' },
+  { stateKey: 'iraAccount',     type: 'ira',                  role: 'ira' },
+];
+
+const placementGraph = (sleeve) => ({
+  pools: [{
+    id: 'reserve', spendOrder: 10,
+    claims: [{ key: 'usStockAccount', sleeves: [sleeve] }],
+    target: { mode: 'YEARS_OF_SPEND', value: 4 },
+  }],
+  flows: [],
+});
+
+test('POOL-21: a pool target warns when the location policy fills an UNCLAIMED account first', () => {
+  // EQUITY's default preference is ROTH first, then taxable. The pool claims only the
+  // brokerage, so the Roth — which it does not claim — is filled ahead of it: the pool
+  // sizes the class and another account holds it.
+  const lines = capturingWarnings(() =>
+    normalizeLiquidityGraph(placementGraph('EQUITY'), PLACEMENT_ACCOUNTS, {}));
+  const hit = lines.find(l => l.includes("pool 'reserve'") && l.includes('EQUITY'));
+  assert.ok(hit, `expected a placement warning, got:\n${lines.join('\n') || '(none)'}`);
+  assert.ok(hit.includes('rothAccount'), 'the warning must NAME the account that wins the class');
+});
+
+test('POOL-21b: no warning when the policy already ranks the claimed roles first', () => {
+  // BOND prefers IRA/401k/SUPER then the taxable roles. Claiming the brokerage alone would
+  // warn (the IRA leads), so the author's fix — put the claimed role first — must silence it.
+  const lines = capturingWarnings(() =>
+    normalizeLiquidityGraph(placementGraph('BOND'), PLACEMENT_ACCOUNTS,
+      { locationPolicy: { BOND: ['us-stock', 'ira', 'k401', 'super'] } }));
+  assert.equal(lines.filter(l => l.includes("pool 'reserve'")).length, 0,
+    `claimed-role-first policy still warned:\n${lines.join('\n')}`);
+});
+
+test('POOL-21c: the check is silent where it has no reader (PER_ACCOUNT, or no rebalancer)', () => {
+  for (const opts of [{ locationMode: 'PER_ACCOUNT' }, { hasRebalancer: false }]) {
+    const lines = capturingWarnings(() =>
+      normalizeLiquidityGraph(placementGraph('EQUITY'), PLACEMENT_ACCOUNTS, opts));
+    assert.equal(lines.filter(l => l.includes("pool 'reserve'")).length, 0,
+      `warned under ${JSON.stringify(opts)}, where no cross-account placement happens`);
+  }
+});
+
+test('POOL-21d: a whole-account claim counts as claiming the class (it holds everything)', () => {
+  // The Roth is claimed unnarrowed, so the pool DOES hold whatever equity lands there —
+  // there is no leak to report, and reporting one would train the author to ignore it.
+  const graph = {
+    pools: [{
+      id: 'reserve', spendOrder: 10,
+      claims: [{ key: 'usStockAccount', sleeves: ['EQUITY'] }, { key: 'rothAccount', sleeves: null }],
+      target: { mode: 'YEARS_OF_SPEND', value: 4 },
+    }],
+    flows: [],
+  };
+  const lines = capturingWarnings(() => normalizeLiquidityGraph(graph, PLACEMENT_ACCOUNTS, {}));
+  assert.equal(lines.filter(l => l.includes("pool 'reserve'")).length, 0,
+    `warned about an account the pool actually claims:\n${lines.join('\n')}`);
+});
+
+test('POOL-22: a target the book cannot afford is CLAMPED, and the clamp is reported', async () => {
+  // §23.2. A reserve sized in YEARS_OF_SPEND grows with the spend line while the book it is
+  // a fraction OF is drawn down, so a target that fit at outset can come to exceed the whole
+  // portfolio. When it does, its class saturates the mix, every other class is squeezed to
+  // zero, and the plan holds a bond book no authored weight asked for — silently, with the
+  // pool still reporting the target it wanted. `targetAfforded` is what makes it visible.
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'reserve', spendOrder: 10, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'YEARS_OF_SPEND', value: 30 } },
+      { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
+    ],
+  }, ACCOUNTS);
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.90, GOLD: 0.10 },
+    poolGraph: graph,
+  });
+  // 30 years × 120k = 3.6m asked against a 1.2m book.
+  const state = { monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+                  liquidityPools: { reserve: { target: 3_600_000 }, growth: {} } };
+  const clamps = [];
+  const mix = r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_200_000, null, clamps);
+
+  assert.equal(+mix.BOND.toFixed(6), 1, 'an unaffordable target should take the whole book');
+  assert.equal(+((mix.EQUITY ?? 0) + (mix.GOLD ?? 0)).toFixed(6), 0, 'and squeeze every other class to zero');
+  assert.equal(clamps.length, 1, 'the clamp must be reported, not just applied');
+  assert.equal(clamps[0].id, 'reserve');
+  assert.equal(+clamps[0].wantFraction.toFixed(4), 3);   // asked for 3x the book
+  assert.equal(+clamps[0].gotFraction.toFixed(4), 1);    // got all of it, and no more
+});
+
+test('POOL-22b: a target that FITS reports no clamp (the field is not a warning about nothing)', () => {
+  const graph = normalizeLiquidityGraph({
+    pools: [
+      { id: 'reserve', spendOrder: 10, claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }],
+        target: { mode: 'YEARS_OF_SPEND', value: 4 } },
+      { id: 'growth',  spendOrder: 20, claims: [{ key: 'usStockAccount', sleeves: ['EQUITY', 'GOLD'] }] },
+    ],
+  }, ACCOUNTS);
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: 'us-stock' }],
+    targetAllocation: { EQUITY: 0.90, GOLD: 0.10 },
+    poolGraph: graph,
+  });
+  const state = { monthlyExpenses: 10_000, effectiveExchangeRates: { USD_AUD: 1 },
+                  liquidityPools: { reserve: { target: 480_000 }, growth: {} } };
+  const clamps = [];
+  r.resolveScheduledTarget(state, { type: 'US_PERIOD_ADVANCE' }, 1_200_000, null, clamps);
+  assert.deepEqual(clamps, [], 'a target that fits is the feature working, not a clamp');
+});

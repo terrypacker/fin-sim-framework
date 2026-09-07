@@ -21,7 +21,7 @@ import { colorForSeriesKey } from '../../../../finance/allocation-reporting/allo
 /** The CSV's columns, in order. The fact table's contract — see `poolHistoryRows`. */
 export const POOL_CSV_COLUMNS = Object.freeze([
   'date', 'year', 'pool', 'label',
-  'balance', 'capacity', 'utilised', 'target', 'yearsOfCover', 'high',
+  'balance', 'capacity', 'utilised', 'target', 'targetAfforded', 'yearsOfCover', 'high',
   'marketReturn', 'priorYearReturn', 'inflow', 'outflow',
   'headroom', 'shortfall', 'drawdown', 'gated', 'vetoed', 'capped',
   // Per-PERIOD figures, repeated on every pool's row (§22.3 extended). Last, so a reader
@@ -472,6 +472,14 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
       const bal = poolSeries(hist, 'balance',  ids);
       const tgt = poolSeries(hist, 'target',   ids);
       const cap = poolSeries(hist, 'capacity', ids);
+      // A FOURTH line, and only where it exists (design 97 §23.2). A pool asking for more
+      // than the room left in the mix is silently given the room and goes on reporting the
+      // target it wanted — so the dashed target line above can sit for decades at a level the
+      // plan never once held, with nothing on the chart saying so. This is the level the book
+      // could actually afford. It is null in every period where the ask fit, so the line is
+      // ABSENT on a healthy pool and appears exactly when the ask outgrows the portfolio —
+      // which is the event worth seeing, and it arrives gradually rather than on a date.
+      const aff = poolSeries(hist, 'targetAfforded', ids);
       for (const id of ids) {
         const c = colorOf(id);
         series.push({ name: `${hist.labels[id]}`, type: 'line', showSymbol: false,
@@ -480,6 +488,14 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
           series.push({ name: `${hist.labels[id]} · target`, type: 'line', showSymbol: false,
                         lineStyle: { width: 1, type: 'dashed', color: c }, itemStyle: { color: c },
                         data: tgt.series[id] });
+        }
+        if (aff.series[id].some(v => v != null)) {
+          // `connectNulls: false` so the gap is honest: the periods where the target fit are
+          // not periods where the afforded level was zero, and a joined line would say they were.
+          series.push({ name: `${hist.labels[id]} · afforded`, type: 'line', showSymbol: false,
+                        connectNulls: false, z: 4,
+                        lineStyle: { width: 2.2, type: 'solid', color: c, opacity: 0.55 },
+                        itemStyle: { color: c }, data: aff.series[id] });
         }
         series.push({ name: `${hist.labels[id]} · capacity`, type: 'line', showSymbol: false,
                       lineStyle: { width: 1, type: 'dotted', color: c }, itemStyle: { color: c },
@@ -653,9 +669,19 @@ export class LiquidityPoolsPlugin extends WorkbenchComponent {
     el.innerHTML = hist.poolIds.map((id, i) => {
       const off = this._hidden.has(id);
       const m   = last.pools[id];
+      // The clamp badge (design 97 §23.2). A pool whose target the book cannot afford is the
+      // single most consequential thing this panel can say — its class saturates the mix and
+      // squeezes every other class toward zero — and it is invisible in the balance and the
+      // cover, both of which look merely disappointing. Stated as a PERCENTAGE OF THE ASK
+      // because that is the actionable number: "this pool is getting 52% of what you asked
+      // for" tells the author to change the ask, where a second dollar figure beside two
+      // others does not.
+      const short = (m?.targetAfforded != null && m.target > 0)
+        ? Math.round((m.targetAfforded / m.target) * 100) : null;
       const tail = m
         ? ` <strong>${_esc(this._money(m.balance))}</strong>` +
-          (m.yearsOfCover != null ? ` <span class="pool-dim">${m.yearsOfCover.toFixed(1)}y</span>` : '')
+          (m.yearsOfCover != null ? ` <span class="pool-dim">${m.yearsOfCover.toFixed(1)}y</span>` : '') +
+          (short != null ? ` <span class="pool-clamped" title="This pool asked for ${_esc(this._money(m.target))} and the portfolio could only afford ${_esc(this._money(m.targetAfforded))} — ${short}% of the ask. The rest of the mix is squeezed to make room, so the other allocation classes hold less than any authored weight asked for. Reduce this pool's target.">${short}% of ask</span>` : '')
         : '';
       // The title says what the chip DOES, not just what it is: this strip is the panel's
       // only pool filter, and a legend that looks like a legend is one nobody clicks.

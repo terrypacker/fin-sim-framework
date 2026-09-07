@@ -144,6 +144,35 @@ export function resolveLocationPolicy(residency = 'US', override = null) {
 const R2 = (x) => +(+x).toFixed(2);
 
 /**
+ * Design 97 §23 — the MEASUREMENT SEAM for joining pool claims to placement.
+ *
+ * `eligibility` is `Map<stateKey, Set<ALLOCATION>>`: the classes an account is permitted
+ * to hold. It is HARD where the role policy is soft — the whole point, since the policy's
+ * preference lists spill into any account with capacity left and so cannot say "never
+ * bonds here" (the failure this exists to price).
+ *
+ * Three rules, and the second and third are the ones with teeth:
+ *
+ * 1. **Absent ⇒ unconstrained.** A null map, or an account the map does not name, keeps
+ *    today's behaviour exactly. That is what makes this inert: no caller wires it yet.
+ * 2. **An account named for no class holds nothing.** An empty Set is a real statement.
+ * 3. **Value conservation outranks eligibility.** If the constraint leaves an account with
+ *    capacity no permitted class can fill, the final pass RELAXES it rather than stranding
+ *    the money — an account whose composition does not sum to its own total breaks the
+ *    Phase-2 invariant and would silently destroy value. The relaxed dollars are counted
+ *    into `stats.relaxed` instead, because that number IS the measurement: it is how much
+ *    of the author's placement the book cannot afford to honour.
+ *
+ * Unwired on purpose. Nothing reads a param into this yet; the probe sets it directly on
+ * the reducer so the join can be priced BEFORE it is designed into the authoring surface.
+ */
+function _canHold(eligibility, stateKey, cls) {
+  if (!eligibility) return true;
+  const set = eligibility.get?.(stateKey);
+  return set === undefined ? true : set.has(cls);
+}
+
+/**
  * Order eligible accounts for a class: those whose role appears in the class's
  * preference list first (in that order), then any remaining accounts by descending
  * remaining capacity (stable) so the spillover fills the biggest homes first.
@@ -168,9 +197,16 @@ function _orderedForClass(accounts, remaining, preferred) {
  * @param {object}   [opts.policy]        - partial class → preferred-roles map, merged over the
  *                                        residency-resolved default (see resolveLocationPolicy)
  * @param {string}   [opts.residency]     - 'US' | 'AU'; selects gold's preference order (§12.2 Q4)
+ * @param {?Map}     [opts.eligibility]   - design 97 §23 measurement seam: stateKey → Set<ALLOCATION>
+ *                                        of the classes that account may hold. Null (the default)
+ *                                        and unnamed accounts are unconstrained. See `_canHold`.
+ * @param {?object}  [opts.stats]         - optional out-param; `stats.relaxed` accumulates the
+ *                                        dollars placed in violation of `eligibility` to keep each
+ *                                        account's composition summing to its total.
  * @returns {Map<string, object>} stateKey → { <ALLOCATION>: dollars } summing to that account's total
  */
-export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy = null, residency = 'US' } = {}) {
+export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy = null, residency = 'US',
+                                     eligibility = null, stats = null } = {}) {
   // Gold's preferred home depends on residency (§12.2 Q4); everything else does not.
   // A caller-supplied `policy` is merged over the residency default, per class.
   policy = resolveLocationPolicy(residency, policy);
@@ -210,7 +246,8 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   for (const cls of LOCATION_FILL_ORDER) {
     let need = classTargets[cls];
     if (need <= 0) continue;
-    const eligible = active.filter(a => cls !== ALLOCATION.GOLD || roleCanHoldGold(a.role));
+    const eligible = active.filter(a => (cls !== ALLOCATION.GOLD || roleCanHoldGold(a.role))
+                                     && _canHold(eligibility, a.stateKey, cls));
     for (const a of _orderedForClass(eligible, remaining, policy[cls])) {
       if (need <= 1e-6) break;
       const amt = Math.min(need, remaining[a.stateKey]);
@@ -224,18 +261,46 @@ export function planLocatedTargets({ accounts = [], portfolioTarget = {}, policy
   // Reconcile: fill any account still carrying capacity with the leftover class dollars
   // (respecting gold eligibility). With Σ class$ == Σ capacity and gold capped feasible,
   // this drives every `remaining` to ~0 so each account's composition sums to its total.
-  for (const cls of [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD]) {
+  const RECONCILE_ORDER = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];
+  for (const cls of RECONCILE_ORDER) {
     let need = classTargets[cls];
     if (need <= 1e-6) continue;
     for (const a of active) {
       if (need <= 1e-6) break;
       if (cls === ALLOCATION.GOLD && !roleCanHoldGold(a.role)) continue;
+      if (!_canHold(eligibility, a.stateKey, cls)) continue;
       const amt = Math.min(need, remaining[a.stateKey]);
       if (amt <= 1e-6) continue;
       assign(a.stateKey, cls, amt);
       need -= amt;
     }
     classTargets[cls] = need;
+  }
+
+  // Design 97 §23 rule 3 — value conservation outranks eligibility. Whatever the constrained
+  // passes could not place goes back into the accounts that have room, ignoring `eligibility`
+  // but never the GOLD guard (which is a claim about what an account may legally hold, not a
+  // preference). Reached only when the author's placement is infeasible against this book;
+  // `stats.relaxed` is how much of it the book could not honour.
+  if (eligibility) {
+    for (const cls of RECONCILE_ORDER) {
+      let need = classTargets[cls];
+      if (need <= 1e-6) continue;
+      for (const a of active) {
+        if (need <= 1e-6) break;
+        if (cls === ALLOCATION.GOLD && !roleCanHoldGold(a.role)) continue;
+        const amt = Math.min(need, remaining[a.stateKey]);
+        if (amt <= 1e-6) continue;
+        assign(a.stateKey, cls, amt);
+        need -= amt;
+        // Only a placement `eligibility` actually FORBIDS is a violation. This pass also
+        // mops up dollars headed for unconstrained accounts — capacity the constrained
+        // reconcile left behind for ordinary reasons — and counting those would report a
+        // constraint as broken in runs where it was honoured exactly.
+        if (stats && !_canHold(eligibility, a.stateKey, cls)) stats.relaxed = (stats.relaxed ?? 0) + amt;
+      }
+      classTargets[cls] = need;
+    }
   }
 
   // Round and absorb sub-cent drift into each account's largest class so the
