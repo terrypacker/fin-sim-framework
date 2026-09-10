@@ -86,7 +86,7 @@ export const US_TAX = {
     return [
       {
         key: 'usFilingSingle', label: 'Filing Single',
-        type: 'Boolean', group: 'US Tax', mc: false, opt: true,
+        type: 'Boolean', group: 'US Tax', mc: false, opt: false,
         defaultValue: undefined,
         description: 'Override filing status auto-detection (true = single, false = MFJ)',
       },

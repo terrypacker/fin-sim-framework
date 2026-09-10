@@ -11,6 +11,7 @@
 import { BaseComponent }              from '../components/base-component.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distributions.js';
+import { SweepVariableTable }          from '../common/sweep-variable-table.js';
 
 /**
  * McConfigPanel — left pane of the MC tab.
@@ -167,6 +168,24 @@ export class McConfigPanel extends BaseComponent {
     el.className   = `mc-var-source${source ? ` mc-var-source--${source}` : ''}`;
   }
 
+  /**
+   * Warn on a role-level row that a per-account rate overrides (design 98 W5 / F5).
+   * Before this, pinning an account's Growth Rate left the role axis listed and
+   * sampled with nothing to say it no longer reached that account — or, once every
+   * account of the role was pinned, anything at all.
+   */
+  _renderShadow(el, cfg) {
+    if (!el) return;
+    const by = cfg.shadowedBy ?? [];
+    el.hidden = by.length === 0;
+    if (!by.length) return;
+    el.textContent = cfg.shadowedAll ? '⚠ no effect' : `⚠ ${by.length} pinned`;
+    el.title = cfg.shadowedAll
+      ? `Every account this rate applies to sets its own rate (${by.join(', ')}), so sampling it changes nothing.`
+      : `These accounts set their own rate and ignore this one: ${by.join(', ')}.`;
+    el.className = `mc-var-shadow${cfg.shadowedAll ? ' mc-var-shadow--dead' : ''}`;
+  }
+
   /** Flag (or clear) a row whose user-set center disagrees with the scenario value. */
   _markDiverged(row, scenarioValue) {
     const diverged = scenarioValue != null;
@@ -187,15 +206,7 @@ export class McConfigPanel extends BaseComponent {
 
     this._variables = variables;
     this._rowMap.clear();
-
-    // Clear just the variable rows, keep the header
-    if (this._section) {
-      // Remove everything after the section header
-      while (this._section.children.length > 1) {
-        this._section.removeChild(this._section.lastChild);
-      }
-      this._buildVarTable(this._section, variables, savedState);
-    }
+    this._table?.render(variables, savedState, this._rowMap);
   }
 
   /**
@@ -300,31 +311,10 @@ export class McConfigPanel extends BaseComponent {
       if (this.onCopyFromScenario) this.onCopyFromScenario();
     });
 
-    this._buildVarTable(this._section, this._variables, new Map());
-  }
-
-  _buildVarTable(section, variables, savedState) {
-    const groups = new Map();
-    for (const cfg of variables) {
-      if (!groups.has(cfg.group)) groups.set(cfg.group, []);
-      groups.get(cfg.group).push(cfg);
-    }
-
-    for (const [groupName, configs] of groups) {
-      const header = document.createElement('div');
-      header.className = 'mc-group-header';
-      header.textContent = groupName;
-      section.appendChild(header);
-
-      for (const cfg of configs) {
-        // Merge saved state into cfg so the rebuilt row restores user values
-        const prior = savedState.get(cfg.paramKey);
-        const merged = prior ? { ...cfg, ...prior } : cfg;
-        const { el, refs } = this._buildVarRow(merged);
-        section.appendChild(el);
-        this._rowMap.set(cfg.paramKey, refs);
-      }
-    }
+    // Grouping, filter and collapse are shared with the Opt panel (design 98 W4).
+    this._table = new SweepVariableTable(this, this._section,
+      { prefix: 'mc', buildRow: cfg => this._buildVarRow(cfg) });
+    this._table.render(this._variables, new Map(), this._rowMap);
   }
 
   _buildVarRow(cfg) {
@@ -341,8 +331,10 @@ export class McConfigPanel extends BaseComponent {
         style="margin:0;cursor:pointer;accent-color:var(--purple);flex-shrink:0" />
       <span class="mc-var-label" title="${cfg.label}">${cfg.label}</span>
       <span class="mc-var-source"></span>
+      <span class="mc-var-shadow"></span>
     `;
     el.appendChild(labelRow);
+    this._renderShadow(labelRow.querySelector('.mc-var-shadow'), cfg);
 
     const inputRow = document.createElement('div');
     inputRow.className = 'mc-var-input-row';

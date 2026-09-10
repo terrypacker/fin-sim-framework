@@ -83,7 +83,7 @@ export const AU_TAX = {
         // to using inflationAccumulator. Set a distinct value to decouple the CGT
         // index from household wage/expense inflation.
         key: 'auCpiRate', label: 'AU CGT Indexation (CPI) Rate',
-        type: 'Number', group: 'AU Tax', mc: true, opt: true,
+        type: 'Number', group: 'AU Tax', mc: true, opt: false,
         defaultValue: undefined,
         description: 'Annual ATO CPI rate used to index AU capital-gains cost bases (FY2027+). '
           + 'Leave unset to track the AU inflation rate.',

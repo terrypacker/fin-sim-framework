@@ -16,7 +16,9 @@ import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchem
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES } from '../holdings/holdings-selection.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { US_STATE_CODES }             from '../tax/state/us-states.js';
-import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
+import { indexParamSchema, resolveSweepVariables, harvestSweepVariables } from '../param-schema-utils.js';
+import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
+import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
 
 // Lazily index the full param schema by key so Opt variables can inherit identity
 // (label / options / visibleWhen) from it rather than duplicating it here.
@@ -24,6 +26,38 @@ let _schemaByKey = null;
 function schemaByKey() {
   if (!_schemaByKey) _schemaByKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
   return _schemaByKey;
+}
+
+const _round6 = x => Math.round(x * 1e6) / 1e6;
+
+/**
+ * Default Opt range for a harvested row, by sweep kind (design 98 W3.4). Every
+ * harvested row ships disabled; these are starting ranges for the user to narrow.
+ */
+function optRowFor(kind, center, entry) {
+  switch (kind) {
+    case 'year': {
+      const c = Math.round(center);
+      return { type: OPT_PARAM_TYPES.INTEGER, min: c - 5, max: c + 5, step: 1 };
+    }
+    case 'rate':
+      return { type: OPT_PARAM_TYPES.CONTINUOUS,
+        min: _round6(center >= 0 ? Math.max(0, center - 0.02) : center - 0.02),
+        max: _round6(center + 0.02), step: 0.005 };
+    case 'amount': {
+      if (center === 0) return null;
+      const [lo, hi] = [center * 0.5, center * 1.5].sort((a, b) => a - b);
+      return { type: OPT_PARAM_TYPES.CONTINUOUS, min: _round6(lo), max: _round6(hi),
+        step: _round6(Math.abs(center) / 10) };
+    }
+    case 'enum': {
+      const values = entry.type === 'Boolean' ? [false, true]
+        : (entry.options ?? []).map(o => (o && typeof o === 'object') ? o.value : o);
+      return values.length > 1 ? { type: OPT_PARAM_TYPES.ENUM, values } : null;
+    }
+    default:     // 'date': the optimizer has no date variable type
+      return null;
+  }
 }
 
 const D = INTL_RETIREMENT_DEFAULTS;
@@ -110,27 +144,11 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 
-  // ── Central-bank Prime rates (design 56 Decision 6 / §3.1) ────────────────
-  // Prime is THE systemic rate sweep: one axis per central bank moves every
-  // Prime-linked cash account (and, in Phase 3, variable loan) coherently. The
-  // per-account/global savings interest-rate opt levers are retired in favour of
-  // these (primeSpread stays an idiosyncratic Opt residual, not a systemic sweep).
-  {
-    paramKey: 'usPrimeRate',
-    label:    'US Prime Rate (Fed policy)',
-    type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 0.0, max: 0.10, step: 0.005,
-    group:    'Rates',
-    enabled:  false,
-  },
-  {
-    paramKey: 'auPrimeRate',
-    label:    'AU Prime Rate (RBA policy)',
-    type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 0.0, max: 0.10, step: 0.005,
-    group:    'Rates',
-    enabled:  false,
-  },
+  // Central-bank Prime rates are NOT optimization axes (design 98 W2 follow-up,
+  // amending design 56 Decision 6). The household does not choose the policy rate, so
+  // "optimising" it only picks whichever end of the range suits the plan. Prime stays
+  // the systemic rate sweep for Monte Carlo; `primeSpread` (the bank's markup, which
+  // the household does choose by choosing a bank) remains an Opt lever.
 
   // ── Migration timing ──────────────────────────────────────────────────────
   {
@@ -449,6 +467,7 @@ function buildShockOptConfigs(params) {
         step:     0.05,
         group:    'Economic Shocks',
         enabled:  false,
+        synthetic: true,   // array sub-path: legitimately schema-less (design 98 W3.5)
       },
     ];
   });
@@ -479,6 +498,7 @@ function buildExpenseBandOptConfigs(params) {
         step:         500,
         group:        'Spending Bands',
         enabled:      false,
+        synthetic:    true,
         controllable: true,
         visibleWhen:  { param: 'spendingStrategy', includes: 'EXPLICIT_BANDS' },
       },
@@ -515,6 +535,7 @@ function buildRothScheduleOptConfigs(params) {
         step:         5_000,
         group:        'Roth Conversion Schedule',
         enabled:      false,
+        synthetic:    true,
         controllable: true,
       },
     ];
@@ -566,8 +587,13 @@ function buildInheritedRaOptConfigs(params) {
  * shock, one monthly-amount entry per configured expense band, and the inherited-RA
  * drawdown axes per inherited retirement account.  Dynamic entries only appear
  * when the scenario actually has them.
+ *
+ * Then HARVESTS (design 98 W3) every `opt`-flagged schema entry the list above does
+ * not already offer, as a disabled row. `cfg` (the loaded scenario) adds its
+ * generated per-record params to the schema harvested from; a null `cfg` (library
+ * callers) harvests the static schema only.
  */
-export function buildOptVariables(params, accounts = null) {
+export function buildOptVariables(params, accounts = null, { cfg = null } = {}) {
   // User-authored drawdown strategies (intl-retirement-scenario customDrawdownStrategies)
   // become additional sweep values for the drawdownStrategy ENUM, alongside the
   // built-ins. Non-mutating: clone the one affected config entry.
@@ -583,6 +609,12 @@ export function buildOptVariables(params, accounts = null) {
     ...buildRothScheduleOptConfigs(params),
     ...buildInheritedRaOptConfigs(params),
   ];
+  const schema = [
+    ...IntlRetirementScenario.buildFullParamSchema(),
+    ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),
+  ];
+  list = [...list, ...harvestSweepVariables(list, schema, params,
+    { flag: 'opt', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: optRowFor })];
   // Build-time filter (design 58): when the caller supplies the scenario's accounts,
   // drop the Lever-B weight axes for roles no account backs. Those dimensions are
   // flat in the objective (nothing consumes their rank), so sweeping them only

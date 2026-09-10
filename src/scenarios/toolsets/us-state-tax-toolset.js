@@ -70,7 +70,7 @@ export const US_STATE_TAX = {
     return [
       {
         key: 'stateMoveYear', label: 'State Move Year',
-        type: 'Number', group: 'US Tax', mc: false, opt: true,
+        type: 'Number', group: 'US Tax', mc: true, opt: true,
         defaultValue: undefined,
         description: 'Calendar year to establish residency in the destination state (effective Jan 1). Leave unset for no state move.',
       },

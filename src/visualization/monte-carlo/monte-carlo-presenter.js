@@ -128,7 +128,9 @@ export class MonteCarloPresenter {
   _resolveVariables() {
     const ownParams      = this._resolveBaseParams();
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
-    const vars = new IntlRetirementMcConfig().buildVariables({ ...schemaDefaults, ...ownParams });
+    // The active cfg lets the harvest reach generated per-record params (design 98 W3).
+    const activeCfg      = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    const vars = new IntlRetirementMcConfig().buildVariables({ ...schemaDefaults, ...ownParams }, { cfg: activeCfg });
     return vars.map(v => ({ ...v, centerSource: refineCenterSource(v, { ownParams, schemaDefaults }) }));
   }
 

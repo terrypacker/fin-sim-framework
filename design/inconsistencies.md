@@ -385,6 +385,36 @@ design/40 Q5), gated on the same `speculative` rule `computeNetWorth` applies, s
 two can no longer disagree about which assets exist. Pinned by *"88 D5: after-tax and
 pre-tax worth agree about WHICH assets exist"* in `tests/unit/speculative-assets.test.mjs`.
 
+### 4.13 The MC "Median Failure" date is suspected wrong — **OPEN, not yet reproduced**
+
+Reported 10 Sep 2026 while refining design 98. Logged here rather than there: it is an MC
+*results* defect, not a question of which params can be swept.
+
+Computed in `ScenarioRunner.summarize` (`scenario.js:86-94`) from the runner's
+`mapFailure` (`intl-retirement-mc-runner.js:482-490`), shown as "Median Failure" by
+`mc-results-panel.js:328`.
+
+Ruled out so far:
+- **Ordering.** The failure times are sorted before indexing.
+- **Last shortfall instead of first.** `SetOutOfFundsDateReducer` stamps the date once, and
+  `OutOfFundsHandler` only emits while `outOfFundsDate` is unset.
+
+Candidates, none confirmed:
+1. **It is a conditional median — over failed paths only.** With 3 failures in 100 runs it
+   is the middle of those three; the badge does not say "among failed runs", so it reads
+   as a statement about the whole distribution.
+2. **The count and the dates can disagree.** `failureCount` counts every `failed` path, but
+   the median is taken only over dates that pass `instanceof Date`. A failed path whose
+   date is a string (a result restored across a Rebuild, or otherwise serialised — worker
+   results use structured clone, which preserves `Date`) is silently dropped from the
+   median while still counted as a failure.
+3. **`failed` and the date come from different fields.** Check whether `failed` can be true
+   for a path with a deficit but no `outOfFundsDate` (and the reverse).
+4. **Upper median** for an even count (`Math.floor(n × 0.5)`). Minor.
+
+Next step: reproduce on the plan where the number looked wrong, and compare the badge
+against the per-run `outOfFundsDate` values in the runs panel.
+
 ---
 
 ## 5. Smaller Annoyances

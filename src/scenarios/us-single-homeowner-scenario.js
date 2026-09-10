@@ -161,7 +161,7 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
 export const US_SINGLE_HOMEOWNER_PARAM_SCHEMA = [
   {
     key: 'residencyState', label: 'US Residency State',
-    type: 'Enum', options: ['', ...US_STATE_CODES], group: 'US Tax', mc: true, opt: true,
+    type: 'Enum', options: ['', ...US_STATE_CODES], group: 'US Tax', mc: false, opt: true,
     defaultValue: US_SINGLE_HOMEOWNER_DEFAULTS.residencyState,
     description: `US state of residency for state income tax (${US_STATE_CODES.join(', ')}). Blank = none.`,
     node: { type: 'person', id: 'primary', field: 'residencyState' },

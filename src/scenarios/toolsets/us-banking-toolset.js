@@ -54,11 +54,12 @@ export const US_BANKING = {
       {
         // Central-bank Prime rate (design 56). Prime-linked cash accounts and loans
         // derive their effective rate as Prime + primeSpread; a single Prime move fans
-        // out to all of them. Prime is THE systemic rate sweep (Decision 6 / §3.1):
-        // mc/opt are true (Phase 2a), and the per-account interest-rate levers are retired
-        // so sweeping a rate means sweeping Prime, which fans out coherently.
+        // out to all of them. Prime is THE systemic rate sweep (Decision 6 / §3.1): the
+        // per-account interest-rate levers are retired so sweeping a rate means sweeping
+        // Prime, which fans out coherently. mc only: design 98 (W2 follow-up) took it off
+        // the optimizer — the household does not choose the policy rate.
         key: 'usPrimeRate', label: 'US Prime Rate (Fed policy)',
-        type: 'Number', group: 'US Banking', mc: true, opt: true,
+        type: 'Number', group: 'US Banking', mc: true, opt: false,
         defaultValue: 0.045,
         description: 'US central-bank (Fed) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
       },

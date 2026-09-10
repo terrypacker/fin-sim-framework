@@ -161,7 +161,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'assetLocationPolicy', label: 'Asset Location Policy',
-        type: 'LocationPolicy', group: 'Behavioral', mc: false, opt: true,
+        type: 'LocationPolicy', group: 'Behavioral', mc: false, opt: false,
         defaultValue: null,
         description: 'Map of allocation → preferred account roles for tax-advantaged placement. E.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira"]}. Null = use defaults.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'STRATEGIC_ASSET_LOCATION' },
@@ -191,7 +191,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'rebalanceTargetAllocation', label: 'Rebalance Target Allocation',
-        type: 'MixList', group: 'Behavioral', mc: false, opt: true,
+        type: 'MixList', group: 'Behavioral', mc: false, opt: false,
         defaultValue: null,
         description: 'Target allocation fractions for opportunistic rebalance. E.g. {"EQUITY":0.60,"BOND":0.40}. Null = 60/40 default.',
         visibleWhen: { param: 'behavioralStrategies', includes: 'OPPORTUNISTIC_REBALANCE' },
@@ -337,7 +337,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationGlidepath', label: 'Allocation Glidepath',
-        type: 'AllocationGlidepath', group: 'Allocation', mc: false, opt: true,
+        type: 'AllocationGlidepath', group: 'Allocation', mc: false, opt: false,
         defaultValue: null,
         description: 'GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. ' +
           '[{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. ' +
@@ -349,7 +349,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationRegimeTargets', label: 'Allocation Regime Targets',
-        type: 'AllocationRegimeTargets', group: 'Allocation', mc: false, opt: true,
+        type: 'AllocationRegimeTargets', group: 'Allocation', mc: false, opt: false,
         defaultValue: null,
         description: 'REGIME_CONDITIONED targets: a map of regime tag → mix, e.g. ' +
           '{"NORMAL":{"EQUITY":0.6,"BOND":0.4},"ECONOMIC_STRESS":{"EQUITY":0.3,"BOND":0.3,"CASH":0.2,"GOLD":0.2}}. ' +
@@ -374,7 +374,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'allocationLocationPolicy', label: 'Allocation Location Policy',
-        type: 'LocationPolicy', group: 'Allocation', mc: false, opt: true,
+        type: 'LocationPolicy', group: 'Allocation', mc: false, opt: false,
         defaultValue: null,
         description: 'LOCATED placement policy: a map of allocation → preferred account roles (in order), ' +
           'e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when ' +

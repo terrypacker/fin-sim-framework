@@ -85,6 +85,27 @@ function buildRateKeyToStateKeys(realProperties = [], collectibles = []) {
 }
 
 /**
+ * The four per-MARKET equity growth params (design 90 §7.2; declared by design 98 W1 —
+ * before that `collectBaseGrowthRates` read them but no schema declared them, so the
+ * market axis ran at four constants nobody could set).
+ *
+ * One table feeds both `paramSchema()` and `collectBaseGrowthRates`, so the editable
+ * default and the value the sim falls back to cannot drift apart. The ORDER is
+ * load-bearing: it is the key order of `baseGrowthRates`, and whole-state fixtures
+ * compare that JSON exactly.
+ */
+const MARKET_GROWTH_PARAMS = Object.freeze([
+  { key: 'usEquityGrowthRate',       rateKey: RATE_KEYS.EQUITY_US,         defaultValue: 0.07,
+    label: 'US Equity Market Growth Rate' },
+  { key: 'auEquityGrowthRate',       rateKey: RATE_KEYS.EQUITY_AU,         defaultValue: 0.06,
+    label: 'AU Equity Market Growth Rate' },
+  { key: 'intlExUsEquityGrowthRate', rateKey: RATE_KEYS.EQUITY_INTL_EX_US, defaultValue: 0.07,
+    label: 'International ex-US Equity Growth Rate' },
+  { key: 'intlExAuEquityGrowthRate', rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, defaultValue: 0.07,
+    label: 'International ex-AU Equity Growth Rate' },
+]);
+
+/**
  * Collect base growth rates from scenario parameters.
  */
 function collectBaseGrowthRates(p) {
@@ -95,10 +116,7 @@ function collectBaseGrowthRates(p) {
     // than as asset classes of their own. A regime shock on a market key reaches every
     // one of those overrides through `_addScaledExpandingClasses`'s `::` sweep, exactly
     // as the old class→member fan-out did.
-    [RATE_KEYS.EQUITY_US]:         p.usEquityGrowthRate      ?? 0.07,
-    [RATE_KEYS.EQUITY_AU]:         p.auEquityGrowthRate      ?? 0.06,
-    [RATE_KEYS.EQUITY_INTL_EX_US]: p.intlExUsEquityGrowthRate ?? 0.07,
-    [RATE_KEYS.EQUITY_INTL_EX_AU]: p.intlExAuEquityGrowthRate ?? 0.07,
+    ...Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, p[m.key] ?? m.defaultValue])),
     // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
     // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
     // computeHoldingsGrowth; regime shocks may target GOLD directly (it is not a
@@ -125,15 +143,40 @@ function collectBaseGrowthRates(p) {
  * account to its market.
  */
 function collectRoleGrowthRates(p) {
-  return {
-    [ACCOUNT_ROLES.ROTH]:      p.rothGrowthRate      ?? 0.07,
-    [ACCOUNT_ROLES.IRA]:       p.iraGrowthRate       ?? 0.07,
-    [ACCOUNT_ROLES.K401]:      p.k401GrowthRate      ?? 0.07,
-    [ACCOUNT_ROLES.US_STOCK]:  p.brokerageGrowthRate ?? 0.05,
-    [ACCOUNT_ROLES.AU_STOCK]:  p.auStockGrowthRate   ?? 0.06,
-    [ACCOUNT_ROLES.SUPER]:     p.superGrowthRate     ?? 0.07,
-  };
+  return Object.fromEntries(ROLE_GROWTH_PARAMS.map(r => [r.role, p[r.param] ?? r.defaultRate]));
 }
+
+/** The per-role wrapper growth params, in seeding order. Feeds collectRoleGrowthRates. */
+const ROLE_GROWTH_PARAMS = Object.freeze([
+  { role: ACCOUNT_ROLES.ROTH,     param: 'rothGrowthRate',      defaultRate: 0.07 },
+  { role: ACCOUNT_ROLES.IRA,      param: 'iraGrowthRate',       defaultRate: 0.07 },
+  { role: ACCOUNT_ROLES.K401,     param: 'k401GrowthRate',      defaultRate: 0.07 },
+  { role: ACCOUNT_ROLES.US_STOCK, param: 'brokerageGrowthRate', defaultRate: 0.05 },
+  // Price only: the 4% franked dividend is paid on top (design 98 M1 — was 0.06, a 10% total).
+  { role: ACCOUNT_ROLES.AU_STOCK, param: 'auStockGrowthRate',   defaultRate: 0.03 },
+  { role: ACCOUNT_ROLES.SUPER,    param: 'superGrowthRate',     defaultRate: 0.07 },
+]);
+
+/**
+ * Which role-level params an account's OWN field overrides (design 98 W5 / F5).
+ *
+ * Every row is a precedence `acct.<field> ?? p.<param>` somewhere in the model: the six
+ * growth rates in seedPerAccountRates above; `brokerageDividendRate` as the US
+ * brokerage's additive dividend and as the IRA/Roth/401(k) carve-out yield fallback
+ * (us-retirement-toolset); `auStockDividendRate` in au-retirement-toolset. An account
+ * that sets the field no longer hears the role param, so an MC axis on that param is
+ * shadowed for it — and dead once EVERY account of its roles is pinned.
+ *
+ * One table so the precedence and its diagnosis cannot drift apart: the growth rows
+ * are derived from ROLE_GROWTH_PARAMS, which is also what collectRoleGrowthRates reads.
+ */
+export const ROLE_PARAM_OVERRIDES = Object.freeze([
+  ...ROLE_GROWTH_PARAMS.map(r => ({ param: r.param, roles: [r.role], field: 'growthRate' })),
+  { param: 'brokerageDividendRate', roles: [ACCOUNT_ROLES.US_STOCK], field: 'dividendRate' },
+  { param: 'brokerageDividendRate',
+    roles: [ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH, ACCOUNT_ROLES.K401], field: 'dividendYield' },
+  { param: 'auStockDividendRate',   roles: [ACCOUNT_ROLES.AU_STOCK], field: 'dividendRate' },
+].map(Object.freeze));
 
 /**
  * Collect base interest rates from scenario parameters.
@@ -602,8 +645,8 @@ export const ECONOMIC_REGIMES = {
         label:        'Economic Shocks',
         type:         'ShockList',
         group:        'Economic Shocks',
-        mc:           true,
-        opt:          true,
+        mc:           false,
+        opt:          false,
         options:      SHOCK_PRESET_OPTIONS,
         defaultValue: [],
         description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
@@ -853,6 +896,23 @@ export const ECONOMIC_REGIMES = {
         description:  'Active behavioral strategies: portfolio reactions to regimes and tax opportunities (design/29). PANIC_SELL rotates equity to cash on crash entry; TAX_LOSS_HARVEST realizes losses at year-end; CONTRIBUTION_SUSPENSION halts contributions under stress; and more.',
       },
       ...behavioralStrategyKeys.flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k].paramSchema()),
+      // Per-MARKET equity growth (design 98 W1). Plan inputs, not sweep axes: an account of
+      // a known role overrides these at the seed, so an MC/Opt axis here would reach almost
+      // nothing — the systematic equity MC axis is design 98 M2's `equityAnchorShift`.
+      ...MARKET_GROWTH_PARAMS.map(m => ({
+        key:          m.key,
+        label:        m.label,
+        type:         'Number',
+        group:        'Market Rates',
+        mc:           false,
+        opt:          false,
+        defaultValue: m.defaultValue,
+        description:  `Annual growth (price return; dividends are separate) of the ${m.label.replace(/ Growth Rate$/, '')} series. `
+          + 'It applies only where no account-level rate does: a holding whose Rate Key picks a market outside '
+          + "its account's own pair — for example an AU-market lot inside a US brokerage. Every account of a known "
+          + 'type prices BOTH its domestic and its international market at its own Growth Rate (or its account '
+          + "type's rate), and that outranks this.",
+      })),
     ];
   },
 

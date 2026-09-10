@@ -121,9 +121,13 @@ describe('the security tier — end to end', () => {
     const { sim } = loadScenarioSim({
       // Enough spending that cash and savings run out and the brokerage is sold into, but
       // not so much that the sleeve is emptied — a fully-drained account would compare two
-      // zeroes and pass whatever the lever did.
+      // zeroes and pass whatever the lever did. The band is narrow and moves with every
+      // default return: the control must leave the employer lot under \$50k, yet the draw
+      // must exceed the whole ~\$53k ex-US lot so naming it empties it. 13,000 → 12,800 when
+      // design 98 M1 cut AU stock growth 6% → 3% (12,700 leaves ex-US at \$4.6k; 13,000
+      // empties the control's employer lot).
       params: {
-        monthlyExpenses: 13_000,
+        monthlyExpenses: 12_800,
         ...(securityOrder ? { drawdownSecurityOrder: securityOrder } : {}),
       },
       simEnd: END,

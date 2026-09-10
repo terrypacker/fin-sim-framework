@@ -29,6 +29,10 @@ import {
   BALANCE_TARGET,
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
+// The namespace list lives in a dependency-free module so mc-param-paths can use it
+// without loading the templates (design 98 W0); re-exported so importers are unchanged.
+import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
+export { GENERATED_KEY_PREFIXES, isGeneratedParamKey };
 
 /** Inherited-asset `__type`s that grow per-account SECURE-drawdown params (design
  *  63 §6.2). Super is excluded — it is a forced lump-sum, not an ongoing account.
@@ -36,10 +40,6 @@ import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js
  *  property / collectible are promoted to real records (design 63 §14) and generate
  *  their params via the standard acct./prop./coll. templates. */
 const INHERITED_RA_TYPES = new Set(['TraditionalIRAAccount', 'FourOhOneKAccount', 'RothAccount']);
-
-/** Namespaces the generator owns. A param key with one of these prefixes is
- *  generated (§6 harvest exception is scoped by this). */
-export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.', 'raAsset.'];
 
 // Template lookup keys off `account.type` (ACCOUNT_TYPE). Records that never went
 // through the account service — raw buildDefaultConfig output, legacy saves — carry
@@ -58,11 +58,6 @@ const ROLE_TO_ACCOUNT_TYPE = {
 };
 function resolveAccountType(a) {
   return a.type ?? CLASS_TO_ACCOUNT_TYPE[a.__type] ?? ROLE_TO_ACCOUNT_TYPE[a.role] ?? null;
-}
-
-/** True when `key` is a generated per-record param key (by namespace). */
-export function isGeneratedParamKey(key) {
-  return typeof key === 'string' && GENERATED_KEY_PREFIXES.some(p => key.startsWith(p));
 }
 
 const PREFIX_TO_NODE_TYPE = {
