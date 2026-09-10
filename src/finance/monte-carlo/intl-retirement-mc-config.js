@@ -9,11 +9,14 @@
  */
 
 import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributions.js';
-import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario }
+  from '../../scenarios/intl-retirement-scenario.js';
+import { ScenarioParamGenerator }   from '../../scenarios/params/scenario-param-generator.js';
+import { ROLE_PARAM_OVERRIDES }     from '../../scenarios/toolsets/economic-regimes-toolset.js';
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
 import { lookupLifeTable }          from './life-tables.js';
-import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
+import { indexParamSchema, resolveSweepVariables, harvestSweepVariables } from '../param-schema-utils.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -23,6 +26,68 @@ let _schemaByKey = null;
 function schemaByKey() {
   if (!_schemaByKey) _schemaByKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
   return _schemaByKey;
+}
+
+/**
+ * Tag each role-level row that a per-account field overrides (design 98 W5 / F5).
+ *
+ *   shadowedBy  — stateKeys of the role's accounts whose own field is set, so the
+ *                 sampled role value never reaches them;
+ *   shadowedAll — true when that is EVERY account of the role(s): the axis is dead.
+ *
+ * An account's override is its generated param when the bag carries one
+ * (`acct.<stateKey>.<field>` — what the loader cascade writes onto the record), else
+ * the record's own field. Rows for params with no accounts of their roles are left
+ * alone: that is a different finding (nothing to shadow).
+ */
+function tagShadowedRows(variables, accounts, params) {
+  if (!Array.isArray(accounts) || accounts.length === 0) return variables;
+  const overrideOf = (acct, field) => {
+    const bagValue = params?.[`acct.${acct.stateKey}.${field}`];
+    return bagValue !== undefined ? bagValue : acct[field];
+  };
+  return variables.map(v => {
+    const rules = ROLE_PARAM_OVERRIDES.filter(r => r.param === v.paramKey);
+    if (rules.length === 0) return v;
+    let members = 0;
+    const shadowedBy = [];
+    for (const rule of rules) {
+      for (const acct of accounts) {
+        if (!acct?.stateKey || !rule.roles.includes(acct.role)) continue;
+        members++;
+        if (overrideOf(acct, rule.field) != null) shadowedBy.push(acct.stateKey);
+      }
+    }
+    if (shadowedBy.length === 0) return v;
+    return { ...v, shadowedBy, shadowedAll: shadowedBy.length === members };
+  });
+}
+
+/**
+ * Default MC distribution for a harvested row, by sweep kind (design 98 W3.4).
+ * Year rows carry `integer: true` so perturbParams rounds the draw — without it,
+ * `Date.UTC(year, …)` truncates and the axis runs half a year early (F10, W0b).
+ * Enums have no categorical distribution, so they are Opt-only.
+ */
+function mcRowFor(kind, center) {
+  switch (kind) {
+    case 'year':
+      return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1.5, integer: true };
+    case 'rate':
+      return { type: DISTRIBUTION_TYPES.NORMAL, mean: center,
+        stdDev: Math.max(0.005, 0.2 * Math.abs(center)) };
+    case 'amount':
+      return center === 0 ? null
+        : { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 0.1 * Math.abs(center) };
+    case 'date': {
+      const d   = new Date(center);
+      const iso = dy => new Date(Date.UTC(d.getUTCFullYear() + dy, d.getUTCMonth(), d.getUTCDate()))
+        .toISOString().slice(0, 10);
+      return { type: DISTRIBUTION_TYPES.UNIFORM_DATE, min: iso(-2), max: iso(2) };
+    }
+    default:
+      return null;
+  }
 }
 
 /**
@@ -201,8 +266,9 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
   // ── Account balances (disabled by default — starting values are known) ────
   // Every account bootstraps at least one holding at compile time, so its `balance` is
   // DERIVED from Σ holdings and is not a plain param (design 55 §13). These levers keep
-  // their flat legacy keys — a dotted key would be misread as a nested path by mc-param-
-  // paths `set()` — and INTL_RETIREMENT_PARAM_ALIASES resolves each to the generated,
+  // their flat legacy keys — the names saved MC configs carry; they were first chosen
+  // because mc-param-paths `set()` dropped dotted generated keys, which design 98 W0
+  // fixed — and INTL_RETIREMENT_PARAM_ALIASES resolves each to the generated,
   // hidden `acct.<stateKey>.balanceTarget`, whose loader cascade rescales that account's
   // holdings to the sampled dollar total non-destructively. The sampled value is still an
   // absolute balance in the account's native currency.
@@ -279,7 +345,8 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
  * Only emits a variable when the param is non-null — a null sale year has no
  * meaningful distribution center, so there is nothing to perturb.
  * stdDev of 1.5 years covers realistic uncertainty about timing (roughly ±3 yr
- * at 2σ).  The runner rounds sampled values to integer before use.
+ * at 2σ).  `integer: true` has perturbParams round each draw (design 98 W0b);
+ * applyRealPropertySaleYearParams also rounds, for the headless/library path.
  */
 function buildRealPropertyMcConfigs(params) {
   const vars = [];
@@ -289,6 +356,7 @@ function buildRealPropertyMcConfigs(params) {
       type: DISTRIBUTION_TYPES.NORMAL,
       mean:   params.usHouseSaleYear,
       stdDev: 1.5,
+      integer: true,
       group:  'Real Properties',
       enabled: false,
     });
@@ -299,6 +367,7 @@ function buildRealPropertyMcConfigs(params) {
       type: DISTRIBUTION_TYPES.NORMAL,
       mean:   params.auHouseSaleYear,
       stdDev: 1.5,
+      integer: true,
       group:  'Real Properties',
       enabled: false,
     });
@@ -329,6 +398,7 @@ function buildShockMcConfigs(params) {
         stdDev:   0.10,
         group:    'Economic Shocks',
         enabled:  false,
+        synthetic: true,   // array sub-path: legitimately schema-less (design 98 W3.5)
         // A preset entry with no explicit severity runs at the library's severity, so
         // that mean IS the effective value — not an unanchored default worth flagging
         // (see CENTER_SOURCES). Without a preset, 0.4 is arbitrary and stays flagged.
@@ -342,6 +412,7 @@ function buildShockMcConfigs(params) {
         max:      '2035-01-01',
         group:    'Economic Shocks',
         enabled:  false,
+        synthetic: true,
       },
     ];
   });
@@ -373,29 +444,9 @@ function buildMortalityMcConfigs(params) {
       currentAge,
       group:    'Mortality',
       enabled:  false,
+      synthetic: true,   // nested people.<key> path: schema-less (design 98 W3.5)
     }];
   });
-}
-
-/**
- * Build the MC variable for a configured state move (design 34 §9).
- *
- * Only emits when `stateMoveYear` is set — an unset move has no distribution
- * center to perturb. The destination state is categorical and intentionally NOT
- * an MC variable (the framework has no categorical distribution; it is an
- * optimization-only axis, mirroring moveYear/startingResidency). stdDev of 1.5
- * years covers realistic uncertainty about timing; the runner rounds to integer.
- */
-function buildStateMoveMcConfigs(params) {
-  if (params.stateMoveYear == null) return [];
-  return [{
-    paramKey: 'stateMoveYear', label: 'State Move Year',
-    type:     DISTRIBUTION_TYPES.NORMAL,
-    mean:     params.stateMoveYear,
-    stdDev:   1.5,
-    group:    'US Tax',
-    enabled:  false,
-  }];
 }
 
 /**
@@ -496,7 +547,9 @@ export class IntlRetirementMcConfig {
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
     ({ params }) => buildRealPropertyMcConfigs(params),
-    ({ params }) => buildStateMoveMcConfigs(params),
+    // State Move Year (and the cross-border moveYear) now arrive through the schema
+    // harvest in buildVariables — `mc: true`, a year kind, so `integer: true` and
+    // emitted only when set (design 98 W3.7 retired buildStateMoveMcConfigs).
     ({ params }) => buildMortalityMcConfigs(params),
   ];
 
@@ -522,10 +575,25 @@ export class IntlRetirementMcConfig {
    *   when the config omits it.
    * - Applies any user overrides stored via applyOverride().
    * - Tags each variable with `centerSource` provenance (see _centerSource).
+   *
+   * After the contributors it HARVESTS (design 98 W3) every `mc`-flagged schema entry
+   * they do not already offer, as a disabled row centred on its value in `params`.
+   * `cfg` (the loaded scenario) adds its generated per-record params to the schema
+   * harvested from; a null `cfg` (library callers) harvests the static schema only.
+   * Harvested rows then go through the same resolution / overrides / provenance.
+   *
+   * Finally each role-level rate row is tagged `shadowedBy` / `shadowedAll` against
+   * `accounts` (default: `cfg.accounts`) — see tagShadowedRows (design 98 W5).
    */
-  buildVariables(params) {
-    const resolved = this.constructor.contributors
-      .flatMap(fn => fn({ params }))
+  buildVariables(params, { cfg = null, accounts = cfg?.accounts ?? null } = {}) {
+    const contributed = this.constructor.contributors.flatMap(fn => fn({ params }));
+    const schema = [
+      ...IntlRetirementScenario.buildFullParamSchema(),
+      ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),
+    ];
+    const harvested = harvestSweepVariables(contributed, schema, params,
+      { flag: 'mc', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: mcRowFor });
+    const resolved = [...contributed, ...harvested]
       .filter(cfg => {
         // Non-array-indexed keys (flat or dot-separated): always keep.
         // Their cfg.value/cfg.mean acts as the reference when the key is absent
@@ -560,7 +628,7 @@ export class IntlRetirementMcConfig {
     // Inherit identity (label / options / visibleWhen) from the param schema and
     // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
     // whose strategy isn't selected). Identity is maintained once, in the schema.
-    return resolveSweepVariables(resolved, schemaByKey(), params);
+    return tagShadowedRows(resolveSweepVariables(resolved, schemaByKey(), params), accounts, params);
   }
 
   /**

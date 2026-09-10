@@ -60,6 +60,10 @@ US-collectibles CGT.
    rate now means sweeping Prime, which fans out coherently (§3.1). The per-account
    `primeSpread` remains an editable/opt target (idiosyncratic residual), not a
    systemic-rate sweep.
+   **Amended 10 Sep 2026 (design 98, W2 follow-up):** Prime is an **MC-only** sweep —
+   `opt: false`, and the curated Opt rows are removed. Under design 98's flag rules the
+   policy rate is an uncertainty, not a household choice; an optimizer "choosing" it
+   just picks whichever end of the range suits the plan.
 7. **Offset earns nothing.** `OFFSET` is cash but its economic effect is reducing loan
    interest, not earning; it carries **no `primeSpread`** and inherits a 0 earn rate.
 8. **The prebuilt scenario auto-links; loaded saves do not.** To make Prime MC work

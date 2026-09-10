@@ -18,6 +18,19 @@
  * sweep-specific data (distributions, ranges, grouping). These helpers let the
  * overlays inherit identity from the schema instead of duplicating it, and
  * evaluate the schema's `visibleWhen` conditions consistently everywhere.
+ *
+ * Sweepability is schema-owned too. Every paramSchema() entry (static and
+ * generated) carries `mc` / `opt`, and they mean (design 98 W2):
+ *   mc: true  — a SCALAR (Number / Integer / Money / Date) whose value is
+ *               UNCERTAIN at plan time: a rate, level, volatility, timing or amount
+ *               the household does not control.
+ *   opt: true — a scalar or enum (incl. Boolean) the household CHOOSES.
+ *   neither   — arrays/objects (their scalar parts get dynamic-contributor rows),
+ *               identities and bases, calendar minutiae, employer-set terms, model
+ *               switches, and anything whose change is a data correction rather
+ *               than a what-if.
+ * `param-sweep-schema.test.mjs` SWEEP-18 fails any flagged entry its engine
+ * cannot sweep; SWEEP-10/11 fail any curated overlay row that is not flagged.
  */
 
 /**
@@ -238,4 +251,102 @@ export function resolveSweepVariables(entries, schemaByKey, baseParams = {}) {
       };
     })
     .filter(e => isParamVisible(e, valueOf));
+}
+
+/**
+ * The sweep kinds a harvested row can take (design 98 W3.4). A schema flag may
+ * name one explicitly (`mc: 'rate'`) when inference would pick wrongly — a scale
+ * centred on 1.0, a volatility centred on 0.11.
+ */
+export const SWEEP_KINDS = Object.freeze(['year', 'rate', 'amount', 'enum', 'date']);
+
+/**
+ * The sweep kind of a schema entry for one engine, or null when it has none.
+ *
+ *   year   — Integer, or a key ending in `Year`
+ *   enum   — Enum / Boolean
+ *   date   — Date
+ *   amount — Money, or a Number whose |center| > 1
+ *   rate   — a Number whose |center| ≤ 1
+ *
+ * @param {object} entry   schema entry
+ * @param {'mc'|'opt'} flag
+ * @param {*} center       the entry's value in the base bag
+ */
+export function sweepKindOf(entry, flag, center) {
+  const declared = entry?.[flag];
+  if (typeof declared === 'string') return declared;
+  const type = entry?.type;
+  if (type === 'Integer' || /Year$/.test(entry?.key ?? '')) return 'year';
+  if (type === 'Enum' || type === 'Boolean') return 'enum';
+  if (type === 'Date')  return 'date';
+  if (type === 'Money') return 'amount';
+  if (type === 'Number') return Math.abs(Number(center)) <= 1 ? 'rate' : 'amount';
+  return null;
+}
+
+/** Does `v` fit a row of `kind`? No synthesized centers: a harvested row sweeps a real value. */
+function _isScalarFor(kind, v) {
+  switch (kind) {
+    case 'year': case 'rate': case 'amount': return typeof v === 'number' && Number.isFinite(v);
+    case 'enum': return typeof v === 'string' || typeof v === 'boolean';
+    case 'date': return v instanceof Date ? !Number.isNaN(v.getTime())
+      : typeof v === 'string' && !Number.isNaN(Date.parse(v));
+    default:     return false;
+  }
+}
+
+/**
+ * Harvest sweep rows from the param schema (design 98 W3): every entry flagged for
+ * the engine that the overlay does not already offer becomes a DISABLED row.
+ *
+ * Emitted only when all hold:
+ *   1. the entry is not `hidden` (compile-only balance levers keep their alias rows);
+ *   2. it is not covered — covered = the overlay's keys plus their alias targets, so
+ *      `prop.usHouseProperty.plannedSaleYear` does not double `usHouseSaleYear`;
+ *   3. its value in `baseParams` is a non-null scalar of its kind. Never a
+ *      synthesized center: perturbParams WRITES a disabled row's reference value
+ *      when the key is absent from the base, and a null `acct.*.growthRate` means
+ *      "inherit the role rate", which has no center of its own.
+ *
+ * The engine supplies the spread/range through `rowFor(kind, center, entry)`
+ * (return null to skip a kind it cannot sweep). Identity (label, options,
+ * visibleWhen) is copied onto the row, because generated per-record entries are
+ * not in the static schema index that resolveSweepVariables consults.
+ *
+ * @param {Array<object>} entries     the overlay rows already built (curated + contributors)
+ * @param {Array<object>} schema      static + generated param schema
+ * @param {object}        baseParams  flat param bag the rows center on
+ * @param {{ flag: 'mc'|'opt', aliases?: object, rowFor: Function }} opts
+ * @returns {Array<object>} the harvested rows, to append to `entries`
+ */
+export function harvestSweepVariables(entries, schema, baseParams, { flag, aliases = {}, rowFor }) {
+  const covered = new Set();
+  for (const e of entries) {
+    covered.add(e.paramKey);
+    if (aliases[e.paramKey]) covered.add(aliases[e.paramKey]);
+  }
+  const out = [];
+  for (const s of schema) {
+    if (!s?.key || !s[flag] || s.hidden || covered.has(s.key)) continue;
+    const center = baseParams?.[s.key];
+    if (center == null) continue;
+    const kind = sweepKindOf(s, flag, center);
+    if (!kind || !_isScalarFor(kind, center)) continue;
+    const sweep = rowFor(kind, center, s);
+    if (!sweep) continue;
+    covered.add(s.key);
+    out.push({
+      paramKey: s.key,
+      label:    s.label ?? s.key,
+      ...(s.options     ? { options:     s.options }     : {}),
+      ...(s.visibleWhen ? { visibleWhen: s.visibleWhen } : {}),
+      ...sweep,
+      group:     s.group,
+      enabled:   false,
+      harvested: true,
+      sweepKind: kind,
+    });
+  }
+  return out;
 }

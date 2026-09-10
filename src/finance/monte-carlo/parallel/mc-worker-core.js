@@ -62,7 +62,11 @@ import { get, set }              from '../mc-param-paths.js';
  * leak back into the live scenario or adjacent iterations.
  *
  * For every variable in the resolved list:
- *   - Enabled: sample from its distribution and write via set().
+ *   - Enabled: sample from its distribution and write via set(). A row carrying
+ *     `integer: true` (a year axis) is rounded first — consumers build dates with
+ *     `Date.UTC(year, …)`, which truncates, so an unrounded draw around 2031 runs
+ *     ~half a year early (design 98 F10). Rounding here means r.params records
+ *     the year the sim actually ran, and replay applies the same integer.
  *   - Disabled: if the path is absent from baseParams, fill the reference
  *     value (cfg.value ?? cfg.mean) so r.params is self-contained.
  */
@@ -72,7 +76,8 @@ export function perturbParams(baseParams, i, variables) {
 
   for (const cfg of variables) {
     if (cfg.enabled) {
-      set(perturbed, cfg.paramKey, createDistribution(cfg).sample(rng));
+      const sample = createDistribution(cfg).sample(rng);
+      set(perturbed, cfg.paramKey, cfg.integer && typeof sample === 'number' ? Math.round(sample) : sample);
     } else if (get(baseParams, cfg.paramKey) === undefined) {
       set(perturbed, cfg.paramKey, cfg.value ?? cfg.mean);
     }

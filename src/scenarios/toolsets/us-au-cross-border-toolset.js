@@ -134,7 +134,7 @@ export const US_AU_CROSS_BORDER = {
     return [
       {
         key: 'moveYear', label: 'US→AU Move Year',
-        type: 'Number', group: 'Cross Border', mc: false, opt: true,
+        type: 'Number', group: 'Cross Border', mc: true, opt: true,
         defaultValue: undefined,
         description: 'Calendar year of US→AU migration (Jul 1). Leave unset for no move.',
       },
@@ -155,7 +155,7 @@ export const US_AU_CROSS_BORDER = {
       },
       {
         key: 'auInflationRate', label: 'AU Inflation Rate (cross-border)',
-        type: 'Number', group: 'Cross Border', mc: true, opt: true,
+        type: 'Number', group: 'Cross Border', mc: true, opt: false,
         defaultValue: 0.03,
         description: 'AU inflation rate when running combined US+AU scenario',
       },
@@ -195,6 +195,11 @@ export const US_AU_CROSS_BORDER = {
         key: 'fxVolatility', label: 'FX Volatility (annualized)',
         type: 'Number', group: 'FX', mc: true, opt: false,
         defaultValue: 0.1142,
+        // Read only when a process model runs (FxService seeds no vol under NONE), so
+        // it is hidden — in the editor and as an MC row — until one is chosen (design
+        // 98 W3 follow-up). An explicit `in` list, not `notEquals: 'NONE'`: an unset
+        // fxProcessModel means NONE, and `notEquals` would count unset as visible.
+        visibleWhen: { param: 'fxProcessModel', in: FX_PROCESS_MODEL_IDS.filter(id => id !== 'NONE') },
         description: 'Annualized log-volatility of the FX rate when a process model is active. '
           + 'Default is calibrated from the published USD/AUD series over the post-float window '
           + '1984-01 onward (design 92 §8.1), not assumed — reproduce it with '
@@ -205,6 +210,8 @@ export const US_AU_CROSS_BORDER = {
         key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
         type: 'Number', group: 'FX', mc: true, opt: false,
         defaultValue: 0.114,
+        // Only the MEAN_REVERTING step reads k (fx-process-models.js).
+        visibleWhen: { param: 'fxProcessModel', equals: 'MEAN_REVERTING' },
         description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model — '
           + 'a half-life of about 6.1 years. Fitted to the observed TERM STRUCTURE of FX '
           + 'dispersion over the post-float window, not to the lag-1 autocorrelation: the lag-1 '

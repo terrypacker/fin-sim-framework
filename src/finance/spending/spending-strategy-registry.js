@@ -135,7 +135,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
       },
       {
         key: 'guardrailBaseCurrency', label: 'Guardrail Base Currency',
-        type: 'Text', group: 'Spending', mc: false, opt: true,
+        type: 'Text', group: 'Spending', mc: false, opt: false,
         defaultValue: 'USD',
         description: 'Currency to use when summing multi-currency portfolio values for the Guardrail check',
         visibleWhen: { param: 'spendingStrategy', includes: 'GUARDRAIL' },
@@ -155,7 +155,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'expenseEvents', label: 'One-Off Expense Events',
-        type: 'ExpenseEventList', group: 'Spending', mc: false, opt: true,
+        type: 'ExpenseEventList', group: 'Spending', mc: false, opt: false,
         defaultValue: [],
         description: 'List of dated one-off expenses: [{ date, amount, currency, category, fundFrom, personId, propertyKey, capitalize }]. '
           + '`currency` defaults to the linked property\'s, else the household expense currency — set it explicitly for a cost that is genuinely denominated in one currency (design 86 §8). '
@@ -177,7 +177,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'spendingExpenseBands', label: 'Spending Expense Bands',
-        type: 'ExpenseBandList', group: 'Spending', mc: false, opt: true,
+        type: 'ExpenseBandList', group: 'Spending', mc: false, opt: false,
         defaultValue: DEFAULT_EXPENSE_BANDS,
         description: 'Absolute monthly spend per age band: each band is { startAge, monthlyAmount } in base-year currency; compounded to nominal by the residence price level at band transitions. The lever for "optimal monthly expense amount per age band" (design 38 §6.1).',
         visibleWhen: { param: 'spendingStrategy', includes: 'EXPLICIT_BANDS' },
@@ -195,7 +195,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'spendingAgeBands', label: 'Spending Age Bands',
-        type: 'AgeBandList', group: 'Spending', mc: false, opt: true,
+        type: 'AgeBandList', group: 'Spending', mc: false, opt: false,
         defaultValue: DEFAULT_AGE_BANDS,
         description: 'Age-band table for the retirement spending smile: each band is { startAge, multiplier, annualRealDrift }; multiplier is the relative step entering the band, annualRealDrift the within-band real glide',
         visibleWhen: { param: 'spendingStrategy', includes: 'AGE_BANDED' },

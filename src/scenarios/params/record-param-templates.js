@@ -15,7 +15,16 @@
  *                  into the full param label ("Roth IRA — Balance")
  *     - type     : UI/param type ('Number' | 'Date' | 'Boolean' | 'Enum' | 'Money')
  *     - mc / opt : Monte-Carlo / optimization target flags (carried onto the entry
- *                  so the MC/Opt config UIs can discover the param)
+ *                  so the MC/Opt config UIs can discover the param). What they mean
+ *                  (design 98 W2 — the same rules as static paramSchema() entries,
+ *                  see param-schema-utils.js):
+ *                    mc: true  — a SCALAR (Number / Integer / Money / Date) whose value
+ *                                is UNCERTAIN at plan time: a rate, level, volatility,
+ *                                timing or amount the household does not control.
+ *                    opt: true — a scalar or enum (incl. Boolean) the household CHOOSES.
+ *                    neither   — arrays/objects, identities and bases, calendar
+ *                                minutiae, employer-set terms, and anything whose change
+ *                                is a data correction rather than a what-if.
  *     - money    : when true the generator seeds design-10 Money metadata
  *                  (defaultCurrency + currencyStateKeys) from the record's native
  *                  currency. Phase 1 keeps balances as plain Number for byte-for-byte
@@ -33,9 +42,10 @@ import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 
 // Retirement-account ledger scalar exposed as a param (design 53 §2 / account-basis
 // two-concepts). Per-lot holdings and cost basis stay in the account editor (design 25).
+// A ledger fact, not a decision: neither flag (design 98 W2).
 const CONTRIBUTION_BASIS = {
   field: 'contributionBasis', label: 'Contribution Basis',
-  type: 'Number', mc: false, opt: true,
+  type: 'Number', mc: false, opt: false,
   description: 'After-tax contribution basis for this retirement account — the portion ' +
     'already taxed. Withdrawals of basis come out tax-free; the balance above it is the ' +
     'taxable earnings.',
@@ -117,7 +127,9 @@ export const ACCOUNT_PARAM_TEMPLATES = {
 export const PERSON_PARAM_TEMPLATE = [
   { field: 'monthlyWage',   label: 'Monthly Wage',    type: 'Number', mc: true,  opt: true,
     description: 'Gross monthly employment wage for this person, before tax, in their native currency.' },
-  { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: true,
+  // opt: false — a household choice, but the optimizer has no Date variable type, so an
+  // opt flag here promises an axis nothing can sweep (design 98 W2 / SWEEP-18).
+  { field: 'retirementDate', label: 'Retirement Date', type: 'Date',  mc: false, opt: false,
     description: 'Date this person stops earning wages (their last working month).' },
 
   // ── Payroll elections (design 95 §7.1, phase 1) ────────────────────────────
@@ -128,11 +140,13 @@ export const PERSON_PARAM_TEMPLATE = [
   { field: 'k401DeferralPct', label: '401(k) Deferral', type: 'Number',
     mc: false, opt: true, nullable: true,
     description: 'This person\'s 401(k) deferral as a fraction of annual pay (0.10 = 10%). Empty inherits the household rate; 0 means they defer nothing.' },
+  // Employer-set terms (match, non-elective, Super Guarantee) are not household
+  // choices: neither flag (design 98 W2).
   { field: 'k401EmployerMatchPct', label: '401(k) Employer Match', type: 'Number',
-    mc: false, opt: true, nullable: true,
+    mc: false, opt: false, nullable: true,
     description: 'Employer match on this person\'s plan, as a fraction of annual pay. Employer-funded: never debits household cash and is not their deduction. Empty inherits the household rate.' },
   { field: 'k401NonElectivePct', label: '401(k) Non-Elective', type: 'Number',
-    mc: false, opt: true, nullable: true,
+    mc: false, opt: false, nullable: true,
     description: 'Employer contribution for this person as a fraction of annual pay that does not depend on them deferring anything (profit-sharing / safe-harbor non-elective). Not a match. Empty inherits the household rate.' },
   // `k401MatchTiers` is deliberately NOT in this template: it is structured data
   // ([{matchRate, uptoPctOfComp}]) and the record-param editor renders scalars. Set
@@ -147,7 +161,7 @@ export const PERSON_PARAM_TEMPLATE = [
     mc: false, opt: true, nullable: true,
     description: 'After-tax Roth contribution per year for this person, paid in twelfths. Empty inherits the household amount. No income phase-out is modelled.' },
   { field: 'superGuaranteePct', label: 'Super Guarantee Rate', type: 'Number',
-    mc: false, opt: true, nullable: true,
+    mc: false, opt: false, nullable: true,
     description: 'Employer Superannuation Guarantee for this person as a fraction of annual pay (0.12 = 12%). Employer-funded and on top of salary. Empty inherits the household rate.' },
   { field: 'superAnnualCap', label: 'Super Annual Cap', type: 'Number',
     mc: false, opt: false, nullable: true,

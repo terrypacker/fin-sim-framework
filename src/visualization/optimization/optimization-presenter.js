@@ -50,7 +50,9 @@ export class OptimizationPresenter {
     const baseParams = this._resolveBaseParams();
     // Pass the scenario's accounts so the Lever-B drawdown-weight axes are pruned
     // to roles an account actually backs (design 58 build-time filter).
-    this._configPanel.setVariables(buildOptVariables(baseParams, this._scenario?.accounts));
+    // The active cfg lets the harvest reach generated per-record params (design 98 W3).
+    const activeCfg  = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    this._configPanel.setVariables(buildOptVariables(baseParams, this._scenario?.accounts, { cfg: activeCfg }));
 
     /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;

@@ -598,7 +598,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // like every other rate here; it is keyed by account type, not by owner.
   superGrowthRate:     0.07,
   auStockBalance:       60_000,  auStockBasis:          40_000,
-  auStockGrowthRate:   0.06,
+  auStockGrowthRate:   0.03,  // price; + 4% franked dividend = 7% total (design 98 M1)
   auStockDividendRate: 0.04,
 
   // International transfer
@@ -710,7 +710,7 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // '' / null = no state configured (no state income tax). The categorical
     // options make it an optimization/MC axis (design 34 §9).
     key: 'residencyState', label: 'US Residency State',
-    type: 'Enum', options: ['', ...US_STATE_CODES], group: 'US Tax', mc: true, opt: true,
+    type: 'Enum', options: ['', ...US_STATE_CODES], group: 'US Tax', mc: false, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.residencyState ?? '',
     description: `US state of residency for state income tax (${US_STATE_CODES.join(', ')}). Blank = none.`,
     node: { type: 'person', id: 'primary', field: 'residencyState' },
@@ -722,19 +722,19 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // account records (design 55); only the derived stock split/basis knobs remain.
   {
     key: 'stockSplitRatio', label: 'Stock Domestic Split (0–1)',
-    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    type: 'Number', group: 'US Account Balances', mc: false, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockSplitRatio,
     description: 'Fraction of US stock balance allocated to the domestic equity holding (remainder goes to international). Default 0.6 = 60/40.',
   },
   {
     key: 'stockBasisUS', label: 'Stock Basis — Domestic (USD)',
-    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    type: 'Number', group: 'US Account Balances', mc: false, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockBasisUS,
     description: 'Cost basis for the domestic equity holding. Default exceeds market value so TLH fires immediately when enabled.',
   },
   {
     key: 'stockBasisIntl', label: 'Stock Basis — International (USD)',
-    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    type: 'Number', group: 'US Account Balances', mc: false, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockBasisIntl,
     description: 'Cost basis for the international equity holding. Default is below market value (gain position, TaxGainHarvest candidate).',
   },
@@ -758,7 +758,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // ── US Retirement ─────────────────────────────────────────────────────────
   {
     key: 'primarySsClaimAge', label: 'Primary SS Claim Age',
-    type: 'Number', group: 'US Retirement', mc: false, opt: true,
+    // opt: false until TODO #292 — only FRA (67) is modelled, so an optimizer axis here
+    // would spend budget on a lever that moves nothing (design 98 W3 follow-up).
+    type: 'Number', group: 'US Retirement', mc: false, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.primarySsClaimAge,
     description: 'Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.',
   },
@@ -1065,8 +1067,9 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   spouseMonthlyWage:     'person.spouse.monthlyWage',
   // Account balances (design 55 §13). Every account bootstraps a holding at compile time,
   // so its `balance` is derived from Σ holdings and is never a plain generated param. These
-  // legacy flat keys — kept as the MC/Opt lever keys because a dotted key is misread as a
-  // nested path by mc-param-paths `set()` — resolve to the generated, hidden compile-only
+  // legacy flat keys — still the MC/Opt lever keys because saved MC configs carry them
+  // (chosen when mc-param-paths `set()` dropped dotted generated keys; design 98 W0 fixed
+  // that) — resolve to the generated, hidden compile-only
   // `acct.<stateKey>.balanceTarget`, whose loader cascade rescales holdings to the value
   // non-destructively. A pre-design-55 save carrying one of these keys therefore rescales
   // its (consistent) holdings to the stored balance — a no-op — rather than being ignored.
@@ -1223,12 +1226,17 @@ export class IntlRetirementScenario extends BaseScenario {
    * Full param schema: scenario-level params merged with all toolset paramSchema
    * entries (deduplicating by key). Use this when you need the complete set of
    * configurable params for UI pickers (e.g. Decision Graph, Optimization).
+   *
+   * Scenario entries win, then the FIRST toolset copy of a shared key (US_RETIREMENT
+   * and AU_RETIREMENT both contribute the spending/mortality family) — the same rule
+   * as ScenarioLoader._mergeParamSchema, so the schema the MC/Opt overlays index and
+   * the schema the loader materializes agree (design 98 W2).
    */
   static buildFullParamSchema() {
-    const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
+    const seen = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
     const toolsetParams = IntlRetirementScenario._paramToolsets()
       .flatMap(t => t.paramSchema?.({}) ?? [])
-      .filter(e => e?.key && !scenarioKeys.has(e.key));
+      .filter(e => e?.key && !seen.has(e.key) && seen.add(e.key));
     return [...INTL_RETIREMENT_PARAM_SCHEMA, ...toolsetParams];
   }
 

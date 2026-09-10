@@ -349,8 +349,15 @@ function runDefaultIntlRetirement() {
 // tax is due on it. A rise ABOVE the theoretical FICA would mean the extra cost had
 // escalated into the drawdown cascade and started realising taxable income, which is
 // what happens in `us-single-homeowner` and is legitimate there — see design 95 §13.5.
-const EXPECTED_LIFETIME_TAX = 800_974;
-const EXPECTED_NET_WORTH     = 12_038_047;
+//
+// MOVED again by design 98 M1: the AU stock default growth went 6% → 3% (price only, with
+// the 4% franked dividend on top — a 7% total like every other equity account, not 10%).
+// Net worth fell by that account's missing 3 points compounded; tax barely moved:
+//
+//   lifetime tax   799,954 -> 793,691    (-6,263; inside tolerance, re-based anyway)
+//   net worth   12,038,047 -> 11,841,449 (-196,598, -1.63%)
+const EXPECTED_LIFETIME_TAX = 793_691;
+const EXPECTED_NET_WORTH     = 11_841_449;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

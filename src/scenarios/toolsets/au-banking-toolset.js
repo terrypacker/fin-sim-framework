@@ -66,16 +66,16 @@ export const AU_BANKING = {
       },
       {
         key: 'auFixedIncomeInterestRate', label: 'AU Fixed Income Interest Rate',
-        type: 'Number', group: 'AU Banking', mc: true, opt: true,
+        type: 'Number', group: 'AU Banking', mc: true, opt: false,
         defaultValue: 0.04,
         description: 'Annual interest rate for AU fixed income accounts',
       },
       {
         // RBA policy ("Prime") rate (design 56) — see usPrimeRate. Prime is THE systemic
-        // rate sweep (Decision 6 / §3.1): mc/opt true in Phase 2a; per-account rate levers
-        // retire so a rate sweep is a Prime sweep, fanning out coherently.
+        // rate sweep (Decision 6 / §3.1): per-account rate levers retire so a rate sweep is
+        // a Prime sweep, fanning out coherently. mc only — not an optimizer axis (design 98).
         key: 'auPrimeRate', label: 'AU Prime Rate (RBA policy)',
-        type: 'Number', group: 'AU Banking', mc: true, opt: true,
+        type: 'Number', group: 'AU Banking', mc: true, opt: false,
         defaultValue: 0.0435,
         description: 'AU central-bank (RBA) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
       },

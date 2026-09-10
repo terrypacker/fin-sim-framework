@@ -120,7 +120,7 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   monthlyExpenses:         7_000,
   auInflationRate:         0.03,
   superGrowthRate:         0.07,
-  auStockGrowthRate:       0.06,
+  auStockGrowthRate:       0.03,  // price; + 4% franked dividend = 7% total (design 98 M1)
   auStockDividendRate:     0.04,
 };
 

@@ -364,7 +364,7 @@ export const US_RETIREMENT = {
     return [
       {
         key: 'inflationRate', label: 'Inflation Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        type: 'Number', group: 'US Retirement', mc: true, opt: false,
         defaultValue: 0.03,
         description: 'Annual inflation rate applied to expenses',
       },
@@ -394,13 +394,13 @@ export const US_RETIREMENT = {
       },
       {
         key: 'goldGrowthRate', label: 'Gold Growth Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        type: 'Number', group: 'US Retirement', mc: true, opt: false,
         defaultValue: 0.05,
         description: 'Annual commodity growth rate for GOLD holdings (design 56 §7); decoupled from equity returns and central-bank Prime, taxed at the 28% collectibles rate on disposal.',
       },
       {
         key: 'brokerageDividendRate', label: 'Brokerage Dividend Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        type: 'Number', group: 'US Retirement', mc: true, opt: false,
         defaultValue: 0.02,
         description: 'Annual dividend yield for US brokerage stock accounts',
       },
@@ -412,7 +412,7 @@ export const US_RETIREMENT = {
       },
       {
         key: 'fixedIncomeInterestRate', label: 'Fixed Income Interest Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        type: 'Number', group: 'US Retirement', mc: true, opt: false,
         defaultValue: 0.04,
         description: 'Annual interest rate for fixed income accounts',
       },
@@ -427,7 +427,7 @@ export const US_RETIREMENT = {
       },
       {
         key: 'k401EmployerMatchPct', label: '401(k) Employer Match',
-        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        type: 'Number', group: 'Contributions', mc: false, opt: false,
         defaultValue: 0,
         description: 'HOUSEHOLD DEFAULT for the employer 401(k) match, as a fraction of annual pay; a Person\'s own election overrides it. Employer-funded: it never debits the household cash pool and is not the employee\'s deduction.',
       },
@@ -446,7 +446,7 @@ export const US_RETIREMENT = {
       },
       {
         key: 'k401NonElectivePct', label: '401(k) Non-Elective Contribution',
-        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        type: 'Number', group: 'Contributions', mc: false, opt: false,
         defaultValue: 0,
         description: 'HOUSEHOLD DEFAULT employer contribution as a fraction of annual pay that does NOT depend on the employee deferring anything — a profit-sharing or safe-harbor non-elective contribution. This is not a match and is deliberately a separate field. Employer-funded, and it counts toward the §415(c) annual-additions limit.',
       },
@@ -508,13 +508,13 @@ export const US_RETIREMENT = {
       },
       {
         key: 'k401ToIraConversionMonth', label: '401(k)→IRA Conversion Month',
-        type: 'Number', group: 'US Retirement', mc: false, opt: true,
+        type: 'Number', group: 'US Retirement', mc: false, opt: false,
         defaultValue: null,
         description: 'Month (1–12) of the conversion; null = use the owner\'s retirement month',
       },
       {
         key: 'k401ToIraConversionDay', label: '401(k)→IRA Conversion Day',
-        type: 'Number', group: 'US Retirement', mc: false, opt: true,
+        type: 'Number', group: 'US Retirement', mc: false, opt: false,
         defaultValue: null,
         description: 'Day of month for the conversion; null = use the owner\'s retirement day',
       },
@@ -554,31 +554,31 @@ export const US_RETIREMENT = {
       },
       {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
-        type: 'Boolean', group: 'Mortality', mc: false, opt: true,
+        type: 'Boolean', group: 'Mortality', mc: false, opt: false,
         defaultValue: true,
         description: 'If true, PERSON_DIED events are scheduled and processed; disable to run to simEnd regardless of lifespan',
       },
       {
         key: 'survivorEssentialMultiplier', label: 'Survivor Essential Multiplier',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0.85,
         description: 'Fraction of essential expenses retained after a spouse dies (default 0.85)',
       },
       {
         key: 'survivorDiscretionaryMultiplier', label: 'Survivor Discretionary Multiplier',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0.50,
         description: 'Fraction of discretionary expenses retained after a spouse dies (default 0.50)',
       },
       {
         key: 'lateLifeCareMonths', label: 'Late-Life Care Window (months)',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0,
         description: 'Number of months before death to apply the late-life care expense multiplier; 0 = disabled',
       },
       {
         key: 'lateLifeCareFactor', label: 'Late-Life Care Factor',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 2.0,
         description: 'Multiplier applied to all monthly expenses during the late-life care window',
       },

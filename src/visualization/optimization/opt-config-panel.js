@@ -16,6 +16,7 @@ import {
 } from '../../finance/optimization/optimization-objectives.js';
 import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
 import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
+import { SweepVariableTable }           from '../common/sweep-variable-table.js';
 
 
 
@@ -70,13 +71,7 @@ export class OptConfigPanel extends BaseComponent {
 
     this._variables = variables;
     this._rowMap.clear();
-
-    if (this._section) {
-      while (this._section.children.length > 1) {
-        this._section.removeChild(this._section.lastChild);
-      }
-      this._buildVarTable(this._section, variables, savedState);
-    }
+    this._table?.render(variables, savedState, this._rowMap);
     this._updateCount();
   }
 
@@ -242,7 +237,10 @@ export class OptConfigPanel extends BaseComponent {
 
     this._syncObjectiveAxes();
     this._renderSolverOptions();
-    this._buildVarTable(this._section, this._variables, new Map());
+    // Grouping, filter and collapse are shared with the MC panel (design 98 W4).
+    this._table = new SweepVariableTable(this, this._section,
+      { prefix: 'opt', buildRow: cfg => this._buildVarRow(cfg) });
+    this._table.render(this._variables, new Map(), this._rowMap);
     this._updateCount();
   }
 
@@ -305,29 +303,6 @@ export class OptConfigPanel extends BaseComponent {
       }
     }
     return out;
-  }
-
-  _buildVarTable(section, variables, savedState) {
-    const groups = new Map();
-    for (const cfg of variables) {
-      if (!groups.has(cfg.group)) groups.set(cfg.group, []);
-      groups.get(cfg.group).push(cfg);
-    }
-
-    for (const [groupName, configs] of groups) {
-      const header = document.createElement('div');
-      header.className = 'opt-group-header';
-      header.textContent = groupName;
-      section.appendChild(header);
-
-      for (const cfg of configs) {
-        const prior  = savedState.get(cfg.paramKey);
-        const merged = prior ? { ...cfg, ...prior } : cfg;
-        const { el, refs } = this._buildVarRow(merged);
-        section.appendChild(el);
-        this._rowMap.set(cfg.paramKey, refs);
-      }
-    }
   }
 
   _buildVarRow(cfg) {

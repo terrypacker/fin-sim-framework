@@ -215,7 +215,7 @@ export const AU_RETIREMENT = {
       // byte-identical to one built before the feature existed.
       {
         key: 'superGuaranteePct', label: 'Super Guarantee Rate',
-        type: 'Number', group: 'Contributions', mc: false, opt: true,
+        type: 'Number', group: 'Contributions', mc: false, opt: false,
         defaultValue: 0,
         description: 'HOUSEHOLD DEFAULT for the employer Superannuation Guarantee, as a fraction of annual pay (0.12 = 12%); a Person\'s own election overrides it. Employer-funded: it is on top of the quoted salary, never debits the member\'s cash and is outside their assessable income \u2014 only the fund\'s 15% Div 295 contributions tax applies. A scenario assumption, NOT a legislated schedule; this model carries no SG rate table.',
       },
@@ -259,12 +259,13 @@ export const AU_RETIREMENT = {
       {
         key: 'auStockGrowthRate', label: 'AU Stock Growth Rate',
         type: 'Number', group: 'AU Retirement', mc: true, opt: true,
-        defaultValue: 0.07,
-        description: 'Annual growth rate for AU brokerage stock accounts',
+        defaultValue: 0.03,
+        description: 'Annual price growth rate for AU brokerage stock accounts; the franked '
+          + 'dividend (AU Stock Dividend Rate) is paid on top, so total return is the sum',
       },
       {
         key: 'auStockDividendRate', label: 'AU Stock Dividend Rate',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: true,
+        type: 'Number', group: 'AU Retirement', mc: true, opt: false,
         defaultValue: 0.04,
         description: 'Annual dividend yield for AU stock accounts',
       },
@@ -280,15 +281,20 @@ export const AU_RETIREMENT = {
         currencyStateKeys: ['monthlyExpenses', 'expenses.essential', 'expenses.discretionary'],
         description: 'Monthly household expenses drawn from savings',
       },
+      // Shared keys with US_RETIREMENT, which precedes this toolset, so its copy wins
+      // in both buildFullParamSchema and the loader (first-wins, design 98 W2). Keep
+      // label / description / flags identical to that copy; only `group` may differ.
+      // In a cross-border plan `inflationRate` is the US rate (the AU one is
+      // auInflationRate), so the old "AU Inflation Rate" label was wrong there.
       {
-        key: 'inflationRate', label: 'AU Inflation Rate',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: true,
+        key: 'inflationRate', label: 'Inflation Rate',
+        type: 'Number', group: 'AU Retirement', mc: true, opt: false,
         defaultValue: 0.03,
-        description: 'Annual AU inflation rate applied to expenses',
+        description: 'Annual inflation rate applied to expenses',
       },
       {
         key: 'inflationAdjust', label: 'Inflation-Adjust Expenses',
-        type: 'Boolean', group: 'AU Retirement', mc: false, opt: true,
+        type: 'Boolean', group: 'Spending', mc: false, opt: true,
         defaultValue: true,
         description: 'If true, monthly expenses grow with inflation each year',
       },
@@ -312,31 +318,31 @@ export const AU_RETIREMENT = {
       ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
-        type: 'Boolean', group: 'Mortality', mc: false, opt: true,
+        type: 'Boolean', group: 'Mortality', mc: false, opt: false,
         defaultValue: true,
-        description: 'If true, PERSON_DIED events are scheduled and processed',
+        description: 'If true, PERSON_DIED events are scheduled and processed; disable to run to simEnd regardless of lifespan',
       },
       {
         key: 'survivorEssentialMultiplier', label: 'Survivor Essential Multiplier',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0.85,
-        description: 'Fraction of essential expenses retained after a spouse dies',
+        description: 'Fraction of essential expenses retained after a spouse dies (default 0.85)',
       },
       {
         key: 'survivorDiscretionaryMultiplier', label: 'Survivor Discretionary Multiplier',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0.50,
-        description: 'Fraction of discretionary expenses retained after a spouse dies',
+        description: 'Fraction of discretionary expenses retained after a spouse dies (default 0.50)',
       },
       {
         key: 'lateLifeCareMonths', label: 'Late-Life Care Window (months)',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 0,
         description: 'Number of months before death to apply the late-life care expense multiplier; 0 = disabled',
       },
       {
         key: 'lateLifeCareFactor', label: 'Late-Life Care Factor',
-        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        type: 'Number', group: 'Mortality', mc: false, opt: false,
         defaultValue: 2.0,
         description: 'Multiplier applied to all monthly expenses during the late-life care window',
       },

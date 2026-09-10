@@ -22,7 +22,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { isParamVisible, indexParamSchema, resolveSweepVariables, visibleWhenControllers }
+import { isParamVisible, indexParamSchema, resolveSweepVariables, visibleWhenControllers,
+         SWEEP_KINDS, scenarioParamValues }
   from '../../src/finance/param-schema-utils.js';
 import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES,
          DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey, presentDrawdownWeightRoles,
@@ -33,7 +34,8 @@ import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-para
 import { ScenarioLoader, synthesizeWeightedPriorities } from '../../src/scenarios/scenario-loader.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig }
+  from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
@@ -49,7 +51,7 @@ const KNOWN_ORPHANS = new Set([]);
 // account bootstraps a holding), so build the eligibility index from a compiled config —
 // static schema + generated params — exactly as the loader presents it, then resolve legacy
 // alias keys to their generated equivalents.
-function buildEligibilityIndex() {
+function compileReference() {
   const simStart = new Date(Date.UTC(2026, 0, 1));
   const simEnd   = new Date(Date.UTC(2041, 0, 1));
   const registry = new ServiceRegistry();
@@ -59,10 +61,13 @@ function buildEligibilityIndex() {
   const cfg = ScenarioSerializer.serializeScenario(
     IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd));
   new ScenarioLoader().load(cfg, registry);   // compiles: bootstraps holdings on every account
-  return indexParamSchema([
-    ...IntlRetirementScenario.buildFullParamSchema(),
-    ...ScenarioParamGenerator.generate(cfg),
-  ]);
+  return {
+    cfg,
+    schema: [...IntlRetirementScenario.buildFullParamSchema(), ...ScenarioParamGenerator.generate(cfg)],
+  };
+}
+function buildEligibilityIndex() {
+  return indexParamSchema(compileReference().schema);
 }
 const resolveAlias = k => INTL_RETIREMENT_PARAM_ALIASES[k] ?? k;
 
@@ -295,9 +300,23 @@ test('SWEEP-17: accounts arg keeps allocWeight axes reachable (all classes prese
 
 // ── Validation: the repurposed mc:/opt: flags ──────────────────────────────────
 
-test('SWEEP-10: every curated Opt variable is schema-eligible (opt:true) or a known orphan', () => {
+// Design 98 W3.5: SWEEP-10/11 cover the static lists AND the contributors, run on the
+// compiled reference config. A contributor row with no schema entry must say so with
+// `synthetic: true` (array sub-paths, people.<k>.lifeExpectancy); any other orphan fails.
+// (This is the check that would have caught stateMoveYear's wrong mc flag.)
+function builtRows(engine) {
+  const { cfg } = compileReference();
+  const params = scenarioParamValues(cfg);
+  const built  = engine === 'mc'
+    ? new IntlRetirementMcConfig().buildVariables(params, { cfg })
+    : buildOptVariables(params, null, { cfg });
+  return [...(engine === 'mc' ? DEFAULT_MC_VARIABLE_CONFIGS : DEFAULT_OPTIMIZATION_CONFIGS), ...built]
+    .filter(v => !v.synthetic);
+}
+
+test('SWEEP-10: every curated/contributed Opt variable is schema-eligible (opt:true) or a known orphan', () => {
   const byKey = buildEligibilityIndex();
-  const offenders = DEFAULT_OPTIMIZATION_CONFIGS.filter(v => {
+  const offenders = builtRows('opt').filter(v => {
     if (KNOWN_ORPHANS.has(v.paramKey)) return false;
     const s = byKey.get(resolveAlias(v.paramKey));
     return !s || !s.opt;
@@ -306,13 +325,54 @@ test('SWEEP-10: every curated Opt variable is schema-eligible (opt:true) or a kn
     `Opt variables must exist in the schema with opt:true — offenders: ${offenders.join(', ')}`);
 });
 
-test('SWEEP-11: every curated MC variable is schema-eligible (mc:true) or a known orphan', () => {
+test('SWEEP-11: every curated/contributed MC variable is schema-eligible (mc:true) or a known orphan', () => {
   const byKey = buildEligibilityIndex();
-  const offenders = DEFAULT_MC_VARIABLE_CONFIGS.filter(v => {
+  const offenders = builtRows('mc').filter(v => {
     if (KNOWN_ORPHANS.has(v.paramKey)) return false;
     const s = byKey.get(resolveAlias(v.paramKey));
     return !s || !s.mc;
   }).map(v => v.paramKey);
   assert.deepStrictEqual(offenders, [],
     `MC variables must exist in the schema with mc:true — offenders: ${offenders.join(', ')}`);
+});
+
+// ── SWEEP-18: the flags are honest (design 98 W2) ─────────────────────────────
+//
+// SWEEP-10/11 check curated ⊆ flagged. This is the converse gate: every FLAGGED entry
+// must be something its engine can sweep — a type the design 98 W3 harvest can build a
+// row for — or already be offered by a curated row (alias-resolved), which supplies its
+// own distribution / candidate set (e.g. the EnumMulti strategy pickers). A flag that
+// fails both is a promise no panel can keep. Rules: record-param-templates.js header.
+const HARVESTABLE_TYPES = {
+  mc:  new Set(['Number', 'Integer', 'Money', 'Date']),
+  opt: new Set(['Number', 'Integer', 'Money', 'Enum', 'Boolean']),
+};
+
+test('SWEEP-18: every mc/opt-flagged entry (static + generated) is harvestable or curated', () => {
+  const { cfg, schema } = compileReference();
+  const params  = cfg.parameters ?? {};
+  const curated = {
+    mc:  new Set(new IntlRetirementMcConfig().buildVariables(params).map(v => resolveAlias(v.paramKey))),
+    opt: new Set(buildOptVariables(params).map(v => resolveAlias(v.paramKey))),
+  };
+  for (const flag of ['mc', 'opt']) {
+    const offenders = schema
+      .filter(e => e[flag] && !HARVESTABLE_TYPES[flag].has(e.type) && !curated[flag].has(e.key))
+      .map(e => `${e.key} (${e.type})`);
+    assert.deepStrictEqual([...new Set(offenders)], [],
+      `${flag}:true on an entry its engine cannot sweep — offenders: ${offenders.join(', ')}`);
+    // D4: a flag may name its sweep kind explicitly; it must be one the harvest knows.
+    const badKinds = schema.filter(e => typeof e[flag] === 'string' && !SWEEP_KINDS.includes(e[flag]))
+      .map(e => `${e.key} (${flag}: '${e[flag]}')`);
+    assert.deepStrictEqual(badKinds, [], `unknown sweep kind — ${badKinds.join(', ')}`);
+  }
+});
+
+test('SWEEP-19: buildFullParamSchema has one entry per key, first copy wins (matches the loader)', () => {
+  const schema = IntlRetirementScenario.buildFullParamSchema();
+  const keys   = schema.map(e => e.key);
+  assert.equal(new Set(keys).size, keys.length, 'no duplicate keys');
+  // US_RETIREMENT precedes AU_RETIREMENT in _paramToolsets(), so its copy of a shared key
+  // wins — exactly as ScenarioLoader._mergeParamSchema resolves the same collision.
+  assert.equal(schema.find(e => e.key === 'inflationAdjust').group, 'Spending');
 });

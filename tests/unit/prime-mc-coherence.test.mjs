@@ -21,7 +21,7 @@
  * the source). This suite pins the config surface and the runtime coherence.
  *
  *   MCC-1: usPrimeRate / auPrimeRate are enabled MC targets; savings-rate levers are gone.
- *   MCC-2: usPrimeRate / auPrimeRate are Opt targets.
+ *   MCC-2: usPrimeRate / auPrimeRate are NOT Opt targets (design 98 amended Decision 6).
  *   MCC-3: the retired rate levers are mc:false in the schema (global + generated per-account).
  *   MCC-4: one usPrimeRate move fans out to the WHOLE US cash complex coherently (same +Δ),
  *          leaving the AU complex untouched (independent PRIME_AU).
@@ -69,16 +69,21 @@ test('MCC-1: Prime is an enabled MC target; the savings-rate MC levers are retir
   assert.ok(mcKeys.has('fixedIncomeInterestRate'), 'fixed-income rate stays an MC target (not Prime-linked)');
 });
 
-test('MCC-2: usPrimeRate / auPrimeRate are Opt targets', () => {
-  assert.ok(optKeys.has('usPrimeRate'), 'usPrimeRate must be a curated Opt target');
-  assert.ok(optKeys.has('auPrimeRate'), 'auPrimeRate must be a curated Opt target');
+// Amended by design 98 (W2 follow-up): Prime is an uncertainty, not a household choice,
+// so it is an MC sweep only. An optimizer "choosing" the policy rate just picks the end
+// of the range that suits the plan.
+test('MCC-2: usPrimeRate / auPrimeRate are NOT Opt targets (MC-only sweep)', () => {
+  assert.ok(!optKeys.has('usPrimeRate'), 'usPrimeRate must not be a curated Opt target');
+  assert.ok(!optKeys.has('auPrimeRate'), 'auPrimeRate must not be a curated Opt target');
 });
 
 test('MCC-3: retired rate levers are mc:false in the schema (global + generated per-account)', () => {
   const byKey = eligibilityIndex();
-  // Prime is mc/opt eligible.
-  assert.ok(byKey.get('usPrimeRate')?.mc && byKey.get('usPrimeRate')?.opt, 'usPrimeRate schema mc+opt');
-  assert.ok(byKey.get('auPrimeRate')?.mc && byKey.get('auPrimeRate')?.opt, 'auPrimeRate schema mc+opt');
+  // Prime is mc-eligible and, since design 98's flag rules, not opt-eligible.
+  for (const k of ['usPrimeRate', 'auPrimeRate']) {
+    assert.strictEqual(byKey.get(k)?.mc,  true,  `${k} schema mc:true`);
+    assert.strictEqual(byKey.get(k)?.opt, false, `${k} schema opt:false`);
+  }
 
   // Global savings rates: retired as rate knobs but still present as seed params.
   assert.strictEqual(byKey.get('usSavingsInterestRate')?.mc, false, 'usSavingsInterestRate schema mc:false');
