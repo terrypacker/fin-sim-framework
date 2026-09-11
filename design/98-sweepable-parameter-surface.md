@@ -948,6 +948,27 @@ should be smaller. Pick one interpretation, write it into the param description,
 re-base; decide in the same step whether `equityReturnStochastic` becomes the default.
 Otherwise MC double-counts for as long as both mechanisms are on (F4).
 
+**M3 BUILT 11 Sep 2026.** Two decisions (user):
+
+1. **The stochastic path is on in Monte Carlo only.** `perturbParams` (mc-worker-core.js,
+   shared by the serial and parallel paths) sets `equityReturnStochastic: true` in every
+   iteration's params unless `mcSequenceRisk` is false. It is written into the params, so
+   `r.params` records it and a replay draws the same path. Single runs, the editor and every
+   golden stay deterministic — one plan, one answer.
+   `mcSequenceRisk` is a new Boolean (default true, group Economic Shocks, `mc`/`opt` false)
+   rather than a reading of `equityReturnStochastic: false`, because the loader materializes
+   every schema default into the typed params list: a plan that never touched the path and
+   one that switched it off are indistinguishable by the time MC sees them.
+2. **The anchor's sd is estimation uncertainty about the long-run mean: 0.015** (was 0.03,
+   the total-uncertainty proxy). The path now carries year-to-year risk, so 0.03 would count
+   part of it twice. 0.015 sits between the CMA providers' disagreement (sd ≈ 1.4 points
+   across the four markets, from the P5b figures in `docs/market-returns/SOURCES.md`) and the
+   sampling error of a 100-year historical mean (18% / √100 ≈ 1.8 points).
+
+No golden moves. Every MC result re-bases: wider in the path's direction (sequence risk and
+market dispersion now present), narrower in the anchor's. The before/after measurement on the
+reference arm is deferred with M2's (long MC runs).
+
 ---
 
 ## 6. Sequencing
@@ -963,7 +984,7 @@ Otherwise MC double-counts for as long as both mechanisms are on (F4).
 | W5 | `shadowedBy` / `shadowedAll` + config-dependent liveness gate (F5) | MC | W3's `{ cfg, accounts }` plumbing | No |
 | M1 | AU stock default → 7% total (F9) — **BUILT** | shared | — | **Yes** (12 goldens) |
 | M2 | `equityAnchorShift`; retire the six wrapper MC axes (F3) — **BUILT 11 Sep 2026** (record under M2) | MC | M1, **design 99 P2** (wrapper rates gone; shift the four market totals) | **Yes**, re-bases every MC result (no golden moves) |
-| M3 | Re-base the anchor sd against the path model (F4) | MC | M2 | **Yes** |
+| M3 | Re-base the anchor sd against the path model (F4) — **BUILT 11 Sep 2026** (path on in MC only; anchor sd 0.015) | MC | M2 | **Yes**, every MC result (no golden moves) |
 
 W0 is a live bug fix and worth landing even if nothing else in this design ships. W0–W5
 have no numeric effect. M2 overlaps design 90 §7.4 — read that section before starting it.

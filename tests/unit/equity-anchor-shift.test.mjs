@@ -50,5 +50,6 @@ test('EAS-3: MC samples ONE equity axis by default, not the per-market totals', 
   }
   const row = DEFAULT_MC_VARIABLE_CONFIGS.find(c => c.paramKey === 'equityAnchorShift');
   assert.equal(row.mean, 0);
-  assert.equal(row.stdDev, 0.03);
+  // Design 98 M3: estimation uncertainty only — the stochastic path carries the rest.
+  assert.equal(row.stdDev, 0.015);
 });
