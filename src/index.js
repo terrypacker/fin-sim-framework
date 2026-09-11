@@ -97,11 +97,13 @@ import { computeOffsetCapacity, deriveOffsetCapacity } from './finance/derived-m
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
+import { BOND_YEAR_MS, yearsToMaturity, couponlessYield } from './finance/economic-regimes/couponless-yield.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
 import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler } from './finance/economic-regimes/property-return-tick-handler.js';
@@ -155,15 +157,16 @@ import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-u
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { CorporateActionHandler, CorporateActionApplyReducer } from './finance/holdings/corporate-action-classes.js';
 import { CORPORATE_ACTION_KIND, normalizeCorporateAction, applyCorporateAction, registryPatchFor } from './finance/holdings/corporate-action.js';
-import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, resolveEquityMarketMix, resolveRateKey, INTEREST_BEARING_ALLOCATIONS, assertInterestBearingHoldings } from './finance/holdings/default-allocations.js';
+import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, CLASS_KEYS_BY_ALLOCATION, EQUITY_MARKETS_BY_COUNTRY, DEFAULT_EQUITY_MARKET_MIX_BY_ROLE, resolveEquityMarketMix, resolveRateKey, INTEREST_BEARING_ALLOCATIONS, assertInterestBearingHoldings } from './finance/holdings/default-allocations.js';
 import { normalizeDrawdownSequence } from './finance/holdings/drawdown-sequence.js';
+import { effectiveEquityReturn } from './finance/holdings/effective-return.js';
 import { HOLDING_ACTION_TYPES, VALUE_KIND, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
-import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
+import { couponFederalExempt, couponStateExempt, baseDividendYield, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withSleeveInclude, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { SECURITY_FIELDS, makeSecurity, buildSecurityRegistry, assertAllocationMatch, identityGroupOf, SYNTHETIC_SECURITY_PREFIX, syntheticSecurityId, syntheticEquitySecurities, scenarioSecurityRegistry } from './finance/holdings/security.js';
@@ -179,6 +182,7 @@ import { JournalReportingService } from './finance/journal-reporting-service.js'
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
+import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng } from './finance/monte-carlo/mc-sampling.js';
 import { perturbParams, buildIterationRunner, initMcContext, runMcIteration } from './finance/monte-carlo/parallel/mc-worker-core.js';
@@ -211,7 +215,7 @@ import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/so
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
 import { defaultPoolSize, WorkerPool } from './finance/parallel/worker-pool.js';
-import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, marketRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables, SWEEP_KINDS, sweepKindOf, harvestSweepVariables } from './finance/param-schema-utils.js';
 import { auFinancialYearOf, monthlyAuSuper } from './finance/payroll/au-super-caps.js';
 import { DEFAULT_MATCH_TIERS, matchedFraction, resolveMatchTiers, monthlyK401 } from './finance/payroll/k401-limits.js';
 import { WAGE_APPLY_TYPES, WITHHELD_TYPE, CONTRIBUTION_STREAMS, monthKeyOf, listPaycheques, buildPaycheque, buildContributionsByYear, buildSuperCapRows } from './finance/payroll/paycheque-report.js';
@@ -368,15 +372,18 @@ import { AU_SINGLE_HOMEOWNER_DEFAULTS, AU_SINGLE_HOMEOWNER_PARAM_SCHEMA, AuSingl
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './scenarios/params/generated-param-keys.js';
 import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField } from './scenarios/params/record-field-rounding.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
-import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
+import { decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
+import { RETIRED_RATE_PARAMS, INTEREST_DEFAULTS, retireRateParams } from './scenarios/retired-rate-params.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
 import { applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage } from './scenarios/scenario-securities.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
+import { toolsetParamKeys, forwardToolsetOverrides } from './scenarios/toolset-param-forwarding.js';
 import { AU_BANKING } from './scenarios/toolsets/au-banking-toolset.js';
 import { AU_BROKERAGE } from './scenarios/toolsets/au-brokerage-toolset.js';
 import { AU_INCOME } from './scenarios/toolsets/au-income-toolset.js';
@@ -458,6 +465,7 @@ import { UNREAD_SECURITY_FIELDS, SecurityEditor } from './visualization/assets/s
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
+import { SweepVariableTable } from './visualization/common/sweep-variable-table.js';
 import { ActionDefinitionList } from './visualization/components/action-definition-list.js';
 import { ActionEditor } from './visualization/components/action-editor.js';
 import { BaseComponent } from './visualization/components/base-component.js';
@@ -931,11 +939,16 @@ export const Finance = {
   AddRegimeReducer,
   BondMaturityReducer,
   BondPriceAdjustReducer,
+  BOND_YEAR_MS,
+  yearsToMaturity,
+  couponlessYield,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
   EquityReturnReducer,
   EquityReturnStepReducer,
   EquityReturnTickHandler,
+  MARKET_GROWTH_PARAMS,
+  marketReturnFor,
   PrimeRelinkReducer,
   PropertyReturnStepReducer,
   PropertyReturnTickHandler,
@@ -1051,11 +1064,13 @@ export const Finance = {
   resolveDefaultAllocation,
   CLASS_KEYS_BY_ALLOCATION,
   EQUITY_MARKETS_BY_COUNTRY,
+  DEFAULT_EQUITY_MARKET_MIX_BY_ROLE,
   resolveEquityMarketMix,
   resolveRateKey,
   INTEREST_BEARING_ALLOCATIONS,
   assertInterestBearingHoldings,
   normalizeDrawdownSequence,
+  effectiveEquityReturn,
   HOLDING_ACTION_TYPES,
   VALUE_KIND,
   HOLDING_ACTION_ENTRIES,
@@ -1113,6 +1128,7 @@ export const Finance = {
   Holding,
   couponFederalExempt,
   couponStateExempt,
+  baseDividendYield,
   computeHoldingsGrowth,
   computeHoldingsDividends,
   computeHoldingsCoupons,
@@ -1180,6 +1196,13 @@ export const Finance = {
   CDC_2024,
   AU_2022,
   lookupLifeTable,
+  RETURN_BAND_EDGES,
+  runsToRows,
+  pairedRescues,
+  pairedMetric,
+  failureRate,
+  failureByBand,
+  failureDrivers,
   get,
   set,
   makeMcSeededRng,
@@ -1277,9 +1300,13 @@ export const Finance = {
   controllableVariables,
   scenarioParamValues,
   primeRatesOf,
+  marketRatesOf,
   paramSchemaDefaults,
   indexParamSchema,
   resolveSweepVariables,
+  SWEEP_KINDS,
+  sweepKindOf,
+  harvestSweepVariables,
   auFinancialYearOf,
   monthlyAuSuper,
   DEFAULT_MATCH_TIERS,
@@ -1778,6 +1805,8 @@ export const Scenarios = {
   resolveBalanceCenters,
   IntlRetirementScenario,
   applyRealPropertySaleYearParams,
+  GENERATED_KEY_PREFIXES,
+  isGeneratedParamKey,
   WHOLE_NUMBER_RECORD_FIELDS,
   roundRecordField,
   BALANCE_TARGET,
@@ -1788,10 +1817,11 @@ export const Scenarios = {
   COMPANY_EQUITY_PARAM_TEMPLATE,
   BEQUEST_PARAM_TEMPLATE,
   INHERITED_RA_PARAM_TEMPLATE,
-  GENERATED_KEY_PREFIXES,
-  isGeneratedParamKey,
   decodeGeneratedParamKey,
   ScenarioParamGenerator,
+  RETIRED_RATE_PARAMS,
+  INTEREST_DEFAULTS,
+  retireRateParams,
   synthesizeWeightedPriorities,
   ScenarioLoader,
   applyParamBagToConfig,
@@ -1802,6 +1832,8 @@ export const Scenarios = {
   scenarioSecurityUsage,
   ScenarioSerializer,
   ScenarioStorage,
+  toolsetParamKeys,
+  forwardToolsetOverrides,
   AU_BANKING,
   AU_BROKERAGE,
   AU_INCOME,
@@ -1810,6 +1842,8 @@ export const Scenarios = {
   AU_TAX,
   CORPORATE_ACTIONS,
   resolvePropertyRateKey,
+  MARKET_GROWTH_PARAMS,
+  marketReturnFor,
   ECONOMIC_REGIMES,
   INHERITANCE,
   ScenarioCompiler,
@@ -1867,6 +1901,7 @@ export const Visualization = {
   ChartController,
   ChartPresenter,
   ChartView,
+  SweepVariableTable,
   ActionDefinitionList,
   ActionEditor,
   BaseComponent,

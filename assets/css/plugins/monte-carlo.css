@@ -86,6 +86,51 @@
 .mc-hist-wrap { height: 160px; flex-shrink: 0; }
 .mc-chart-fill { width: 100%; height: 100%; }
 
+/* ── Path shape section (design 100 §3) ── */
+.mc-shape-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mc-shape-block { display: flex; flex-direction: column; gap: 2px; }
+
+.mc-shape-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.mc-shape-table th {
+  padding: 1px 6px 3px;
+  font-weight: 600;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mc-shape-table td {
+  padding: 1px 6px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mc-shape-table .mc-shape-name { text-align: left; color: var(--text-dim); }
+.mc-band-row--fails td:last-child { color: var(--red); }
+
+.mc-shape-note {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
 .mc-results-header-row {
   display: flex;
   align-items: center;
