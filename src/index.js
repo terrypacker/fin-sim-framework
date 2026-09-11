@@ -51,7 +51,7 @@ import { buildAllocationSeries, mixAt } from './finance/allocation-reporting/all
 import { ASSET_CLASS_COLOR, ASSET_CLASS_COLOR_DARK, colorForSeriesKey } from './finance/allocation-reporting/allocation-palette.js';
 import { createAllocationSampler, summarizeSamples, lastYearEndIndex, samplesToRows, samplesToTargetRows } from './finance/allocation-reporting/allocation-sampler.js';
 import { ASSET_CLASS, ASSET_CLASS_VALUES, LIABILITY_CLASSES, assetClassForAllocation, exposureCountryForRateKey } from './finance/allocation-reporting/asset-class.js';
-import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
+import { MIX_CLASSES, ILLIQUID_CLASSES, mixPoint, buildMixSeries, mixSeriesFromRuns, mixBands, DEFAULT_MIX_THRESHOLDS, thresholdProbability, thresholdProbabilities, mixByOutcome, outcomeGapAt } from './finance/allocation-reporting/mix-distribution.js';
 import { rollupBySecurity, totalSecurityRollup } from './finance/allocation-reporting/security-rollup.js';
 import { buildTargetCube, targetedStateKeys, driftAgainstTarget } from './finance/allocation-reporting/target-cube.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
@@ -816,6 +816,7 @@ export const Finance = {
   ILLIQUID_CLASSES,
   mixPoint,
   buildMixSeries,
+  mixSeriesFromRuns,
   mixBands,
   DEFAULT_MIX_THRESHOLDS,
   thresholdProbability,

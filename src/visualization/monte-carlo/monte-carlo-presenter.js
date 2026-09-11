@@ -153,7 +153,7 @@ export class MonteCarloPresenter {
   }
 
   _onRun(config) {
-    const { n, variableConfigs } = config;
+    const { n, variableConfigs, mix = false, spending = false } = config;
     const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
     this._configPanel.showProgress(`Running 0 / ${n}…`);
 
@@ -164,6 +164,8 @@ export class MonteCarloPresenter {
         simEnd:         this._scenario.simEnd,
         n,
         mcConfig,
+        mix,
+        spending,
         baseParams:     this._resolveBaseParams(),
         onProgress:     (done, total) => {
           this._configPanel.showProgress(`Running ${done} / ${total}…`);

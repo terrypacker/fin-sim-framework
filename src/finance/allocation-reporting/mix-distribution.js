@@ -149,6 +149,29 @@ export function buildMixSeries(paths, { classes = MIX_CLASSES, dp = 4 } = {}) {
 }
 
 /**
+ * The mix matrix straight from the runner's `runs` (design 100 §4).
+ *
+ * The MC tab and `scripts/lib/mc.mjs` both need this, so it lives here once. It reads
+ * each run's sampled `timeSeries` points that carry a `mix` — only present when the run
+ * was made with `mix: true` — so it returns null for a run without them, exactly as
+ * `buildMixSeries` does for paths with no mix.
+ *
+ * @param {Array} runs  `IntlRetirementMcRunner.run()` → `runs`
+ * @param {object} [opts]  passed to `buildMixSeries`
+ * @returns {MixSeries|null}
+ */
+export function mixSeriesFromRuns(runs, opts) {
+  const year = (d) => (d instanceof Date ? d : new Date(d)).getUTCFullYear();
+  return buildMixSeries((runs ?? []).map(r => ({
+    seed:   r.seed,
+    failed: !!r.scenarioFailed,
+    series: (r.timeSeries ?? [])
+      .filter(p => p.mix != null)
+      .map(p => ({ year: year(p.date), grossAssetsUsd: p.grossAssetsUsd, mix: p.mix })),
+  })), opts);
+}
+
+/**
  * Nearest-rank percentile, p ∈ [0,1]. Never interpolates, so every band value is a
  * share some path actually held — which matters more here than smoothness, because the
  * whole point of the chart is to describe mixes that occurred.

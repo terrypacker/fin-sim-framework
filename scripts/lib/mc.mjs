@@ -61,7 +61,7 @@ import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retir
 import { IntlRetirementMcConfig } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { scenarioParamValues }    from '../../src/finance/param-schema-utils.js';
 import { DISTRIBUTION_TYPES }     from '../../src/simulation-framework/distributions.js';
-import { buildMixSeries }         from '../../src/finance/allocation-reporting/mix-distribution.js';
+import { mixSeriesFromRuns }      from '../../src/finance/allocation-reporting/mix-distribution.js';
 import { quietAsync } from './run.mjs';
 import { numericParams } from './variant.mjs';
 
@@ -251,19 +251,7 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
   // Per-path mix matrix (design 82 §8.1). `failed` travels with each path because
   // §8.2's third view splits the bands by outcome, and a report that had to re-join
   // the matrix against `rows` by seed could silently drop paths on a mismatch.
-  const mixSeries = mix
-    ? buildMixSeries(runs.map(r => ({
-        seed: r.seed,
-        failed: !!r.scenarioFailed,
-        series: (r.timeSeries ?? [])
-          .filter(p => p.mix != null)
-          .map(p => ({
-            year: p.date.getUTCFullYear(),
-            grossAssetsUsd: p.grossAssetsUsd,
-            mix: p.mix,
-          })),
-      })))
-    : null;
+  const mixSeries = mix ? mixSeriesFromRuns(runs) : null;
 
   // Per-path classified spending (design 89 phase 6). Kept as the runner's compact
   // ~20-number summary rather than a cube, for the reason design 78 §4.5 gives about

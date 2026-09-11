@@ -131,6 +131,50 @@
   font-family: var(--font-mono);
 }
 
+/* ── Opt-in telemetry (design 100 §4) ── */
+.mc-telemetry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.mc-telemetry-opt { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.mc-telemetry-opt input { margin: 0; accent-color: var(--purple); }
+.mc-telemetry-cost { color: var(--text-dim); font-size: 9px; }
+
+/* ── Mix + spending sections (design 100 §4) ── */
+.mc-mix-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+
+.mc-mix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.mc-mix-chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.mc-mix-chip--active { border-color: var(--border-hi); color: var(--text-primary); }
+.mc-mix-wrap { height: 200px; flex-shrink: 0; }
+
+.mc-spend-banner {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+}
+
 .mc-results-header-row {
   display: flex;
   align-items: center;

@@ -1,6 +1,7 @@
 # 100 — The Monte Carlo analysis surface (in-app)
 
-**Status: PROPOSED (11 Sep 2026). Step 1 BUILT (11 Sep 2026); steps 2–4 not started.**
+**Status: PROPOSED (11 Sep 2026). Steps 1–2 BUILT (11 Sep 2026); step 3 next, step 4 needs
+its own design pass. Start at §9 when picking this up.**
 
 ## 1. Problem
 
@@ -98,6 +99,34 @@ That last view is the design 82 §8.2 question: whether the shape IS the failure
 mechanism. Thresholds start as the defaults. Editing them later uses a typed row editor,
 never a JSON text area.
 
+**Step 2 BUILT (11 Sep 2026).**
+- **Options:** `McConfigPanel` has an "extra telemetry" group, `.mc-opt-mix` and
+  `.mc-opt-spending`, with the cost on each label. `getConfig()` returns `mix` and
+  `spending`, and the presenter and controller pass both to the runner.
+- **Shared conversion:** `mixSeriesFromRuns(runs)` in `mix-distribution.js`. The panel and
+  `scripts/lib/mc.mjs` both use it; the lab's inline copy is gone.
+- **Mix section** (`_buildMixSection`):
+  - one class at a time, chosen by chips coloured from the allocation palette; classes no
+    path held are dropped;
+  - a P10–P90 band and P50 line, with the failed paths' median as a dashed line;
+  - the `DEFAULT_MIX_THRESHOLDS` table and the failed-vs-survived table at the horizon,
+    sorted by gap.
+  - **Decision:** one class at a time rather than a chart per class. Six marginal bands
+    side by side were too much for a results pane, and the chips keep the "never stacked"
+    rule obvious.
+- **Spending section** (`_buildSpendingSection`), built on design 89's
+  `aggregateSpendingRuns`:
+  - the `describeSpendingDistribution` header;
+  - badges for real cost P50, tax over 50% of spending, and "went short" beside the failure
+    rate (design 89 §21.4's cross-check);
+  - an unclassified-types banner;
+  - a per-category P10/P50/P90 table with each category's fired rate.
+  - It is a table, not §21.4's stacked percentile bar: the same numbers, with the bar left
+    as an option.
+- **Tests:** `tests/viz/mc-telemetry-options.test.mjs`,
+  `tests/viz/mc-results-mix-spending.test.mjs` and
+  `tests/unit/mix-series-from-runs.test.mjs` (MSR-1…3).
+
 ## 5. Step 3 — paired A/B
 
 Iteration i is seeded by index, so path i is the same world in two runs of the same
@@ -152,6 +181,57 @@ to the baseline slot.
 1. Does the baseline slot survive a scenario switch? Proposed: no; it is keyed to the
    scenario id, like the result carry.
 2. Should the path-shape section be collapsible so the fan chart stays above the fold?
-3. Mix bands in MC Results, or a mode of the Allocation tab? Proposed: MC Results, since
-   the Allocation tab is a single-run view and mixing the two would blur which world is
-   shown.
+3. Mix bands in MC Results, or a mode of the Allocation tab? **Resolved: MC Results**
+   (step 2). The Allocation tab is a single-run view, and mixing the two would blur which
+   world is shown.
+
+## 9. Where to pick up
+
+**Next: step 3, paired A/B (§5).** The pieces already exist:
+- `pairedRescues` / `pairedMetric` in `src/finance/monte-carlo/mc-analysis.js`, fed by
+  `runsToRows(runs)`;
+- `MonteCarloPresenter._lastResult` (the current result);
+- the in-memory carry in `workbench-app.js` (`_mcResultCarry`, keyed by scenario id), as
+  the pattern for keeping a baseline across a rebuild.
+
+Build order:
+1. A "Keep as baseline" button in the results header. It stores
+   `{ result, n, seeds, sampledKeys, mcSequenceRisk }` in the presenter.
+   - `seeds` comes from `runs[i].seed`.
+   - `sampledKeys` is the enabled variable keys of the `mcConfig` that ran (keep them at
+     run time; the result does not carry them).
+   - `mcSequenceRisk` comes from the base params.
+2. The pairing guard (§5), a pure function in `mc-analysis.js` with unit tests. It returns
+   the list of mismatches.
+3. A comparison section:
+   - rescues and reverse rescues first;
+   - then the paired after-tax NW delta;
+   - then the two failure rates and percentiles side by side;
+   - a banner naming any guard mismatch, falling back to the unpaired side-by-side.
+4. Viz tests in the style of `mc-results-mix-spending.test.mjs`.
+
+**Then: step 4 (§7) needs a design pass before code.** Open questions: which tab it lives
+in, deterministic cells vs MC cells, and the cost estimate shown before launch.
+
+**What step 2 found on a real plan (11 Sep 2026, in the app, 40 paths, mix + spending):**
+- **Design 89's classification list is behind.** The unclassified banner named
+  `US_PERIOD_ADVANCE`, `AU_PERIOD_ADVANCE` and `POOL_FLOW_APPLY` on every path, and
+  UNCLASSIFIED was the largest category by value. Design 97's pool flows were never added
+  to design 89's classification list, and period-advance entries land there too. Fix this
+  in design 89's classification before reading spending totals on a pools plan.
+- **"Went short" and the failure rate disagreed** by one path (25% vs 22.5%). Design 89
+  §20.5 found them identical on its reference plan. The panel now shows the gap; the cause
+  is not yet traced (a path that ran short and recovered is the likely one).
+- **Spending is expensive in the browser**: 40 paths took about 10 minutes and the page
+  process held about 4 GB. Keep it opt-in and keep n small. Design 89 §20.7's in-state
+  accumulator is what would remove the cost.
+- **The spending table carries a Tier column**, because non-spending rows (INTERNAL,
+  REVALUATION, UNCLASSIFIED) were reading as cost next to a header that excludes them.
+
+**Known follow-ups, not part of this design:**
+- **Gold-pool warning:** `liquidityGraph`'s location-policy warning fires once per MC
+  iteration. Log it once per run.
+- **CLI warnings:** `run-scenario.mjs` and `scripts/lib/run.mjs` silence `console.warn`
+  during load, so design 99 retired-rate warnings never print from the CLI.
+- **`run-scenario --params`** diffs numeric params only; it missed `liquidityGraphEnabled`.
+- **Step 2 wishlist:** a threshold editor (typed rows) and §21.4's stacked percentile bar.
