@@ -16,6 +16,14 @@ import { fmtCompact, fmtWhole } from '../money-format.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
 } from '../../finance/monte-carlo/mc-analysis.js';
+import {
+  mixSeriesFromRuns, mixBands, mixByOutcome, thresholdProbabilities, outcomeGapAt,
+  DEFAULT_MIX_THRESHOLDS,
+} from '../../finance/allocation-reporting/mix-distribution.js';
+import { colorForSeriesKey } from '../../finance/allocation-reporting/allocation-palette.js';
+import {
+  aggregateSpendingRuns, exceedanceRate, describeSpendingDistribution,
+} from '../../finance/spending-reporting/spending-distribution.js';
 
 const HIST_BUCKETS = 20;
 
@@ -34,6 +42,12 @@ const fmtDollar = (v) => fmtWhole(v);
 function fmtPct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
 function fmtDate(v) { return v instanceof Date ? v.toISOString().slice(0, 7) : '—'; }
 function fmtMoneyOrDash(v) { return v == null || !isFinite(v) ? '—' : fmtWhole(v); }
+
+/** Same rule as the Allocation panel: an explicit theme wins; the workbench ships dark. */
+function isDarkTheme() {
+  const theme = typeof document !== 'undefined' ? document.documentElement?.dataset?.theme : null;
+  return theme ? theme !== 'light' : true;
+}
 
 /** "< 0%", "4%–5%", "12%+" — the first and last edges are sentinels, not real bounds. */
 function bandLabel({ lo, hi }) {
@@ -64,6 +78,10 @@ const METRIC_LABELS = {
  *   3. Histogram — terminal value distribution
  *   4. Path shape — sequence-risk and liquidity readouts, failure by realized return,
  *      and what separates a failing path (design 100 §3)
+ *   5. Asset mix — per-class share bands, threshold probabilities, failed vs survived
+ *      (only for a run made with `mix: true`; design 100 §4, design 82 §8)
+ *   6. Spending — lifetime cost by category (only for a run made with `spending: true`;
+ *      design 100 §4, design 89 §21)
  *
  * Public API:
  *   showResults(summary, runs) — populate all three components
@@ -89,6 +107,11 @@ export class McResultsPanel extends BaseComponent {
     this._histLabelEl     = null;
     this._fanDiv          = null;
     this._histDiv         = null;
+    this._mixChart        = null;
+    this._mixChartRo      = null;
+    this._mixDiv          = null;
+    this._mixData         = null;
+    this._mixClass        = null;
 
     /** Callback fired when the user toggles metrics: onMetricChange(metric) */
     this.onMetricChange = null;
@@ -120,6 +143,10 @@ export class McResultsPanel extends BaseComponent {
     if (this._histChartRo) { this._histChartRo.disconnect(); this._histChartRo = null; }
     if (this._fanChart)    { this._fanChart.dispose();       this._fanChart    = null; }
     if (this._histChart)   { this._histChart.dispose();      this._histChart   = null; }
+    if (this._mixChartRo)  { this._mixChartRo.disconnect();  this._mixChartRo  = null; }
+    if (this._mixChart)    { this._mixChart.dispose();       this._mixChart    = null; }
+    this._mixDiv  = null;
+    this._mixData = null;
     if (this._wrapperEl)   { this._wrapperEl.remove();       this._wrapperEl   = null; }
     this._fanDataByMetric  = {};
     this._histDataByMetric = {};
@@ -266,7 +293,23 @@ export class McResultsPanel extends BaseComponent {
     const shape = this._buildPathShapeSection(summary, runs);
     if (shape) wrapper.appendChild(shape);
 
+    // ── Opt-in telemetry sections (design 100 §4) ─────────────────────────────
+    const mixSection = this._buildMixSection(runs);
+    if (mixSection) wrapper.appendChild(mixSection);
+    const spendSection = this._buildSpendingSection(summary, runs);
+    if (spendSection) wrapper.appendChild(spendSection);
+
     this._container.appendChild(wrapper);
+
+    if (this._mixDiv) {
+      this._mixChartRo = initEChartWhenReady(this._mixDiv, () => {
+        this._mixChart = echarts.init(this._mixDiv, null, { renderer: 'canvas' });
+        this._mixChart.setOption(this._mixChartOption());
+        const ro = new ResizeObserver(() => this._mixChart?.resize());
+        ro.observe(this._mixDiv);
+        this._mixChartRo = ro;
+      });
+    }
 
     if (this._fanDiv) {
       this._fanChartRo = initEChartWhenReady(this._fanDiv, () => {
@@ -443,6 +486,261 @@ export class McResultsPanel extends BaseComponent {
     table.appendChild(body);
     wrap.appendChild(table);
     return wrap;
+  }
+
+  /**
+   * The asset mix as a distribution (design 82 §8, design 100 §4). Present only for a run
+   * made with `mix: true`.
+   *
+   * One class at a time, picked by chip: per-class bands are MARGINAL — the p90 of one class
+   * and of another come from different paths — so they are never stacked, and six overlaid
+   * bands are unreadable. The failed paths' median rides on the same chart as a dashed line,
+   * because "is the shape the failure mechanism?" is the question this view exists for.
+   */
+  _buildMixSection(runs) {
+    const ms = mixSeriesFromRuns(runs);
+    if (!ms) return null;
+
+    const all      = mixBands(ms);
+    const byOut    = mixByOutcome(ms, { percentiles: [0.5] });
+    // A class no path ever held is a chip that draws nothing — drop it.
+    const classes  = ms.classes.filter(c => (all.bands[c]?.[0.9] ?? []).some(v => v > 0));
+    if (!classes.length) return null;
+    this._mixData  = { years: ms.years, bands: all.bands, failed: byOut.failed.bands, nFailed: byOut.nFailed };
+    this._mixClass = classes.includes('EQUITY') ? 'EQUITY' : classes[0];
+
+    const section = document.createElement('div');
+    section.className = 'mc-shape-section mc-mix-section';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Asset Mix — share of gross assets, P10–P90 per class';
+    section.appendChild(label);
+
+    const dark  = isDarkTheme();
+    const chips = document.createElement('div');
+    chips.className = 'mc-mix-chips';
+    classes.forEach((cls, i) => {
+      const chip = document.createElement('button');
+      chip.className = 'mc-mix-chip' + (cls === this._mixClass ? ' mc-mix-chip--active' : '');
+      chip.dataset.cls = cls;
+      const swatch = document.createElement('i');
+      swatch.style.background = colorForSeriesKey(cls, i, { dark });
+      chip.append(swatch, document.createTextNode(cls));
+      chip.addEventListener('click', () => {
+        this._mixClass = cls;
+        for (const c of chips.children) c.classList.toggle('mc-mix-chip--active', c.dataset.cls === cls);
+        this._mixChart?.setOption(this._mixChartOption(), true);
+      });
+      chips.appendChild(chip);
+    });
+    section.appendChild(chips);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-mix-wrap';
+    const div = document.createElement('div');
+    div.className = 'mc-chart-fill';
+    this._mixDiv = div;
+    wrap.appendChild(div);
+    section.appendChild(wrap);
+
+    const note = document.createElement('div');
+    note.className = 'mc-shape-note';
+    note.textContent = 'Bands are marginal: the P90 of one class and of another come from different paths, '
+      + 'so they do not sum to 100%. Dashed = median share on paths that failed.';
+    section.appendChild(note);
+
+    section.appendChild(this._buildThresholdTable(ms));
+    const gap = this._buildOutcomeGapTable(ms);
+    if (gap) section.appendChild(gap);
+    return section;
+  }
+
+  /** eCharts option for the selected class: P10–P90 band, P50 line, failed-path median. */
+  _mixChartOption() {
+    const { years, bands, failed, nFailed } = this._mixData;
+    const cls   = this._mixClass;
+    const b     = bands[cls] ?? {};
+    const color = colorForSeriesKey(cls, 0, { dark: isDarkTheme() });
+    const p10   = b[0.1] ?? [];
+    const p90   = b[0.9] ?? [];
+    const textDim = readThemeColor('--text-dim');
+    const border  = readThemeColor('--border');
+    const red     = readThemeColor('--red');
+    const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+
+    const series = [
+      { id: 'lo', type: 'line', stack: 'band', data: p10, symbol: 'none', lineStyle: { opacity: 0 },
+        tooltip: { show: false }, emphasis: { disabled: true } },
+      { id: 'band', type: 'line', stack: 'band', data: p90.map((v, i) => (v == null || p10[i] == null ? null : v - p10[i])),
+        symbol: 'none', lineStyle: { opacity: 0 }, areaStyle: { color, opacity: 0.25 },
+        tooltip: { show: false }, emphasis: { disabled: true } },
+      { id: 'p50', name: 'P50', type: 'line', data: b[0.5] ?? [], symbol: 'none', lineStyle: { color, width: 2 } },
+    ];
+    if (nFailed > 0) {
+      series.push({ id: 'failed', name: 'Failed P50', type: 'line', data: failed[cls]?.[0.5] ?? [],
+        symbol: 'none', lineStyle: { color: red, width: 1.5, type: 'dashed' } });
+    }
+    return {
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { top: 12, right: 16, bottom: 28, left: 16, containLabel: true },
+      xAxis: { type: 'category', data: years, axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace' },
+        axisLine: { lineStyle: { color: border } } },
+      yAxis: { type: 'value', min: 0, max: 1, axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: pct },
+        splitLine: { lineStyle: { color: border } } },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          const i = params[0]?.dataIndex;
+          if (i == null) return '';
+          const lines = [`${years[i]} · ${cls}`, `P10 ${pct(p10[i])} · P50 ${pct(b[0.5]?.[i])} · P90 ${pct(p90[i])}`];
+          if (nFailed > 0) lines.push(`failed paths P50 ${pct(failed[cls]?.[0.5]?.[i])}`);
+          return lines.join('<br>');
+        },
+      },
+      series,
+    };
+  }
+
+  /** P(threshold) over the paths — the readouts worth quoting (design 82 §8.2). */
+  _buildThresholdTable(ms) {
+    const rows = thresholdProbabilities(ms, DEFAULT_MIX_THRESHOLDS);
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-shape-block mc-threshold-block';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Share of Paths Meeting Each Condition';
+    wrap.appendChild(label);
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-threshold-table';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Condition</th><th>Paths</th><th>Probability</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.title = r.excluded ? `${r.excluded} path(s) had no assets left in the window and are excluded.` : '';
+      tr.append(cell(r.label, 'mc-shape-name'), cell(`${r.hits} / ${r.n}`), cell(fmtPct(r.rate)));
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  /** Median share at the horizon, failed vs survived, sorted by gap. Omitted without both. */
+  _buildOutcomeGapTable(ms) {
+    const g = outcomeGapAt(ms);
+    if (!g.nFailed || !g.nSurvived) return null;
+    const rows = g.rows
+      .filter(r => (r.failed ?? 0) > 0.005 || (r.survived ?? 0) > 0.005)
+      .sort((a, b) => Math.abs(b.gap ?? 0) - Math.abs(a.gap ?? 0));
+    if (!rows.length) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-shape-block mc-gap-block';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = `Mix at ${g.year} — ${g.nFailed} failed / ${g.nSurvived} survived (median share)`;
+    wrap.appendChild(label);
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-gap-table';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Class</th><th>Failed</th><th>Survived</th><th>Gap</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      const gapTxt = r.gap == null ? '—' : `${r.gap > 0 ? '+' : ''}${(r.gap * 100).toFixed(1)}%`;
+      tr.append(cell(r.key, 'mc-shape-name'), cell(fmtPct(r.failed)), cell(fmtPct(r.survived)), cell(gapTxt));
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+
+    const note = document.createElement('div');
+    note.className = 'mc-shape-note';
+    note.textContent = 'A large positive gap on an illiquid class means the paths that ran out of money '
+      + 'were the paths that ended holding it — the shape is the failure mechanism.';
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  /**
+   * Lifetime spending across paths (design 89 §21.4, design 100 §4). Present only for a run
+   * made with `spending: true`. A table rather than §21.4's stacked percentile bar — the same
+   * numbers, and the bar is a later option.
+   */
+  _buildSpendingSection(summary, runs) {
+    const records = (runs ?? []).map(r => r.spending ?? null);
+    if (!records.some(Boolean)) return null;
+    const agg = aggregateSpendingRuns(records);
+
+    const section = document.createElement('div');
+    section.className = 'mc-shape-section mc-spend-section';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Spending — lifetime, real base-year dollars';
+    section.appendChild(label);
+
+    const header = document.createElement('div');
+    header.className = 'mc-shape-note';
+    header.textContent = describeSpendingDistribution(agg);
+    section.appendChild(header);
+
+    const failRate = summary?.successRate != null ? 1 - summary.successRate : null;
+    const badges = [
+      { label: 'Real Cost P50',        value: fmtMoneyOrDash(agg.spendingReal?.p50) },
+      { label: 'Tax > 50% of Spending', value: fmtPct(exceedanceRate(records, 'taxShare', 0.5)),
+        title: 'Share of paths where tax was more than half of lifetime spending.' },
+      { label: 'Went Short',           value: fmtPct(agg.wentShortRate), cls: 'mc-badge-value--failure',
+        title: 'Paths that could not fund what they intended at some point. An independent check on the failure rate.' },
+      { label: 'Failure Rate',         value: fmtPct(failRate), cls: 'mc-badge-value--failure',
+        title: 'From the run summary. Should match Went Short; a gap is a real signal about one of the two.' },
+    ];
+    const grid = document.createElement('div');
+    grid.className = 'mc-badge-grid';
+    for (const b of badges) {
+      const card = document.createElement('div');
+      card.className = 'mc-badge-card';
+      if (b.title) card.title = b.title;
+      const l = document.createElement('div');
+      l.className = 'mc-badge-label';
+      l.textContent = b.label;
+      const v = document.createElement('div');
+      v.className = `mc-badge-value ${b.cls ?? 'mc-badge-value--muted'}`;
+      v.textContent = b.value;
+      card.append(l, v);
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+
+    if (agg.unclassifiedTypes?.length) {
+      const banner = document.createElement('div');
+      banner.className = 'mc-spend-banner';
+      banner.textContent = '⚠ Unclassified spending — action types with no category: '
+        + agg.unclassifiedTypes.map(t => `${t.actionType} (${t.paths} path${t.paths === 1 ? '' : 's'})`).join(', ');
+      section.appendChild(banner);
+    }
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-spend-table';
+    // Tier travels with each row: roughly half of "all debits" is not spending (internal
+    // moves, revaluation, principal — design 89), and a table without the tier reads those
+    // rows as cost next to a header that excludes them.
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Category</th>'
+      + '<th title="Design 89 spend tier — only spending tiers count toward Real Cost">Tier</th>'
+      + '<th>P10</th><th>P50</th><th>P90</th>'
+      + '<th title="Share of paths in which this category moved any money">Fired</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const key of agg.categories) {
+      const c = agg.byCategoryReal[key];
+      const tr = document.createElement('tr');
+      tr.append(cell(key, 'mc-shape-name'), cell(c.tier ?? '—'), cell(fmtMoneyOrDash(c.p10)),
+        cell(fmtMoneyOrDash(c.p50)), cell(fmtMoneyOrDash(c.p90)), cell(fmtPct(c.firedRate)));
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    section.appendChild(table);
+    return section;
   }
 
   _buildToggle() {

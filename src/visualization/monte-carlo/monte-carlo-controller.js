@@ -57,15 +57,20 @@ export class MonteCarloController {
    * @param {number}                 [opts.n=100]        - Iteration count.
    * @param {IntlRetirementMcConfig} [opts.mcConfig]     - Config that builds the variable list.
    * @param {object}                 [opts.baseParams={}]- Scenario params that override defaults.
+   * @param {boolean}                [opts.mix=false]    - Record the per-year asset mix (design 82 §8).
+   * @param {boolean}                [opts.spending=false] - Record classified spending (design 89 §20).
    * @param {Function}               [opts.onProgress]   - Called with (completed, total) after each run.
    * @returns {Promise<{ runs: Array, summary: object }>}
    */
-  async runMonteCarlo({ simStart, simEnd, n = 100, mcConfig = new IntlRetirementMcConfig(), baseParams = {}, onProgress }) {
+  async runMonteCarlo({
+    simStart, simEnd, n = 100, mcConfig = new IntlRetirementMcConfig(), baseParams = {},
+    mix = false, spending = false, onProgress,
+  }) {
     // Design 15 §2.3: snapshot the active scenario cfg as the per-iteration template
     // so non-param edits (planned sale year, life expectancy, etc.) are honored.
     const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
     const runner = new IntlRetirementMcRunner({
-      n, mcConfig, simStart, simEnd, cfgTemplate, workerPool: this._workerPool(),
+      n, mcConfig, simStart, simEnd, cfgTemplate, mix, spending, workerPool: this._workerPool(),
     });
     return runner.run(baseParams, onProgress);
   }

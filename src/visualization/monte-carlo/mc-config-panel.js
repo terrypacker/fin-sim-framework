@@ -30,7 +30,7 @@ import { SweepVariableTable }          from '../common/sweep-variable-table.js';
  * never overwritten; they are flagged instead (see syncScenarioCenters).
  *
  * Callbacks:
- *   onRun({ n, variableConfigs })   — fired when the Run button is clicked.
+ *   onRun({ n, variableConfigs, mix, spending }) — fired when the Run button is clicked.
  *   onResolveScenarioCenters()      — must return Map(paramKey → current scenario
  *                                     value); used to re-sync untouched centers.
  */
@@ -193,10 +193,15 @@ export class McConfigPanel extends BaseComponent {
 
   /**
    * Returns the current panel configuration.
-   * @returns {{ n: number, variableConfigs: Array }}
+   * `mix` / `spending` are the runner's opt-in telemetry flags (design 100 §4). Both
+   * default off: mix is ~1% extra compute, spending forces full telemetry at ~7.5x.
+   *
+   * @returns {{ n: number, variableConfigs: Array, mix: boolean, spending: boolean }}
    */
   getConfig() {
     const n = Math.max(1, parseInt(this._iterEl?.value ?? '100', 10) || 100);
+    const mix      = !!this._mixCb?.checked;
+    const spending = !!this._spendingCb?.checked;
 
     const variableConfigs = this._variables.map(cfg => {
       const row = this._rowMap.get(cfg.paramKey);
@@ -225,7 +230,7 @@ export class McConfigPanel extends BaseComponent {
       return out;
     });
 
-    return { n, variableConfigs };
+    return { n, variableConfigs, mix, spending };
   }
 
   // ── Private ───────────────────────────────────────────────────────────────────
@@ -263,6 +268,12 @@ export class McConfigPanel extends BaseComponent {
           <label>Iterations</label>
           <input type="number" class="mc-iters-input" value="100" min="1" max="10000" />
         </div>
+        <div class="mc-telemetry" title="Extra per-path recording. The cost is on the label because it is the reason both are off by default (design 100 §4).">
+          <label class="mc-telemetry-opt"><input type="checkbox" class="mc-opt-mix" />
+            Record asset mix <span class="mc-telemetry-cost">+~1% time</span></label>
+          <label class="mc-telemetry-opt"><input type="checkbox" class="mc-opt-spending" />
+            Record spending <span class="mc-telemetry-cost">~7.5× time</span></label>
+        </div>
         <button class="btn btn-primary" style="width:100%">▶ Run Monte Carlo</button>
       </div>
       <div class="mc-status-el"></div>
@@ -277,6 +288,8 @@ export class McConfigPanel extends BaseComponent {
     this.append(this._container, shell);
 
     this._iterEl   = shell.querySelector('.mc-iters-input');
+    this._mixCb      = shell.querySelector('.mc-opt-mix');
+    this._spendingCb = shell.querySelector('.mc-opt-spending');
     this._runBtn   = shell.querySelector('.btn-primary');
     this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
