@@ -920,6 +920,26 @@ column — switch to `equityAnchorShift`); audit `scripts/lab/sequence-risk/scen
 Before/after: terminal-NW dispersion on the reference plan. Expected direction **wider**,
 by roughly the √6 the current independence throws away on the equity component.
 
+**M2 BUILT 11 Sep 2026** — after design 99, so the shape above changed in three places:
+- **Where:** `collectBaseGrowthRates` adds the shift to each of the four market totals.
+  After design 99 P2 there are no `<sleeve>::<stateKey>` equity keys and no per-account
+  seeding to run after, so the market total IS every equity holding's rate; still upstream
+  of regimes and the design 74 path, and still not gold, bonds, cash or an authored
+  `appreciationSchedule`.
+- **What it replaces:** not the six wrapper axes (design 99 P2 already retired them with
+  their params) but the interim that followed — US and AU totals drawn INDEPENDENTLY, F3
+  with two dimensions instead of six. All four totals and yields stay listed, off.
+- **Steps 4–5** were done by design 99 P2 (wrapper rows and the two dividend axes are gone).
+
+`equityAnchorShift`: schema default 0 (`mc: true`, `opt: false`, group `Market Rates`); MC
+row NORMAL, mean 0, sd 0.03; centers from the schema. `scripts/lib/mc.mjs` reports `growth`
+as the US total as run (plan total + anchor) and the raw `anchor`. The listed script
+consumers only SET market totals as plan inputs — unchanged. Tests:
+`equity-anchor-shift.test.mjs` (every market shifts by the anchor, gold does not, 0 is
+byte-identical, MC samples one equity axis); `mc-axis-liveness` MC-LIVE-2 proves the
+anchor moves the end state. No golden moves (default 0). The before/after dispersion
+measurement is deferred — MC re-runs are long; run the reference arm when convenient.
+
 ### M3 — decide what the anchor's sd means
 
 Once M2 lands and the design 74 path becomes a realistic default, the anchor's `stdDev`
@@ -942,7 +962,7 @@ Otherwise MC double-counts for as long as both mechanisms are on (F4).
 | W4 | Shared panel: filter + collapsible groups | MC + Opt | — (best after W3) | No |
 | W5 | `shadowedBy` / `shadowedAll` + config-dependent liveness gate (F5) | MC | W3's `{ cfg, accounts }` plumbing | No |
 | M1 | AU stock default → 7% total (F9) — **BUILT** | shared | — | **Yes** (12 goldens) |
-| M2 | `equityAnchorShift`; retire the six wrapper MC axes (F3) | MC | M1, **design 99 P2** (wrapper rates gone; shift the four market totals) | **Yes**, re-bases every MC result |
+| M2 | `equityAnchorShift`; retire the six wrapper MC axes (F3) — **BUILT 11 Sep 2026** (record under M2) | MC | M1, **design 99 P2** (wrapper rates gone; shift the four market totals) | **Yes**, re-bases every MC result (no golden moves) |
 | M3 | Re-base the anchor sd against the path model (F4) | MC | M2 | **Yes** |
 
 W0 is a live bug fix and worth landing even if nothing else in this design ships. W0–W5

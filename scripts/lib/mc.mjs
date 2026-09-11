@@ -182,9 +182,13 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     // report prints the out-of-funds line only when at least one row parses, so the
     // readout simply never appeared and nothing ever errored. Matches run.mjs.
     oof:    r.outOfFundsDate ? new Date(r.outOfFundsDate).toISOString().slice(0, 10) : null,
-    // sampled long-run mean — the headline explanatory variable for failure
-    // (the US market's total return since design 99 P2 retired the per-account rates)
-    growth: r.params?.usEquityGrowthRate ?? null,
+    // sampled long-run mean — the headline explanatory variable for failure: the US
+    // market's total return AS RUN. Since design 98 M2 the draw is `equityAnchorShift`,
+    // added to every market; the runner writes the plan's own (unsampled) US total into
+    // every run's params, so the sum is the rate the run actually used.
+    growth: r.params?.usEquityGrowthRate == null ? null
+      : +(r.params.usEquityGrowthRate + (r.params.equityAnchorShift ?? 0)).toFixed(6),
+    anchor: r.params?.equityAnchorShift ?? null,
     // The OTHER sampled axes, carried for the same reason `growth` is: they are the
     // explanatory variables for any failure that equity returns do NOT explain. On an
     // all-bond arm `growth` moves nothing at all, and without these a report can only

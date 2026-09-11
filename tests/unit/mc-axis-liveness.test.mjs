@@ -198,9 +198,10 @@ test('MC-LIVE-3: the retired spouse growth axes are gone, and super has a workin
   }
   // Super growth is not merely renamed away — it must still be sampled, under the
   // one key the compiler reads. Before §4.10 it had no working axis at all.
-  // Design 99 P2: super has no rate of its own — it earns the AU market's total, so
-  // that is the axis that must be sampled.
-  assert.ok(keys.includes('auEquityGrowthRate'), 'auEquityGrowthRate must be an MC axis');
-  assert.ok(ENABLED.some(c => c.paramKey === 'auEquityGrowthRate'),
-    'auEquityGrowthRate must be enabled by default, as the four dead spouse axes were');
+  // Design 99 P2: super has no rate of its own — it earns the AU and ex-AU markets' totals.
+  // Design 98 M2: those are reached by the ONE enabled equity axis, `equityAnchorShift`
+  // (MC-LIVE-2 proves it moves the end state); the AU total stays offered, off.
+  assert.ok(keys.includes('auEquityGrowthRate'), 'auEquityGrowthRate must still be offered');
+  assert.ok(ENABLED.some(c => c.paramKey === 'equityAnchorShift'),
+    'equityAnchorShift must be enabled by default — it is the equity return uncertainty');
 });

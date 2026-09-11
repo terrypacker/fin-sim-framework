@@ -122,10 +122,12 @@ test('IntlRetirementMcRunner: p50 is a positive finite number', async () => {
 
 test('IntlRetirementMcRunner: enabled params differ across runs', async () => {
   const { runs } = await makeRunner().run();
-  // With Normal distributions on growth rates, values should differ across runs
-  const rates = runs.map(r => r.params.usEquityGrowthRate);
-  const allSame = rates.every(v => v === rates[0]);
-  assert.ok(!allSame, 'enabled param usEquityGrowthRate should differ across runs');
+  // Design 98 M2: the one enabled equity axis is the anchor, a Normal draw per run.
+  const shifts = runs.map(r => r.params.equityAnchorShift);
+  assert.ok(!shifts.every(v => v === shifts[0]), 'enabled param equityAnchorShift should differ across runs');
+  // The per-market totals are off, so they hold the plan's value in every run.
+  const us = runs.map(r => r.params.usEquityGrowthRate);
+  assert.ok(us.every(v => v === us[0]), 'disabled usEquityGrowthRate should be constant across runs');
 });
 
 test('IntlRetirementMcRunner: disabled params are constant across runs', async () => {
