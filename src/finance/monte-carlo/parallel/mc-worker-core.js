@@ -83,6 +83,12 @@ export function perturbParams(baseParams, i, variables) {
     }
   }
 
+  // Design 98 M3 — Monte Carlo runs the stochastic return path (sequence risk and design
+  // 90 §7.4's market dispersion) whatever a single run does, so the anchor's sd can mean
+  // estimation uncertainty alone. Opt out with `mcSequenceRisk: false`. Written into the
+  // iteration's params, so `r.params` records it and a replay runs the same path.
+  if (perturbed.mcSequenceRisk !== false) perturbed.equityReturnStochastic = true;
+
   return perturbed;
 }
 

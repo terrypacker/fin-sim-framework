@@ -81,11 +81,17 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
   // ONE systematic draw, added to all four market totals. Drawing the markets separately
   // (the interim after design 99 P2 drew US and AU independently) lets them cancel each
   // other, and the measured dispersion then depends on how many markets a plan happens to
-  // hold (F3). sd 0.03 is the size the per-market axes used, so M2 changes the SHAPE of
-  // the uncertainty, not its stated size; M3 revisits the size.
+  // hold (F3).
+  //
+  // sd 0.015 is ESTIMATION uncertainty about the long-run mean (design 98 M3), not total
+  // return uncertainty: MC now runs the stochastic path (`mcSequenceRisk`), which supplies
+  // the year-to-year risk, so the old 0.03 would count part of it twice (F4). 0.015 sits
+  // between the CMA providers' disagreement (sd ≈ 1.4 points across the four markets,
+  // docs/market-returns/SOURCES.md) and the sampling error of a 100-year historical mean
+  // (18% / √100 ≈ 1.8 points).
   {
     paramKey: 'equityAnchorShift',     label: 'Equity Return Shift (all markets)',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0, stdDev: 0.03,
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0, stdDev: 0.015,
     group: 'Market Rates',             enabled: true,
   },
   // The per-market totals and yields stay listed for anyone studying one market or yield

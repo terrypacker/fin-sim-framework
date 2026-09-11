@@ -664,7 +664,20 @@ export const ECONOMIC_REGIMES = {
         mc:           false,
         opt:          false,
         defaultValue: false,
-        description:  'When on (design 74), each year draws its own equity return from a seeded process instead of holding one constant rate for the whole run — so Monte Carlo measures sequence-of-returns risk, not just uncertainty about the long-run average. One shared market factor drives every equity sleeve (via per-sleeve beta), so systematic risk survives portfolio aggregation. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe. NOTE (Phase 1): the anchor is treated as an ARITHMETIC mean, so turning this on lowers the realized geometric return by ≈σ²/2 (volatility drag). Geometric drift compensation is design 74 Phase 3.',
+        description:  'When on (design 74), each year draws its own equity return from a seeded process instead of holding one constant rate for the whole run — so Monte Carlo measures sequence-of-returns risk, not just uncertainty about the long-run average. One shared market factor drives every equity sleeve (via per-sleeve beta), so systematic risk survives portfolio aggregation. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe. NOTE (Phase 1): the anchor is treated as an ARITHMETIC mean, so turning this on lowers the realized geometric return by ≈σ²/2 (volatility drag). Geometric drift compensation is design 74 Phase 3. Monte Carlo turns this on for every iteration regardless (see "Monte Carlo: Stochastic Return Path"); this switch governs single runs.',
+      },
+      {
+        // Design 98 M3. A separate switch, not a reading of `equityReturnStochastic: false`:
+        // the loader materializes every schema default into the typed params list, so a plan
+        // that never touched the path and one that switched it off look the same to MC.
+        key:          'mcSequenceRisk',
+        label:        'Monte Carlo: Stochastic Return Path',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        description:  'When on (default), every Monte Carlo iteration runs the stochastic equity return path — its own year-by-year returns, with the markets able to diverge — on top of the sampled long-run mean (Equity Return Shift). Single runs are unaffected. Turn off to make Monte Carlo sample the long-run mean only.',
       },
       {
         key:          'equityReturnVol',
