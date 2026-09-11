@@ -65,6 +65,9 @@ const mkRng = (seed = 42) => {
 // wrappers, which are no longer sleeves.
 const US_MKT = RATE_KEYS.EQUITY_US;
 const AU_MKT = RATE_KEYS.EQUITY_AU;
+// Design 90 §7.4 — an absent idio vol is now the sourced default, so a test about the
+// pure single-factor path states its zeros.
+const ZERO_IDIO = Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0]));
 
 // ─── EquityReturnTickHandler ─────────────────────────────────────────────────────
 
@@ -81,7 +84,8 @@ describe('EquityReturnTickHandler', () => {
   });
 
   test('one market factor drives every sleeve — each is beta × marketDev (idio 0)', () => {
-    const h = new EquityReturnTickHandler({ vol: 0.18 });
+    // Explicit zeros: since design 90 §7.4 an absent idio vol is the sourced default.
+    const h = new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO });
     const { marketDev, deviation } = h.call({ sim: { rng: () => 0.5 }, state: {} })[0];
     for (const sleeve of EQUITY_SLEEVES) {
       const expected = DEFAULT_EQUITY_BETA[sleeve] * marketDev;
@@ -91,7 +95,7 @@ describe('EquityReturnTickHandler', () => {
     // by construction; the AU market loads below it. Spot-checked by name as well as by
     // the loop above, so a table edited to all-1.0 betas cannot pass vacuously.
     assert.ok(Math.abs(deviation[RATE_KEYS.EQUITY_US] - marketDev) < 1e-12);
-    assert.ok(Math.abs(deviation[RATE_KEYS.EQUITY_AU] - 0.8 * marketDev) < 1e-12);
+    assert.ok(Math.abs(deviation[RATE_KEYS.EQUITY_AU] - 0.43 * marketDev) < 1e-12);
   });
 
   test('same rng sequence ⇒ identical output (reproducible)', () => {
@@ -145,7 +149,7 @@ describe('EquityReturnTickHandler', () => {
   });
 
   test('per-sleeve beta override replaces the default loading', () => {
-    const h = new EquityReturnTickHandler({ beta: { [AU_MKT]: 1.5 } });
+    const h = new EquityReturnTickHandler({ beta: { [AU_MKT]: 1.5 }, idioVol: ZERO_IDIO });
     const { marketDev, deviation } = h.call({ sim: { rng: () => 0.5 }, state: {} })[0];
     assert.ok(Math.abs(deviation[AU_MKT] - 1.5 * marketDev) < 1e-12);
   });
@@ -184,7 +188,7 @@ describe('EquityReturnTickHandler — statistics', () => {
     // The direct regression against Option A's diversification bug: with a single shared
     // factor and unit betas, every sleeve equals the market deviation exactly.
     const ones = Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 1]));
-    const h = new EquityReturnTickHandler({ beta: ones, idioVol: {} });
+    const h = new EquityReturnTickHandler({ beta: ones, idioVol: ZERO_IDIO });
     for (let i = 0; i < 200; i++) {
       const { marketDev, deviation } = h.call({ sim: { rng: mkRng(i) }, state: {} })[0];
       for (const sleeve of EQUITY_SLEEVES) {

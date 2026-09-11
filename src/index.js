@@ -105,7 +105,7 @@ import { EquityReturnTickHandler } from './finance/economic-regimes/equity-retur
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
 import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler } from './finance/economic-regimes/property-return-tick-handler.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { STRESS_TAGS, regimeMeetsSeverity, stressRegimes, isStressed } from './finance/economic-regimes/regime-stress.js';
@@ -944,6 +944,7 @@ export const Finance = {
   RATE_KEY_CLASS_MEMBERS,
   EQUITY_SLEEVES,
   DEFAULT_EQUITY_BETA,
+  DEFAULT_EQUITY_IDIO,
   PROPERTY_SLEEVES,
   DEFAULT_RE_BETA,
   DEFAULT_RE_IDIO,

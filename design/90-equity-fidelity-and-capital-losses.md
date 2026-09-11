@@ -1060,6 +1060,36 @@ Note the cost: enabling idio vol **does** advance the RNG cursor (§1.4), one ex
 sleeve per tick. That is a deliberate, one-time re-basing of every stochastic result, and it
 should land as its own commit with its own re-gold so it is not confused with the tax changes.
 
+**✅ BUILT 11 Sep 2026.** Sourced defaults in `rate-keys.js` — `DEFAULT_EQUITY_BETA` and a new
+`DEFAULT_EQUITY_IDIO` — read by `EquityReturnTickHandler` when a market has no override (an
+explicit 0 still skips the draw). One factor, the US market, at `equityReturnVol` 0.18. Each
+market keeps its own volatility σ and its correlation ρ with the US: β = ρσ/0.18,
+σ_idio = σ√(1−ρ²).
+
+| market | σ | ρ with US | β | σ_idio |
+|---|---|---|---|---|
+| US | 18% (the factor) | 1 | 1.00 | 0 |
+| Developed ex-US | 17.6% | 0.874 | 0.85 | 8.5% |
+| Australia | 15.1% | 0.511 | 0.43 | 13.0% |
+| Intl ex-AU | 14.7% | 0.990 | 0.81 | 2.0% |
+
+Sources (user decision: the providers' mean where both publish, the P5b rule): J.P. Morgan's
+2026 LTCMA USD/AUD matrices and BlackRock's CMA workbook, which alone has a world-ex-Australia
+row; every figure and cell is in `docs/market-returns/SOURCES.md`. The factor vol stays 0.18 —
+the providers' mean US vol is 17.9%. The one-factor limit: two non-US markets correlate only
+through the US; AU ~ ex-AU comes out at 0.51 against BlackRock's 0.52.
+
+`equityReturnStochastic` stays **off** by default (user decision) — design 98 M3 decides that
+with the anchor's sd. So the only golden to move is `two-security-concentration`, the one with
+the path on: three extra uniforms per tick re-draw the whole path (market factor 0.056 → 0.099
+in the last year; AU's deviation is no longer 0.8 × US), net worth +4.45% on its one seed.
+Tests: `equity-market-dispersion.test.mjs` (the defaults reproduce σ and ρ; US and AU move in
+opposite directions about a third of years; an explicit 0 is pure single-factor); tests about
+the zero-idio path now state their zeros.
+
+**Deliberately not re-priced:** the `MILD_CORRECTION` shock preset sizes its ex-AU fall at the
+OLD ex-AU beta (0.95). A preset is a historical episode; re-calibrating one is its own decision.
+
 ---
 
 ## 8. AU franked dividends  ✅ BUILT (step 7 — gaps 1–3; §8.4 super franking still open)

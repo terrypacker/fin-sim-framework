@@ -357,8 +357,10 @@ export const SHOCK_LIBRARY = Object.freeze({
    *
    * `EQUITY_INTL_EX_AU` moves with it, though, because that sleeve is a global-ex-Australia
    * basket — roughly 70 % US by weight — and a US correction is most of what it holds. It
-   * is priced at the framework's own market-factor loading for the sleeve
-   * (`DEFAULT_EQUITY_BETA`, 0.95), not at a fresh guess: −0.115 × 0.95 and −0.418 × 0.95.
+   * was priced at the framework's market-factor loading for the sleeve AS IT THEN WAS
+   * (`DEFAULT_EQUITY_BETA`, 0.95): −0.115 × 0.95 and −0.418 × 0.95. Design 90 §7.4 sourced
+   * that beta at 0.81 (11 Sep 2026); this preset was deliberately NOT re-priced with it — a
+   * shock preset is a historical episode, and re-calibrating one is its own decision.
    * Leaving it out meant an AU household whose growth sleeve is a global fund felt nothing
    * at all from the library's control-arm correction.
    *

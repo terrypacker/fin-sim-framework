@@ -10,7 +10,7 @@
 
 import { HandlerEntry }                    from '../../simulation-framework/handlers.js';
 import { FX_PROCESS_MODELS, gaussianFrom } from '../fx/fx-process-models.js';
-import { EQUITY_SLEEVES, DEFAULT_EQUITY_BETA } from './rate-keys.js';
+import { EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } from './rate-keys.js';
 
 /**
  * EquityReturnTickHandler — stochastic equity RETURN PATH (design 74 §4/§5.1). The
@@ -110,7 +110,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
     const sleeveVar = {};
     for (const sleeve of EQUITY_SLEEVES) {
       const beta    = this.beta[sleeve]    ?? DEFAULT_EQUITY_BETA[sleeve] ?? 1.0;
-      const idioVol = this.idioVol[sleeve] ?? 0;
+      // Design 90 §7.4 — absent ⇒ the sourced default, not 0. An explicit 0 still skips.
+      const idioVol = this.idioVol[sleeve] ?? DEFAULT_EQUITY_IDIO[sleeve] ?? 0;
       let dev = beta * marketDev;
       // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced
       // and the market-only path reproduces exactly (design 74 §4 ⚠️).
