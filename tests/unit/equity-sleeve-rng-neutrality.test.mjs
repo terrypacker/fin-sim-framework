@@ -44,9 +44,14 @@ function countingRng() {
   return { rng, state };
 }
 
+// Design 90 §7.4 gave the sleeves sourced idio vols, so an EMPTY map now means those
+// defaults, not zero. The property below is about ZERO idio vol, so it is stated with an
+// explicit zero for every sleeve.
+const ZERO_IDIO = Object.fromEntries(EQUITY_SLEEVES.map(s => [s, 0]));
+
 test('design 90 §1.4: with idio vol 0 the sleeve loop consumes NO uniforms', () => {
   const { rng, state } = countingRng();
-  new EquityReturnTickHandler({ vol: 0.18 }).call({ sim: { rng }, state: {} });
+  new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO }).call({ sim: { rng }, state: {} });
 
   // gaussianFrom may take more than one uniform per normal draw, so the assertion is
   // that the count is independent of the sleeve list — not a specific number. The
@@ -59,11 +64,11 @@ test('design 90 §1.4: adding sleeves does not move the RNG cursor while idio vo
   // deviations for a much longer sleeve list. If the loop drew per sleeve, the draw
   // counts would differ and every subsequent draw in a run would shift.
   const a = countingRng();
-  const h = new EquityReturnTickHandler({ vol: 0.18 });
+  const h = new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO });
   h.call({ sim: { rng: a.rng }, state: {} });
 
   const b = countingRng();
-  const padded = new EquityReturnTickHandler({ vol: 0.18 });
+  const padded = new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO });
   // Simulate a longer list by giving every sleeve an explicit ZERO idio vol — the same
   // path a new sleeve takes when nobody has configured one for it.
   padded.idioVol = Object.fromEntries(EQUITY_SLEEVES.map(s => [s, 0]));
@@ -77,7 +82,7 @@ test('a NON-zero idio vol does draw — the skip is conditional, not dead code',
   // The control. Without this, the test above would pass just as well against a handler
   // that had lost its idiosyncratic term entirely.
   const base = countingRng();
-  new EquityReturnTickHandler({ vol: 0.18 }).call({ sim: { rng: base.rng }, state: {} });
+  new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO }).call({ sim: { rng: base.rng }, state: {} });
 
   const withIdio = countingRng();
   new EquityReturnTickHandler({ vol: 0.18, idioVol: { [RATE_KEYS.EQUITY_US]: 0.10 } })
@@ -117,7 +122,7 @@ test('EQUITY_SLEEVES is stably sorted — the order matters the moment idio vol 
 const IDENTITY_REGISTRY = buildSecurityRegistry(syntheticEquitySecurities());
 
 const tick = (rng, state = {}) =>
-  new EquityReturnTickHandler({ vol: 0.18 }).call({ sim: { rng }, state })[0];
+  new EquityReturnTickHandler({ vol: 0.18, idioVol: ZERO_IDIO }).call({ sim: { rng }, state })[0];
 
 test('design 94 §6.2: a registry of identity securities consumes NO uniforms', () => {
   // The migration's whole claim. Every migrated equity lot names one of these four, and

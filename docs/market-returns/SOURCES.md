@@ -99,6 +99,45 @@ as a proxy (user decision). Yields are MSCI's, to the 0.01% MSCI publishes.
 
 Previous defaults: 7% total everywhere; yields US 2%, AU 4%, ex-US 2%, ex-AU 2%.
 
+## Volatility and correlation (design 90 §7.4, 11 Sep 2026)
+
+`DEFAULT_EQUITY_BETA` / `DEFAULT_EQUITY_IDIO` (`src/finance/economic-regimes/rate-keys.js`)
+and the factor volatility `equityReturnVol`. Used only when Stochastic Equity Returns is on.
+
+**Model.** One factor, defined as the US market. Each market keeps its own volatility σ
+and its correlation ρ with the US: β = ρ·σ / σ_F and σ_idio = σ·√(1 − ρ²), so the market's
+variance is σ² and its correlation with the US is ρ exactly. Two non-US markets correlate
+only through the US (ρ₁·ρ₂).
+
+**Decisions (user):** the equal-weighted mean of the providers where both publish a
+volatility (the P5b rule); correlations from the matrices; factor vol kept at 0.18.
+
+| input | J.P. Morgan 2026 LTCMA | BlackRock CMA ("Starting point") | used |
+|---|---|---|---|
+| US vol (the factor), USD | U.S. Large Cap 16.47% | US large cap, USD block, 19.35% | mean 17.91% → **0.18** |
+| Developed ex-US vol, USD | EAFE 17.63% | Global ex-US (MSCI World ex-US) 17.57% | **17.60%** |
+| Developed ex-US ρ with US | EAFE ~ U.S. Large Cap 0.8745 (USD matrix) | — (correlations only to its own reference) | **0.8745** |
+| Australia vol, AUD | Australian Equity 14.33% | Australia large cap, AUD block, 15.81% | **15.07%** |
+| Australia ρ with US | Australian Equity ~ U.S. Large Cap 0.5105 (AUD matrix) | — | **0.5105** |
+| Intl ex-AU vol, AUD | no world-ex-Australia row | Global ex-Australia (MSCI World ex Australia) 14.72% | **14.72%** |
+| Intl ex-AU ρ with US | — | US large cap ~ Global ex-Australia 0.9904 (AUD block) | **0.9904** |
+
+BlackRock's "Correlation" columns are to two references per currency block (Government
+bonds, Equities); in the AUD block the Equities reference is MSCI World ex Australia (its
+own row reads 1.0), which is what makes the ex-AU row usable. J.P. Morgan's matrices hold a
+full lower-triangle correlation matrix (columns G onward, in row order); the volatility is
+column E.
+
+| market | β = ρσ/0.18 | σ_idio = σ√(1−ρ²) | adopted β / σ_idio |
+|---|---|---|---|
+| US | 1 | 0 | **1.00 / 0** |
+| Developed ex-US | 0.8549 | 0.0854 | **0.85 / 8.5%** |
+| Australia | 0.4275 | 0.1296 | **0.43 / 13.0%** |
+| Intl ex-AU | 0.8102 | 0.0203 | **0.81 / 2.0%** |
+
+Implied AU ~ ex-AU correlation 0.51 (BlackRock: 0.52). Previous defaults: β US 1.0 / ex-US
+0.85 / ex-AU 0.95 / AU 0.8, all idio 0 — unsourced, and unable to disperse.
+
 ## Super's equity market mix (design 99 P5c, 11 Sep 2026)
 
 `DEFAULT_EQUITY_MARKET_MIX_BY_ROLE` (`src/finance/holdings/default-allocations.js`): the

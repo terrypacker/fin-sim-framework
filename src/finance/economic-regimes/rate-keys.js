@@ -123,25 +123,42 @@ export const EQUITY_SLEEVES = Object.freeze([
 ]);
 
 /**
- * Default per-MARKET beta on the shared market factor (design 74 §4 Option B, re-based
- * onto the market axis by design 90 §7.2). Overridable via the `equityReturnBeta` param;
- * a sleeve absent here defaults to 1.0.
+ * Default per-MARKET beta on the shared market factor, and idiosyncratic vol, sourced
+ * (design 90 §7.4). Overridable via the `equityReturnBeta` / `equityReturnIdioVol` params.
+ *
+ * One factor, defined as the US market, at `equityReturnVol` 0.18 — the mean of J.P.
+ * Morgan's and BlackRock's US volatility (16.5% / 19.3%). Each other market keeps its own
+ * volatility σ (the providers' mean, in its own currency) and its correlation ρ with the
+ * US market, which fixes the two numbers exactly:
+ *
+ *     β = ρ · σ / 0.18            σ_idio = σ · √(1 − ρ²)
+ *
+ * so Var = (β·0.18)² + σ_idio² = σ² and Corr(market, US) = ρ. Every figure, and the rows
+ * it comes from, is in docs/market-returns/SOURCES.md.
+ *
+ * The one-factor limit: two non-US markets correlate only through the US (ρ₁·ρ₂). For AU
+ * and ex-AU that gives 0.51, against BlackRock's 0.52 — close, because ex-AU is ~0.99
+ * correlated with the US. Nothing here models the AUD itself as a common factor.
  */
 export const DEFAULT_EQUITY_BETA = Object.freeze({
-  // The market factor is defined as the US market's, so EQUITY_US rides it 1:1 by
-  // construction. The other three load below 1 in USD terms: a broad ex-US basket is
-  // more diversified across economies than the US alone, and the Australian market is
-  // narrower but far less correlated with US mega-cap technology than its own size
-  // suggests. These are the same shape as the betas they replace, re-expressed on the
-  // axis that actually generates the correlation.
-  //
-  // ⚠️ These are the CO-MOVEMENT parameter, not the dispersion one. With `idioVol` at
-  // its default of 0 every sleeve is still a deterministic multiple of one draw, so
-  // sleeves cannot cross — design 90 §7.4. Betas alone do not make losses possible.
-  [RATE_KEYS.EQUITY_US]:         1.0,
-  [RATE_KEYS.EQUITY_INTL_EX_US]: 0.85,
-  [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.95,
-  [RATE_KEYS.EQUITY_AU]:         0.8,
+  [RATE_KEYS.EQUITY_US]:         1.0,    // the factor itself
+  [RATE_KEYS.EQUITY_INTL_EX_US]: 0.85,   // σ 17.6%, ρ 0.874 (J.P. Morgan EAFE)
+  [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.81,   // σ 14.7%, ρ 0.990 (BlackRock World ex-AU, AUD)
+  [RATE_KEYS.EQUITY_AU]:         0.43,   // σ 15.1%, ρ 0.511 (J.P. Morgan, AUD)
+});
+
+/**
+ * Default per-MARKET idiosyncratic vol — the DISPERSION parameter (design 90 §7.4): what lets
+ * one market fall while another rises. See DEFAULT_EQUITY_BETA for the derivation. US is 0
+ * by construction — it IS the factor — so its idio draw is skipped and its path is the
+ * market factor exactly. ⚠️ Non-zero entries each consume a uniform per tick in
+ * EQUITY_SLEEVES order (design 74 §4): changing this table re-bases every stochastic run.
+ */
+export const DEFAULT_EQUITY_IDIO = Object.freeze({
+  [RATE_KEYS.EQUITY_US]:         0,
+  [RATE_KEYS.EQUITY_INTL_EX_US]: 0.085,
+  [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.020,
+  [RATE_KEYS.EQUITY_AU]:         0.130,
 });
 
 /**

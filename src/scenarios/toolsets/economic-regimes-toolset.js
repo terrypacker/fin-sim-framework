@@ -12,7 +12,7 @@ import { OneOffEvent }                    from '../../simulation-framework/event
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from '../../finance/economic-regimes/market-returns.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
@@ -177,14 +177,6 @@ function collectYieldCurves(p) {
  * (spread 0): shorter bonds yield less, longer bonds earn a term premium. Applied to
  * both countries unless a scenario overrides `usYieldCurveShape` / `auYieldCurveShape`.
  */
-/**
- * Equity idiosyncratic vol has no per-sleeve default table — an absent key is a
- * literal 0 (pure single-factor, design 74 §4). Stated explicitly so the param
- * editor's blank-cell placeholder shows `0` rather than the word "default", which
- * would imply a value lives somewhere else.
- */
-const ZERO_EQUITY_IDIO = Object.freeze(
-  Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0])));
 
 const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
   { tenor: 1,  spread: -0.010 },
@@ -682,7 +674,7 @@ export const ECONOMIC_REGIMES = {
         mc:           true,
         opt:          false,
         defaultValue: 0.18,
-        description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor. Each sleeve scales this by its beta (US large-cap 1.0; AU stock 0.9; super 0.7 by default). Only used when Stochastic Equity Returns is on.',
+        description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor — the US market\'s own volatility (0.18 is the mean of J.P. Morgan\'s and BlackRock\'s, design 90 §7.4). Each market loads on it by its beta (US 1.0; intl ex-US 0.85; intl ex-AU 0.81; AU 0.43) and adds its own idiosyncratic volatility. Only used when Stochastic Equity Returns is on.',
       },
       {
         key:          'randomSeed',
@@ -729,19 +721,19 @@ export const ECONOMIC_REGIMES = {
         mc:           false,
         opt:          false,
         defaultValue: null,
-        description:  'Optional per-sleeve override of each equity sleeve\'s loading on the market factor, keyed by MARKET rate key (EQUITY_US, EQUITY_AU, EQUITY_INTL_EX_US, EQUITY_INTL_EX_AU — design 90 §7.2). Absent keys fall back to the defaults (US 1.0 / intl ex-US 0.85 / intl ex-AU 0.95 / AU 0.8). Only used when Stochastic Equity Returns is on.',
+        description:  'Optional per-market override of each equity market\'s loading on the shared market factor (the US market), keyed by MARKET rate key (EQUITY_US, EQUITY_AU, EQUITY_INTL_EX_US, EQUITY_INTL_EX_AU). Absent keys use the sourced defaults (design 90 §7.4): US 1.0 / intl ex-US 0.85 / intl ex-AU 0.81 / AU 0.43. The CO-MOVEMENT half — the idiosyncratic volatility is the dispersion half. Only used when Stochastic Equity Returns is on.',
       },
       {
         key:          'equityReturnIdioVol',
         label:        'Equity Return Idiosyncratic Volatility',
         type:         'RateKeyMap',
         options:      EQUITY_SLEEVES,
-        optionDefaults: ZERO_EQUITY_IDIO,
+        optionDefaults: DEFAULT_EQUITY_IDIO,
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
         defaultValue: null,
-        description:  'Optional per-sleeve idiosyncratic (sleeve-specific) return sd, keyed by rate key. Adds independent noise on top of the shared market factor so sleeves are not perfectly correlated. Absent ⇒ 0 (pure single-factor). Only used when Stochastic Equity Returns is on.',
+        description:  'Optional per-market override of each equity market\'s own (idiosyncratic) return sd, keyed by MARKET rate key. It is what lets one market fall while another rises. Absent keys use the sourced defaults (design 90 §7.4): US 0 (it is the market factor) / intl ex-US 8.5% / intl ex-AU 2.0% / AU 13.0%. Set a market to 0 to make it a pure multiple of the US market. Only used when Stochastic Equity Returns is on.',
       },
       {
         key:          'equityReturnDriftComp',
