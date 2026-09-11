@@ -226,7 +226,6 @@ export function summarizeProvenance(variables, { ownParams = null, schemaDefault
   const bySource = { scenario: [], schema: [], override: [], default: [] };
   const divergentCenters = [];
   const syntheticCenters = [];
-  const shadowed         = [];   // design 98 W5: role rows a per-account field overrides
 
   for (const v of variables) {
     // buildVariables can only report "resolvable in the merged bag or not"; the
@@ -239,30 +238,17 @@ export function summarizeProvenance(variables, { ownParams = null, schemaDefault
       divergentCenters.push({ paramKey: v.paramKey, center: v.center, scenarioValue: v.scenarioValue });
     }
     if (v.enabled && source === CENTER_SOURCES.DEFAULT) syntheticCenters.push(v.paramKey);
-    if (v.shadowedBy?.length) {
-      shadowed.push({ paramKey: v.paramKey, enabled: !!v.enabled,
-        shadowedBy: v.shadowedBy, shadowedAll: !!v.shadowedAll });
-    }
   }
 
   if (syntheticCenters.length > 0) {
     console.warn('[IntlRetirementMcRunner] sampling around FRAMEWORK DEFAULTS — the scenario '
       + `carries no value for: ${syntheticCenters.join(', ')}. Results are partly synthetic.`);
   }
-  // Called once per run (from _prepare), so this warns once per run.
-  const deadAxes = shadowed.filter(s => s.enabled && s.shadowedAll);
-  if (deadAxes.length > 0) {
-    console.warn('[IntlRetirementMcRunner] sampling axes that reach NOTHING — every account '
-      + 'of their role sets its own rate: '
-      + deadAxes.map(s => `${s.paramKey} (${s.shadowedBy.join(', ')})`).join('; ')
-      + '. The distribution is narrower than the variable list claims (design 98 F5).');
-  }
 
   return {
     centersBySource: bySource,
     syntheticCenters,
     divergentCenters,
-    shadowed,
     /** True when every sampled center traces to the loaded scenario. */
     fromScenario: syntheticCenters.length === 0 && divergentCenters.length === 0,
   };

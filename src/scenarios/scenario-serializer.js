@@ -784,8 +784,6 @@ export class ScenarioSerializer {
     if (account.type !== 'loan' && account.deductibleFraction != null) {
       d.deductibleFraction = account.deductibleFraction;
     }
-    if (account.growthRate   != null) d.growthRate   = account.growthRate;
-    if (account.dividendRate != null) d.dividendRate = account.dividendRate;
     if (account.type !== 'loan' && account.interestRate != null) d.interestRate = account.interestRate;
     // Prime-relative spread (design 56) — emitted only when set so non-Prime-linked
     // accounts (null) round-trip byte-for-byte.
@@ -1316,10 +1314,9 @@ export class ScenarioSerializer {
     if (d.__type !== 'LoanAccount' && d.deductibleFraction !== undefined) {
       opts.deductibleFraction = d.deductibleFraction;
     }
-    // Per-account earnings rates (design 55 §8). Skip interestRate for loans — the
-    // LoanAccount branch above already set it from the loan rate.
-    if (d.growthRate   !== undefined) opts.growthRate   = d.growthRate;
-    if (d.dividendRate !== undefined) opts.dividendRate = d.dividendRate;
+    // Per-account interest rate (design 55 §8). Skip it for loans — the LoanAccount
+    // branch above already set it from the loan rate. (Per-account growth/dividend rates
+    // are retired by design 99 P2; the loader drops them before this runs.)
     if (d.__type !== 'LoanAccount' && d.interestRate !== undefined) opts.interestRate = d.interestRate;
     // Prime-relative spread (design 56) — absent on legacy saves → null (not linked).
     if (d.primeSpread !== undefined) opts.primeSpread = d.primeSpread;

@@ -52,8 +52,7 @@ function makeConfig({
   conversionDay      = null,
   conversionYear     = null,
   includeIra         = true,
-  k401GrowthRate     = 0,
-  iraGrowthRate      = 0,
+  usEquityGrowthRate = 0,   // design 99: the 401(k) and IRA both earn the US market's total
 } = {}) {
   const accounts = [
     {
@@ -87,8 +86,8 @@ function makeConfig({
     simEnd:   '2032-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-      rothGrowthRate: 0, iraGrowthRate, k401GrowthRate,
-      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usEquityGrowthRate, intlExUsEquityGrowthRate: usEquityGrowthRate,
+      usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0,
       k401ToIraConversionEnabled: conversionEnabled,
       k401ToIraConversionMonth:   conversionMonth,
@@ -314,7 +313,7 @@ test('Toolset: partial overrides — only month set, year/day default to retirem
 test('EVT-53: full conversion zeroes k401 holdings so no ghost earnings fire', () => {
   const { sim } = loadToolsetScenario(makeConfig({
     k401Balance: 100_000, k401ContribBasis: 80_000, k401EarningsBasis: 20_000,
-    k401GrowthRate: 0.07,
+    usEquityGrowthRate: 0.07,
   }));
   sim.schedule({
     date: new Date(2026, 0, 15),
@@ -353,8 +352,7 @@ test('EVT-53: k401 earnings stay at 0 after conversion with non-zero growth rate
   const { sim } = loadToolsetScenario(makeConfig({
     k401Balance:    250_000, k401ContribBasis: 250_000, k401EarningsBasis: 0,
     iraBalance:     0,
-    k401GrowthRate: 0.07,
-    iraGrowthRate:  0.07,
+    usEquityGrowthRate: 0.07,
     conversionEnabled: true,
     retirementDate: '2027-01-01', // separation date — makes the 2027 conversion legal
     conversionYear:  2027, conversionMonth: 1, conversionDay: 1,

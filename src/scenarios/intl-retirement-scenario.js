@@ -42,6 +42,7 @@ import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES,
 import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
 import { RATE_KEYS, ROLE_TO_RATE_KEY } from '../finance/economic-regimes/rate-keys.js';
 import { EQUITY_MARKETS_BY_COUNTRY }  from '../finance/holdings/default-allocations.js';
+import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
 import { US_STATE_CODES }      from '../finance/tax/state/us-states.js';
 
 /**
@@ -543,7 +544,6 @@ export const INTL_RETIREMENT_DEFAULTS = {
   stockSplitRatio:    0.60,   // fraction of the EQUITY book → domestic holding
   stockBasisUS:    65_000,    // domestic cost basis — above market (loss position, triggers TLH)
   stockBasisIntl:  25_000,    // international cost basis — below market (gain position)
-  stockDividendRate:    0.02,
   stockDividendReinvest: false,
   fixedIncomeBalance:   80_000,
   fixedIncomeInterestRate: 0.04,
@@ -554,11 +554,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
   stateMoveYear:        undefined,
   stateMoveDestination: null,
 
-  // US investment growth rates (annual, separate from dividends)
-  rothGrowthRate:   0.07,
-  iraGrowthRate:    0.07,
-  k401GrowthRate:   0.07,
-  usStockGrowthRate: 0.05,
+  // Equity growth: no per-account rates since design 99 P2 — every equity holding earns
+  // its market's total return (the economic-regimes toolset's Market Rates).
   // Gold commodity growth (design 56 §7) — seeds effectiveGrowthRates.GOLD; a GOLD
   // holding grows at this rate, decoupled from equity returns and Prime.
   goldGrowthRate:   0.05,
@@ -574,6 +571,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // deliberately NOT set to a realistic 30-40% here, because doing so would re-rate
   // every scenario in the same commit that introduced the mechanism and make the two
   // effects impossible to separate.
+  //
+  // SUPER is the exception (design 99 P5c): with no stamped mix it takes the APRA
+  // MySuper split (DEFAULT_EQUITY_MARKET_MIX_BY_ROLE). A share > 0 here still stamps
+  // every AU equity account, super included, and so overrides that default.
   usEquityIntlShare: 0,
   auEquityIntlShare: 0,
 
@@ -594,12 +595,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   auPrimeRate:          0.0435,
   auFixedIncomeBalance:  1_000,  auFixedIncomeInterestRate: 0.04,
   superBalance:        250_000,  superBasis:           180_000,
-  // Superannuation growth (EQUITY_AU_SUPER) — one rate for BOTH people's super,
-  // like every other rate here; it is keyed by account type, not by owner.
-  superGrowthRate:     0.07,
   auStockBalance:       60_000,  auStockBasis:          40_000,
-  auStockGrowthRate:   0.03,  // price; + 4% franked dividend = 7% total (design 98 M1)
-  auStockDividendRate: 0.04,
 
   // International transfer
   exchangeRateUsdToAud: 1.55,  // 1 USD = 1.55 AUD
@@ -1247,15 +1243,8 @@ export class IntlRetirementScenario extends BaseScenario {
    * static (behavioralStrategyKeys etc. don't depend on runtime context).
    */
   static _toolsetParamKeys() {
-    if (!IntlRetirementScenario.__toolsetParamKeys) {
-      const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
-      const keys = new Set();
-      for (const t of IntlRetirementScenario._paramToolsets())
-        for (const e of (t.paramSchema?.({}) ?? []))
-          if (e?.key && !scenarioKeys.has(e.key)) keys.add(e.key);
-      IntlRetirementScenario.__toolsetParamKeys = keys;
-    }
-    return IntlRetirementScenario.__toolsetParamKeys;
+    return (IntlRetirementScenario.__toolsetParamKeys ??= toolsetParamKeys(
+      IntlRetirementScenario._paramToolsets(), INTL_RETIREMENT_PARAM_SCHEMA));
   }
 
   static getToolsets() {
@@ -1307,16 +1296,11 @@ export class IntlRetirementScenario extends BaseScenario {
       // AU_TAX — dedicated ATO CPI indexation rate (design 57 Part 2, Item A).
       // Only forwarded when set; unset ⇒ tracks AU inflation.
       ...(p.auCpiRate != null ? { auCpiRate: p.auCpiRate } : {}),
-      iraGrowthRate:            p.iraGrowthRate,
-      rothGrowthRate:           p.rothGrowthRate,
-      k401GrowthRate:           p.k401GrowthRate,
-      brokerageGrowthRate:      p.usStockGrowthRate,
       goldGrowthRate:           p.goldGrowthRate,
       // Design 90 §7.3 — the equity market sub-axis lever. 0 ⇒ no mix is stamped and
       // every equity account bootstraps its single domestic sleeve, as before.
       usEquityIntlShare:        p.usEquityIntlShare,
       auEquityIntlShare:        p.auEquityIntlShare,
-      brokerageDividendRate:    p.stockDividendRate,
       dividendReinvest:         p.stockDividendReinvest,
       fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
       monthlyExpenses:          p.monthlyExpenses,
@@ -1343,13 +1327,6 @@ export class IntlRetirementScenario extends BaseScenario {
       // AU_BANKING
       auSavingsInterestRate:    p.auSavingsInterestRate,
       auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,
-      // AU_RETIREMENT — one super growth rate for both people (§4.10). Before the
-      // retirement of `spouseSuperGrowthRate` this read that key, which both
-      // mislabelled the lever and shadowed an explicit `superGrowthRate` override
-      // (the passthrough below skips keys the enumerated block already owns).
-      superGrowthRate:          p.superGrowthRate,
-      auStockGrowthRate:        p.auStockGrowthRate,
-      auStockDividendRate:      p.auStockDividendRate,
       // Mortality — per-person lifespan seed for MC actuarial draws (design/27 Step 15).
       // The 'people' map mirrors context.people but lives in parameters so set()
       // can overwrite individual lifeExpectancy values per MC iteration.
@@ -1388,12 +1365,7 @@ export class IntlRetirementScenario extends BaseScenario {
     // buildDefaultConfig({ behavioralStrategies: ['BOND_LADDER'] }) got a no-op.
     // Only explicit overrides are forwarded — a toolset param the caller didn't
     // pass keeps its own schema default, so the reference scenario is unchanged.
-    const toolsetKeys = IntlRetirementScenario._toolsetParamKeys();
-    for (const key of Object.keys(params)) {
-      if (key in parameters) continue;      // enumerated block already owns it
-      if (!toolsetKeys.has(key)) continue;  // not a toolset param → not ours to forward
-      parameters[key] = params[key];
-    }
+    forwardToolsetOverrides(params, parameters, IntlRetirementScenario._toolsetParamKeys());
 
     return withEquityMarketMix({
       toolsets: IntlRetirementScenario.getToolsets(),

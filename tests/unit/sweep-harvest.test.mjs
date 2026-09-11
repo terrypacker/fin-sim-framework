@@ -55,17 +55,9 @@ test('W3-2: an absent or null value is not harvested — no synthesized centers'
   assert.equal(byKey(mcVars({ goldGrowthRate: null }), 'goldGrowthRate'), undefined);
 });
 
-test('W3-3: a pinned account growthRate surfaces its generated row; unpinned it does not', () => {
-  const { cfg, base } = reference();
-  const key = ScenarioParamGenerator.generate(cfg).map(e => e.key)
-    .find(k => /^acct\..+\.growthRate$/.test(k));
-  assert.ok(key, 'the reference plan generates at least one acct.*.growthRate');
-  assert.equal(byKey(mcVars(base, { cfg }), key), undefined, 'null = inherit the role rate: no row');
-  const row = byKey(mcVars({ ...base, [key]: 0.08 }, { cfg }), key);
-  assert.ok(row, `${key} appears once the account is pinned`);
-  assert.equal(row.mean, 0.08);
-  assert.equal(row.centerSource, CENTER_SOURCES.SCENARIO);
-});
+// W3-3 (a pinned account growthRate surfaces its generated row) is retired with the
+// field: design 99 P2 generates no per-account growth rate. That also settles design 98
+// §7 Q1 (null-centered per-account rows) — there are none left to center.
 
 test('W3-4: an alias-covered generated key does not appear twice', () => {
   const { cfg, base } = reference();

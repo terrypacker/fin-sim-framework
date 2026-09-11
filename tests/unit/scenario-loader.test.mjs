@@ -641,7 +641,7 @@ test('toolset params: schema-drift adds newly-introduced toolset keys to existin
   const names = new Set(cfg.params.map(p => p.name));
   assert.ok(names.has('k401ToIraConversionEnabled'),
     'schema-drift guard should append toolset-only params missing from saved cfg.params');
-  assert.ok(names.has('superGrowthRate'),
+  assert.ok(names.has('superGuaranteePct'),
     'schema-drift guard should append AU_RETIREMENT params missing from saved cfg.params');
 });
 

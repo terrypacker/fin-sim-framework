@@ -186,30 +186,9 @@ test('MC-LIVE-5: the FX process knobs (hidden while fxProcessModel is NONE) are 
   }
 });
 
-// ── MC-LIVE-6: the config-dependent gate F5 asked for (design 98 W5) ────────────
-//
-// MC-LIVE-2 runs the reference plan, where no account pins its rate, so it cannot see
-// an axis that a LOADED config kills. With the US brokerage's growthRate pinned, the
-// brokerageGrowthRate row must (a) be tagged shadowedAll AND (b) move nothing — while
-// the unpinned control moves something. The tag has to predict the deadness.
-test('MC-LIVE-6: a pinned brokerage growthRate is tagged dead AND is dead; unpinned it is live', () => {
-  const PIN = { 'acct.usStockAccount.growthRate': 0.06 };
-  const endWith = extra => flatten(normalizeState(runGolden({ ...SPEC,
-    mutateCfg: cfg => { Object.assign(cfg.parameters, extra); } }).state));
-
-  const cfg  = IntlRetirementScenario.buildDefaultConfig({}, SPEC.simStart, SPEC.simEnd);
-  const base = { ...paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema()),
-    ...scenarioParamValues(cfg), ...PIN };
-  const tagged = new IntlRetirementMcConfig().buildVariables(base, { cfg })
-    .find(v => v.paramKey === 'brokerageGrowthRate');
-  assert.equal(tagged.shadowedAll, true, '(a) the row must report shadowedAll');
-
-  const nudge = { brokerageGrowthRate: 0.05 * 1.5 + 0.011 };
-  assert.equal(movedFields(endWith(PIN), endWith({ ...PIN, ...nudge })), 0,
-    '(b) with every brokerage pinned, perturbing brokerageGrowthRate must move nothing');
-  assert.ok(movedFields(endWith({}), endWith(nudge)) > 0,
-    'control: unpinned, the same perturbation must move the end state');
-});
+// MC-LIVE-6 (design 98 W5) pinned a brokerage's own growthRate and required the
+// brokerageGrowthRate row to be tagged dead. Both are retired by design 99 P2 — an
+// account has no rate to pin — so there is no config-dependent shadowing left to gate.
 
 test('MC-LIVE-3: the retired spouse growth axes are gone, and super has a working one', () => {
   const keys = DEFAULT_MC_VARIABLE_CONFIGS.map(c => c.paramKey);
@@ -219,7 +198,9 @@ test('MC-LIVE-3: the retired spouse growth axes are gone, and super has a workin
   }
   // Super growth is not merely renamed away — it must still be sampled, under the
   // one key the compiler reads. Before §4.10 it had no working axis at all.
-  assert.ok(keys.includes('superGrowthRate'), 'superGrowthRate must be an MC axis');
-  assert.ok(ENABLED.some(c => c.paramKey === 'superGrowthRate'),
-    'superGrowthRate must be enabled by default, as the four dead spouse axes were');
+  // Design 99 P2: super has no rate of its own — it earns the AU market's total, so
+  // that is the axis that must be sampled.
+  assert.ok(keys.includes('auEquityGrowthRate'), 'auEquityGrowthRate must be an MC axis');
+  assert.ok(ENABLED.some(c => c.paramKey === 'auEquityGrowthRate'),
+    'auEquityGrowthRate must be enabled by default, as the four dead spouse axes were');
 });

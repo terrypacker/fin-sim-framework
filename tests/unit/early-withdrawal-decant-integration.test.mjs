@@ -52,7 +52,7 @@ function makeConfig({
   earlyWithdrawalSchedule = [],
   rothConversionEnabled   = false,
   rothConversionSchedule  = [],
-  brokerageGrowthRate     = 0,
+  brokerageGrowthRate     = 0,   // design 99: the US market total (yield 0 ⇒ also the brokerage's price growth)
   moveYear                = null,
   simEnd                  = '2028-01-01',
   monthlyExpenses         = 0,
@@ -69,10 +69,10 @@ function makeConfig({
     simEnd,
     parameters: {
       monthlyExpenses, inflationAdjust: false, inflationRate: 0,
-      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
-      brokerageGrowthRate, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usEquityGrowthRate: brokerageGrowthRate, intlExUsEquityGrowthRate: brokerageGrowthRate,
+      usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
-      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      auEquityGrowthRate: 0, auEquityDividendYield: 0, intlExAuEquityGrowthRate: 0, intlExAuEquityDividendYield: 0,
       startingResidency: 'US',
       moveYear,
       // TAXABLE_FIRST triggers the accountPriority cascade so every account gets a

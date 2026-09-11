@@ -35,8 +35,8 @@ const BASE_CFG = {
   simEnd:     '2028-01-01',
   parameters: {
     monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-    rothGrowthRate: 0.0, iraGrowthRate: 0, k401GrowthRate: 0,
-    brokerageGrowthRate: 0, brokerageDividendRate: 0,
+    usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
+    usEquityDividendYield: 0, intlExUsEquityDividendYield: 0,
     fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
   },
   persons: [{
@@ -99,7 +99,7 @@ test('EVT-SHOCK-2: ECONOMIC_SHOCK pushes regime onto state.activeRegimes', () =>
     regime: { returnAdjustment: { EQUITY_US: -0.05 } },
     recovery: { profile: 'V', durationMonths: 6 },
   };
-  const { sim } = loadScenario({ rothGrowthRate: 0.07, shocks: [shock] });
+  const { sim } = loadScenario({ usEquityGrowthRate: 0.07, shocks: [shock] });
 
   sim.stepTo(new Date('2026-07-01'));
 
@@ -137,36 +137,16 @@ test('EVT-SHOCK-4: effectiveGrowthRates reflects regime returnAdjustment', () =>
     regime:    { returnAdjustment: { EQUITY_US: -0.04 } },
     recovery:  { profile: 'L', durationMonths: 24 },
   };
-  const { sim } = loadScenario({ rothGrowthRate: 0.07, shocks: [shock] });
+  const { sim } = loadScenario({ usEquityGrowthRate: 0.07, shocks: [shock] });
 
   sim.stepTo(new Date('2026-03-01'));
 
-  // Design 90 §7.2 — the fan-out target moved from per-account-type MEMBER keys
-  // (EQUITY_US_ROTH, EQUITY_US_K401) to per-ACCOUNT keys under the market sleeve
-  // (`EQUITY_US::<stateKey>`). `_addScaledExpandingClasses` reaches them through its
-  // `<leaf>::` sweep, so coverage is unchanged — but the assertion has to name the
-  // account, because the whole point is that each one keeps its OWN baseline under a
-  // shared shock. Asserting the bare `EQUITY_US` key twice, as a mechanical rename of
-  // this test did, cannot distinguish the two accounts at all.
+  // Design 99 P2 — the Roth has no rate of its own: it earns the bare `EQUITY_US` market
+  // rate, and that is the key the shock reaches. 0.07 + returnAdjustment −0.04 = 0.03.
   const eff = sim.state.effectiveGrowthRates ?? {};
-
-  // The Roth: base rothGrowthRate 0.07 + returnAdjustment −0.04 = 0.03.
-  const rothRate = eff['EQUITY_US::rothAccount'];
-  assert.ok(rothRate !== undefined, 'EQUITY_US::rothAccount must exist');
-  assert.ok(Math.abs(rothRate - 0.03) < 0.001, `Expected Roth ~0.03, got ${rothRate}`);
-
-  // The shared market key takes the shock too, for any holding with no per-account
-  // override. Both are asserted because they are separately reachable: the sweep writes
-  // `EQUITY_US` directly and `EQUITY_US::*` through the prefix scan, and a fan-out that
-  // did only one of the two would still satisfy the other assertion alone.
   assert.ok(Math.abs((eff.EQUITY_US ?? NaN) - (0.07 - 0.04)) < 0.001,
     `Expected the EQUITY_US market rate ~0.03, got ${eff.EQUITY_US}`);
-
-  // No 401k assertion: BASE_CFG has no 401k account. Before design 90 there was a
-  // shared `EQUITY_US_K401` key seeded from `k401GrowthRate` whether or not any 401k
-  // existed, so the original test could assert on it — a per-ACCOUNT key has no such
-  // phantom, which is an improvement rather than lost coverage. `evt-per-account-
-  // growth.test.mjs` covers multi-account fan-out against a scenario that has them.
-  assert.equal(eff['EQUITY_US::k401Account'], undefined,
-    'no phantom per-account key for an account this scenario does not have');
+  // …and no per-account equity key exists for the shock to miss.
+  assert.deepEqual(Object.keys(eff).filter(k => k.startsWith('EQUITY_US::')), [],
+    'no per-account equity key is seeded (design 99 P2)');
 });

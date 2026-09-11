@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { MARKET_GROWTH_PARAMS, marketReturnFor } from './economic-regimes/market-returns.js';
+
 /**
  * param-schema-utils.js — shared helpers for the param schema as the single
  * source of identity metadata (label, options, visibleWhen).
@@ -189,6 +191,24 @@ export function scenarioParamValues(cfg) {
 export function primeRatesOf(cfg) {
   const values = scenarioParamValues(cfg);
   return { US: values.usPrimeRate, AU: values.auPrimeRate };
+}
+
+/**
+ * The equity market returns a scenario currently assumes (design 99 P3), by rate key:
+ * `{ EQUITY_US: { total, yield }, … }`.
+ *
+ * Read through {@link scenarioParamValues} for the same reason as {@link primeRatesOf}:
+ * an edited market param sits in the typed `cfg.params` LIST until the next Rebuild, and
+ * the account editor's derived expected return must reflect the plan as it will RUN, not
+ * as it was last loaded. A market the plan never authored takes the table's default —
+ * the value the loader materializes.
+ *
+ * @param {object} cfg  the active scenario config
+ * @returns {Object<string, {total: number, yield: number}>}
+ */
+export function marketRatesOf(cfg) {
+  const values = scenarioParamValues(cfg);
+  return Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, marketReturnFor(values, m.rateKey)]));
 }
 
 /**

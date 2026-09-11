@@ -51,11 +51,9 @@ const US_JSON = {
   parameters: {
     inflationRate:         0.03,
     usSavingsInterestRate: 0,     // a static cash pool, so a balance delta is the contribution
-    iraGrowthRate:         0,
-    rothGrowthRate:        0,
-    k401GrowthRate:        0,     // …and a static wrapper, so its delta is the credit
-    brokerageGrowthRate:   0,
-    brokerageDividendRate: 0,
+    usEquityGrowthRate:    0,     // …and a static wrapper, so its delta is the credit
+    usEquityDividendYield: 0,
+    intlExUsEquityGrowthRate: 0, intlExUsEquityDividendYield: 0,
     monthlyExpenses:       0,     // nothing else moves cash
     inflationAdjust:       false,
   },
@@ -94,9 +92,9 @@ const AU_JSON = {
   parameters: {
     inflationRate:         0.03,
     auSavingsInterestRate: 0,
-    superGrowthRate:       0,
-    auStockGrowthRate:     0,
-    auStockDividendRate:   0,
+    auEquityGrowthRate:    0,
+    auEquityDividendYield: 0,
+    intlExAuEquityGrowthRate: 0, intlExAuEquityDividendYield: 0,
     monthlyExpenses:       0,
     inflationAdjust:       false,
   },

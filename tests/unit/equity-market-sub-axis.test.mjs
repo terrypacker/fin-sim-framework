@@ -178,3 +178,44 @@ test('§7.3: the reference brokerage\'s "International" sleeve tracks the ex-US 
   assert.equal(intl.rateKey, RATE_KEYS.EQUITY_INTL_EX_US);
   assert.notEqual(intl.rateKey, RATE_KEYS.EQUITY_US);
 });
+
+// ─── Design 99 P5c: super's default mix (APRA MySuper, June 2026) ───────────
+
+const superAcct = (o = {}) => acct({
+  type: ACCOUNT_TYPE.SUPER, role: ACCOUNT_ROLES.SUPER, country: 'AU', ...o });
+
+test('P5c: an un-authored super bootstraps 39.7% AU / 60.3% ex-AU', () => {
+  assert.deepEqual(resolveEquityMarketMix(superAcct()),
+    { [RATE_KEYS.EQUITY_AU]: 0.397, [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.603 });
+  const h = bootstrap(superAcct());
+  assert.equal(h.length, 2);
+  assert.equal(h.find(x => x.rateKey === RATE_KEYS.EQUITY_AU).marketValue,         39_700);
+  assert.equal(h.find(x => x.rateKey === RATE_KEYS.EQUITY_INTL_EX_AU).marketValue, 60_300);
+  assert.ok(h.every(x => x.allocation === ALLOCATION.EQUITY), 'equity split only — no defensive sleeve');
+});
+
+test('P5c: an AU brokerage keeps its domestic default', () => {
+  assert.deepEqual(
+    resolveEquityMarketMix(acct({ type: ACCOUNT_TYPE.BROKERAGE, role: ACCOUNT_ROLES.AU_STOCK, country: 'AU' })),
+    { [RATE_KEYS.EQUITY_AU]: 1 });
+});
+
+test('P5c: an authored mix beats the role default — 100% AU super stays expressible', () => {
+  assert.deepEqual(resolveEquityMarketMix(superAcct({ equityMarketMix: { [RATE_KEYS.EQUITY_AU]: 1 } })),
+    { [RATE_KEYS.EQUITY_AU]: 1 });
+});
+
+test('P5c: the intl plan\'s auEquityIntlShare still overrides super\'s default', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ auEquityIntlShare: 0.25 }, SS, SE);
+  const sup = (cfg.accounts ?? []).filter(a => a.role === ACCOUNT_ROLES.SUPER);
+  assert.ok(sup.length > 0);
+  for (const a of sup) assert.deepEqual(resolveEquityMarketMix(a),
+    { [RATE_KEYS.EQUITY_AU]: 0.75, [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.25 });
+});
+
+test('P5c §4.4: the super split is value-exact on awkward balances', () => {
+  for (const bal of [320_000, 33_333.33, 0.01, 125_000.07]) {
+    const h = bootstrap(superAcct({ balance: bal }));
+    assert.equal(+h.reduce((s, x) => s + x.marketValue, 0).toFixed(2), bal);
+  }
+});

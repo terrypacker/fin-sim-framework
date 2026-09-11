@@ -14,6 +14,19 @@ import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD }                 from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 import { US_STATE_CODES }      from '../finance/tax/state/us-states.js';
+import { US_BANKING }          from './toolsets/us-banking-toolset.js';
+import { US_TAX }              from './toolsets/us-tax-toolset.js';
+import { US_STATE_TAX }        from './toolsets/us-state-tax-toolset.js';
+import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
+import { US_INCOME }           from './toolsets/us-income-toolset.js';
+import { US_RETIREMENT }       from './toolsets/us-retirement-toolset.js';
+import { US_REAL_PROPERTY }    from './toolsets/us-real-property-toolset.js';
+import { US_COLLECTIBLES }     from './toolsets/us-collectibles-toolset.js';
+import { US_ROTH_CONVERSION }  from './toolsets/us-roth-conversion-toolset.js';
+import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
+import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
+import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
+import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
 
 /**
  * UsSingleHomeownerScenario — one person, one country, a mortgage and a job.
@@ -141,11 +154,6 @@ export const US_SINGLE_HOMEOWNER_DEFAULTS = {
   // never includes loan payments, which are debited by the loan schedule.
   monthlyExpenses:         7_000,
   usInflationRate:         0.03,
-  brokerageGrowthRate:     0.06,
-  brokerageDividendRate:   0.02,
-  k401GrowthRate:          0.07,
-  iraGrowthRate:           0.07,
-  rothGrowthRate:          0.07,
 };
 
 /**
@@ -224,6 +232,22 @@ export class UsSingleHomeownerScenario extends BaseScenario {
     ];
   }
 
+  /** getToolsets() as objects, same order — a test pins the two together. */
+  static _paramToolsets() {
+    return [
+      US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
+      US_REAL_PROPERTY, US_COLLECTIBLES,
+      US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
+      INHERITANCE, ECONOMIC_REGIMES,
+    ];
+  }
+
+  /** Toolset-contributed param keys buildDefaultConfig() forwards. Memoized. */
+  static _toolsetParamKeys() {
+    return (UsSingleHomeownerScenario.__toolsetParamKeys ??= toolsetParamKeys(
+      UsSingleHomeownerScenario._paramToolsets(), US_SINGLE_HOMEOWNER_PARAM_SCHEMA));
+  }
+
   static buildDefaultConfig(params = {}, simStart, simEnd) {
     const p = { ...US_SINGLE_HOMEOWNER_DEFAULTS, ...params };
     const toDate = v => (v instanceof Date ? v : new Date(v));
@@ -243,11 +267,6 @@ export class UsSingleHomeownerScenario extends BaseScenario {
       inflationRate:           p.usInflationRate,
       inflationAdjust:         true,
       monthlyExpenses:         p.monthlyExpenses,
-      brokerageGrowthRate:     p.brokerageGrowthRate,
-      brokerageDividendRate:   p.brokerageDividendRate,
-      k401GrowthRate:          p.k401GrowthRate,
-      iraGrowthRate:           p.iraGrowthRate,
-      rothGrowthRate:          p.rothGrowthRate,
       // Payroll contributions
       k401DeferralPct:         p.k401DeferralPct,
       k401EmployerMatchPct:    p.k401EmployerMatchPct,
@@ -263,6 +282,8 @@ export class UsSingleHomeownerScenario extends BaseScenario {
         },
       },
     };
+    // Market totals/yields, shocks, … — toolset keys the block above doesn't name.
+    forwardToolsetOverrides(params, parameters, UsSingleHomeownerScenario._toolsetParamKeys());
 
     return {
       toolsets: UsSingleHomeownerScenario.getToolsets(),

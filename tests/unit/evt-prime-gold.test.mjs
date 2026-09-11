@@ -87,7 +87,7 @@ test('GOLD-2: effectiveGrowthRates.GOLD tracks goldGrowthRate, independent of eq
   const hot = run(cfg => { cfg.parameters.goldGrowthRate = 0.11; });
   assert.ok(Math.abs(growth(hot, RATE_KEYS.GOLD) - 0.11) < 1e-9,
     `raising goldGrowthRate must lift the GOLD series, got ${growth(hot, RATE_KEYS.GOLD)}`);
-  assert.ok(Math.abs(growth(hot, 'EQUITY_US::usStockAccount') - growth(base, 'EQUITY_US::usStockAccount')) < 1e-9,
+  assert.ok(Math.abs(growth(hot, 'EQUITY_US') - growth(base, 'EQUITY_US')) < 1e-9,
     'a gold move must NOT touch the brokerage equity growth rate');
   assert.ok(Math.abs((hot.effectiveInterestRates?.PRIME_US ?? 0) - (base.effectiveInterestRates?.PRIME_US ?? 0)) < 1e-9,
     'a gold move must NOT touch central-bank Prime');

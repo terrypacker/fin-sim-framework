@@ -13,7 +13,7 @@ import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
 import { disposalTermFields, auCpiRate } from '../holdings/holding-period.js';
 import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
-import { resolveRateKey }       from '../holdings/default-allocations.js';
+import { resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
 import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { realiseDerivedGain } from '../assets/investment-account.js';
@@ -215,9 +215,27 @@ export class RebalanceToTargetApplyReducer extends Reducer {
       // on. The gold backstop that used to sit here is gone with the bullion guard
       // (design 61 §12 OQ4a, reversed 2026-07-29) — a GOLD sleeve may now be
       // established in any account, including a US IRA/401k/Roth.
+      const traits = _inheritedTraits(matching, state.securities ?? null);
+      // An EQUITY sleeve whose lots disagree on the market — or that is empty — would
+      // otherwise buy its DOMESTIC market alone, and a split account (super's APRA mix,
+      // design 99 P5c) would drift home one rebalance at a time. Split the buy by market
+      // instead: one generic market lot per market (design 94 D10 — a mixed sleeve buys the
+      // market position, never an arbitrary lot's security).
+      const split = allocation === ALLOCATION.EQUITY && traits.rateKey === undefined
+        ? _equityBuySplit(account, matching, buyAmt, state.securities ?? null)
+        : null;
+      if (split) {
+        for (const leg of split) {
+          holdings = [...holdings, _newSleeve({
+            allocation, amount: leg.amount, country, role, purchaseMs, holdings, state, stateKey,
+            traits: { rateKey: leg.rateKey }, priceLevel: auLevel, siblings: leg.siblings,
+          })];
+        }
+        continue;
+      }
       holdings = [...holdings, _newSleeve({
         allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey,
-        traits: _inheritedTraits(matching, state.securities ?? null), priceLevel: auLevel, siblings: matching,
+        traits, priceLevel: auLevel, siblings: matching,
       })];
     }
 
@@ -564,6 +582,44 @@ function _inheritedTraits(matching, securities = null) {
     // `promoteToUnitised` derives from the rateKey below.
     securityId:    unanimousLot('securityId'),
   };
+}
+
+/**
+ * Split an EQUITY buy across markets, for a sleeve that does not agree on one.
+ *
+ * Lots present ⇒ pro rata on the sleeve's current value per market — the same rule a
+ * deposit follows, and it also covers an account whose split lives only in its authored
+ * lots (the intl plan's US brokerage). Sleeve empty ⇒ the account's resolved mix
+ * (`resolveEquityMarketMix`: authored → role default → domestic). Value-exact: the last
+ * leg absorbs the rounding remainder. Each leg carries its own market's lots as siblings,
+ * so it joins at that market's price rather than a blend.
+ *
+ * @returns {null|Array<{rateKey: string, amount: number, siblings: object[]}>} null when
+ *   there is only one market to buy — the caller's single-lot path is then unchanged.
+ */
+function _equityBuySplit(account, matching, amount, securities) {
+  const byMarket = new Map();
+  for (const h of matching) {
+    const key = instrumentOf(h, securities).rateKey;
+    const mv  = h.marketValue ?? 0;
+    if (!key || !(mv > 0)) continue;
+    const g = byMarket.get(key) ?? { mv: 0, lots: [] };
+    g.mv += mv;
+    g.lots.push(h);
+    byMarket.set(key, g);
+  }
+  const totalMv = [...byMarket.values()].reduce((s, g) => s + g.mv, 0);
+  const weights = totalMv > 0
+    ? [...byMarket].map(([k, g]) => [k, g.mv / totalMv])
+    : Object.entries(resolveEquityMarketMix(account) ?? {});
+  if (weights.length < 2) return null;
+
+  let allocated = 0;
+  return weights.map(([rateKey, w], i) => {
+    const legAmt = i === weights.length - 1 ? +(amount - allocated).toFixed(2) : +(amount * w).toFixed(2);
+    allocated = +(allocated + legAmt).toFixed(2);
+    return { rateKey, amount: legAmt, siblings: byMarket.get(rateKey)?.lots ?? [] };
+  }).filter(leg => leg.amount > 0);
 }
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */

@@ -180,11 +180,6 @@ const JOE_CONFIG = {
   parameters: {
     inflationRate:           0.03,
     usSavingsInterestRate:   0.03,
-    iraGrowthRate:           0.07,
-    rothGrowthRate:          0.07,
-    k401GrowthRate:          0.07,
-    brokerageGrowthRate:     0.05,
-    brokerageDividendRate:   0.02,
     dividendReinvest:        false,
     monthlyExpenses:         10_000,
     inflationAdjust:         true,

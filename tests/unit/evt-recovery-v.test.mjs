@@ -59,8 +59,8 @@ const BASE_CFG = {
   simEnd:     '2028-01-01',
   parameters: {
     monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-    rothGrowthRate: 0.0, iraGrowthRate: 0, k401GrowthRate: 0,
-    brokerageGrowthRate: 0, brokerageDividendRate: 0,
+    usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
+    usEquityDividendYield: 0, intlExUsEquityDividendYield: 0,
     fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
   },
   persons: [{
@@ -107,23 +107,20 @@ test('EVT-RECOVERY-V-4: V-curve recovery gradually reduces regime impact over ti
     regime: { returnAdjustment: { EQUITY_US: adjustment } },
     recovery: { profile: 'V', durationMonths: 6 },
   };
-  const { sim } = loadScenario({ rothGrowthRate: baseRate, shocks: [shock] });
+  const { sim } = loadScenario({ usEquityGrowthRate: baseRate, shocks: [shock] });
 
   // Just after shock: factor ~1, effective rate ~0.06 + (-0.06) = 0
   sim.stepTo(new Date('2026-02-15'));
-  // Design 90 §7.2 — read the Roth's PER-ACCOUNT key. `rothGrowthRate` is a wrapper
-  // rate and now lands on `EQUITY_US::rothAccount`; the bare `EQUITY_US` key carries the
-  // MARKET rate (0.07 by default), which is not the baseline these assertions are
-  // written against.
-  const rateNearStart = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
+  // Design 99 P2 — the Roth has no rate of its own, so the bare market key IS its rate.
+  const rateNearStart = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
 
   // Halfway through recovery: factor ~0.5, effective rate ~0.06 + (-0.03) = 0.03
   sim.stepTo(new Date('2026-05-01'));
-  const rateMid = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
+  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
 
   // After recovery complete: factor = 0, effective rate = base
   sim.stepTo(new Date('2026-09-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
 
   assert.ok(rateNearStart < 0.02, `Near-start effective rate should be near 0, got ${rateNearStart}`);
   assert.ok(rateMid > rateNearStart, `Mid rate (${rateMid}) should be > near-start rate (${rateNearStart})`);

@@ -168,24 +168,6 @@ export class McConfigPanel extends BaseComponent {
     el.className   = `mc-var-source${source ? ` mc-var-source--${source}` : ''}`;
   }
 
-  /**
-   * Warn on a role-level row that a per-account rate overrides (design 98 W5 / F5).
-   * Before this, pinning an account's Growth Rate left the role axis listed and
-   * sampled with nothing to say it no longer reached that account — or, once every
-   * account of the role was pinned, anything at all.
-   */
-  _renderShadow(el, cfg) {
-    if (!el) return;
-    const by = cfg.shadowedBy ?? [];
-    el.hidden = by.length === 0;
-    if (!by.length) return;
-    el.textContent = cfg.shadowedAll ? '⚠ no effect' : `⚠ ${by.length} pinned`;
-    el.title = cfg.shadowedAll
-      ? `Every account this rate applies to sets its own rate (${by.join(', ')}), so sampling it changes nothing.`
-      : `These accounts set their own rate and ignore this one: ${by.join(', ')}.`;
-    el.className = `mc-var-shadow${cfg.shadowedAll ? ' mc-var-shadow--dead' : ''}`;
-  }
-
   /** Flag (or clear) a row whose user-set center disagrees with the scenario value. */
   _markDiverged(row, scenarioValue) {
     const diverged = scenarioValue != null;
@@ -331,10 +313,8 @@ export class McConfigPanel extends BaseComponent {
         style="margin:0;cursor:pointer;accent-color:var(--purple);flex-shrink:0" />
       <span class="mc-var-label" title="${cfg.label}">${cfg.label}</span>
       <span class="mc-var-source"></span>
-      <span class="mc-var-shadow"></span>
     `;
     el.appendChild(labelRow);
-    this._renderShadow(labelRow.querySelector('.mc-var-shadow'), cfg);
 
     const inputRow = document.createElement('div');
     inputRow.className = 'mc-var-input-row';

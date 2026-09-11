@@ -80,16 +80,9 @@ const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', typ
   description: 'Cash floor for this account. When the balance drops below it, the model ' +
     'replenishes from other liquid accounts.' };
 
-// Per-account earnings rates (design 55 §8 / Phase 2). An unset rate on the record
-// (null) means "use the toolset's global rate"; the generated param therefore starts
-// empty and only overrides the global once the user (or MC) gives it a value. The
-// earnings handler reads it via the per-account rate key so regimes still apply.
-const GROWTH_RATE   = { field: 'growthRate',   label: 'Growth Rate',   type: 'Number', mc: true, opt: false,
-  description: 'Annual growth (appreciation) rate for this account\'s holdings, as a ' +
-    'fraction (0.05 = 5%). Leave blank to use the scenario\'s global rate for this account type.' };
-const DIVIDEND_RATE = { field: 'dividendRate', label: 'Dividend Rate', type: 'Number', mc: true, opt: false,
-  description: 'Annual dividend yield for this account\'s holdings, as a fraction ' +
-    '(0.02 = 2%). Leave blank to use the scenario\'s global dividend rate.' };
+// Per-account growth and dividend rates (design 55 §8) are RETIRED by design 99 P2: an
+// equity account earns what its holdings' markets earn (Market Rates). No template
+// generates them any more; `retireRateParams` drops a saved one on load.
 // Per-account cash interest rate (CHECKING/SAVINGS). Retired as an MC lever (design 56
 // Decision 6 / §3.1): a cash account's rate is now Prime + primeSpread, so the systemic
 // rate sweep is Prime, not this per-account knob — retiring it removes the MC double-move
@@ -112,11 +105,11 @@ const IS_TRANSACTION_ACCOUNT = {
 export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.CHECKING]:        [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
   [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
-  [ACCOUNT_TYPE.BROKERAGE]:       [BALANCE, GROWTH_RATE, DIVIDEND_RATE],
-  [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],
-  [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],
-  [ACCOUNT_TYPE.FOUR_OH_ONE_K]:   [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],
-  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],
+  [ACCOUNT_TYPE.BROKERAGE]:       [BALANCE],
+  [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS],
+  [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS],
+  [ACCOUNT_TYPE.FOUR_OH_ONE_K]:   [BALANCE, CONTRIBUTION_BASIS],
+  [ACCOUNT_TYPE.SUPER]:           [BALANCE, CONTRIBUTION_BASIS],
   // Liability / linked-cash accounts (design 54) expose their balance too. The
   // loan's own interestRate is its *loan* rate (design 54), not an earnings rate,
   // so it stays out of this earnings-rate template.

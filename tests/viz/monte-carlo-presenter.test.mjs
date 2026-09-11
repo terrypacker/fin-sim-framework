@@ -51,34 +51,34 @@ describe('MonteCarloPresenter — variable centers follow the live scenario', ()
   afterEach(() => ServiceRegistry.resetAll());
 
   test('reads the active cfg typed params list, not just the instance bag', () => {
-    setActiveCfg({ params: [{ name: 'brokerageGrowthRate', value: 0.11 }], accounts: [] });
-    const presenter = makePresenter({ params: { brokerageGrowthRate: 0.04 } });
+    setActiveCfg({ params: [{ name: 'usEquityGrowthRate', value: 0.11 }], accounts: [] });
+    const presenter = makePresenter({ params: { usEquityGrowthRate: 0.04 } });
 
-    expect(presenter._scenarioCenters().get('brokerageGrowthRate')).toBeCloseTo(0.11);
+    expect(presenter._scenarioCenters().get('usEquityGrowthRate')).toBeCloseTo(0.11);
 
     presenter.destroy();
   });
 
   test('falls back to the scenario instance bag when there is no active cfg', () => {
     setActiveCfg(null);
-    const presenter = makePresenter({ params: { brokerageGrowthRate: 0.04 } });
+    const presenter = makePresenter({ params: { usEquityGrowthRate: 0.04 } });
 
-    expect(presenter._scenarioCenters().get('brokerageGrowthRate')).toBeCloseTo(0.04);
+    expect(presenter._scenarioCenters().get('usEquityGrowthRate')).toBeCloseTo(0.04);
 
     presenter.destroy();
   });
 
   test('tags each variable with the layer its center came from', () => {
-    // `brokerageGrowthRate` is on the cfg; `equityReturnVol` is a schema key the
+    // `usEquityGrowthRate` is on the cfg; `equityReturnVol` is a schema key the
     // cfg doesn't carry, so its center is the schema default — the value the sim will
     // run at, which is why it must resolve rather than fall through to the MC
     // template's own mean. (`spouseRothGrowthRate` was the exemplar until it was
     // retired — design/inconsistencies §4.10.)
-    setActiveCfg({ params: [{ name: 'brokerageGrowthRate', value: 0.11 }], accounts: [] });
+    setActiveCfg({ params: [{ name: 'usEquityGrowthRate', value: 0.11 }], accounts: [] });
     const presenter = makePresenter({ params: {} });
 
     const bySource = new Map(presenter._resolveVariables().map(v => [v.paramKey, v.centerSource]));
-    expect(bySource.get('brokerageGrowthRate')).toBe('scenario');
+    expect(bySource.get('usEquityGrowthRate')).toBe('scenario');
     expect(bySource.get('equityReturnVol')).toBe('schema');
     // A balance lever's value lives on the ACCOUNT, and this cfg has none — so its
     // center really is a framework default and says so.

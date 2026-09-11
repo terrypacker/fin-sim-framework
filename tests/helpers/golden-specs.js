@@ -373,9 +373,11 @@ export const GOLDEN_SPECS = [
           id: 'sec-emp', symbol: 'EMP', name: 'Employer stock (concentrated)',
           rateKey: 'EQUITY_US',
           beta: 1.35, idioVol: 0.35,
-          // Instrument-level, and LOWER than the account-level fallback the handler
-          // supplies — so a fixture diff shows the security winning the §12 D11 chain
-          // rather than the two agreeing by luck.
+          // Instrument-level, and LOWER than the US market's 2% — so a fixture diff shows
+          // the security winning the §12 D11 chain rather than the two agreeing by luck.
+          // Since design 99 P2 it also moves the price: the lot's TOTAL stays the market's
+          // 7%, so a 0.6% yield leaves 6.4% of price growth (it was 5% + 0.6% = 5.6% total
+          // before, because the brokerage's price rate ignored the lot's yield).
           dividendYield: 0.006, qualifiedDividends: true,
         },
         {

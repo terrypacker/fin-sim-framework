@@ -15,27 +15,9 @@ import { interpolateSpread, countryOfRateKey } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { revalueLedger }     from '../assets/investment-account.js';
 import { reprice, instrumentOf } from '../holdings/holding-utils.js';
-
-const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
-
-/**
- * Years from `asOfMs` to a holding's maturity (design 66 §G4). Returns null when
- * the holding is a bond *fund* (no `maturityDate`) or the as-of date is unknown,
- * in which case the caller keeps the perpetual-fund behavior. Floored at 0 (a bond
- * at/after maturity has 0 years left — BondMaturityReducer redeems it).
- *
- * Takes the INSTRUMENT view (design 94 §5.1): a maturity date is a fact about the bond.
- *
- * @param {object} inst     - instrument view of a holding (`instrumentOf`)
- * @param {number|null} asOfMs
- * @returns {number|null}
- */
-function yearsToMaturity(inst, asOfMs) {
-  if (inst?.maturityDate == null || asOfMs == null) return null;
-  const matMs = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
-  if (!Number.isFinite(matMs)) return null;
-  return Math.max(0, (matMs - asOfMs) / YEAR_MS);
-}
+// Shared with the coupon path (design 99 D-6), so a bond's mark and its floating coupon
+// measure its remaining tenor identically.
+import { YEAR_MS, yearsToMaturity } from './couponless-yield.js';
 
 /**
  * BondPriceAdjustReducer — marks BOND-allocation holdings to market on each

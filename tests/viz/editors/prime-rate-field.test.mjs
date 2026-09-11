@@ -83,6 +83,19 @@ describe('design 56 §10 — Prime-relative cash rate field', () => {
     expect(data.interestRate).toBeNull();
   });
 
+  test('brokerage with no Prime configured → nothing stored; its cash earns the savings rate (design 99 P3b)', () => {
+    const editor = editorFor({ id: 'b1', name: 'Broker', type: 'brokerage', country: 'US',
+                               currency: { code: 'USD', symbol: '$' } }, {});
+    const root = editor._rootEl;
+    root.querySelector('[data-id="cashRate"]').value = 0.05;
+    editor._refreshCashRateHint(root);
+    expect(root.querySelector('[data-id="cashRateHint"]').textContent)
+      .toBe('Prime not configured — the cash sleeve earns the country\'s savings rate; not stored');
+    const data = editor._readForm(root);
+    expect(data.interestRate).toBeNull();
+    expect(data.primeSpread).toBeNull();
+  });
+
   test('no Prime configured → stores the entered value as a legacy absolute', () => {
     const editor = editorFor({ id: 's1', name: 'US Savings', type: 'savings', country: 'US',
                                currency: { code: 'USD', symbol: '$' }, interestRate: 0.03 }, {});

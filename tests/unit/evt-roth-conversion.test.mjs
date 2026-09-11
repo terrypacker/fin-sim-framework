@@ -57,8 +57,7 @@ function makeConversionConfig({
   spouseRothBalance      = 0,
   spouseRolloverContrib  = 0,
   startingResidency      = 'US',
-  rothGrowthRate         = 0,
-  iraGrowthRate          = 0,
+  usEquityGrowthRate     = 0,   // design 99: the Roth and IRA both earn the US market's total
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_ROTH_CONVERSION', 'US_AU_CROSS_BORDER'],
@@ -66,10 +65,10 @@ function makeConversionConfig({
     simEnd:   '2028-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-      rothGrowthRate, iraGrowthRate, k401GrowthRate: 0,
-      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usEquityGrowthRate, intlExUsEquityGrowthRate: usEquityGrowthRate,
+      usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
-      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      auEquityGrowthRate: 0, auEquityDividendYield: 0, intlExAuEquityGrowthRate: 0, intlExAuEquityDividendYield: 0,
       rothConversionEnabled: false,
       startingResidency,
     },
@@ -434,7 +433,7 @@ test('EVT-52: Roth conversion updates Roth holdings so subsequent earnings are n
   const { sim } = loadToolsetScenario(makeConversionConfig({
     iraBalance:    250_000, iraContribBasis: 250_000,
     rothBalance:   107_000, rolloverContribBasis: 107_000,
-    rothGrowthRate: 0.07, iraGrowthRate: 0.07,
+    usEquityGrowthRate: 0.07,
   }));
 
   // Convert 238k from IRA → Roth on 2026-12-01

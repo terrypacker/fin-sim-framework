@@ -187,9 +187,14 @@ describe('the step-5 golden reaches the per-security path (design 94 §11)', () 
     // answer to "more of which?", so the buy establishes the synthetic market security
     // rather than an arbitrary sibling's — which is what makes the branch above meaningful
     // rather than "the rebalancer copies whatever it finds first".
+    // Since the market split (design 99 P5c follow-up) the buy is ONE generic lot PER
+    // MARKET — the sleeve holds US and ex-US — each naming its own market's synthetic
+    // security, never a sibling's.
     const bought = state.usStockAccount.holdings.filter(h => h.id.startsWith('reb-') && h.allocation === 'EQUITY');
     assert.ok(bought.length > 0, 'the rebalancer never bought equity in the brokerage');
-    for (const h of bought) assert.equal(h.securityId, 'sec-auto-EQUITY_US');
+    for (const h of bought) assert.equal(h.securityId, `sec-auto-${h.rateKey}`);
+    assert.deepEqual([...new Set(bought.map(h => h.rateKey))].sort(),
+      ['EQUITY_INTL_EX_US', 'EQUITY_US'], 'both markets are bought');
   });
 
   test('unanimity is judged on the INSTRUMENT — step 6', () => {

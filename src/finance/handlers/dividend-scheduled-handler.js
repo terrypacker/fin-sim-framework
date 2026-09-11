@@ -46,7 +46,7 @@ export class DividendScheduledHandler extends HandlerEntry {
   static eventType   = 'DIVIDEND_SCHEDULED';
   static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.02, reinvest = false, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = null, reinvest = false, rateKey = null } = {}) {
     super(null, 'Dividend Scheduled');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
@@ -60,7 +60,7 @@ export class DividendScheduledHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false, rateKey: d.rateKey ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? null, reinvest: d.reinvest ?? false, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }

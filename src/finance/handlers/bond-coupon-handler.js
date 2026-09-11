@@ -89,6 +89,7 @@ export class BondCouponScheduledHandler extends HandlerEntry {
     const firingIndex    = couponFiringIndex(date, firingsPerYear);
     const { amount, federalTaxableAmount, stateTaxableAmount, reinvestBuckets } = computeHoldingsCoupons({
       state, stateKey, fallbackRate: this.couponRate, firingIndex, firingsPerYear,
+      currentDate: date ?? null,   // design 99 D-6 — a coupon-less lot floats on the curve
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 

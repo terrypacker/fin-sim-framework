@@ -142,7 +142,9 @@ export const AU_BANKING = {
           stateRegistry: context.stateRegistry,
           role:          ACCOUNT_ROLES.AU_FIXED_INCOME,
           ownerId:       acct.ownerId,
-          interestRate:  acct.interestRate ?? rate,
+          // Design 99 P3b — the AU fixed-income rate; the account carries no rate of its
+          // own (its bonds' own coupons, where authored, win inside the handler).
+          interestRate:  rate,
         });
         h.handledEvents.push(event);
         handlers.push(h);

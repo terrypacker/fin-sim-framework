@@ -49,7 +49,8 @@ import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scen
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2036, 0, 1));   // long enough for returns to diverge
 const N         = 6;
-const EQUITY_RATE_KEYS = ['brokerageGrowthRate', 'rothGrowthRate', 'iraGrowthRate', 'k401GrowthRate'];
+// Design 99 P2: the market totals are the equity axes now.
+const EQUITY_RATE_KEYS = ['usEquityGrowthRate', 'intlExUsEquityGrowthRate', 'auEquityGrowthRate'];
 
 /**
  * Run N iterations with a wide spread on the equity growth rates and EVERY OTHER
@@ -91,10 +92,10 @@ async function runWithWideEquitySpread({ stdDev = 0.05 } = {}) {
 
 test('MC sampling: sampled growth rates vary across iterations', async () => {
   const { runs } = await runWithWideEquitySpread();
-  const sampled = runs.map(r => r.params?.brokerageGrowthRate);
+  const sampled = runs.map(r => r.params?.usEquityGrowthRate);
 
   assert.ok(sampled.every(v => typeof v === 'number'),
-    'every run should report a sampled brokerageGrowthRate in params');
+    'every run should report a sampled usEquityGrowthRate in params');
 
   const distinct = new Set(sampled.map(v => v.toFixed(6))).size;
   assert.ok(distinct > 1,

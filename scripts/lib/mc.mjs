@@ -183,7 +183,8 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     // readout simply never appeared and nothing ever errored. Matches run.mjs.
     oof:    r.outOfFundsDate ? new Date(r.outOfFundsDate).toISOString().slice(0, 10) : null,
     // sampled long-run mean — the headline explanatory variable for failure
-    growth: r.params?.brokerageGrowthRate ?? null,
+    // (the US market's total return since design 99 P2 retired the per-account rates)
+    growth: r.params?.usEquityGrowthRate ?? null,
     // The OTHER sampled axes, carried for the same reason `growth` is: they are the
     // explanatory variables for any failure that equity returns do NOT explain. On an
     // all-bond arm `growth` moves nothing at all, and without these a report can only

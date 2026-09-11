@@ -121,8 +121,10 @@ test("PRIME-6: a brokerage's primeSpread seeds its cash-sleeve rate (SAVINGS::<b
   assert.ok(Math.abs(rate(state, 'SAVINGS_US::usStockAccount') - (US_PRIME - 0.01)) < 1e-9,
     `brokerage cash sleeve must earn Prime + spread (${US_PRIME - 0.01}), got ${rate(state, 'SAVINGS_US::usStockAccount')}`);
   // The equity sleeve key still reflects the equity growth rate, not the cash rate.
-  assert.ok(state.effectiveGrowthRates?.['EQUITY_US::usStockAccount'] != null,
-    'the equity sleeve keeps its own per-account growth key');
+  // Design 99 P2: the equity sleeve has no per-account key — it earns the bare market rate.
+  assert.ok(state.effectiveGrowthRates?.EQUITY_US != null, 'the equity sleeve earns the US market rate');
+  assert.equal(state.effectiveGrowthRates?.['EQUITY_US::usStockAccount'], undefined,
+    'no per-account equity key is seeded (design 99 P2)');
 });
 
 test('PRIME-4: AU savings mirrors US via an independent PRIME_AU', () => {

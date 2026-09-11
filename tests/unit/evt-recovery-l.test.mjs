@@ -57,8 +57,8 @@ const BASE_CFG = {
   simEnd:     '2028-06-01',
   parameters: {
     monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-    rothGrowthRate: 0.0, iraGrowthRate: 0, k401GrowthRate: 0,
-    brokerageGrowthRate: 0, brokerageDividendRate: 0,
+    usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
+    usEquityDividendYield: 0, intlExUsEquityDividendYield: 0,
     fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
   },
   persons: [{
@@ -105,16 +105,13 @@ test('EVT-RECOVERY-L-4: L-curve keeps effectiveGrowthRates depressed for full du
     regime: { returnAdjustment: { EQUITY_US: adjustment } },
     recovery: { profile: 'L', durationMonths: 12 },
   };
-  const { sim } = loadScenario({ rothGrowthRate: baseRate, shocks: [shock] });
+  const { sim } = loadScenario({ usEquityGrowthRate: baseRate, shocks: [shock] });
 
   // Mid-duration: factor = 1, full adjustment still applied. The class shock
   // fans out to the per-account member key (EQUITY_US).
   sim.stepTo(new Date('2026-08-01'));
-  // Design 90 §7.2 — read the Roth's PER-ACCOUNT key. `rothGrowthRate` is a wrapper
-  // rate and now lands on `EQUITY_US::rothAccount`; the bare `EQUITY_US` key carries the
-  // MARKET rate (0.07 by default), which is not the baseline these assertions are
-  // written against.
-  const rateMid = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
+  // Design 99 P2 — the Roth has no rate of its own, so the bare market key IS its rate.
+  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
   assert.ok(
     Math.abs(rateMid - (baseRate + adjustment)) < 0.001,
     `Mid-L rate should be ${baseRate + adjustment}, got ${rateMid}`
@@ -122,7 +119,7 @@ test('EVT-RECOVERY-L-4: L-curve keeps effectiveGrowthRates depressed for full du
 
   // After duration (>12 months from Feb 2026 = after Feb 2027): regime expires, rate returns to base
   sim.stepTo(new Date('2027-04-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.['EQUITY_US::rothAccount'] ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
   assert.ok(
     Math.abs(rateAfter - baseRate) < 0.001,
     `Post-L rate should return to base ${baseRate}, got ${rateAfter}`

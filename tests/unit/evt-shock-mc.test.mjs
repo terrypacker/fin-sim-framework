@@ -44,16 +44,16 @@ const SHOCK_2028 = {
 // Variable configs: vary equity growth rate with moderate spread
 const GROWTH_VAR_CONFIGS = [
   {
-    paramKey: 'rothGrowthRate',
-    label:    'Roth IRA Growth Rate',
+    paramKey: 'usEquityGrowthRate',
+    label:    'US Equity Total Return',
     type:     DISTRIBUTION_TYPES.NORMAL,
     mean:     0.07,
     stdDev:   0.03,
     enabled:  true,
   },
   {
-    paramKey: 'iraGrowthRate',
-    label:    'IRA Growth Rate',
+    paramKey: 'intlExUsEquityGrowthRate',
+    label:    'International ex-US Equity Total Return',
     type:     DISTRIBUTION_TYPES.NORMAL,
     mean:     0.07,
     stdDev:   0.03,

@@ -802,6 +802,9 @@
             <button class="btn btn-xs" data-id="addHoldingBtn" type="button">+ Add</button>
             <button class="btn btn-xs" data-id="ladderBtn" type="button" title="Build a bond ladder — expands into N staggered individual bonds (design 66 §G8)">+ Bond ladder</button>
           </div>
+          <!-- Design 99 P3: the account's expected equity return, READ-ONLY and derived from
+               the holdings' markets (an account has no growth rate of its own). -->
+          <div class="field-hint" data-id="expectedReturn" style="font-size:0.8em;opacity:0.7;display:none"></div>
           <!-- Bond-ladder builder (design 66 §G8). Expands (total, rungs, spacing,
                term, tax, coupon, roll, zero/TIPS) into N staggered BOND rungs that
                self-perpetuate via roll-to-tail. Hidden until "+ Bond ladder". -->

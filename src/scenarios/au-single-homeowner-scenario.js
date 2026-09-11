@@ -13,6 +13,17 @@ import { ScenarioSerializer }  from './scenario-serializer.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
 import { AUD }                 from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
+import { AU_BANKING }          from './toolsets/au-banking-toolset.js';
+import { AU_TAX }              from './toolsets/au-tax-toolset.js';
+import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
+import { AU_INCOME }           from './toolsets/au-income-toolset.js';
+import { AU_RETIREMENT }       from './toolsets/au-retirement-toolset.js';
+import { AU_REAL_PROPERTY }    from './toolsets/au-real-property-toolset.js';
+import { US_COLLECTIBLES }     from './toolsets/us-collectibles-toolset.js';
+import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
+import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
+import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
+import { toolsetParamKeys, forwardToolsetOverrides } from './toolset-param-forwarding.js';
 
 /**
  * AuSingleHomeownerScenario — the Australian sibling of UsSingleHomeownerScenario.
@@ -119,9 +130,6 @@ export const AU_SINGLE_HOMEOWNER_DEFAULTS = {
   // AUD 7,000/month of living costs, separate from the mortgage.
   monthlyExpenses:         7_000,
   auInflationRate:         0.03,
-  superGrowthRate:         0.07,
-  auStockGrowthRate:       0.03,  // price; + 4% franked dividend = 7% total (design 98 M1)
-  auStockDividendRate:     0.04,
 };
 
 /**
@@ -194,6 +202,21 @@ export class AuSingleHomeownerScenario extends BaseScenario {
     ];
   }
 
+  /** getToolsets() as objects, same order — a test pins the two together. */
+  static _paramToolsets() {
+    return [
+      AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
+      AU_REAL_PROPERTY, US_COLLECTIBLES, US_BROKERAGE,
+      INHERITANCE, ECONOMIC_REGIMES,
+    ];
+  }
+
+  /** Toolset-contributed param keys buildDefaultConfig() forwards. Memoized. */
+  static _toolsetParamKeys() {
+    return (AuSingleHomeownerScenario.__toolsetParamKeys ??= toolsetParamKeys(
+      AuSingleHomeownerScenario._paramToolsets(), AU_SINGLE_HOMEOWNER_PARAM_SCHEMA));
+  }
+
   static buildDefaultConfig(params = {}, simStart, simEnd) {
     const p = { ...AU_SINGLE_HOMEOWNER_DEFAULTS, ...params };
     const toDate = v => (v instanceof Date ? v : new Date(v));
@@ -210,9 +233,6 @@ export class AuSingleHomeownerScenario extends BaseScenario {
       auInflationRate:         p.auInflationRate,
       inflationAdjust:         true,
       monthlyExpenses:         p.monthlyExpenses,
-      superGrowthRate:         p.superGrowthRate,
-      auStockGrowthRate:       p.auStockGrowthRate,
-      auStockDividendRate:     p.auStockDividendRate,
       // Superannuation Guarantee
       superGuaranteePct:       p.superGuaranteePct,
       superGuaranteeAnnualCap: p.superGuaranteeAnnualCap,
@@ -231,6 +251,8 @@ export class AuSingleHomeownerScenario extends BaseScenario {
         },
       },
     };
+    // Market totals/yields, shocks, … — toolset keys the block above doesn't name.
+    forwardToolsetOverrides(params, parameters, AuSingleHomeownerScenario._toolsetParamKeys());
 
     return {
       toolsets: AuSingleHomeownerScenario.getToolsets(),
