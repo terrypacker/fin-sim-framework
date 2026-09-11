@@ -61,7 +61,9 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 
-import { pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
+import {
+  pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers, RETURN_BAND_EDGES,
+} from '../lib/mc-analysis.mjs';
 import { millions, thousands, money, moneyAuto, pct, percentile, columns } from '../lib/format.mjs';
 import { renderMixReport } from '../lib/mix-report-html.mjs';
 import {
@@ -363,7 +365,9 @@ for (const k of keys) {
 
 // Failure rate against the sampled return — turns a probability into a threshold.
 const bandKey = rm.paths ? 'netWorthCagr' : 'growth';
-const EDGES = [0, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10, 0.12, 1];
+// Shared with the MC tab (design 100 §2.1). Starts below 0% so a path whose net worth
+// shrank is counted instead of falling into no band.
+const EDGES = RETURN_BAND_EDGES;
 const anyBanded = keys.some(k => arms[k].rows.some(r => typeof r[bandKey] === 'number'));
 if (anyBanded) {
   const bandRows = EDGES.slice(0, -1).map((lo, i) => ({ lo, hi: EDGES[i + 1] }));
@@ -371,7 +375,8 @@ if (anyBanded) {
     title: `FAILURE RATE BY ${bandKey === 'growth' ? 'SAMPLED MEAN RETURN' : 'REALIZED NET-WORTH CAGR'}`,
     rows: bandRows,
     columns: [
-      { head: 'BAND', get: b => `${pct(b.lo, 0)}–${pct(b.hi, 0)}`, width: 14, align: 'left' },
+      { head: 'BAND', get: b => (b.lo <= -1 ? `< ${pct(b.hi, 0)}` : `${pct(b.lo, 0)}–${pct(b.hi, 0)}`),
+        width: 14, align: 'left' },
       ...keys.map(k => ({
         head: k.length > 12 ? k.slice(0, 12) : k, width: 14,
         get: (b) => {

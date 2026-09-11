@@ -17,7 +17,7 @@ import { revalueLedger }     from '../assets/investment-account.js';
 import { reprice, instrumentOf } from '../holdings/holding-utils.js';
 // Shared with the coupon path (design 99 D-6), so a bond's mark and its floating coupon
 // measure its remaining tenor identically.
-import { YEAR_MS, yearsToMaturity } from './couponless-yield.js';
+import { BOND_YEAR_MS, yearsToMaturity } from './couponless-yield.js';
 
 /**
  * BondPriceAdjustReducer — marks BOND-allocation holdings to market on each
@@ -76,7 +76,7 @@ export class BondPriceAdjustReducer extends Reducer {
     const priorMs = state.priorMarkMs ?? null;
     // Years since the prior mark; drives pull-to-par amortization. null/≤0 (first
     // period, or no as-of date) ⇒ no convergence this period.
-    const dt = (asOfMs != null && priorMs != null) ? (asOfMs - priorMs) / YEAR_MS : 0;
+    const dt = (asOfMs != null && priorMs != null) ? (asOfMs - priorMs) / BOND_YEAR_MS : 0;
 
     const accountUpdates = {};
     const securities = state.securities ?? null;

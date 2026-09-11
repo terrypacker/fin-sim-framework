@@ -13,6 +13,9 @@ import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
 import { initEChartWhenReady } from '../components/echarts-init.js';
 import { fmtCompact, fmtWhole } from '../money-format.js';
+import {
+  runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
+} from '../../finance/monte-carlo/mc-analysis.js';
 
 const HIST_BUCKETS = 20;
 
@@ -30,6 +33,22 @@ const fmtDollar = (v) => fmtWhole(v);
 
 function fmtPct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
 function fmtDate(v) { return v instanceof Date ? v.toISOString().slice(0, 7) : '—'; }
+function fmtMoneyOrDash(v) { return v == null || !isFinite(v) ? '—' : fmtWhole(v); }
+
+/** "< 0%", "4%–5%", "12%+" — the first and last edges are sentinels, not real bounds. */
+function bandLabel({ lo, hi }) {
+  const p = (v) => `${Math.round(v * 100)}%`;
+  if (lo <= -1) return `< ${p(hi)}`;
+  if (hi >= 1)  return `${p(lo)}+`;
+  return `${p(lo)}–${p(hi)}`;
+}
+
+function cell(text, cls) {
+  const td = document.createElement('td');
+  if (cls) td.className = cls;
+  td.textContent = text;
+  return td;
+}
 
 const METRIC_LABELS = {
   netWorthUsd:  'Net Worth',
@@ -43,6 +62,8 @@ const METRIC_LABELS = {
  *   1. Metric toggle + badges (success rate, failure count, P10/P50/P90)
  *   2. Fan chart — P10/P25/P50/P75/P90 confidence bands over time
  *   3. Histogram — terminal value distribution
+ *   4. Path shape — sequence-risk and liquidity readouts, failure by realized return,
+ *      and what separates a failing path (design 100 §3)
  *
  * Public API:
  *   showResults(summary, runs) — populate all three components
@@ -241,6 +262,10 @@ export class McResultsPanel extends BaseComponent {
       wrapper.appendChild(histWrap);
     }
 
+    // ── Path shape (design 100 §3) ─────────────────────────────────────────────
+    const shape = this._buildPathShapeSection(summary, runs);
+    if (shape) wrapper.appendChild(shape);
+
     this._container.appendChild(wrapper);
 
     if (this._fanDiv) {
@@ -261,6 +286,163 @@ export class McResultsPanel extends BaseComponent {
         this._histChartRo = ro;
       });
     }
+  }
+
+  /**
+   * Path shape, failure by realized return, and what separates a failing path (design 100
+   * §3). All of it was already on the result — `summary.pathShape` and each run's own
+   * `pathShape` — and nothing displayed it.
+   *
+   * Absent, not zero, for a result without `pathShape` (an older or restored result): a
+   * row of 0% badges would read as a measurement.
+   */
+  _buildPathShapeSection(summary, runs) {
+    const ps = summary?.pathShape;
+    if (!ps) return null;
+
+    const section = document.createElement('div');
+    section.className = 'mc-shape-section';
+
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Path Shape — sequence risk and liquidity';
+    section.appendChild(label);
+
+    const badges = [
+      { label: 'Median NW CAGR',          value: fmtPct(ps.medianNetWorthCagr) },
+      { label: 'Median Worst 5-yr',       value: fmtPct(ps.medianWorst5yrCagr) },
+      { label: 'Median Max Drawdown',     value: fmtPct(ps.medianMaxDrawdown) },
+      { label: 'Fail | Weak 1st Decade',  value: fmtPct(ps.failureRateBelowMedianDecade),
+        cls: 'mc-badge-value--failure',
+        title: 'Failure rate among paths whose net worth at ~10 years was below the cross-path median.' },
+      // Muted, not green: it is still a FAILURE rate, and green reads as "good".
+      { label: 'Fail | Strong 1st Decade', value: fmtPct(ps.failureRateAboveMedianDecade),
+        title: 'Failure rate among paths whose net worth at ~10 years was at or above the median. '
+          + 'A wide gap to the weak-decade rate is sequence-of-returns risk stated directly.' },
+      { label: 'Liquidity Trough P50',    value: fmtMoneyOrDash(ps.medianTroughRealNetLiquidity),
+        title: 'Real (base-year) spendable wealth at its deepest fall from peak. Excludes the house and company equity.' },
+      { label: 'Liquidity Trough P10',    value: fmtMoneyOrDash(ps.p10TroughRealNetLiquidity) },
+    ];
+    // Plan-dependent readouts appear only when the plan has the thing they describe.
+    if (ps.medianHouseCagr != null) {
+      badges.push(
+        { label: 'Median House CAGR',     value: fmtPct(ps.medianHouseCagr) },
+        { label: 'Median House Drawdown', value: fmtPct(ps.medianHouseMaxDrawdown) },
+      );
+    }
+    if ((ps.p90RepairSpend ?? 0) > 0) {
+      badges.push(
+        { label: 'Repair Spend P50', value: fmtMoneyOrDash(ps.medianRepairSpend) },
+        { label: 'Repair Spend P90', value: fmtMoneyOrDash(ps.p90RepairSpend) },
+      );
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'mc-badge-grid';
+    for (const b of badges) {
+      const card = document.createElement('div');
+      card.className = 'mc-badge-card';
+      if (b.title) card.title = b.title;
+      const l = document.createElement('div');
+      l.className = 'mc-badge-label';
+      l.textContent = b.label;
+      const v = document.createElement('div');
+      v.className = `mc-badge-value ${b.cls ?? 'mc-badge-value--muted'}`;
+      v.textContent = b.value;
+      card.append(l, v);
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+
+    const rows = runsToRows(runs);
+    const bandTable = this._buildReturnBandTable(rows);
+    if (bandTable) section.appendChild(bandTable);
+    const drivers = this._buildDriversTable(rows);
+    if (drivers) section.appendChild(drivers);
+    return section;
+  }
+
+  /**
+   * Failure rate by realized net-worth CAGR (design 100 §3). Realized, not the sampled
+   * mean: since design 98 M3 every path draws its own year-by-year returns, so the
+   * sampled mean no longer says which paths fail.
+   */
+  _buildReturnBandTable(rows) {
+    const bands = failureByBand(rows, 'netWorthCagr', RETURN_BAND_EDGES).filter(b => b.n > 0);
+    if (!bands.length) return null;
+    const unbanded = rows.filter(r => typeof r.netWorthCagr !== 'number').length;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-shape-block mc-band-block';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Failure Rate by Realized Return';
+    wrap.appendChild(label);
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-band-table';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Realized NW CAGR</th>'
+      + '<th>Paths</th><th>Failure Rate</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const b of bands) {
+      const tr = document.createElement('tr');
+      if (b.rate > 0) tr.className = 'mc-band-row--fails';
+      tr.append(
+        cell(bandLabel(b), 'mc-shape-name'),
+        cell(String(b.n)),
+        cell(fmtPct(b.rate)),
+      );
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+
+    const note = document.createElement('div');
+    note.className = 'mc-shape-note';
+    note.textContent = 'Turns "N% of paths fail" into a return threshold: the realized growth below which '
+      + 'this plan fails.'
+      + (unbanded ? ` ${unbanded} path(s) had no computable CAGR (net worth reached zero) and are not banded.` : '');
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  /** Failed vs surviving paths on the explanatory fields. Omitted when nothing failed. */
+  _buildDriversTable(rows) {
+    const d = failureDrivers(rows, ['netWorthCagr', 'worst5yrCagr', 'maxDrawdown']);
+    if (!d.nFailed || !d.nSurvived) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-shape-block mc-drivers-block';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = `What Separates a Failing Path — ${d.nFailed} failed / ${d.nSurvived} survived`;
+    wrap.appendChild(label);
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-drivers-table';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Mean of</th>'
+      + '<th>Failed</th><th>Survived</th></tr></thead>';
+    const body = document.createElement('tbody');
+    const NAMES = { netWorthCagr: 'Realized NW CAGR', worst5yrCagr: 'Worst 5-yr window', maxDrawdown: 'Max drawdown' };
+    for (const f of d.fields) {
+      if (f.failed == null && f.survived == null) continue;
+      const tr = document.createElement('tr');
+      tr.append(cell(NAMES[f.key], 'mc-shape-name'), cell(fmtPct(f.failed)), cell(fmtPct(f.survived)));
+      body.appendChild(tr);
+    }
+    if (d.oofYears.length) {
+      const tr = document.createElement('tr');
+      const mid = d.oofYears[Math.floor((d.oofYears.length - 1) / 2)];
+      // Both years describe FAILED paths — a survivor has no out-of-funds year — so they
+      // share the Failed column; splitting them across the two columns read as a survivor
+      // running out of money.
+      tr.append(cell('Out-of-funds year', 'mc-shape-name'),
+        cell(`median ${mid} · earliest ${d.oofYears[0]}`), cell('—'));
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    return wrap;
   }
 
   _buildToggle() {

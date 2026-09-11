@@ -27,8 +27,13 @@
 
 import { resolveYield } from './yield-curve.js';
 
-/** One year in ms — the SAME constant the bond price reducer marks durations with. */
-export const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+/**
+ * One year in ms for BOND TENOR — the same constant the bond price reducer marks durations
+ * with. Deliberately not `YEAR_MS`: `holdings/holding-period.js` exports that name as a
+ * 365-day year (the 12-month holding tests), and the generated index can bind a name to only
+ * one of them.
+ */
+export const BOND_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
  * Years from `asOfMs` to a holding's maturity (design 66 §G4). Returns null when the
@@ -46,7 +51,7 @@ export function yearsToMaturity(inst, asOfMs) {
   if (inst?.maturityDate == null || asOfMs == null) return null;
   const matMs = inst.maturityDate instanceof Date ? inst.maturityDate.getTime() : new Date(inst.maturityDate).getTime();
   if (!Number.isFinite(matMs)) return null;
-  return Math.max(0, (matMs - asOfMs) / YEAR_MS);
+  return Math.max(0, (matMs - asOfMs) / BOND_YEAR_MS);
 }
 
 /**
