@@ -115,12 +115,16 @@ function collectMarketDividendYields(p) {
  * Collect base growth rates from scenario parameters.
  */
 function collectBaseGrowthRates(p) {
+  // Design 98 M2 — ONE systematic draw on the equity return, added to every market's
+  // total. Here, upstream of regimes and the design 74 path, so it reaches every holding
+  // on a market key and nothing else (gold, bonds and cash are their own keys).
+  const anchor = p.equityAnchorShift ?? 0;
   return {
     // Per-MARKET total return (design 90 §7.2; design 99 §2). The ONLY equity rate: a
     // holding earns the market it tracks, in any account — no per-account or per-wrapper
     // override is seeded since design 99 P2. A regime shock on a market key therefore
     // reaches every holding on it directly.
-    ...Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, p[m.key] ?? m.defaultValue])),
+    ...Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, (p[m.key] ?? m.defaultValue) + anchor])),
     // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
     // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
     // computeHoldingsGrowth; regime shocks may target GOLD directly (it is not a
@@ -862,6 +866,21 @@ export const ECONOMIC_REGIMES = {
           + 'Changes how the return is TAXED, not its size: a taxable account pays it out as a dividend and grows '
           + 'by the rest. A security or lot that names its own yield overrides this.',
       }]),
+      // Design 98 M2 — the equity return UNCERTAINTY, as one draw. A plan input it is not:
+      // at its default of 0 nothing moves; Monte Carlo samples it.
+      {
+        key:          'equityAnchorShift',
+        label:        'Equity Return Shift (all markets)',
+        type:         'Number',
+        group:        'Market Rates',
+        mc:           true,
+        opt:          false,
+        defaultValue: 0,
+        description:  'Added to every equity market\'s total return at once — one systematic draw, so the markets '
+          + 'rise and fall together rather than cancelling out. Monte Carlo samples it; leave it at 0 for a '
+          + 'single run. Reaches every holding that tracks a market; not an authored appreciation schedule, '
+          + 'and not gold, bonds or cash.',
+      },
     ];
   },
 

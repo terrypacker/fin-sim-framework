@@ -77,19 +77,25 @@ function mcRowFor(kind, center) {
  */
 export const DEFAULT_MC_VARIABLE_CONFIGS = [
 
-  // ── Equity market returns (design 99 P2) ─────────────────────────────────
-  // The six per-wrapper growth axes (Roth/IRA/401k/brokerage/AU stock/super) and the two
-  // per-account dividend axes retired with the params they swept. INTERIM, until design
-  // 98 M2's single `equityAnchorShift`: the US and AU totals are on — the two markets
-  // every library plan holds — drawn independently, as the wrapper axes were. The two
-  // international totals and all four yields are listed but off; a yield draw changes
-  // how a return is TAXED, not its size (the total is fixed and the price takes the rest).
+  // ── Equity return uncertainty (design 98 M2) ─────────────────────────────
+  // ONE systematic draw, added to all four market totals. Drawing the markets separately
+  // (the interim after design 99 P2 drew US and AU independently) lets them cancel each
+  // other, and the measured dispersion then depends on how many markets a plan happens to
+  // hold (F3). sd 0.03 is the size the per-market axes used, so M2 changes the SHAPE of
+  // the uncertainty, not its stated size; M3 revisits the size.
+  {
+    paramKey: 'equityAnchorShift',     label: 'Equity Return Shift (all markets)',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0, stdDev: 0.03,
+    group: 'Market Rates',             enabled: true,
+  },
+  // The per-market totals and yields stay listed for anyone studying one market or yield
+  // composition, but off: genuine per-market divergence is design 90 §7.4's job. A yield
+  // draw changes how a return is TAXED, not its size (the price takes the rest).
   ...MARKET_GROWTH_PARAMS.flatMap(m => [
     {
       paramKey: m.key,                   label: m.label,
       type: DISTRIBUTION_TYPES.NORMAL,   mean: m.defaultValue, stdDev: 0.03,
-      group: 'Market Rates',
-      enabled: m.key === 'usEquityGrowthRate' || m.key === 'auEquityGrowthRate',
+      group: 'Market Rates',             enabled: false,
     },
     {
       paramKey: m.yieldKey,              label: m.yieldLabel,
