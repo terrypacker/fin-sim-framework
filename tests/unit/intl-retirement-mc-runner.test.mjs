@@ -123,9 +123,9 @@ test('IntlRetirementMcRunner: p50 is a positive finite number', async () => {
 test('IntlRetirementMcRunner: enabled params differ across runs', async () => {
   const { runs } = await makeRunner().run();
   // With Normal distributions on growth rates, values should differ across runs
-  const rates = runs.map(r => r.params.rothGrowthRate);
+  const rates = runs.map(r => r.params.usEquityGrowthRate);
   const allSame = rates.every(v => v === rates[0]);
-  assert.ok(!allSame, 'enabled param rothGrowthRate should differ across runs');
+  assert.ok(!allSame, 'enabled param usEquityGrowthRate should differ across runs');
 });
 
 test('IntlRetirementMcRunner: disabled params are constant across runs', async () => {
@@ -147,7 +147,7 @@ test('IntlRetirementMcRunner: same baseParams produces identical results on repe
   // Same seeds → same perturbed params → same results
   for (let i = 0; i < N; i++) {
     assert.strictEqual(r1.runs[i].seed, r2.runs[i].seed);
-    assert.strictEqual(r1.runs[i].params.rothGrowthRate, r2.runs[i].params.rothGrowthRate);
+    assert.strictEqual(r1.runs[i].params.usEquityGrowthRate, r2.runs[i].params.usEquityGrowthRate);
     assert.strictEqual(r1.runs[i].finalNetWorthUsd, r2.runs[i].finalNetWorthUsd);
   }
 });
@@ -218,18 +218,18 @@ function customizedTemplate(overrides) {
 }
 
 test('IntlRetirementMcRunner: an enabled lever samples around the SCENARIO value, not the library default', async () => {
-  const cfgTemplate = customizedTemplate({ brokerageGrowthRate: 0.10 });
-  assert.notStrictEqual(INTL_RETIREMENT_DEFAULTS.usStockGrowthRate, 0.10,
+  const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
+  assert.notStrictEqual(0.07, 0.10,
     'test is meaningless unless the scenario value differs from the framework default');
 
   const { runs } = await makeRunner({ n: 12, cfgTemplate }).run();
-  const sampled = runs.map(r => r.params.brokerageGrowthRate);
+  const sampled = runs.map(r => r.params.usEquityGrowthRate);
   const mean = sampled.reduce((a, b) => a + b, 0) / sampled.length;
 
   // stdDev is 0.03, so a 12-sample mean sits well inside ±0.03 of the true center
-  // while being nowhere near the 0.05 library default.
+  // while being nowhere near the 0.07 market default.
   assert.ok(Math.abs(mean - 0.10) < 0.03,
-    `sampled mean ${mean} should center on the scenario's 0.10, not ${INTL_RETIREMENT_DEFAULTS.usStockGrowthRate}`);
+    `sampled mean ${mean} should center on the scenario's 0.10, not ${0.07}`);
 });
 
 test('IntlRetirementMcRunner: a disabled lever does not overwrite the scenario value with a framework default', async () => {
@@ -262,28 +262,28 @@ test('IntlRetirementMcRunner: shock variables build from the template without th
 // ─── Provenance ──────────────────────────────────────────────────────────────
 
 test('summarizeProvenance: reports scenario-centered variables as fromScenario', async () => {
-  const cfgTemplate = customizedTemplate({ brokerageGrowthRate: 0.10 });
+  const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
   const { summary } = await makeRunner({ cfgTemplate }).run();
   const p = summary.provenance;
 
   assert.ok(p, 'summary should carry provenance');
-  assert.ok(p.centersBySource.scenario.includes('brokerageGrowthRate'));
+  assert.ok(p.centersBySource.scenario.includes('usEquityGrowthRate'));
   assert.deepStrictEqual(p.divergentCenters, []);
   assert.deepStrictEqual(p.syntheticCenters, []);
   assert.strictEqual(p.fromScenario, true);
 });
 
 test('summarizeProvenance: an explicit center override is reported as divergent', async () => {
-  const cfgTemplate = customizedTemplate({ brokerageGrowthRate: 0.10 });
+  const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
   const mcConfig = new IntlRetirementMcConfig();
-  mcConfig.applyOverride('brokerageGrowthRate', { mean: 0.04 });
+  mcConfig.applyOverride('usEquityGrowthRate', { mean: 0.04 });
 
   const { summary } = await makeRunner({ mcConfig, cfgTemplate }).run();
   const p = summary.provenance;
 
-  assert.ok(p.centersBySource.override.includes('brokerageGrowthRate'));
+  assert.ok(p.centersBySource.override.includes('usEquityGrowthRate'));
   assert.deepStrictEqual(p.divergentCenters,
-    [{ paramKey: 'brokerageGrowthRate', center: 0.04, scenarioValue: 0.10 }]);
+    [{ paramKey: 'usEquityGrowthRate', center: 0.04, scenarioValue: 0.10 }]);
   assert.strictEqual(p.fromScenario, false, 'a center away from the plan must not read as "the plan"');
 });
 
@@ -293,12 +293,12 @@ test('summarizeProvenance: an untouched panel row keeps its declared source, so 
   // panel resolved; without honouring that, a variable centered on a framework
   // default reclassifies as a deliberate user choice the moment it goes through the
   // UI, and the results badge under-counts exactly the case it exists to catch.
-  const cfgTemplate = customizedTemplate({ brokerageGrowthRate: 0.10 });
+  const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
   const mcConfig = new IntlRetirementMcConfig();
   mcConfig.applyOverride('primaryMonthlyWage', {
     enabled: true, mean: 8000, stdDev: 500, centerDirty: false, centerSource: 'default',
   });
-  mcConfig.applyOverride('brokerageGrowthRate', {
+  mcConfig.applyOverride('usEquityGrowthRate', {
     enabled: true, mean: 0.10, stdDev: 0.03, centerDirty: false, centerSource: 'scenario',
   });
 
@@ -306,22 +306,22 @@ test('summarizeProvenance: an untouched panel row keeps its declared source, so 
   const p = summary.provenance;
 
   assert.deepStrictEqual(p.syntheticCenters, ['primaryMonthlyWage']);
-  assert.ok(p.centersBySource.scenario.includes('brokerageGrowthRate'),
+  assert.ok(p.centersBySource.scenario.includes('usEquityGrowthRate'),
     'a copied-in scenario center is not a user override');
   assert.strictEqual(p.fromScenario, false);
 });
 
 test('summarizeProvenance: a hand-typed center is still an override', async () => {
-  const cfgTemplate = customizedTemplate({ brokerageGrowthRate: 0.10 });
+  const cfgTemplate = customizedTemplate({ usEquityGrowthRate: 0.10 });
   const mcConfig = new IntlRetirementMcConfig();
-  mcConfig.applyOverride('brokerageGrowthRate', {
+  mcConfig.applyOverride('usEquityGrowthRate', {
     enabled: true, mean: 0.02, stdDev: 0.03, centerDirty: true, centerSource: 'scenario',
   });
 
   const { summary } = await makeRunner({ mcConfig, cfgTemplate }).run();
-  assert.ok(summary.provenance.centersBySource.override.includes('brokerageGrowthRate'));
+  assert.ok(summary.provenance.centersBySource.override.includes('usEquityGrowthRate'));
   assert.deepStrictEqual(summary.provenance.divergentCenters,
-    [{ paramKey: 'brokerageGrowthRate', center: 0.02, scenarioValue: 0.10 }]);
+    [{ paramKey: 'usEquityGrowthRate', center: 0.02, scenarioValue: 0.10 }]);
 });
 
 test('summarizeProvenance: a key the scenario lacks falls back to the schema default, not a synthetic center', async () => {
@@ -416,19 +416,19 @@ test('DEFAULT_MC_VARIABLE_CONFIGS: enabled entries use Normal or LogNormal distr
 
 // ── Alias cleanup: the renamed dividend variable now actually perturbs the sim ─
 
-test('IntlRetirementMcRunner: brokerageDividendRate perturbation reaches the sim (dead alias fixed)', async () => {
+test('IntlRetirementMcRunner: usEquityDividendYield perturbation reaches the sim (dead alias fixed)', async () => {
   // Enable only the US stock dividend at a wide stdDev; everything else off. The
-  // toolset reads `brokerageDividendRate`, so the sampled value now affects net
+  // toolset reads `usEquityDividendYield`, so the sampled value now affects net
   // worth across runs. Under the old `stockDividendRate` key this was a no-op.
   const configs = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({
     ...c,
-    enabled: c.paramKey === 'brokerageDividendRate',
-    stdDev:  c.paramKey === 'brokerageDividendRate' ? 0.05 : c.stdDev,
+    enabled: c.paramKey === 'usEquityDividendYield',
+    stdDev:  c.paramKey === 'usEquityDividendYield' ? 0.05 : c.stdDev,
   }));
   const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(configs);
   const { runs }  = await makeRunner({ n: 8, mcConfig }).run();
 
   const worths  = runs.map(r => r.finalNetWorthUsd);
   const allSame = worths.every(w => w === worths[0]);
-  assert.ok(!allSame, 'brokerageDividendRate must now affect finalNetWorth across runs');
+  assert.ok(!allSame, 'usEquityDividendYield must now affect finalNetWorth across runs');
 });

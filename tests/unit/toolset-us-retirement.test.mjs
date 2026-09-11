@@ -162,10 +162,6 @@ const CUSTOM_JSON = {
   parameters: {
     inflationRate:          0.03,
     usSavingsInterestRate:  0.03,
-    iraGrowthRate:          0.07,
-    k401GrowthRate:         0.07,
-    brokerageGrowthRate:    0.05,
-    brokerageDividendRate:  0.02,
     dividendReinvest:       false,
     monthlyExpenses:        6_000,
     inflationAdjust:        false,
@@ -366,7 +362,6 @@ function makeSsConfig({ socialSecurityMonthly, retirementDate, monthlyWage = 0 }
     parameters: {
       inflationRate:         0.03,
       usSavingsInterestRate: 0,
-      iraGrowthRate:         0.07,
       monthlyExpenses:       0,
       inflationAdjust:       false,
     },
@@ -570,10 +565,6 @@ const DEDUP_JSON = {
   parameters: {
     inflationRate:         0.03,
     usSavingsInterestRate: 0.03,
-    iraGrowthRate:         0.07,
-    k401GrowthRate:        0.07,
-    brokerageGrowthRate:   0.05,
-    brokerageDividendRate: 0.02,
     dividendReinvest:      false,
     fixedIncomeInterestRate: 0.04,
     monthlyExpenses:       4_000,
@@ -671,7 +662,7 @@ function makeRmdConfig({ birthDate, iraBalance = 500_000, iraContribBasis = 500_
     parameters: {
       inflationRate:          0,
       usSavingsInterestRate:  0,
-      iraGrowthRate:          0,    // zero growth so RMD amount is predictable
+      usEquityGrowthRate:     0, usEquityDividendYield: 0,    // zero growth so RMD amount is predictable
       monthlyExpenses:        0,
       inflationAdjust:        false,
     },
@@ -826,7 +817,7 @@ function makeK401RmdConfig({ birthDate, k401Balance = 400_000, k401ContribBasis 
     parameters: {
       inflationRate:         0,
       usSavingsInterestRate: 0,
-      k401GrowthRate:        0,
+      usEquityGrowthRate:    0, usEquityDividendYield: 0,
       monthlyExpenses:       0,
       inflationAdjust:       false,
     },

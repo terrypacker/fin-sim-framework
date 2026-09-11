@@ -195,7 +195,8 @@ export function numericParams(cfg) {
  * persisted effective-rate map, which is what actually drives the sim when present.
  */
 export function baseEquityRate(cfg, dflt = 0.07) {
-  const p = numericParams(cfg).get('brokerageGrowthRate');
+  // The US market's total return (design 99 P2 retired the per-account rates).
+  const p = numericParams(cfg).get('usEquityGrowthRate');
   if (p != null) return p;
   const m = cfg.initialState?.effectiveGrowthRates ?? {};
   const eq = Object.entries(m).find(([k, v]) => k.startsWith('EQUITY') && typeof v === 'number');
@@ -232,8 +233,15 @@ export function applyEquityShift(cfg, set, delta) {
 
   // Both param stores (see numericParams) — a saved plan populates the list, the
   // built-in default populates only the bag.
-  for (const [name, value] of numericParams(cfg)) {
+  const present = numericParams(cfg);
+  for (const [name, value] of present) {
     if (/GrowthRate$/.test(name) && !/property|house/i.test(name)) set(name, bump(value));
+  }
+  // Design 99 P2: the four market totals are the ONLY equity rates, and a plan that
+  // never authored one carries it in neither store — so shift it from its default, or
+  // the lever is silently inert on the built-in plan.
+  for (const m of MARKET_GROWTH_PARAMS) {
+    if (!present.has(m.key)) set(m.key, bump(m.defaultValue));
   }
   for (const mapName of ['baseGrowthRates', 'effectiveGrowthRates']) {
     const m = cfg.initialState?.[mapName];

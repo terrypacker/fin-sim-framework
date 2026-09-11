@@ -14,7 +14,7 @@ import { DateUtils }                      from '../../simulation-framework/date-
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
-import { EQUITY_MARKETS_BY_COUNTRY } from '../../finance/holdings/default-allocations.js';
+import { MARKET_GROWTH_PARAMS, marketReturnFor } from '../../finance/economic-regimes/market-returns.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { PrimeRelinkReducer }             from '../../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
@@ -94,28 +94,32 @@ function buildRateKeyToStateKeys(realProperties = [], collectibles = []) {
  * load-bearing: it is the key order of `baseGrowthRates`, and whole-state fixtures
  * compare that JSON exactly.
  */
-const MARKET_GROWTH_PARAMS = Object.freeze([
-  { key: 'usEquityGrowthRate',       rateKey: RATE_KEYS.EQUITY_US,         defaultValue: 0.07,
-    label: 'US Equity Market Growth Rate' },
-  { key: 'auEquityGrowthRate',       rateKey: RATE_KEYS.EQUITY_AU,         defaultValue: 0.06,
-    label: 'AU Equity Market Growth Rate' },
-  { key: 'intlExUsEquityGrowthRate', rateKey: RATE_KEYS.EQUITY_INTL_EX_US, defaultValue: 0.07,
-    label: 'International ex-US Equity Growth Rate' },
-  { key: 'intlExAuEquityGrowthRate', rateKey: RATE_KEYS.EQUITY_INTL_EX_AU, defaultValue: 0.07,
-    label: 'International ex-AU Equity Growth Rate' },
-]);
+//
+// Design 99 §2: each market authors its TOTAL return and the dividend YIELD inside it.
+// They are the ONLY equity rates — accounts carry none and derive their growth from
+// their holdings. Price growth is `total − yield` where a dividend handler pays the yield
+// out (taxable accounts); a wrapper grows by the total and reports the yield as a slice
+// of it. The keys keep their W1 names (`*GrowthRate`) so saved values carry over.
+//
+// The table itself lives in `finance/economic-regimes/market-returns.js` (design 99 P3)
+// so the account editor can read it without importing this toolset; re-exported here for
+// every existing importer.
+export { MARKET_GROWTH_PARAMS, marketReturnFor };
+
+/** Per-market dividend yields, `rateKey → yield` (design 99 §2). Read by `baseDividendYield`. */
+function collectMarketDividendYields(p) {
+  return Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, p[m.yieldKey] ?? m.yieldDefault]));
+}
 
 /**
  * Collect base growth rates from scenario parameters.
  */
 function collectBaseGrowthRates(p) {
   return {
-    // Per-MARKET base growth (design 90 §7.2). These are the rate a holding gets from
-    // the market it tracks; the per-WRAPPER rates below still exist and still win, but
-    // they are now seeded as per-account overrides (`<marketKey>::<stateKey>`) rather
-    // than as asset classes of their own. A regime shock on a market key reaches every
-    // one of those overrides through `_addScaledExpandingClasses`'s `::` sweep, exactly
-    // as the old class→member fan-out did.
+    // Per-MARKET total return (design 90 §7.2; design 99 §2). The ONLY equity rate: a
+    // holding earns the market it tracks, in any account — no per-account or per-wrapper
+    // override is seeded since design 99 P2. A regime shock on a market key therefore
+    // reaches every holding on it directly.
     ...Object.fromEntries(MARKET_GROWTH_PARAMS.map(m => [m.rateKey, p[m.key] ?? m.defaultValue])),
     // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
     // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
@@ -125,58 +129,14 @@ function collectBaseGrowthRates(p) {
   };
 }
 
-/**
- * Per-ROLE equity growth rates — the wrapper-specific rates that used to be the base
- * rate of an account-type member key (design 90 §7.2).
- *
- * They did not become less useful when the sleeve axis moved to markets, they became
- * more honestly placed: `brokerageGrowthRate` at 5% against `rothGrowthRate` at 7% was
- * never a statement about two asset classes, it was a statement about two accounts
- * holding different mixes. `seedPerAccountRates` writes each as
- * `<marketKey>::<stateKey>`, so every account keeps exactly the rate it had.
- *
- * The defaults are the ones the retired member keys carried, verbatim — that is what
- * makes this step behaviour-preserving rather than a re-basing of every scenario.
- *
- * Once the §7.3 sub-axis lands, a mix of market sleeves expresses the same thing
- * directly and these can start to retire; until then removing one silently re-rates the
- * account to its market.
+/*
+ * The per-ROLE wrapper growth rates (`rothGrowthRate` … `superGrowthRate`) and the
+ * `collectRoleGrowthRates` / `ROLE_GROWTH_PARAMS` that seeded them are RETIRED by design
+ * 99 P2. Design 90 §7.5 kept them only until the §7.3 market sub-axis could express an
+ * account's mix; it can, so an account now earns what its holdings' markets earn. A
+ * saved value is dropped by `retireRateParams`, with a warning when it differs from what
+ * the market now gives.
  */
-function collectRoleGrowthRates(p) {
-  return Object.fromEntries(ROLE_GROWTH_PARAMS.map(r => [r.role, p[r.param] ?? r.defaultRate]));
-}
-
-/** The per-role wrapper growth params, in seeding order. Feeds collectRoleGrowthRates. */
-const ROLE_GROWTH_PARAMS = Object.freeze([
-  { role: ACCOUNT_ROLES.ROTH,     param: 'rothGrowthRate',      defaultRate: 0.07 },
-  { role: ACCOUNT_ROLES.IRA,      param: 'iraGrowthRate',       defaultRate: 0.07 },
-  { role: ACCOUNT_ROLES.K401,     param: 'k401GrowthRate',      defaultRate: 0.07 },
-  { role: ACCOUNT_ROLES.US_STOCK, param: 'brokerageGrowthRate', defaultRate: 0.05 },
-  // Price only: the 4% franked dividend is paid on top (design 98 M1 — was 0.06, a 10% total).
-  { role: ACCOUNT_ROLES.AU_STOCK, param: 'auStockGrowthRate',   defaultRate: 0.03 },
-  { role: ACCOUNT_ROLES.SUPER,    param: 'superGrowthRate',     defaultRate: 0.07 },
-]);
-
-/**
- * Which role-level params an account's OWN field overrides (design 98 W5 / F5).
- *
- * Every row is a precedence `acct.<field> ?? p.<param>` somewhere in the model: the six
- * growth rates in seedPerAccountRates above; `brokerageDividendRate` as the US
- * brokerage's additive dividend and as the IRA/Roth/401(k) carve-out yield fallback
- * (us-retirement-toolset); `auStockDividendRate` in au-retirement-toolset. An account
- * that sets the field no longer hears the role param, so an MC axis on that param is
- * shadowed for it — and dead once EVERY account of its roles is pinned.
- *
- * One table so the precedence and its diagnosis cannot drift apart: the growth rows
- * are derived from ROLE_GROWTH_PARAMS, which is also what collectRoleGrowthRates reads.
- */
-export const ROLE_PARAM_OVERRIDES = Object.freeze([
-  ...ROLE_GROWTH_PARAMS.map(r => ({ param: r.param, roles: [r.role], field: 'growthRate' })),
-  { param: 'brokerageDividendRate', roles: [ACCOUNT_ROLES.US_STOCK], field: 'dividendRate' },
-  { param: 'brokerageDividendRate',
-    roles: [ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH, ACCOUNT_ROLES.K401], field: 'dividendYield' },
-  { param: 'auStockDividendRate',   roles: [ACCOUNT_ROLES.AU_STOCK], field: 'dividendRate' },
-].map(Object.freeze));
 
 /**
  * Collect base interest rates from scenario parameters.
@@ -253,7 +213,7 @@ const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
  *
  * Mutates `baseGrowthRates` / `baseInterestRates` in place.
  */
-function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleGrowthRates = {}) {
+function seedPerAccountRates(accounts, baseInterestRates) {
   const primeLinks = [];
   for (const acct of accounts ?? []) {
     const stateKey  = acct?.stateKey;
@@ -263,9 +223,14 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleG
     // 1. Primary sleeve rate from the account's role member key (equity growth, or
     //    savings/fixed-income interest). Cash accounts take their `Prime + primeSpread`
     //    here (their member key is a cash key); everything else uses its absolute rate.
-    if (memberKey) {
-      const isInterest = INTEREST_RATE_KEYS.has(memberKey);
-      const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
+    //
+    //    CASH accounts only since design 99 P3b. An equity account seeds nothing (P2): its
+    //    holdings resolve to their bare market keys. A fixed-income account seeds nothing
+    //    either: its bonds earn their own coupons, else the country's FIXED_INCOME_* level.
+    //    A bank account's rate is a contract with one institution (D-5), so it alone
+    //    keeps an account-level rate — Prime + spread, or a legacy absolute.
+    if (memberKey && CASH_PRIME_KEY_BY_RATE_KEY[memberKey] != null) {
+      const baseMap    = baseInterestRates;
       const primeKey = CASH_PRIME_KEY_BY_RATE_KEY[memberKey];
       const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;
       let perVal;
@@ -273,35 +238,9 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates, roleG
         perVal = prime + acct.primeSpread;
         primeLinks.push({ stateKey, savKey: memberKey, primeKey, spread: acct.primeSpread });
       } else {
-        const ownRate = isInterest ? acct.interestRate : acct.growthRate;
-        // Design 90 §7.2 — the per-WRAPPER growth rate (rothGrowthRate,
-        // brokerageGrowthRate, superGrowthRate, …) lands HERE now, as this account's
-        // override of its market's rate. Before the market axis it was the member key's
-        // own base rate, which made a wrapper look like an asset class. Precedence is
-        // unchanged and so is every resulting number: the account's own `growthRate`
-        // still wins, then its role's rate, then the market's.
-        perVal = ownRate ?? roleGrowthRates[acct?.role] ?? baseMap[memberKey];
+        perVal = acct.interestRate ?? baseMap[memberKey];
       }
       if (perVal != null) baseMap[`${memberKey}::${stateKey}`] = perVal;
-
-      // Design 90 §7.3 — an account's own rate governs EVERY equity market it holds,
-      // not just its domestic one.
-      //
-      // `brokerageGrowthRate` is a per-ACCOUNT override and the account is one account:
-      // 5% is a statement about that brokerage, not about the US market. Seeding only
-      // the domestic key left any international sleeve in the same account falling
-      // through to the market rate, so introducing the market axis silently re-rated the
-      // brokerage from 5% to a 5/7 blend — measured at ×1.0582/yr against an authored
-      // ×1.0500, and about +1% on terminal net worth. That is a re-rating the sub-axis
-      // was explicitly not supposed to cause (§7.6); dispersion belongs to §7.4.
-      //
-      // The market keys therefore SHARE the account's rate until someone gives a market
-      // its own. What the axis buys at this stage is a distinct beta, a distinct shock
-      // target and distinct reporting — not a distinct drift.
-      const eqMarkets = EQUITY_MARKETS_BY_COUNTRY[acct?.country];
-      if (perVal != null && eqMarkets && memberKey === eqMarkets.domestic) {
-        baseMap[`${eqMarkets.international}::${stateKey}`] = perVal;
-      }
     }
 
     // 2. Cash-sleeve rate for a NON-cash account carrying a `primeSpread` (design 56 §6):
@@ -896,23 +835,33 @@ export const ECONOMIC_REGIMES = {
         description:  'Active behavioral strategies: portfolio reactions to regimes and tax opportunities (design/29). PANIC_SELL rotates equity to cash on crash entry; TAX_LOSS_HARVEST realizes losses at year-end; CONTRIBUTION_SUSPENSION halts contributions under stress; and more.',
       },
       ...behavioralStrategyKeys.flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k].paramSchema()),
-      // Per-MARKET equity growth (design 98 W1). Plan inputs, not sweep axes: an account of
-      // a known role overrides these at the seed, so an MC/Opt axis here would reach almost
-      // nothing — the systematic equity MC axis is design 98 M2's `equityAnchorShift`.
-      ...MARKET_GROWTH_PARAMS.map(m => ({
+      // Per-MARKET equity return (design 98 W1, made the ONLY equity rate by design 99 P2).
+      // A total and the yield inside it, per market. MC-sweepable; not Opt levers — a
+      // market's return is an uncertainty, not a decision.
+      ...MARKET_GROWTH_PARAMS.flatMap(m => [{
         key:          m.key,
         label:        m.label,
         type:         'Number',
         group:        'Market Rates',
-        mc:           false,
+        mc:           true,
         opt:          false,
         defaultValue: m.defaultValue,
-        description:  `Annual growth (price return; dividends are separate) of the ${m.label.replace(/ Growth Rate$/, '')} series. `
-          + 'It applies only where no account-level rate does: a holding whose Rate Key picks a market outside '
-          + "its account's own pair — for example an AU-market lot inside a US brokerage. Every account of a known "
-          + 'type prices BOTH its domestic and its international market at its own Growth Rate (or its account '
-          + "type's rate), and that outranks this.",
-      })),
+        description:  `Expected annual TOTAL return of the ${m.label.replace(/ Total Return$/, '')} market — price `
+          + 'growth plus dividends. Every equity holding tracking this market earns it, in any account: a taxable '
+          + 'account grows by this minus the dividend yield and pays the yield out as a dividend; a retirement '
+          + 'account or super grows by the whole of it.',
+      }, {
+        key:          m.yieldKey,
+        label:        m.yieldLabel,
+        type:         'Number',
+        group:        'Market Rates',
+        mc:           true,
+        opt:          false,
+        defaultValue: m.yieldDefault,
+        description:  `The part of the ${m.label.replace(/ Total Return$/, '')} total return paid as dividends. `
+          + 'Changes how the return is TAXED, not its size: a taxable account pays it out as a dividend and grows '
+          + 'by the rest. A security or lot that names its own yield overrides this.',
+      }]),
     ];
   },
 
@@ -924,8 +873,7 @@ export const ECONOMIC_REGIMES = {
     // `<memberKey>::<stateKey>` entries derived from each account's own rate. The
     // returned Prime links let PrimeRelinkReducer re-derive linked cash keys when
     // Prime moves at runtime (design 56 §5, Phase 2b).
-    const primeLinks = seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates,
-                                           collectRoleGrowthRates(p));
+    const primeLinks = seedPerAccountRates(context.accounts, baseInterestRates);
     const baseInflationRates = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,
@@ -938,6 +886,8 @@ export const ECONOMIC_REGIMES = {
       activeRegimes:               [],
       primeLinks,
       baseGrowthRates,
+      // Design 99 §2 — the dividend yield inside each market's total return.
+      marketDividendYields:        collectMarketDividendYields(p),
       baseInterestRates,
       baseInflationRates,
       baseAppreciationRates:       {},

@@ -343,10 +343,6 @@ const NEW_FORMAT_JSON = {
   parameters: {
     inflationRate:          0.03,
     usSavingsInterestRate:  0.03,
-    iraGrowthRate:          0.07,
-    k401GrowthRate:         0.07,
-    brokerageGrowthRate:    0.05,
-    brokerageDividendRate:  0.02,
     dividendReinvest:       false,
     monthlyExpenses:        6_000,
     inflationAdjust:        false,
@@ -527,6 +523,6 @@ test('compiler: paramSchema returned contains all toolset schemas merged', () =>
   assert.ok(Array.isArray(paramSchema), 'paramSchema must be an array');
   const keys = paramSchema.map(e => e.key);
   assert.ok(keys.includes('usSavingsInterestRate'), 'US_BANKING param must be in schema');
-  assert.ok(keys.includes('iraGrowthRate'), 'US_RETIREMENT param must be in schema');
+  assert.ok(keys.includes('goldGrowthRate'), 'US_RETIREMENT param must be in schema');
   assert.ok(keys.includes('monthlyExpenses'), 'monthlyExpenses must be in schema');
 });

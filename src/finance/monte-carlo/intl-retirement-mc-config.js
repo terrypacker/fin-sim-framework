@@ -12,7 +12,7 @@ import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributio
 import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario }
   from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator }   from '../../scenarios/params/scenario-param-generator.js';
-import { ROLE_PARAM_OVERRIDES }     from '../../scenarios/toolsets/economic-regimes-toolset.js';
+import { MARKET_GROWTH_PARAMS } from '../../scenarios/toolsets/economic-regimes-toolset.js';
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
 import { lookupLifeTable }          from './life-tables.js';
@@ -26,41 +26,6 @@ let _schemaByKey = null;
 function schemaByKey() {
   if (!_schemaByKey) _schemaByKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
   return _schemaByKey;
-}
-
-/**
- * Tag each role-level row that a per-account field overrides (design 98 W5 / F5).
- *
- *   shadowedBy  — stateKeys of the role's accounts whose own field is set, so the
- *                 sampled role value never reaches them;
- *   shadowedAll — true when that is EVERY account of the role(s): the axis is dead.
- *
- * An account's override is its generated param when the bag carries one
- * (`acct.<stateKey>.<field>` — what the loader cascade writes onto the record), else
- * the record's own field. Rows for params with no accounts of their roles are left
- * alone: that is a different finding (nothing to shadow).
- */
-function tagShadowedRows(variables, accounts, params) {
-  if (!Array.isArray(accounts) || accounts.length === 0) return variables;
-  const overrideOf = (acct, field) => {
-    const bagValue = params?.[`acct.${acct.stateKey}.${field}`];
-    return bagValue !== undefined ? bagValue : acct[field];
-  };
-  return variables.map(v => {
-    const rules = ROLE_PARAM_OVERRIDES.filter(r => r.param === v.paramKey);
-    if (rules.length === 0) return v;
-    let members = 0;
-    const shadowedBy = [];
-    for (const rule of rules) {
-      for (const acct of accounts) {
-        if (!acct?.stateKey || !rule.roles.includes(acct.role)) continue;
-        members++;
-        if (overrideOf(acct, rule.field) != null) shadowedBy.push(acct.stateKey);
-      }
-    }
-    if (shadowedBy.length === 0) return v;
-    return { ...v, shadowedBy, shadowedAll: shadowedBy.length === members };
-  });
 }
 
 /**
@@ -112,56 +77,26 @@ function mcRowFor(kind, center) {
  */
 export const DEFAULT_MC_VARIABLE_CONFIGS = [
 
-  // ── Equity growth rates (high uncertainty) ───────────────────────────────
-  {
-    paramKey: 'rothGrowthRate',        label: 'Roth IRA Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.rothGrowthRate,   stdDev: 0.03,
-    group: 'US Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'iraGrowthRate',         label: 'Traditional IRA Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.iraGrowthRate,    stdDev: 0.03,
-    group: 'US Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'k401GrowthRate',        label: '401(k) Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.k401GrowthRate,   stdDev: 0.03,
-    group: 'US Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'brokerageGrowthRate',   label: 'US Stock Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usStockGrowthRate, stdDev: 0.03,
-    group: 'US Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'brokerageDividendRate', label: 'US Stock Dividend Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.stockDividendRate, stdDev: 0.005,
-    group: 'US Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'auStockGrowthRate',     label: 'AU Stock Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.auStockGrowthRate, stdDev: 0.03,
-    group: 'AU Account Rates',         enabled: true,
-  },
-  {
-    paramKey: 'auStockDividendRate',   label: 'AU Stock Dividend Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.auStockDividendRate, stdDev: 0.005,
-    group: 'AU Account Rates',         enabled: true,
-  },
-
-  // ── Superannuation growth ─────────────────────────────────────────────────
-  // Was four `spouse*GrowthRate` axes under a "Spouse Account Rates" group, three of
-  // which could not move a single state field: growth is keyed by account TYPE, so
-  // `rothGrowthRate`/`iraGrowthRate`/`k401GrowthRate` above already cover the spouse's
-  // wrappers too and the per-owner keys were read by nothing. Every MC run was
-  // spending three sampling dimensions on levers that did nothing, which understates
-  // the dispersion of the axes that work (design/inconsistencies §4.10). The fourth
-  // was the ONLY super lever and is renamed to the key the compiler reads.
-  {
-    paramKey: 'superGrowthRate',       label: 'Super Growth Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.superGrowthRate, stdDev: 0.03,
-    group: 'AU Account Rates',         enabled: true,
-  },
+  // ── Equity market returns (design 99 P2) ─────────────────────────────────
+  // The six per-wrapper growth axes (Roth/IRA/401k/brokerage/AU stock/super) and the two
+  // per-account dividend axes retired with the params they swept. INTERIM, until design
+  // 98 M2's single `equityAnchorShift`: the US and AU totals are on — the two markets
+  // every library plan holds — drawn independently, as the wrapper axes were. The two
+  // international totals and all four yields are listed but off; a yield draw changes
+  // how a return is TAXED, not its size (the total is fixed and the price takes the rest).
+  ...MARKET_GROWTH_PARAMS.flatMap(m => [
+    {
+      paramKey: m.key,                   label: m.label,
+      type: DISTRIBUTION_TYPES.NORMAL,   mean: m.defaultValue, stdDev: 0.03,
+      group: 'Market Rates',
+      enabled: m.key === 'usEquityGrowthRate' || m.key === 'auEquityGrowthRate',
+    },
+    {
+      paramKey: m.yieldKey,              label: m.yieldLabel,
+      type: DISTRIBUTION_TYPES.NORMAL,   mean: m.yieldDefault, stdDev: 0.005,
+      group: 'Market Rates',             enabled: false,
+    },
+  ]),
 
   // ── Central-bank Prime rates — THE systemic rate sweep (design 56 Decision 6 / §3.1) ──
   // One draw on Prime moves every Prime-linked cash account (and, in Phase 3, variable
@@ -581,11 +516,8 @@ export class IntlRetirementMcConfig {
    * `cfg` (the loaded scenario) adds its generated per-record params to the schema
    * harvested from; a null `cfg` (library callers) harvests the static schema only.
    * Harvested rows then go through the same resolution / overrides / provenance.
-   *
-   * Finally each role-level rate row is tagged `shadowedBy` / `shadowedAll` against
-   * `accounts` (default: `cfg.accounts`) — see tagShadowedRows (design 98 W5).
    */
-  buildVariables(params, { cfg = null, accounts = cfg?.accounts ?? null } = {}) {
+  buildVariables(params, { cfg = null } = {}) {
     const contributed = this.constructor.contributors.flatMap(fn => fn({ params }));
     const schema = [
       ...IntlRetirementScenario.buildFullParamSchema(),
@@ -628,7 +560,7 @@ export class IntlRetirementMcConfig {
     // Inherit identity (label / options / visibleWhen) from the param schema and
     // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
     // whose strategy isn't selected). Identity is maintained once, in the schema.
-    return tagShadowedRows(resolveSweepVariables(resolved, schemaByKey(), params), accounts, params);
+    return resolveSweepVariables(resolved, schemaByKey(), params);
   }
 
   /**
@@ -639,28 +571,21 @@ export class IntlRetirementMcConfig {
    *   shockSeverity  → shocks[0].severity
    *   shockStartDate → shocks[0].startDate
    *
-   * And legacy scenario-default aliases to the toolset keys the compiler reads
-   * (these MC variables were silently no-ops under the old keys), so a saved MC
-   * config keeps the user's enabled/distribution settings after the fix:
-   *   usStockGrowthRate → brokerageGrowthRate
-   *   stockDividendRate → brokerageDividendRate
+   * And a legacy scenario-default alias to the toolset key the compiler reads (the MC
+   * variable was a silent no-op under the old key), so a saved MC config keeps the
+   * user's enabled/distribution settings after the fix:
    *   usInflationRate   → inflationRate
    *
-   * And the retired spouse growth rate (§4.10):
-   *   spouseSuperGrowthRate → superGrowthRate
-   *
-   * The other three spouse rates need no entry: `applyOverride` only stores settings
-   * for a paramKey, and a stored setting for a key no contributor emits is never
+   * The retired equity axes (the per-wrapper growth rates, the per-account dividend
+   * rates and their aliases — design 99 P2) need no entry: `applyOverride` only stores
+   * settings for a paramKey, and a stored setting for a key no contributor emits is never
    * resolved into a variable — so a saved config's dead axes simply disappear.
    */
   static fromVariableConfigs(variableConfigs) {
     const ALIASES = {
       shockSeverity:        'shocks[0].severity',
       shockStartDate:       'shocks[0].startDate',
-      usStockGrowthRate:    'brokerageGrowthRate',
-      stockDividendRate:    'brokerageDividendRate',
       usInflationRate:      'inflationRate',
-      spouseSuperGrowthRate: 'superGrowthRate',
     };
     const config = new IntlRetirementMcConfig();
     for (const v of variableConfigs) {

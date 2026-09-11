@@ -152,6 +152,25 @@ export const EQUITY_MARKETS_BY_COUNTRY = Object.freeze({
 });
 
 /**
+ * Default equity market mix per account ROLE, used when the account authors none
+ * (design 99 P5c). Only SUPER has one: a super balance is a diversified fund, and APRA's
+ * Quarterly Superannuation Industry Publication (June 2026, Table 9a "MySuper asset
+ * allocation", all MySuper products, effective exposure) puts its listed equity at
+ * $285.9bn Australian and $434.4bn international ($110.8bn hedged + $323.6bn unhedged)
+ * — 39.7% / 60.3%. The file and the arithmetic are in docs/market-returns/SOURCES.md.
+ *
+ * Equity split only, by decision: the ~19% of a MySuper fund in cash and fixed income
+ * is not modelled, so super stays 100% EQUITY. An AU_STOCK brokerage keeps its domestic
+ * default — APRA's figures describe funds, not a person's own home-biased holdings.
+ */
+export const DEFAULT_EQUITY_MARKET_MIX_BY_ROLE = Object.freeze({
+  [ACCOUNT_ROLES.SUPER]: Object.freeze({
+    [RATE_KEYS.EQUITY_AU]:         0.397,
+    [RATE_KEYS.EQUITY_INTL_EX_AU]: 0.603,
+  }),
+});
+
+/**
  * Resolve an account's equity market MIX — the sub-axis under `ALLOCATION.EQUITY`
  * (design 90 §7.3).
  *
@@ -165,12 +184,11 @@ export const EQUITY_MARKETS_BY_COUNTRY = Object.freeze({
  * equity at beta 0.7"; with a mix it is expressed as what it is — some AU, some ex-AU —
  * and the return follows from the markets rather than from a scaling constant.
  *
- * **Returns a single-market mix by default, which is what keeps this inert.** With no
- * authored mix and no international share, an equity account resolves to
- * `{ <its domestic market>: 1 }` — exactly the one sleeve `resolveRateKey` produced
- * before, so bootstrapping is byte-identical until somebody asks for a split.
+ * Resolution order: an authored `equityMarketMix`, then the role's default
+ * (`DEFAULT_EQUITY_MARKET_MIX_BY_ROLE` — SUPER's APRA split, design 99 P5c), then
+ * `{ <its domestic market>: 1 }` — the one sleeve `resolveRateKey` produces.
  *
- * @param {object} account         - needs `country`, and optionally `equityMarketMix`
+ * @param {object} account         - needs `country`, and optionally `role` and `equityMarketMix`
  * @param {string} [allocation]    - only EQUITY has markets; anything else ⇒ null
  * @returns {Object<string,number>|null} rateKey → weight (summing to 1), or null when
  *   the allocation has no market axis.
@@ -191,6 +209,9 @@ export function resolveEquityMarketMix(account, allocation = ALLOCATION.EQUITY) 
     const total = valid.reduce((s, [, w]) => s + w, 0);
     if (total > 0) return Object.fromEntries(valid.map(([k, w]) => [k, w / total]));
   }
+
+  const byRole = DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[account?.role];
+  if (byRole) return { ...byRole };
 
   return { [markets.domestic]: 1 };
 }

@@ -251,15 +251,17 @@ test('EVT-63 §14: promoted inherited assets gain per-record OPT/MC params throu
   const cfg = inheritanceConfig({ decedentState: 'SD' });
   new ScenarioLoader().load(cfg, services);   // mutates cfg in place (populates cfg.params)
   const keys = new Set((cfg.params ?? []).map(p => p.name));
-  assert.ok(keys.has('acct.inheritBrokerage.growthRate'),  'inherited brokerage growth-rate override');
-  assert.ok(keys.has('acct.inheritBrokerage.dividendRate'), 'inherited brokerage dividend-rate override');
+  // Design 99 P2: no per-account growth/dividend rate — the promoted brokerage earns its
+  // holdings' market returns like any other account.
+  assert.ok(!keys.has('acct.inheritBrokerage.growthRate'),  'no inherited brokerage growth-rate param');
+  assert.ok(!keys.has('acct.inheritBrokerage.dividendRate'), 'no inherited brokerage dividend-rate param');
   assert.ok(keys.has('prop.inheritHome.plannedSaleYear'),  'inherited home sale-year param');
   assert.ok(keys.has('coll.inheritArt.plannedSaleYear'),   'inherited art sale-year param');
   // Design 63 §15 (P8): the promoted retirement IRA keeps its SECURE-drawdown knobs on
   // raAsset.* AND gains the standard acct.* earnings/priority knobs — disjoint prefixes
   // (§14.5), so both cascade onto the one promoted record.
   assert.ok(keys.has('raAsset.inheritIra.distributionMode'), 'inherited IRA distribution strategy (raAsset.)');
-  assert.ok(keys.has('acct.inheritIra.growthRate'),          'promoted inherited IRA earnings knob (acct., §15.6)');
+  assert.ok(!keys.has('acct.inheritIra.growthRate'),         'no per-account IRA growth knob (design 99 P2)');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

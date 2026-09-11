@@ -201,8 +201,9 @@ const BASE_CFG = {
   simEnd:     '2029-06-01',
   parameters: {
     monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-    rothGrowthRate: 0.0, iraGrowthRate: 0, k401GrowthRate: 0,
-    brokerageGrowthRate: 0, brokerageDividendRate: 0.04,
+    // design 99: a 4% total that is ALL dividend — price 0, as before
+    usEquityGrowthRate: 0.04, intlExUsEquityGrowthRate: 0.04,
+    usEquityDividendYield: 0.04, intlExUsEquityDividendYield: 0.04,
     fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
   },
   persons: [{

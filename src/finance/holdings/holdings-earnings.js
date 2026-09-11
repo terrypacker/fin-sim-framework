@@ -13,6 +13,7 @@ import { instrumentOf } from './holding-utils.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
 import { primaryResidencyState }    from '../residency-utils.js';
 import { resolveYield }             from '../economic-regimes/yield-curve.js';
+import { couponlessYield }          from '../economic-regimes/couponless-yield.js';
 import { addValue, isUnitised } from './holding-utils.js';
 
 /**
@@ -57,6 +58,42 @@ export function couponStateExempt(inst, residentState) {
     return inst?.issuingState != null && residentState != null && inst.issuingState === residentState;
   }
   return false;
+}
+
+/**
+ * The base (pre-regime) dividend yield carried by a holding's return (design 99 §2).
+ *
+ * ONE resolver for both halves of the price/dividend split, so they can never disagree:
+ * `computeHoldingsGrowth` subtracts it from the market's total return where the yield
+ * is paid out, and `computeHoldingsDividends` pays it. The chain is design 94 D11's with
+ * the market inserted above the handler: instrument (a security that names a yield,
+ * then a lot that names one) → the market's yield for the holding's rate key →
+ * the handler's own fallback → 0. BOND, CASH and GOLD pay no dividend.
+ *
+ * @param {object} h                    - the holding
+ * @param {object} inst                 - its instrument view (`instrumentOf`)
+ * @param {object} state                - reads `state.marketDividendYields`
+ * @param {string|null} fallbackRateKey - rate key for a holding without one
+ * @param {number|null} [fallbackYield] - the handler's own yield (tests, legacy)
+ * @returns {number}
+ */
+export function baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield = null) {
+  if (h?.allocation === 'BOND' || h?.allocation === 'CASH' || h?.allocation === 'GOLD') return 0;
+  const rk = inst?.rateKey ?? fallbackRateKey;
+  return inst?.dividendYield ?? state?.marketDividendYields?.[rk] ?? fallbackYield ?? 0;
+}
+
+/**
+ * A taxable lot's price rate: the market's total return less the yield paid out beside it.
+ *
+ * Rounded to 12 decimal places because binary floating point makes the subtraction
+ * inexact — `0.07 − 0.04` is `0.030000000000000006`, not `0.03` — and that residue is
+ * enough to tip an occasional per-holding `toFixed(2)` the other way, which then
+ * compounds (measured: +\$0.10 on a \$312k AU stock balance over two decades). Twelve
+ * places is far below any rate anyone authors and far above the residue.
+ */
+function priceOf(total, yld) {
+  return +(total - yld).toFixed(12);
 }
 
 /**
@@ -105,6 +142,15 @@ export function couponStateExempt(inst, residentState) {
  *                                            per-holding appreciationSchedule entries.
  *                                            When null, schedule lookup is skipped and
  *                                            the effective rate is used directly.
+ * @param {number|null} [opts.dividendYield=null]
+ *                                          - The handler's own yield, below the market's
+ *                                            (see `baseDividendYield`).
+ * @param {boolean} [opts.yieldPaidSeparately=false]
+ *                                          - Design 99 §2. True for a taxable account whose
+ *                                            dividend handler pays the yield out: each lot's
+ *                                            price then moves by total − yield. False (the
+ *                                            wrappers) grows by the total and reports the
+ *                                            yield as `derivedAmount`, a slice OF it.
  * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsGrowth({
@@ -117,6 +163,7 @@ export function computeHoldingsGrowth({
   rateOverride = null,
   currentDate  = null,
   dividendYield = null,
+  yieldPaidSeparately = false,
 }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
@@ -142,12 +189,24 @@ export function computeHoldingsGrowth({
     ?? ratesMap[fallbackRateKey]
     ?? fallbackRate;
 
+  const isGrowthPath = rateSource === 'effectiveGrowthRates';
+  const requireRate = (rate, rateKey) => {
+    // Design 99 P2 retired the handler constants (0.07 / 0.05 / 0.06) that used to hide
+    // a missing rate. Every equity market key is seeded, so reaching here is a wiring bug.
+    if (rate == null && isGrowthPath) {
+      throw new Error(`computeHoldingsGrowth: no growth rate for '${rateKey}' on '${stateKey}'`);
+    }
+    return rate;
+  };
+
   if (!holdings.length) {
     // No holdings (defensive): fall back to the scalar-balance code path.
     const balance = account?.balance ?? 0;
-    const amount  = +(balance * fbRate * factor).toFixed(2);
-    const derivedAmount = dividendYield
-      ? +(balance * dividendYield * factor).toFixed(2) : 0;
+    const y0      = isGrowthPath ? (state?.marketDividendYields?.[fallbackRateKey] ?? dividendYield ?? 0) : 0;
+    const total0  = requireRate(fbRate, fallbackRateKey);
+    const amount  = +(balance * (yieldPaidSeparately ? priceOf(total0, y0) : total0) * factor).toFixed(2);
+    const derivedAmount = !yieldPaidSeparately && y0
+      ? +(balance * y0 * factor).toFixed(2) : 0;
     return { amount, derivedAmount, holdingActions: [] };
   }
 
@@ -192,11 +251,26 @@ export function computeHoldingsGrowth({
     // account's own growth rate with the market's. Same precedence as the account
     // level: per-account first, shared series second.
     const hPerAcctKey = (inst.rateKey != null && stateKey != null) ? `${inst.rateKey}::${stateKey}` : null;
-    const baseRate = rateOverride
+    const baseRate = requireRate(rateOverride
       ?? (useCoupon ? (inst.couponRate ?? undefined) : undefined)
+      // Design 99 D-6 — a BOND lot with no coupon of its own earns the curve at its
+      // remaining tenor (a fund at the 5y anchor, where the default curve's spread is 0);
+      // null — no curve, or a lot that must not float — falls through to the level below.
+      ?? (useCoupon && h.allocation === 'BOND'
+        ? (couponlessYield(state, { ...inst, rateKey: inst.rateKey ?? fallbackRateKey },
+            { stateKey, asOf: currentDate }) ?? undefined)
+        : undefined)
       ?? (hPerAcctKey != null ? ratesMap[hPerAcctKey] : undefined)
       ?? (inst.rateKey != null ? ratesMap[inst.rateKey] : undefined)
-      ?? fbRate;
+      ?? fbRate, inst.rateKey ?? fallbackRateKey);
+    // Design 99 §2 — the market rate is a TOTAL return. Where the caller pays the yield
+    // out as a dividend (the two taxable handlers), the price moves by total − yield; the
+    // yield arrives through computeHoldingsDividends, resolved by the same
+    // baseDividendYield, so the halves always sum to the total. Subtracted BEFORE the
+    // security overlay and the appreciationSchedule: both stay price-rate overrides,
+    // exactly as they were when the account carried a price rate of its own.
+    const yld       = useCoupon ? 0 : baseDividendYield(h, inst, state, fallbackRateKey, dividendYield);
+    const priceRate = yieldPaidSeparately ? priceOf(baseRate, yld) : baseRate;
     // The per-security return overlay (design 94 §6.2/§6.3). An OVERLAY, not a rate:
     // added to the holding's resolved rate directly, exactly as `AssetAppreciationHandler`
     // adds `propertyReturnDev[<sleeve>]` (design 75 §4.2 A2), so `effectiveGrowthRates`
@@ -213,7 +287,7 @@ export function computeHoldingsGrowth({
     const secOverlay = (!useCoupon && h.securityId != null && secOverlayMap != null)
       ? (secOverlayMap[h.securityId] ?? 0)
       : 0;
-    const rate    = secOverlay !== 0 ? baseRate + secOverlay : baseRate;
+    const rate    = secOverlay !== 0 ? priceRate + secOverlay : priceRate;
     const hRate   = (currentDate && h.appreciationSchedule)
       ? resolveScheduledRate(h.appreciationSchedule, currentDate, rate)
       : rate;
@@ -229,8 +303,10 @@ export function computeHoldingsGrowth({
     // Deliberately NOT clamped to `growth`: a holding can pay its distribution in a
     // year its price fell, which is the real case where the two diverge — s99B
     // reaches the distribution regardless of the capital loss beside it.
-    const yld = inst.dividendYield ?? dividendYield;
-    if (yld) derived += +(mv * yld * factor).toFixed(2);
+    //
+    // Not where the yield is paid separately: there it is a dividend of its own, not a
+    // slice of this growth.
+    if (!yieldPaidSeparately && yld) derived += +(mv * yld * factor).toFixed(2);
     if (growth !== 0) {
       holdingActions.push(new HoldingTransactAction({
         stateKey,
@@ -287,7 +363,8 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
 
   if (!holdings.length) {
     const balance = account?.balance ?? 0;
-    const amount  = +(balance * effYield(fallbackYield, fallbackRateKey)).toFixed(2);
+    const y0      = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;
+    const amount  = +(balance * effYield(y0, fallbackRateKey)).toFixed(2);
     return { amount, holdingActions: [] };
   }
 
@@ -304,10 +381,11 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     if (h.allocation === 'BOND' || h.allocation === 'CASH' || h.allocation === 'GOLD') continue;
     const inst = instrumentOf(h, securities);
     const mv  = h.marketValue ?? 0;
-    // design 94 D11 — the yield chain is instrument → account fallback, and it has to stay
-    // in that order: a security that names a yield wins, a lot that names one wins next,
-    // and the account rate is the floor.
-    const yld = inst.dividendYield ?? fallbackYield;
+    // design 94 D11, extended by design 99 §2 — instrument → market → handler fallback.
+    // A security that names a yield wins, a lot that names one wins next, then the
+    // market's yield. The SAME resolver feeds the price side (computeHoldingsGrowth), so a
+    // taxable lot's price growth and its dividend always sum to the market's total.
+    const yld = baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield);
     const rk  = inst.rateKey ?? fallbackRateKey;
     const div = +(mv * effYield(yld, rk)).toFixed(2);
     total += div;
@@ -378,7 +456,7 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  *   `reinvestBuckets` groups the coupon by tax character (taxExemption + issuingState
  *   + rateKey + allocation) for the design 66 §G10b new-vintage reinvestment path.
  */
-export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIndex = 0, firingsPerYear = 1 }) {
+export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIndex = 0, firingsPerYear = 1, currentDate = null }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const securities = state?.securities ?? null;
@@ -398,7 +476,12 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate, firingIn
     const fraction = couponFiringFraction(inst.couponFrequency, firingIndex, firingsPerYear);
     if (fraction === 0) continue;   // this holding pays nothing on this firing
     const mv     = h.marketValue ?? 0;
-    const rate   = inst.couponRate ?? fallbackRate;
+    // Design 99 D-6 — a lot with no contractual coupon floats: it earns the regime-adjusted
+    // curve at its remaining tenor (a fund at the 5y anchor), not the flat param the
+    // handler carries. That flat rate is only the last resort (no curve in state).
+    const rate   = inst.couponRate
+      ?? couponlessYield(state, inst, { stateKey, asOf: currentDate })
+      ?? fallbackRate;
     const coupon = +(mv * rate * fraction).toFixed(2);
     if (coupon === 0) continue;
     total += coupon;

@@ -92,6 +92,17 @@ import {
 } from '../../finance/account-rules/us/roth-rollover-classes.js';
 import { projectHoldingsToState }             from '../../finance/holdings/holding-utils.js';
 import { assertInterestBearingHoldings } from '../../finance/holdings/default-allocations.js';
+import { marketReturnFor }                    from './economic-regimes-toolset.js';
+
+/**
+ * Design 99 — a handler's market rate of last resort: its market's total and yield, from
+ * the same table ECONOMIC_REGIMES seeds its rate maps from. Reached only by a config
+ * without that toolset; when the maps are in state they win.
+ */
+const marketFallback = (p, rateKey) => {
+  const m = marketReturnFor(p, rateKey);
+  return { growthRate: m.total, dividendYield: m.yield };
+};
 
 function _accountToStatePlain(account) {
   const plain = {
@@ -368,41 +379,13 @@ export const US_RETIREMENT = {
         defaultValue: 0.03,
         description: 'Annual inflation rate applied to expenses',
       },
-      {
-        key: 'iraGrowthRate', label: 'IRA Growth Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
-        defaultValue: 0.07,
-        description: 'Annual growth rate for Traditional IRA accounts',
-      },
-      {
-        key: 'rothGrowthRate', label: 'Roth IRA Growth Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
-        defaultValue: 0.07,
-        description: 'Annual growth rate for Roth IRA accounts',
-      },
-      {
-        key: 'k401GrowthRate', label: '401(k) Growth Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
-        defaultValue: 0.07,
-        description: 'Annual growth rate for 401(k) accounts',
-      },
-      {
-        key: 'brokerageGrowthRate', label: 'Brokerage Growth Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
-        defaultValue: 0.05,
-        description: 'Annual growth rate for US brokerage stock accounts',
-      },
+      // The four per-wrapper growth rates and `brokerageDividendRate` are RETIRED by
+      // design 99 P2: equity accounts earn their holdings' market returns (Market Rates).
       {
         key: 'goldGrowthRate', label: 'Gold Growth Rate',
         type: 'Number', group: 'US Retirement', mc: true, opt: false,
         defaultValue: 0.05,
         description: 'Annual commodity growth rate for GOLD holdings (design 56 §7); decoupled from equity returns and central-bank Prime, taxed at the 28% collectibles rate on disposal.',
-      },
-      {
-        key: 'brokerageDividendRate', label: 'Brokerage Dividend Rate',
-        type: 'Number', group: 'US Retirement', mc: true, opt: false,
-        defaultValue: 0.02,
-        description: 'Annual dividend yield for US brokerage stock accounts',
       },
       {
         key: 'dividendReinvest', label: 'Reinvest Dividends',
@@ -1156,11 +1139,9 @@ export const US_RETIREMENT = {
         const h = new IntlIraEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.IRA,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: acct.growthRate ?? p.iraGrowthRate,
-          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
-          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
-          // equity are described consistently; per-holding `dividendYield` still wins.
-          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
+          // Design 99 P2 — no rate of its own: the account's holdings earn their markets'
+          // total return, and the yield slice (design 84 G2) is the market's.
+          ...marketFallback(p, IntlIraEarningsHandler.rateKey),
         });
         h.handledEvents.push(iraEvent);
         handlers.push(h);
@@ -1184,11 +1165,8 @@ export const US_RETIREMENT = {
         const h = new IntlRothEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.ROTH,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: acct.growthRate ?? p.rothGrowthRate,
-          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
-          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
-          // equity are described consistently; per-holding `dividendYield` still wins.
-          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
+          // Design 99 P2 — rate and yield come from the holdings' markets.
+          ...marketFallback(p, IntlRothEarningsHandler.rateKey),
         });
         h.handledEvents.push(rothEvent);
         handlers.push(h);
@@ -1203,11 +1181,8 @@ export const US_RETIREMENT = {
         const h = new IntlK401EarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.K401,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: acct.growthRate ?? p.k401GrowthRate,
-          // Design 84 G2 — the derived (yield) slice of the wrapper's equity return.
-          // Defaults to the plan's brokerage dividend rate so sheltered and taxable
-          // equity are described consistently; per-holding `dividendYield` still wins.
-          dividendYield: acct.dividendYield ?? p.brokerageDividendRate,
+          // Design 99 P2 — rate and yield come from the holdings' markets.
+          ...marketFallback(p, IntlK401EarningsHandler.rateKey),
         });
         h.handledEvents.push(k401Event);
         handlers.push(h);
@@ -1233,7 +1208,7 @@ export const US_RETIREMENT = {
         const earningsH = new IntlUsStockEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: acct.growthRate ?? p.brokerageGrowthRate,
+          ...marketFallback(p, IntlUsStockEarningsHandler.rateKey),
         });
         earningsH.handledEvents.push(stockEvent);
         handlers.push(earningsH);
@@ -1241,7 +1216,9 @@ export const US_RETIREMENT = {
         const divH = new DividendScheduledHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          dividendRate: acct.dividendRate ?? p.brokerageDividendRate,
+          // Design 99 P2 — the yield is each holding's market's (baseDividendYield);
+          // this is only its last resort, matching the earnings handler's.
+          dividendRate: marketReturnFor(p, DividendScheduledHandler.rateKey).yield,
           reinvest:     p.dividendReinvest,
         });
         divH.handledEvents.push(divEvent);
@@ -1278,7 +1255,9 @@ export const US_RETIREMENT = {
         const h = new CashSleeveInterestHandler({
           stateRegistry: sr, role,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          interestRate: acct.interestRate ?? p.usSavingsInterestRate,
+          // Design 99 P3b — the country's savings rate. A cash sleeve's own rate exists only
+          // as a Prime spread (`SAVINGS_US::<stateKey>`, read from state before this).
+          interestRate: p.usSavingsInterestRate,
           taxMode,
         });
         h.handledEvents.push(cashInterestEvent);
@@ -1305,7 +1284,9 @@ export const US_RETIREMENT = {
         const h = new BondSleeveCouponHandler({
           stateRegistry: sr, role,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          couponRate: acct.interestRate ?? p.fixedIncomeInterestRate,
+          // Design 99 P3b — a bond lot's own coupon wins; otherwise the US fixed-income
+          // rate. (Was `acct.interestRate`, the same field as the cash sleeve's rate above.)
+          couponRate: p.fixedIncomeInterestRate,
           taxMode,
         });
         h.handledEvents.push(bondCouponEvent);
@@ -1348,7 +1329,9 @@ export const US_RETIREMENT = {
         const h = new FixedIncomeInterestHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.FIXED_INCOME,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          interestRate: acct.interestRate ?? p.fixedIncomeInterestRate,
+          // Design 99 P3b — the account's bonds earn their own coupons, else the US
+          // fixed-income rate; the account carries no rate of its own.
+          interestRate: p.fixedIncomeInterestRate,
         });
         h.handledEvents.push(fiEvent);
         handlers.push(h);

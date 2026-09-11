@@ -3,7 +3,10 @@
 **Status: REFINED (10 Sep 2026) — wiring track COMPLETE (W0, W1, W0b, W2, W3, W4, W5
 BUILT); modelling track M1–M3 is designed and deferred.**
 
-**W5 (built 10 Sep 2026).** `ROLE_PARAM_OVERRIDES` is exported from
+**W5 (built 10 Sep 2026; REMOVED by design 99 P4, same day).** Design 99 retired every
+account-level rate W5 diagnosed, so no account can shadow an axis any more and the tags,
+chip, provenance field and runner warning were deleted. The record below is historical.
+`ROLE_PARAM_OVERRIDES` was exported from
 `economic-regimes-toolset.js`. It lists:
 - the six wrapper growth rates, with account field `growthRate`;
 - `brokerageDividendRate`, via the US-stock account's `dividendRate` and the
@@ -939,7 +942,7 @@ Otherwise MC double-counts for as long as both mechanisms are on (F4).
 | W4 | Shared panel: filter + collapsible groups | MC + Opt | — (best after W3) | No |
 | W5 | `shadowedBy` / `shadowedAll` + config-dependent liveness gate (F5) | MC | W3's `{ cfg, accounts }` plumbing | No |
 | M1 | AU stock default → 7% total (F9) — **BUILT** | shared | — | **Yes** (12 goldens) |
-| M2 | `equityAnchorShift`; retire the six wrapper MC axes (F3) | MC | M1 recommended first, W5 | **Yes**, re-bases every MC result |
+| M2 | `equityAnchorShift`; retire the six wrapper MC axes (F3) | MC | M1, **design 99 P2** (wrapper rates gone; shift the four market totals) | **Yes**, re-bases every MC result |
 | M3 | Re-base the anchor sd against the path model (F4) | MC | M2 | **Yes** |
 
 W0 is a live bug fix and worth landing even if nothing else in this design ships. W0–W5
@@ -952,6 +955,8 @@ have no numeric effect. M2 overlaps design 90 §7.4 — read that section before
    every account gets a row — needs a ladder resolver outside the sim and turns "enable"
    into "pin". Revisit only if someone asks for per-account MC rows on unpinned accounts;
    M2 makes that request much less likely.
+   **Settled by design 99 P2 (10 Sep 2026):** accounts no longer carry a growth rate, so
+   there are no per-account growth rows left to center; W3-3 was deleted with the field.
 2. **MPC actuation of generated keys.** W0 audits it; if `control.actuate` has its own
    path writer, it may need the same flat-token rule.
 3. **Security/holding-level sweeps** (F6, design 94). Out of scope; the harvest is the
@@ -964,3 +969,6 @@ have no numeric effect. M2 overlaps design 90 §7.4 — read that section before
    a role, but M2 shifts them together, and a holding that falls through to its market key
    gets no dividend handler of its own. Decide before M2 whether the four are total returns
    (then AU should be 0.07) and say so in their descriptions.
+   **Answered 10 Sep 2026 → design 99.** They are totals, each market gets a yield, and the
+   wrapper rates retire, so accounts derive their growth from their holdings. M2 is
+   re-based onto the four market totals and waits for design 99 P2.

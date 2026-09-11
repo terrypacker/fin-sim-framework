@@ -15,6 +15,7 @@ import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
 import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
 import { rateKeyOptionsHtml } from './rate-key-options.js';
+import { effectiveEquityReturn } from '../../finance/holdings/effective-return.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Liability types: `balance` is debt owed (positive), net worth subtracts it, and
@@ -88,7 +89,7 @@ export class AccountEditor extends BaseComponent {
   constructor({ parent, container, node, people = [], realProperties = [], accounts = [],
                 onSave, onDelete, onHistory,
                 links = null, onParamChange = null, onOpenParam = null, primeRates = {},
-                securities = null }) {
+                securities = null, marketRates = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -106,6 +107,11 @@ export class AccountEditor extends BaseComponent {
     // holding's own id as the only option, which preserves a value it cannot enumerate
     // rather than silently clearing it.
     this._securities = securities ?? null;
+    // The scenario's equity market returns (design 99 P3), `rateKey → { total, yield }`,
+    // supplied by the host from `marketRatesOf(cfg)` — the plan's CURRENT market params,
+    // as `primeRates` is for Prime. Null (a host that does not supply them) hides the
+    // derived expected-return line rather than showing one computed off the defaults.
+    this._marketRates = marketRates ?? null;
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
@@ -163,6 +169,8 @@ export class AccountEditor extends BaseComponent {
       // The Prime baseline is country-specific, so the "= Prime + spread" hint
       // (and the absolute the entered value implies) shifts when the country does.
       this._refreshCashRateHint(el);
+      // …and so does the market a lot with no Rate Key of its own resolves to.
+      this._refreshExpectedReturn();
       // Country drives the currency default, and currency gates the §988 fields.
       this._applyFxBasisVisibility(el, typeSelect.value);
     });
@@ -431,6 +439,8 @@ export class AccountEditor extends BaseComponent {
     if (!section || !tbody) return;
 
     this._tbodyEl = tbody;
+    this._expectedReturnEl = el.querySelector('[data-id="expectedReturn"]');
+    this._countryEl        = el.querySelector('[data-id="country"]');
 
     // Visibility: always show for investment account types
     const type = this._node?.type ?? el.querySelector('[data-id="type"]')?.value ?? '';
@@ -998,6 +1008,42 @@ export class AccountEditor extends BaseComponent {
     }
     // Balance drives the derived earnings; keep it in step (design 53 §8).
     this._syncEarningsBasis(el);
+    // Every holdings mutation (add, delete, ladder, a value or yield edit) lands here, and
+    // the market-value weights move with it.
+    this._refreshExpectedReturn();
+  }
+
+  /**
+   * The account's expected equity return, READ-ONLY and derived from its holdings
+   * (design 99 P3). An account has no growth rate of its own since design 99 P2 — each lot
+   * earns its market's total return — so this shows what that adds up to, and where it
+   * comes from, instead of a field that would pretend to set it. Hidden when there is
+   * nothing to derive (no equity lots, or a host that supplies no market rates).
+   */
+  _refreshExpectedReturn() {
+    const hint = this._expectedReturnEl;
+    if (!hint) return;
+    const r = this._marketRates ? effectiveEquityReturn({
+      holdings:    this._holdings,
+      country:     this._countryEl?.value ?? this._node?.country ?? null,
+      role:        this._node?.role ?? null,
+      securities:  this._securities,
+      marketRates: this._marketRates,
+    }) : null;
+    if (!r) { hint.style.display = 'none'; hint.textContent = ''; return; }
+
+    const pct = x => this._fmtPct(x);
+    let text = r.taxable
+      ? `Expected return ${pct(r.total)} a year = ${pct(r.price)} growth + ${pct(r.yield)} paid as dividends`
+      : `Expected return ${pct(r.total)} a year (${pct(r.yield)} of it dividends)`;
+    if (r.scheduled) {
+      text += ` · ${r.scheduled} lot${r.scheduled === 1 ? '' : 's'} on an appreciation schedule not included`;
+    }
+    hint.textContent = text;
+    hint.title = 'Derived from the holdings: each equity lot earns its market\'s total return '
+      + '(Market Rates, set in the scenario), blended by market value. Change it there, or '
+      + 'by holding a different security — an account has no rate of its own.';
+    hint.style.display = '';
   }
 
   /**
@@ -1078,6 +1124,12 @@ export class AccountEditor extends BaseComponent {
         data.interestRate = null;
       } else if (prime != null) {
         data.primeSpread  = Number(raw) - prime;
+        data.interestRate = null;
+      } else if (type === 'brokerage') {
+        // Design 99 P3b: a brokerage has no absolute rate of its own — its cash sleeve
+        // is Prime-linked or earns the country's savings rate. With no Prime to link to,
+        // there is nothing to store (the hint says so).
+        data.primeSpread  = null;
         data.interestRate = null;
       } else {
         data.primeSpread  = null;
@@ -1191,7 +1243,13 @@ export class AccountEditor extends BaseComponent {
     }
     const abs = Number(raw);
     if (!Number.isFinite(abs)) { hint.textContent = ''; return; }
-    if (prime == null) { hint.textContent = 'Prime not configured — stored as an absolute rate'; return; }
+    if (prime == null) {
+      // Design 99 P3b: only a bank account keeps an absolute rate of its own.
+      hint.textContent = el.querySelector('[data-id="type"]')?.value === 'brokerage'
+        ? 'Prime not configured — the cash sleeve earns the country\'s savings rate; not stored'
+        : 'Prime not configured — stored as an absolute rate';
+      return;
+    }
     const spread = abs - prime;
     hint.textContent = `= Prime (${this._fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${this._fmtPct(Math.abs(spread))}`;
   }

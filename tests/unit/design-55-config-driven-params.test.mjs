@@ -224,26 +224,26 @@ test('D55-8: deleting a default account (tombstoned) prunes its generated params
   const cfg = freshCfg();
   loadCfg(cfg);
 
-  // Precondition: the default fixed-income account generated params. (balance is a
-  // hidden balanceTarget once the compiler bootstraps a holding — §13 — so assert on
-  // the always-generated rate fields.)
-  assert.ok(paramNamed(cfg, 'acct.fixedIncomeAccount.growthRate'),
-    'fixedIncomeAccount growthRate param exists before deletion');
+  // Precondition: the default spouse Roth generated params. (The fixed-income account was
+  // the probe until design 99 P2 retired per-account growth/dividend rates — its rate
+  // fields were the only params it generated once its holding bootstraps a balance.)
+  assert.ok(paramNamed(cfg, 'acct.spouseRothAccount.contributionBasis'),
+    'spouseRothAccount contributionBasis param exists before deletion');
 
   // Simulate the user deleting the default account: remove the record and tombstone
   // its stateKey so drift-merge does not re-add it (design 55 §11 lifecycle).
-  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'fixedIncomeAccount');
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'spouseRothAccount');
   cfg.deletedDefaults = {
-    persons: [], accounts: ['fixedIncomeAccount'],
+    persons: [], accounts: ['spouseRothAccount'],
     realProperties: [], collectibles: [], companyEquities: [],
   };
 
   loadCfg(cfg); // Rebuild
 
-  assert.strictEqual((cfg.accounts ?? []).find(a => a.stateKey === 'fixedIncomeAccount'), undefined,
+  assert.strictEqual((cfg.accounts ?? []).find(a => a.stateKey === 'spouseRothAccount'), undefined,
     'tombstoned account stays deleted');
-  for (const field of ['growthRate', 'dividendRate']) {
-    const key = `acct.fixedIncomeAccount.${field}`;
+  for (const field of ['contributionBasis']) {
+    const key = `acct.spouseRothAccount.${field}`;
     assert.strictEqual(paramNamed(cfg, key), undefined, `${key} pruned from cfg.params`);
     assert.strictEqual(cfg.parameters[key], undefined, `${key} pruned from cfg.parameters`);
   }
@@ -257,25 +257,27 @@ test('D55-8: deleting a default account (tombstoned) prunes its generated params
 // alone. Without a `null` entry, a dropped param does not disappear — it lingers in
 // the editor under its old group, editable, doing nothing.
 
-test('D55-14: a retired spouse growth rate renames onto the type-level key it fed', () => {
+test('D55-14: a retired spouse growth rate renames onto superGrowthRate — which design 99 P2 then retires', () => {
   // `spouseSuperGrowthRate` was the only one of the four the compiler ever read: it
-  // supplied `superGrowthRate`, i.e. BOTH people's super, which is what made its
-  // "Spouse …" caption wrong. A saved value must keep its effect under the new name.
+  // supplied `superGrowthRate`, i.e. BOTH people's super. The rename still happens, but
+  // since design 99 P2 its successor is itself retired (super earns the AU market's
+  // total), so the value is dropped — with a warning, since 0.123 ≠ 7% — not applied.
   const cfg = freshCfg();
   cfg.params = [
     { name: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate', type: 'Number',
       group: 'Spouse Account Rates', value: 0.123 },
   ];
   delete cfg.parameters.superGrowthRate;
-  const { sim } = loadCfg(cfg);
+  const { warn } = console;
+  console.warn = () => {};
+  let sim;
+  try { ({ sim } = loadCfg(cfg)); } finally { console.warn = warn; }
 
   assert.strictEqual(paramNamed(cfg, 'spouseSuperGrowthRate'), undefined, 'legacy entry renamed away');
   assert.strictEqual(cfg.parameters.spouseSuperGrowthRate, undefined, 'legacy flat key removed');
-  assert.strictEqual(cfg.parameters.superGrowthRate, 0.123, 'value carried onto the live key');
-  // Design 90 §7.2 — `superGrowthRate` is a WRAPPER rate, so it lands on each super
-  // account's own key beneath the shared AU market sleeve, not on the sleeve itself.
-  assert.strictEqual(sim.state.effectiveGrowthRates['EQUITY_AU::superAccount'], 0.123,
-    'and reaches the rate the super accounts actually grow at');
+  assert.strictEqual(cfg.parameters.superGrowthRate, undefined, 'the successor is retired too');
+  assert.strictEqual(sim.state.effectiveGrowthRates.EQUITY_AU, 0.067,   // the sourced AU default (design 99 P5b)
+    'super earns the AU market total');
 });
 
 test('D55-15: the three dead spouse growth rates are dropped, not carried forward', () => {
@@ -298,7 +300,7 @@ test('D55-15: the three dead spouse growth rates are dropped, not carried forwar
   // saved 0.19 was never doing anything, and turning it into the whole household's
   // Roth/IRA/401(k) growth rate on upgrade would silently rewrite the plan's result.
   for (const rateKey of ['EQUITY_US', 'EQUITY_US', 'EQUITY_US']) {
-    assert.strictEqual(sim.state.effectiveGrowthRates[rateKey], INTL_RETIREMENT_DEFAULTS.rothGrowthRate,
+    assert.strictEqual(sim.state.effectiveGrowthRates[rateKey], 0.07,
       `${rateKey} keeps its own rate — a retired key is dropped, not promoted`);
   }
 });

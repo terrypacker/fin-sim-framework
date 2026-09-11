@@ -130,13 +130,14 @@ export class Account extends Asset {
     this.minimumBalance = opts.minimumBalance ?? 0;
     this.country        = opts.country        ?? null;
     this.currency       = opts.currency       ?? null;
-    // Per-account earnings rates (design 55 §8). Default null → the earnings
-    // handler falls back to the toolset's global rate, so legacy accounts are
-    // byte-for-byte unchanged. When set, the account grows/earns at its own rate
-    // (still regime-adjusted via the per-account rate key). LoanAccount overrides
-    // `interestRate` in its own constructor with a loan-specific default.
-    this.growthRate     = opts.growthRate     ?? null;
-    this.dividendRate   = opts.dividendRate   ?? null;
+    // Per-account INTEREST rate (design 55 §8) — for a BANK account (savings, checking)
+    // only since design 99 P3b: a contract with one bank (D-5). Default null → the
+    // earnings handler falls back to the toolset's global rate. LoanAccount overrides
+    // `interestRate` in its own constructor with a loan-specific default (its LOAN rate).
+    // A wrapper's cash/bond sleeves and a fixed-income account's bonds earn the country's
+    // savings / fixed-income rates; `retireRateParams` drops a saved one on load. There is no per-account growth
+    // or dividend rate since design 99 P2: an account earns what its holdings' markets
+    // earn (`retireRateParams` drops a saved one on load, with a warning if it differed).
     this.interestRate   = opts.interestRate   ?? null;
     // Prime-relative cash/loan rate (design 56). When set, the account's effective
     // rate is `Prime(country) + primeSpread` (seedPerAccountRates for cash; the loan

@@ -70,7 +70,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_ROTH_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = null, rateKey = null, dividendYield = null } = {}) {
     super(null, 'Roth IRA Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
@@ -85,7 +85,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? null, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
@@ -124,7 +124,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_IRA_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = null, rateKey = null, dividendYield = null } = {}) {
     super(null, 'IRA Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
@@ -139,7 +139,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? null, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
@@ -178,7 +178,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_K401_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null, dividendYield = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = null, rateKey = null, dividendYield = null } = {}) {
     super(null, '401k Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
@@ -193,7 +193,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07, dividendYield: d.dividendYield ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? null, dividendYield: d.dividendYield ?? null });
     h.id = d.id;
     return h;
   }
@@ -233,19 +233,22 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_STOCK_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.05, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = null, rateKey = null, dividendYield = null } = {}) {
     super(null, 'US Stock Earnings');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
     this.ownerId         = ownerId;
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
+    // Design 99 §2 — the yield to take out of the total when no market yield is in state
+    // (a config without ECONOMIC_REGIMES). Must match the dividend handler's own fallback.
+    this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? 0.05 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? null });
     h.id = d.id;
     return h;
   }
@@ -260,6 +263,10 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
+      dividendYield:   this.dividendYield,
+      // Design 99 §2 — the dividend handler beside this one pays the yield, so the
+      // price moves by the market's total return minus it.
+      yieldPaidSeparately: true,
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -302,19 +309,21 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_AU_STOCK_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.06, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = null, rateKey = null, dividendYield = null } = {}) {
     super(null, 'AU Stock Earnings');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
     this._stateKeyFixed = stateKey;
     this.growthRate    = growthRate;
+    // Design 99 §2 — see IntlUsStockEarningsHandler.
+    this.dividendYield = dividendYield;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? 0.06 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, growthRate: d.growthRate ?? null });
     h.id = d.id;
     return h;
   }
@@ -329,6 +338,10 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
       state, stateKey,
       fallbackRate:    this.growthRate,
       fallbackRateKey: this.rateKey,
+      dividendYield:   this.dividendYield,
+      // Design 99 §2 — the dividend handler beside this one pays the yield, so the
+      // price moves by the market's total return minus it.
+      yieldPaidSeparately: true,
     });
     // A LOSS is applied, not discarded (design 84 G12). Only an exactly-flat year
     // short-circuits. See the file header.
@@ -355,7 +368,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   static eventType   = 'INTL_AU_STOCK_DIVIDEND';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.04, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = null, rateKey = null } = {}) {
     super(null, 'AU Stock Dividend');
     this.stateRegistry = stateRegistry;
     this.role          = role;
@@ -372,7 +385,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? 0.04, rateKey: d.rateKey ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? null, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }
@@ -517,7 +530,7 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
-  call({ state }) {
+  call({ state, date }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
@@ -525,6 +538,8 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
       rateSource:      'effectiveInterestRates',
       factor:          1 / 12,
+      // Design 99 D-6 — a dated coupon-less bond prices off the curve at its remaining tenor.
+      currentDate:     date ?? null,
     });
     // One-directional by nature: a dividend/interest receipt cannot be negative, and
     // crediting one would book negative TAXABLE income. The G12 fix deliberately does
@@ -579,7 +594,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
-  call({ state }) {
+  call({ state, date }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
@@ -587,6 +602,8 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
       rateSource:      'effectiveInterestRates',
       factor:          1 / 12,
+      // Design 99 D-6 — a dated coupon-less bond prices off the curve at its remaining tenor.
+      currentDate:     date ?? null,
     });
     // One-directional by nature: a dividend/interest receipt cannot be negative, and
     // crediting one would book negative TAXABLE income. The G12 fix deliberately does
@@ -622,7 +639,7 @@ export class SuperEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_SUPER_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, defaultRate = 0.07, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, defaultRate = null, rateKey = null } = {}) {
     super(null, 'Super Earnings');
     this.stateRegistry = stateRegistry;
     this.role          = role;
@@ -634,7 +651,7 @@ export class SuperEarningsHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, defaultRate: d.defaultRate ?? 0.07 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, defaultRate: d.defaultRate ?? null });
     h.id = d.id;
     return h;
   }

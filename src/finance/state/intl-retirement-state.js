@@ -93,6 +93,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // absent from state and handlers fall back to their own default rates.
     this.activeRegimes          = [];
     this.baseGrowthRates        = {};
+    this.marketDividendYields   = {};   // design 99 §2 — yield inside each market's total
     this.baseInterestRates      = {};
     this.baseAppreciationRates  = {};
     this.effectiveGrowthRates       = {};

@@ -59,6 +59,7 @@ import { ScenarioCompleteReducer }               from '../../finance/reducers/sc
 import { LateLifeCareHandler }                  from '../../finance/spending/strategies/late-life-care-handler.js';
 import { LateLifeCareApplyReducer }             from '../../finance/spending/strategies/late-life-care-apply-reducer.js';
 import { projectHoldingsToState }             from '../../finance/holdings/holding-utils.js';
+import { marketReturnFor }                    from './economic-regimes-toolset.js';
 
 /**
  * AU_RETIREMENT toolset — AU retirement/superannuation scenario wiring.
@@ -250,25 +251,8 @@ export const AU_RETIREMENT = {
         defaultValue: 0, defaultCurrency: 'AUD',
         description: 'HOUSEHOLD DEFAULT annual non-concessional super contribution, spread evenly across the year; a Person\'s own election overrides it. Paid from AFTER-TAX AU cash and arriving in the fund IN FULL — no 15% Div 295 tax and no deduction. Money already taxed at the member\'s marginal rate is not taxed again on the way in. UNCAPPED until design 95 phase 7 adds Div 292 and the transfer-balance-cap stop.',
       },
-      {
-        key: 'superGrowthRate', label: 'Super Growth Rate',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: true,
-        defaultValue: 0.07,
-        description: 'Annual growth rate for superannuation accounts',
-      },
-      {
-        key: 'auStockGrowthRate', label: 'AU Stock Growth Rate',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: true,
-        defaultValue: 0.03,
-        description: 'Annual price growth rate for AU brokerage stock accounts; the franked '
-          + 'dividend (AU Stock Dividend Rate) is paid on top, so total return is the sum',
-      },
-      {
-        key: 'auStockDividendRate', label: 'AU Stock Dividend Rate',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: false,
-        defaultValue: 0.04,
-        description: 'Annual dividend yield for AU stock accounts',
-      },
+      // `superGrowthRate`, `auStockGrowthRate` and `auStockDividendRate` are RETIRED by
+      // design 99 P2: super and AU stock earn their holdings' market returns (Market Rates).
       {
         // Shared key with US_RETIREMENT (merge dedupes by key). Kept identical in
         // its Money metadata so the effective param is consistent regardless of
@@ -662,7 +646,9 @@ export const AU_RETIREMENT = {
           role:          ACCOUNT_ROLES.SUPER,
           ownerId:       acct.ownerId,
           stateKey:      acct.stateKey,
-          defaultRate:   acct.growthRate ?? p.superGrowthRate,
+          // Design 99 P2 — the fund's holdings earn their markets' total return. This is
+          // only the last resort, for a config without ECONOMIC_REGIMES' rate maps.
+          defaultRate:   marketReturnFor(p, SuperEarningsHandler.rateKey).total,
         });
         h.handledEvents.push(superEvent);
         handlers.push(h);
@@ -682,7 +668,9 @@ export const AU_RETIREMENT = {
           // handler resolves role+owner to the same first au-stock account — the one
           // that then earns twice while an inherited brokerage earns nothing.
           stateKey:      acct.stateKey,
-          growthRate:    acct.growthRate ?? p.auStockGrowthRate,
+          // Design 99 P2 — last resort only (no ECONOMIC_REGIMES rate maps in state).
+          growthRate:    marketReturnFor(p, IntlAuStockEarningsHandler.rateKey).total,
+          dividendYield: marketReturnFor(p, IntlAuStockEarningsHandler.rateKey).yield,
         });
         earningsH.handledEvents.push(stockEvent);
         handlers.push(earningsH);
@@ -692,7 +680,9 @@ export const AU_RETIREMENT = {
           role:          ACCOUNT_ROLES.AU_STOCK,
           ownerId:       acct.ownerId,
           stateKey:      acct.stateKey,
-          dividendRate:  acct.dividendRate ?? p.auStockDividendRate,
+          // Design 99 P2 — the yield is each holding's market's (baseDividendYield);
+          // this is only its last resort, matching the earnings handler's.
+          dividendRate:  marketReturnFor(p, IntlAuStockDividendHandler.rateKey).yield,
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
@@ -714,7 +704,9 @@ export const AU_RETIREMENT = {
         const h = new CashSleeveInterestHandler({
           stateRegistry: sr, role,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          interestRate: acct.interestRate ?? p.auSavingsInterestRate,
+          // Design 99 P3b — the country's savings rate (a Prime spread, if any, is read
+          // from state first).
+          interestRate: p.auSavingsInterestRate,
           rateKey: RATE_KEYS.SAVINGS_AU,
           taxMode,
         });
@@ -740,7 +732,8 @@ export const AU_RETIREMENT = {
         const h = new BondSleeveCouponHandler({
           stateRegistry: sr, role,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          couponRate: acct.interestRate ?? p.auFixedIncomeInterestRate,
+          // Design 99 P3b — a bond lot's own coupon wins; otherwise the AU fixed-income rate.
+          couponRate: p.auFixedIncomeInterestRate,
           rateKey: RATE_KEYS.FIXED_INCOME_AU,
           taxMode,
         });

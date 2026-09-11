@@ -64,8 +64,8 @@ const CFG = {
   simStart: `${START_YEAR}-01-01`, simEnd: `${START_YEAR + YEARS}-01-01`,
   parameters: {
     monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-    rothGrowthRate: BASE, iraGrowthRate: 0, k401GrowthRate: 0,
-    brokerageGrowthRate: 0, brokerageDividendRate: 0,
+    // The Roth is the only equity account, so the US market total IS its rate (design 99).
+    usEquityGrowthRate: BASE,
     fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
   },
   persons: [{ __type: 'Person', id: 'primary', name: 'P', birthDate: '1975-04-15', citizen: ['US'],

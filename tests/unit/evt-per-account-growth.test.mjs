@@ -11,16 +11,18 @@
 /**
  * evt-per-account-growth.test.mjs
  *
- * Per-account equity growth under ECONOMIC_REGIMES.
+ * Equity growth under ECONOMIC_REGIMES since design 99 P2: an account has no growth rate
+ * of its own. Every equity holding earns its MARKET's total return, so one market param
+ * moves every account that holds that market — and a class-level regime shock still fans
+ * out to every one of them.
  *
- * Each equity account TYPE carries its own base growth rate (a member of the
- * EQUITY_US / EQUITY_AU asset class), so rothGrowthRate / iraGrowthRate /
- * k401GrowthRate / brokerageGrowthRate are independent levers — while a
- * class-level regime shock still fans out to every member account.
+ * (Before P2 this file pinned the opposite: `rothGrowthRate` / `iraGrowthRate` /
+ * `k401GrowthRate` / `brokerageGrowthRate` as independent per-wrapper levers, seeded onto
+ * `EQUITY_US::<stateKey>` keys. Those params and keys are retired.)
  *
- *   EVT-PAG-1: each US-equity growth param moves only its own account
- *   EVT-PAG-2: a class shock fans out to every US-equity member account
- *   EVT-PAG-3: base rates seed per-account member keys (no EQUITY_US collapse)
+ *   EVT-PAG-1: one market's total moves every account holding that market
+ *   EVT-PAG-2: a class shock fans out to every US-equity account
+ *   EVT-PAG-3: no per-account equity key is seeded — the bare market key is the rate
  */
 
 import { test } from 'node:test';
@@ -50,48 +52,33 @@ function runScenario(extra = {}) {
 
 const bal = (state, key) => Math.round(state[key]?.balance ?? -1);
 
-test('EVT-PAG-1: each US-equity growth param moves only its own account', () => {
-  const lo = runScenario({ rothGrowthRate: 0.01, iraGrowthRate: 0.01, k401GrowthRate: 0.01, brokerageGrowthRate: 0.01 });
-  const rothHi = runScenario({ rothGrowthRate: 0.30, iraGrowthRate: 0.01, k401GrowthRate: 0.01, brokerageGrowthRate: 0.01 });
+const US_ACCOUNTS = ['rothAccount', 'iraAccount', 'k401Account', 'usStockAccount'];
 
-  // Raising rothGrowthRate grows the Roth...
-  assert.ok(bal(rothHi, 'rothAccount') > bal(lo, 'rothAccount'),
-    'rothGrowthRate should grow the Roth account');
-  // ...but leaves IRA / 401k / brokerage untouched (independent levers).
-  assert.strictEqual(bal(rothHi, 'iraAccount'),     bal(lo, 'iraAccount'),     'IRA unaffected by rothGrowthRate');
-  assert.strictEqual(bal(rothHi, 'k401Account'),    bal(lo, 'k401Account'),    '401k unaffected by rothGrowthRate');
-  assert.strictEqual(bal(rothHi, 'usStockAccount'), bal(lo, 'usStockAccount'), 'brokerage unaffected by rothGrowthRate');
+test('EVT-PAG-1: one market\'s total moves every account holding that market', () => {
+  // The US brokerage also holds an ex-US sleeve, so move both US-side markets together.
+  const lo = runScenario({ usEquityGrowthRate: 0.01, intlExUsEquityGrowthRate: 0.01 });
+  const hi = runScenario({ usEquityGrowthRate: 0.10, intlExUsEquityGrowthRate: 0.10 });
+  for (const key of US_ACCOUNTS) {
+    assert.ok(bal(hi, key) > bal(lo, key), `${key} should grow faster when its markets do`);
+  }
 });
 
-test('EVT-PAG-2: a class-level shock fans out to every US-equity member account', () => {
+test('EVT-PAG-2: a class-level shock fans out to every US-equity account', () => {
   const base  = runScenario({});
   const shock = runScenario({ shocks: [{ preset: 'MARKET_CRASH_2008_LITE', startDate: '2028-01-01' }] });
 
-  for (const key of ['rothAccount', 'iraAccount', 'k401Account', 'usStockAccount']) {
+  for (const key of US_ACCOUNTS) {
     assert.ok(bal(shock, key) < bal(base, key),
       `${key} should be depressed by the US-equity class shock (fan-out)`);
   }
 });
 
-test('EVT-PAG-3: base rates seed per-account member keys, not the collapsed class key', () => {
-  const state = runScenario({ rothGrowthRate: 0.07, iraGrowthRate: 0.08, k401GrowthRate: 0.09, brokerageGrowthRate: 0.05 });
+test('EVT-PAG-3: no per-account equity key is seeded — the bare market key is the rate', () => {
+  const state = runScenario({ usEquityGrowthRate: 0.08 });
   const eff = state.effectiveGrowthRates ?? {};
 
-  // Design 90 §7.2 — each wrapper's rate now lands on its own PER-ACCOUNT key beneath
-  // the shared market sleeve, rather than on an account-type key of its own. The four
-  // rates are still four independent levers; what changed is where they are written.
-  const at = (k) => eff[`${RATE_KEYS.EQUITY_US}::${k}`] ?? NaN;
-  assert.ok(Math.abs(at('rothAccount')    - 0.07) < 1e-9, 'rothAccount = rothGrowthRate');
-  assert.ok(Math.abs(at('iraAccount')     - 0.08) < 1e-9, 'iraAccount = iraGrowthRate');
-  assert.ok(Math.abs(at('k401Account')    - 0.09) < 1e-9, 'k401Account = k401GrowthRate');
-  assert.ok(Math.abs(at('usStockAccount') - 0.05) < 1e-9, 'usStockAccount = brokerageGrowthRate');
-
-  // The shared market key exists and is DISTINCT from every override — it is the rate a
-  // holding gets when its account has none, not a collapse of the four above. (The
-  // pre-90 assertion here was that no `EQUITY_US` growth rate existed at all; the market
-  // axis makes it exist by design, so the meaningful check is that it did not swallow
-  // the per-account values.)
-  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US] ?? NaN) - 0.07) < 1e-9,
-    'EQUITY_US is the market rate (usEquityGrowthRate default), not a wrapper rate');
-  assert.notStrictEqual(at('iraAccount'), eff[RATE_KEYS.EQUITY_US]);
+  const perAccount = Object.keys(eff).filter(k => /^EQUITY_[A-Z_]+::/.test(k));
+  assert.deepEqual(perAccount, [], 'design 99 P2 seeds no `<market>::<stateKey>` equity key');
+  assert.ok(Math.abs((eff[RATE_KEYS.EQUITY_US] ?? NaN) - 0.08) < 1e-9,
+    'EQUITY_US carries usEquityGrowthRate itself');
 });

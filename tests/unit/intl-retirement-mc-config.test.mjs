@@ -22,14 +22,8 @@ const D = INTL_RETIREMENT_DEFAULTS;
 
 // Minimal flat params (no shocks)
 const FLAT_PARAMS = {
-  rothGrowthRate:        D.rothGrowthRate,
-  iraGrowthRate:         D.iraGrowthRate,
-  k401GrowthRate:        D.k401GrowthRate,
-  brokerageGrowthRate:   D.usStockGrowthRate,
-  brokerageDividendRate: D.stockDividendRate,
-  auStockGrowthRate:     D.auStockGrowthRate,
-  auStockDividendRate:   D.auStockDividendRate,
-  superGrowthRate:       D.superGrowthRate,
+  usEquityGrowthRate:    0.07,
+  auEquityGrowthRate:    0.07,
   usSavingsInterestRate: D.usSavingsInterestRate,
   fixedIncomeInterestRate: D.fixedIncomeInterestRate,
   auSavingsInterestRate: D.auSavingsInterestRate,
@@ -176,9 +170,9 @@ test('resolveBalanceCenters: tolerates a missing/empty cfg', () => {
 test('buildVariables: defaultValue is set to the scenario param value', () => {
   const cfg  = new IntlRetirementMcConfig();
   const vars = cfg.buildVariables({ ...FLAT_PARAMS, shocks: [] });
-  const roth = vars.find(v => v.paramKey === 'rothGrowthRate');
-  assert.ok(roth, 'rothGrowthRate variable not found');
-  assert.strictEqual(roth.defaultValue, D.rothGrowthRate);
+  const us = vars.find(v => v.paramKey === 'usEquityGrowthRate');
+  assert.ok(us, 'usEquityGrowthRate variable not found');
+  assert.strictEqual(us.defaultValue, 0.07);
 });
 
 test('buildVariables: presets mean/value from the live scenario value (config wins over hardcoded default)', () => {
@@ -187,21 +181,21 @@ test('buildVariables: presets mean/value from the live scenario value (config wi
   const vars = cfg.buildVariables({
     ...FLAT_PARAMS, shocks: [],
     stockBalance: 600_000,        // holdings-bearing balance, resolved from account records
-    brokerageGrowthRate: 0.09,    // per-account/global rate from the config
+    usEquityGrowthRate: 0.09,     // the market total from the config
   });
   const bal = vars.find(v => v.paramKey === 'stockBalance');
   assert.strictEqual(bal.value, 600_000, 'CONSTANT balance lever presets its value from config');
   assert.strictEqual(bal.mean,  600_000, 'balance lever mean also tracks config');
 
-  const gr = vars.find(v => v.paramKey === 'brokerageGrowthRate');
+  const gr = vars.find(v => v.paramKey === 'usEquityGrowthRate');
   assert.strictEqual(gr.mean, 0.09, 'rate lever mean presets from the config value, not D default');
 });
 
 test('buildVariables: falls back to the hardcoded default when the param is absent from params', () => {
   const cfg  = new IntlRetirementMcConfig();
   const vars = cfg.buildVariables({ shocks: [] });   // sparse params: nothing resolves
-  const gr = vars.find(v => v.paramKey === 'rothGrowthRate');
-  assert.strictEqual(gr.mean, D.rothGrowthRate, 'unresolvable lever keeps its template default mean');
+  const gr = vars.find(v => v.paramKey === 'usEquityGrowthRate');
+  assert.strictEqual(gr.mean, 0.07, 'unresolvable lever keeps its template default mean');
 });
 
 test('buildVariables: explicit shock severity is used as mean', () => {
@@ -263,44 +257,41 @@ test('fromVariableConfigs: legacy shockStartDate rewritten to shocks[0].startDat
 
 test('fromVariableConfigs: non-shock overrides are applied correctly', () => {
   const cfg = IntlRetirementMcConfig.fromVariableConfigs([
-    { paramKey: 'rothGrowthRate', enabled: false, type: 'normal', mean: 0.05, stdDev: 0.01 },
+    { paramKey: 'usEquityGrowthRate', enabled: false, type: 'normal', mean: 0.05, stdDev: 0.01 },
   ]);
   const vars = cfg.buildVariables(FLAT_PARAMS);
-  const roth = vars.find(v => v.paramKey === 'rothGrowthRate');
-  assert.ok(roth, 'rothGrowthRate not found');
+  const roth = vars.find(v => v.paramKey === 'usEquityGrowthRate');
+  assert.ok(roth, 'usEquityGrowthRate not found');
   assert.strictEqual(roth.enabled, false);
   assert.strictEqual(roth.mean, 0.05);
 });
 
-// ── Alias cleanup: growth/dividend/inflation now key on the toolset params ────
+// ── Design 99 P2: equity axes are the markets'; the per-account ones are retired ─
 
-test('DEFAULT_MC_VARIABLE_CONFIGS: equity/dividend/inflation use toolset keys (dead aliases fixed)', () => {
+test('DEFAULT_MC_VARIABLE_CONFIGS: equity axes are the market returns; retired keys are gone', () => {
   const keys = DEFAULT_MC_VARIABLE_CONFIGS.map(c => c.paramKey);
-  // Renamed to the keys the compiler actually reads (verified to take effect):
-  assert.ok(keys.includes('brokerageGrowthRate'),   'brokerageGrowthRate present');
-  assert.ok(keys.includes('brokerageDividendRate'), 'brokerageDividendRate present');
-  assert.ok(keys.includes('inflationRate'),         'inflationRate present');
-  // Old scenario-default aliases gone (per-account growth refactor made
-  // brokerageGrowthRate a live, independent lever):
-  assert.ok(!keys.includes('usStockGrowthRate'), 'usStockGrowthRate alias removed');
-  assert.ok(!keys.includes('stockDividendRate'), 'stockDividendRate alias removed');
-  assert.ok(!keys.includes('usInflationRate'),   'usInflationRate alias removed');
+  for (const k of ['usEquityGrowthRate', 'auEquityGrowthRate', 'usEquityDividendYield', 'inflationRate']) {
+    assert.ok(keys.includes(k), `${k} present`);
+  }
+  for (const k of ['rothGrowthRate', 'iraGrowthRate', 'k401GrowthRate', 'brokerageGrowthRate',
+    'brokerageDividendRate', 'auStockGrowthRate', 'auStockDividendRate', 'superGrowthRate',
+    'usStockGrowthRate', 'stockDividendRate', 'usInflationRate']) {
+    assert.ok(!keys.includes(k), `${k} retired`);
+  }
 });
 
-test('fromVariableConfigs: migrates legacy alias keys from saved configs', () => {
+test('fromVariableConfigs: a saved setting for a retired equity axis simply disappears; usInflationRate still migrates', () => {
   const saved = [
     { paramKey: 'usStockGrowthRate', enabled: true, mean: 0.06, stdDev: 0.02 },
-    { paramKey: 'stockDividendRate', enabled: true, mean: 0.03, stdDev: 0.01 },
+    { paramKey: 'brokerageGrowthRate', enabled: true, mean: 0.06, stdDev: 0.02 },
     { paramKey: 'usInflationRate',   enabled: true, mean: 0.04, stdDev: 0.01 },
   ];
   const cfg  = IntlRetirementMcConfig.fromVariableConfigs(saved);
   const vars = cfg.buildVariables({ ...FLAT_PARAMS, shocks: [] });
 
-  const growth = vars.find(v => v.paramKey === 'brokerageGrowthRate');
-  const div    = vars.find(v => v.paramKey === 'brokerageDividendRate');
-  const infl   = vars.find(v => v.paramKey === 'inflationRate');
-  assert.ok(growth?.enabled, 'saved usStockGrowthRate setting migrated to brokerageGrowthRate');
-  assert.ok(Math.abs(growth.stdDev - 0.02) < 1e-9, 'migrated stdDev preserved');
-  assert.ok(div?.enabled,  'saved stockDividendRate setting migrated to brokerageDividendRate');
-  assert.ok(infl?.enabled, 'saved usInflationRate setting migrated to inflationRate');
+  const keys = vars.map(v => v.paramKey);
+  assert.ok(!keys.includes('usStockGrowthRate') && !keys.includes('brokerageGrowthRate'),
+    'no contributor emits a retired axis, so its stored setting resolves to nothing');
+  assert.ok(vars.find(v => v.paramKey === 'inflationRate')?.enabled,
+    'saved usInflationRate setting migrated to inflationRate');
 });

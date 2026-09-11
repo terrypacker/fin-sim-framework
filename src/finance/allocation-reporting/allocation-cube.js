@@ -140,6 +140,9 @@ export function buildAllocationCube(state, opts = {}) {
 
   const rows  = [];
   const stamp = date ? new Date(date) : null;
+  // Each row's UNROUNDED base-currency value, kept beside the rows (not on them, so the
+  // row shape is unchanged) for `_absorbRoundingResidue` — see THE INVARIANT.
+  const exactBase = new Map();
 
   const nameOf = stateKey => {
     try { return displayNameFor?.(stateKey) || stateKey; }
@@ -153,6 +156,7 @@ export function buildAllocationCube(state, opts = {}) {
     marketValueLocal, costBasisLocal = null, holdingCount = 0, inferred = false,
   }) => {
     const currency = currencyOf(entry, baseCurrency);
+    const exact    = Number(toBaseCurrency(marketValueLocal, currency, baseCurrency, state)) || 0;
     // The wrapper's jurisdiction and the market it is exposed to are different
     // questions; emit both columns rather than picking one and calling it "country".
     // An unrecognised rateKey (undefined) falls back to the domicile; a deliberately
@@ -196,13 +200,14 @@ export function buildAllocationCube(state, opts = {}) {
       // that lost the field upstream reads as `false` here rather than as absent.
       speculative:      isSpeculative(entry),
       marketValueLocal: _round(marketValueLocal),
-      marketValue:      _round(toBaseCurrency(marketValueLocal, currency, baseCurrency, state)),
+      marketValue:      _round(exact),
       costBasisLocal:   costBasisLocal == null ? null : _round(costBasisLocal),
       costBasis:        costBasisLocal == null
         ? null
         : _round(toBaseCurrency(costBasisLocal, currency, baseCurrency, state)),
       inferred,
     });
+    exactBase.set(rows[rows.length - 1], exact);
   };
 
   for (const [stateKey, entry] of Object.entries(state)) {
@@ -283,7 +288,49 @@ export function buildAllocationCube(state, opts = {}) {
     // what the comment above says this sort exists to remove.
     String(a.securityId).localeCompare(String(b.securityId)));
 
+  // After the sort, so the row that absorbs a residue is chosen deterministically.
+  _absorbRoundingResidue(rows, exactBase);
   return rows;
+}
+
+/**
+ * Make THE INVARIANT hold exactly, not merely to within a cent per row.
+ *
+ * Each row's `marketValue` is rounded to the cent on its own, and a sum of rounded rows
+ * can land up to half a cent PER ROW away from the rounded exact total. With round
+ * 7% / 2% rates the errors happened to cancel and the invariant held by luck; with
+ * sourced rates (design 99 P5b) they did not, by one cent. So the residue is settled:
+ *
+ *   - the RECOGNISED rows (`!speculative`) are settled to round(Σ exact recognised), so
+ *     Σ recognised rows === round(computeNetWorth);
+ *   - the SPECULATIVE rows are settled to round(Σ exact all) − round(Σ exact recognised),
+ *     NOT to their own rounded sum — two groups each rounding their own sum can still miss
+ *     the rounded grand total by a cent (0.004 + 0.004 → 0.00 + 0.00, but 0.008 → 0.01) —
+ *     so Σ all rows === round(computeNetWorthInclSpeculative).
+ *
+ * The residue (at most a few cents) lands on the group's largest row by magnitude, where
+ * it is proportionally smallest. That one row's `marketValue` may then differ from its
+ * converted `marketValueLocal` by a cent; every share on a chart stays correct.
+ * @private
+ */
+function _absorbRoundingResidue(rows, exactBase) {
+  const exactOf     = r => exactBase.get(r) ?? r.marketValue;
+  const recognised  = rows.filter(r => !r.speculative);
+  const speculative = rows.filter(r => r.speculative);
+  const recognisedTarget = _round(recognised.reduce((s, r) => s + exactOf(r), 0));
+  const totalTarget      = _round(rows.reduce((s, r) => s + exactOf(r), 0));
+  _settleGroup(recognised, recognisedTarget);
+  _settleGroup(speculative, _round(totalTarget - recognisedTarget));
+}
+
+/** Put a group's rounding residue on its largest row. @private */
+function _settleGroup(group, target) {
+  if (group.length === 0) return;
+  const residue = _round(target - group.reduce((s, r) => s + r.marketValue, 0));
+  if (residue === 0) return;
+  let largest = group[0];
+  for (const r of group) if (Math.abs(r.marketValue) > Math.abs(largest.marketValue)) largest = r;
+  largest.marketValue = _round(largest.marketValue + residue);
 }
 
 /**

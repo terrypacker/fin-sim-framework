@@ -155,7 +155,6 @@ const AU_JSON = {
   simEnd:   '2041-01-01',
   parameters: {
     auSavingsInterestRate: 0.045,
-    superGrowthRate:       0.07,
     monthlyExpenses:       5_000,
     inflationAdjust:       false,
   },

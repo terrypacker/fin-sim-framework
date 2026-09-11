@@ -154,11 +154,24 @@ describe('the §1091(d) twin defers the loss into basis (§8.1p)', () => {
       'the sheltered golden defers nothing — the two goldens must not be measuring one thing');
   });
 
-  test('§1091(a) still bites: the loss leaves the return and the balance due is paid', () => {
+  test('§1091(a) still bites: the disallowed loss leaves the return', () => {
     // Deferral is about where the money GOES, not about whether the deduction survives. A
-    // reading that let a taxable wash cost nothing today would be the rule inverted.
+    // reading that let a taxable wash cost nothing would be the rule inverted.
+    //
+    // The bite takes one of two forms, and which one depends on the year, not on §1091. If
+    // adding the loss back tips the year into a net gain, the liability rises (this golden
+    // did that until rebalance buys followed the market split, design 99 P5c). If the year
+    // still nets a loss, the $3,000 allowance (§1211(b)) applies either way and the
+    // disallowance shows up as a SMALLER carryforward (§1212(b)) instead. Either is correct;
+    // neither is "nothing changed".
     const [f] = twinFilings.filter(x => x.disallowed > 0);
-    assert.ok(f.delta > 0, `a disallowed loss must raise the liability, got ${f.delta}`);
+    const cl  = f.capitalLoss;
+    const netWith    = cl.shortTermGain + cl.longTermGain + cl.collectibleGain - cl.netLoss;
+    const carryWith  = cl.closingShort + cl.closingLong;
+    const carryWithout = Math.max(0, -(netWith - f.disallowed) - 3_000);
+    assert.ok(f.delta > 0 || carryWith < carryWithout - 0.01,
+      `a disallowed loss must raise the liability or shrink the carryforward: delta ${f.delta}, `
+      + `carryforward ${carryWith} vs ${carryWithout.toFixed(2)} without the disallowance`);
   });
 
   test('every deferred dollar found a lot to land in', () => {

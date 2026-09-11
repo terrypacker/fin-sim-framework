@@ -37,8 +37,8 @@ const SIM_END   = new Date('2030-01-01');
 
 const COMMON_PARAMS = {
   monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-  rothGrowthRate: 0.12, iraGrowthRate: 0, k401GrowthRate: 0,
-  brokerageGrowthRate: 0, brokerageDividendRate: 0,
+  usEquityGrowthRate: 0.12, intlExUsEquityGrowthRate: 0.12,
+  usEquityDividendYield: 0, intlExUsEquityDividendYield: 0,
   fixedIncomeInterestRate: 0, usSavingsInterestRate: 0,
 };
 
@@ -135,7 +135,7 @@ test('EVT-MIGRATION-3: effectiveGrowthRates absent produces same growth as expli
 
   const { sim: simExplicit } = loadScenario(
     ['US_BANKING', 'US_TAX', 'US_RETIREMENT', 'ECONOMIC_REGIMES'],
-    { shocks: [], rothGrowthRate: 0.12 }
+    { shocks: [], usEquityGrowthRate: 0.12 }
   );
   simExplicit.stepTo(AFTER_EARNINGS);
   const balanceExplicit = simExplicit.state.rothAccount.balance;

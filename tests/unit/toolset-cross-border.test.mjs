@@ -163,9 +163,6 @@ const CROSS_BORDER_JSON = {
     inflationRate:         0.03,
     auInflationRate:       0.03,
     usSavingsInterestRate: 0.03,
-    iraGrowthRate:         0.07,
-    k401GrowthRate:        0.07,
-    superGrowthRate:       0.07,
     monthlyExpenses:       6_000,
     inflationAdjust:       false,
     moveYear:              2026,   // move Jul 1 2026 (within test window)

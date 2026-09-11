@@ -80,7 +80,7 @@ import {
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 import { createAllocationSampler }   from '../finance/allocation-reporting/allocation-sampler.js';
 import { withBalances }             from '../finance/spending-reporting/account-flow-tie.js';
-import { scenarioParamValues, primeRatesOf } from '../finance/param-schema-utils.js';
+import { scenarioParamValues, primeRatesOf, marketRatesOf } from '../finance/param-schema-utils.js';
 import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage }
   from '../scenarios/scenario-securities.js';
@@ -441,6 +441,9 @@ export class WorkbenchApp extends BaseComponent {
           // ScenarioLoader projects into `state.securities`, via the one shared builder,
           // so the picker cannot offer an instrument the run does not have.
           securities: scenarioSecurityRegistry(registry?.scenarioService?.getActive?.()),
+          // Design 99 P3 — the plan's CURRENT market returns, for the read-only expected
+          // return the editor derives from the holdings (an account has no rate of its own).
+          marketRates: marketRatesOf(registry?.scenarioService?.getActive?.()),
           ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {

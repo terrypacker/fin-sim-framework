@@ -528,3 +528,17 @@ test('cube: row order is stable when two securities tie on every other key', () 
   }).map(r => r.securityId);
   assert.deepEqual(build('sec-emp', 'sec-idx'), build('sec-idx', 'sec-emp'));
 });
+
+test('buildAllocationCube: the rounding residue is absorbed, so Σ rows equals rounded net worth EXACTLY', () => {
+  // Three accounts of 100.004 each: every row rounds DOWN to 100.00, so the rounded rows
+  // sum to 300.00 while the exact total is 300.012 → 300.01. Design 99 P5b found this one
+  // cent in a real scenario; the cube now settles it onto the largest row.
+  const acct = (balance) => ({ balance, type: 'savings', role: 'us-savings', country: 'US',
+    currency: { code: 'USD', symbol: '$' } });
+  const state = { a: acct(100.004), b: acct(100.004), c: acct(100.004) };
+  const rows  = buildAllocationCube(state, { baseCurrency: 'USD' });
+  const sum   = +rows.reduce((s, r) => s + r.marketValue, 0).toFixed(2);
+  assert.equal(sum, +computeNetWorth(state, 'USD').toFixed(2));
+  assert.equal(sum, 300.01);
+  assert.equal(rows.filter(r => r.marketValue === 100.01).length, 1, 'the residue lands on ONE row');
+});

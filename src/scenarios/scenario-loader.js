@@ -13,6 +13,7 @@ import { scenarioSecurityRegistry } from '../finance/holdings/security.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
+import { retireRateParams }        from './retired-rate-params.js';
 import { StateRegistry }          from '../finance/services/state-registry.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { BlankScenario }           from './blank-scenario.js';
@@ -643,6 +644,10 @@ export class ScenarioLoader {
       if (!node || val === undefined) continue;
       this._applyParamNode(cfg, node, val);
     }
+
+    // Design 99 P2 — accounts no longer carry equity rates. Runs AFTER the cascade, so a
+    // per-record rate param has already landed on its account and is dropped with it.
+    retireRateParams(cfg);
   }
 
   /**

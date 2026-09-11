@@ -348,19 +348,6 @@
 .mc-var-source--default { color: var(--warning); }
 .mc-var-source--user    { color: var(--purple); }
 
-/* Design 98 W5: a role-level rate that per-account rates override. Partly shadowed is
-   informational; "no effect" means sampling it changes nothing, so it reads as a warning. */
-.mc-var-shadow {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--text-dim);
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-  cursor: help;
-}
-.mc-var-shadow[hidden]     { display: none; }
-.mc-var-shadow--dead       { color: var(--warning); font-weight: 600; }
-
 /* ── Runs panel: replay pin ──
    A pinned replay seed changes what every subsequent Rebuild simulates, so it is
    stated on the panel rather than left as a mode the user has to remember being in. */

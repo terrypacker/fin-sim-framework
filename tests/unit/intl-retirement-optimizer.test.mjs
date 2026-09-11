@@ -301,16 +301,15 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
     assert.strictEqual(entry.opt, false);
   });
 
-  test('growth rates have mc:true and opt:true', () => {
-    // After deduplication these live in US_RETIREMENT and AU_RETIREMENT, which
-    // set opt:true (the toolset-level defaults). brokerageGrowthRate replaces
-    // the prior scenario-level usStockGrowthRate alias.
-    const rateKeys = ['rothGrowthRate', 'iraGrowthRate', 'brokerageGrowthRate'];
-    for (const k of rateKeys) {
+  test('equity returns are the markets\' — MC axes, not Opt levers (design 99 P2)', () => {
+    for (const k of ['usEquityGrowthRate', 'auEquityGrowthRate']) {
       const entry = COMBINED_SCHEMA.find(e => e.key === k);
       assert.ok(entry, `${k} must be in combined schema`);
       assert.strictEqual(entry.mc,  true,  `${k}: mc should be true`);
-      assert.strictEqual(entry.opt, true,  `${k}: opt should be true at the toolset level`);
+      assert.strictEqual(entry.opt, false, `${k}: a market's return is not a decision`);
+    }
+    for (const k of ['rothGrowthRate', 'iraGrowthRate', 'brokerageGrowthRate', 'superGrowthRate']) {
+      assert.ok(!COMBINED_SCHEMA.some(e => e.key === k), `${k} is retired`);
     }
   });
 

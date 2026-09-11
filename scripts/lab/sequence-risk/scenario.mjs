@@ -92,7 +92,12 @@ export function buildScenario({ params = {}, plan = {} } = {}) {
 
     // One sleeve, one rate. The dividend is paid out rather than reinvested (the default),
     // so the equity book's market value compounds at the price rate exactly.
-    brokerageGrowthRate: P.equityGrowth,
+    // Design 99 P2: markets author TOTAL returns. `equityGrowth` stays a price rate, so
+    // the total is price + the 2% yield paid out beside it; both US sleeves (domestic and
+    // ex-US) follow it. The retirement wrappers now follow the same total too — before
+    // P2 they sat at a fixed 7% whatever this lab swept.
+    usEquityGrowthRate:          P.equityGrowth + 0.02,  usEquityDividendYield:       0.02,
+    intlExUsEquityGrowthRate:    P.equityGrowth + 0.02,  intlExUsEquityDividendYield: 0.02,
 
     monthlyExpenses: P.monthlySpend,
     inflationAdjust: true,

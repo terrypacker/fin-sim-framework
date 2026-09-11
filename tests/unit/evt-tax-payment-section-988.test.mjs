@@ -272,10 +272,10 @@ function loadAuTaxScenario({ auBasisRate = null, rate = 1.55 } = {}) {
     simStart: '2026-01-01', simEnd: '2028-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0, auInflationRate: 0,
-      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
-      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
+      usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0.12,
-      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      auEquityGrowthRate: 0, auEquityDividendYield: 0, intlExAuEquityGrowthRate: 0, intlExAuEquityDividendYield: 0,
       exchangeRateUsdToAud: rate, intlTransferFeeUsd: 0,
     },
     persons: [{

@@ -255,10 +255,10 @@ export class HandlerService extends BaseService {
    * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
    * @param {string} opts.role
    * @param {string} [opts.ownerId]
-   * @param {number} [opts.defaultRate=0.07]
+   * @param {number|null} [opts.defaultRate=null] - null ⇒ the market's rate (design 99)
    * @param {string} [opts.name='Super Earnings']
    */
-  createSuperEarningsHandler({ stateRegistry, role, ownerId = null, defaultRate = 0.07, name = 'Super Earnings' } = {}) {
+  createSuperEarningsHandler({ stateRegistry, role, ownerId = null, defaultRate = null, name = 'Super Earnings' } = {}) {
     const item = new SuperEarningsHandler({ stateRegistry, role, ownerId, defaultRate });
     item.name = name;
     item.id   = this._generateId('h');
@@ -275,11 +275,11 @@ export class HandlerService extends BaseService {
    * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
    * @param {string} opts.role
    * @param {string} [opts.ownerId]
-   * @param {number}  [opts.dividendRate=0.02]
+   * @param {number|null} [opts.dividendRate=null] - null ⇒ the market's yield (design 99)
    * @param {boolean} [opts.reinvest=false]
    * @param {string}  [opts.name='Dividend Scheduled']
    */
-  createDividendScheduledHandler({ stateRegistry, role, ownerId = null, dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
+  createDividendScheduledHandler({ stateRegistry, role, ownerId = null, dividendRate = null, reinvest = false, name = 'Dividend Scheduled' } = {}) {
     const item = new DividendScheduledHandler({ stateRegistry, role, ownerId, dividendRate, reinvest });
     item.name = name;
     item.id   = this._generateId('h');

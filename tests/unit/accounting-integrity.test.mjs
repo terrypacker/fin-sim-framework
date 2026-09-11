@@ -34,6 +34,9 @@ import { BaseScenario }             from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario }   from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }           from '../../src/scenarios/scenario-loader.js';
 import { SUPER_TAX_RATE }          from '../../src/finance/tax/au/super-tax-rate.js';
+import { marketReturnFor } from '../../src/scenarios/toolsets/economic-regimes-toolset.js';
+import { DEFAULT_EQUITY_MARKET_MIX_BY_ROLE } from '../../src/finance/holdings/default-allocations.js';
+import { ACCOUNT_ROLES }            from '../../src/finance/state/account-roles.js';
 
 function buildPrebuilt() {
   ServiceRegistry.resetAll();
@@ -104,6 +107,10 @@ function buildPrebuiltAuLoan({ offset = false } = {}) {
 test('per-account: untouched accounts compound at exactly their configured rate', () => {
   const { sim, cfg } = buildPrebuilt();
   const p = cfg.parameters;
+  // Design 99 P2 — accounts carry no rate: each earns its market's total (and the
+  // taxable brokerage pays the yield out, growing by the rest).
+  const us = marketReturnFor(p, 'EQUITY_US');
+  const au = marketReturnFor(p, 'EQUITY_AU');
 
   // Pure-equity accounts compound at their configured growth rate (dividend leaves
   // as cash in the prebuilt, reinvest off). usStockAccount + k401Account are now
@@ -112,8 +119,8 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   // deferred 401k) and mark to market via duration. So they are checked at the
   // EQUITY-SLEEVE level below instead of on the whole balance.
   const expectedWhole = {
-    rothAccount:  p.rothGrowthRate,
-    iraAccount:   p.iraGrowthRate,
+    rothAccount:  us.total,
+    iraAccount:   us.total,
     // Design 77 §5.1 — an accumulation-phase super account compounds NET of the 15%
     // Div 295 fund earnings tax, because the fund pays that tax out of the member's
     // own assets. This is the one account whose credited return is below its
@@ -121,12 +128,22 @@ test('per-account: untouched accounts compound at exactly their configured rate'
     // compounded gross and the tax was separately taken from the member's AU cash.
     // The prebuilt's members are in accumulation for these three early years; once
     // they pass 60 the rate reverts to the full `superGrowthRate` (see evt-super).
-    superAccount: p.superGrowthRate * (1 - SUPER_TAX_RATE),
+    // Design 99 P5c: super bootstraps across AU and ex-AU (APRA's MySuper split), so its
+    // gross rate is the mix-weighted blend of the two markets' totals.
+    superAccount: Object.entries(DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER])
+      .reduce((s, [k, w]) => s + w * marketReturnFor(p, k).total, 0) * (1 - SUPER_TAX_RATE),
   };
   // Equity sleeves of the mixed books still grow at exactly the equity rate.
   const expectedEquitySleeve = {
-    usStockAccount: p.brokerageGrowthRate + (p.dividendReinvest ? p.brokerageDividendRate : 0),
-    k401Account:    p.k401GrowthRate,
+    k401Account:    us.total,
+  };
+  // The US brokerage's equity sleeve holds TWO markets (a domestic and an ex-US lot), and
+  // since design 99 P5b they no longer share a rate, so it is checked LOT by lot below:
+  // each lot's price moves by its own market's total − yield (the yield leaves as cash,
+  // reinvest off in the prebuilt).
+  const lotRate = (h) => {
+    const m = marketReturnFor(p, h.rateKey);
+    return m.total - m.yield + (p.dividendReinvest ? m.yield : 0);
   };
   const equityMv = (acct) => (acct?.holdings ?? [])
     .filter(h => h.allocation === 'EQUITY')
@@ -137,13 +154,30 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   // retirement drawdown): whole balance for pure-equity accounts, equity-sleeve
   // marketValue for the mixed books.
   const snaps = [];
+  const lotSnaps = [];
   for (let i = 1; i <= 3; i++) {
     sim.stepTo(yearEnd(startYear + i));
     const snap = {};
     for (const k of Object.keys(expectedWhole))        snap[k] = sim.state[k]?.balance ?? 0;
     for (const k of Object.keys(expectedEquitySleeve)) snap[k] = equityMv(sim.state[k]);
     snaps.push(snap);
+    lotSnaps.push(new Map((sim.state.usStockAccount?.holdings ?? [])
+      .filter(h => h.allocation === 'EQUITY').map(h => [h.id, { mv: h.marketValue ?? 0, rateKey: h.rateKey }])));
   }
+
+  let lotsChecked = 0;
+  for (let i = 1; i < lotSnaps.length; i++) {
+    for (const [id, now] of lotSnaps[i]) {
+      const before = lotSnaps[i - 1].get(id);
+      if (!before || !(before.mv > 0)) continue;
+      const rate  = lotRate(now);
+      const ratio = now.mv / before.mv;
+      lotsChecked++;
+      assert.ok(Math.abs(ratio - (1 + rate)) < 1e-4,
+        `usStockAccount lot ${id} (${now.rateKey}): expected ×${(1 + rate).toFixed(4)} per year, got ×${ratio.toFixed(4)}`);
+    }
+  }
+  assert.ok(lotsChecked >= 2, `usStockAccount: expected both equity lots to be checked, got ${lotsChecked}`);
 
   for (const [key, rate] of Object.entries({ ...expectedWhole, ...expectedEquitySleeve })) {
     for (let i = 1; i < snaps.length; i++) {
