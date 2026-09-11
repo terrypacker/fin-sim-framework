@@ -145,6 +145,28 @@ export function buildMcConfig(cfg, { shock = false, overrides = {}, recentre = t
 }
 
 /**
+ * Whether an arm's runs actually drew the stochastic equity path, read off the runs.
+ *
+ * Not inferable from the CLI: since design 98 M3 `perturbParams` turns the path on in
+ * every MC iteration unless the plan sets `mcSequenceRisk: false`, so a run with no
+ * `--paths` flag has sequence risk too. Every iteration writes the flag into its params,
+ * which makes the runs the only honest source.
+ *
+ * @returns {{ on: number, n: number, vol: ?number, model: ?string, drift: ?string }}
+ */
+export function summarizeSequenceRisk(runs) {
+  const stochastic = runs.filter(r => r.params?.equityReturnStochastic === true);
+  const p = stochastic[0]?.params ?? {};
+  return {
+    on: stochastic.length,
+    n: runs.length,
+    vol:   p.equityReturnVol       ?? null,
+    model: p.equityReturnModel     ?? null,
+    drift: p.equityReturnDriftComp ?? null,
+  };
+}
+
+/**
  * Run one arm and reduce each iteration to a comparable row.
  *
  * `seed` is carried on every row because it is the pairing key across arms — drop
@@ -257,6 +279,7 @@ export async function runArm({ cfg, n, mcConfig, shocks, mix = false, spending =
     mixSeries,
     spendingRuns,
     pathShape:  summary?.pathShape ?? null,
+    sequenceRisk: summarizeSequenceRisk(runs),
     // What world these rows describe (see summarizeProvenance). Persisted with the
     // arm so a report written days later can still say whether it is about the plan.
     provenance: summary?.provenance ?? null,
