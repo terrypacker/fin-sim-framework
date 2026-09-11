@@ -93,6 +93,7 @@ import { buildMcConfig, runArm, mergeArmLevers } from '../lib/mc.mjs';
 import { pct } from '../lib/format.mjs';
 import { parseFlags } from '../lib/cli.mjs';
 import { MC_SAMPLER_CADENCE } from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
+import { scenarioParamValues } from '../../src/finance/param-schema-utils.js';
 
 // `-n` is the documented short form and predates this parser; normalize it rather than
 // break every runbook that uses it. Everything else goes through `parseFlags`, which REJECTS
@@ -153,8 +154,15 @@ const stochastic = (paths || propertyPaths)
     }
   : null;
 
+// Since design 98 M3 the runner draws the stochastic path in every iteration unless the
+// plan sets `mcSequenceRisk: false` — `--paths` only pins its vol/model/drift. So the
+// header asks the plan, and each arm's record is stamped from what its runs actually did
+// (`summarizeSequenceRisk`), never from the flag.
+const planPaths = paths || scenarioParamValues(base.cfg).mcSequenceRisk !== false;
+
 const riskModel = {
-  paths, propertyPaths, shock, vol: paths ? vol : null, drift: paths ? drift : null,
+  paths: planPaths, pathsFlag: paths, propertyPaths, shock,
+  vol: paths ? vol : null, drift: paths ? drift : null,
   recentre, mix, spending,
 };
 
@@ -168,7 +176,9 @@ console.log('');
 
 function describeRisk() {
   const parts = [];
-  parts.push(paths ? `stochastic equity paths (vol ${vol}, drift ${drift})` : 'constant sampled return');
+  parts.push(paths ? `stochastic equity paths (vol ${vol}, drift ${drift})`
+    : planPaths ? 'stochastic equity paths (MC default, plan settings — mcSequenceRisk)'
+    : 'constant sampled return (plan sets mcSequenceRisk: false)');
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push('manufactured crash');
   if (mix) parts.push('recording asset mix');
@@ -213,8 +223,21 @@ for (const [order, key] of armKeys.entries()) {
 
   const cfg = buildVariant(base.cfg, levers);
   const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });
-  const { rows, mixSeries, spendingRuns, pathShape, provenance, ms } =
+  const { rows, mixSeries, spendingRuns, pathShape, provenance, sequenceRisk, ms } =
     await runArm({ cfg, n, mcConfig, shocks, mix, spending });
+
+  // The arm's risk model AS RUN. Report consumers read `paths`/`vol`/`drift`, so stamping
+  // the truth here fixes every one of them, old arm files included (they keep their flag).
+  const armRisk = {
+    ...riskModel,
+    paths: sequenceRisk.on > 0,
+    vol:   sequenceRisk.on > 0 ? sequenceRisk.vol : null,
+    drift: sequenceRisk.on > 0 ? sequenceRisk.drift : null,
+    sequenceRisk,
+  };
+  if (sequenceRisk.on > 0 && sequenceRisk.on < sequenceRisk.n) {
+    console.log(`** ${key}: only ${sequenceRisk.on}/${sequenceRisk.n} runs drew a stochastic path — mixed arm`);
+  }
 
   const fails = rows.filter(r => r.failed).length;
   // `order` preserves the spec's arm sequence. mc-report reads a DIRECTORY, so
@@ -229,14 +252,15 @@ for (const [order, key] of armKeys.entries()) {
   writeFileSync(join(outDir, `${key}.json`), serializeArm({
     arm: key, order, n, source: base.source, synthetic: base.synthetic,
     samplerCadence: MC_SAMPLER_CADENCE,
-    riskModel, levers, recentred, provenance, pathShape, rows,
+    riskModel: armRisk, levers, recentred, provenance, pathShape, rows,
   }, mixSeries, spendingRuns));
 
   const extras = pathShape?.medianHouseCagr != null
     ? `  houseCAGR=${pct(pathShape.medianHouseCagr)} repair p50=$${Math.round((pathShape.medianRepairSpend ?? 0) / 1000)}k`
     : '';
   console.log(`${key.padEnd(24)} fail ${String(fails).padStart(4)}/${n} `
-    + `(${pct(fails / n).padStart(6)})${extras}  ${(ms / 1000).toFixed(0)}s`
+    + `(${pct(fails / n).padStart(6)})${extras}`
+    + `  ${armRisk.paths ? 'paths' : 'CONSTANT return'}  ${(ms / 1000).toFixed(0)}s`
     + (recentred.length ? `  [!! ${recentred.length} centers off-scenario]` : ''));
   for (const line of recentred) console.log(`    !! ${line}`);
 }

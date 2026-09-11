@@ -937,8 +937,13 @@ as the US total as run (plan total + anchor) and the raw `anchor`. The listed sc
 consumers only SET market totals as plan inputs — unchanged. Tests:
 `equity-anchor-shift.test.mjs` (every market shifts by the anchor, gold does not, 0 is
 byte-identical, MC samples one equity axis); `mc-axis-liveness` MC-LIVE-2 proves the
-anchor moves the end state. No golden moves (default 0). The before/after dispersion
-measurement is deferred — MC re-runs are long; run the reference arm when convenient.
+anchor moves the end state. No golden moves (default 0).
+
+**Measured 11 Sep 2026** (synthetic default plan, n = 2000, each arm run from its own
+commit): M2 widened terminal-NW dispersion **×1.25** in sd(log NW) at the same stated sd.
+Direction as predicted. The √6 figure no longer applied: after design 99 only two markets
+were drawn independently, so √2 was the ceiling, and unequal market weights put the result
+below it. Median unchanged.
 
 ### M3 — decide what the anchor's sd means
 
@@ -966,8 +971,16 @@ Otherwise MC double-counts for as long as both mechanisms are on (F4).
    sampling error of a 100-year historical mean (18% / √100 ≈ 1.8 points).
 
 No golden moves. Every MC result re-bases: wider in the path's direction (sequence risk and
-market dispersion now present), narrower in the anchor's. The before/after measurement on the
-reference arm is deferred with M2's (long MC runs).
+market dispersion now present), narrower in the anchor's.
+
+**Measured 11 Sep 2026** (same setup as M2's): M3 widened sd(log NW) a further **×1.42**
+despite halving the anchor sd, so the path adds more spread than it takes from the anchor.
+M2 + M3 together: ×1.78. Median unchanged. Most of the widening is in the upper tail
+(geometric paths are right-skewed), but the lower tail and the real-liquidity trough
+worsen too, and the trough arrives earlier: sequence risk showing up as intended. The
+failure rate was 0% in every arm because the synthetic default is over-funded, so it
+cannot say how failure rates moved. That needs the same three arms on a plan that can
+fail.
 
 ---
 
