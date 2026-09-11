@@ -578,14 +578,15 @@ export const INTL_RETIREMENT_DEFAULTS = {
   usEquityIntlShare: 0,
   auEquityIntlShare: 0,
 
-  // Spouse retirement accounts (US). No per-spouse growth rates: growth is keyed by
-  // account TYPE (EQUITY_US_ROTH/_IRA/_K401), so the rates above cover both people —
-  // see the retired spouse*GrowthRate aliases below (design/inconsistencies §4.10).
+  // Spouse retirement accounts (US). No growth rates of their own: since design 99 an
+  // account earns the markets its holdings track (MARKET_GROWTH_PARAMS), whoever owns it.
+  // See the retired spouse*GrowthRate aliases below (design/inconsistencies §4.10).
   spouseRothBalance:  40_000,  spouseRothBasis:  30_000,
   spouseIraBalance:  100_000,  spouseIraBasis:   75_000,
   spouseK401Balance: 150_000,  spouseK401Basis: 100_000,
 
-  // Spouse retirement account (AU) — growth comes from `superGrowthRate` below
+  // Spouse retirement account (AU) — earns the AU and ex-AU markets' totals, on super's
+  // default APRA mix (design 99 P5c), like the primary's.
   spouseSuperBalance: 125_000,  spouseSuperBasis: 90_000,
 
   // AU accounts
@@ -737,19 +738,15 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
 
   // AU + Spouse per-record balances (auSavingsBalance, superBalance,
   // auStockBalance, spouse{Roth,Ira,K401,Super}Balance) are generated from their
-  // account records (design 55). Their growth rates remain global params below.
+  // account records (design 55). Their growth comes from the markets they hold.
 
   // ── Spouse Account Rates ───────────────────────────────────────────────────
-  // RETIRED (design/inconsistencies §4.10). There were four `spouse*GrowthRate`
-  // params here and none of them could work: growth is keyed by account TYPE
-  // (`collectBaseGrowthRates` → EQUITY_US_ROTH ← `rothGrowthRate`, … ,
-  // EQUITY_AU_SUPER ← `superGrowthRate`), so one rate per wrapper already covers
-  // both people and a per-owner param has nowhere to land. The type-level keys are
-  // contributed by the US_RETIREMENT / AU_RETIREMENT toolset schemas and are the
-  // real levers. The retired keys map onto them (or drop) via
-  // INTL_RETIREMENT_PARAM_ALIASES. A genuinely per-person rate is a rate-KEY change
-  // (a new EQUITY_US_ROTH_SPOUSE member, or a per-account `growthRate` override),
-  // not a param one.
+  // RETIRED (design/inconsistencies §4.10), and the per-wrapper rates they pointed at
+  // have since gone too (design 99 P2): an account has no growth rate of its own and
+  // earns the TOTAL return of each market its holdings track (`collectBaseGrowthRates`
+  // → one key per market, from MARKET_GROWTH_PARAMS). The retired keys drop via
+  // INTL_RETIREMENT_PARAM_ALIASES. A genuinely per-person return is a holdings question
+  // — give that person's account a different market mix or security — not a param.
 
   // ── US Retirement ─────────────────────────────────────────────────────────
   {
@@ -1091,14 +1088,13 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   usSavingsMinBalance:   'acct.usSavingsAccount.minimumBalance',
   auSavingsMinBalance:   'acct.auSavingsAccount.minimumBalance',
   // Spouse growth rates (design/inconsistencies §4.10). `spouseSuperGrowthRate` was
-  // the only one the compiler ever read (it fed the type-level `superGrowthRate`),
-  // so it RENAMES and a saved value keeps its effect. The other three were read by
-  // nothing; a `null` target RETIRES a key — the loader deletes it instead of
-  // carrying a dead entry forward into the params UI forever. They are deliberately
-  // NOT aliased onto `rothGrowthRate`/`iraGrowthRate`/`k401GrowthRate`: those are
-  // already live levers with their own saved values, and promoting a rate that has
-  // never done anything into one that drives the whole wrapper would silently change
-  // a saved plan's results.
+  // the only one the compiler ever read (it fed the type-level `superGrowthRate`), so it
+  // still RENAMES — but `superGrowthRate` is itself retired now (design 99 P2): the
+  // loader's `retireRateParams` runs after these aliases, drops it, and WARNS if the
+  // saved value differs from the market total super now earns. So a saved value is
+  // reported rather than silently lost. The other three were read by nothing; a `null`
+  // target RETIRES a key — the loader deletes it instead of carrying a dead entry
+  // forward into the params UI forever.
   spouseSuperGrowthRate: 'superGrowthRate',
   spouseRothGrowthRate:  null,
   spouseIraGrowthRate:   null,
