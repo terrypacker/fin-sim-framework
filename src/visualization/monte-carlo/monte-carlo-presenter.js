@@ -36,6 +36,9 @@ export class MonteCarloPresenter {
     this._view          = view;
     this._scenario      = scenario;
     this._lastResult    = null;
+    // { result, keptAt } — the batch later runs are compared against (design 100 §5).
+    // In memory only; WorkbenchApp carries it across a rebuild like the result itself.
+    this._baseline      = null;
     this._unsubSettings = null;
 
     this._configPanel  = new McConfigPanel(view.configPane);
@@ -49,6 +52,8 @@ export class MonteCarloPresenter {
     this._configPanel.onResolveScenarioCenters = ()  => this._scenarioCenters();
     this._runsPanel.onRunSelected        = (run)     => this.onReplayRun?.(run);
     this._runsPanel.onClearReplaySeed    = ()        => this.onClearReplaySeed?.();
+    this._resultsPanel.onKeepBaseline  = () => this.keepBaseline();
+    this._resultsPanel.onClearBaseline = () => this.clearBaseline();
     this._resultsPanel.onMetricChange = (metric) => {
       if (this._lastResult) {
         this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, metric);
@@ -68,7 +73,7 @@ export class MonteCarloPresenter {
     if (appBus) {
       this._unsubSettings = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
         if (!this._lastResult) return;
-        this._resultsPanel.showResults(this._lastResult.summary, this._lastResult.runs);
+        this._showResult(this._lastResult);
         this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, this._resultsPanel._metric);
       });
     }
@@ -106,13 +111,42 @@ export class MonteCarloPresenter {
   restoreResult(result, replaySeed = null) {
     if (!result?.runs) return;
     this._lastResult = result;
-    this._resultsPanel.showResults(result.summary, result.runs);
+    this._showResult(result);
     this._runsPanel.setReplaySeed(replaySeed);
     this._runsPanel.showResults(result.summary, result.runs, this._resultsPanel._metric);
     this._configPanel.setStatus(`Showing ${result.runs.length} runs from the last batch.`);
   }
 
+  // ── Baseline slot (design 100 §5) ─────────────────────────────────────────────
+
+  /** Pin the current result; later results are shown against it, path by path. */
+  keepBaseline() {
+    if (!this._lastResult) return;
+    this._baseline = { result: this._lastResult, keptAt: new Date() };
+    this._showResult(this._lastResult);
+    this._configPanel.setStatus('Kept as baseline. The next run is compared against it.');
+  }
+
+  clearBaseline() {
+    this._baseline = null;
+    if (this._lastResult) this._showResult(this._lastResult);
+  }
+
+  /** The `{ result, keptAt }` baseline, or null — for WorkbenchApp's rebuild carry. */
+  getBaseline() { return this._baseline; }
+
+  /** Re-install a baseline kept by a previous presenter (see `restoreResult`). */
+  restoreBaseline(baseline) {
+    if (!baseline?.result?.runs) return;
+    this._baseline = baseline;
+    if (this._lastResult) this._showResult(this._lastResult);
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────────
+
+  _showResult(result) {
+    this._resultsPanel.showResults(result.summary, result.runs, { baseline: this._baseline });
+  }
 
   /**
    * The variable list as the RUNNER will resolve it, each row tagged with where its
@@ -174,7 +208,7 @@ export class MonteCarloPresenter {
         this._lastResult = result;
         this._configPanel.showProgress(`Completed ${n} runs`);
         this._configPanel.enableRun();
-        this._resultsPanel.showResults(result.summary, result.runs);
+        this._showResult(result);
         this._runsPanel.showResults(result.summary, result.runs, this._resultsPanel._metric);
       }).catch(err => {
         this._configPanel.showProgress(`Error: ${err.message}`);

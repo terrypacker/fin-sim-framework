@@ -93,6 +93,30 @@ export function perturbParams(baseParams, i, variables) {
 }
 
 /**
+ * The shape of the random stream `perturbParams` consumes: each ENABLED variable, in
+ * draw order, with how many random numbers its distribution takes per sample.
+ *
+ * Every variable draws from ONE shared stream, so this — not merely the set of sampled
+ * keys — is what decides whether path i is the same world in two batches (design 100
+ * §6). The count is not fixed by the key: a Normal takes two numbers, a Uniform one, and
+ * a Normal with a zero spread takes NONE. Setting one lever's sd to 0 therefore shifts
+ * every variable drawn after it, which a key comparison cannot see.
+ *
+ * Counted by sampling once with a counting stream rather than by a per-type table, so a
+ * distribution added later is covered without anyone remembering to update one.
+ *
+ * @param {Array} variables  the resolved variable list the batch ran with
+ * @returns {Array<{key: string, draws: number}>}
+ */
+export function samplingSignature(variables) {
+  return (variables ?? []).filter(v => v.enabled).map(v => {
+    let draws = 0;
+    createDistribution(v).sample(() => { draws++; return 0.5; });
+    return { key: v.paramKey, draws };
+  });
+}
+
+/**
  * Build the `ScenarioRunner` that runs one MC iteration of `ctx`'s world.
  *
  * Called once per thread — once on the main thread for the serial path, once per

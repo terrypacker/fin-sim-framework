@@ -15,6 +15,7 @@ import { initEChartWhenReady } from '../components/echarts-init.js';
 import { fmtCompact, fmtWhole } from '../money-format.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
+  pairingMismatches, pairedRescues, pairedMetric, failureRate,
 } from '../../finance/monte-carlo/mc-analysis.js';
 import {
   mixSeriesFromRuns, mixBands, mixByOutcome, thresholdProbabilities, outcomeGapAt,
@@ -64,6 +65,37 @@ function cell(text, cls) {
   return td;
 }
 
+const fmtSignedMoney = (v) => (v == null || !isFinite(v) ? '—' : `${v >= 0 ? '+' : '−'}${fmtWhole(Math.abs(v))}`);
+const fmtSignedPct   = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)}%`);
+const fmtPp          = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} pp`);
+
+/** A `.mc-badge-grid` of `{ label, value, cls?, title? }` cards. */
+function badgeGrid(badges) {
+  const grid = document.createElement('div');
+  grid.className = 'mc-badge-grid';
+  for (const b of badges) {
+    const card = document.createElement('div');
+    card.className = 'mc-badge-card';
+    if (b.title) card.title = b.title;
+    const l = document.createElement('div');
+    l.className = 'mc-badge-label';
+    l.textContent = b.label;
+    const v = document.createElement('div');
+    v.className = `mc-badge-value ${b.cls ?? 'mc-badge-value--muted'}`;
+    v.textContent = b.value;
+    card.append(l, v);
+    grid.appendChild(card);
+  }
+  return grid;
+}
+
+function noteEl(text) {
+  const el = document.createElement('div');
+  el.className = 'mc-shape-note';
+  el.textContent = text;
+  return el;
+}
+
 const METRIC_LABELS = {
   netWorthUsd:  'Net Worth',
   netLiquidity: 'Net Liquidity',
@@ -82,11 +114,14 @@ const METRIC_LABELS = {
  *      (only for a run made with `mix: true`; design 100 §4, design 82 §8)
  *   6. Spending — lifetime cost by category (only for a run made with `spending: true`;
  *      design 100 §4, design 89 §21)
+ *   7. Against baseline — paired rescues and money delta against a kept batch, placed
+ *      under the badges (design 100 §5)
  *
  * Public API:
- *   showResults(summary, runs) — populate all three components
+ *   showResults(summary, runs, { baseline }) — populate; `baseline` is `{ result, keptAt }`
  *   clearResults()             — restore idle placeholder
  *   onMetricChange             — callback(metric) fired when the user switches metrics
+ *   onKeepBaseline / onClearBaseline — the header's baseline button
  */
 export class McResultsPanel extends BaseComponent {
   constructor(containerEl) {
@@ -112,9 +147,13 @@ export class McResultsPanel extends BaseComponent {
     this._mixDiv          = null;
     this._mixData         = null;
     this._mixClass        = null;
+    this._baseline        = null;
 
     /** Callback fired when the user toggles metrics: onMetricChange(metric) */
     this.onMetricChange = null;
+    /** Header baseline button: pin this batch / clear the pinned one. */
+    this.onKeepBaseline  = null;
+    this.onClearBaseline = null;
 
     this._renderIdle();
   }
@@ -126,8 +165,9 @@ export class McResultsPanel extends BaseComponent {
     this._renderIdle();
   }
 
-  showResults(summary, runs) {
+  showResults(summary, runs, { baseline = null } = {}) {
     this._destroyCharts();
+    this._baseline = baseline;
     this._renderResults(summary, runs);
   }
 
@@ -240,7 +280,10 @@ export class McResultsPanel extends BaseComponent {
 
     const toggle = this._buildToggle();
     const badge  = this._buildProvenanceBadge(summary?.provenance);
-    headerRow.append(header, ...(badge ? [badge] : []), toggle);
+    const actions = document.createElement('div');
+    actions.className = 'mc-results-header-actions';
+    actions.append(this._buildBaselineButton(runs), toggle);
+    headerRow.append(header, ...(badge ? [badge] : []), actions);
     wrapper.appendChild(headerRow);
 
     const provenance = this._buildProvenanceBanner(summary?.provenance);
@@ -252,6 +295,10 @@ export class McResultsPanel extends BaseComponent {
     this._badgeGridEl = badgeGrid;
     this._populateBadgeGrid(badgeGrid);
     wrapper.appendChild(badgeGrid);
+
+    // ── Against baseline (design 100 §5) — the headline when there is one ──────
+    const ab = this._buildBaselineSection(summary, runs);
+    if (ab) wrapper.appendChild(ab);
 
     // ── Fan chart ──────────────────────────────────────────────────────────────
     const hasFan = this._fanDataByMetric.netWorthUsd || this._fanDataByMetric.netLiquidity;
@@ -329,6 +376,147 @@ export class McResultsPanel extends BaseComponent {
         this._histChartRo = ro;
       });
     }
+  }
+
+  /** "Keep as baseline", or — when this batch IS the baseline — a pressed "Baseline ✕". */
+  _buildBaselineButton(runs) {
+    const isBaseline = !!this._baseline && this._baseline.result?.runs === runs;
+    const btn = document.createElement('button');
+    btn.className = 'mc-metric-btn mc-baseline-btn' + (isBaseline ? ' mc-metric-btn--active' : '');
+    btn.textContent = isBaseline ? 'Baseline ✕' : (this._baseline ? 'Replace baseline' : 'Keep as baseline');
+    btn.title = isBaseline
+      ? 'This batch is the baseline. Click to clear it.'
+      : 'Pin this batch. Later runs are compared against it, path by path.';
+    btn.addEventListener('click', () => (isBaseline ? this.onClearBaseline : this.onKeepBaseline)?.());
+    return btn;
+  }
+
+  /**
+   * This batch against the kept baseline (design 100 §5).
+   *
+   * Paired first: path i is seeded by index, so it is the same world in both batches, and
+   * the question becomes "in how many worlds did the change flip the outcome" — sharper
+   * than two failure rates, which mix the change with sampling noise. Reverse rescues lead
+   * because a nonzero count is state-dependent harm, the thing an average hides.
+   *
+   * Paired only when `pairingMismatches` finds nothing. Otherwise a banner names why, and
+   * only the unpaired side-by-side is shown: a paired count across two random streams would
+   * look exactly as precise and mean nothing.
+   */
+  _buildBaselineSection(summary, runs) {
+    const base = this._baseline;
+    if (!base?.result?.runs || base.result.runs === runs) return null;
+    const bSummary = base.result.summary;
+    const aRows = runsToRows(base.result.runs);
+    const bRows = runsToRows(runs);
+
+    const section = document.createElement('div');
+    section.className = 'mc-ab-section';
+
+    const head = document.createElement('div');
+    head.className = 'mc-ab-head';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    const kept = base.keptAt instanceof Date ? ` kept ${base.keptAt.toTimeString().slice(0, 5)}` : '';
+    label.textContent = `Against Baseline — ${base.result.runs.length} runs${kept}`;
+    const clear = document.createElement('button');
+    clear.className = 'mc-metric-btn mc-ab-clear';
+    clear.textContent = 'Clear';
+    clear.addEventListener('click', () => this.onClearBaseline?.());
+    head.append(label, clear);
+    section.appendChild(head);
+
+    const mismatches = pairingMismatches(bSummary?.pairing, summary?.pairing);
+    if (mismatches.length) {
+      const banner = document.createElement('div');
+      banner.className = 'mc-ab-banner';
+      banner.textContent = `⚠ Not paired: ${mismatches.join('; ')}. Showing the two batches side by side only; `
+        + 'a difference there mixes the change with sampling noise.';
+      section.appendChild(banner);
+    } else {
+      section.append(...this._buildPairedBlocks(aRows, bRows));
+    }
+
+    section.appendChild(this._buildSideBySideTable(bSummary, aRows, summary, bRows));
+    return section;
+  }
+
+  /** Rescue counts, then the paired after-tax NW delta. */
+  _buildPairedBlocks(aRows, bRows) {
+    const r = pairedRescues(aRows, bRows);
+    const blocks = [
+      badgeGrid([
+        { label: 'Reverse Rescues', value: String(r.reverseRescues),
+          cls: r.reverseRescues ? 'mc-badge-value--failure' : undefined,
+          title: 'Worlds that survived the baseline and fail in this run.' },
+        { label: 'Rescues', value: String(r.rescues),
+          cls: r.rescues ? 'mc-badge-value--success' : undefined,
+          title: 'Worlds that failed in the baseline and survive in this run.' },
+        { label: 'Fail in Both',    value: String(r.both) },
+        { label: 'Survive in Both', value: String(r.neither) },
+      ]),
+    ];
+    blocks[0].classList.add('mc-ab-rescues');
+    blocks.push(noteEl(r.reverseRescues
+      ? `${r.reverseRescues} world(s) that survived the baseline fail here: state-dependent harm to explain, `
+        + 'not noise to average away.'
+      : r.rescues
+        ? `No world got worse. On survival the change weakly dominates across these ${r.n} paths.`
+        : `No world changed outcome across these ${r.n} paths.`));
+
+    const pm = pairedMetric(aRows, bRows, 'afterTaxNW');
+    if (pm.n) {
+      const grid = badgeGrid([
+        { label: 'Ahead (after-tax NW)',  value: String(pm.wins),
+          title: 'Worlds where this run ends with more after-tax net worth than the baseline.' },
+        { label: 'Behind (after-tax NW)', value: String(pm.losses),
+          cls: pm.losses ? 'mc-badge-value--warning' : undefined },
+        { label: 'Paired Δ P10', value: fmtSignedMoney(pm.p10) },
+        { label: 'Paired Δ P50', value: fmtSignedMoney(pm.p50) },
+        { label: 'Paired Δ P90', value: fmtSignedMoney(pm.p90) },
+      ]);
+      grid.classList.add('mc-ab-delta');
+      blocks.push(grid, noteEl(
+        `Percentiles of each world's own difference (this run − baseline), not of either batch's level. `
+        + `Median relative change ${fmtSignedPct(pm.medianRel)}`
+        + (pm.ties ? `; ${pm.ties} tied` : '')
+        + (pm.missing ? `; ${pm.missing} path(s) had no after-tax value` : '') + '.'));
+    }
+    return blocks;
+  }
+
+  /** Both batches' headline numbers side by side, with the change. Shown paired or not. */
+  _buildSideBySideTable(aSummary, aRows, bSummary, bRows) {
+    const rows = [
+      { name: 'Failure rate', a: failureRate(aRows), b: failureRate(bRows), pct: true, lowerIsBetter: true },
+      { name: 'P10 Net Worth', a: aSummary?.p10, b: bSummary?.p10 },
+      { name: 'P50 Net Worth', a: aSummary?.p50, b: bSummary?.p50 },
+      { name: 'P90 Net Worth', a: aSummary?.p90, b: bSummary?.p90 },
+      { name: 'Median NW CAGR', a: aSummary?.pathShape?.medianNetWorthCagr,
+        b: bSummary?.pathShape?.medianNetWorthCagr, pct: true },
+      { name: 'Liquidity Trough P10', a: aSummary?.pathShape?.p10TroughRealNetLiquidity,
+        b: bSummary?.pathShape?.p10TroughRealNetLiquidity },
+    ].filter(r => r.a != null || r.b != null);
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-ab-table';
+    table.innerHTML = '<thead><tr><th class="mc-shape-name">Side by side</th>'
+      + '<th>Baseline</th><th>This run</th><th>Change</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const r of rows) {
+      const d = (r.a != null && r.b != null) ? r.b - r.a : null;
+      const fmt = r.pct ? fmtPct : fmtMoneyOrDash;
+      const better = d == null || d === 0 ? null : (r.lowerIsBetter ? d < 0 : d > 0);
+      const tr = document.createElement('tr');
+      tr.append(
+        cell(r.name, 'mc-shape-name'), cell(fmt(r.a)), cell(fmt(r.b)),
+        cell(r.pct ? fmtPp(d) : fmtSignedMoney(d),
+          better == null ? undefined : `mc-ab-change--${better ? 'better' : 'worse'}`),
+      );
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    return table;
   }
 
   /**

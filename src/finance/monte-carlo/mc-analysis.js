@@ -158,6 +158,61 @@ export function pairedMetric(aRows, bRows, metric = 'afterTaxNW', tolerance = 0)
   };
 }
 
+/**
+ * Why two batches are NOT paired, as a list of reasons — empty when they are.
+ *
+ * `pairedRescues` and `pairedMetric` match rows by seed and trust that seed s is the same
+ * world in both arms. In the lab that holds by discipline (same flags, same n). In the app
+ * the two batches are separated by arbitrary edits, so it is checked instead (design 100
+ * §6): a paired count across two different random streams describes noise, and nothing in
+ * the counts themselves would show it.
+ *
+ * Takes the runner's `summary.pairing` records:
+ *   `{ n, seeds, sampled: [{ key, draws }], mcSequenceRisk }`.
+ * `sampled` is compared in ORDER and by draw count, not as a key set — every variable
+ * draws from one shared stream, so a reordering or a variable that now takes a different
+ * number of random numbers (a zero spread, a type change) shifts every draw after it.
+ *
+ * @param {object|null} a  baseline pairing record
+ * @param {object|null} b  this run's pairing record
+ * @returns {string[]}
+ */
+export function pairingMismatches(a, b) {
+  if (!a || !b) {
+    return [`${a ? 'this run' : 'the baseline'} has no pairing record (a result from before pairing was recorded)`];
+  }
+  const out = [];
+  if (a.n !== b.n) out.push(`path count ${a.n} vs ${b.n}`);
+  else if (a.seeds?.length !== b.seeds?.length || a.seeds.some((s, i) => s !== b.seeds[i])) out.push('seed lists differ');
+
+  if (a.mcSequenceRisk !== b.mcSequenceRisk) {
+    const on = (x) => (x ? 'on' : 'off');
+    out.push(`sequence risk ${on(a.mcSequenceRisk)} vs ${on(b.mcSequenceRisk)}`);
+  }
+
+  const aKeys = (a.sampled ?? []).map(s => s.key);
+  const bKeys = (b.sampled ?? []).map(s => s.key);
+  const onlyA = aKeys.filter(k => !bKeys.includes(k));
+  const onlyB = bKeys.filter(k => !aKeys.includes(k));
+  if (onlyA.length || onlyB.length) {
+    const parts = [];
+    if (onlyA.length) parts.push(`only in the baseline: ${onlyA.join(', ')}`);
+    if (onlyB.length) parts.push(`only in this run: ${onlyB.join(', ')}`);
+    out.push(`sampled variables differ (${parts.join('; ')})`);
+  } else if (aKeys.some((k, i) => k !== bKeys[i])) {
+    out.push('sampled variables are drawn in a different order');
+  } else {
+    for (let i = 0; i < aKeys.length; i++) {
+      const da = a.sampled[i].draws, db = b.sampled[i].draws;
+      if (da !== db) {
+        out.push(`${aKeys[i]} takes ${da} random number(s) vs ${db} (a zero spread or a distribution change), `
+          + 'so every variable after it draws differently');
+      }
+    }
+  }
+  return out;
+}
+
 /** Failure rate of an arm. */
 export const failureRate = (rows) => (rows.length ? rows.filter(r => r.failed).length / rows.length : null);
 

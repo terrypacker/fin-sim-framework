@@ -1,7 +1,7 @@
 # 100 — The Monte Carlo analysis surface (in-app)
 
-**Status: PROPOSED (11 Sep 2026). Steps 1–2 BUILT (11 Sep 2026); step 3 next, step 4 needs
-its own design pass. Start at §9 when picking this up.**
+**Status: PROPOSED (11 Sep 2026). Steps 1–3 BUILT (11 Sep 2026); step 4 needs its own
+design pass. Start at §9 when picking this up.**
 
 ## 1. Problem
 
@@ -149,6 +149,30 @@ that changes WHICH variables are sampled silently breaks common random numbers, 
 guard is what makes the view trustworthy. The baseline lives in memory for the session,
 like the existing result carry. Persisting it is a later decision.
 
+**Step 3 BUILT (11 Sep 2026).**
+- **The pairing record lives on the result**, not with the caller as §9 first proposed.
+  The runner stamps `summary.pairing = { n, seeds, sampled, mcSequenceRisk }`, so it
+  travels with the result across a rebuild and nothing has to rebuild what a batch ran
+  with. `sampled` is `samplingSignature(ctx.variables)` in `mc-worker-core.js`, next to
+  `perturbParams`, which defines the stream.
+- **The guard compares draws, not just keys** (§6): `pairingMismatches(a, b)` in
+  `mc-analysis.js` returns a list of reasons, empty when the batches are paired. A record
+  missing on either side counts as a mismatch.
+- **Baseline slot:** `MonteCarloPresenter.keepBaseline / clearBaseline / getBaseline /
+  restoreBaseline`. `WorkbenchApp._mcBaselineCarry` carries it across a rebuild, keyed to
+  the scenario id (§8 Q1).
+- **Panel:** a header button ("Keep as baseline" / "Replace baseline" / a pressed
+  "Baseline ✕") and `_buildBaselineSection`, placed under the badges because a comparison
+  is the headline when one exists:
+  - rescue badges, reverse rescues first, with a one-line reading below them;
+  - paired after-tax NW: ahead/behind counts and P10/P50/P90 of the per-world difference;
+  - a side-by-side table (failure rate, P10/P50/P90 NW, median CAGR, liquidity trough P10)
+    with the change coloured better or worse;
+  - on a mismatch, a banner naming it, and the side-by-side table only.
+- **Tests:** `tests/unit/mc-analysis-shared.test.mjs` (MCA-5…8),
+  `tests/unit/mc-pairing-record.test.mjs` (MPR-1…3), `tests/viz/mc-results-paired.test.mjs`,
+  and baseline cases in `tests/viz/monte-carlo-presenter.test.mjs`.
+
 ## 6. Pairing — why it is checked, not assumed
 
 `mc-run` and `mc-report` rely on "same flags, same n" discipline by convention. In the app
@@ -156,6 +180,20 @@ the two runs are separated by arbitrary UI edits, so the convention cannot be re
 The guard compares the facts that define the random stream. A config edit that enables
 one more MC variable changes every subsequent draw index, and the paired counts would
 then describe noise.
+
+**The sampled-key set is not enough (found while building step 3).** Every enabled
+variable draws from one shared stream, in order, and the number of random numbers a
+variable takes depends on its distribution, not its key:
+- a Normal takes two;
+- a Uniform takes one;
+- a Normal with a zero spread takes none (`NormalDistribution.sample` returns the mean
+  early).
+
+Setting one lever's sd to 0, a natural "remove this uncertainty" edit, keeps the key set
+identical and shifts every variable drawn after it. The guard therefore compares the
+ordered list of `{ key, draws }`. The counts come from sampling each distribution once
+with a counting stream, so a distribution added later is covered without a table to keep
+up to date.
 
 ## 7. Step 4 — multi-lever grid (to be designed)
 
@@ -178,8 +216,10 @@ to the baseline slot.
 
 ## 8. Open questions
 
-1. Does the baseline slot survive a scenario switch? Proposed: no; it is keyed to the
-   scenario id, like the result carry.
+1. Does the baseline slot survive a scenario switch? **Resolved: no** (step 3). It is
+   keyed to the scenario id, like the result carry. A lever tried as a copy of the plan
+   therefore cannot be compared against the original in the app yet. If that is wanted,
+   the guard already makes it safe; only the label would need to name both scenarios.
 2. Should the path-shape section be collapsible so the fan chart stays above the fold?
 3. Mix bands in MC Results, or a mode of the Allocation tab? **Resolved: MC Results**
    (step 2). The Allocation tab is a single-run view, and mixing the two would blur which
@@ -187,31 +227,14 @@ to the baseline slot.
 
 ## 9. Where to pick up
 
-**Next: step 3, paired A/B (§5).** The pieces already exist:
-- `pairedRescues` / `pairedMetric` in `src/finance/monte-carlo/mc-analysis.js`, fed by
-  `runsToRows(runs)`;
-- `MonteCarloPresenter._lastResult` (the current result);
-- the in-memory carry in `workbench-app.js` (`_mcResultCarry`, keyed by scenario id), as
-  the pattern for keeping a baseline across a rebuild.
+**Step 3 is built (§5). Not yet exercised on a real plan in the app.** First check: keep
+a baseline, change one lever's centre (not its spread), and run again. The section should
+render paired. Then set that lever's sd to 0 and run: the banner should name it.
 
-Build order:
-1. A "Keep as baseline" button in the results header. It stores
-   `{ result, n, seeds, sampledKeys, mcSequenceRisk }` in the presenter.
-   - `seeds` comes from `runs[i].seed`.
-   - `sampledKeys` is the enabled variable keys of the `mcConfig` that ran (keep them at
-     run time; the result does not carry them).
-   - `mcSequenceRisk` comes from the base params.
-2. The pairing guard (§5), a pure function in `mc-analysis.js` with unit tests. It returns
-   the list of mismatches.
-3. A comparison section:
-   - rescues and reverse rescues first;
-   - then the paired after-tax NW delta;
-   - then the two failure rates and percentiles side by side;
-   - a banner naming any guard mismatch, falling back to the unpaired side-by-side.
-4. Viz tests in the style of `mc-results-mix-spending.test.mjs`.
-
-**Then: step 4 (§7) needs a design pass before code.** Open questions: which tab it lives
-in, deterministic cells vs MC cells, and the cost estimate shown before launch.
+**Next: step 4 (§7) needs a design pass before code.** Open questions: which tab it lives
+in, deterministic cells vs MC cells, and the cost estimate shown before launch. Step 3's
+`pairingMismatches` and `summary.pairing` are what an MC-cell grid would use to check
+that neighbouring cells are paired.
 
 **What step 2 found on a real plan (11 Sep 2026, in the app, 40 paths, mix + spending):**
 - **Design 89's classification list is behind.** The unclassified banner named
