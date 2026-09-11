@@ -191,6 +191,8 @@ export class WorkbenchApp extends BaseComponent {
     this._replaySeed           = null;
     // { result, scenarioId } — the last MC batch, carried across a rebuild.
     this._mcResultCarry        = null;
+    // { baseline, scenarioId } — the MC baseline slot (design 100 §5), carried the same way.
+    this._mcBaselineCarry      = null;
 
     // App-lifetime event bus — shared across all app-level services and components.
     this.appBus = new EventBus();
@@ -923,6 +925,13 @@ export class WorkbenchApp extends BaseComponent {
     // Hand back the batch the previous presenter was showing (see destroyScenario).
     // Scoped to the scenario it was run on: a batch describes ONE plan, and re-presenting
     // it under a different scenario's name would be a chart that lies about its subject.
+    // The baseline goes first so the restored result renders against it. Same scoping:
+    // a baseline from another scenario is a different plan, not a lever on this one.
+    if (this._mcBaselineCarry?.scenarioId === (activeConfig?.id ?? null)) {
+      this.mcPresenter.restoreBaseline(this._mcBaselineCarry.baseline);
+    } else {
+      this._mcBaselineCarry = null;
+    }
     if (this._mcResultCarry?.scenarioId === (activeConfig?.id ?? null)) {
       this.mcPresenter.restoreResult(this._mcResultCarry.result, this._activeReplaySeed());
     } else {
@@ -1013,6 +1022,11 @@ export class WorkbenchApp extends BaseComponent {
     // reason the harvest below is).
     const mcResult = this.mcPresenter?.getLastResult?.();
     if (mcResult) this._mcResultCarry = { result: mcResult, scenarioId: this._loadedCfg?.id ?? null };
+    // Unconditional, unlike the result: a baseline the user cleared must stay cleared.
+    if (this.mcPresenter) {
+      const baseline = this.mcPresenter.getBaseline?.() ?? null;
+      this._mcBaselineCarry = baseline ? { baseline, scenarioId: this._loadedCfg?.id ?? null } : null;
+    }
 
     // Harvest in-flight free-field domain edits (currency, holdings, names, …)
     // into the scenario record BEFORE reset so Rebuild rebuilds what the user

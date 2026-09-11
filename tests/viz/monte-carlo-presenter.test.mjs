@@ -24,6 +24,8 @@
 import { MonteCarloPresenter } from '../../src/visualization/monte-carlo/monte-carlo-presenter.js';
 import { ServiceRegistry }     from '../../src/services/service-registry.js';
 
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+
 function makeView() {
   const pane = () => {
     const el = document.createElement('div');
@@ -111,5 +113,53 @@ describe('MonteCarloPresenter — variable centers follow the live scenario', ()
     expect(presenter._scenarioCenters().get('stockBalance')).toBe(750_000);
 
     presenter.destroy();
+  });
+});
+
+describe('MonteCarloPresenter — baseline slot (design 100 §5)', () => {
+  afterEach(() => ServiceRegistry.resetAll());
+
+  const pairing = { n: 1, seeds: [1], mcSequenceRisk: true, sampled: [] };
+  const result = (failed) => ({
+    runs:    [{ seed: 1, scenarioFailed: failed, finalNetWorthUsd: 1, afterTaxNetWorthUsd: 1, timeSeries: [] }],
+    summary: { successRate: failed ? 0 : 1, p10: 1, p50: 1, p90: 1, pairing },
+  });
+
+  test('keepBaseline pins the current result; the next result renders against it', () => {
+    setActiveCfg(null);
+    const presenter = makePresenter({ params: {} });
+    const pane = presenter._view.resultsPane;
+
+    presenter.keepBaseline();                        // nothing to keep yet
+    expect(presenter.getBaseline()).toBeNull();
+
+    presenter.restoreResult(result(true));
+    presenter.keepBaseline();
+    expect(presenter.getBaseline().result.summary.successRate).toBe(0);
+    expect(pane.querySelector('.mc-ab-section')).toBeNull();
+
+    presenter.restoreResult(result(false));
+    expect(pane.querySelector('.mc-ab-section .mc-ab-rescues')).not.toBeNull();
+
+    pane.querySelector('.mc-ab-clear').click();
+    expect(presenter.getBaseline()).toBeNull();
+    expect(pane.querySelector('.mc-ab-section')).toBeNull();
+
+    presenter.destroy();
+  });
+
+  test('restoreBaseline re-installs a carried baseline on a new presenter', () => {
+    setActiveCfg(null);
+    const first = makePresenter({ params: {} });
+    first.restoreResult(result(true));
+    first.keepBaseline();
+    const carried = first.getBaseline();
+    first.destroy();
+
+    const second = makePresenter({ params: {} });
+    second.restoreBaseline(carried);
+    second.restoreResult(result(false));
+    expect(second._view.resultsPane.querySelector('.mc-ab-section')).not.toBeNull();
+    second.destroy();
   });
 });

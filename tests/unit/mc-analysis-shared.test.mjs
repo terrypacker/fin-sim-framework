@@ -25,7 +25,7 @@ import * as lab    from '../../scripts/lib/mc-analysis.mjs';
 
 test('MCA-1 the lab module re-exports the shared functions, not copies', () => {
   for (const name of ['pairedRescues', 'pairedMetric', 'failureRate', 'failureByBand',
-    'failureDrivers', 'runsToRows', 'RETURN_BAND_EDGES']) {
+    'failureDrivers', 'runsToRows', 'RETURN_BAND_EDGES', 'pairingMismatches']) {
     assert.equal(lab[name], shared[name], name);
   }
 });
@@ -66,4 +66,40 @@ test('MCA-4 failureDrivers reads out-of-funds years from adapted runner rows', (
   const d = shared.failureDrivers(rows, ['netWorthCagr']);
   assert.deepEqual(d.oofYears, [2049]);
   assert.equal(d.fields[0].survived, 0.05);
+});
+
+// ─── Pairing guard (design 100 §5–6) ────────────────────────────────────────────
+
+const rec = (over = {}) => ({
+  n: 3, seeds: [1, 2, 3], mcSequenceRisk: true,
+  sampled: [{ key: 'usEquityGrowthRate', draws: 2 }, { key: 'inflationRate', draws: 2 }],
+  ...over,
+});
+
+test('MCA-5 identical pairing records are paired', () => {
+  assert.deepEqual(shared.pairingMismatches(rec(), rec()), []);
+});
+
+test('MCA-6 each fact that defines the stream is named when it differs', () => {
+  const m = (over) => shared.pairingMismatches(rec(), rec(over));
+  assert.deepEqual(m({ n: 4, seeds: [1, 2, 3, 4] }), ['path count 3 vs 4'],
+    'a path-count mismatch is not also reported as a seed mismatch');
+  assert.deepEqual(m({ seeds: [1, 2, 9] }), ['seed lists differ']);
+  assert.deepEqual(m({ mcSequenceRisk: false }), ['sequence risk on vs off']);
+  assert.match(m({ sampled: [{ key: 'usEquityGrowthRate', draws: 2 }] })[0], /only in the baseline: inflationRate/);
+  assert.match(m({ sampled: [...rec().sampled].reverse() })[0], /different order/);
+});
+
+test('MCA-7 a variable taking a different number of draws breaks pairing, same keys or not', () => {
+  // The trap a key comparison misses: a zero-spread Normal draws nothing, so every
+  // variable after it reads different random numbers.
+  const b = rec({ sampled: [{ key: 'usEquityGrowthRate', draws: 0 }, { key: 'inflationRate', draws: 2 }] });
+  const out = shared.pairingMismatches(rec(), b);
+  assert.equal(out.length, 1);
+  assert.match(out[0], /usEquityGrowthRate takes 2 random number\(s\) vs 0/);
+});
+
+test('MCA-8 a missing record is a mismatch, never assumed paired', () => {
+  assert.match(shared.pairingMismatches(null, rec())[0], /the baseline has no pairing record/);
+  assert.match(shared.pairingMismatches(rec(), undefined)[0], /this run has no pairing record/);
 });

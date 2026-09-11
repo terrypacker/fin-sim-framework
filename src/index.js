@@ -182,10 +182,10 @@ import { JournalReportingService } from './finance/journal-reporting-service.js'
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
-import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
+import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng } from './finance/monte-carlo/mc-sampling.js';
-import { perturbParams, buildIterationRunner, initMcContext, runMcIteration } from './finance/monte-carlo/parallel/mc-worker-core.js';
+import { perturbParams, samplingSignature, buildIterationRunner, initMcContext, runMcIteration } from './finance/monte-carlo/parallel/mc-worker-core.js';
 import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
@@ -1201,6 +1201,7 @@ export const Finance = {
   runsToRows,
   pairedRescues,
   pairedMetric,
+  pairingMismatches,
   failureRate,
   failureByBand,
   failureDrivers,
@@ -1208,6 +1209,7 @@ export const Finance = {
   set,
   makeMcSeededRng,
   perturbParams,
+  samplingSignature,
   buildIterationRunner,
   initMcContext,
   runMcIteration,

@@ -13,7 +13,7 @@ import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/i
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
-import { buildIterationRunner, perturbParams } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, perturbParams, samplingSignature } from './parallel/mc-worker-core.js';
 import { McWorkerPool }              from './parallel/mc-worker-pool.js';
 
 // What a path records lives in ./mc-sampling.js so the worker core can import it
@@ -557,6 +557,17 @@ export class IntlRetirementMcRunner {
     // summary so a report can state what these numbers describe instead of the
     // reader having to assume it was their plan.
     summary.provenance = provenance;
+
+    // The facts that define this batch's random stream (design 100 §5–6), so a later
+    // batch can be checked for pairing against this one instead of assumed paired. On
+    // the result itself rather than kept by the caller: it then travels with the result
+    // across a rebuild, and nothing has to reconstruct what the batch ran with.
+    summary.pairing = {
+      n:              runs.length,
+      seeds:          runs.map(r => r.seed),
+      sampled:        samplingSignature(ctx.variables),
+      mcSequenceRisk: ctx.base.mcSequenceRisk !== false,
+    };
 
     return { runs, summary };
   }

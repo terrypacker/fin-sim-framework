@@ -166,7 +166,8 @@
 .mc-mix-chip--active { border-color: var(--border-hi); color: var(--text-primary); }
 .mc-mix-wrap { height: 200px; flex-shrink: 0; }
 
-.mc-spend-banner {
+.mc-spend-banner,
+.mc-ab-banner {
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--warning);
@@ -186,6 +187,23 @@
   display: flex;
   gap: 2px;
 }
+
+.mc-results-header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* ── Paired A/B against a baseline (design 100 §5) ── */
+.mc-ab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.mc-ab-head { display: flex; align-items: center; justify-content: space-between; }
+.mc-ab-change--better { color: var(--green); }
+.mc-ab-change--worse  { color: var(--red); }
 
 .mc-metric-btn {
   padding: 1px 8px;
