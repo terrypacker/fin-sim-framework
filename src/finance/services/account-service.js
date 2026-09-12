@@ -784,6 +784,12 @@ export class AccountService extends AssetService {
     // that has a sleeve to name. Absent — every other caller — leaves the credit exactly
     // where it was, `transaction()`'s pro-rata spread, so no existing path moves by a cent.
     const depositAllocation = (typeof opts === 'object' && scopedSources) ? (opts.depositAllocation ?? null) : null;
+    // A currency this draw must not touch. `IntlTransferApplyReducer` tops up its SOURCE
+    // through here, and without this the cash sweep below (savings are drawable across the
+    // border) could raise that source from the transfer's own destination currency — a
+    // round trip that reports the deficit covered, so OUT_OF_FUNDS never fires and the
+    // expense debit is capped instead (design 100 §9).
+    const excludeCurrency = typeof opts === 'object' ? (opts.excludeCurrency ?? null) : null;
     const targetAccount = state[targetKey];
     const country       = targetAccount.country;
     const currency      = targetAccount.currency?.code ?? country;
@@ -846,7 +852,8 @@ export class AccountService extends AssetService {
       typeof v === 'object' &&
       !Array.isArray(v) &&
       'balance' in v &&
-      v.type !== ACCOUNT_TYPE.LOAN;      // liabilities are never a source of cash (design 54 §8)
+      v.type !== ACCOUNT_TYPE.LOAN &&    // liabilities are never a source of cash (design 54 §8)
+      (excludeCurrency === null || srcCcyOf(v) !== excludeCurrency);
 
     const sources = Object.entries(state)
       .filter(([k, v]) =>

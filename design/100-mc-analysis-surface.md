@@ -394,8 +394,32 @@ a real plan in the app yet.** First checks:
   holds. None of this money was tier 1, so the spending totals were right before the fix.
   Tests: `tests/unit/spending-cube.test.mjs` CLS-8, CLS-9, CUBE-7.
 - **"Went short" and the failure rate disagreed** by one path (25% vs 22.5%). Design 89
-  §20.5 found them identical on its reference plan. The panel now shows the gap; the cause
-  is not yet traced (a path that ran short and recovered is the likely one).
+  §20.5 found them identical on its reference plan. The panel now shows the gap.
+  **TRACED 11 Sep 2026 — a funding round trip, not a recovery.** Reproduced headless
+  (`mc-run --spending`, same 40 seeds: 9 failed, 10 short, one discordant path). On that
+  path, in the plan's last months:
+  1. `REPLENISH_SAVINGS` on the AU transaction account escalates to `INTL_TRANSFER_APPLY`
+     (US → AU).
+  2. `IntlTransferApplyReducer` finds the US source short and calls
+     `accountService.replenishSavings(usKey, …)`.
+  3. That walk excludes only its own target. `isCashRole` makes savings drawable across
+     the border even under LOCAL_FIRST, so it **draws the AU destination account** to top
+     up the US source.
+  4. The transfer then converts the money back, AU is credited the full `targetDeficit`,
+     and `audShortfall ≤ 0.01`, so no `OUT_OF_FUNDS`. The destination nets only the part
+     that did not come from itself, less two FX fees.
+  5. `ExpenseDebitReducer` caps the debit silently. The path goes short and never fails.
+
+  So the failure flag undercounted. **FIXED 11 Sep 2026.**
+  - `IntlTransferApplyReducer` now passes `excludeCurrency` (the destination's currency) to
+    the source top-up, and `replenishSavings` skips every account in that currency.
+    Drawing destination-currency money to fund a transfer into that currency is always a
+    round trip, not only when the account is the destination itself.
+  - The uncovered remainder now chains `OUT_OF_FUNDS`.
+  - The same 40 seeds now give 10 failed and 10 short, with no discordant path.
+  - All 6,311 unit tests pass and the goldens did not move.
+  - Test: `reducer-postconditions-finance.test.mjs` ("no round trip"), which fails
+    without the fix. See design 89 §21.7.
 - **Spending is expensive in the browser**: 40 paths took about 10 minutes and the page
   process held about 4 GB. Keep it opt-in and keep n small. Design 89 §20.7's in-state
   accumulator is what would remove the cost.
