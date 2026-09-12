@@ -12,7 +12,9 @@ and the untyped-leaf gate. Untyped numeric leaves across the goldens went from 5
 The chart plots the active list's charted entries, every watched path is captured at full
 resolution, a State panel checkbox means "in the active list", the chip ✕ un-charts, and
 there is an active-list picker, `runtime.watchlist`, and `WATCHLIST_CHANGED`. The user
-confirmed the §4 decisions on 12 Sep.
+confirmed the §4 decisions on 12 Sep. **R2 ✅ (12 Sep)**: `FieldFormatter` and the shared
+field row are built. The chart takes its kinds, labels and tooltip values from the one
+stamped registry (§9.7).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -628,6 +630,56 @@ to **23 in 7 shapes**. The count uses the stamped registry and the panel's `[id=
    `washSaleLedger.*.{deferred,disallowedLong,disallowedShort}`): `wash-sale.js` doesn't
    pin their currency, so they stay untyped until someone confirms it.
 
+### 9.7 R2 as built (12 Sep 2026)
+
+- **`FieldFormatter`** (`src/visualization/state/field-format.js`) is built over the one
+  stamped registry and provides:
+  - `describe(path)`: `{ kind, currencyCode, label, contextLabel, chartable, typed }`;
+  - `format(path, value, { state, compact })`;
+  - `valueTitle(path, value)`, the hover for a value;
+  - `contextLabel(path)`.
+
+  It declines objects and arrays (it returns null), so the view's own object renderer
+  handles them. This also removes a latent R1 regression. `auSuperCapsByPerson.**`
+  matches the record objects as well as their leaves, so an action-detail diff of a whole
+  caps record would have printed as "[object Object]".
+- **`contextLabel`** (R-7) joins the owning record's name, the holding, and the field.
+  The holding shows its `label`, else its security's symbol or name, else its id.
+  - `metrics.<stateKey>` reads as the account.
+  - Other metrics read as their own name.
+  - A path with no owner lists every segment.
+
+  The history modal title uses it too, so the separator there is now "·" where it was
+  "—".
+- **Hover and the untyped marker.**
+  - A converted amount's hover shows the native amount and the rate, e.g.
+    `A$1,000.00 native @ 0.6500 AUD→USD`.
+  - A number with no schema entry gets a dotted underline, and its hover says it is a
+    guess.
+  - Compact money renders as `$3.21M` or `A$450k`. It is ready for W3; the State panel
+    keeps the full form.
+- **Shared row** (`src/visualization/state/field-row.js`) has `buildFieldRow`,
+  `buildStaticRow` and `renderSparkline`.
+  - Every captured row now draws a sparkline from its full-resolution buffer, not only
+    the Metrics section (§9.3).
+  - The sparkline is sampled down to 64 points, so a buffer of thousands of events stays
+    cheap to redraw each frame.
+  - `StatePanelView._fmtChange` and `_pathLabel` go through the formatter. `fmtVal`
+    remains only for what the formatter declines.
+- **Chart (R-9).** `ChartPresenter` takes each series' kind (its axis) and label from the
+  formatter instead of `state-paths`' unstamped module registry. A balance copy used to
+  resolve to `metric` there; it now resolves to money.
+  - Labels are fixed when a series is charted, because the legend keys its on/off state
+    by name. Equal labels get "(2)" appended.
+  - Chips and the legend show the context label.
+  - The tooltip formats money in the currency the series is plotted in, and everything
+    else through the formatter.
+- **A bug found and fixed.** `ChartView.resetHistory` clears the series kinds, and the
+  presenter never restored them, so a rate series replayed on the money axis after a
+  rewind. The presenter now re-applies kind and label for the surviving selection.
+- **Left alone:** the chart's axis formatters. They already key off the kinds, which are
+  now correct.
+
 ---
 
 ## 10. Phasing
@@ -638,7 +690,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 |---|---|---|---|
 | **W0** ✅ | Remove chart-by-path (§5.1) | — | none |
 | **R1** ✅ | Registry correctness (§9.2 R-1, R-2 split, R-3, R-5, R-6, R-8), the `toLabel` acronym fix, the untyped-leaf coverage gate (§9.6), and hidden text rows (§9.5). Display only. | — | none |
-| **R2** `[ ]` | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. | R1 | none |
+| **R2** ✅ | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. See §9.7. | R1 | none |
 | **W1** ✅ | `WatchlistModel` (`src/visualization/watchlist/watchlist-model.js`) + legacy migration + `metrics.<stateKey>` alias + persistence (`activeWatchlistId` marker in `serializeScenario`) + default seed (§5.4, §8.1). Unit tests: `watchlist-model.test.mjs` (migration, round-trip, delete-last, alias, normalization, events) plus serializer cases. Not wired into the app; W2 wires it. | — | none |
 | **W2** ✅ | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. Built as §8.2. | W1 | none |
 | **W3** `[ ]` | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. | W2 | none |
@@ -649,7 +701,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3**, with **M1** alongside. Then **W4 / W5**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.

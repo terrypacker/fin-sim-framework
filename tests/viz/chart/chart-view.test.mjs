@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { ChartView } from '../../../src/visualization/chart/chart-view.js';
 import { StateSchemaRegistry } from '../../../src/finance/services/state-schema-registry.js';
 import { CurrencyConverter }   from '../../../src/finance/fx/currency-converter.js';
+import { FieldFormatter }      from '../../../src/visualization/state/field-format.js';
 
 // ─── DOM setup ────────────────────────────────────────────────────────────────
 // Provide the two DOM fixtures ChartView needs: a canvas with a parent div
@@ -287,6 +288,30 @@ test('ChartView._displaySeriesData: non-currency series is unchanged', () => {
   view._seriesKinds.set('someRate', 'rate');
   const data = [[0, 0.05]];
   assert.strictEqual(view._displaySeriesData('someRate', data), data);
+});
+
+test('ChartView: a series label set by the presenter names it in the legend (design 101 R2)', () => {
+  const view = makeView();
+  view.setSeriesLabel('superAccount.balance', 'AU Super · Balance');
+  assert.strictEqual(view._labelFor('superAccount.balance'), 'AU Super · Balance');
+  view.removeSeries('superAccount.balance');
+  assert.notStrictEqual(view._labelFor('superAccount.balance'), 'AU Super · Balance', 'dropped with the series');
+});
+
+test('ChartView._fmtSeriesValue: money in its plotted currency; the rest via the formatter', () => {
+  const reg = new StateSchemaRegistry();
+  reg.registerAccount('superAccount', { currency: { code: 'AUD' }, type: 'super' });
+  const conv = { convert: (v, from, to) => (from === 'AUD' && to === 'USD' ? v * 0.65 : null) };
+  const view = makeView({
+    schemaRegistry: reg, currencyConverter: conv, rateStateProvider: () => ({}),
+    displaySettings: { displayCurrency: 'USD' },
+    formatter: new FieldFormatter({ registry: reg }),
+  });
+  assert.strictEqual(view._fmtSeriesValue('superAccount.balance', 650), '$650.00', 'converted: display currency');
+  view._displaySettings = { displayCurrency: 'AUD' };
+  assert.strictEqual(view._fmtSeriesValue('superAccount.balance', 1000), 'A$1,000.00', 'native: its own currency');
+  assert.strictEqual(view._fmtSeriesValue('effectiveExchangeRates.USD_AUD', 1.55), '1.5500');
+  assert.strictEqual(view._fmtSeriesValue('effectiveGrowthRates.EQUITY_US', 0.0715), '7.15%');
 });
 
 test('ChartView._buildYAxes: a rate-only right axis reads as percent (design 101 R-2)', () => {

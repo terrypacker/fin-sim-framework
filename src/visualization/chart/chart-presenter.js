@@ -47,6 +47,8 @@ export class ChartPresenter extends BaseComponent {
     this._backfilledPaths  = new Set();  // active paths currently shown at snapshot resolution (R10.1)
     this._fieldStore       = null;       // shared FieldSeriesStore, read to backfill on activation
     this._liveAfter        = new Map();  // path → ms of the last backfilled point (see activatePath)
+    this._labels           = new Map();  // path → legend/chip label, fixed at activation
+    this._formatter        = null;       // FieldFormatter over the stamped registry (R2)
     this._onChipRemove     = null;       // chip ✕ callback (R7.3)
     this._drainExecEndMsgs = () => [];
   }
@@ -59,6 +61,13 @@ export class ChartPresenter extends BaseComponent {
 
   /** Callback (path) when an active-series chip's ✕ is clicked (R7.3). */
   set onChipRemove(fn) { this._onChipRemove = fn ?? null; }
+
+  /**
+   * Inject the FieldFormatter (design 101 R2). A series' kind (axis bucket) and its
+   * legend/chip label then come from the app's stamped registry, not state-paths'
+   * unstamped module default (R-9).
+   */
+  set formatter(f) { this._formatter = f ?? null; }
 
   /** Snapshot of the active paths, for the active-series chip strip (R7.3). */
   get activePaths() { return [...this._activePaths]; }
@@ -73,7 +82,7 @@ export class ChartPresenter extends BaseComponent {
       chip.className = 'wb-series-chip';
       if (this._backfilledPaths.has(path)) chip.classList.add('is-backfilled');
       const label = document.createElement('span');
-      label.textContent = path.split('.').pop().replace(/\[.*?\]/g, '');
+      label.textContent = this._labels.get(path) ?? path.split('.').pop().replace(/\[.*?\]/g, '');
       label.title = path;
       const x = document.createElement('button');
       x.className = 'wb-series-chip-x';
@@ -152,6 +161,9 @@ export class ChartPresenter extends BaseComponent {
     this._view.resetHistory();
     this._backfilledPaths.clear();   // replay re-ingests live data, clearing any coarse badge
     this._liveAfter.clear();
+    // The view's reset drops each series' kind and label; the selection survives, so
+    // restore them, or a rate series replays on the left (money) axis.
+    for (const path of this._activePaths) this._describeToView(path);
   }
 
   // ── Active set / watchlist / promote ──────────────────────────────────────────
@@ -160,9 +172,29 @@ export class ChartPresenter extends BaseComponent {
   _activate(path) {
     this._activePaths.add(path);
     this._controller.discoverKey(path, groupFor(path));
-    this._view.setSeriesKind(path, typeForPath(path)?.kind ?? 'unknown');
+    if (this._formatter) this._labels.set(path, this._uniqueLabel(path, this._formatter.contextLabel(path)));
+    this._describeToView(path);
     this._view.setDatasetVisible(path, true);
     this._renderChips();
+  }
+
+  /** Tell the view a series' kind (its axis) and label. */
+  _describeToView(path) {
+    const kind = this._formatter?.describe(path).kind ?? typeForPath(path)?.kind ?? 'unknown';
+    this._view.setSeriesKind(path, kind);
+    const label = this._labels.get(path);
+    if (label) this._view.setSeriesLabel?.(path, label);
+  }
+
+  /**
+   * The label, suffixed "(2)", "(3)" when another charted series already shows it.
+   * The chart keys legend state by name, so two equal names would toggle together.
+   */
+  _uniqueLabel(path, base) {
+    const taken = new Set([...this._labels].filter(([p]) => p !== path).map(([, l]) => l));
+    let label = base;
+    for (let n = 2; taken.has(label); n++) label = `${base} (${n})`;
+    return label;
   }
 
   /** Mark/unmark a series as backfilled (coarse) so the view can dash it (R10.1). */
@@ -196,6 +228,7 @@ export class ChartPresenter extends BaseComponent {
   deactivatePath(path) {
     this._activePaths.delete(path);
     this._liveAfter.delete(path);
+    this._labels.delete(path);
     this._setBackfilled(path, false);
     this._view.removeSeries?.(path);
     this._renderChips();

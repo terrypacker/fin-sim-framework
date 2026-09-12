@@ -12,6 +12,8 @@ import assert from 'node:assert/strict';
 import { ChartController } from '../../../src/visualization/chart/chart-controller.js';
 import { ChartPresenter }  from '../../../src/visualization/chart/chart-presenter.js';
 import { EventBus }        from '../../../src/simulation-framework/event-bus.js';
+import { StateSchemaRegistry } from '../../../src/finance/services/state-schema-registry.js';
+import { FieldFormatter }  from '../../../src/visualization/state/field-format.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../src/simulation-framework/bus-messages.js';
 
 // ─── DOM / globals ──────────────────────────────────────────────────────────────
@@ -303,6 +305,51 @@ test('syncActivePaths: drops paths no longer listed, and leaves kept ones untouc
   assert.deepStrictEqual(presenter.activePaths.sort(), ['b', 'c']);
   assert.deepStrictEqual(view.calls.removeSeries, ['a']);
   assert.strictEqual(backfills, 3, "'b' is not re-activated (and re-backfilled) by the second sync");
+});
+
+// ─── FieldFormatter: one registry for kinds and labels (design 101 R2, R-9) ──────
+
+function withFormatter() {
+  const reg = new StateSchemaRegistry();
+  reg.registerAccount('superAccount', { currency: { code: 'AUD' }, type: 'super', name: 'Super', country: 'AU' });
+  const state = { superAccount: { holdings: [{ id: 'h1', label: 'Growth' }, { id: 'h2', label: 'Growth' }] } };
+  const made = makePresenter();
+  made.view.setSeriesLabel = function (key, label) { (this.calls.setSeriesLabel ??= []).push({ key, label }); };
+  made.presenter.formatter = new FieldFormatter({ registry: reg, stateProvider: () => state });
+  return made;
+}
+
+test('activatePath: kind and label come from the injected formatter', () => {
+  const { presenter, view } = withFormatter();
+  presenter.activatePath('metrics.superAccount');
+  assert.deepStrictEqual(view.calls.setSeriesKind.at(-1), { key: 'metrics.superAccount', kind: 'currency' },
+    'the stamped registry types a balance copy as money; the module default said "metric"');
+  assert.deepStrictEqual(view.calls.setSeriesLabel.at(-1), { key: 'metrics.superAccount', label: 'AU Super' });
+});
+
+test('activatePath: equal context labels are made unique for the legend', () => {
+  const { presenter, view } = withFormatter();
+  presenter.activatePath('superAccount.holdings[id=h1].marketValue');
+  presenter.activatePath('superAccount.holdings[id=h2].marketValue');
+  assert.deepStrictEqual(view.calls.setSeriesLabel.map(c => c.label),
+    ['AU Super · Growth · Market Value', 'AU Super · Growth · Market Value (2)']);
+});
+
+test('resetHistory: kinds and labels are restored for the surviving selection', () => {
+  const { presenter, view } = withFormatter();
+  presenter.activatePath('effectiveGrowthRates.EQUITY_US');
+  view.calls.setSeriesKind.length = 0;
+  presenter.resetHistory();
+  assert.deepStrictEqual(view.calls.setSeriesKind, [{ key: 'effectiveGrowthRates.EQUITY_US', kind: 'rate' }],
+    'without this a rate series replays on the money axis');
+});
+
+test('chips show the context label', () => {
+  document.body.innerHTML = '<div id="chartActiveSeries"></div>';
+  const { presenter } = withFormatter();
+  presenter.activatePath('superAccount.holdings[id=h1].marketValue');
+  assert.strictEqual(document.querySelector('#chartActiveSeries .wb-series-chip span').textContent,
+    'AU Super · Growth · Market Value');
 });
 
 // ─── wireSimBus filtering ───────────────────────────────────────────────────────
