@@ -33,10 +33,11 @@
  *
  * ─── the two units traps ─────────────────────────────────────────────────────
  *
- * 1. **The loan balances declare `kind: 'currency'` with a null `currencyCode`.**
- *    Measured on the reference plan: `usHousePropertyLoan.balance` and its AU sibling
- *    both resolve that way. `normalizeAggregateCurrency` treats an undeclared unit as
- *    already-in-target and says so, which for the AUD loan would understate the
+ * 1. **A loan balance can declare `kind: 'currency'` with a null `currencyCode`.**
+ *    The property loans (`usHousePropertyLoan.balance` and its AU sibling) used to
+ *    resolve that way; ScenarioLoader now stamps them, but any record that never
+ *    registers still would. `normalizeAggregateCurrency` treats an undeclared unit as
+ *    already-in-target and says so, which for an AUD loan would understate the
  *    principal by the exchange rate. So the cube resolves the schema FIRST and falls
  *    back to the account's own `currency.code` in state, which is authoritative for an
  *    account's denomination.

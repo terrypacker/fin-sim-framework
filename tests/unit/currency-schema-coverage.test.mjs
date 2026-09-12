@@ -27,6 +27,7 @@ import { StateSchemaRegistry } from '../../src/finance/services/state-schema-reg
 import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { RealProperty }        from '../../src/finance/assets/real-property.js';
 
 // ── Unit: registry stamping ────────────────────────────────────────────────
 
@@ -97,6 +98,28 @@ test('currency override re-stamps account/asset paths to the new code', () => {
   assert.equal(reg.resolve('usHouseProperty.value').currencyCode, 'USD');
   reg.registerAsset('usHouseProperty', { currency: { code: 'AUD' }, country: 'US' });
   assert.equal(reg.resolve('usHouseProperty.value').currencyCode, 'AUD');
+});
+
+test('mortgaged property: the synthesized <prop>Loan money paths carry the property currency', () => {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const us = new RealProperty(800000, { name: 'US House', country: 'US', mortgageBalance: 300000 });
+  const au = new RealProperty(900000, { name: 'AU House', country: 'AU', mortgageBalance: 0 });
+  us.stateKey = 'usHouseProperty';
+  au.stateKey = 'auHouseProperty';
+  services.realPropertyService.createProperty(us);
+  services.realPropertyService.createProperty(au);
+  new ScenarioLoader()._registerDisplayCurrencies({}, services);
+  const reg = services.schemaRegistry;
+  for (const f of ['balance', 'monthlyPayment', 'postIoPrincipal', 'minimumBalance']) {
+    assert.equal(reg.resolve(`usHousePropertyLoan.${f}`).currencyCode, 'USD', `${f} should be USD`);
+  }
+  assert.equal(reg.resolve('usHousePropertyLoan.interestRate').kind, 'rate');
+  assert.equal(reg.displayNameFor('usHousePropertyLoan'), 'US House Loan');
+  // Out of the report account scope — joining it would bring back the mortgage double-count.
+  assert.ok(!reg.accountBalanceKeys().includes('usHousePropertyLoan.balance'));
+  // No mortgage → no loan synthesized → nothing stamped.
+  assert.equal(reg.resolve('auHousePropertyLoan.balance').currencyCode, null);
 });
 
 // ── Integration: compiled scenario has no code-less money ───────────────────

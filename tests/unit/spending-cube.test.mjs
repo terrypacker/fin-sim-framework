@@ -302,25 +302,20 @@ describe('the cube on a real run', () => {
     assert.equal(cube.unconverted, 0, 'nothing fell out of the fold for want of a rate');
   });
 
-  test('CUBE-2 a loan balance gets a unit the SCHEMA does not declare', () => {
-    // Measured: `usHousePropertyLoan.balance` resolves to kind `currency` with a NULL
-    // code. A converter trusting the schema alone would treat it as already-in-target,
-    // which for an AUD loan understates the principal by the exchange rate. The fallback
-    // is the account's own descriptor — an object, never a bare string.
+  test('CUBE-2 a loan balance unit from the SCHEMA agrees with the loan\'s own descriptor', () => {
+    // `usHousePropertyLoan.balance` used to resolve to kind `currency` with a NULL code,
+    // which a converter would treat as already-in-target — for an AUD loan, understating
+    // the principal by the exchange rate. ScenarioLoader now stamps the property loans;
+    // the cube keeps the state-descriptor fallback, so the two must never disagree.
     const { sim, services } = run();
     const loans = [...loanBalanceKeys(sim.state)];
     assert.ok(loans.length > 0, 'the fixture must have a loan for this to mean anything');
 
-    let fellBack = 0;
     for (const key of loans) {
       const vt = services.schemaRegistry?.resolve?.(key);
-      if (vt?.currencyCode) continue;                     // schema declared it after all
-      fellBack++;
-      assert.ok(sim.state[key.slice(0, -'.balance'.length)]?.currency?.code,
-        `${key} has no unit from either source`);
+      assert.equal(vt?.currencyCode, sim.state[key.slice(0, -'.balance'.length)]?.currency?.code,
+        `${key}: the schema unit disagrees with the loan's own descriptor`);
     }
-    assert.ok(fellBack > 0,
-      'the schema now declares a code for every loan — this test is no longer testing the fallback');
   });
 
   test('CUBE-3 coverage names what the shipped reports cannot see', () => {
