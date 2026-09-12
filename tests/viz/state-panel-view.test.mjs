@@ -872,7 +872,7 @@ test('_renderMetricsPanel: a per-account balance metric shows the account name',
 
 test('_pathLabel: resolves the owning record and keeps the field name', () => {
   const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
-  assert.strictEqual(panel._pathLabel('usSavings2Account.balance'), 'US Shared Checking — Balance');
+  assert.strictEqual(panel._pathLabel('usSavings2Account.balance'), 'US Shared Checking · Balance');
   assert.strictEqual(panel._pathLabel('usSavings2Account'),         'US Shared Checking');
   assert.strictEqual(panel._pathLabel('cumulativeTaxesPaid'),       'Cumulative Taxes Paid');
 });
@@ -916,4 +916,37 @@ test('initLiveState: choosing a list calls onWatchlistSelect with its id', () =>
   sel.value = 'w2';
   sel.dispatchEvent(new Event('change'));
   assert.deepStrictEqual(picked, ['w2']);
+});
+
+// ─── Shared field row + FieldFormatter (design 101 R2) ───────────────────────
+
+test('renderState: a watched row draws its sparkline from the capture buffer', () => {
+  const panel = registryPanel();
+  panel.fieldSeriesStore = { get: p => (p === 'cash' ? [{ value: 1 }, { value: 3 }] : null), clear() {} };
+  const c = document.createElement('div');
+  panel.renderState({ cash: 3, other: 1 }, c);
+  const rows = [...c.querySelectorAll('.lsp-metric-row')];
+  const spark = t => rows.find(r => r.querySelector('.lsp-metric-label').title === t).querySelector('.lsp-metric-spark svg');
+  assert.ok(spark('cash'), 'captured → sparkline');
+  assert.strictEqual(spark('other'), null, 'not captured → none');
+});
+
+test('renderState: an untyped number is marked, a typed one is not', () => {
+  const panel = registryPanel();
+  const c = document.createElement('div');
+  panel.renderState({ mysteryField: 12, effectiveGrowthRates: { EQUITY_US: 0.07 } }, c);
+  panel._expandedSections.add('effectiveGrowthRates');
+  const c2 = document.createElement('div');
+  panel.renderState({ mysteryField: 12, effectiveGrowthRates: { EQUITY_US: 0.07 } }, c2);
+  const val = t => [...c2.querySelectorAll('.lsp-metric-row')]
+    .find(r => r.querySelector('.lsp-metric-label').title === t).querySelector('.lsp-metric-value');
+  assert.ok(val('mysteryField').classList.contains('is-untyped'));
+  assert.match(val('mysteryField').title, /No schema entry/);
+  assert.ok(!val('effectiveGrowthRates.EQUITY_US').classList.contains('is-untyped'));
+  assert.strictEqual(val('effectiveGrowthRates.EQUITY_US').textContent, '7.00%');
+});
+
+test('_fmtChange: an object under a money glob falls back to the object renderer', () => {
+  const panel = registryPanel();
+  assert.strictEqual(panel._fmtChange('auSuperCapsByPerson.p1', { sgYTD: 5 }), '{"sgYTD":5}');
 });

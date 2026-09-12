@@ -44,7 +44,8 @@ export class ChartView extends BaseComponent {
    * @param {function}[opts.rateStateProvider] - () => state carrying effectiveExchangeRates
    */
   constructor({ container, simStart, simEnd, series,
-                appBus, schemaRegistry, currencyConverter, displaySettings, rateStateProvider } = {}) {
+                appBus, schemaRegistry, currencyConverter, displaySettings, rateStateProvider,
+                formatter } = {}) {
     super();
     this.container = container;
     this.simStart  = simStart;
@@ -64,7 +65,9 @@ export class ChartView extends BaseComponent {
 
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
     this._seriesKinds  = new Map(); // key → ParameterValueType.kind string
+    this._seriesLabels = new Map(); // key → legend/tooltip name (design 101 R2 context label)
     this._backfilledSeries = new Set(); // keys shown at snapshot resolution → dashed (R10.1)
+    this._formatter    = formatter ?? null; // FieldFormatter: tooltip values (design 101 R2)
 
     // Display-currency conversion (design 10 §Phase 4). Currency series are stored
     // native and converted to the display currency at build time, so switching
@@ -110,6 +113,7 @@ export class ChartView extends BaseComponent {
   removeSeries(key) {
     this._seriesMap.delete(key);
     this._seriesKinds.delete(key);
+    this._seriesLabels.delete(key);
     this._hiddenSeries.delete(key);
     this._backfilledSeries.delete(key);
     if (!this._chart) return;
@@ -126,6 +130,15 @@ export class ChartView extends BaseComponent {
    */
   setSeriesKind(key, kind) {
     this._seriesKinds.set(key, kind ?? 'unknown');
+  }
+
+  /**
+   * The name a series shows in the legend and tooltip. Set once when the series is
+   * charted: the legend keys its on/off state by this name, so it must not drift.
+   */
+  setSeriesLabel(key, label) {
+    if (label) this._seriesLabels.set(key, label);
+    else       this._seriesLabels.delete(key);
   }
 
   /** Mark a series as backfilled (snapshot resolution) → rendered dashed (R10.1). */
@@ -195,6 +208,7 @@ export class ChartView extends BaseComponent {
   resetHistory() {
     this._seriesMap.clear();
     this._seriesKinds.clear();
+    this._seriesLabels.clear();
     this._backfilledSeries.clear();
     this._colorIdx    = 0;
     this._annotations = {};
@@ -231,6 +245,8 @@ export class ChartView extends BaseComponent {
   _labelFor(key) {
     const cfg = this._seriesConfig.get(key);
     if (cfg?.label) return cfg.label;
+    const label = this._seriesLabels.get(key);
+    if (label) return label;
     return key
       .replace(/([A-Z])/g, ' $1')
       .replace(/_/g, ' ')
@@ -629,29 +645,48 @@ export class ChartView extends BaseComponent {
       );
     }
 
-    // Series lines. Currency series carry the active display-currency symbol so
-    // the conversion is legible (design 10 §Phase 4); the value is already in
-    // display currency because the series data was converted at build time.
-    const displaySymbol = (this._displaySettings && this._currencyConverter)
-      ? this._symbolFor(this._displaySettings.displayCurrency) : '';
     for (const p of filtered) {
-      let rawVal;
-      if (Array.isArray(p.value)) {
-        rawVal = p.value[1];
-      } else {
-        rawVal = p.value;
-      }
-      const isCurrency = this._isCurrencySeries(p.seriesId);
-      const isPercent  = this._isPercentKind(this._seriesKinds.get(p.seriesId));
-      const formattedVal =
-          typeof rawVal !== 'number' ? rawVal
-          : isPercent ? `${(rawVal * 100).toLocaleString('en-US', { maximumFractionDigits: 3 })}%`
-          : (isCurrency ? displaySymbol : '') + rawVal.toLocaleString();
+      const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
+      const formattedVal = typeof rawVal === 'number' ? this._fmtSeriesValue(p.seriesId, rawVal) : rawVal;
       lines.push(
           `${p.marker}${p.seriesName}: <b>${formattedVal}</b>`
       );
     }
 
     return lines.join('<br/>');
+  }
+
+  /**
+   * One plotted value as the tooltip shows it (design 101 R2). Money is already in the
+   * currency it was plotted in (see _displaySeriesData), so it is formatted in that
+   * currency, never converted again. Everything else goes through the FieldFormatter,
+   * so a rate reads 7.15% and an FX multiplier 1.5500, as in the State panel.
+   */
+  _fmtSeriesValue(key, value) {
+    const code = this._plottedCurrency(key);
+    if (code) return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+    if (!this._isCurrencySeries(key)) {
+      const formatted = this._formatter?.format(key, value);
+      if (formatted != null) return formatted;
+    }
+    if (this._isPercentKind(this._seriesKinds.get(key))) {
+      return `${(value * 100).toLocaleString('en-US', { maximumFractionDigits: 3 })}%`;
+    }
+    return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  /**
+   * The currency a currency series is plotted in: the display currency when
+   * _displaySeriesData converted it, else its native code. Null for a non-currency or
+   * code-less series.
+   */
+  _plottedCurrency(key) {
+    const vt = this._schemaRegistry?.resolve(key);
+    if (vt?.kind !== 'currency' || !vt.currencyCode) return null;
+    const native  = vt.currencyCode;
+    const display = this._displaySettings?.displayCurrency;
+    if (!this._currencyConverter || !display || display === native) return native;
+    const factor = this._currencyConverter.convert(1, native, display, this._rateStateProvider?.() ?? null);
+    return factor == null ? native : display;
   }
 }

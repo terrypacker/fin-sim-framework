@@ -60,6 +60,7 @@ import { ScenarioTabPresenter }       from '../visualization/scenario/scenario-t
 import { StatePanelView }             from '../visualization/simulation/state-panel-view.js';
 import { FieldSeriesStore }           from '../visualization/state/field-series-store.js';
 import { WatchCapture }               from '../visualization/watchlist/watch-capture.js';
+import { FieldFormatter }             from '../visualization/state/field-format.js';
 import { WatchlistController }        from '../visualization/watchlist/watchlist-controller.js';
 import { SimulationAnimator }         from '../visualization/simulation/simulation-animator.js';
 import { ScenarioTabView }            from '../visualization/scenario/scenario-tab-view.js';
@@ -794,8 +795,16 @@ export class WorkbenchApp extends BaseComponent {
         .filter(([, c]) => c)
     );
 
+    // Design 101 R2: one FieldFormatter over the one stamped registry (R-9) gives the
+    // chart its series kinds, legend/chip labels and tooltip values. The State panel
+    // builds its own over the same registry.
+    const fieldFormatter = new FieldFormatter({
+      registry:      registry.schemaRegistry,
+      stateProvider: () => this.scenario?.sim?.state ?? null,
+    });
     const chartController = new ChartController();
     const chartView = new ChartView({
+      formatter: fieldFormatter,
       container: this._paneHost('chartContainer', { outerClass: 'wb-chart-root', innerClass: 'wb-chart-viz' }),
       simStart:  this.scenario.simStart,
       simEnd:    this.scenario.simEnd,
@@ -809,6 +818,7 @@ export class WorkbenchApp extends BaseComponent {
     });
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
     this.chartPresenter.fieldStore = fieldStore;   // read to backfill a path when it is charted
+    this.chartPresenter.formatter  = fieldFormatter;
     this.chartPresenter.startViz();
 
     // Design 101 W2: the scenario's watchlists drive the chart (the active list's

@@ -47,6 +47,13 @@
   font-family: var(--font-mono);
   text-align: right;
 }
+/* Design 101 R2: a number with no schema entry. Its "1,234.56" is a guess, so it
+   says so on hover instead of passing as plausible. */
+.lsp-metric-value.is-untyped {
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 2px;
+  cursor: help;
+}
 
 /* Chart-toggle checkbox at the start of each numeric row / section header. */
 .lsp-chart-toggle {

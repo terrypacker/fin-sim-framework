@@ -15,6 +15,8 @@ import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph
 import { readThemeColor } from '../theme.js';
 import { APP_EVENTS } from '../app-display-settings.js';
 import { toLabel } from '../state/state-paths.js';
+import { FieldFormatter } from '../state/field-format.js';
+import { buildFieldRow, buildStaticRow } from '../state/field-row.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -72,10 +74,17 @@ export class StatePanelView extends BaseComponent {
     this._formatDate = fn ?? (d => d.toDateString());
   }
 
-  /** Inject the StateSchemaRegistry for context-aware value formatting. */
+  /**
+   * Inject the StateSchemaRegistry. Every value and label goes through a
+   * FieldFormatter over it (design 101 R2).
+   */
   set schemaRegistry(r) {
     this._schemaRegistry = r ?? null;
+    this._formatter = r ? new FieldFormatter({ registry: r, stateProvider: () => this._pendingState }) : null;
   }
+
+  /** The FieldFormatter over the injected registry, or null. */
+  get fieldFormatter() { return this._formatter ?? null; }
 
   /**
    * The human display name for a state path, or null when it names no
@@ -88,22 +97,15 @@ export class StatePanelView extends BaseComponent {
   }
 
   /**
-   * Human label for a *full* state path, resolving the owning record when the
-   * path points at one of its fields: `usSavings2Account.balance` →
-   * "US Shared Checking — Balance". Falls back to today's whole-path
-   * beautification when nothing resolves (design 70 §6.1/§6.4).
+   * Human label for a *full* state path: the FieldFormatter's context label, so
+   * `usSavings2Account.balance` → "US Shared Checking · Balance" and a lot names its
+   * holding (design 70 §6.1, design 101 R-7). Without a registry, the whole path
+   * beautified.
    * @param {string} statePath
    * @returns {string}
    */
   _pathLabel(statePath) {
-    const direct = this._displayName(statePath);
-    if (direct) return direct;
-    const dot = statePath.lastIndexOf('.');
-    if (dot > 0) {
-      const owner = this._displayName(statePath.slice(0, dot));
-      if (owner) return `${owner} — ${this.toLabel(statePath.slice(dot + 1))}`;
-    }
-    return this.toLabel(statePath);
+    return this._formatter?.contextLabel(statePath) ?? this.toLabel(statePath);
   }
 
   /** Inject the TypeRegistry, used to resolve action-payload field currencies. */
@@ -340,50 +342,6 @@ export class StatePanelView extends BaseComponent {
     container.replaceChildren(frag);
   }
 
-  _renderMetricSparkline(history) {
-    const values = history.map(e => e.value);
-    if (values.length < 2) return null;
-
-    const W = 56, H = 14, P = 1;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-
-    const pts = values.map((v, i) => {
-      const x = P + (i / (values.length - 1)) * (W - P * 2);
-      const y = P + (H - P * 2) - ((v - min) / range) * (H - P * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-
-    const trend = values[values.length - 1] - values[0];
-    const color = trend > 0 ? '#34d399' : trend < 0 ? '#f87171' : '#6b7280';
-
-    const NS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('width', W);
-    svg.setAttribute('height', H);
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.style.cssText = 'flex-shrink:0;vertical-align:middle;';
-
-    const poly = document.createElementNS(NS, 'polyline');
-    poly.setAttribute('points', pts);
-    poly.setAttribute('fill', 'none');
-    poly.setAttribute('stroke', color);
-    poly.setAttribute('stroke-width', '1.5');
-    poly.setAttribute('stroke-linejoin', 'round');
-    poly.setAttribute('stroke-linecap', 'round');
-    svg.appendChild(poly);
-
-    const lastPt = pts.split(' ').at(-1).split(',');
-    const dot = document.createElementNS(NS, 'circle');
-    dot.setAttribute('cx', lastPt[0]);
-    dot.setAttribute('cy', lastPt[1]);
-    dot.setAttribute('r', '2');
-    dot.setAttribute('fill', color);
-    svg.appendChild(dot);
-
-    return svg;
-  }
 
   createStateDetails(_templateId, date, state) {
     if (!state) return null;
@@ -555,55 +513,28 @@ export class StatePanelView extends BaseComponent {
   }
 
   /**
-   * Build a unified numeric-field row: [chart checkbox][label][sparkline][value].
-   * The checkbox reflects/drives the chart active set; row-click opens history.
+   * A numeric field row (design 101 R2, shared with the Watchlist panel):
+   * [watch checkbox][label][sparkline][value]. The sparkline draws from `history`
+   * (the Metrics section's own buffer) or else the path's full-resolution capture
+   * buffer, so every watched row has one. Row-click opens history.
    */
   _buildFieldRow({ path, value, label = null, history = null, onClick = null }) {
-    const row = document.createElement('div');
-    row.className = 'lsp-metric-row lsp-clickable-row';
-
-    row.appendChild(this._buildChartToggle(path));
-
-    const lbl = document.createElement('span');
-    lbl.className = 'lsp-metric-label';
-    lbl.textContent = label ?? this.toLabel(path.split('.').pop().replace(/\[.*?\]/g, ''));
-    lbl.title = path;
-    row.appendChild(lbl);
-
-    const spark = (history && history.length >= 2) ? this._renderMetricSparkline(history) : null;
-    const sparkCell = document.createElement('span');
-    sparkCell.className = 'lsp-metric-spark';
-    if (spark) sparkCell.appendChild(spark);
-    row.appendChild(sparkCell);
-
-    const val = document.createElement('span');
-    val.className = 'lsp-metric-value';
-    val.textContent = this._fmtChange(path, value);
-    row.appendChild(val);
-
-    const click = onClick ?? (() => this._onFieldRowClick(path));
-    row.addEventListener('click', click);
-    return row;
+    const series = history ?? this._fieldSeriesStore?.get(path) ?? null;
+    return buildFieldRow({
+      path,
+      label:      label ?? this._formatter?.label(path) ?? this.toLabel(path.split('.').pop().replace(/\[.*?\]/g, '')),
+      valueText:  this._fmtChange(path, value),
+      valueTitle: this._formatter?.valueTitle(path, value) ?? null,
+      untyped:    this._formatter ? !this._formatter.isTyped(path) : false,
+      history:    series ? series.map(e => e.value) : null,
+      toggle:     this._buildChartToggle(path),
+      onClick:    onClick ?? (() => this._onFieldRowClick(path)),
+    });
   }
 
   /** A non-numeric leaf row (label + value), no chart toggle. */
   _buildStaticRow(label, valueText, path = null) {
-    const row = document.createElement('div');
-    row.className = 'lsp-metric-row lsp-static-row';
-    row.appendChild(document.createElement('span')); // checkbox column spacer
-    const lbl = document.createElement('span');
-    lbl.className = 'lsp-metric-label';
-    lbl.textContent = label;
-    // Keep the raw state path reachable on hover — once the label shows a name,
-    // this is the only place the identity is recoverable (design 70 §6.1).
-    if (path) lbl.title = path;
-    const spark = document.createElement('span');
-    spark.className = 'lsp-metric-spark';
-    const val = document.createElement('span');
-    val.className = 'lsp-metric-value';
-    val.textContent = valueText;
-    row.append(lbl, spark, val);
-    return row;
+    return buildStaticRow({ label, valueText, path });
   }
 
   /** A checkbox bound to membership of the active watchlist for a single path. */
@@ -1705,19 +1636,15 @@ export class StatePanelView extends BaseComponent {
   }
 
   // ── Formatting helpers ────────────────────────────────────────────────────
-  //TODO Extract to shared UI class #139
+  // Scalars go through the shared FieldFormatter (design 101 R2, #139); fmtVal
+  // remains only for what it declines: objects, arrays, and untyped text.
 
   /**
-   * Format a state-diff value using the schema registry when available,
-   * falling back to fmtVal for types the registry returns null for
-   * (arrays, objects, unregistered non-numeric fields).
+   * Format a state value (a row, a diff before/after/delta, a history stat) via the
+   * FieldFormatter, falling back to fmtVal for anything it returns null for.
    */
   _fmtChange(field, value, objAsCode = false) {
-    if (this._schemaRegistry) {
-      const formatted = this._schemaRegistry.format(field, value);
-      if (formatted !== null) return formatted;
-    }
-    return this.fmtVal(value, objAsCode);
+    return this._formatter?.format(field, value) ?? this.fmtVal(value, objAsCode);
   }
 
   fmtVal(v, objAsCode = false) {
