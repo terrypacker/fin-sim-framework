@@ -87,6 +87,18 @@ export function loanBalanceKeys(state) {
 }
 
 /**
+ * State paths that end in `.balance` but are a READOUT of accounts, not an account.
+ *
+ * The cube's domain is every balance delta, registered or not (§3.1), because the loan
+ * legs are accounts the registry does not carry. A derived readout is a different case:
+ * design 97's `PoolFlowReducer` stamps `state.liquidityPools[id].balance` each period as
+ * the sum of the accounts a pool claims, so its fall is those accounts' debits counted a
+ * second time. Measured on a pools plan it was ~80% of the whole UNCLASSIFIED band.
+ */
+const DERIVED_BALANCE_PREFIXES = ['liquidityPools.'];
+const _isDerivedBalance = (stateKey) => DERIVED_BALANCE_PREFIXES.some(p => stateKey.startsWith(p));
+
+/**
  * Build the cube.
  *
  * @param {object} opts
@@ -133,6 +145,7 @@ export function buildSpendingCube({ journal, state = null, services = null,
     for (const diff of entry.stateDiff ?? []) {
       const stateKey = diff.field ?? '';
       if (!stateKey.endsWith('.balance')) continue;
+      if (_isDerivedBalance(stateKey)) continue;
       const delta = diff.delta ?? 0;
       if (!(delta < 0)) continue;
 
@@ -164,7 +177,8 @@ export function buildSpendingCube({ journal, state = null, services = null,
         ? data.amount : null;
       const intentRatio = intentLocal != null && local > 0 ? intentLocal / local : null;
 
-      for (const share of classifyDebit({ actionType, stateKey, data, loanKeys })) {
+      const reducerName = entry.reducer?.name ?? null;
+      for (const share of classifyDebit({ actionType, stateKey, data, loanKeys, reducerName })) {
         const value = amount * share.fraction;
         rows.push({
           ts,

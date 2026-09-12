@@ -151,6 +151,10 @@ const BY_ACTION_TYPE = Object.freeze({
   INTL_TRANSFER_APPLY:               REPORT_CATEGORY.INTERNAL,
   FX_TRANSFER_APPLY:                 REPORT_CATEGORY.INTERNAL,
   COLLECTIBLE_SALE_APPLY:            REPORT_CATEGORY.INTERNAL,
+  // Design 97's cross-account pool flow: a refill draws one of the household's accounts
+  // to fund another. Its withdrawal tax and §988 legs are their own actions (it goes
+  // through `replenishSavings`), so the debit itself is purely a move between pockets.
+  POOL_FLOW_APPLY:                   REPORT_CATEGORY.INTERNAL,
 
   // ── marks, not cash flows ──────────────────────────────────────────────────
   // §2's failure mode in one line: a revaluation in a spending band would report a
@@ -214,6 +218,28 @@ const PAYS_OFF_DEBT = new Set([
   'AU_HOUSE_SALE_APPLY',
 ]);
 
+/**
+ * The period advance is not one thing. `US_PERIOD_ADVANCE` / `AU_PERIOD_ADVANCE` are
+ * reduced by twenty-odd reducers, and some of them move a balance directly rather than
+ * emitting an action of their own, so the action type alone cannot say what a debit is.
+ * The journal records the REDUCER on every entry, so these debits are classified by it.
+ *
+ * Still an allowlist: a reducer not named here lands in `UNCLASSIFIED`. Found by design
+ * 100's in-app spending run, where period-advance debits were a visible stripe on every
+ * path. None of these is spending — spending arrives as `EXPENSE_DEBIT` and taxes as
+ * their own debit actions — which is why the tier-1 totals were right all along.
+ */
+const PERIOD_ADVANCE_TYPES = new Set(['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE']);
+const BY_PERIOD_ADVANCE_REDUCER = Object.freeze({
+  // Marks: a bond repriced by the yield curve, an equity return applied by the path.
+  'Bond Price Adjust': REPORT_CATEGORY.REVALUATION,
+  'Equity Return':     REPORT_CATEGORY.REVALUATION,
+  // Moves between the household's own holdings: a maturing bond to cash, a ladder rung
+  // bought from cash.
+  'Bond Maturity':     REPORT_CATEGORY.INTERNAL,
+  'Bond Ladder':       REPORT_CATEGORY.INTERNAL,
+});
+
 /** One share of a debit. `fraction` values across a classification sum to 1. */
 /**
  * @typedef {{category: string, tier: string, fraction: number}} DebitShare
@@ -234,10 +260,16 @@ const whole = (category) => [{ category, tier: CATEGORY_TIER[category], fraction
  *                                     LIABILITY. Absent ⇒ a sale payoff cannot be identified
  *                                     and lands in `UNCLASSIFIED`, which is the honest answer:
  *                                     visibly unclassified beats silently counted as spending.
+ * @param {string}   [debit.reducerName] the journal entry's reducer — used for the period
+ *                                     advance, whose debits the action type cannot tell apart
  * @returns {DebitShare[]} shares summing to 1
  */
-export function classifyDebit({ actionType, stateKey, data = null, loanKeys = null } = {}) {
+export function classifyDebit({ actionType, stateKey, data = null, loanKeys = null, reducerName = null } = {}) {
   if (!actionType) return whole(REPORT_CATEGORY.UNCLASSIFIED);
+
+  if (PERIOD_ADVANCE_TYPES.has(actionType)) {
+    return whole(BY_PERIOD_ADVANCE_REDUCER[reducerName] ?? REPORT_CATEGORY.UNCLASSIFIED);
+  }
 
   // ── the loan legs, asserted rather than scoped away (§3.1) ─────────────────
   if (PAYS_OFF_DEBT.has(actionType)) {

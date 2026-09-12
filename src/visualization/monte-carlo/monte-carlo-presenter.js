@@ -16,6 +16,10 @@ import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/i
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
+import { buildOptVariables }       from '../../finance/optimization/intl-retirement-opt-config.js';
+import { get }                     from '../../finance/monte-carlo/mc-param-paths.js';
+import { formatDuration, formatAxisValue } from './mc-grid-format.js';
+import { gridCellRuns }            from '../../finance/monte-carlo/mc-grid-runner.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -39,6 +43,13 @@ export class MonteCarloPresenter {
     // { result, keptAt } — the batch later runs are compared against (design 100 §5).
     // In memory only; WorkbenchApp carries it across a rebuild like the result itself.
     this._baseline      = null;
+    // The last lever grid (design 100 §7), and which of the two the results pane shows.
+    this._lastGrid      = null;
+    this._showing       = 'batch';
+    this._gridView      = { ref: null, sel: null };   // the grid's reference and selected cells
+    this._gridRuns      = new Map();                  // cell → run records (see gridCellRuns)
+    // Wall-clock ms per path from the last run: the grid's cost estimate (§7.2).
+    this._msPerPath     = null;
     this._unsubSettings = null;
 
     this._configPanel  = new McConfigPanel(view.configPane);
@@ -52,6 +63,8 @@ export class MonteCarloPresenter {
     this._configPanel.onResolveScenarioCenters = ()  => this._scenarioCenters();
     this._runsPanel.onRunSelected        = (run)     => this.onReplayRun?.(run);
     this._runsPanel.onClearReplaySeed    = ()        => this.onClearReplaySeed?.();
+    this._configPanel.onRunGrid          = (config)  => this._onRunGrid(config);
+    this._resultsPanel.onGridCellSelected = (view)   => this._onGridCellSelected(view);
     this._resultsPanel.onKeepBaseline  = () => this.keepBaseline();
     this._resultsPanel.onClearBaseline = () => this.clearBaseline();
     this._resultsPanel.onMetricChange = (metric) => {
@@ -63,6 +76,7 @@ export class MonteCarloPresenter {
     // Populate panel with the full dynamic variable list (including per-shock rows),
     // each row carrying the provenance of its center.
     this._configPanel.setVariables(this._resolveVariables());
+    this._configPanel.setGridAxes(this._resolveGridAxes());
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
@@ -72,6 +86,10 @@ export class MonteCarloPresenter {
     // Re-render results in the active display currency on change (design 10 §Phase 4).
     if (appBus) {
       this._unsubSettings = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+        if (this._showing === 'grid' && this._lastGrid) {
+          this._resultsPanel.showGrid(this._lastGrid, this._gridView);
+          return;
+        }
         if (!this._lastResult) return;
         this._showResult(this._lastResult);
         this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, this._resultsPanel._metric);
@@ -145,6 +163,8 @@ export class MonteCarloPresenter {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _showResult(result) {
+    this._showing = 'batch';
+    this._runsPanel.setContext(null);
     this._resultsPanel.showResults(result.summary, result.runs, { baseline: this._baseline });
   }
 
@@ -189,6 +209,7 @@ export class MonteCarloPresenter {
   _onRun(config) {
     const { n, variableConfigs, mix = false, spending = false } = config;
     const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
+    const started  = performance.now();
     this._configPanel.showProgress(`Running 0 / ${n}…`);
 
     // rAF lets the browser paint the "Running" status before async work starts.
@@ -206,6 +227,9 @@ export class MonteCarloPresenter {
         },
       }).then(result => {
         this._lastResult = result;
+        // Spending runs at ~7.5x (design 89 §20) and a grid never records it, so its rate
+        // would overstate a grid's cost several times over.
+        if (!spending) this._recordPathRate(started, n);
         this._configPanel.showProgress(`Completed ${n} runs`);
         this._configPanel.enableRun();
         this._showResult(result);
@@ -216,6 +240,101 @@ export class MonteCarloPresenter {
         console.error('[MonteCarloPresenter] run failed', err);
       });
     });
+  }
+
+  /** Run a lever grid (design 100 §7) and show it in the results pane. */
+  _onRunGrid(config) {
+    const { n, variableConfigs, axes, mode, runs } = config;
+    const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
+    const started  = performance.now();
+    this._configPanel.showProgress(`Grid: 0 / ${runs} runs…`);
+
+    requestAnimationFrame(() => {
+      this._controller.runGrid({
+        simStart:   this._scenario.simStart,
+        simEnd:     this._scenario.simEnd,
+        n, mcConfig, axes, mode,
+        baseParams: this._resolveBaseParams(),
+        onProgress: (done, total) => {
+          const left = done ? ((performance.now() - started) / done) * (total - done) : null;
+          this._configPanel.showProgress(`Grid: ${done} / ${total} runs`
+            + (left != null && done < total ? ` · about ${formatDuration(left)} left` : ''));
+        },
+      }).then(grid => {
+        this._lastGrid = grid;
+        this._showing  = 'grid';
+        this._gridRuns = new Map();
+        this._gridView = { ref: null, sel: null };
+        this._recordPathRate(started, runs);
+        this._configPanel.showProgress(`Completed grid: ${grid.cells.length} cells, ${runs} runs`);
+        this._configPanel.enableRun();
+        this._resultsPanel.showGrid(grid);
+      }).catch(err => {
+        this._configPanel.showProgress(`Error: ${err.message}`);
+        this._configPanel.enableRun();
+        console.error('[MonteCarloPresenter] grid run failed', err);
+      });
+    });
+  }
+
+  /**
+   * List the paths of the grid cell being read in the Runs panel, with their params, so
+   * a grid path can be inspected and replayed like a batch run. A context line names the
+   * cell, because seed N exists in every cell.
+   */
+  _onGridCellSelected({ ref, sel, shown }) {
+    this._gridView = { ref, sel };
+    const g = this._lastGrid;
+    if (!g?.cells?.[shown]) return;
+    if (!this._gridRuns.has(shown)) this._gridRuns.set(shown, gridCellRuns(g, shown));
+    const runs  = this._gridRuns.get(shown);
+    const label = g.axes.map((a, k) => `${a.label} ${formatAxisValue(g.cells[shown].values[k])}`).join(', ');
+    this._runsPanel.setContext(`Grid cell — ${label}${shown === ref ? ' (reference)' : ''} · `
+      + `${runs.length} path${runs.length === 1 ? '' : 's'}`);
+    this._runsPanel.showResults({ p50: g.cells[shown].summary.p50 }, runs, 'netWorthUsd');
+  }
+
+  /** The grid and how it is being read, for WorkbenchApp's rebuild carry; null with no grid. */
+  getGridState() {
+    return this._lastGrid ? { grid: this._lastGrid, showing: this._showing, ...this._gridView } : null;
+  }
+
+  /**
+   * Re-install a grid carried across a rebuild. Replaying a grid path rebuilds the
+   * scenario, and without this the grid vanished at the moment one of its runs was
+   * being looked into, the same problem `restoreResult` solves for a batch.
+   */
+  restoreGrid(state, replaySeed = null) {
+    if (!state?.grid?.cells) return;
+    this._lastGrid = state.grid;
+    this._gridRuns = new Map();
+    this._gridView = { ref: state.ref ?? null, sel: state.sel ?? null };
+    if (state.showing !== 'grid') return;
+    this._showing = 'grid';
+    this._runsPanel.setReplaySeed(replaySeed);
+    this._resultsPanel.showGrid(state.grid, this._gridView);
+    this._configPanel.setStatus(`Showing the last grid: ${state.grid.cells.length} cells.`);
+  }
+
+  /** Wall-clock ms per path from a finished run, for the grid's cost line (design 100 §7.2). */
+  _recordPathRate(started, paths) {
+    if (!(paths > 0)) return;
+    this._msPerPath = (performance.now() - started) / paths;
+    this._configPanel.setMsPerPath(this._msPerPath);
+  }
+
+  /**
+   * The levers a grid axis can be: the Opt harvest (design 100 §7.2), each with the
+   * plan's value so the panel can show it. Schema defaults are layered under the plan
+   * here, and only for that display value, so a lever the plan leaves at its default
+   * still shows the value the sim runs at.
+   */
+  _resolveGridAxes() {
+    const base      = this._resolveBaseParams();
+    const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    const withDefaults = { ...paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema()), ...base };
+    return buildOptVariables(base, this._scenario?.accounts, { cfg: activeCfg })
+      .map(v => ({ ...v, planValue: get(withDefaults, v.paramKey) }));
   }
 
   /**

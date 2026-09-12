@@ -12,6 +12,10 @@ import { BaseComponent }              from '../components/base-component.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distributions.js';
 import { SweepVariableTable }          from '../common/sweep-variable-table.js';
+import { valuesForConfig }             from '../../finance/optimization/opt-values.js';
+import { OPT_PARAM_TYPES }             from '../../finance/optimization/optimization-objectives.js';
+import { GRID_MODES, MAX_AXIS_VALUES } from '../../finance/monte-carlo/mc-grid.js';
+import { formatAxisValue, formatDuration } from './mc-grid-format.js';
 
 /**
  * McConfigPanel — left pane of the MC tab.
@@ -31,6 +35,7 @@ import { SweepVariableTable }          from '../common/sweep-variable-table.js';
  *
  * Callbacks:
  *   onRun({ n, variableConfigs, mix, spending }) — fired when the Run button is clicked.
+ *   onRunGrid(getGridConfig())      — fired by Run Grid in Grid mode (design 100 §7).
  *   onResolveScenarioCenters()      — must return Map(paramKey → current scenario
  *                                     value); used to re-sync untouched centers.
  */
@@ -46,7 +51,13 @@ export class McConfigPanel extends BaseComponent {
     this._statusEl   = null;
     this._section    = null;
     this.onRun       = null;
+    this.onRunGrid   = null;
     this.onCopyFromScenario = null;
+    // Grid mode (design 100 §7).
+    this._mode       = 'batch';
+    this._gridVars   = [];      // the levers an axis can be (the Opt harvest)
+    this._gridAxis   = null;    // [rows, columns]: { select, valuesEl, planEl, previewEl, cfg, inputs }
+    this._msPerPath  = null;
     this.onResolveScenarioCenters = null;
 
     this._render();
@@ -57,10 +68,12 @@ export class McConfigPanel extends BaseComponent {
   showProgress(msg) {
     if (this._statusEl) this._statusEl.textContent = msg;
     if (this._runBtn)   this._runBtn.disabled = true;
+    if (this._gridRunBtn) this._gridRunBtn.disabled = true;
   }
 
   enableRun() {
     if (this._runBtn) this._runBtn.disabled = false;
+    if (this._gridRunBtn) this._gridRunBtn.disabled = false;
   }
 
   /** Show a transient status message without touching the Run button state. */
@@ -264,8 +277,12 @@ export class McConfigPanel extends BaseComponent {
     shell.innerHTML = `
       <div class="node-header">Monte Carlo</div>
       <div class="mc-controls">
+        <div class="mc-mode-toggle" title="Batch: one Monte Carlo run of the plan. Grid: one or two levers crossed, every cell run (design 100 §7).">
+          <button type="button" class="mc-metric-btn mc-mode-btn mc-metric-btn--active" data-mode="batch">Batch</button>
+          <button type="button" class="mc-metric-btn mc-mode-btn" data-mode="grid">Grid</button>
+        </div>
         <div class="node-field">
-          <label>Iterations</label>
+          <label class="mc-iters-label">Iterations</label>
           <input type="number" class="mc-iters-input" value="100" min="1" max="10000" />
         </div>
         <div class="mc-telemetry" title="Extra per-path recording. The cost is on the label because it is the reason both are off by default (design 100 §4).">
@@ -274,7 +291,8 @@ export class McConfigPanel extends BaseComponent {
           <label class="mc-telemetry-opt"><input type="checkbox" class="mc-opt-spending" />
             Record spending <span class="mc-telemetry-cost">~7.5× time</span></label>
         </div>
-        <button class="btn btn-primary" style="width:100%">▶ Run Monte Carlo</button>
+        <button class="btn btn-primary mc-batch-run" style="width:100%">▶ Run Monte Carlo</button>
+        <div class="mc-grid-body" hidden></div>
       </div>
       <div class="mc-status-el"></div>
       <div class="mc-var-section">
@@ -290,7 +308,10 @@ export class McConfigPanel extends BaseComponent {
     this._iterEl   = shell.querySelector('.mc-iters-input');
     this._mixCb      = shell.querySelector('.mc-opt-mix');
     this._spendingCb = shell.querySelector('.mc-opt-spending');
-    this._runBtn   = shell.querySelector('.btn-primary');
+    this._runBtn   = shell.querySelector('.mc-batch-run');
+    this._telemetryEl = shell.querySelector('.mc-telemetry');
+    this._itersLabel  = shell.querySelector('.mc-iters-label');
+    this._modeBtns    = [...shell.querySelectorAll('.mc-mode-btn')];
     this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
     this._section  = shell.querySelector('.mc-var-section');
@@ -310,6 +331,268 @@ export class McConfigPanel extends BaseComponent {
     this._table = new SweepVariableTable(this, this._section,
       { prefix: 'mc', buildRow: cfg => this._buildVarRow(cfg) });
     this._table.render(this._variables, new Map(), this._rowMap);
+
+    this._buildGridBody(shell.querySelector('.mc-grid-body'));
+    for (const b of this._modeBtns) this.listen(b, 'click', () => this._setMode(b.dataset.mode));
+  }
+
+  // ── Grid mode (design 100 §7) ────────────────────────────────────────────────
+
+  /**
+   * The levers a grid axis can be: the Opt harvest, each row carrying `planValue`.
+   * A lever already chosen keeps its edited values if it is still on the list.
+   */
+  setGridAxes(optVars) {
+    this._gridVars = (optVars ?? []).filter(v => v?.paramKey);
+    if (!this._gridAxis) return;
+    for (const k of [0, 1]) this._fillAxisSelect(k);
+    this._updateGridCost();
+  }
+
+  /** Wall-clock ms per path from the last run; the cost line's time estimate. */
+  setMsPerPath(ms) {
+    this._msPerPath = Number.isFinite(ms) && ms > 0 ? ms : null;
+    this._updateGridCost();
+  }
+
+  /**
+   * The grid as configured, with an `error` when it cannot run.
+   *
+   * `sampledAxes` names chosen levers that are also enabled MC variables. The runner
+   * takes them out of sampling for the grid, and the cost line says so BEFORE the run,
+   * since it changes what the grid measures.
+   *
+   * @returns {{ mode, n, variableConfigs, axes: Array<{paramKey, label, values}>,
+   *             cells: number, pathsPerCell: number, runs: number, sampledAxes: string[],
+   *             error: string|null }}
+   */
+  getGridConfig() {
+    const { n, variableConfigs } = this.getConfig();
+    const mode = this._gridModeSel?.value ?? GRID_MODES.MC;
+    const axes = [];
+    let error = null;
+    for (const k of [0, 1]) {
+      const axis = this._gridAxis?.[k];
+      if (!axis?.cfg) continue;
+      const label = axis.cfg.label ?? axis.cfg.paramKey;
+      const { values, count } = this._axisValues(k);
+      if (!count) error ??= `${label}: no values in that range.`;
+      else if (count > MAX_AXIS_VALUES) error ??= `${label}: ${count} values; at most ${MAX_AXIS_VALUES} per axis.`;
+      axes.push({ paramKey: axis.cfg.paramKey, label, values, count });
+    }
+    if (!this._gridAxis?.[0]?.cfg) error = 'Choose a lever for the rows.';
+    else if (axes.length === 2 && axes[0].paramKey === axes[1].paramKey) {
+      error ??= 'Rows and columns must be different levers.';
+    }
+
+    const pathsPerCell = mode === GRID_MODES.DETERMINISTIC ? 1 : n;
+    const cells = axes.length ? axes.reduce((p, a) => p * a.count, 1) : 0;
+    const sampledAxes = mode === GRID_MODES.DETERMINISTIC ? []
+      : axes.map(a => a.paramKey).filter(k => this._rowMap.get(k)?.enabledCb.checked);
+    return {
+      mode, n, variableConfigs,
+      axes: axes.map(({ count: _c, ...a }) => a),
+      cells, pathsPerCell, runs: cells * pathsPerCell, sampledAxes, error,
+    };
+  }
+
+  _setMode(mode) {
+    this._mode = mode;
+    const grid = mode === 'grid';
+    for (const b of this._modeBtns) b.classList.toggle('mc-metric-btn--active', b.dataset.mode === mode);
+    this._gridBody.hidden    = !grid;
+    this._runBtn.hidden      = grid;
+    // A grid never records mix or spending (design 100 §7.2), so the options would lie.
+    this._telemetryEl.hidden = grid;
+    this._itersLabel.textContent = grid ? 'Paths per cell' : 'Iterations';
+    this._updateGridCost();
+  }
+
+  _buildGridBody(el) {
+    this._gridBody = el;
+    this._gridAxis = [0, 1].map(k => {
+      const block = document.createElement('div');
+      block.className = 'mc-grid-axis-block';
+      block.dataset.axis = String(k);
+      const label = document.createElement('div');
+      label.className = 'mc-grid-label';
+      label.textContent = k === 0 ? 'Rows' : 'Columns (optional)';
+      const select = document.createElement('select');
+      select.className = 'mc-num-input mc-grid-axis';
+      const valuesEl = document.createElement('div');
+      valuesEl.className = 'mc-grid-values';
+      const planEl = document.createElement('div');
+      planEl.className = 'mc-grid-plan';
+      block.append(label, select, valuesEl, planEl);
+      el.appendChild(block);
+
+      this.listen(select, 'change', () => this._selectAxis(k, select.value));
+      this.listen(valuesEl, 'input',  () => this._updateGridCost());
+      this.listen(valuesEl, 'change', () => this._updateGridCost());
+      return { select, valuesEl, planEl, previewEl: null, cfg: null, inputs: null };
+    });
+
+    const modeField = document.createElement('div');
+    modeField.className = 'node-field';
+    const modeLabel = document.createElement('label');
+    modeLabel.textContent = 'Cells';
+    this._gridModeSel = document.createElement('select');
+    this._gridModeSel.className = 'mc-num-input mc-grid-mode';
+    this._gridModeSel.innerHTML = `<option value="${GRID_MODES.MC}">Monte Carlo (paths per cell)</option>`
+      + `<option value="${GRID_MODES.DETERMINISTIC}">Deterministic (one run each)</option>`;
+    modeField.append(modeLabel, this._gridModeSel);
+
+    this._gridCostEl = document.createElement('div');
+    this._gridCostEl.className = 'mc-grid-cost';
+
+    this._gridRunBtn = document.createElement('button');
+    this._gridRunBtn.className = 'btn btn-primary mc-grid-run';
+    this._gridRunBtn.style.width = '100%';
+    this._gridRunBtn.textContent = '▶ Run Grid';
+
+    el.append(modeField, this._gridCostEl, this._gridRunBtn);
+
+    this.listen(this._gridModeSel, 'change', () => this._updateGridCost());
+    this.listen(this._iterEl, 'input', () => this._updateGridCost());
+    // Enabling an MC variable that is also an axis changes the cost line's note.
+    this.listen(this._section, 'change', () => this._updateGridCost());
+    this.listen(this._gridRunBtn, 'click', () => {
+      this.syncScenarioCenters();
+      const cfg = this.getGridConfig();
+      if (cfg.error) { this.setStatus(cfg.error); return; }
+      this.onRunGrid?.(cfg);
+    });
+
+    for (const k of [0, 1]) this._fillAxisSelect(k);
+    this._updateGridCost();
+  }
+
+  /** Rebuild one axis picker from the lever list, grouped as the Opt panel groups them. */
+  _fillAxisSelect(k) {
+    const axis = this._gridAxis[k];
+    const keep = axis.cfg?.paramKey ?? '';
+    axis.select.replaceChildren(new Option(k === 0 ? '— choose a lever —' : '— none —', ''));
+    const byGroup = new Map();
+    for (const v of this._gridVars) {
+      const g = v.group ?? 'Other';
+      if (!byGroup.has(g)) byGroup.set(g, []);
+      byGroup.get(g).push(v);
+    }
+    for (const [g, vars] of byGroup) {
+      const og = document.createElement('optgroup');
+      og.label = g;
+      for (const v of vars) og.appendChild(new Option(v.label ?? v.paramKey, v.paramKey));
+      axis.select.appendChild(og);
+    }
+    const still = !!keep && this._gridVars.some(v => v.paramKey === keep);
+    axis.select.value = still ? keep : '';
+    this._selectAxis(k, axis.select.value, { preserve: still });
+  }
+
+  /**
+   * Point an axis at a lever and build its value editor, typed by the lever's kind: a
+   * checkbox per value for an ENUM, min / max / step for a number (the Opt row's own
+   * shape, so the defaults are the Opt panel's).
+   */
+  _selectAxis(k, paramKey, { preserve = false } = {}) {
+    const axis = this._gridAxis[k];
+    const cfg  = this._gridVars.find(v => v.paramKey === paramKey) ?? null;
+    if (preserve && cfg && axis.cfg?.paramKey === paramKey) {
+      axis.cfg = cfg;
+      this._renderAxisPlan(axis);
+      return;
+    }
+    axis.cfg = cfg;
+    axis.inputs = null;
+    axis.previewEl = null;
+    axis.valuesEl.replaceChildren();
+    if (cfg) {
+      if (cfg.type === OPT_PARAM_TYPES.ENUM) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mc-grid-enum';
+        axis.inputs = {
+          checks: (cfg.values ?? []).map(val => {
+            const lab = document.createElement('label');
+            const cb  = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = true;
+            lab.append(cb, ` ${formatAxisValue(val)}`);
+            wrap.appendChild(lab);
+            return { cb, val };
+          }),
+        };
+        axis.valuesEl.appendChild(wrap);
+      } else {
+        const wrap = document.createElement('div');
+        wrap.className = 'mc-grid-range';
+        const num = (cls, placeholder, v) => {
+          const inp = document.createElement('input');
+          inp.type = 'number';
+          inp.step = 'any';
+          inp.className = `mc-num-input ${cls}`;
+          inp.placeholder = placeholder;
+          inp.value = v == null ? '' : String(v);
+          return inp;
+        };
+        axis.inputs = {
+          min:  num('mc-grid-min', 'min', cfg.min),
+          max:  num('mc-grid-max', 'max', cfg.max),
+          step: num('mc-grid-step', 'step', cfg.step),
+        };
+        wrap.append(axis.inputs.min, '–', axis.inputs.max, 'step', axis.inputs.step);
+        axis.valuesEl.appendChild(wrap);
+      }
+      axis.previewEl = document.createElement('div');
+      axis.previewEl.className = 'mc-grid-preview';
+      axis.valuesEl.appendChild(axis.previewEl);
+    }
+    this._renderAxisPlan(axis);
+    this._updateGridCost();
+  }
+
+  _renderAxisPlan(axis) {
+    const pv = axis.cfg?.planValue;
+    axis.planEl.textContent = pv === undefined || pv === null ? '' : `plan: ${formatAxisValue(pv)}`;
+  }
+
+  /**
+   * An axis's values and their count. The count is computed first, so a mistyped range
+   * reports "40,000 values" instead of building the list.
+   */
+  _axisValues(k) {
+    const axis = this._gridAxis?.[k];
+    if (!axis?.cfg || !axis.inputs) return { values: [], count: 0 };
+    if (axis.inputs.checks) {
+      const values = axis.inputs.checks.filter(c => c.cb.checked).map(c => c.val);
+      return { values, count: values.length };
+    }
+    const { min, max, step } = axis.inputs;
+    if ([min, max, step].some(i => i.value.trim() === '')) return { values: [], count: 0 };
+    const lo = Number(min.value), hi = Number(max.value), st = Number(step.value);
+    if (![lo, hi, st].every(Number.isFinite) || st <= 0 || hi < lo) return { values: [], count: 0 };
+    const count = Math.floor((hi - lo) / st + 1e-9) + 1;
+    if (count > MAX_AXIS_VALUES) return { values: [], count };
+    return { values: valuesForConfig({ type: axis.cfg.type, min: lo, max: hi, step: st }), count };
+  }
+
+  /** The line under the grid controls: cells × paths = runs, and the time it will take. */
+  _updateGridCost() {
+    if (!this._gridCostEl) return;
+    for (const [k, axis] of (this._gridAxis ?? []).entries()) {
+      if (!axis.previewEl) continue;
+      const { values, count } = this._axisValues(k);
+      axis.previewEl.textContent = count > 0 && count <= MAX_AXIS_VALUES
+        ? `${count} value${count === 1 ? '' : 's'}: ${values.map(formatAxisValue).join(', ')}`
+        : `${count} values`;
+    }
+
+    const c = this.getGridConfig();
+    this._gridCostEl.classList.toggle('mc-grid-cost--error', !!c.error);
+    if (c.error) { this._gridCostEl.textContent = c.error; return; }
+    const paths = `${c.pathsPerCell} path${c.pathsPerCell === 1 ? '' : 's'}`;
+    this._gridCostEl.textContent = `${c.cells} cells × ${paths} = ${c.runs} runs`
+      + (this._msPerPath ? ` · about ${formatDuration(c.runs * this._msPerPath)}` : ' · time is measured once it starts')
+      + (c.sampledAxes.length ? ` · not sampled here (axes): ${c.sampledAxes.join(', ')}` : '');
   }
 
   _buildVarRow(cfg) {

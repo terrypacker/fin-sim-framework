@@ -414,3 +414,50 @@ describe('the cube on a real run', () => {
       'or record deliberately that it belongs in UNCLASSIFIED.');
   });
 });
+
+// ─── pools and the period advance (found by design 100's in-app spending run) ─────
+
+describe('pools and the period advance', () => {
+  const only = (shares) => { assert.equal(shares.length, 1); return shares[0].category; };
+
+  test('CLS-8 a design-97 pool flow is a move between the household\'s own pockets', () => {
+    assert.equal(only(classifyDebit({ actionType: 'POOL_FLOW_APPLY', stateKey: 'usStockAccount.balance' })),
+      REPORT_CATEGORY.INTERNAL);
+  });
+
+  test('CLS-9 a period-advance debit is classified by its reducer, and an unlisted one stays visible', () => {
+    const pa = (reducerName, actionType = 'US_PERIOD_ADVANCE') =>
+      only(classifyDebit({ actionType, stateKey: 'x.balance', reducerName }));
+    assert.equal(pa('Bond Price Adjust'), REPORT_CATEGORY.REVALUATION);
+    assert.equal(pa('Equity Return', 'AU_PERIOD_ADVANCE'), REPORT_CATEGORY.REVALUATION);
+    assert.equal(pa('Bond Maturity'), REPORT_CATEGORY.INTERNAL);
+    assert.equal(pa('Bond Ladder'), REPORT_CATEGORY.INTERNAL);
+    // The allowlist still refuses to guess.
+    assert.equal(pa('Some Future Reducer'), REPORT_CATEGORY.UNCLASSIFIED);
+    assert.equal(pa(null), REPORT_CATEGORY.UNCLASSIFIED);
+  });
+
+  test('CUBE-7 a pool\'s summary balance is a readout, not a debit', () => {
+    const date = new Date(Date.UTC(2027, 0, 1));
+    const journal = { journal: [{
+      date,
+      action:  { type: 'US_PERIOD_ADVANCE', data: {} },
+      reducer: { name: 'Pool Flows' },
+      stateDiff: [
+        { field: 'liquidityPools.cash.balance', before: 500, after: 400, delta: -100 },
+        { field: 'liquidityPools.growth.balance', before: 900, after: 800, delta: -100 },
+      ],
+    }, {
+      date,
+      action:  { type: 'POOL_FLOW_APPLY', data: {} },
+      reducer: { name: 'Pool Flow Apply' },
+      stateDiff: [{ field: 'usStockAccount.balance', before: 1000, after: 950, delta: -50 }],
+    }] };
+    const cube = buildSpendingCube({ journal, state: { usStockAccount: { currency: USD } } });
+
+    assert.deepEqual(cube.rows.map(r => r.stateKey), ['usStockAccount.balance'],
+      'only the account moved; the pool summary moving with it is the same money');
+    assert.equal(cube.rows[0].category, REPORT_CATEGORY.INTERNAL);
+    assert.equal(cube.byCategory.get(REPORT_CATEGORY.UNCLASSIFIED) ?? 0, 0);
+  });
+});

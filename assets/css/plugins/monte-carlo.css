@@ -96,6 +96,15 @@
 
 .mc-shape-block { display: flex; flex-direction: column; gap: 2px; }
 
+/* The opt-in sections are separate readouts of the same batch; a rule marks where each
+   one starts. */
+.mc-mix-section,
+.mc-spend-section {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hi);
+}
+
 .mc-shape-table {
   width: 100%;
   border-collapse: collapse;
@@ -201,9 +210,131 @@
   padding: 6px;
 }
 
-.mc-ab-head { display: flex; align-items: center; justify-content: space-between; }
+.mc-ab-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+/* A grid cell's heading names two cells and can be long; wrap it rather than clip it. */
+.mc-ab-head .mc-section-label {
+  /* `.mc-section-label` is flex-shrink 0 elsewhere; here it must give way to the button. */
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.mc-ab-head > button { flex: 0 0 auto; }
 .mc-ab-change--better { color: var(--green); }
 .mc-ab-change--worse  { color: var(--red); }
+
+/* ── Lever grid (design 100 §7) ── */
+.mc-controls [hidden] { display: none !important; }
+.mc-mode-toggle { display: flex; gap: 2px; }
+.mc-grid-body { display: flex; flex-direction: column; gap: 6px; }
+.mc-grid-axis-block { display: flex; flex-direction: column; gap: 3px; }
+
+.mc-grid-label {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.mc-grid-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+.mc-grid-range input { width: 64px; }
+
+.mc-grid-enum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.mc-grid-preview,
+.mc-grid-plan,
+.mc-grid-cost {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+.mc-grid-cost--error { color: var(--warning); }
+
+.mc-grid-table-wrap { overflow-x: auto; flex-shrink: 0; }
+
+.mc-grid-table {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.mc-grid-table--mc  { --mc-grid-hue: var(--red); }
+.mc-grid-table--det { --mc-grid-hue: var(--blue-muted); }
+
+.mc-grid-table th {
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+.mc-grid-table thead th { text-align: center; }
+/* The column axis's name, centred over its values with a rule that shows the span. */
+.mc-grid-table th.mc-grid-axis-title {
+  text-align: center;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-hi);
+  padding-bottom: 3px;
+}
+/* The row axis's name: wraps, so a long lever name cannot widen the row-header column,
+   and right-aligned so it sits over the row values it names. */
+.mc-grid-table th.mc-grid-corner {
+  max-width: 8em;
+  white-space: normal;
+  text-align: right;
+  vertical-align: bottom;
+  color: var(--text-muted);
+}
+
+.mc-runs-context {
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* The plan's value on each axis: a pill, not an underline (a dotted underline read as a
+   strike-through at this size). */
+.mc-grid-table th.mc-grid-plan {
+  color: var(--text-primary);
+  font-weight: 800;
+  background: var(--bg-panel2);
+  border-radius: 3px;
+}
+
+.mc-grid-cell {
+  min-width: 52px;
+  padding: 4px 6px;
+  text-align: center;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--mc-grid-hue) var(--shade, 0%), transparent);
+}
+.mc-grid-cell:hover   { border-color: var(--border-hi); }
+.mc-grid-cell--ref    { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+.mc-grid-cell--sel    { outline: 2px dashed var(--purple); outline-offset: -2px; }
+.mc-grid-cell--failed { color: var(--red); }
 
 .mc-metric-btn {
   padding: 1px 8px;
