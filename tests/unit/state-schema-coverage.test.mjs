@@ -38,9 +38,6 @@ import { ScenarioLoader }                from '../../src/scenarios/scenario-load
 
 /** Numeric leaves allowed to stay `unknown`, each with the reason it cannot be typed yet. */
 const ALLOWED_UNKNOWN = [
-  { glob: '*Loan.monthlyPayment',
-    why:  'Loan records (`<prop>Loan`, built by the property toolsets) are not in accountService, so '
-        + 'ScenarioLoader never stamps their currency. Their balance falls to the code-less `*.balance` glob.' },
   { glob: 'washPendingLosses.*.longLoss',  why: 'Wash-sale loss amounts: currency not pinned by wash-sale.js.' },
   { glob: 'washPendingLosses.*.shortLoss', why: 'Wash-sale loss amounts: currency not pinned by wash-sale.js.' },
   { glob: 'washSaleLedger.*.deferred',        why: 'Wash-sale ledger amounts: as above.' },

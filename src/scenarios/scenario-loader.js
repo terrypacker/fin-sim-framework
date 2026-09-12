@@ -41,7 +41,8 @@ import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { INHERITANCE }       from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { seedIndexLevels }   from '../finance/economic-regimes/market-index.js';
-import { normalizeCountryCode } from '../finance/country-codes.js';
+import { normalizeCountryCode, currencyForCountry } from '../finance/country-codes.js';
+import { loanKeyForProperty } from '../finance/account-rules/loan-classes.js';
 import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
@@ -364,7 +365,23 @@ export class ScenarioLoader {
       if (a.stateKey) reg.registerAccount(a.stateKey, a);
     }
     for (const p of services.realPropertyService?.getAll() ?? []) {
-      if (p.stateKey) reg.registerAsset(p.stateKey, p);
+      if (!p.stateKey) continue;
+      reg.registerAsset(p.stateKey, p);
+      // Design 54 P2: the property toolsets synthesize the mortgage as a plain
+      // `<prop>Loan` state entry that is never in accountService, so stamp it here
+      // in the property's currency (the same fallback the toolsets stamp on it).
+      if ((p.mortgageBalance ?? 0) > 0) {
+        const code = p.currency?.code ?? currencyForCountry(p.country ?? 'US');
+        const loanKey = loanKeyForProperty(p.stateKey);
+        reg.registerCurrencyPaths(['balance', 'minimumBalance', 'monthlyPayment', 'postIoPrincipal']
+          .map(f => `${loanKey}.${f}`), code);
+        // Kind 'loan', NOT 'account': accountBalanceKeys() scopes the shipped reports,
+        // and keeping these loans out of it is what stops the mortgage double-count
+        // (spending-classification.js, `DEBT_PRINCIPAL`).
+        reg.registerDisplayRecord(loanKey, {
+          name: `${p.name ?? p.stateKey} Loan`, country: p.country ?? 'US', ownerId: p.ownerId ?? null,
+        }, 'loan');
+      }
     }
     for (const c of services.collectibleService?.getAll() ?? []) {
       if (c.stateKey) reg.registerAsset(c.stateKey, c);

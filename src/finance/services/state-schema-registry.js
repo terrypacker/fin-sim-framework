@@ -736,7 +736,7 @@ export class StateSchemaRegistry {
    *
    * @param {string} stateKey
    * @param {object} record    - reads name, country, ownerId
-   * @param {'account'|'asset'|'person'} [kind]
+   * @param {'account'|'asset'|'person'|'loan'} [kind]  only 'account' joins accountBalanceKeys()
    */
   registerDisplayRecord(stateKey, record, kind = 'asset') {
     if (!stateKey || !record) return;
