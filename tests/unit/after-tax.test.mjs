@@ -253,13 +253,20 @@ describe('after-tax net worth gives the Roth conversion lever a real gradient', 
   //
   // This is the bias G1 removed. Before it, the metric priced the destination
   // wrapper at par and could only ever reward converting.
-  test('moving to AU reverses the conversion reward the US-domestic case shows', () => {
+  //
+  // CUTS, not reverses (corrected 2026-09-11). This test used to assert the sign FLIPS.
+  // That was measured through a serializer bug (design 89 §21.8.3): OptimizationProblem
+  // serializes its template, and every buildDefaultConfig account came back as a generic
+  // Account, so the moving case's after-tax Δ equalled its nominal Δ exactly. On the real
+  // account classes (identical to the never-serialized template) the move cuts the reward
+  // by more than half and leaves it positive. The assertion is the mechanism, not a sign.
+  test('moving to AU cuts the conversion reward the US-domestic case shows', () => {
     const delta = (extra) =>
       evalAt(0.22, 300_000, extra).finalAfterTaxNetWorth - evalAt(0.22, 0, extra).finalAfterTaxNetWorth;
     const staying = delta({});                  // moveYear 2060 — never leaves
     const moving  = delta({ moveYear: 2031 });  // the reference scenario's own move
     assert.ok(staying > 0, `US-domestic: conversion rewarded, Δ=${staying}`);
-    assert.ok(moving  < 0, `cross-border: conversion penalised, Δ=${moving}`);
+    assert.ok(moving < staying, `cross-border: the move must cut the reward, moving=${moving} staying=${staying}`);
   });
 });
 

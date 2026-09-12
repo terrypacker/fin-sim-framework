@@ -49,6 +49,7 @@ import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-e
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 import { Person }             from '../../src/finance/person.js';
 import { Account, SavingsAccount } from '../../src/finance/assets/account.js';
@@ -459,4 +460,48 @@ test('finance round-trip: inherited property + collectible carry their metadata'
   // Owned property emits no inheritance keys.
   const owned = ScenarioSerializer._serializeRealProperty(new RealProperty(100, { id: 'p2', country: 'US' }));
   assert.ok(!('inherited' in owned));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Account class survives a plain record that names it by `__type` only
+// (design 89 §21.8.3). buildDefaultConfig and the prebuilt records write accounts
+// this way; the MC runner serializes its template, and a record whose class fell
+// through to 'Object' came back as a generic Account — so MC and the Timeline ran
+// different worlds.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const ACCOUNT_CLASSES = {
+  SavingsAccount, BrokerageAccount, TraditionalIRAAccount, FourOhOneKAccount,
+  RothAccount, SuperannuationAccount,
+};
+
+test('finance round-trip: a __type-only plain account keeps its class', () => {
+  for (const [name, cls] of Object.entries(ACCOUNT_CLASSES)) {
+    const record = { __type: name, id: `x-${name}`, name, stateKey: `k${name}`, balance: 1000, country: 'US' };
+    const d = ScenarioSerializer._serializeAccount(record);
+    assert.equal(d.__type, name, `${name}: serialized __type`);
+    const back = ScenarioSerializer._makeAccount(d);
+    assert.ok(back instanceof cls, `${name}: deserialized as ${back.constructor.name}`);
+    // Idempotent: serializing the serialized record again changes nothing.
+    assert.deepEqual(ScenarioSerializer._serializeAccount(d), d, `${name}: re-serialize is stable`);
+  }
+});
+
+test('finance round-trip: a live account still resolves its class from `type`', () => {
+  const d = ScenarioSerializer._serializeAccount(
+    new SuperannuationAccount(500, { id: 's1', role: ACCOUNT_ROLES.SUPER, country: 'AU' }));
+  assert.equal(d.__type, 'SuperannuationAccount');
+  assert.ok(ScenarioSerializer._makeAccount(d) instanceof SuperannuationAccount);
+});
+
+test('finance round-trip: every buildDefaultConfig account survives serializeScenario', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, SIM_START, SIM_END);
+  const serialized = ScenarioSerializer.serializeScenario(cfg);
+  assert.equal(serialized.accounts.length, cfg.accounts.length);
+  cfg.accounts.forEach((raw, i) => {
+    const d = serialized.accounts[i];
+    assert.notEqual(d.__type, 'Object', `${raw.name}: __type fell through to 'Object'`);
+    assert.equal(d.__type, raw.__type, `${raw.name}: __type`);
+    assert.equal(ScenarioSerializer._makeAccount(d).constructor.name, raw.__type, `${raw.name}: class`);
+  });
 });

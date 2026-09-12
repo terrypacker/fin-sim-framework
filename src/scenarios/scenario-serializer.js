@@ -687,7 +687,12 @@ export class ScenarioSerializer {
       'loan':     'LoanAccount',
       'offset':   'OffsetAccount',
     };
-    const __type = typeToClass[account.type] ?? account.constructor?.name ?? 'Account';
+    // A plain record that already names its class (buildDefaultConfig, prebuilts, older
+    // saves) carries `__type` but no `type`; its constructor is Object. Falling through to
+    // `constructor.name` wrote 'Object', which deserializes as a generic Account — every MC
+    // path then ran brokerage/retirement/super accounts without their class (design 89 §21.8.3).
+    const ownType = _isAlreadySerialized(account) ? account.__type : null;
+    const __type = typeToClass[account.type] ?? ownType ?? account.constructor?.name ?? 'Account';
     const d = {
       __type,
       id:               account.id,

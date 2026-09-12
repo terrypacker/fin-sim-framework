@@ -1,7 +1,8 @@
 # 89 — Spending over time: what the plan actually costs
 
-**Status** (2026-08-15): **PHASES 0–6 BUILT. The §5.1 A–E thread is CLOSED — code shipped.
-Phase 7 (spending in the MC *UI*) is PROPOSED; §21 is where the next session starts.**
+**Status** (2026-09-11): **PHASES 0–7 BUILT. The §5.1 A–E thread is CLOSED — code shipped.
+Phase 7 (spending in the MC *UI*) shipped as design 100 step 2 (§21.8); its open items are
+in §21.7.**
 
 Section 3 is a measurement, not a proposal — it is what the design is shaped around, and it is
 now reproducible (`scripts/probes/probe-spending-composition.mjs`) rather than quoted.
@@ -1687,7 +1688,7 @@ reporting one.
 
 ---
 
-## 21. Phase 7 — spending in the Monte Carlo **UI**  (2026-08-15).  **PROPOSED.**
+## 21. Phase 7 — spending in the Monte Carlo **UI**  (2026-08-15).  **BUILT 2026-09-11 — see §21.8.**
 
 Phase 6 shipped the aggregation layer and a **script**. Nothing of it is reachable from the
 app. This phase closes that, and the reason it is a phase rather than a footnote is that two
@@ -1818,9 +1819,87 @@ accumulator is worth it.** Phase 7 is the thing that makes MC spending routine e
 | item | why it is not this phase | where |
 |---|---|---|
 | ~~MC on a worker pool~~ | **BUILT — see §22.** Phase 7 remains shippable without it | §21.2, §22 |
-| Per-year × per-category matrix in the run record | only needed if replay does not answer the drill-down question | §21.3, §21.5 |
-| `mix` has no UI either | same control, and phase 7 should build it for both rather than leave a second one | §21.4 |
+| Per-year × per-category matrix in the run record | only needed if replay does not answer the drill-down question. **Replay does answer it** once the serializer bug is fixed — see §21.8.2 | §21.3, §21.5, §21.8 |
+| ~~`mix` has no UI either~~ | **BUILT** with `spending`, as one "extra telemetry" group (design 100 step 2) | §21.4, §21.8 |
 | Spending still not persisted into arm JSON | unchanged from §20.7; a UI panel does not read arm files | §20.7 |
+| `_serializeAccount` drops `__type` on plain-object accounts | MC runs such accounts as a generic `Account`, so it and Replay disagree; a correctness fix to MC, not a phase-7 item | §21.8.3 |
+| "Went short" ≠ failure rate on a real plan | seen in design 100 step 2 (one path in 40); cause not traced | design 100 §4 |
+| Stacked percentile bar | shipped as a table with the same numbers; the bar is an option | §21.8.1 |
+
+### 21.8 As built  (2026-09-11)
+
+#### 21.8.1 What shipped, and where it went
+
+Phase 7 was built as **design 100 step 2**, not as a design 89 session, which is why this doc
+still said PROPOSED. §21.4's plan is in the app:
+
+- **Control:** `McConfigPanel`'s "extra telemetry" group, *Record asset mix* and *Record
+  spending*, each label carrying its cost. Built together, as §21.4 asked.
+- **Results:** `McResultsPanel._buildSpendingSection`: the `describeSpendingDistribution`
+  header; badges for real cost P50, tax > 50% of spending, and *Went short* beside the
+  failure rate; the unclassified-types banner; a per-category P10/P50/P90 table with fired
+  rate and tier.
+- **One deliberate deviation:** a table, not the stacked percentile bar. Same numbers.
+- **§21.2's obstacle** was removed by §22 (the worker pool) before the control shipped.
+
+Design 100 §4 records what the first real run found: the classification gap it fixed, the
+went-short/failure-rate disagreement, and the cost (about 10 minutes and 4 GB for 40 paths).
+
+#### 21.8.2 §21.5 answered: Replay reproduces the path — once the serializer bug is fixed
+
+The check was run headless, calling the same code on both sides: `IntlRetirementMcRunner`
+with `spending: true` on the active record (as `MonteCarloController` does), then each run
+rebuilt as `_replayMcRun` + `initScenario` do it (`applyParamBagToConfig` on the active record,
+`createActiveScenario`, `buildSim({ seed, withBalances sampler, 'year-boundary' })`, load,
+step to the end). Compared per path: failed, out-of-funds date, net worth, taxes, and the
+whole `summarizeSpendingForRun` record, with the cube built both ways (`services: null` as MC
+does it, and with services as the Spending panel does).
+
+- **As the code stands: not exact.** On the prebuilt International Retirement scenario, seeds
+  1, 2 and 4 matched bit for bit and seed 3 did not. Net worth was about \$124k lower on
+  replay, spending higher, and the failure status was the same.
+- **Isolated one difference at a time.** The sampler, the constructor's param source and
+  the singleton-vs-isolated registry were all exact. The whole gap was **the config source**:
+  Replay loads the live active record, while MC loads `ScenarioSerializer.serializeScenario` of
+  it. Bisecting that, only `accounts` mattered, and within it only **`__type`** (§21.8.3).
+- **With `__type` preserved** (patched inside the probe only), **8 of 8 seeds were exact** on
+  every field, including both spending cubes.
+
+So the drill-down is "click Replay, open the Spending panel" and **the per-year × per-category
+matrix does not need building.** That depends on §21.8.3 being fixed; until then, a replayed
+path on an affected scenario can differ from the MC path it came from.
+
+#### 21.8.3 The bug: MC runs type-less accounts as a generic `Account`
+
+`ScenarioSerializer._serializeAccount` derives the discriminator as
+`typeToClass[account.type] ?? account.constructor?.name`. A plain-object account that carries
+`__type` but no `type` falls through to `'Object'`. The deserializer's `switch (d.__type)`
+then takes its `default:` branch and builds a plain `Account`. The file's own
+`_isAlreadySerialized` helper exists to stop exactly this, but the account path does not use it.
+
+- **Who is affected:** `buildDefaultConfig` writes accounts in that shape, and so do the
+  prebuilt records `loadPrebuilt` materializes from it. The runner also falls back to
+  `buildDefaultConfig` when it has no template. Of 65 saved scenario records scanned, 6 have
+  such accounts, all in older sequence-risk arm files. Accounts the workbench has harvested
+  carry `type` and are unaffected.
+- **What it does:** every MC path on an affected scenario runs brokerage, retirement and
+  super accounts without their class behaviour. On the probe's seed 3 the gap came from AU
+  Stock and both Superannuation accounts. Paths that never lean on those accounts match,
+  which is why this hides.
+- **Direction of the error:** the live record, which the workbench Timeline runs, is the
+  correct world. The **MC side** is wrong, not Replay.
+- **FIXED 2026-09-11.** `_serializeAccount` now keeps an existing string `__type` (via
+  `_isAlreadySerialized`) when `type` is absent. Round-trip tests are in
+  `serializer-finance-roundtrip.test.mjs`; both `__type` tests fail at the pre-fix HEAD.
+- **The optimizer was affected too.** `OptimizationProblem._cfgTemplate()` serializes the same
+  way, so every headless lab and optimizer rollout on a default-shaped template ran plain
+  `Account`s. After the fix, its rollouts match the never-serialized template exactly.
+- **One test changed, and it corrected a design conclusion.** The fix passes all but one
+  existing unit and viz test; the goldens did not move. The exception is `after-tax.test.mjs`,
+  which asserted design 84 G1's claim that moving to AU flips the Roth conversion reward to a
+  penalty. On the correct classes the move cuts the reward (about \$55k to about \$24k) and does
+  not flip it; the "penalty" was the after-tax metric collapsing to nominal on plain
+  `Account`s. The test now asserts the cut, and design 84 carries dated corrections.
 
 ---
 

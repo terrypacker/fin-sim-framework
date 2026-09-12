@@ -330,6 +330,16 @@ were pinned to a US-domestic framing (`moveYear` past the horizon), which is the
 their claims were established in and keeps each testing its own subject; the cross-border
 reversal is now asserted deliberately, in its own test, in `after-tax.test.mjs`. See Q2.
 
+> **Correction (2026-09-11): the move CUTS the reward, it does not reverse it.** The reversal
+> was measured through a serializer bug (design 89 §21.8.3). `OptimizationProblem` serializes
+> its template, and `_serializeAccount` wrote every `buildDefaultConfig` account's class as
+> `'Object'`, so the rollouts ran plain `Account`s. In the moving case the after-tax Δ equalled
+> the nominal Δ exactly (−\$61.8k): there was no wrapper left to price. With the classes
+> restored, which exactly matches the never-serialized template, staying is +\$54.9k and
+> moving is **+\$24.0k**. The G1 mechanism is real and more than halves the reward; on this
+> scenario it does not flip the sign. The test now asserts `moving < staying`. The text
+> above is left as written.
+
 ### G2 — `earningsBasis` is appreciation, not "amounts derived by the trust estate"
 
 Design 53 §8 made `earningsBasis` a **derived** quantity, maintained under the invariant
@@ -1510,6 +1520,14 @@ mistake — but it roughly doubles the grid and is separable. Its own study.
 > cross-border scenario was climbing a biased gradient. That is a caution about *existing*
 > results, not just about future ones. Quantifying it is the separate study's job; noting
 > that the sign flipped is this one's.
+
+> **Correction (2026-09-11): the sign did not flip. The reward shrank.** The flip was
+> measured on rollouts whose accounts had lost their class to a serializer bug (design 89
+> §21.8.3; see the correction under G1). On the correct classes, the conversion is still
+> rewarded for the household that moves (+\$24.0k against +\$54.9k for staying). The caution
+> above about earlier cross-border optimizer runs still stands, for a broader reason: every
+> optimizer and MC rollout on a `buildDefaultConfig`-shaped template ran plain `Account`s
+> until the fix. The "penalised" half of the conclusion does not stand.
 
 **Q3 — do we model derived-vs-appreciation (G2) before running?** ~~**No**~~ — **reversed
 2026-08-04: yes, before P6.** The original answer was no: conservative treatment, bias
