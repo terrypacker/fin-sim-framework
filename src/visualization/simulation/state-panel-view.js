@@ -214,20 +214,6 @@ export class StatePanelView extends BaseComponent {
     const filter = document.getElementById('lsp-panel-filter');
     if (filter) filter.addEventListener('input', e => this.setFilter(e.target.value));
 
-    // R9.2: chart a path by name (lets you arm paths not present at t0, e.g. a
-    // holding bought mid-sim — it buffers live once it first appears).
-    const addInput = document.getElementById('lsp-add-path');
-    const addBtn   = document.getElementById('lsp-add-path-btn');
-    const addPath = () => {
-      const path = (addInput?.value ?? '').trim();
-      if (!path) return;
-      this._onChartToggle?.(path, true);
-      this._refreshRows();
-      if (addInput) addInput.value = '';
-    };
-    if (addBtn)   addBtn.addEventListener('click', addPath);
-    if (addInput) addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPath(); });
-
     const header  = document.getElementById('stateSectionHeader');
     const content = document.getElementById('currentStateContent');
     if (!header || !content) return;

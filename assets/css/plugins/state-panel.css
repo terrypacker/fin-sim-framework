@@ -104,15 +104,6 @@
 }
 .lsp-panel-filter::placeholder { color: var(--text-muted); }
 
-/* "Chart a path by name" row (R9.2). */
-.lsp-add-path-row {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-bottom: 6px;
-}
-.lsp-add-path { margin: 0; flex: 1; }
-
 #actionPanelDetails {
   display: flex;
   flex-direction: column;
