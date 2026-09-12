@@ -1823,7 +1823,7 @@ accumulator is worth it.** Phase 7 is the thing that makes MC spending routine e
 | ~~`mix` has no UI either~~ | **BUILT** with `spending`, as one "extra telemetry" group (design 100 step 2) | §21.4, §21.8 |
 | Spending still not persisted into arm JSON | unchanged from §20.7; a UI panel does not read arm files | §20.7 |
 | `_serializeAccount` drops `__type` on plain-object accounts | MC runs such accounts as a generic `Account`, so it and Replay disagree; a correctness fix to MC, not a phase-7 item | §21.8.3 |
-| "Went short" ≠ failure rate on a real plan | seen in design 100 step 2 (one path in 40); cause not traced | design 100 §4 |
+| "Went short" ≠ failure rate on a real plan | **TRACED 2026-09-11:** `IntlTransferApplyReducer`'s source top-up draws the transfer's own destination (cross-border cash sweep), so the round trip reports the deficit covered and never raises `OUT_OF_FUNDS`; the expense debit is capped instead. **FIXED 2026-09-11** (`excludeCurrency` on the source top-up); went short = failed on the same 40 seeds | design 100 §9 |
 | Stacked percentile bar | shipped as a table with the same numbers; the bar is an option | §21.8.1 |
 
 ### 21.8 As built  (2026-09-11)
@@ -1900,6 +1900,26 @@ then takes its `default:` branch and builds a plain `Account`. The file's own
   penalty. On the correct classes the move cuts the reward (about \$55k to about \$24k) and does
   not flip it; the "penalty" was the after-tax metric collapsing to nominal on plain
   `Account`s. The test now asserts the cut, and design 84 carries dated corrections.
+- **Exposure audit (2026-09-11).**
+  - **Window:** the discriminator dates from 2026-05-24, before the optimizer existed, so
+    every MC and optimizer result through 2026-09-11 is inside it.
+  - **Affected call sites:** four serialize a template, not two. They are the MC runner,
+    `OptimizationProblem._cfgTemplate()`, the decision graph (`makeLeafEntry`) and
+    `ScenarioCompareRunner`.
+  - **Not affected:** `scripts/lib/run.mjs` grid tools load the raw cfg. Every
+    workbench-exported plan carries `type`.
+  - **What moved:** on the default template's deterministic run, the pre-fix
+    serialization left nominal net worth, taxes and failure **bit-identical**. It moved
+    net liquidity (plain `Account`s count as liquid) and after-tax net worth. So:
+    - conclusions scored on those two metrics through a serializing path are
+      **unverified**;
+    - an optimizer or MPC run that *optimized* one of them may also have chosen different
+      levers.
+    - Named: design 61's harvest "+2.2M median after-tax, 11 of 12 seeds", design 88
+      §5.4a's worth-vs-liquid gap (CEM on the reference plan) and design 40 §5.1's
+      conversion gradient, besides design 84 G1 (already corrected).
+    - Nominal-only and failure-rate conclusions are low risk. They are not proven
+      unaffected, because stochastic paths can lean on class behaviour (the seed-3 case).
 
 ---
 

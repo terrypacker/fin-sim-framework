@@ -110,7 +110,12 @@ export class IntlTransferApplyReducer extends Reducer {
       const shortfall = audNeeded - auAcc.balance;
       if (shortfall > 0) {
         try {
-          const result = this.accountService.replenishSavings(state, auKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          // Never raise the AUD source from USD: that is the destination's own currency,
+          // and the round trip would report this deficit covered (design 100 §9).
+          const result = this.accountService.replenishSavings(state, auKey, shortfall, date, {
+            earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
+            excludeCurrency: usAcc?.currency?.code ?? 'USD',
+          });
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
@@ -163,7 +168,11 @@ export class IntlTransferApplyReducer extends Reducer {
       const shortfall = usdNeeded - usAcc.balance;
       if (shortfall > 0) {
         try {
-          const result = this.accountService.replenishSavings(state, usKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          // Mirror of the AU_TO_US leg: never raise the USD source from AUD.
+          const result = this.accountService.replenishSavings(state, usKey, shortfall, date, {
+            earlyWithdrawalRulesFn: this.earlyWithdrawalRulesFn,
+            excludeCurrency: auAcc?.currency?.code ?? 'AUD',
+          });
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;

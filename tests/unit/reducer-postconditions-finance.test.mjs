@@ -167,6 +167,29 @@ test('IntlTransferApplyReducer: short source proceeds partial then chains OUT_OF
   assert.ok(oof.deficit > 0);
 });
 
+test('IntlTransferApplyReducer: the source top-up never draws the destination currency (no round trip)', () => {
+  // Design 100 §9. Savings are drawable across the border, so topping up the US source
+  // used to pull AUD from the very account the transfer credits. The reducer then saw
+  // the full target arrive, chained no OUT_OF_FUNDS, and the destination netted almost
+  // nothing — a path that ran short without ever failing.
+  const services = makeServices();
+  const r = new IntlTransferApplyReducer(services);
+  const state = {
+    people: makePeople({ residency: 'AU' }),
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+    effectiveFxFees: { USD_AUD: 15 },
+    usSavingsAccount: { ...makeAccount({ stateKey: 'usSavingsAccount', role: 'us-savings', holdings: [{ id: 'u1', marketValue: 1000, costBasis: 1000 }] }), drawdownPriority: null },
+    auSavingsAccount: { ...makeAccount({ stateKey: 'auSavingsAccount', country: 'AU', currency: 'AUD', role: 'au-savings', holdings: [{ id: 'a1', marketValue: 5000, costBasis: 5000 }] }), drawdownPriority: 0 },
+  };
+  const next = runReducer(r, state, makeAction('INTL_TRANSFER_APPLY', { direction: 'US_TO_AU', targetDeficit: 10000 }),
+    DATE, { checkNoMutation: false, balance: true, nonNegative: true });
+  const received = (1000 - 15) * 1.55;
+  assert.equal(+next.auSavingsAccount.balance.toFixed(2), +(5000 + received).toFixed(2), 'AU gains only what the US side held');
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the uncovered remainder is reported, not laundered through the destination');
+  assert.equal(+oof.deficit.toFixed(2), +(10000 - received).toFixed(2));
+});
+
 test('IntlTransferApplyReducer: dstKey credits an explicit account, not the default transaction account', () => {
   const services = makeServices();
   const r = new IntlTransferApplyReducer(services);
