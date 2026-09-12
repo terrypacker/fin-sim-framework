@@ -680,14 +680,11 @@ export const US_RETIREMENT = {
       })()),
     };
 
-    // Account state entries + initial metrics snapshot so the chart shows
-    // correct balances at t=0 without waiting for the first RECORD_BALANCE.
+    // Account state entries. No `metrics.<stateKey>` balance seed: those copies are
+    // retired (design 101 W-D10), and `<stateKey>.balance` is right from t=0.
     for (const account of context.accounts) {
       if (account.stateKey && patches[account.stateKey] === undefined) {
         patches[account.stateKey] = _accountToStatePlain(account);
-      }
-      if (account.stateKey != null && account.balance != null) {
-        metrics[account.stateKey] = account.balance;
       }
     }
 

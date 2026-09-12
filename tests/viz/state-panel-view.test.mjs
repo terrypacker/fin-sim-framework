@@ -861,13 +861,18 @@ test('StatePanelView.toLabel: keeps acronym runs whole (design 101 R-7)', () => 
   assert.strictEqual(p.toLabel('totalUSA'), 'Total USA');
 });
 
-test('_renderMetricsPanel: a per-account balance metric shows the account name', () => {
+test('metrics is an ordinary branch of the tree, and the tree starts open (design 101 W-D9)', () => {
+  // The Metrics section is gone: a watchlist, not a section of its own, is what makes a
+  // field first-class. With the tree the panel's only content, it must not start
+  // collapsed, or the panel opens empty.
   const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  assert.strictEqual(panel._stateCollapsed, false);
+  panel._expandedSections.add('metrics');
   const c = document.createElement('div');
-  panel._renderMetricsPanel({ usSavings2Account: 1000, netWorth: 5000 }, c);
+  panel.renderState({ metrics: { netWorth: 5000 }, usSavings2Account: { balance: 1000 } }, c);
+  assert.ok(sectionLabels(c).includes('Metrics'), sectionLabels(c).join(' | '));
   const labels = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.textContent);
-  assert.ok(labels.includes('US Shared Checking'), 'account metric renamed');
-  assert.ok(labels.includes('Net Worth'),          'a true metric keeps toLabel');
+  assert.ok(labels.includes('Net Worth'), labels.join(' | '));
 });
 
 test('_pathLabel: resolves the owning record and keeps the field name', () => {

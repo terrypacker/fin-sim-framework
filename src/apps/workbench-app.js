@@ -1076,9 +1076,8 @@ export class WorkbenchApp extends BaseComponent {
     registry?.graph.clearLayer('config');
     ServiceRegistry.reset();
 
-    $('currentStateContent').innerHTML      = '';
-    $('cumulativeMetricsContent').innerHTML = '';
-    this._statePanelView.clearMetricHistory();
+    $('currentStateContent').innerHTML = '';
+    this._statePanelView.clearFieldHistory();
 
     this._editModal?.close();
     // These are recreated each initScenario and subscribe to the persistent

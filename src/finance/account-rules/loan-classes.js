@@ -635,13 +635,9 @@ export class LoanPaymentHandler extends HandlerEntry {
                                                  firstResidency(state));
       if (deduction) actions.push(deduction);
       actions.push(new RecordBalanceAction(`${loanKey}.balance`, loanKey));
-      // Snapshot the debited cash pool too (design 54 P4): the payment mutates its
-      // balance, and its charted `metrics.<cashKey>` series only updates when a
-      // RECORD_BALANCE is emitted. A savings pool gets snapshotted by its own monthly
-      // events (interest/wages/expenses), but a linked OFFSET has no other event
-      // touching it once it's the payment source — without this its metric freezes
-      // while state.<cashKey>.balance correctly drops. (BalanceSnapshotReducer runs at
-      // PRIORITY.METRICS, reading the post-debit/post-replenish balance.)
+      // The debited cash pool's RECORD_BALANCE (design 54 P4). It is now only a
+      // pipeline-flush marker: the `metrics.<cashKey>` copy it fed is retired (design
+      // 101 W-D10), and `state.<cashKey>.balance` is what to chart.
       actions.push(new RecordBalanceAction(`${cashKey}.balance`, cashKey));
     }
     return actions;

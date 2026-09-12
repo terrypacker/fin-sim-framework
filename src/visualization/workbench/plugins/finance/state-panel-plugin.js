@@ -16,12 +16,10 @@ export class StatePanelPlugin extends WorkbenchComponent {
         <label class="lsp-text-toggle" title="Ids, symbols, labels and other text that does not change during a run. A filter that matches one shows it anyway.">
           <input id="lsp-show-text" type="checkbox" /> <span>Show text fields</span>
         </label>
-        <div class="data-section-title">Metrics</div>
-        <div id="cumulativeMetricsContent"></div>
         <div class="data-section-title lsp-state-toggle" id="stateSectionHeader">
-          <span>State</span><span class="lsp-collapse-icon">&#x25B6;</span>
+          <span>State</span><span class="lsp-collapse-icon">&#x25BC;</span>
         </div>
-        <div id="currentStateContent" style="display:none"></div>
+        <div id="currentStateContent"></div>
       </div>
     `;
     return root;

@@ -366,13 +366,9 @@ export const AU_RETIREMENT = {
         essential:     monthlyExpenses * (1 - discretionarySharePct),
         discretionary: monthlyExpenses * discretionarySharePct,
       };
+      // No `metrics.<stateKey>` balance seed: retired with the copies (design 101 W-D10).
       patches.metrics = metrics;
       patches.people  = people;
-      for (const account of context.accounts) {
-        if (account.stateKey != null && account.balance != null) {
-          metrics[account.stateKey] = account.balance;
-        }
-      }
     }
 
     for (const account of context.accounts) {

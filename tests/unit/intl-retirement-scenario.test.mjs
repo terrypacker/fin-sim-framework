@@ -326,38 +326,28 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Metrics: investment account balances captured in state.metrics
+// Balances live on the account; RECORD_BALANCE no longer copies them into
+// state.metrics (design 101 W-D10)
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('DIVIDEND_SCHEDULED: state.metrics.usStockAccount is set after year-end dividend', () => {
+test('DIVIDEND_SCHEDULED: the stock balance is on the account, with no copy in metrics', () => {
   // dividendsEvent has startOffset(1), so first DIVIDEND_SCHEDULED fires Dec 31 2027
   const { sim } = buildScenario();
   sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
 
-  assert.ok(
-    sim.state.metrics?.usStockAccount != null,
-    `state.metrics.usStockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
-  );
-  assert.ok(
-    typeof sim.state.metrics.usStockAccount === 'number' && sim.state.metrics.usStockAccount > 0,
-    `state.metrics.usStockAccount should be a positive number, got ${sim.state.metrics.usStockAccount}`
-  );
+  assert.ok(sim.state.usStockAccount.balance > 0,
+    `usStockAccount.balance should be positive, got ${sim.state.usStockAccount.balance}`);
+  assert.equal(sim.state.metrics?.usStockAccount, undefined, 'the balance copy is retired');
 });
 
-test('REPLENISH_SAVINGS: state.metrics captures balance of each drawn account', () => {
+test('REPLENISH_SAVINGS: a drawn account keeps its balance, with no copy in metrics', () => {
   // Low savings forces immediate drawdown from fixedIncomeAccount (drawdownPriority 1)
   // on the first month-end expense.
   const { sim } = buildScenario({ initialUsSavings: 3000 });
   sim.stepTo(new Date(Date.UTC(2026, 0, 31)));  // Jan 31 2026 — first MONTHLY_EXPENSES
 
-  assert.ok(
-    sim.state.metrics?.fixedIncomeAccount != null,
-    `state.metrics.fixedIncomeAccount should be set after drawdown; got ${JSON.stringify(sim.state.metrics)}`
-  );
-  assert.ok(
-    typeof sim.state.metrics.fixedIncomeAccount === 'number',
-    `state.metrics.fixedIncomeAccount should be a number, got ${sim.state.metrics.fixedIncomeAccount}`
-  );
+  assert.equal(typeof sim.state.fixedIncomeAccount.balance, 'number');
+  assert.equal(sim.state.metrics?.fixedIncomeAccount, undefined, 'the balance copy is retired');
 });
 
 test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
