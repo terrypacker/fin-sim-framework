@@ -16,7 +16,8 @@ confirmed the §4 decisions on 12 Sep. **R2 ✅ (12 Sep)**: `FieldFormatter` and
 field row are built. The chart takes its kinds, labels and tooltip values from the one
 stamped registry (§9.7). **W3 ✅ (12 Sep)**: the Watchlist panel is built (§5.5).
 **M1 ✅ (12 Sep)**: `marketIndex` and `securityIndex` are built. The step rides the period
-advances, and the regold is additive-only (§6.5).
+advances, and the regold is additive-only (§6.5). **W5 ✅ (12 Sep)**: the Securities and
+Holdings panels put a ☆ beside the values they can watch (§6.6).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -195,7 +196,7 @@ them:
 | **W-D8** | UC1 values | **New state:** `state.marketIndex` (per market) and `state.securityIndex` (per security), both advanced by the same rate that holdings see, and both marked down by shocks (§6). | Rejected: integrating rates in the UI (misses shocks and duplicates the growth math), and picking a representative position's `pricePerUnit` (per-account, exists only while held). |
 | **W-D9** | The State panel's Metrics section | **Remove it.** `metrics` renders as an ordinary branch of the tree. | Once watchlists carry the "first-class" role, the special section is exactly the clutter UC2 complains about. It also stops advertising stale balance copies. |
 | **W-D10** | Balance copies (§2.5 b) | **Retire them.** `BalanceSnapshotReducer` becomes a pure no-op. `RECORD_BALANCE` keeps its other job as a pipeline-flush marker, so all 124 emit sites stay untouched. | They are redundant with `<stateKey>.balance` and wrong 18 % of the time. |
-| **W-D11** | Flow amounts (§2.5 c) | **Open: see Q1.** | There's a currency subtlety that needs the user. |
+| **W-D11** | Flow amounts (§2.5 c) | **Decided (12 Sep): retire them (Q1 option b).** `metrics` keeps only the derived aggregates. Monthly expenses is already in state. See §7.1. | The user checked the State panel's Metrics section. The only values they could not find elsewhere in state were the derived aggregates, plus monthly expenses, which is in fact the top-level `monthlyExpenses`. |
 
 ---
 
@@ -436,6 +437,42 @@ dollars gets crushed. Recommendation: the `index` kind gets its own bucket, and 
 existing per-entry `axis` override (design 31 §5.7 already sketched
 `perPath: {axis}`) lets the user force it. See Q5.
 
+### 6.6 As built (W5, 12 Sep 2026)
+
+- **One star, two panels.** `src/visualization/watchlist/watch-star.js` renders the ☆ as
+  markup, and one delegated listener on the panel root toggles its path through
+  `runtime.watchlist`. Both panels rebuild their tables with `innerHTML` on every sim step,
+  so a listener per star would be re-attached and leaked.
+- **Meaning.** ★ means "in the active list", the State panel checkbox's meaning (W-D4).
+  Clicking ☆ adds a charted entry, and clicking ★ removes it. With every list deleted, a
+  star creates one, as a check does (§8.0). Both panels repaint on `WATCHLIST_CHANGED`,
+  so a change made in any panel shows everywhere.
+- **Securities.** A ☆ before the name watches `securityIndex.<id>.price`, and a ☆ in the
+  Market cell watches `marketIndex.<rateKey>.price`. A star appears only where state has
+  that level: a security tracking an unindexed market, or a row whose lots disagree on
+  the market (`rateKey: null`), gets none. Clicking a star does not expand the row.
+- **Holdings.** A ☆ in the Market Value and Price cells watches
+  `<stateKey>.holdings[id=<id>].marketValue` / `.pricePerUnit`. The path names the lot by
+  id, so the watch survives a sale that shifts the array. A lot with no id, and the Price
+  cell of a scalar lot, get none. The star sits inside the value cell, so the column
+  counts do not change.
+- **Labels.** `FieldFormatter.contextLabel` now names an index level by what it measures:
+  `EMP · Price index`, `US market index · Total return index`, `EQUITY US · Price index`.
+  Before, it walked the path generically ("Security Index · Sec-Emp · Price"). This
+  reaches the Watchlist panel, the chart legend and the chips.
+- **Not built.** There is no ☆ for `total`. The price level is what an index chart shows
+  (§6.1), and `total` is one State panel check away.
+- **Verified.**
+  - `tests/viz/watch-producers.test.mjs` (8 cases, through the real controller and bus)
+    and a `contextLabel` case in `field-format.test.mjs`.
+  - Full suites: 6401 unit and 1487 viz tests pass.
+  - The running app, International Retirement run to 2041: real clicks on a security ☆,
+    a market ☆ and a lot's Market Value ☆, plus the Price ☆ added and then removed. Each
+    one updated the active list, the chart's active paths, the Watchlist panel row and
+    the ★. No console errors beyond the pre-existing ECharts 0-size warning.
+  - The run also confirmed M1's invariant in place: the US equity lot's
+    `pricePerUnit` (236.29) equals `marketIndex.EQUITY_US.price`.
+
 ---
 
 ## 7. Redefining "metric" (part 4)
@@ -464,9 +501,60 @@ Consequences:
 - **Migrate:** a saved watchlist entry `metrics.<stateKey>`, where `<stateKey>` names an
   account, rewrites on load to `<stateKey>.balance`. This is the same alias idea as
   `getParamAliases()`.
-- **Flow amounts (§2.5 c): Q1.**
+- **Flow amounts (§2.5 c): retired (Q1 answered, §7.1).**
 - **The Metrics section goes (W-D9).** `metrics` is just another branch of the tree, and
   "first-class" now means "on a watchlist".
+
+### 7.1 M3 plan: retiring the flow amounts (decided 12 Sep 2026)
+
+**The user's check.** In the State panel's Metrics section, the only values the user could
+not find elsewhere in state were Net worth, Net worth incl. speculative, Net liquidity,
+Offset capacity, Offset idle capacity, and Monthly expenses. That matches the code:
+
+| Metric | Where it lives after M2 + M3 |
+|---|---|
+| `netWorth`, `netLiquidity`, `netWorthInclSpeculative`, `offsetAppliedCapacity`, `offsetIdleCapacity` | **Stay in `metrics`.** They are the only functions `BaseScenario.buildSim` registers with `DerivedMetricsRegistry`: true aggregates, found nowhere else (§7). `netWorthInclSpeculative` is published only on plans holding a speculative asset (2 of 13 goldens). |
+| Monthly expenses | **Already in state** as the top-level `monthlyExpenses`, with its split in `expenses.essential` / `expenses.discretionary`. `metrics.monthly_expenses` is a copy. The handler records `data?.amount ?? state.monthlyExpenses`, and no scheduled event supplies its own `amount`. |
+| `afterTaxNetWorth`, `afterTaxNetLiquidity` | Not live. `deriveAfterTax*` are exported but never registered, which is why the user did not see them. Out of scope. The schema registrations stay, so they format as money if they are ever wired. |
+
+**Measured scope across the 13 goldens.** `metrics` holds 5 derived keys, 19 balance-copy
+keys (M2, §7) and 17 flow keys:
+
+`au_fixed_income_interest`, `au_savings_interest`, `au_stock_dividend`,
+`au_stock_earnings`, `bond_accretion`, `bond_coupons`, `cash_sleeve_interest`,
+`dividends`, `fixed_income_interest`, `ira_earnings`, `k401_earnings`,
+`monthly_expenses`, `roth_earnings`, `super_earnings`, `tlh_skipped_no_substitute`,
+`us_savings_interest`, `us_stock_earnings`.
+
+The code emits a few more that no golden fires: `house_running_cost`,
+`house_repair_expenses`, `expense_events`, `intl_transfer_to_us/au`, `out_of_funds`, and
+the dynamic `fx_transfer_<from>_<to>`. That makes 27 emit sites in all.
+
+**M3 changes:**
+- **Every finance `RecordMetricAction` emit site is removed**, along with `'RECORD_METRIC'`
+  in those handlers' `generatedActionTypes`. The journal and the Timeline already record
+  every flow as its own action with its amount.
+- **The framework primitive stays.** `RecordMetricAction` / `MetricReducer` are generic
+  (`simulation.test.mjs` uses them for its own metrics). Only the finance toolsets stop
+  declaring the `RECORD_METRIC` action type, and only once nothing of theirs emits it.
+- **Tests.**
+  - `evt-per-account-instance-rate.test.mjs` reads `metrics.us_savings_interest` and has to
+    read the interest from the journal or the balance instead.
+  - `RECORD_METRIC` leaves the golden action-coverage manifest, since no golden fires it
+    any more.
+- **Migration.**
+  - A saved watch entry `metrics.monthly_expenses` is rewritten to `monthlyExpenses`, the
+    same alias mechanism as `metrics.<stateKey>` → `<stateKey>.balance` (W1).
+  - A saved watch of any other retired key has no state equivalent, so it is **kept and
+    shown muted** ("not in state at this date"). The user removes it; nothing is hidden on
+    their behalf.
+- **Golden impact.** Removals of `metrics.<flow key>` only. This is checked with a
+  removals-only mode of `probe-regold-additive.mjs`: any added or changed field fails.
+
+**Order.** M2 (the balance copies, which also includes the AU retirement toolset's load-time
+`metrics[stateKey] = balance` seed) and M3 each leave only removals under `metrics`. After
+both, `metrics` is exactly the five derived aggregates, and W-D9 (drop the Metrics section)
+removes nothing the tree does not already show.
 
 ---
 
@@ -801,12 +889,12 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **W3** ✅ | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. See §5.5. | W2 | none |
 | **M1** ✅ | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. See §6.5. | — (parallel to W) | **additive only** (verified) |
 | **W4** `[ ]` | Export/import definition JSON + series CSV (§8.1). | W3 | none |
-| **W5** `[ ]` | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). | W2, M1 | none |
+| **W5** ✅ | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). Index-level context labels. Browser-verified. See §6.6. | W2, M1 | none |
 | **M2** `[ ]` | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** |
-| **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
+| **M3** `[ ]` | Retire the flow amounts (§7.1): remove the 27 finance `RecordMetricAction` emit sites, alias `metrics.monthly_expenses` → `monthlyExpenses`, keep saved watches of other retired keys muted, and update one test plus the golden action-coverage manifest. | Q1 ✅, M2 | **removals of `metrics.<flow key>` only** |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1 ✅** alongside. Then **W4 / W5 ✅**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
@@ -829,6 +917,10 @@ panel renders through it.
 
    *Leaning (a) with the currency audit.* It is what the name has always promised, and it
    matches "a reducer that puts a value into state".
+
+   **Answered (12 Sep): (b), retire them.** The only values the user could not find
+   elsewhere in state were the derived aggregates, which stay, and monthly expenses,
+   which is already the top-level `monthlyExpenses`. See §7.1.
 2. **Q2: Which action carries the market-index step?** **Answered (12 Sep):** the period
    advances, running before the regime reset. Equity grows annually, not monthly. The regold
    is additive-only. See §6.5.

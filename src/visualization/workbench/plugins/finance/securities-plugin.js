@@ -16,6 +16,8 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framew
 import { buildAllocationCube } from '../../../../finance/allocation-reporting/allocation-cube.js';
 import { rollupBySecurity, totalSecurityRollup }
   from '../../../../finance/allocation-reporting/security-rollup.js';
+import { watchStarHtml, bindWatchStars, isWatchStarClick }
+  from '../../../watchlist/watch-star.js';
 
 const BASE_CURRENCY = 'USD';
 
@@ -107,11 +109,14 @@ export class SecuritiesPlugin extends WorkbenchComponent {
   onInit() {
     this._runtime.bus.subscribe(WB_EVENTS.SCENARIO_READY, ({ scenario }) => this._bindSim(scenario?.sim ?? null));
     this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._render());
+    // ★ follows the active list, whichever panel changed it (design 101 W5).
+    this._runtime.bus.subscribe(WB_EVENTS.WATCHLIST_CHANGED, () => this._render());
   }
 
   onMount() {
     // Late-mount: the scenario is usually built before this panel first mounts.
     if (!this._sim) this._bindSim(this._services()?.simulationRegistry?.getPrimary?.() ?? null);
+    bindWatchStars(this.el, () => this._runtime.watchlist ?? null);
 
     this._bindOnce('synthetic', 'change', (el) => {
       this._showSynthetic = el.checked;
@@ -125,6 +130,7 @@ export class SecuritiesPlugin extends WorkbenchComponent {
       // Delegated, because the rows are re-rendered on every sim step and a per-row
       // listener would be re-attached (and leaked) each time.
       rows.addEventListener('click', (e) => {
+        if (isWatchStarClick(e)) return;   // a ☆ watches; it does not expand the row
         const tr = e.target.closest('tr[data-id]');
         if (!tr) return;
         const id = tr.dataset.id;
@@ -266,8 +272,8 @@ export class SecuritiesPlugin extends WorkbenchComponent {
     const main = `
       <tr data-id="${_esc(r.securityId)}" class="sec-row${open ? ' is-open' : ''}">
         <td class="sec-td sec-name" title="${_esc(r.securityId)}">
-          <span class="sec-caret">${open ? '▾' : '▸'}</span>${_esc(r.security)}</td>
-        <td class="sec-td">${_esc(r.rateKey ?? '—')}</td>
+          <span class="sec-caret">${open ? '▾' : '▸'}</span>${this._securityStar(r)}${_esc(r.security)}</td>
+        <td class="sec-td sec-market">${this._marketStar(r.rateKey)}${_esc(r.rateKey ?? '—')}</td>
         <td class="sec-td sec-td--num">${_fmtUnits(r.units)}</td>
         <td class="sec-td sec-td--num">${r.avgPrice == null ? '—' : this._money(r.avgPrice, 2)}</td>
         <td class="sec-td sec-td--num">${this._money(r.marketValue)}</td>
@@ -290,6 +296,30 @@ export class SecuritiesPlugin extends WorkbenchComponent {
         <td class="sec-td sec-td--num" colspan="3"></td>
       </tr>`).join('');
     return main + detail;
+  }
+
+  // ─── Watch stars (design 101 W5 / §6.4) ──────────────────────────────────
+
+  /**
+   * The ☆ for a security's price index. What this panel shows is a rollup of POSITIONS,
+   * which moves with every buy and sale; the index is what the instrument itself did, and
+   * it is state, so it can be watched. Only a security with an index level gets a star:
+   * one tracking no indexed market has nothing to point at.
+   */
+  _securityStar(r) {
+    if (this._sim?.state?.securityIndex?.[r.securityId] == null) return '';
+    return this._star(`securityIndex.${r.securityId}.price`, `the price index of ${r.security}`);
+  }
+
+  /** The ☆ for the market a security tracks. None for a mixed (null) or unindexed market. */
+  _marketStar(rateKey) {
+    if (rateKey == null || this._sim?.state?.marketIndex?.[rateKey] == null) return '';
+    return this._star(`marketIndex.${rateKey}.price`, `the ${rateKey} market's price index`);
+  }
+
+  _star(path, what) {
+    const wl = this._runtime.watchlist;
+    return wl ? watchStarHtml(path, { watched: wl.has(path), what }) : '';
   }
 
   // ─── CSV ─────────────────────────────────────────────────────────────────

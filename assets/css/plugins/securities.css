@@ -109,6 +109,9 @@
 
 .sec-name { white-space: nowrap; }
 
+/* A long market key (EQUITY_INTL_EX_AU) would otherwise wrap its ☆ onto a line of its own. */
+.sec-market { white-space: nowrap; }
+
 /* The per-account breakdown: indented and dimmed, so a glance separates the parts
    from the instrument total they add up to. */
 .sec-detail-row td {

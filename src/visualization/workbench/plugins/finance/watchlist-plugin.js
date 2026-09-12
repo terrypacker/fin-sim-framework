@@ -197,7 +197,7 @@ export class WatchlistPlugin extends WorkbenchComponent {
     const empty  = text => { const d = document.createElement('div'); d.className = 'wl-empty'; d.textContent = text; body.appendChild(d); };
     if (!wl)                     return empty('Load a scenario to see its watchlists.');
     if (!active)                 return empty('No watchlists. ＋ creates one.');
-    if (!active.entries.length)  return empty('This list is empty. Check a field in the State panel to add it.');
+    if (!active.entries.length)  return empty('This list is empty. Check a field in the State panel, or ☆ one in Holdings or Securities.');
 
     const fmt   = this._fmt();
     const state = this._sim?.state ?? null;

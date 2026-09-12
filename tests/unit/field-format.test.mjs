@@ -74,6 +74,19 @@ test('contextLabel: people, metrics, balance copies and ownerless paths', () => 
   assert.equal(f.contextLabel('usStockAccount.balance'), 'US Brokerage · Balance');
 });
 
+test('contextLabel: an index level names the instrument or market, then the level (W5)', () => {
+  const state = { securities: {
+    'sec-emp': { id: 'sec-emp', symbol: 'EMP' },
+    'sec-auto-EQUITY_US': { id: 'sec-auto-EQUITY_US', symbol: '', name: 'US market index' },
+  } };
+  const { f } = formatter({ state });
+  assert.equal(f.contextLabel('securityIndex.sec-emp.price'), 'EMP · Price index');
+  assert.equal(f.contextLabel('securityIndex.sec-auto-EQUITY_US.total'), 'US market index · Total return index',
+    'an empty symbol is "no ticker", so the name wins');
+  assert.equal(f.contextLabel('securityIndex.sec-gone.price'), 'sec-gone · Price index', 'unknown id: the id itself');
+  assert.equal(f.contextLabel('marketIndex.EQUITY_US.price'), 'EQUITY US · Price index');
+});
+
 test('contextLabel: an explicit state wins over the provider', () => {
   const { f } = formatter({ state: null });
   const state = { usStockAccount: { holdings: [{ id: 'h1', label: 'Tech lot' }] } };
