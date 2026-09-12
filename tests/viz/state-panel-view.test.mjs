@@ -769,11 +769,96 @@ test('renderState: a named numeric leaf and static leaf both use the display nam
 
 test('renderState: a static (non-numeric) row exposes its path as a tooltip', () => {
   const panel = makePanel();
+  panel.setShowText(true); // no registry here, so nothing is marked status
   const c = document.createElement('div');
   panel.renderState({ residency: 'AU' }, c);
   const lbl = c.querySelector('.lsp-static-row .lsp-metric-label');
   assert.strictEqual(lbl.textContent, 'Residency');
   assert.strictEqual(lbl.title, 'residency');
+});
+
+// ─── Text rows, dates, identity headers (design 101 §9.5, R-3, R-7) ─────────────
+
+function registryPanel() {
+  const panel = makePanel();
+  panel.schemaRegistry = new StateSchemaRegistry();
+  return panel;
+}
+const staticLabels  = c => [...c.querySelectorAll('.lsp-static-row .lsp-metric-label')].map(l => l.textContent);
+const sectionLabels = c => [...c.querySelectorAll('.lsp-section-label')].map(l => l.textContent);
+
+test('renderState: identity/config text is hidden by default and shown by the toggle', () => {
+  const panel = registryPanel();
+  const state = { rateKey: 'EQUITY_US', cash: 100 };
+  let c = document.createElement('div');
+  panel.renderState(state, c);
+  assert.deepStrictEqual(staticLabels(c), [], 'text row hidden');
+  assert.ok(c.querySelector('.lsp-metric-row input.lsp-chart-toggle'), 'numeric row still shown');
+
+  panel.setShowText(true);
+  c = document.createElement('div');
+  panel.renderState(state, c);
+  assert.deepStrictEqual(staticLabels(c), ['Rate Key']);
+});
+
+test('renderState: a filter that names a hidden text field shows it', () => {
+  const panel = registryPanel();
+  panel.setFilter('symbol');
+  const c = document.createElement('div');
+  panel.renderState({ sec: { symbol: 'SWTSX', beta: 1 } }, c);
+  assert.deepStrictEqual(staticLabels(c), ['Symbol'],
+    'the section is reached through its text leaf, not only its numeric ones');
+});
+
+test('renderState: status text (residency) stays visible while text is hidden', () => {
+  const panel = registryPanel();
+  panel._expandedSections.add('people');
+  panel._expandedSections.add('people.p1');
+  const c = document.createElement('div');
+  panel.renderState({ people: { p1: { residency: 'AU', wageCurrency: 'USD' } } }, c);
+  assert.deepStrictEqual(staticLabels(c), ['Residency']);
+});
+
+test('renderState: an epoch-ms field is a static date row with no chart toggle (R-3)', () => {
+  const panel = registryPanel();
+  panel.setShowText(true);
+  panel._expandedSections.add('currentPeriods');
+  panel._expandedSections.add('currentPeriods.US');
+  const c = document.createElement('div');
+  panel.renderState({ currentPeriods: { US: { startMs: Date.UTC(2050, 0, 1) } } }, c);
+  const row = c.querySelector('.lsp-static-row');
+  assert.ok(row, 'rendered as a static row');
+  assert.strictEqual(row.querySelector('.lsp-metric-value').textContent, '2050-01-01');
+  assert.strictEqual(c.querySelector('input.lsp-chart-toggle'), null, 'no chart toggle for a date');
+  assert.deepStrictEqual(panel._collectLeafPaths({ US: { startMs: 1 } }, 'currentPeriods'), [],
+    'a date is not in the header select-all set');
+});
+
+test('renderState: a section holding only hidden text is omitted, and returns with the toggle', () => {
+  const panel = registryPanel();
+  let c = document.createElement('div');
+  panel.renderState({ currency: { code: 'USD' }, cash: 1 }, c);
+  assert.ok(!sectionLabels(c).includes('Currency'), 'no empty header');
+  panel.setShowText(true);
+  c = document.createElement('div');
+  panel.renderState({ currency: { code: 'USD' }, cash: 1 }, c);
+  assert.ok(sectionLabels(c).includes('Currency'));
+});
+
+test('renderState: a security registry entry is headed "symbol · name"', () => {
+  const panel = registryPanel();
+  panel._expandedSections.add('securities');
+  const c = document.createElement('div');
+  panel.renderState({ securities: { 'sec-core': { symbol: 'SWTSX', name: 'Schwab Total Stock Market', beta: 1 } } }, c);
+  assert.ok(sectionLabels(c).includes('SWTSX · Schwab Total Stock Market'), sectionLabels(c).join(' | '));
+});
+
+test('StatePanelView.toLabel: keeps acronym runs whole (design 101 R-7)', () => {
+  const p = makePanel();
+  assert.strictEqual(p.toLabel('AU'), 'AU');
+  assert.strictEqual(p.toLabel('usCapitalGainsYTD'), 'Us Capital Gains YTD');
+  assert.strictEqual(p.toLabel('EQUITY_US'), 'EQUITY US');
+  assert.strictEqual(p.toLabel('totalUSA'), 'Total USA');
 });
 
 test('_renderMetricsPanel: a per-account balance metric shows the account name', () => {

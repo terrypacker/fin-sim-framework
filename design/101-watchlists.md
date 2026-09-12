@@ -4,7 +4,9 @@
 recommendations awaiting the user's confirmation, and §11 lists the questions that need an
 answer before the phases they block. **W0 ✅ (12 Sep)**: the chart-by-path input is gone.
 §9 (added the same day) reviews how the State panel renders values, and proposes a shared
-typed renderer that the Watchlist panel builds on.
+typed renderer that the Watchlist panel builds on. **R1 ✅ (12 Sep)**: registry correctness
+and the untyped-leaf gate. Untyped numeric leaves across the goldens went from 5,136 to 23
+(§9.6). Text rows are hidden behind a toggle, per the user's decision (§9.5).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -498,7 +500,8 @@ format(path, value, { state, compact })  // → string
 | fxRate *(new)* | `effectiveExchangeRates.USD_AUD` | `1.550` | `1.5500`, with the pair ("AUD per USD") on hover |
 | percentage | `auCgtEffectiveRate` | `12.34%` | Unchanged |
 | index *(new, §6)* | `marketIndex.EQUITY_US.price` | — | `142.7` |
-| dateMs *(new)* | `currentPeriods.US.startMs` | `2,524,608,000,000.00` | A display-timezone date. Not chartable. |
+| date *(now also epoch ms)* | `currentPeriods.US.startMs` | `2,524,608,000,000.00` | A display-timezone date. Not chartable. R1 built this by letting the existing `date` kind take ms, not by adding a `dateMs` kind. `people.*.residencySinceMs` was already typed `date`. |
+| year *(new)* | `*.maturityYear` | `2,045.00` | `2045`. Not chartable. |
 | integer | `*.drawdownPriority` | `8.00` | `8` |
 | unknown | — | `1,234.56` | Unchanged, plus a subtle "untyped" marker (dotted underline; hover says "no schema entry"), so gaps are visible rather than silently plausible. |
 
@@ -510,14 +513,80 @@ through `describe()` and fails on any numeric leaf of kind `unknown` that is not
 explicit allow-list. The README convention "register the `ValueType` when you add a state
 field" then becomes enforced, instead of being discovered in the UI months later.
 
-### 9.5 Non-numeric clutter (an option for UC2, not a decision)
+### 9.5 Non-numeric rows: hidden, but never out of reach (decided 12 Sep, built in R1)
 
-Identity leaves (`id`, `symbol`, `name`, `rateKey`, `label`) and the frozen `securities`
-registry account for most non-numeric rows. They are real state, and they are how a user
-finds out which lot is which, so they stay. The option is presentation: fold a section's
-identity fields into its header text (e.g. "SWTSX · Schwab Total Stock Market"), and show
-the `securities` registry, which is config projected into state and never changes during a
-run, as one collapsed section. **This needs the user's call before anything is hidden.**
+**Decision (user):** hide non-numeric rows, since they can't be charted and don't change.
+They must stay reachable, though, because they show what the state is *now*. Don't hide
+them blindly.
+
+**Measured before building.** Each of two goldens was stepped a year at a time, and the
+non-numeric leaves were compared across the snapshots:
+
+| Golden | Non-numeric paths | Value changed | Only appear/disappear (lots bought/sold) | Constant |
+|---|---|---|---|---|
+| `cross-border-reference` | 514 | 8 | 107 | 399 |
+| `au-single-homeowner` | 180 | 4 | 17 | 159 |
+
+The changing ones are exactly the "now" values the user meant: `people.*.residency` and the
+current tax period (`currentPeriods.*.name` / `.id`). The only other change was one lot's
+`allocation` and `taxExemption`. The premise holds for everything else.
+
+**The rule** (`StatePanelView._leafVisible`):
+
+- Chartable numbers always render.
+- A static leaf (text, flag, date, year) renders when **any** of these is true:
+  1. the **"Show text fields"** toggle under the filter is on (off by default, in memory);
+  2. the **filter** matches its path, so typing `symbol` finds every symbol;
+  3. the registry marks it as **status** (`ParameterValueType.status`): `boolean` fields,
+     `people.*.residency`, `people.*.residencyState`, `currentPeriods.*.name`.
+- A section renders only when some descendant would render, so a `currency: {code}` object
+  no longer leaves an empty header. With the toggle on, every section shows.
+- Identity stays visible without the rows: array items were already headed by
+  `label ?? rateKey ?? name ?? id`, and an object with a `symbol` (a `securities` entry) is
+  now headed "SWTSX · Schwab Total Stock Market". The registry was already a collapsed
+  section.
+
+Before this, the filter searched numeric paths only, so a text leaf could never be found
+through it. Section visibility now walks every leaf.
+
+### 9.6 R1 as built (12 Sep 2026)
+
+**Result:** untyped numeric leaves across the 13 goldens dropped from **5,136 in 215 shapes**
+to **23 in 7 shapes**. The count uses the stamped registry and the panel's `[id=…]` paths.
+
+- **R-1:** `resolve()` rewrites `seg[key=val]` to `seg.val` before matching. One correction
+  to §9.2: `costBaseByCountry.<CC>` is in the **account's** currency, not the country's.
+  `AccountService.recordResidencyChange` stamps it from the lot's `marketValue`. It is
+  stamped per account and per asset.
+- **R-2:** the new `fxRate` kind covers `baseExchangeRates`, `effectiveExchangeRates`,
+  `fxAnchorRates`, `*.fxBasisRate` and `*.bookingFxRate`. `rate` now renders as `7.15%`. On
+  the chart, `fxRate` stays on the right axis. That axis, and the tooltip, show percent only
+  when every right-axis series is a rate or percentage.
+- **R-3 / R-5 / R-6 / R-8** as in §9.2. Two new kinds, `date` (ms) and `year`, are not
+  chartable (`StateSchemaRegistry.isChartable`). Their rows are static and outside the
+  header select-all.
+- **R-7:** only the acronym fix, as a shared `toLabel` in `state-paths.js`. `contextLabel`
+  stays in R2.
+- **Also typed:** position fields (units, unit price, face, par, coupon frequency, roll
+  term), account/asset settings, the property repair and running-cost model, yield-curve
+  points, return deviations and overlays, active-regime fields, the security registry, the
+  US payroll/§988/401(k) accumulators, and plan scalars.
+  `registerMirrorPrefix('usPendingReturn.')` types the held-open return as the top-level
+  YTD fields it copies.
+- **Gate:** `tests/unit/state-schema-coverage.test.mjs` loads each golden's cfg without
+  running it (about 0.2 s in total) and resolves every numeric leaf of the fixture. Any
+  `unknown` leaf outside `ALLOWED_UNKNOWN` fails, and so does any allow-list row that no
+  longer matches.
+
+**Left on the allow-list, as follow-ups:**
+
+1. **Loan records are never stamped.** `<prop>Loan` accounts come from the property
+   toolsets and are not in `accountService`, so `ScenarioLoader._registerDisplayCurrencies`
+   skips them. `monthlyPayment` is untyped, and `balance` falls to the code-less
+   `*.balance` glob, so **the display-currency toggle does not convert a loan balance**.
+2. **Wash-sale loss amounts** (`washPendingLosses.*.{long,short}Loss`,
+   `washSaleLedger.*.{deferred,disallowedLong,disallowedShort}`): `wash-sale.js` doesn't
+   pin their currency, so they stay untyped until someone confirms it.
 
 ---
 
@@ -528,7 +597,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | Phase | Scope | Depends | Golden impact |
 |---|---|---|---|
 | **W0** ✅ | Remove chart-by-path (§5.1) | — | none |
-| **R1** `[ ]` | Registry correctness (§9.2 R-1, R-2 split, R-3, R-5, R-6, R-8), the `toLabel` acronym fix, and the untyped-leaf coverage gate. Display only. | — | none |
+| **R1** ✅ | Registry correctness (§9.2 R-1, R-2 split, R-3, R-5, R-6, R-8), the `toLabel` acronym fix, the untyped-leaf coverage gate (§9.6), and hidden text rows (§9.5). Display only. | — | none |
 | **R2** `[ ]` | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. | R1 | none |
 | **W1** `[ ]` | `WatchlistModel` + legacy migration + `metrics.<stateKey>` alias + persistence + default seed (§5.4, §8.1). Unit tests: migration, round-trip, delete-last, alias. | — | none |
 | **W2** `[ ]` | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. | W1 | none |
@@ -540,7 +609,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 → W1 → W2 → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 → W2 → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.

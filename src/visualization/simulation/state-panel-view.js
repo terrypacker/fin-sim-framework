@@ -14,6 +14,7 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
 import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph.js';
 import { readThemeColor } from '../theme.js';
 import { APP_EVENTS } from '../app-display-settings.js';
+import { toLabel } from '../state/state-paths.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -47,6 +48,10 @@ export class StatePanelView extends BaseComponent {
     this._onChartToggle     = null;
     this._stateCollapsed    = true;
     this._filterText        = '';
+    // Design 101 §9.5: text leaves (ids, symbols, labels, config flags) are hidden
+    // until asked for. Status text (residency, the current period) and filter
+    // matches always show, so nothing is out of reach.
+    this._showText          = false;
     this._expandedSections  = new Set();  // sectionPath → expanded; default (absent) = collapsed
 
     if (appBus) {
@@ -199,6 +204,12 @@ export class StatePanelView extends BaseComponent {
   }
 
   /** Set the row filter substring (case-insensitive, matches full path). Re-renders. */
+  /** Show or hide identity/config text rows (design 101 §9.5). */
+  setShowText(on) {
+    this._showText = !!on;
+    this._refreshRows();
+  }
+
   setFilter(text) {
     this._filterText = (text ?? '').trim().toLowerCase();
     if (this._pendingState) this._renderStatePanel(this._pendingDate, this._pendingState);
@@ -213,6 +224,8 @@ export class StatePanelView extends BaseComponent {
   initLiveState() {
     const filter = document.getElementById('lsp-panel-filter');
     if (filter) filter.addEventListener('input', e => this.setFilter(e.target.value));
+    const showText = document.getElementById('lsp-show-text');
+    if (showText) showText.addEventListener('change', e => this.setShowText(e.target.checked));
 
     const header  = document.getElementById('stateSectionHeader');
     const content = document.getElementById('currentStateContent');
@@ -375,19 +388,24 @@ export class StatePanelView extends BaseComponent {
       if (isObjArray || isObject) {
         const subPaths = this._collectLeafPaths(v, topPath);
         paths.push(...subPaths);
+        // A registry entry is config, not a record: head it "SWTSX · Schwab Total
+        // Stock Market" so its identity reads without expanding it (design 101 §9.5).
+        const identity = isObject ? this._identityLabel(v) : null;
         this._appendCollapsibleSection(container, {
-          label: name ?? k, alreadyLabel: name != null, sectionPath: topPath, subPaths,
+          label: name ?? identity ?? k, alreadyLabel: (name ?? identity) != null,
+          sectionPath: topPath, subPaths, node: v,
           renderBody: (body) => isObjArray ? this._renderObjectArray(v, topPath, body)
                                            : this.renderState(v, body, topPath),
         });
 
-      } else if (typeof v === 'number' && isFinite(v)) {
+      } else if (this._isChartableLeaf(topPath, v)) {
         if (!this._matchesFilter(topPath)) continue;
         container.appendChild(this._buildFieldRow({ path: topPath, value: v, label: name ?? this.toLabel(k) }));
         paths.push(topPath);
 
       } else {
-        if (!this._matchesFilter(topPath)) continue;
+        // Text, flags, dates and years: static rows, shown per _leafVisible.
+        if (!this._leafVisible(topPath, v)) continue;
         container.appendChild(this._buildStaticRow(name ?? this.toLabel(k),
           typeof v === 'object' ? this.renderObj(v) : this._fmtChange(topPath, v), topPath));
       }
@@ -404,6 +422,7 @@ export class StatePanelView extends BaseComponent {
       const label = item.label ?? item.rateKey ?? item.name ?? (id != null ? String(id) : `[${idx}]`);
       this._appendCollapsibleSection(container, {
         label, sectionPath: seg, subPaths: this._collectLeafPaths(item, seg), alreadyLabel: true,
+        node: item,
         renderBody: (body) => this.renderState(item, body, seg),
       });
     });
@@ -413,10 +432,10 @@ export class StatePanelView extends BaseComponent {
    * Append a foldable section: a header (caret + tri-state checkbox + label) and,
    * when expanded, a body built lazily by `renderBody`. Sections are collapsed by
    * default (D17-style) and auto-expanded while a filter is active. A section with
-   * no filter-matching descendant is omitted entirely.
+   * no visible descendant (see _leafVisible) is omitted entirely.
    */
-  _appendCollapsibleSection(container, { label, sectionPath, subPaths, renderBody, alreadyLabel = false }) {
-    if (this._filterText && !subPaths.some(p => this._matchesFilter(p))) return;
+  _appendCollapsibleSection(container, { label, sectionPath, subPaths, renderBody, node, alreadyLabel = false }) {
+    if (!this._sectionVisible(node, sectionPath)) return;
     const expanded = this._filterText !== '' || this._expandedSections.has(sectionPath);
     container.appendChild(this.renderHeaderRow(label, subPaths, alreadyLabel, sectionPath, expanded));
     if (expanded) {
@@ -449,24 +468,57 @@ export class StatePanelView extends BaseComponent {
    */
   _collectLeafPaths(node, prefix) {
     const out = [];
-    const walk = (n, p) => {
-      if (Array.isArray(n)) {
-        if (n.length > 0 && n[0] !== null && typeof n[0] === 'object') {
-          n.forEach((item, idx) => {
-            if (item === null || typeof item !== 'object' || this.isDate(item)) return;
-            walk(item, item.id != null ? `${p}[id=${item.id}]` : `${p}.${idx}`);
-          });
-        }
-        return;
-      }
-      if (n !== null && typeof n === 'object' && !this.isDate(n)) {
-        for (const [k, v] of Object.entries(n)) walk(v, p ? `${p}.${k}` : k);
-        return;
-      }
-      if (typeof n === 'number' && isFinite(n)) out.push(p);
-    };
-    walk(node, prefix);
+    this._someLeaf(node, prefix, (p, v) => { if (this._isChartableLeaf(p, v)) out.push(p); return false; });
     return out;
+  }
+
+  /**
+   * Visit the leaves renderState would render under `node`, stopping at the first
+   * `visit(path, value)` that returns true (and returning true). A leaf is anything
+   * renderState does not recurse into: a scalar, a Date, or an array of scalars.
+   */
+  _someLeaf(node, prefix, visit) {
+    if (Array.isArray(node)) {
+      if (node.length > 0 && node[0] !== null && typeof node[0] === 'object') {
+        return node.some((item, idx) => item !== null && typeof item === 'object' && !this.isDate(item)
+          && this._someLeaf(item, item.id != null ? `${prefix}[id=${item.id}]` : `${prefix}.${idx}`, visit));
+      }
+      return visit(prefix, node);
+    }
+    if (node !== null && typeof node === 'object' && !this.isDate(node)) {
+      return Object.entries(node).some(([k, v]) => this._someLeaf(v, prefix ? `${prefix}.${k}` : k, visit));
+    }
+    return visit(prefix, node);
+  }
+
+  /** A finite number the registry does not mark as a date or year (design 101 R-3). */
+  _isChartableLeaf(path, value) {
+    return typeof value === 'number' && isFinite(value)
+      && (this._schemaRegistry?.isChartable?.(path) ?? true);
+  }
+
+  /**
+   * Whether a leaf gets a row. Chartable numbers always do (filter permitting). A
+   * static leaf does when a filter names it, when text is switched on, or when the
+   * registry marks it as live status (design 101 §9.5).
+   */
+  _leafVisible(path, value) {
+    if (!this._matchesFilter(path)) return false;
+    if (this._isChartableLeaf(path, value)) return true;
+    return this._filterText !== '' || this._showText
+      || (this._schemaRegistry?.isStatus?.(path) ?? false);
+  }
+
+  /** A section renders when any descendant leaf is visible; with text shown, always. */
+  _sectionVisible(node, sectionPath) {
+    if (node === undefined || (this._showText && !this._filterText)) return true;
+    return this._someLeaf(node, sectionPath, (p, v) => this._leafVisible(p, v));
+  }
+
+  /** "SWTSX · Schwab Total Stock Market" for an object carrying a symbol, else null. */
+  _identityLabel(obj) {
+    if (typeof obj?.symbol !== 'string' || !obj.symbol) return null;
+    return typeof obj.name === 'string' && obj.name ? `${obj.symbol} · ${obj.name}` : obj.symbol;
   }
 
   /** Case-insensitive substring match of the filter against the full path. */
@@ -1668,10 +1720,7 @@ export class StatePanelView extends BaseComponent {
   }
 
   toLabel(key) {
-    return key.replace(/([A-Z])/g, ' $1')
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase())
-      .trim();
+    return toLabel(key);
   }
 
   renderObj(v) {
