@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsAccretion } from '../holdings/holdings-earnings.js';
 
@@ -60,7 +60,7 @@ export class BondAccretionHandler extends HandlerEntry {
     this.country        = country;
     this.taxMode        = taxMode;
     this.rateKey        = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['BOND_ACCRETION_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['BOND_ACCRETION_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -101,7 +101,6 @@ export class BondAccretionHandler extends HandlerEntry {
     return [
       { type: 'BOND_ACCRETION_APPLY', amount, federalTaxableAmount, stateTaxableAmount, stateKey, taxMode: this.taxMode, residency },
       ...holdingActions,
-      new RecordMetricAction('bond_accretion', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsCashInterest } from '../holdings/holdings-earnings.js';
 
@@ -53,7 +53,7 @@ export class CashSleeveInterestHandler extends HandlerEntry {
     this.interestRate   = interestRate;
     this.rateKey        = rateKey ?? new.target.rateKey;
     this.taxMode        = taxMode;
-    this.generatedActionTypes = ['CASH_SLEEVE_INTEREST_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['CASH_SLEEVE_INTEREST_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -87,7 +87,6 @@ export class CashSleeveInterestHandler extends HandlerEntry {
     return [
       { type: 'CASH_SLEEVE_INTEREST_APPLY', amount, stateKey, taxMode: this.taxMode, residency },
       ...holdingActions,
-      new RecordMetricAction('cash_sleeve_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

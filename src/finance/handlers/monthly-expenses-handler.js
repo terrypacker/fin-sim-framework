@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { residencePriceLevel } from '../spending/expense-price-level.js';
 import { SPEND_CATEGORY } from '../spending/spend-category.js';
@@ -74,9 +74,9 @@ function rebaseAtAnchor(amount, fromCode, toCode, state) {
  * across seeds — which is an artifact, not a risk. The anchor keeps the re-basing
  * deterministic and puts the FX risk where it belongs: on funding.
  *
- * The RECORD_METRIC 'monthly_expenses' value stays in the BASE currency so the
- * expense-level series reads consistently across the move rather than changing
- * units halfway through.
+ * The base-currency expense level to chart is `state.monthlyExpenses`, which reads
+ * consistently across the move. The `metrics.monthly_expenses` copy of it is retired
+ * (design 101 §7.1).
  *
  * If the target savings account would fall below its minimumBalance after the
  * (converted) debit, a REPLENISH_SAVINGS action is prepended to trigger the
@@ -121,7 +121,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     this.auRole             = auRole;
     this.auOwnerId          = auOwnerId;
     this.primaryPersonKey   = primaryPersonKey;
-    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -223,7 +223,6 @@ export class MonthlyExpensesHandler extends HandlerEntry {
         priceLevel: residencePriceLevel(state, this.primaryPersonKey),
         spendCategory: SPEND_CATEGORY.LIVING, capitalFraction: 0,
         section988: { kind: 'DISPOSE', businessFraction: 0 } },
-      new RecordMetricAction('monthly_expenses', nativeAmount),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );
     return actions;

@@ -288,7 +288,6 @@ export const US_RETIREMENT = {
                                                  targetKey: ValueType.text(),
                                                  section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  family: 'WITHDRAWAL', fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
-      { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
@@ -1434,10 +1433,6 @@ export const US_RETIREMENT = {
     const primaryId = usSavingsAccounts[0]?.ownerId ?? (context.people[0]?.id ?? null);
 
     const reducers = [];
-
-    const recordMetricReducer = ReducerBuilder.metric(null).name('Record Metric').build();
-    recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
-    reducers.push(recordMetricReducer);
 
     reducers.push(new ExpenseDebitReducer({ accountService: accountSvc, stateRegistry: sr }));
     reducers.push(new HouseRepairApplyReducer());   // design 75 §5.2 — tracking + capitalize basis

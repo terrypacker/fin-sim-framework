@@ -24,13 +24,11 @@ function actionsFrom(reducer, state, action, date = DATE) {
   return result.next ?? [];
 }
 
-test('OutOfFundsReducer: emits RECORD_METRIC with the deficit amount', () => {
+test('OutOfFundsReducer: no RECORD_METRIC; the deficit rides ACCUMULATE_DEFICIT (design 101 §7.1)', () => {
   const reducer = new OutOfFundsReducer();
   const next    = actionsFrom(reducer, makeState(), { type: 'OUT_OF_FUNDS', deficit: 750, currency: 'USD' });
-  const metric  = next.find(a => a.type === 'RECORD_METRIC' || a.constructor?.name === 'RecordMetricAction');
-
-  assert.ok(metric, 'RECORD_METRIC action missing');
-  assert.strictEqual(metric.value ?? metric.amount, 750);
+  assert.ok(!next.some(a => a.type === 'RECORD_METRIC'), 'the metrics.out_of_funds copy is retired');
+  assert.strictEqual(next.find(a => a.type === 'ACCUMULATE_DEFICIT')?.amount, 750);
 });
 
 test('OutOfFundsReducer: emits ACCUMULATE_DEFICIT with the deficit amount', () => {

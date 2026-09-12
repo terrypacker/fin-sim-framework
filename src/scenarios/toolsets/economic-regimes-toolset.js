@@ -520,6 +520,17 @@ export const ECONOMIC_REGIMES = {
           residency:           ValueType.text(),
         },
       },
+      // Journal-only: the losing lots the harvester skipped for want of a substitute
+      // (design 101 §7.1, replacing `metrics.tlh_skipped_no_substitute`). Declared so
+      // `pickPayload` keeps the fields; reduced by a no-op.
+      {
+        type: 'TLH_NO_SUBSTITUTE',
+        fields: {
+          count:      ValueType.number(),
+          holdingIds: ValueType.any(),
+          stateKeys:  ValueType.any(),
+        },
+      },
       {
         type: 'BEHAVIORAL_PANIC_SELL_APPLY',
         fields: {

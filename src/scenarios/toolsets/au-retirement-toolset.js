@@ -119,7 +119,6 @@ export const AU_RETIREMENT = {
                                                  targetKey: ValueType.text(),
                                                  section988: ValueType.any() } },
       { type: 'REPLENISH_SAVINGS',  fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
-      { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
@@ -823,10 +822,6 @@ export const AU_RETIREMENT = {
 
     // Skip reducers already registered by US_RETIREMENT.
     if (!context._auSharedDelegated) {
-      const recordMetricReducer = ReducerBuilder.metric(null).name('Record Metric').build();
-      recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
-      reducers.push(recordMetricReducer);
-
       reducers.push(new ExpenseDebitReducer({ accountService: accountSvc, stateRegistry: sr }));
       reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc, stateRegistry: sr }));
       reducers.push(new SetOutOfFundsDateReducer());

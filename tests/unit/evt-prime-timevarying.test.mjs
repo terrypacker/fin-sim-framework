@@ -50,13 +50,33 @@ function run(mutate = () => {}) {
   cfg.parameters = { ...(cfg.parameters ?? {}) };
   mutate(cfg);
   new ScenarioLoader().load(cfg, reg);
-  sc.sim.silent = true; sc.sim.journal.enabled = false;
+  sc.sim.silent = true;
   sc.sim.stepTo(SE);
+  credited.set(sc.sim.state, {
+    us: creditedInterest(sc.sim.journal, 'US_SAVINGS_INTEREST_CREDIT', 'usSavingsAccount'),
+    au: creditedInterest(sc.sim.journal, 'AU_SAVINGS_EARNINGS_APPLY'),
+  });
   return sc.sim.state;
 }
 
+/**
+ * Total savings interest credited over a run, from the journal. These tests read the last
+ * `metrics.us_savings_interest` / `au_savings_interest` until design 101 §7.1 retired them;
+ * the sum is also the stronger signal. Keyed by the returned state so every call site
+ * stays as it was.
+ */
+const credited = new WeakMap();
+function creditedInterest(journal, type, stateKey = null) {
+  const credits = new Map();   // one journal entry per (action, reducer): count each action once
+  for (const { action: a } of journal.journal) {
+    if (a?.type === type && (stateKey == null || a.data?.stateKey === stateKey)) credits.set(a.instanceId, a.data?.amount ?? 0);
+  }
+  return [...credits.values()].reduce((sum, amount) => sum + amount, 0);
+}
+
 const rate    = (state, key) => state.effectiveInterestRates?.[key] ?? NaN;
-const metric  = (state, m)   => state.metrics?.[m]?.value ?? state.metrics?.[m] ?? -1;
+const interest   = (state)   => credited.get(state)?.us ?? -1;
+const auInterest = (state)   => credited.get(state)?.au ?? -1;
 
 const US_KEY = 'SAVINGS_US::usSavingsAccount';
 const AU_KEY = 'SAVINGS_AU::auSavingsAccount';
@@ -90,8 +110,8 @@ test('PRIME-TV-1: a mid-run PRIME_US hike lifts the linked US cash rate and cred
     `a +3% mid-run Prime hike must lift the US cash rate to ${US_SAVINGS + 0.03}, got ${rate(hike, US_KEY)}`);
 
   // And that live rate credits strictly more interest over the run.
-  assert.ok(metric(hike, 'us_savings_interest') > metric(base, 'us_savings_interest'),
-    `a mid-run Prime hike must credit more US savings interest (base ${metric(base, 'us_savings_interest')}, hike ${metric(hike, 'us_savings_interest')})`);
+  assert.ok(interest(hike) > interest(base),
+    `a mid-run Prime hike must credit more US savings interest (base ${interest(base)}, hike ${interest(hike)})`);
 });
 
 test('PRIME-TV-2: a spread-less (non-linked) US savings account does not track a Prime hike', () => {
@@ -123,8 +143,9 @@ test('PRIME-TV-3: a PRIME_US hike does NOT touch the AU cash account (independen
 
   assert.ok(Math.abs(rate(hike, AU_KEY) - AU_SAVINGS) < 1e-9,
     `a Fed move must leave the AU cash rate at ${AU_SAVINGS}, got ${rate(hike, AU_KEY)}`);
-  assert.ok(Math.abs(metric(hike, 'au_savings_interest') - metric(base, 'au_savings_interest')) < 1e-6,
-    'a Fed move must not change AU savings interest');
+  assert.ok(auInterest(base) > 0, 'the run must credit AU savings interest, or the next check proves nothing');
+  assert.ok(Math.abs(auInterest(hike) - auInterest(base)) < 1e-6,
+    `a Fed move must not change AU savings interest (base ${auInterest(base)}, hike ${auInterest(hike)})`);
 });
 
 test('PRIME-TV-4: no Prime move ⇒ PrimeRelinkReducer is a no-op (byte-for-byte identical)', () => {
@@ -158,7 +179,7 @@ test('PRIME-TV-5: a Prime schedule param compiles into a scheduled step onto lin
 
   assert.ok(Math.abs(rate(sched, US_KEY) - (US_SAVINGS + 0.025)) < 1e-9,
     `a scheduled Prime step to ${US_PRIME + 0.025} must lift the US cash rate to ${US_SAVINGS + 0.025}, got ${rate(sched, US_KEY)}`);
-  assert.ok(metric(sched, 'us_savings_interest') > metric(base, 'us_savings_interest'),
+  assert.ok(interest(sched) > interest(base),
     'a scheduled Prime hike must credit more US savings interest');
 });
 

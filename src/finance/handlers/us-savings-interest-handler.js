@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 
 /**
@@ -41,7 +41,7 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     this.stateKey      = stateKey;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -71,7 +71,6 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     // emitting HOLDING_TRANSACT here would double-count.
     return [
       { type: 'US_SAVINGS_INTEREST_CREDIT', amount, stateKey },
-      new RecordMetricAction('us_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

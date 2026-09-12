@@ -81,7 +81,7 @@ describe('RealPropertyRepairTickHandler', () => {
     const apply = applyOf(out);
     assert.ok(apply && apply.amount > 0, 'a repair should occur every year at prob 1');
     assert.ok(out.some(a => a.type === 'EXPENSE_DEBIT'));
-    assert.ok(out.some(a => a.type === 'RECORD_METRIC'));
+    assert.ok(!out.some(a => a.type === 'RECORD_METRIC'), 'no flow-amount copy into metrics (design 101 §7.1)');
   });
 
   test('same seed ⇒ identical repair sequence (reproducible)', () => {

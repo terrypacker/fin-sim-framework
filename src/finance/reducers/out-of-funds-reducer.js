@@ -9,7 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 
 /**
  * Handles OUT_OF_FUNDS actions emitted by IntlTransferApplyReducer (and
@@ -17,7 +17,6 @@ import { RecordMetricAction, RecordBalanceAction } from '../../simulation-framew
  * sources are exhausted.
  *
  * Chains downstream actions:
- *   RECORD_METRIC       — cumulative out_of_funds deficit metric
  *   ACCUMULATE_DEFICIT  — increments state.cumulativeDeficit + deficitMonths
  *   SET_OUT_OF_FUNDS_DATE — stamps the first-occurrence date (once only)
  *   RECORD_BALANCE      — snapshot after the event
@@ -35,7 +34,7 @@ export class OutOfFundsReducer extends Reducer {
   constructor() {
     super('Out of Funds', PRIORITY.PRE_PROCESS);
     this.reducedActionTypes   = ['OUT_OF_FUNDS'];
-    this.generatedActionTypes = ['RECORD_METRIC', 'ACCUMULATE_DEFICIT', 'SET_OUT_OF_FUNDS_DATE', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['ACCUMULATE_DEFICIT', 'SET_OUT_OF_FUNDS_DATE', 'RECORD_BALANCE'];
   }
 
   reduce(state, action, date) {
@@ -46,7 +45,6 @@ export class OutOfFundsReducer extends Reducer {
     );
 
     const next = [
-      new RecordMetricAction('out_of_funds', deficit),
       { type: 'ACCUMULATE_DEFICIT', amount: deficit },
     ];
 

@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry }                            from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction }                     from '../../simulation-framework/actions.js';
 import { InsufficientFundsError }                  from '../assets/account.js';
 
 /**
@@ -35,7 +35,7 @@ export class FxTransferToHandler extends HandlerEntry {
     super(null, 'FX Transfer');
     this.fxService      = fxService;
     this.accountService = accountService;
-    this.generatedActionTypes = ['FX_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE', 'INTL_TRANSFER_RECORD'];
+    this.generatedActionTypes = ['FX_TRANSFER_APPLY', 'RECORD_BALANCE', 'INTL_TRANSFER_RECORD'];
   }
 
   static fromJSON(d, { fxService, accountService }) {
@@ -103,7 +103,6 @@ export class FxTransferToHandler extends HandlerEntry {
         // and it is the one that moves the most money on a real conversion history.
         section988: { kind: 'DISPOSE', businessFraction: 0, accountKey: srcKey },
       },
-      new RecordMetricAction(`fx_transfer_${from}_${to}`, toCredit),
       new RecordBalanceAction(`${dstKey}.balance`, dstKey),
       ...transferRecords,
       ...pendingTax,

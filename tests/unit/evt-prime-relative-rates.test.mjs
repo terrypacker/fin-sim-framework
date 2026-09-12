@@ -50,13 +50,28 @@ function run(mutate = () => {}) {
   cfg.parameters = { ...(cfg.parameters ?? {}) };
   mutate(cfg);
   new ScenarioLoader().load(cfg, reg);
-  sc.sim.silent = true; sc.sim.journal.enabled = false;
+  sc.sim.silent = true;
   sc.sim.stepTo(SE);
+  credited.set(sc.sim.state, creditedUsSavingsInterest(sc.sim.journal));
   return sc.sim.state;
 }
 
+/**
+ * Total US savings interest credited over a run, from the journal. These tests read the
+ * last `metrics.us_savings_interest` until design 101 §7.1 retired it; the sum is also
+ * the stronger signal. Keyed by the returned state so every call site stays as it was.
+ */
+const credited = new WeakMap();
+function creditedUsSavingsInterest(journal) {
+  const credits = new Map();   // one journal entry per (action, reducer): count each action once
+  for (const { action: a } of journal.journal) {
+    if (a?.type === 'US_SAVINGS_INTEREST_CREDIT' && a.data?.stateKey === 'usSavingsAccount') credits.set(a.instanceId, a.data.amount);
+  }
+  return [...credits.values()].reduce((sum, amount) => sum + amount, 0);
+}
+
 const rate    = (state, key) => state.effectiveInterestRates?.[key] ?? NaN;
-const metric  = (state, m)   => state.metrics?.[m]?.value ?? state.metrics?.[m] ?? -1;
+const interest = (state)     => credited.get(state) ?? -1;
 const balance = (state, sk)  => state[sk]?.balance ?? 0;
 
 const US_KEY = 'SAVINGS_US::usSavingsAccount';
@@ -82,7 +97,7 @@ test('PRIME-2: a Prime move fans out — raising usPrimeRate raises the effectiv
   assert.ok(Math.abs(rate(hike, US_KEY) - (US_SAVINGS + 0.03)) < 1e-9,
     `a +3% Prime move must lift the effective rate to ${US_SAVINGS + 0.03}, got ${rate(hike, US_KEY)}`);
   // And more interest is credited (the rate is live in UsSavingsInterestMonthlyHandler).
-  assert.ok(metric(hike, 'us_savings_interest') > metric(base, 'us_savings_interest'),
+  assert.ok(interest(hike) > interest(base),
     'a higher Prime must credit more US savings interest');
 });
 

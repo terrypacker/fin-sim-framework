@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { TaxLossHarvestHandler }                from './tax-loss-harvest-handler.js';
+import { TaxLossHarvestHandler, tlhNoSubstituteRecordReducer } from './tax-loss-harvest-handler.js';
 import { TaxGainHarvestHandler }               from './tax-gain-harvest-handler.js';
 import { StockHarvestApplyReducer }            from './stock-harvest-apply-reducer.js';
 import { DownturnRothConversionReducer }       from './downturn-roth-conversion-reducer.js';
@@ -118,7 +118,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       if (evt) handler.handledEvents.push(evt);
       return [handler];
     },
-    reducers: (_context) => [new StockHarvestApplyReducer()],
+    reducers: (_context) => [new StockHarvestApplyReducer(), tlhNoSubstituteRecordReducer()],
     paramSchema: () => [
       {
         key: 'taxLossHarvestCap', label: 'TLH Cap ($/yr)',

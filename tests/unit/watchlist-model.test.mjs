@@ -70,6 +70,13 @@ test('deleting the last list leaves none, and a reload does not re-seed', () => 
 
 // ── The metrics.<stateKey> alias (§7) ──────────────────────────────────────
 
+test('alias: a saved monthly_expenses watch rewrites to monthlyExpenses; other flow keys are kept (M3)', () => {
+  assert.equal(aliasWatchPath('metrics.monthly_expenses', new Set()), 'monthlyExpenses');
+  const cfg = { watchlists: ['metrics.monthly_expenses', 'metrics.dividends', 'monthlyExpenses'] };
+  assert.deepEqual(WatchlistModel.fromCfg(cfg).chartedPaths(), ['monthlyExpenses', 'metrics.dividends'],
+    'the rewrite that duplicates an existing entry is dropped; a retired key with no equivalent stays (muted)');
+});
+
 test('alias: a saved account balance copy rewrites to the account balance', () => {
   const cfg = {
     accounts: [{ stateKey: 'usSavingsAccount' }],
