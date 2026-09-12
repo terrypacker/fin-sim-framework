@@ -289,6 +289,21 @@ test('ChartView._displaySeriesData: non-currency series is unchanged', () => {
   assert.strictEqual(view._displaySeriesData('someRate', data), data);
 });
 
+test('ChartView._buildYAxes: a rate-only right axis reads as percent (design 101 R-2)', () => {
+  const view = makeView();
+  view._seriesKinds.set('effectiveGrowthRates.EQUITY_US', 'rate');
+  const right = [].concat(view._buildYAxes()).find(a => a.position === 'right');
+  assert.strictEqual(right.axisLabel.formatter(0.05), '5%');
+});
+
+test('ChartView._buildYAxes: an FX multiplier on the right axis keeps plain numbers', () => {
+  const view = makeView();
+  view._seriesKinds.set('effectiveGrowthRates.EQUITY_US', 'rate');
+  view._seriesKinds.set('effectiveExchangeRates.USD_AUD', 'fxRate');
+  const right = [].concat(view._buildYAxes()).find(a => a.position === 'right');
+  assert.strictEqual(right.axisLabel.formatter(1.55), '1.55');
+});
+
 test('ChartView._displaySeriesData: no recorded rate leaves data native', () => {
   const reg = new StateSchemaRegistry();
   reg.registerAccount('usSavingsAccount', { currency: { code: 'USD' }, type: 'savings' });

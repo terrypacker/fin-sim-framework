@@ -239,7 +239,21 @@ export class ChartView extends BaseComponent {
   }
 
   _kindToAxisIndex(kind) {
-    return (kind === 'rate' || kind === 'percentage') ? 1 : 0;
+    return (kind === 'rate' || kind === 'percentage' || kind === 'fxRate') ? 1 : 0;
+  }
+
+  /** A fraction shown as a percentage (rate / percentage kinds; not fxRate). */
+  _isPercentKind(kind) {
+    return kind === 'rate' || kind === 'percentage';
+  }
+
+  /**
+   * Whether the right axis reads as percent: every right-axis series is a rate or
+   * percentage. An FX multiplier shares the axis, so one present keeps plain numbers.
+   */
+  _rightAxisIsPercent() {
+    const kinds = [...this._seriesKinds.values()].filter(k => this._kindToAxisIndex(k) === 1);
+    return kinds.length > 0 && kinds.every(k => this._isPercentKind(k));
   }
 
   /** Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. */
@@ -364,7 +378,8 @@ export class ChartView extends BaseComponent {
   _buildYAxes() {
     // Determine which axis indices are actually in use
     const activeKinds = new Set([...this._seriesKinds.values()]);
-    const hasRateAxis = [...activeKinds].some(k => k === 'rate' || k === 'percentage');
+    const hasRateAxis = [...activeKinds].some(k => this._kindToAxisIndex(k) === 1);
+    const rightPercent = this._rightAxisIsPercent();
 
     const leftSymbol = this._symbolFor(this._leftAxisCurrencyCode());
     const leftAxis = {
@@ -390,7 +405,9 @@ export class ChartView extends BaseComponent {
         color:      readThemeColor('--text-dim'),
         fontSize:   11,
         fontFamily: 'monospace',
-        formatter:  (val) => Number(val).toLocaleString('en-US', { maximumFractionDigits: 4 }),
+        formatter:  rightPercent
+          ? (val) => `${(Number(val) * 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}%`
+          : (val) => Number(val).toLocaleString('en-US', { maximumFractionDigits: 4 }),
       },
       splitLine: { show: false },
       axisLine:  { show: false },
@@ -625,10 +642,11 @@ export class ChartView extends BaseComponent {
         rawVal = p.value;
       }
       const isCurrency = this._isCurrencySeries(p.seriesId);
+      const isPercent  = this._isPercentKind(this._seriesKinds.get(p.seriesId));
       const formattedVal =
-          typeof rawVal === 'number'
-              ? (isCurrency ? displaySymbol : '') + rawVal.toLocaleString()
-              : rawVal;
+          typeof rawVal !== 'number' ? rawVal
+          : isPercent ? `${(rawVal * 100).toLocaleString('en-US', { maximumFractionDigits: 3 })}%`
+          : (isCurrency ? displaySymbol : '') + rawVal.toLocaleString();
       lines.push(
           `${p.marker}${p.seriesName}: <b>${formattedVal}</b>`
       );

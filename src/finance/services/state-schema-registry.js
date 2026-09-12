@@ -29,18 +29,40 @@ export class ParameterValueType {
     this.kind         = kind;
     this.currencyCode = options.currencyCode ?? null; // string|null — for kind 'currency'
     this.precision    = options.precision    ?? 2;    // number      — for kind 'decimal'
+    // A non-numeric field whose value says what the plan is doing NOW (residency, the
+    // current tax period). The State panel keeps these visible when it hides text rows
+    // (design 101 §9.5); every other text leaf is identity or config.
+    this.status       = options.status       ?? false;
   }
 
   static currency(code = null) { return new ParameterValueType('currency', { currencyCode: code }); }
+  /** An annual rate or return as a fraction (0.0715); shown as a percentage. */
   static rate()                { return new ParameterValueType('rate'); }
+  /** An FX multiplier (1.55 AUD per USD). Never a percentage (design 101 R-2). */
+  static fxRate()              { return new ParameterValueType('fxRate'); }
   static percentage()          { return new ParameterValueType('percentage'); }
   static integer()             { return new ParameterValueType('integer'); }
+  /** A calendar or fiscal year: an integer shown without a thousands separator. */
+  static year()                { return new ParameterValueType('year'); }
   static decimal(precision=2)  { return new ParameterValueType('decimal', { precision }); }
-  static boolean()             { return new ParameterValueType('boolean'); }
+  static boolean()             { return new ParameterValueType('boolean', { status: true }); }
+  /** A Date instance, or epoch milliseconds (the `…Ms` fields). Not chartable. */
   static date()                { return new ParameterValueType('date'); }
-  static text()                { return new ParameterValueType('text'); }
+  static text({ status = false } = {}) { return new ParameterValueType('text', { status }); }
   static metric()              { return new ParameterValueType('metric'); }
   static unknown()             { return new ParameterValueType('unknown'); }
+}
+
+/** Kinds whose numbers are positions or labels, not quantities: a line over time means nothing. */
+const NON_CHARTABLE_KINDS = new Set(['date', 'year']);
+
+/**
+ * Canonicalise the State panel's id-addressed array segments (`holdings[id=h1]`,
+ * design 31 R11.3) to plain dotted segments (`holdings.h1`), so a glob written
+ * against the positional path (`*.holdings.*.marketValue`) matches both.
+ */
+function _canonicalPath(path) {
+  return path.includes('[') ? path.replace(/\[[^=\]]+=([^\]]+)\]/g, '.$1') : path;
 }
 
 function _globToRegex(glob) {
@@ -70,8 +92,9 @@ function _personDefaultCurrency(person) {
  * record is nameless, which keeps the label non-empty (and unique).
  */
 function _baseLabel(rec, stateKey) {
-  const country = rec.country ? `${rec.country} ` : '';
   const name    = rec.name || stateKey;
+  // A name that already leads with its country ("AU Savings") keeps it once.
+  const country = rec.country && !name.startsWith(`${rec.country} `) ? `${rec.country} ` : '';
   return `${country}${name}`.trim();
 }
 
@@ -96,13 +119,19 @@ function _fmt(vt, value) {
     }
     case 'rate':
       return typeof value === 'number'
-        ? value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 6 })
+        ? `${(value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%`
+        : String(value);
+    case 'fxRate':
+      return typeof value === 'number'
+        ? value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
         : String(value);
     case 'percentage':
       return typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value);
     case 'integer':
     case 'metric':
       return typeof value === 'number' ? Math.round(value).toLocaleString('en-US') : String(value);
+    case 'year':
+      return typeof value === 'number' ? String(Math.round(value)) : String(value);
     case 'decimal':
       return typeof value === 'number'
         ? value.toLocaleString('en-US', { minimumFractionDigits: vt.precision, maximumFractionDigits: vt.precision })
@@ -110,7 +139,8 @@ function _fmt(vt, value) {
     case 'boolean':
       return String(value);
     case 'date':
-      return value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      return typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : String(value);
     case 'text':
     case 'unknown':
     default:
@@ -138,6 +168,7 @@ export class StateSchemaRegistry {
   constructor() {
     this._exact    = new Map(); // path → ParameterValueType
     this._patterns = [];       // [{ glob, re, vt }] ordered by registration
+    this._mirrors  = [];       // prefixes whose subtree copies top-level fields (registerMirrorPrefix)
 
     // Display-currency conversion wiring (design 10 §Phase 4). Injected by the
     // app layer; duck-typed so this finance-layer class needs no UI imports.
@@ -198,13 +229,13 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.appreciationSchedule', ParameterValueType.unknown());
 
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
-    this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
-    this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
+    this.registerPattern('baseExchangeRates.*',      ParameterValueType.fxRate());
+    this.registerPattern('effectiveExchangeRates.*', ParameterValueType.fxRate());
     // Time-varying FX stochastic layer (design 47) — unitless scalars.
     this.registerPattern('fxDeviation.*',    ParameterValueType.decimal(4));
     this.registerPattern('baseFxVol.*',      ParameterValueType.decimal(4));
     this.registerPattern('effectiveFxVol.*', ParameterValueType.decimal(4));
-    this.registerPattern('fxAnchorRates.*',  ParameterValueType.rate());
+    this.registerPattern('fxAnchorRates.*',  ParameterValueType.fxRate());
 
     // ── Economic regime effective/base rates (design 21) ─────────────────────
     // Growth rates are per MARKET (design 90 §7.2): a total return each, with the
@@ -223,8 +254,21 @@ export class StateSchemaRegistry {
     this.registerPattern('effectiveFxFees.*',        ParameterValueType.currency('USD'));
 
     // ── Well-known exact fields ───────────────────────────────────────────────
-    this.registerPattern('people.*.residency',      ParameterValueType.text());
-    this.registerPattern('people.*.residencyState', ParameterValueType.text());
+    // Status text: these change during a run (measured, design 101 §9.5), so the State
+    // panel keeps them visible when it hides identity/config text.
+    this.registerPattern('people.*.residency',      ParameterValueType.text({ status: true }));
+    this.registerPattern('people.*.residencyState', ParameterValueType.text({ status: true }));
+    this.registerPattern('currentPeriods.*.name',   ParameterValueType.text({ status: true }));
+    // Epoch-ms timestamps (design 101 R-3): dates, not quantities.
+    this.registerPattern('currentPeriods.*.startMs', ParameterValueType.date());
+    this.registerPattern('currentPeriods.*.endMs',   ParameterValueType.date());
+    this.register('priorMarkMs',                     ParameterValueType.date());
+    this.registerPattern('*.acquisitionDateByCountry.*',            ParameterValueType.date());
+    this.registerPattern('*.holdings.*.acquisitionDateByCountry.*', ParameterValueType.date());
+    this.registerPattern('*.rolloverConversions.*.conversionMs',    ParameterValueType.date());
+    this.registerPattern('washPendingLosses.*.ms',         ParameterValueType.date());
+    this.registerPattern('washPendingLosses.*.heldFromMs', ParameterValueType.date());
+    this.registerPattern('washSaleLedger.*.ms',            ParameterValueType.date());
     // Move date (ms) stamped by ChangeResidencyApplyReducer — backs the FEIE
     // full-qualifying-year gate (design 52 §4.2).
     this.registerPattern('people.*.residencySinceMs', ParameterValueType.date());
@@ -343,10 +387,12 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonNrWithholdingUnfrankedDividendYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonDeductibleSuperYTD.*',        ParameterValueType.currency('AUD'));
-    // design 95 phase 7 — the caps record. Money fields are AUD; `unusedByFy` keys are
-    // financial years and `bringForward` is a small object, both matched by the same
-    // prefix so nothing under the record reads as an untyped scalar.
-    this.registerPattern('auSuperCapsByPerson.*',               ParameterValueType.currency('AUD'));
+    // design 95 phase 7 — the caps record. Money fields are AUD, including each
+    // `unusedByFy.<fy>` amount and `bringForward.{cap,used}`. `**` reaches those nested
+    // leaves (a lone `*` matched only the record itself, so they were untyped); the
+    // bring-forward trigger year is registered first so it is not read as money.
+    this.registerPattern('auSuperCapsByPerson.*.bringForward.firstFy', ParameterValueType.year());
+    this.registerPattern('auSuperCapsByPerson.**',              ParameterValueType.currency('AUD'));
     // design 86 G1 — Div 36 carried-forward tax losses, per person. Not a YTD field:
     // it deliberately survives the settle reset.
     this.registerPattern('auPersonTaxLossPool.*',               ParameterValueType.currency('AUD'));
@@ -394,6 +440,13 @@ export class StateSchemaRegistry {
     // PUBLISHED table is not indexed for indexation it already contains. Unitless.
     this.register('bracketIndexAccumulator',       ParameterValueType.decimal(4));
     this.register('bracketIndexAccumulatorByYear', ParameterValueType.decimal(4));
+    // The accumulators are keyed by country (and the by-year series by year too); the
+    // exact registrations above name only the parent and never match those leaves.
+    this.registerPattern('inflationAccumulator.*',             ParameterValueType.decimal(4));
+    this.registerPattern('cpiAccumulator.*',                   ParameterValueType.decimal(4));
+    this.registerPattern('limitIndexAccumulator.*',            ParameterValueType.decimal(4));
+    this.registerPattern('bracketIndexAccumulator.*',          ParameterValueType.decimal(4));
+    this.registerPattern('bracketIndexAccumulatorByYear.**',   ParameterValueType.decimal(4));
     this.registerPattern('bracketIndexSpreads.*',  ParameterValueType.rate());
     this.registerPattern('cpiRates.*',           ParameterValueType.rate());
 
@@ -403,6 +456,107 @@ export class StateSchemaRegistry {
     // Behavioral layer (design/29 §6)
     this.register('contributionsSuspended',      ParameterValueType.boolean());
     this.registerPattern('*.holdings.*.taxLossPartner', ParameterValueType.text());
+
+    // ── Design 101 R1: fields found untyped across the goldens ───────────────
+    // The golden coverage gate (tests/unit/state-schema-coverage.test.mjs) lists any
+    // numeric leaf still resolving to `unknown`; add the type here, not an allow-list row.
+
+    // Position fields. Money ones are stamped per account in registerAccount; these
+    // code-less globs are the fallback for a record that never registered.
+    this.registerPattern('*.holdings.*.units',                 ParameterValueType.decimal(4));
+    this.registerPattern('*.holdings.*.pricePerUnit',          ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.faceValue',             ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.parPerUnit',            ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.couponFrequency',       ParameterValueType.integer());
+    this.registerPattern('*.holdings.*.rollTermYears',         ParameterValueType.integer());
+    this.registerPattern('*.holdings.*.cpiIndexRatio',         ParameterValueType.decimal(4));
+    this.registerPattern('*.holdings.*.acquisitionPriceLevel', ParameterValueType.decimal(4));
+
+    // Account / asset settings that are not money.
+    this.registerPattern('*.drawdownPriority',      ParameterValueType.integer());
+    this.registerPattern('*.minimumAge',            ParameterValueType.decimal(1)); // 59.5
+    this.registerPattern('*.targetBand',            ParameterValueType.percentage());
+    this.registerPattern('*.targetComposition.*',   ParameterValueType.percentage());
+    this.registerPattern('*._bondLadderRungs',      ParameterValueType.integer());
+    this.registerPattern('*.fxBasisRate',           ParameterValueType.fxRate());
+    this.registerPattern('*.fxBasisUsd',            ParameterValueType.currency('USD'));
+    this.registerPattern('*.bookingFxRate',         ParameterValueType.fxRate());
+    this.registerPattern('*.interestRate',          ParameterValueType.rate());
+    this.registerPattern('*.primeSpread',           ParameterValueType.rate());
+    this.registerPattern('*.maturityYear',          ParameterValueType.year());
+    this.registerPattern('*.plannedSaleYear',       ParameterValueType.year());
+    this.registerPattern('*.acquisitionPriceLevel', ParameterValueType.decimal(4));
+    this.registerPattern('*.appreciationRate',      ParameterValueType.rate());
+    // Property running costs and the repair model (design 75). Money is stamped per asset.
+    this.registerPattern('*.runningCostGrowth',     ParameterValueType.rate());
+    this.registerPattern('*.runningCostValuePct',   ParameterValueType.percentage());
+    this.registerPattern('*.capitalizeRepairs',     ParameterValueType.percentage());
+    this.registerPattern('*.repairProb',            ParameterValueType.percentage());
+    this.registerPattern('*.repairValuePct',        ParameterValueType.percentage());
+    this.registerPattern('*.repairLambda',          ParameterValueType.decimal(2)); // events / yr
+    this.registerPattern('*.repairSigma',           ParameterValueType.decimal(2)); // lognormal shape
+
+    // Yield curves: each point is { tenor (years), spread (a rate) }.
+    for (const curve of ['baseYieldCurve', 'yieldCurve', 'priorMarkCurve']) {
+      this.registerPattern(`${curve}.*.*.spread`, ParameterValueType.rate());
+      this.registerPattern(`${curve}.*.*.tenor`,  ParameterValueType.decimal(2));
+    }
+    this.registerPattern('yieldCurveLevelDev.*',  ParameterValueType.rate());
+    this.registerPattern('primeLinks.*.spread',   ParameterValueType.rate());
+
+    // Stochastic return deviations, drift compensation and overlays (designs 74, 90, 94).
+    this.registerPattern('equityReturnDev.*',         ParameterValueType.rate());
+    this.registerPattern('equityReturnDriftComp.*',   ParameterValueType.rate());
+    this.register('equityReturnMarketDev',            ParameterValueType.rate());
+    this.registerPattern('propertyReturnDev.*',       ParameterValueType.rate());
+    this.registerPattern('propertyReturnDriftComp.*', ParameterValueType.rate());
+    this.register('propertyReturnMarketDev',          ParameterValueType.rate());
+    this.registerPattern('securityReturnDev.*',       ParameterValueType.rate());
+    this.registerPattern('securityReturnDriftComp.*', ParameterValueType.rate());
+    this.registerPattern('securityReturnOverlay.*',   ParameterValueType.rate());
+
+    // Active regimes (design 21): adjustments are rates, severity is the trough depth.
+    this.registerPattern('activeRegimes.*.returnAdjustment.*',       ParameterValueType.rate());
+    this.registerPattern('activeRegimes.*.interestRateAdjustment.*', ParameterValueType.rate());
+    this.registerPattern('activeRegimes.*.yieldCurveTwist.*.*.spread', ParameterValueType.rate());
+    this.registerPattern('activeRegimes.*.yieldCurveTwist.*.*.tenor',  ParameterValueType.decimal(2));
+    this.registerPattern('activeRegimes.*.severity',       ParameterValueType.percentage());
+    this.registerPattern('activeRegimes.*.currentFactor',  ParameterValueType.decimal(4));
+    this.registerPattern('activeRegimes.*.durationMonths', ParameterValueType.integer());
+    this.registerPattern('activeRegimes.*.reboundStart',   ParameterValueType.decimal(4));
+    this.registerPattern('activeRegimes.*.reboundPeak',    ParameterValueType.decimal(4));
+
+    // The security registry (design 94): config projected into state.
+    this.registerPattern('securities.*.beta',          ParameterValueType.decimal(2));
+    this.registerPattern('securities.*.idioVol',       ParameterValueType.decimal(2));
+    this.registerPattern('securities.*.dividendYield', ParameterValueType.rate());
+
+    // US payroll, withholding, §988 and 401(k) accumulators — the US return is in USD.
+    this.register('usSeEarningsYTD',               ParameterValueType.currency('USD'));
+    this.register('usSsWagesYTD',                  ParameterValueType.currency('USD'));
+    this.registerPattern('usSsWagesByPersonYTD.*', ParameterValueType.currency('USD'));
+    this.register('usWithheldYTD',                 ParameterValueType.currency('USD'));
+    this.register('usSection988GainYTD',           ParameterValueType.currency('USD'));
+    this.register('usSection988DisallowedLossYTD', ParameterValueType.currency('USD'));
+    this.registerPattern('k401ContributionsYTD.*.*', ParameterValueType.currency('USD'));
+    this.registerPattern('auPersonDiscountableGainsYTD.*', ParameterValueType.currency('AUD'));
+    // The return held open for a pending wash-sale re-file (tax-file-classes.js) is a
+    // copy of the top-level YTD fields, so it types exactly as they do.
+    this.registerMirrorPrefix('usPendingReturn.');
+
+    // Wash-sale bookkeeping (design 94 §8.1). The loss amounts are left untyped until
+    // their currency is pinned (see the coverage gate's allow-list).
+    this.registerPattern('washPendingLosses.*.units',         ParameterValueType.decimal(4));
+    this.registerPattern('washSaleLedger.*.matchedFraction',  ParameterValueType.percentage());
+    this.registerPattern('washSaleLedger.*.filedYear',        ParameterValueType.year());
+
+    // Plan-level scalars.
+    this.registerPattern('people.*.lifeExpectancy',     ParameterValueType.integer());
+    this.register('deficitMonths',                      ParameterValueType.integer());
+    this.register('discretionarySharePct',              ParameterValueType.percentage());
+    this.register('drawdownRebalanceWeight',            ParameterValueType.decimal(2));
+    this.register('cumulativeConsumptionMarginalUtility', ParameterValueType.decimal(6));
+    this.register('cumulativeConsumptionUtilityCount',  ParameterValueType.integer());
   }
 
   /**
@@ -473,6 +627,20 @@ export class StateSchemaRegistry {
     // code-less `*.holdings.*` globs registered in the constructor.
     this.registerPatternFront(`${stateKey}.holdings.*.marketValue`, vt);
     this.registerPatternFront(`${stateKey}.holdings.*.costBasis`,   vt);
+    // Unit prices and bond face are the account's money too. So is the per-country
+    // cost base: the residency step-up stamps it from the lot's marketValue
+    // (AccountService.recordResidencyChange), so `.AU` on a USD account is USD.
+    this.registerPatternFront(`${stateKey}.holdings.*.pricePerUnit`,        vt);
+    this.registerPatternFront(`${stateKey}.holdings.*.faceValue`,           vt);
+    this.registerPatternFront(`${stateKey}.holdings.*.parPerUnit`,          vt);
+    this.registerPatternFront(`${stateKey}.holdings.*.costBaseByCountry.*`, vt);
+    this.registerPatternFront(`${stateKey}.costBaseStepUpByCountry.*`,      vt);
+    this.register(`${stateKey}.balanceAtResidencyChange`, vt);
+    // IRA rollover basis (design 53) and each recorded conversion.
+    this.register(`${stateKey}.rolloverContribBasis`,  vt);
+    this.register(`${stateKey}.rolloverEarningsBasis`, vt);
+    this.registerPatternFront(`${stateKey}.rolloverConversions.*.amount`,        vt);
+    this.registerPatternFront(`${stateKey}.rolloverConversions.*.taxableAmount`, vt);
   }
 
   /**
@@ -500,6 +668,12 @@ export class StateSchemaRegistry {
     this.register(`${stateKey}.rentalExpenseRatio`,      ParameterValueType.rate());
     this.register(`${stateKey}.mortgageInterestRate`,    ParameterValueType.rate());
     this.register(`${stateKey}.landValueRatio`,          ParameterValueType.rate());
+    // Running costs and repairs (design 75), all in the asset's currency.
+    this.register(`${stateKey}.annualRunningCost`,       vt);
+    this.register(`${stateKey}.capitalizedImprovements`, vt);
+    this.register(`${stateKey}.repairMedian`,            vt);
+    // Per-country cost base, stepped up from the asset's own value (design 36 §12.2).
+    this.registerPatternFront(`${stateKey}.costBaseByCountry.*`, vt);
   }
 
   /**
@@ -635,10 +809,42 @@ export class StateSchemaRegistry {
   resolve(fieldPath) {
     const exact = this._exact.get(fieldPath);
     if (exact) return exact;
+    const path = _canonicalPath(fieldPath);
+    if (path !== fieldPath) {
+      const canonExact = this._exact.get(path);
+      if (canonExact) return canonExact;
+    }
     for (const { re, vt } of this._patterns) {
-      if (re.test(fieldPath)) return vt;
+      if (re.test(path)) return vt;
+    }
+    for (const prefix of this._mirrors) {
+      if (path.startsWith(prefix)) return this.resolve(path.slice(prefix.length));
     }
     return ParameterValueType.unknown();
+  }
+
+  /**
+   * Declare that the subtree under `prefix` holds copies of top-level fields, so
+   * `usPendingReturn.usCapitalGainsYTD` types as `usCapitalGainsYTD` does. Tried
+   * only after every exact path and glob misses.
+   *
+   * @param {string} prefix  e.g. 'usPendingReturn.' (include the trailing dot)
+   */
+  registerMirrorPrefix(prefix) {
+    if (!this._mirrors.includes(prefix)) this._mirrors.push(prefix);
+  }
+
+  /**
+   * Whether a numeric field is a quantity worth plotting over time. Dates and years
+   * are numbers but name a position, so they render as static rows (design 101 R-3).
+   */
+  isChartable(fieldPath) {
+    return !NON_CHARTABLE_KINDS.has(this.resolve(fieldPath).kind);
+  }
+
+  /** Whether a non-numeric field reports live status rather than identity/config (§9.5). */
+  isStatus(fieldPath) {
+    return this.resolve(fieldPath).status === true;
   }
 
   /** Inject the AppDisplaySettings (read for the active display currency). */
@@ -678,6 +884,11 @@ export class StateSchemaRegistry {
     if (value == null) return '—';
     const vt = this.resolve(fieldPath);
     if (vt.kind === 'unknown' && typeof value !== 'number') return null;
+    // Dates go through the display timezone (UTC or local) when one is wired.
+    const fmtDate = this._displaySettings?.formatDate;
+    if (vt.kind === 'date' && fmtDate && (typeof value === 'number' || value instanceof Date)) {
+      return fmtDate(value instanceof Date ? value : new Date(value));
+    }
     if (vt.kind === 'currency' && typeof value === 'number') {
       const display = this._toDisplayCurrency(vt, fieldPath, value, opts.state);
       if (display) return _fmt(display.vt, display.value);

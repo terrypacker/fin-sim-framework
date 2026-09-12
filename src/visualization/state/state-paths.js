@@ -38,6 +38,24 @@ export function typeForPath(path, registry = _defaultRegistry) {
   return registry.resolve(path);
 }
 
+/**
+ * Human label for one state-path segment: splits camelCase and underscores but keeps
+ * acronym runs whole, so 'usCapitalGainsYTD' → 'Us Capital Gains YTD' and 'AU' stays
+ * 'AU' rather than 'A U' (design 101 R-7).
+ *
+ * @param {string} key
+ * @returns {string}
+ */
+export function toLabel(key) {
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .trim();
+}
+
 function _walk(node, prefix, results, registry) {
   if (node === null || node === undefined) return;
 

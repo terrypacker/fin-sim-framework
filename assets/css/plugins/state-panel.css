@@ -104,6 +104,19 @@
 }
 .lsp-panel-filter::placeholder { color: var(--text-muted); }
 
+/* "Show text fields" toggle (design 101 §9.5). */
+.lsp-text-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.lsp-text-toggle input { margin: 0; }
+
 #actionPanelDetails {
   display: flex;
   flex-direction: column;

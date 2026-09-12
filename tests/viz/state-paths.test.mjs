@@ -47,7 +47,7 @@ test('flattenStatePaths: returns type from StateSchemaRegistry', () => {
   const state = { effectiveExchangeRates: { USD_AUD: 0.65 } };
   const paths = flattenStatePaths(state);
   assert.strictEqual(paths.length, 1);
-  assert.strictEqual(paths[0].type.kind, 'rate');
+  assert.strictEqual(paths[0].type.kind, 'fxRate'); // an FX multiplier, not a rate (design 101 R-2)
 });
 
 test('flattenStatePaths: returns unknown type for unregistered path', () => {
