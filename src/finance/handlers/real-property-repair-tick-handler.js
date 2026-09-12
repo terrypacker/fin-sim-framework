@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry }                    from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction }             from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount }         from '../fx/expense-fx.js';
 import { blendExpensePriceLevel }          from '../spending/expense-price-level.js';
 import { SPEND_CATEGORY, blendCapitalFraction } from '../spending/spend-category.js';
@@ -91,7 +91,7 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     // cursor discipline (design 74 §4) is preserved.
     this.severityScale    = severityScale ?? 1;
     this.freqScale        = freqScale ?? 1;
-    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'HOUSE_REPAIR_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'HOUSE_REPAIR_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -220,7 +220,6 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
           capitalFraction: blendCapitalFraction(capitalDebit, totalDebit),
           section988: { kind: 'DISPOSE',
                         businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
-        new RecordMetricAction('house_repair_expenses', totalDebit),
         new RecordBalanceAction(`${targetKey}.balance`, targetKey),
       );
     }

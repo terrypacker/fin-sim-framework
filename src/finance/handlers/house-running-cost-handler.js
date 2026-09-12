@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { blendExpensePriceLevel } from '../spending/expense-price-level.js';
 import { SPEND_CATEGORY } from '../spending/spend-category.js';
@@ -70,7 +70,7 @@ export class HouseRunningCostHandler extends HandlerEntry {
     this.auOwnerId        = auOwnerId;
     this.primaryPersonKey = primaryPersonKey;
     this.startMs          = startDate != null ? new Date(startDate).getTime() : null;
-    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -174,7 +174,6 @@ export class HouseRunningCostHandler extends HandlerEntry {
         spendCategory: SPEND_CATEGORY.HOUSING_RUNNING, capitalFraction: 0,
         section988: { kind: 'DISPOSE',
                       businessFraction: blendExpenseBusinessFraction(businessDebit, totalDebit) } },
-      new RecordMetricAction('house_running_cost', totalDebit),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );
     return actions;

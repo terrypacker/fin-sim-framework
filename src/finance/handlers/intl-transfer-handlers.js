@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 
 /**
  * Handles user-triggered INTL_TRANSFER_TO_US events (AUD → USD).
@@ -43,7 +43,7 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     this.auOwnerId     = auOwnerId;
     this.usRole        = usRole;
     this.usOwnerId     = usOwnerId;
-    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -77,7 +77,6 @@ export class IntlTransferToUsHandler extends HandlerEntry {
       // which one a scenario happened to use — which is the whole defect G2 recorded.
       { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit,
         section988: { kind: 'DISPOSE', businessFraction: 0 } },
-      new RecordMetricAction('intl_transfer_to_us', targetDeficit),
       new RecordBalanceAction(`${usStateKey}.balance`, usStateKey),
     ];
   }
@@ -115,7 +114,7 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     this.usOwnerId     = usOwnerId;
     this.auRole        = auRole;
     this.auOwnerId     = auOwnerId;
-    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -138,7 +137,6 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     const auStateKey    = this.stateRegistry.getStateKey(this.auRole, this.auOwnerId);
     return [
       { type: 'INTL_TRANSFER_APPLY', direction: 'US_TO_AU', targetDeficit },
-      new RecordMetricAction('intl_transfer_to_au', targetDeficit),
       new RecordBalanceAction(`${auStateKey}.balance`, auStateKey),
     ];
   }

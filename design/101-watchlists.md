@@ -20,7 +20,9 @@ advances, and the regold is additive-only (§6.5). **W5 ✅ (12 Sep)**: the Secu
 Holdings panels put a ☆ beside the values they can watch (§6.6). **W4 ✅ (12 Sep)**: lists
 export and import as a definition JSON, and the active list's series downloads as CSV (§8.3).
 **M2 ✅ (12 Sep)**: the balance copies are retired and the State panel's Metrics section is
-gone. The regold only removed `metrics.<stateKey>` (§7.2).
+gone. The regold only removed `metrics.<stateKey>` (§7.2). **M3 ✅ (12 Sep)**: the flow
+amounts are retired, and `metrics` is now exactly the derived aggregates. The one flow with
+no other record, the harvester's skips, became a journal action (§7.3).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -606,6 +608,47 @@ removes nothing the tree does not already show.
 - **What remains in `metrics`** is the derived aggregates plus the flow keys, which M3
   retires.
 
+### 7.3 As built (M3, 12 Sep 2026)
+
+- **The emits.** All 27 finance `RecordMetricAction` emit sites are gone (17 files), and so
+  is `'RECORD_METRIC'` in those handlers' `generatedActionTypes`. Neither retirement
+  toolset declares the `RECORD_METRIC` action type or registers the "Record Metric"
+  reducer any more. The framework primitive stays: `RecordMetricAction`, `MetricReducer`
+  and the action-editor template.
+- **One correction to §7.1, decided by the user on 12 Sep.** The plan said "the journal
+  and the Timeline already record every flow as its own action". That was true of 26
+  emits, not of `tlh_skipped_no_substitute`: a lot skipped for want of a substitute emits
+  no `STOCK_HARVEST_APPLY`, so the metric was its only record.
+  - It is now a journal action of its own, `TLH_NO_SUBSTITUTE { count, holdingIds,
+    stateKeys }`. It names the lots, which the count never did.
+  - It is declared in the economic-regimes toolset, because `pickPayload` keeps only
+    declared fields.
+  - It is reduced by a no-op (`tlhNoSubstituteRecordReducer`, wired through the
+    behavioral registry beside `StockHarvestApplyReducer`), so it changes no state.
+- **Migration.** `aliasWatchPath` rewrites a saved `metrics.monthly_expenses` watch to
+  `monthlyExpenses`, on load and on import (W4). A watch of any other retired key has no
+  state equivalent, so it is kept and shows muted.
+- **Coverage.** `RECORD_METRIC` left the golden COVERED list, since no golden wires or
+  fires it any more. `TLH_NO_SUBSTITUTE` joined it, because the wash-sale goldens reach it.
+- **Tests.** §7.1 named one test to update. The run found **four** interest tests that
+  read `metrics.us_savings_interest`: EVT-PAIR-5, PRIME-2, PRIME-TV-1 and PRIME-TV-5.
+  - Each now sums `US_SAVINGS_INTEREST_CREDIT` over the run from the journal. The payload
+    lives under `action.data`, and a journal entry is one (action, reducer) pair, so each
+    action is counted once. The total over the run is a stronger signal than last month's
+    value.
+  - The out-of-funds, house repair/running cost, `evt-expense-fx` and TLH-H-3 tests now
+    assert that no metrics copy is made. The out-of-funds deficit is read from
+    `ACCUMULATE_DEFICIT`, and the TLH skip from the new action.
+- **Regold: removals only (verified).**
+  - `probe-regold-additive.mjs --removals='^metrics\.(…24 retired keys…|fx_transfer_…)$'`
+    passed: each of the 13 fixtures lost only flow keys, 5 to 15 apiece, with nothing
+    added or changed.
+  - Every golden's `metrics` is now `netWorth`, `netLiquidity`, `offsetAppliedCapacity`
+    and `offsetIdleCapacity`, plus `netWorthInclSpeculative` on the two speculative plans.
+- **Full suites:** 6410 unit and 1494 viz tests pass. There is no UI change to check in the
+  browser. An old watch of a retired key shows muted, which is W3's absent-path rendering,
+  already verified.
+
 ---
 
 ## 8. Architecture
@@ -984,11 +1027,11 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **W4** ✅ | Export/import definition JSON + series CSV (§8.1). Browser-verified. See §8.3. | W3 | none |
 | **W5** ✅ | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). Index-level context labels. Browser-verified. See §6.6. | W2, M1 | none |
 | **M2** ✅ | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). Both toolset seeds removed; State tree opens expanded. See §7.2. | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** (verified: 161) |
-| **M3** `[ ]` | Retire the flow amounts (§7.1): remove the 27 finance `RecordMetricAction` emit sites, alias `metrics.monthly_expenses` → `monthlyExpenses`, keep saved watches of other retired keys muted, and update one test plus the golden action-coverage manifest. | Q1 ✅, M2 | **removals of `metrics.<flow key>` only** |
+| **M3** ✅ | Retire the flow amounts (§7.1): remove the 27 finance `RecordMetricAction` emit sites, alias `metrics.monthly_expenses` → `monthlyExpenses`, keep saved watches of other retired keys muted, and update the tests plus the golden action-coverage manifest. TLH skips became the `TLH_NO_SUBSTITUTE` journal action. See §7.3. | Q1 ✅, M2 | **removals of `metrics.<flow key>` only** (verified) |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
 Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1 ✅** alongside. Then **W4 ✅ / W5 ✅**,
-then **M2 ✅**, then **M3**. R1 comes next because it is independent, display-only, and fixes
+then **M2 ✅**, then **M3 ✅**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
 

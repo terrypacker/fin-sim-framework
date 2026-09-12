@@ -44,7 +44,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsGrowth, computeHoldingsDividends } from '../holdings/holdings-earnings.js';
 import { getBirthDate } from '../residency-utils.js';
@@ -81,7 +81,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
     this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -108,7 +108,6 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     return [
       { type: 'ROTH_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
-      new RecordMetricAction('roth_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -135,7 +134,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
     this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['IRA_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['IRA_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -162,7 +161,6 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     return [
       { type: 'IRA_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
-      new RecordMetricAction('ira_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -189,7 +187,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     // return is treated as appreciation, i.e. exactly the pre-G2 behaviour.
     this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['K401_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['K401_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -216,7 +214,6 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     return [
       { type: 'K401_EARNINGS_APPLY', amount, derivedAmount, stateKey },
       ...holdingActions,
-      new RecordMetricAction('k401_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -244,7 +241,7 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
     // (a config without ECONOMIC_REGIMES). Must match the dividend handler's own fallback.
     this.dividendYield   = dividendYield;
     this.rateKey         = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['STOCK_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -274,7 +271,6 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount, stateKey },
       ...holdingActions,
-      new RecordMetricAction('us_stock_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -319,7 +315,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
     // Design 99 §2 — see IntlUsStockEarningsHandler.
     this.dividendYield = dividendYield;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -349,7 +345,6 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
     return [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount },
       ...holdingActions,
-      new RecordMetricAction('au_stock_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -379,7 +374,6 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     this.generatedActionTypes = [
       'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
       'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
-      'RECORD_METRIC',
       'RECORD_BALANCE',
     ];
   }
@@ -421,7 +415,6 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     return [
       { type: actionType, amount },
       ...holdingActions,
-      new RecordMetricAction('au_stock_dividend', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -455,7 +448,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     this.stateKey      = stateKey;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -486,7 +479,6 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
-      new RecordMetricAction('au_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -517,7 +509,7 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['AU_FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['AU_FIXED_INCOME_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -550,7 +542,6 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     return [
       { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
-      new RecordMetricAction('au_fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -581,7 +572,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -614,7 +605,6 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
-      new RecordMetricAction('fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
@@ -647,7 +637,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     this._stateKeyFixed = stateKey;
     this.defaultRate   = defaultRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
-    this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -684,7 +674,6 @@ export class SuperEarningsHandler extends HandlerEntry {
       return [
         { type: 'SUPER_EARNINGS_APPLY', amount: gross.amount, grossAmount: 0, stateKey, taxRate: 0 },
         ...gross.holdingActions,
-        new RecordMetricAction('super_earnings', gross.amount),
         new RecordBalanceAction(`${stateKey}.balance`, stateKey),
       ];
     }
@@ -711,7 +700,6 @@ export class SuperEarningsHandler extends HandlerEntry {
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount: net.amount, grossAmount: gross.amount, stateKey, taxRate },
       ...net.holdingActions,
-      new RecordMetricAction('super_earnings', net.amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

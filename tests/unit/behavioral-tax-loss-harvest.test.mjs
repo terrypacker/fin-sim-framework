@@ -302,8 +302,11 @@ describe('TaxLossHarvestHandler', () => {
     // lifetime path as a `console.warn` nobody reads, and it is what stops an uncapped
     // harvester dead after its first harvest. A strategy that declines to act must not look
     // like one that had nothing to do.
-    const skip = actions.find(a => a.fieldName === 'tlh_skipped_no_substitute');
+    // Design 101 §7.1: recorded as its own journal action, naming the lot, not as a metric.
+    const skip = actions.find(a => a.type === 'TLH_NO_SUBSTITUTE');
     assert.ok(skip, `the skip must be recorded, got: ${JSON.stringify(actions)}`);
+    assert.deepStrictEqual(skip, { type: 'TLH_NO_SUBSTITUTE', count: 1, holdingIds: ['h1'], stateKeys: ['usStockAccount'] });
+    assert.ok(!actions.some(a => a.type === 'RECORD_METRIC'), 'no metrics copy');
   });
 
   test('TLH-H-4: skips accounts not in taxableStateKeys (tax-advantaged are no-op)', () => {

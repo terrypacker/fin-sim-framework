@@ -72,6 +72,9 @@ export function balanceCopyKeys(cfg) {
  * @param {Set<string>} keys  from balanceCopyKeys()
  */
 export function aliasWatchPath(path, keys) {
+  // `metrics.monthly_expenses` was a copy of the top-level `monthlyExpenses` (§7.1, M3).
+  // The other retired flow amounts have no state equivalent: they are kept, and show muted.
+  if (path === 'metrics.monthly_expenses') return 'monthlyExpenses';
   const m = /^metrics\.([^.[\]]+)$/.exec(path);
   return m && keys.has(m[1]) ? `${m[1]}.balance` : path;
 }

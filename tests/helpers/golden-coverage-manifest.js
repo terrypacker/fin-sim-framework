@@ -100,7 +100,6 @@ export const COVERED = [
   'LOAN_PAYMENT_APPLY',
   'NE_INHERITANCE_TAX',
   'RECORD_BALANCE',
-  'RECORD_METRIC',
   'REPLENISH_SAVINGS',
   'ROTH_CONTRIBUTION_APPLY',
   'ROTH_EARNINGS_APPLY',
@@ -129,6 +128,9 @@ export const COVERED = [
   // `washSaleLedger` appeared in NO fixture, so the whole path — two writing reducers, the
   // resolver and the filing — was guarded by unit tests alone.
   'STOCK_HARVEST_APPLY',
+  // Design 101 §7.1: the harvester's journal-only record of lots it skipped for want of a
+  // substitute (was `metrics.tlh_skipped_no_substitute`). The same golden reaches it.
+  'TLH_NO_SUBSTITUTE',
   'US_TAX_FILE_APPLY',
   // The same golden's dated crash, which is what puts a loss in the book to harvest. The
   // shock family came along with it: the regime is added and recomputed, and the level

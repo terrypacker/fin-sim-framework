@@ -80,7 +80,7 @@ describe('HouseRunningCostHandler', () => {
     const out = mkHandler().call({ state: baseState(), date: new Date(START) });
     // 12000 / 12 = 1000, price level 1.0, same currency ⇒ 1000.
     assert.ok(Math.abs(debitOf(out) - 1000) < 1e-9);
-    assert.ok(out.some(a => a.type === 'RECORD_METRIC'));
+    assert.ok(!out.some(a => a.type === 'RECORD_METRIC'), 'no flow-amount copy into metrics (design 101 §7.1)');
   });
 
   test('zero cost on every property ⇒ no actions (inert)', () => {

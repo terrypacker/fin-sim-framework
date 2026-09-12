@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsCoupons, couponFiringIndex, resolvePrevailingCouponRate } from '../holdings/holdings-earnings.js';
 
@@ -66,7 +66,7 @@ export class BondSleeveCouponHandler extends HandlerEntry {
     this.couponRate     = couponRate;
     this.rateKey        = rateKey ?? new.target.rateKey;
     this.taxMode        = taxMode;
-    this.generatedActionTypes = ['BOND_SLEEVE_COUPON_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['BOND_SLEEVE_COUPON_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -112,7 +112,6 @@ export class BondSleeveCouponHandler extends HandlerEntry {
         _reinvestBuckets: reinvestBuckets, _prevailingRate: prevailingRate,
         _reinvestYear: (date ?? new Date()).getUTCFullYear(), _reinvestPurchaseMs: (date ?? new Date()).getTime(),
       },
-      new RecordMetricAction('bond_coupons', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

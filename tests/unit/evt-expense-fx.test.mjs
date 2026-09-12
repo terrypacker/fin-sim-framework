@@ -15,7 +15,7 @@
  * after a change of residency must leave the *converted* AUD magnitude
  * (e.g. $6k @ 1.5 → A$9k), not the raw native number. Pre-move (USD→USD) and
  * post-move (USD→AUD) are both covered, for monthly and one-off expense events.
- * The RECORD_METRIC value stays native in both cases.
+ * No handler copies the amount into metrics any more (design 101 §7.1).
  */
 
 import { test } from 'node:test';
@@ -58,7 +58,7 @@ test('EVT-EXPENSE-FX-1: pre-move, USD expense debits US savings at native magnit
   const debit = debitOf(actions);
   assert.strictEqual(debit.targetKey, 'usSavingsAccount');
   assert.strictEqual(debit.amount, 6_000); // USD → USD, no conversion
-  assert.strictEqual(metricOf(actions).value, 6_000); // metric stays native
+  assert.strictEqual(metricOf(actions), undefined); // no metrics copy (design 101 §7.1)
 });
 
 test('EVT-EXPENSE-FX-2: post-move, USD expense debits AU savings at converted (AUD) magnitude', () => {
@@ -70,7 +70,7 @@ test('EVT-EXPENSE-FX-2: post-move, USD expense debits AU savings at converted (A
   const debit = debitOf(actions);
   assert.strictEqual(debit.targetKey, 'auSavingsAccount');
   assert.ok(Math.abs(debit.amount - 9_000) < 1e-6, `expected A$9000, got ${debit.amount}`);
-  assert.strictEqual(metricOf(actions).value, 6_000); // metric stays native USD
+  assert.strictEqual(metricOf(actions), undefined); // no metrics copy (design 101 §7.1)
 });
 
 test('EVT-EXPENSE-FX-3: post-move deficit/replenish uses the converted amount', () => {
@@ -102,10 +102,10 @@ test('EVT-EXPENSE-FX-4: post-move expense event debits AU savings at converted m
   const debit = debitOf(actions);
   assert.strictEqual(debit.targetKey, 'auSavingsAccount');
   assert.ok(Math.abs(debit.amount - 9_000) < 1e-6, `expected A$9000, got ${debit.amount}`);
-  // Tracking + metric stay native.
+  // Tracking stays native; there is no metrics copy (design 101 §7.1).
   const apply = actions.find(a => a.type === 'EXPENSE_EVENT_APPLY');
   assert.strictEqual(apply.amount, 6_000);
-  assert.strictEqual(metricOf(actions).value, 6_000);
+  assert.strictEqual(metricOf(actions), undefined);
 });
 
 test('EVT-EXPENSE-FX-5: pre-move expense event debits US savings at native magnitude', () => {

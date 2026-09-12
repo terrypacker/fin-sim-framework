@@ -10,7 +10,17 @@
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { resolveSubstitute, resolveSubstituteSecurity } from './substitute-holding.js';
-import { RecordMetricAction } from '../../simulation-framework/actions.js';
+import { ReducerBuilder } from '../../simulation-framework/builders/reducer-builder.js';
+
+/**
+ * The reducer for TLH_NO_SUBSTITUTE: a no-op, because the action is journal-only (like
+ * INTL_TRANSFER_RECORD). The skip is a fact about the run, not about state.
+ */
+export function tlhNoSubstituteRecordReducer() {
+  const r = ReducerBuilder.noOp().name('TLH No Substitute Record').build();
+  r.reducedActionTypes = ['TLH_NO_SUBSTITUTE'];
+  return r;
+}
 
 /**
  * TaxLossHarvestHandler — flagship behavioral strategy (design/29 §3.3, Step 11).
@@ -57,7 +67,7 @@ export class TaxLossHarvestHandler extends HandlerEntry {
     super(null, 'Tax Loss Harvest');
     this.taxableStateKeys    = taxableStateKeys;
     this.taxLossHarvestCap   = taxLossHarvestCap;
-    this.generatedActionTypes = ['STOCK_HARVEST_APPLY', 'RECORD_METRIC'];
+    this.generatedActionTypes = ['STOCK_HARVEST_APPLY', 'TLH_NO_SUBSTITUTE'];
   }
 
   call({ state }) {
@@ -65,7 +75,7 @@ export class TaxLossHarvestHandler extends HandlerEntry {
     // `Infinity` when uncapped, so every `capRemaining <= 0` / `fullLoss <= capRemaining`
     // test below reads the same way in both modes.
     let capRemaining = Number.isFinite(this.taxLossHarvestCap) ? this.taxLossHarvestCap : Infinity;
-    let skipped      = 0;
+    const skipped    = [];   // { stateKey, holdingId } for each losing lot with no substitute
 
     const residency = _primaryResidency(state);
 
@@ -103,7 +113,7 @@ export class TaxLossHarvestHandler extends HandlerEntry {
           // R2 (§8.1f) found this skip firing 2.6–4.0 times per lifetime path, silently.
           // It is what stops an uncapped harvester dead after its first harvest: once the
           // sold lot is gone the sleeve holds one lot, and one lot has no partner.
-          skipped++;
+          skipped.push({ stateKey, holdingId: holding.id });
           console.warn(`[TaxLossHarvestHandler] no substitute for holding '${holding.id}' (${holding.label ?? holding.id}) in ${stateKey}; skipping`);
           continue;
         }
@@ -143,10 +153,19 @@ export class TaxLossHarvestHandler extends HandlerEntry {
       }
     }
 
-    // Recorded as a metric rather than left in the console: a strategy that declines to
-    // act is indistinguishable from one that had nothing to do, and the difference is
-    // whole years of unharvested loss.
-    if (skipped > 0) actions.push(new RecordMetricAction('tlh_skipped_no_substitute', skipped));
+    // Recorded, not left in the console: a strategy that declines to act is
+    // indistinguishable from one that had nothing to do, and the difference is whole years
+    // of unharvested loss. It is a journal action of its own (design 101 §7.1), as every
+    // other flow is. It changes no state, and it names the lots, which the retired
+    // `metrics.tlh_skipped_no_substitute` count never did.
+    if (skipped.length > 0) {
+      actions.push({
+        type:       'TLH_NO_SUBSTITUTE',
+        count:      skipped.length,
+        holdingIds: skipped.map(s => s.holdingId),
+        stateKeys:  [...new Set(skipped.map(s => s.stateKey))],
+      });
+    }
     return actions;
   }
 }

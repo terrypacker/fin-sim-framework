@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry }                            from '../../../simulation-framework/handlers.js';
-import { RecordBalanceAction, RecordMetricAction } from '../../../simulation-framework/actions.js';
+import { RecordBalanceAction }                     from '../../../simulation-framework/actions.js';
 import { OneOffEvent }                             from '../../../simulation-framework/events/one-off-event.js';
 import { convertExpenseToAccount }                 from '../../fx/expense-fx.js';
 import { propertyExpenseBusinessFraction }         from '../../account-rules/currency-basis.js';
@@ -119,7 +119,7 @@ export class ExpenseEventHandler extends HandlerEntry {
     this.usOwnerId            = usOwnerId;
     this.auRole               = auRole;
     this.auOwnerId            = auOwnerId;
-    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'EXPENSE_EVENT_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'EXPENSE_EVENT_APPLY', 'RECORD_BALANCE'];
   }
 
   call({ state, data }) {
@@ -223,7 +223,6 @@ export class ExpenseEventHandler extends HandlerEntry {
       type: 'EXPENSE_EVENT_APPLY',
       amount, category, personId, currency, propertyKey, capitalizeAmount,
     });
-    actions.push(new RecordMetricAction('expense_events', amount));
 
     return actions;
   }

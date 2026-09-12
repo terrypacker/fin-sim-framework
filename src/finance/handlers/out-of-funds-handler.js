@@ -9,7 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../../simulation-framework/actions.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 
 /**
  * Handles OUT_OF_FUNDS events.
@@ -33,7 +33,7 @@ export class OutOfFundsHandler extends HandlerEntry {
 
   constructor() {
     super(null, 'Out of Funds');
-    this.generatedActionTypes = ['SET_OUT_OF_FUNDS_DATE', 'ACCUMULATE_DEFICIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['SET_OUT_OF_FUNDS_DATE', 'ACCUMULATE_DEFICIT', 'RECORD_BALANCE'];
   }
 
   call({ data, date, state }) {
@@ -43,7 +43,6 @@ export class OutOfFundsHandler extends HandlerEntry {
       (date instanceof Date ? date.toISOString().slice(0, 10) : String(date))
     );
     const actions = [
-      new RecordMetricAction('out_of_funds', deficit),
       { type: 'ACCUMULATE_DEFICIT', amount: deficit },
     ];
     if (!state.outOfFundsDate) {
