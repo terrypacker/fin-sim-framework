@@ -594,6 +594,43 @@ test('renderState: an active filter auto-expands matching sections', () => {
 
 // ─── Filter (R6) ────────────────────────────────────────────────────────────────
 
+test('renderState: under a filter, a clicked section folds; a new filter re-opens it', () => {
+  // Regression: the filter used to force every section open, so clicking a caret did
+  // nothing at all while a filter was set.
+  const panel = makePanel();
+  const state = { acct: { balance: 5 } };
+  const bodyAfterRender = () => {
+    const c = document.createElement('div');
+    panel.renderState(state, c);
+    return c.querySelector('.lsp-section-body');
+  };
+  panel.setFilter('balance');
+  assert.ok(bodyAfterRender(), 'the filter opens the matching section');
+  panel._toggleSection('acct');
+  assert.equal(bodyAfterRender(), null, 'folded by the user, it stays folded under this filter');
+  panel._toggleSection('acct');
+  assert.ok(bodyAfterRender(), 'and unfolds again');
+
+  panel._toggleSection('acct');
+  panel.setFilter('bal');
+  assert.ok(bodyAfterRender(), 'a new filter starts with its matches open again');
+  panel.setFilter('');
+  assert.equal(bodyAfterRender(), null, 'no filter: the ordinary fold state (collapsed by default) is untouched');
+});
+
+test('renderState: a filter finds a record by its display name, not only its stateKey', () => {
+  // Regression: "Terry" found nothing, because only the path was searched and the
+  // owner's name lives in the display name.
+  const panel = namedPanel({ usSavings2Account: { name: 'Shared Checking', country: 'US' } });
+  const render = () => { const c = document.createElement('div'); panel.renderState({ usSavings2Account: { balance: 5 }, other: { balance: 1 } }, c); return c; };
+  panel.setFilter('shared');
+  assert.deepEqual(sectionLabels(render()), ['US Shared Checking'], 'matched on the name; the non-matching record is gone');
+  panel.setFilter('balance shared');
+  assert.ok(render().querySelector('.lsp-section-body .lsp-metric-row'), 'words in any order, across label and path');
+  panel.setFilter('shared income');
+  assert.deepEqual(sectionLabels(render()), [], 'every word must match');
+});
+
 test('renderState: filter hides rows whose path does not match', () => {
   const panel = makePanel();
   panel.setFilter('marketValue');

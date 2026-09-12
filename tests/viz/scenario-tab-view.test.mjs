@@ -506,6 +506,33 @@ test('_renderParamsList: clicking a group header expands/collapses its rows', ()
   assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 0);
 });
 
+test('_renderParamsList: under a filter, a clicked group folds; a new filter re-opens it', () => {
+  // Regression: the filter force-expanded every group, so a header click did nothing
+  // while a filter was set (the same defect the State panel had).
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'inflationRate', type: 'Number', group: 'Rates', value: 1 }] };
+  const rows = () => document.querySelectorAll('#paramsList .param-row').length;
+  view._paramFilterFields = new Set(['name']);
+  view._paramFilter = 'inflation';
+  view._renderParamsList(scenario);
+  assert.strictEqual(rows(), 1, 'the filter opens the matching group');
+  document.querySelector('#paramsList .param-group-header').click();
+  assert.strictEqual(rows(), 0, 'folded by the user, it stays folded under this filter');
+  view._paramFilter = 'inflationr';
+  view._renderParamsList(scenario);
+  assert.strictEqual(rows(), 1, 'a new filter opens it again');
+  view._paramFilter = '';
+  view._renderParamsList(scenario);
+  assert.strictEqual(rows(), 0, 'no filter: the unfiltered fold state is untouched');
+});
+
+test('_paramMatchesFilter: every word must match, in any order', () => {
+  const view = new ScenarioTabView();
+  const param = { name: 'inflationRate', description: 'CPI growth for the US' };
+  assert.ok(view._paramMatchesFilter(param, 'growth cpi'));
+  assert.ok(!view._paramMatchesFilter(param, 'cpi wage'));
+});
+
 test('_paramMatchesFilter: defaults to description only', () => {
   const view = new ScenarioTabView();
   assert.deepStrictEqual([...view._paramFilterFields], ['description']);

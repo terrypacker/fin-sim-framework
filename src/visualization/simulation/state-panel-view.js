@@ -18,6 +18,8 @@ import { toLabel } from '../state/state-paths.js';
 import { FieldFormatter } from '../state/field-format.js';
 import { buildFieldRow, buildStaticRow } from '../state/field-row.js';
 
+import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components/text-filter.js';
+
 /**
  * StatePanelView — pure DOM layer for the State panel and node detail.
  *
@@ -55,7 +57,12 @@ export class StatePanelView extends BaseComponent {
     // until asked for. Status text (residency, the current period) and filter
     // matches always show, so nothing is out of reach.
     this._showText          = false;
-    this._expandedSections  = new Set();  // sectionPath → expanded; default (absent) = collapsed
+    // Section folding, shared with the Parameters panel (text-filter.js): collapsed by
+    // default, a filter opens its matches, and a fold made under a filter holds until
+    // the filter changes.
+    this._fold              = new FilteredFoldState();
+    this._expandedSections  = this._fold.expanded;   // the unfiltered set: sectionPath → expanded
+    this._filterLabels      = new Map();             // path → its display label, for the filter
 
     if (appBus) {
       appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate }) => {
@@ -81,6 +88,7 @@ export class StatePanelView extends BaseComponent {
    */
   set schemaRegistry(r) {
     this._schemaRegistry = r ?? null;
+    this._filterLabels?.clear();   // labels come from the registry
     this._formatter = r ? new FieldFormatter({ registry: r, stateProvider: () => this._pendingState }) : null;
   }
 
@@ -239,13 +247,14 @@ export class StatePanelView extends BaseComponent {
   }
 
   setFilter(text) {
-    this._filterText = (text ?? '').trim().toLowerCase();
+    this._filterText = normalizeFilter(text);
     if (this._pendingState) this._renderStatePanel(this._pendingDate, this._pendingState);
   }
 
   /** Drop every captured field series (a new scenario is a new history). */
   clearFieldHistory() {
     this._fieldSeriesStore?.clear();
+    this._filterLabels.clear();   // a new scenario names different records
   }
 
   /** Wire the collapse toggle for the State section. Called once from WorkbenchApp.initView(). */
@@ -387,12 +396,13 @@ export class StatePanelView extends BaseComponent {
   /**
    * Append a foldable section: a header (caret + tri-state checkbox + label) and,
    * when expanded, a body built lazily by `renderBody`. Sections are collapsed by
-   * default (D17-style) and auto-expanded while a filter is active. A section with
-   * no visible descendant (see _leafVisible) is omitted entirely.
+   * default (D17-style) and auto-expanded while a filter is active, except those the
+   * user folds under that filter (without that, a filtered section could not be folded
+   * at all). A section with no visible descendant (see _leafVisible) is omitted entirely.
    */
   _appendCollapsibleSection(container, { label, sectionPath, subPaths, renderBody, node, alreadyLabel = false }) {
     if (!this._sectionVisible(node, sectionPath)) return;
-    const expanded = this._filterText !== '' || this._expandedSections.has(sectionPath);
+    const expanded = this._fold.isExpanded(sectionPath, this._filterText);
     container.appendChild(this.renderHeaderRow(label, subPaths, alreadyLabel, sectionPath, expanded));
     if (expanded) {
       const body = document.createElement('div');
@@ -402,10 +412,12 @@ export class StatePanelView extends BaseComponent {
     }
   }
 
-  /** Toggle a section's expanded state and re-render. */
+  /**
+   * Toggle a section's expanded state and re-render. Under a filter the fold is
+   * remembered for that filter only; the unfiltered fold state is left as it was.
+   */
   _toggleSection(sectionPath) {
-    if (this._expandedSections.has(sectionPath)) this._expandedSections.delete(sectionPath);
-    else this._expandedSections.add(sectionPath);
+    this._fold.toggle(sectionPath, this._filterText);
     this._refreshRows();
   }
 
@@ -477,9 +489,20 @@ export class StatePanelView extends BaseComponent {
     return typeof obj.name === 'string' && obj.name ? `${obj.symbol} · ${obj.name}` : obj.symbol;
   }
 
-  /** Case-insensitive substring match of the filter against the full path. */
+  /**
+   * Whether a path passes the filter: every typed word appears in the path OR in its
+   * display label ("US Brokerage (Terry) · Balance"). So a record is found by the name
+   * the panel shows for it, not only by its stateKey. Labels are looked up only while a
+   * filter is set, and cached per path.
+   */
   _matchesFilter(path) {
-    return !this._filterText || path.toLowerCase().includes(this._filterText);
+    if (!this._filterText) return true;
+    let label = this._filterLabels.get(path);
+    if (label === undefined) {
+      label = this._pathLabel(path);
+      this._filterLabels.set(path, label);
+    }
+    return matchesFilter(this._filterText, path, label);
   }
 
   /**

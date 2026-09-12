@@ -10,6 +10,7 @@
 
 import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
 import { scenarioSecurityRegistry } from '../../finance/holdings/security.js';
+import { normalizeFilter, matchesFilter, FilteredFoldState } from '../components/text-filter.js';
 import {
   buildMixListEditor, buildAllocationGlidepathEditor, buildAllocationRegimeTargetsEditor,
   buildDrawdownSequenceEditor, buildLiquidityGraphEditor,
@@ -76,7 +77,9 @@ export class ScenarioTabView {
     // Mirrors StatePanelView's filter/foldable-section behaviour. Groups are
     // collapsed by default; absence from _expandedGroups means collapsed.
     this._paramFilter       = '';
-    this._expandedGroups    = new Set();
+    // Matching and group folding are shared with the State panel (text-filter.js).
+    this._groupFold         = new FilteredFoldState();
+    this._expandedGroups    = this._groupFold.expanded;   // the unfiltered set
     // Which param fields the filter searches. Defaults to description only.
     this._paramFilterFields = new Set(['description']);
     this._activeScenario    = null;
@@ -142,7 +145,7 @@ export class ScenarioTabView {
     });
 
     document.getElementById('paramsFilter')?.addEventListener('input', (e) => {
-      this._paramFilter = (e.target.value ?? '').trim().toLowerCase();
+      this._paramFilter = normalizeFilter(e.target.value);
       if (this._activeScenario) this._renderParamsList(this._activeScenario);
     });
 
@@ -326,8 +329,9 @@ export class ScenarioTabView {
         continue;
       }
 
-      // Groups are collapsed by default; an active filter force-expands matches.
-      const expanded = filter !== '' || this._expandedGroups.has(group);
+      // Collapsed by default; a filter opens its matches, and a group the user folds
+      // under that filter stays folded until the filter changes.
+      const expanded = this._groupFold.isExpanded(group, filter);
       container.appendChild(this._buildGroupHeader(group, expanded, scenario));
       if (!expanded) continue;
 
@@ -361,8 +365,9 @@ export class ScenarioTabView {
   }
 
   /**
-   * Case-insensitive substring match against the param fields the user opted into
-   * via the filter-field multi-select (defaults to description only).
+   * Every typed word must appear in one of the param fields the user opted into via the
+   * filter-field multi-select (defaults to description only). Same rule as the State
+   * panel (text-filter.js).
    */
   _paramMatchesFilter(param, filter) {
     const fields = this._paramFilterFields;
@@ -371,7 +376,7 @@ export class ScenarioTabView {
     if (fields.has('name'))        parts.push(param.name ?? '');
     if (fields.has('group'))       parts.push(param.group ?? '');
     if (fields.has('description')) parts.push(param.description ?? '');
-    return parts.join(' ').toLowerCase().includes(filter);
+    return matchesFilter(filter, ...parts);
   }
 
   /** Build a clickable, collapsible group header (caret + label). */
@@ -389,8 +394,7 @@ export class ScenarioTabView {
 
     header.append(caret, label);
     header.addEventListener('click', () => {
-      if (this._expandedGroups.has(group)) this._expandedGroups.delete(group);
-      else this._expandedGroups.add(group);
+      this._groupFold.toggle(group, this._paramFilter);
       this._renderParamsList(scenario);
     });
     return header;
