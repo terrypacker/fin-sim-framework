@@ -107,6 +107,29 @@ test('facade: has / add / remove / active, the cross-panel contract (§8)', () =
   assert.equal(wl.has('idx'), false);
 });
 
+test('facade: maintenance, series, and the chart receives each charted entry\'s label/axis (W3)', () => {
+  const { ctl, chart } = rig({});
+  chart.meta = null;
+  chart.applySeriesMeta = function (entries) { this.meta = entries.map(({ path, label, axis }) => ({ path, label, axis })); };
+  const wl = ctl.facade();
+  assert.deepEqual(wl.lists(), [{ id: 'w1', name: 'Overview', size: 1 }]);
+  assert.equal(wl.setLabel('metrics.netWorth', 'NW'), true);
+  assert.equal(wl.setAxis('metrics.netWorth', 'right'), true);
+  assert.deepEqual(chart.meta, [{ path: 'metrics.netWorth', label: 'NW', axis: 'right' }]);
+
+  const id = wl.create('Markets');
+  assert.equal(wl.activeId(), id);
+  assert.equal(wl.rename(id, 'Indices'), true);
+  const copy = wl.duplicate(id);
+  assert.equal(wl.delete(copy), true);
+  assert.equal(wl.setActive('w1'), true);
+  wl.add('a'); wl.add('b');
+  assert.equal(wl.moveEntry(2, 0), true);
+  assert.deepEqual(wl.active().entries.map(e => e.path), ['b', 'metrics.netWorth', 'a']);
+  assert.equal(wl.setCharted('a', false), true);
+  assert.deepEqual(wl.series('anything'), [], 'no store: an empty series, not a throw');
+});
+
 test('destroy: the controller stops reacting to the model', () => {
   const { ctl, chart } = rig({});
   ctl.destroy();

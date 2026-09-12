@@ -87,6 +87,15 @@ export class StatePanelView extends BaseComponent {
   get fieldFormatter() { return this._formatter ?? null; }
 
   /**
+   * Open a field's history modal on behalf of another panel (WB_EVENTS.FIELD_HISTORY_OPEN,
+   * design 101 W3). This view owns the modal; it opens over the page, whether or not the
+   * State tab is showing.
+   */
+  openFieldHistory(path) {
+    this._onFieldRowClick(path);
+  }
+
+  /**
    * The human display name for a state path, or null when it names no
    * account/asset/person (design 70). Callers own the `?? toLabel(k)` fallback.
    * @param {string} statePath

@@ -90,14 +90,31 @@ export class WatchlistController {
 
   /**
    * The cross-panel contract (§8): `runtime.watchlist`. A panel produces by adding a
-   * path it already shows, and consumes by reading `active()` on WATCHLIST_CHANGED.
+   * path it already shows, and consumes by reading `active()` and `series(path)` on
+   * WATCHLIST_CHANGED. The maintenance half serves the Watchlist panel (W3).
+   * Entry operations act on the active list.
    */
   facade() {
+    const m = this.model;
     return {
-      has:    path => this.model.has(path),
-      add:    (path, opts = {}) => this._add(path, opts),
-      remove: path => this.model.remove(path),
-      active: () => this.model.active(),
+      has:        path => m.has(path),
+      add:        (path, opts = {}) => this._add(path, opts),
+      remove:     path => m.remove(path),
+      active:     () => m.active(),
+      /** Every list as { id, name, size }. */
+      lists:      () => m.lists.map(({ id, name, entries }) => ({ id, name, size: entries.length })),
+      activeId:   () => m.activeId,
+      setActive:  id => m.setActive(id),
+      create:     name => m.create(name),
+      rename:     (id, name) => m.rename(id, name),
+      duplicate:  id => m.duplicate(id),
+      delete:     id => m.delete(id),
+      setCharted: (path, on) => m.setCharted(path, on),
+      setLabel:   (path, label) => m.setLabel(path, label),
+      setAxis:    (path, axis) => m.setAxis(path, axis),
+      moveEntry:  (from, to) => m.moveEntry(from, to),
+      /** The path's full-resolution captured series, [{ date, value }] (W-D2). */
+      series:     path => this._fieldStore?.get(path) ?? [],
     };
   }
 
@@ -120,7 +137,9 @@ export class WatchlistController {
   }
 
   _sync() {
-    this._chart?.syncActivePaths(this.model.chartedPaths(), this._fieldStore);
+    const charted = (this.model.active()?.entries ?? []).filter(e => e.charted);
+    this._chart?.syncActivePaths(charted.map(e => e.path), this._fieldStore);
+    this._chart?.applySeriesMeta?.(charted);   // each entry's own label and axis (W3)
     this._capture?.setPaths(this.model.capturePaths());
     this._statePanel?.setWatchlists?.(this.model.lists.map(({ id, name }) => ({ id, name })), this.model.activeId);
     this._statePanel?.render?.();   // coalesced: checkboxes follow the active list
