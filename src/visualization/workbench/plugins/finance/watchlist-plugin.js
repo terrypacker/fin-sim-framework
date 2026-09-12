@@ -15,6 +15,9 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framew
 import { get }                from '../../../../finance/monte-carlo/mc-param-paths.js';
 import { FieldFormatter }     from '../../../state/field-format.js';
 import { buildFieldRow, renderSparkline } from '../../../state/field-row.js';
+import { withBom }            from '../../../../utils/csv.js';
+import { toDefinition, parseDefinition, unresolvedPaths, buildSeriesCsv }
+  from '../../../watchlist/watchlist-io.js';
 
 const AXES = [['auto', 'Auto'], ['left', 'Left'], ['right', 'Right']];
 
@@ -67,6 +70,8 @@ export class WatchlistPlugin extends WorkbenchComponent {
         <button class="btn btn-sm" data-wl="rename"    title="Rename this watchlist">✎</button>
         <button class="btn btn-sm" data-wl="duplicate" title="Duplicate this watchlist">⧉</button>
         <button class="btn btn-sm" data-wl="delete"    title="Delete this watchlist">🗑</button>
+        <button class="btn btn-sm" data-wl="io"        title="Export or import watchlists, or download the series">⇅</button>
+        <input type="file" data-wl="file" accept=".json,application/json" class="wb-hidden" />
       </div>
       <div class="wl-body" data-wl="body"></div>
       <div class="wl-hint">☑ charted · ⠿ drag to reorder · click a row for its history</div>
@@ -161,6 +166,103 @@ export class WatchlistPlugin extends WorkbenchComponent {
         this._wl().delete(active.id);
       }
     });
+    this._q('io').addEventListener('click', e => { e.stopPropagation(); this._openIoMenu(e.currentTarget); });
+    this._q('file').addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      e.target.value = '';   // choosing the same file again must fire `change` again
+      if (file) this._importText(await file.text());
+    });
+  }
+
+  // ─── Export / import (design 101 W4, §8.1) ───────────────────────────────
+
+  /** The toolbar's ⇅ menu. */
+  _openIoMenu(anchor) {
+    this._closeMenu();
+    const wl = this._wl();
+    if (!wl) return;
+    const active = wl.active();
+    const lists  = wl.lists();
+    this._showMenu(anchor, [
+      [active ? `Export "${active.name}" (JSON)` : 'Export this list (JSON)', () => this._exportDefinition([active.id]), !active],
+      ['Export all lists (JSON)', () => this._exportDefinition(null), lists.length === 0],
+      ['Import lists (JSON)…', () => this._q('file').click(), false],
+      null,
+      ['Download series (CSV)', () => this._exportSeries(), !active?.entries.length],
+    ]);
+  }
+
+  /** Download one list (`ids`) or every list (null) as a definition file. */
+  _exportDefinition(ids) {
+    const wl = this._wl();
+    const lists = wl?.definitionLists(ids) ?? [];
+    if (!lists.length) return;
+    const stem = ids == null ? 'watchlists-all' : `watchlist-${_slug(lists[0].name)}`;
+    this._download(`${stem}-${_today()}.json`, JSON.stringify(toDefinition(lists), null, 2), 'application/json');
+  }
+
+  /**
+   * Import a definition file's lists into this scenario. Entries whose path does not
+   * resolve here (another scenario's stateKeys or holding ids) are kept and show muted;
+   * the report names them so nothing is dropped silently.
+   */
+  _importText(text) {
+    const wl = this._wl();
+    if (!wl) return;
+    let lists;
+    try { lists = parseDefinition(text); }
+    catch (err) { window.alert(`Could not import watchlists: ${err.message}`); return; }
+
+    const ids   = wl.importLists(lists);
+    const count = lists.reduce((n, l) => n + l.entries.length, 0);
+    const lines = [`Imported ${ids.length} watchlist${ids.length === 1 ? '' : 's'} (${count} field${count === 1 ? '' : 's'}).`];
+    // Checked against the lists as imported, so an aliased `metrics.<stateKey>` counts as the balance it became.
+    const missing = unresolvedPaths(wl.definitionLists(ids), this._sim?.state ?? null);
+    if (missing == null) {
+      lines.push('Run the simulation to see which fields resolve in this scenario.');
+    } else if (missing.length) {
+      const one = missing.length === 1;
+      lines.push(`${missing.length} field${one ? ' is' : 's are'} not in this scenario's state at the current date. `
+        + (one ? 'It is kept, shown muted, and fills in if it appears later in the run:'
+               : 'They are kept, shown muted, and fill in if they appear later in the run:'),
+      ...missing.slice(0, 12).map(p => `  • ${p}`),
+      ...(missing.length > 12 ? [`  … and ${missing.length - 12} more`] : []));
+    }
+    window.alert(lines.join('\n'));
+  }
+
+  /** The active list's captured series as CSV (§8.1 form 3). */
+  _exportSeries() {
+    const wl     = this._wl();
+    const active = wl?.active();
+    if (!active?.entries.length) return;
+    const fmt   = this._fmt();
+    const state = this._sim?.state ?? null;
+    const csv = buildSeriesCsv(active.entries.map(e => {
+      const { series, backfilled } = wl.seriesWithResolution(e.path);
+      const d    = fmt?.describe(e.path, { state });
+      const base = e.label ?? d?.contextLabel ?? e.path;
+      // Values are in state's own currency, not converted, so the header names it.
+      const header = d?.kind === 'currency' && d.currencyCode ? `${base} (${d.currencyCode})` : base;
+      return { path: e.path, header, series, backfilled };
+    }));
+    if (csv == null) {
+      window.alert('Nothing has been captured for this list yet. Run the simulation first.');
+      return;
+    }
+    this._download(`watchlist-${_slug(active.name)}-series-${_today()}.csv`, withBom(csv), 'text/csv');
+  }
+
+  /** Hand the browser a file. Replaced in tests. */
+  _download(filename, text, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // ─── Rendering ───────────────────────────────────────────────────────────
@@ -353,6 +455,37 @@ export class WatchlistPlugin extends WorkbenchComponent {
     document.addEventListener('mousedown', this._onDocDown);
   }
 
+  /**
+   * A plain menu of `[text, action, disabled]` items (null = separator), below `anchor`.
+   * The row ⋯ menu builds its own because it needs headings and check marks.
+   */
+  _showMenu(anchor, items) {
+    const menu = document.createElement('div');
+    menu.className = 'wl-menu';
+    menu.setAttribute('role', 'menu');
+    for (const it of items) {
+      if (it == null) {
+        const sep = document.createElement('div');
+        sep.className = 'wl-menu-sep';
+        menu.appendChild(sep);
+        continue;
+      }
+      const [text, action, disabled] = it;
+      const b = document.createElement('button');
+      b.className = 'wl-menu-item';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = text;
+      b.disabled = !!disabled;
+      b.addEventListener('click', e => { e.stopPropagation(); this._closeMenu(); action(); });
+      menu.appendChild(b);
+    }
+    menu.style.top = `${anchor.offsetTop + anchor.offsetHeight}px`;
+    this.el.appendChild(menu);
+    this._menu = menu;
+    this._onDocDown = e => { if (!menu.contains(e.target)) this._closeMenu(); };
+    document.addEventListener('mousedown', this._onDocDown);
+  }
+
   _closeMenu() {
     this._menu?.remove();
     this._menu = null;
@@ -360,3 +493,10 @@ export class WatchlistPlugin extends WorkbenchComponent {
     this._onDocDown = null;
   }
 }
+
+/** A list name as a filename part: "US & AU markets" → "us-au-markets". */
+function _slug(name) {
+  return String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'watchlist';
+}
+
+function _today() { return new Date().toISOString().slice(0, 10); }

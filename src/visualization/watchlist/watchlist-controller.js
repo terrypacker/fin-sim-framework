@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import { WatchlistModel, LEGACY_LIST_NAME } from './watchlist-model.js';
+import { WatchlistModel, LEGACY_LIST_NAME, balanceCopyKeys } from './watchlist-model.js';
 import { WB_EVENTS } from '../workbench/workbench-runtime.js';
 
 /**
@@ -115,6 +115,18 @@ export class WatchlistController {
       moveEntry:  (from, to) => m.moveEntry(from, to),
       /** The path's full-resolution captured series, [{ date, value }] (W-D2). */
       series:     path => this._fieldStore?.get(path) ?? [],
+      /**
+       * The best series there is, and whether it is snapshot backfill: a field watched
+       * only after the run has no live capture (W4 series CSV).
+       */
+      seriesWithResolution: path => this._fieldStore?.getOrBackfill?.(path)
+        ?? { series: this._fieldStore?.get(path) ?? [], backfilled: false },
+      /** Lists with their entries, for a definition export: every list, or those in `ids`. */
+      definitionLists: (ids = null) => m.lists
+        .filter(l => ids == null || ids.includes(l.id))
+        .map(({ name, entries }) => ({ name, entries })),
+      /** Append lists from a definition file (W4), aliased for this scenario. @returns {string[]} */
+      importLists: lists => m.importLists(lists, balanceCopyKeys(this._cfg)),
     };
   }
 

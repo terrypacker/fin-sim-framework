@@ -293,6 +293,29 @@ export class WatchlistModel {
     return true;
   }
 
+  /**
+   * Append lists read from a definition file (W4 import, §8.1). Each list gets a fresh
+   * id, a name made unique among the lists already here ("Markets (imported)"), and the same
+   * normalization and `metrics.<stateKey>` aliasing as a load. The first imported list
+   * becomes active. One `import` event, not one per entry.
+   *
+   * @param {{ name: string, entries: any[] }[]} lists
+   * @param {Set<string>} [keys]  from balanceCopyKeys() of the target scenario
+   * @returns {string[]} the new ids, in order
+   */
+  importLists(lists, keys = new Set()) {
+    const ids = [];
+    for (const l of Array.isArray(lists) ? lists : []) {
+      if (l === null || typeof l !== 'object') continue;
+      const name = this._uniqueName(cleanName(l.name) ?? LEGACY_LIST_NAME);
+      ids.push(this._pushList({ name, entries: l.entries }, keys).id);
+    }
+    if (ids.length === 0) return ids;
+    this._activeId = ids[0];
+    this._emit('import', ids[0]);
+    return ids;
+  }
+
   setActive(id) {
     if (!this._find(id) || id === this._activeId) return false;
     this._activeId = id;
@@ -322,6 +345,20 @@ export class WatchlistModel {
 
   _find(id) {
     return id == null ? null : (this._lists.find(l => l.id === id) ?? null);
+  }
+
+  /**
+   * `name`, or "name (imported)", "name (imported 2)", …, whichever is free. Not
+   * "name (2)": the list picker already appends each list's size in parentheses, and
+   * "Overview (2) (3)" reads as nonsense.
+   */
+  _uniqueName(name) {
+    const taken = new Set(this._lists.map(l => l.name));
+    if (!taken.has(name)) return name;
+    for (let n = 1; ; n++) {
+      const candidate = `${name} (imported${n === 1 ? '' : ` ${n}`})`;
+      if (!taken.has(candidate)) return candidate;
+    }
   }
 
   _updateEntry(path, listId, field, value) {
