@@ -7,6 +7,8 @@ answer before the phases they block. **W0 ✅ (12 Sep)**: the chart-by-path inpu
 typed renderer that the Watchlist panel builds on. **R1 ✅ (12 Sep)**: registry correctness
 and the untyped-leaf gate. Untyped numeric leaves across the goldens went from 5,136 to 23
 (§9.6). Text rows are hidden behind a toggle, per the user's decision (§9.5).
+**W1 ✅ (12 Sep)**: `WatchlistModel` handles migration, the Overview seed, the
+`metrics.<stateKey>` alias and persistence. It is not wired into the app yet; W2 does that.
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -254,6 +256,12 @@ design 31 D15's single net-worth line, and it happens **only on migration**, whe
 is absent or is a legacy empty array. Once the user deletes every list, the scenario stays
 empty; it is not re-seeded.
 
+As built (W1): a bare `watchlists: []` is ambiguous on its own, because
+`serializeScenario` has always defaulted the key to `[]`. The presence of
+`activeWatchlistId` (§8.1) decides it. With the key, `[]` means every list was deleted.
+Without it, `[]` means a legacy scenario, which gets the seed. `fromCfg` never writes the
+seed back, so an untouched scenario stays byte-identical until the user edits a list.
+
 ---
 
 ## 6. UC1: market and security index levels
@@ -392,8 +400,14 @@ decision each time.
 - **Legacy detection:** an array whose elements are strings. It becomes one list,
   "Watchlist", with every entry `charted: true`. That is exactly today's behaviour, so an
   old scenario looks identical after load.
-- `activeWatchlistId` is emitted only when set (design 93 §5a's "no payload gains a key"
-  discipline).
+- `activeWatchlistId` is also the **migration marker**. `WatchlistModel.toCfg()` always
+  writes it, as `null` once every list is deleted. `serializeScenario` carries it only when
+  the record has the key, so a scenario saved before W1 gains no key (design 93 §5a's "no
+  payload gains a key" discipline). See §5.4 for why the marker is needed.
+- **Alias keys** (§7): `metrics.<k>` is rewritten to `<k>.balance` when `<k>` is one of the
+  cfg's accounts, a loan synthesized from one of its properties (`loanKeyForProperty`), or
+  an inherited bequest account. The goldens carry balance copies for all three. A rewrite
+  that duplicates an existing entry is dropped, and the first entry is kept.
 - **Why nested and not flat tables joined by id:** the flat-table rule
   (`structured-editors-not-json-textarea`) exists for `row-list-editor` param editors. This
   is a dedicated panel with its own editor, not a param.
@@ -599,7 +613,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **W0** ✅ | Remove chart-by-path (§5.1) | — | none |
 | **R1** ✅ | Registry correctness (§9.2 R-1, R-2 split, R-3, R-5, R-6, R-8), the `toLabel` acronym fix, the untyped-leaf coverage gate (§9.6), and hidden text rows (§9.5). Display only. | — | none |
 | **R2** `[ ]` | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. | R1 | none |
-| **W1** `[ ]` | `WatchlistModel` + legacy migration + `metrics.<stateKey>` alias + persistence + default seed (§5.4, §8.1). Unit tests: migration, round-trip, delete-last, alias. | — | none |
+| **W1** ✅ | `WatchlistModel` (`src/visualization/watchlist/watchlist-model.js`) + legacy migration + `metrics.<stateKey>` alias + persistence (`activeWatchlistId` marker in `serializeScenario`) + default seed (§5.4, §8.1). Unit tests: `watchlist-model.test.mjs` (migration, round-trip, delete-last, alias, normalization, events) plus serializer cases. Not wired into the app; W2 wires it. | — | none |
 | **W2** `[ ]` | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. | W1 | none |
 | **W3** `[ ]` | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. | W2 | none |
 | **M1** `[ ]` | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. | — (parallel to W) | **additive only** |
@@ -609,7 +623,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 → W2 → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
