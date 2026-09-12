@@ -154,24 +154,26 @@ describe('the §1091(d) twin defers the loss into basis (§8.1p)', () => {
       'the sheltered golden defers nothing — the two goldens must not be measuring one thing');
   });
 
-  test('§1091(a) still bites: the disallowed loss leaves the return', () => {
+  test('§1091(a) still bites: the disallowed loss leaves the return, and the bill is paid', () => {
     // Deferral is about where the money GOES, not about whether the deduction survives. A
     // reading that let a taxable wash cost nothing would be the rule inverted.
     //
-    // The bite takes one of two forms, and which one depends on the year, not on §1091. If
-    // adding the loss back tips the year into a net gain, the liability rises (this golden
-    // did that until rebalance buys followed the market split, design 99 P5c). If the year
-    // still nets a loss, the $3,000 allowance (§1211(b)) applies either way and the
-    // disallowance shows up as a SMALLER carryforward (§1212(b)) instead. Either is correct;
-    // neither is "nothing changed".
+    // In general the bite takes one of two forms, depending on the year rather than on §1091:
+    // a higher liability if the add-back tips the year into a net gain, or a SMALLER §1212(b)
+    // carryforward if it still nets a loss past the $3,000 allowance. This plan is sized
+    // (the spouse book, see the spec) so it takes the FIRST form. That keeps the
+    // taxable-match filing → April payment chain covered here, not only by the sheltered
+    // golden.
     const [f] = twinFilings.filter(x => x.disallowed > 0);
-    const cl  = f.capitalLoss;
-    const netWith    = cl.shortTermGain + cl.longTermGain + cl.collectibleGain - cl.netLoss;
-    const carryWith  = cl.closingShort + cl.closingLong;
-    const carryWithout = Math.max(0, -(netWith - f.disallowed) - 3_000);
-    assert.ok(f.delta > 0 || carryWith < carryWithout - 0.01,
-      `a disallowed loss must raise the liability or shrink the carryforward: delta ${f.delta}, `
-      + `carryforward ${carryWith} vs ${carryWithout.toFixed(2)} without the disallowance`);
+    assert.ok(f.delta > 0,
+      `the amended year must net a gain so the filing assesses a balance due, got ${f.delta} `
+      + '— if a retune broke this, resize the spouse book rather than weakening the assertion');
+
+    const paidInApril = twin.sim.journal.journal.filter(e =>
+      e.action?.type === 'US_TAX_PAYMENT_DEBIT'
+      && new Date(e.date).getUTCMonth() === 3
+      && Math.abs(payload(e).amount - f.delta) < 0.005);
+    assert.equal(paidInApril.length, 1, 'the balance due is chained as an April payment');
   });
 
   test('every deferred dollar found a lot to land in', () => {
@@ -193,7 +195,8 @@ describe('the §1091(d) twin defers the loss into basis (§8.1p)', () => {
     //
     // The DISALLOWANCE is real money the year it happens: it is six figures here, and the
     // April balance due is the cash. The basis TRANSFER is only worth something when the
-    // replacement is eventually sold — measured by stubbing `_applyBasisTransfers`, the
+    // replacement is eventually sold — measured by stubbing `_applyBasisTransfers` (on the
+    // earlier \$500k-spouse-book plan; the order of magnitude is what matters), the
     // fixture moves 123 fields but terminal net worth moves by about \$154 on a \$6.7m book,
     // because most of the re-based lots are never disposed of inside the horizon. That is
     // what "timing, not money" means when the horizon is finite, and it is why this golden

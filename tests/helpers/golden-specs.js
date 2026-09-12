@@ -523,15 +523,23 @@ export const GOLDEN_SPECS = [
       // The second taxable book, holding the OTHER security. Drawn down late (priority 6) so
       // it is still there to harvest in the crash years — a book spent before the crash
       // cannot be anyone's replacement.
+      //
+      // Its SIZE is what makes the April filing assess a balance due. The book's own
+      // unmatched December losses scale with it, and at \$500k they outweighed the January
+      // rebalance gain even with the \$86k disallowance added back: 2030 still netted a loss
+      // past the \$3,000 allowance, so the filing only shrank a carryforward and the payment
+      // step went dark once rebalance buys followed the market split (design 99 P5c). At
+      // \$300k the amended year nets about +\$31k of gain and the balance due is about \$5.4k,
+      // enough margin that ordinary retuning elsewhere will not tip it back.
       cfg.accounts.push({
         __type: 'BrokerageAccount', stateKey: 'spouseStockAccount',
         name: 'US Stock (spouse)', role: ACCOUNT_ROLES.US_STOCK,
-        balance: 500_000, contributionBasis: 500_000,
+        balance: 300_000, contributionBasis: 300_000,
         ownerId: 'spouse', drawdownPriority: 6,
         country: 'US', currency: { code: 'USD' },
         holdings: [new Holding({
           id: 'h-spouse-equity', label: 'Spouse Equity', allocation: ALLOCATION.EQUITY,
-          rateKey: RATE_KEYS.EQUITY_US, marketValue: 500_000, costBasis: 500_000,
+          rateKey: RATE_KEYS.EQUITY_US, marketValue: 300_000, costBasis: 300_000,
           securityId: 'sec-alt',
         })],
       });
