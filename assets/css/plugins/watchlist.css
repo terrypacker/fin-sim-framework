@@ -94,3 +94,18 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* The ☆ other panels put beside a value to watch its path (design 101 W5). Quiet until
+   hovered or watched, so a table of stars reads as a table of values first. */
+.wl-star {
+  background: none;
+  border: none;
+  padding: 0 4px 0 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: pointer;
+}
+.wl-star:hover      { opacity: 1; color: var(--blue-text); }
+.wl-star.is-watched { opacity: 1; color: var(--warning); }

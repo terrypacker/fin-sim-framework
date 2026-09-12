@@ -22,6 +22,8 @@ import { toLabel } from './state-paths.js';
 
 const SEP = ' · ';
 
+const INDEX_LEVEL = { price: 'Price index', total: 'Total return index' };
+
 /** `holdings[id=h1]` → { id: 'h1' }; a plain segment → null. */
 function parseElementSegment(seg) {
   const m = /^[^[]+\[[^=\]]+=([^\]]+)\]$/.exec(seg);
@@ -110,6 +112,15 @@ export class FieldFormatter {
     // metric is just its own name.
     if (segs[0] === 'metrics' && segs.length === 2) {
       return reg?.displayNameFor?.(segs[1]) ?? toLabel(segs[1]);
+    }
+
+    // The index levels (design 101 §6): the instrument or market, then which level.
+    // Generic walking would print "Security Index · Sec-Emp · Price".
+    if ((segs[0] === 'marketIndex' || segs[0] === 'securityIndex') && segs.length === 3) {
+      const level = INDEX_LEVEL[segs[2]] ?? toLabel(segs[2]);
+      if (segs[0] === 'marketIndex') return `${toLabel(segs[1])}${SEP}${level}`;
+      const sec = (state ?? this._stateProvider?.() ?? null)?.securities?.[segs[1]];
+      return `${sec?.symbol || sec?.name || segs[1]}${SEP}${level}`;
     }
 
     // The longest prefix that names a record: `people.p1` is tried before `people`.

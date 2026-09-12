@@ -15,6 +15,7 @@ import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { withBom }            from '../../../../utils/csv.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 import { colorForSeriesKey }  from '../../../../finance/allocation-reporting/allocation-palette.js';
+import { watchStarHtml, bindWatchStars } from '../../../watchlist/watch-star.js';
 import {
   snapshotHoldings,
   totalSnapshot,
@@ -131,6 +132,8 @@ export class HoldingsPlugin extends WorkbenchComponent {
       this._bindSim(scenario?.sim ?? null);
     });
     this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._render());
+    // ★ follows the active list, whichever panel changed it (design 101 W5).
+    this._runtime.bus.subscribe(WB_EVENTS.WATCHLIST_CHANGED, () => this._render());
     this._onResize = () => this._resizeCharts();
     window.addEventListener('resize', this._onResize);
   }
@@ -138,6 +141,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
   onMount() {
     // Late-mount: the scenario may already be built before this panel first mounts.
     if (!this._sim) this._bindSim(this._services()?.simulationRegistry?.getPrimary?.() ?? null);
+    bindWatchStars(this.el, () => this._runtime.watchlist ?? null);
 
     const accSel = this._q('account');
     if (accSel && !accSel._hldBound) {
@@ -363,7 +367,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     }
     const unitCells = (r) => showUnits
       ? `<td class="hld-td hld-td--num">${_fmtUnits(r.units)}</td>`
-        + `<td class="hld-td hld-td--num">${_fmtPrice(r.pricePerUnit)}</td>`
+        + `<td class="hld-td hld-td--num">${r.pricePerUnit == null ? '' : this._star(r, 'pricePerUnit', 'price per unit')}${_fmtPrice(r.pricePerUnit)}</td>`
       : '';
     const COLS = showUnits ? 8 : 6;
 
@@ -373,7 +377,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
         <td class="hld-td hld-alloc">${_esc(r.allocation ?? '—')}</td>
         <td class="hld-td hld-sec" title="${_esc(r.securityId ?? '')}">${_esc(r.security ?? '—')}</td>
         ${unitCells(r)}
-        <td class="hld-td hld-td--num">${this._fmt(r.marketValue)}</td>
+        <td class="hld-td hld-td--num">${this._star(r, 'marketValue', 'market value')}${this._fmt(r.marketValue)}</td>
         <td class="hld-td hld-td--num">${this._fmt(r.costBasis)}</td>
         <td class="hld-td hld-td--num ${_signCls(r.unrealized)}">${this._fmtSigned(r.unrealized)}</td>
       </tr>`).join('') || `<tr><td class="hld-td hld-empty" colspan="${COLS}">No holdings.</td></tr>`;
@@ -391,6 +395,17 @@ export class HoldingsPlugin extends WorkbenchComponent {
       </tr>` : '';
   }
 
+  /**
+   * The ☆ that watches one lot's field (design 101 W5). The path names the lot by its
+   * `id`, not its position, so the watch survives a sale that shifts the array. A lot
+   * with no id cannot be addressed stably and gets no star.
+   */
+  _star(row, field, what) {
+    const wl = this._runtime.watchlist;
+    if (!wl || row.id == null || !this._stateKey) return '';
+    const path = `${this._stateKey}.holdings[id=${row.id}].${field}`;
+    return watchStarHtml(path, { watched: wl.has(path), what: `${row.label} ${what}` });
+  }
 
   // ─── Charts ──────────────────────────────────────────────────────────────
 
