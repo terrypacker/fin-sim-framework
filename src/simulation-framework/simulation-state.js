@@ -32,8 +32,10 @@
  *
  * Standard fields
  * ───────────────
- * metrics  {Object}  Keyed metric arrays consumed by MetricReducer.
- *                    e.g. { salary: [8000, 8000], tax: [1200] }
+ * metrics  {Object}  Values the simulation computes that are no single field
+ *                    elsewhere in state: DerivedMetricsRegistry aggregates, and the
+ *                    last value MetricReducer was given per key (not a running total).
+ *                    e.g. { netWorth: 1234567.89 }
  *
  * Usage
  * ─────

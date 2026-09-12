@@ -65,11 +65,12 @@ test('contextLabel: owner · holding · field, the holding named from state (R-7
     'a lot no longer held falls back to its id');
 });
 
-test('contextLabel: people, metrics, balance copies and ownerless paths', () => {
+test('contextLabel: people, metrics and ownerless paths', () => {
   const { f } = formatter();
   assert.equal(f.contextLabel('people.p1.monthlyWage'), 'Marge · Monthly Wage');
   assert.equal(f.contextLabel('metrics.netWorth'), 'Net Worth');
-  assert.equal(f.contextLabel('metrics.superAccount'), 'AU Super', 'a balance copy reads as its account');
+  assert.equal(f.contextLabel('metrics.superAccount'), 'Super Account',
+    'balance copies are retired (design 101 W-D10): a metric key is only its own name, never an account');
   assert.equal(f.contextLabel('effectiveGrowthRates.EQUITY_US'), 'Effective Growth Rates · EQUITY US');
   assert.equal(f.contextLabel('usStockAccount.balance'), 'US Brokerage · Balance');
 });

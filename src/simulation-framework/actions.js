@@ -150,17 +150,18 @@ export class AmountAction extends FieldValueAction {
 }
 
 /**
- * Captures a state field value into state.metrics so the chart can track it.
- * When called with no arguments it behaves as a pure pipeline-flush marker
- * (the BalanceSnapshotReducer is a no-op in that case).
+ * A pipeline-flush marker; its reducer (BalanceSnapshotReducer) is a no-op.
  *
- * @param {string|null} [fieldPath]  Dot-separated path into state to read
- *                                   (e.g. 'accounts.usSavings.balance').
- * @param {string|null} [metricKey]  Key under state.metrics to write to.
- *                                   Defaults to fieldPath when omitted.
+ * It once had the reducer copy `state[fieldPath]` into `state.metrics[metricKey]`.
+ * Those balance copies are retired (design 101 W-D10): chart or watch
+ * `<stateKey>.balance` itself. The arguments are still accepted and serialized,
+ * so existing emit sites and saved scenarios are unchanged.
+ *
+ * @param {string|null} [fieldPath]  Retained for compatibility; not read.
+ * @param {string|null} [metricKey]  Retained for compatibility; not read.
  */
 export class RecordBalanceAction extends Action {
-  static description = 'Captures a state field value into state.metrics[metricKey] for charting; with no args, acts as a no-op pipeline-flush marker.';
+  static description = 'Pipeline-flush marker; its reducer is a no-op. The balance copy into state.metrics is retired (design 101 W-D10).';
   static type        = 'RecordBalanceAction';
   constructor(fieldPath = null, metricKey = null) {
     super('RECORD_BALANCE');

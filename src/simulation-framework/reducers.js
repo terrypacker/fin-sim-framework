@@ -349,28 +349,29 @@ export class MetricReducer extends FieldReducer {
 }
 
 /**
- * Reducer for RECORD_BALANCE actions.
- * When the action carries a fieldPath, reads that dot-separated path from
- * state and writes the value into state.metrics[metricKey] so the chart
- * picks it up automatically.  When fieldPath is absent the reducer is a
- * pure no-op (pipeline-flush only), preserving backward compatibility with
- * all existing new RecordBalanceAction() call sites.
+ * Reducer for RECORD_BALANCE actions: a pure no-op. RECORD_BALANCE is a pipeline-flush
+ * marker.
+ *
+ * It used to copy `state[fieldPath]` into `state.metrics[metricKey]` for the chart.
+ * Design 101 W-D10 retired those balance copies:
+ *   - they duplicated `<stateKey>.balance`, which is itself chartable and watchable;
+ *   - they went stale whenever growth, a shock or a rebalance moved a balance
+ *     without a RECORD_BALANCE (29 of the 161 copies in the goldens disagreed with the
+ *     account's final balance).
+ *
+ * The class and its registration stay, so the emit sites and saved scenarios that
+ * name it are unchanged.
  */
 export class BalanceSnapshotReducer extends FieldReducer {
-  static description = 'Reads state[action.fieldPath] and writes the value to state.metrics[action.metricKey]; no-op when fieldPath is absent.';
+  static description = 'No-op for RECORD_BALANCE, a pipeline-flush marker. The balance copy it once wrote into state.metrics is retired (design 101 W-D10).';
   static type        = 'BalanceSnapshotReducer';
 
   constructor(name = 'Balance Snapshot', priority = PRIORITY.METRICS) {
     super(name, priority, null);
   }
 
-  reduce(state, action) {
-    if (!action.fieldPath) {
-      return this.newState(state);
-    }
-    const value = this.getValueByPath(state, action.fieldPath);
-    const newState = this.newState(state);
-    return this.setValueByPath(newState, `metrics.${action.metricKey}`, value);
+  reduce(state) {
+    return this.newState(state);
   }
 }
 

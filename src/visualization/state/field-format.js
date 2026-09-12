@@ -108,11 +108,9 @@ export class FieldFormatter {
     const reg  = this._registry;
     const segs = String(path).split('.');
 
-    // `metrics.<stateKey>` is an account's balance copy (design 70 §6.1); any other
-    // metric is just its own name.
-    if (segs[0] === 'metrics' && segs.length === 2) {
-      return reg?.displayNameFor?.(segs[1]) ?? toLabel(segs[1]);
-    }
+    // A metric is its own name: "Net Worth", not "Metrics · Net Worth". The balance
+    // copies once kept under `metrics.<stateKey>` are retired (design 101 W-D10).
+    if (segs[0] === 'metrics' && segs.length === 2) return toLabel(segs[1]);
 
     // The index levels (design 101 §6): the instrument or market, then which level.
     // Generic walking would print "Security Index · Sec-Emp · Price".

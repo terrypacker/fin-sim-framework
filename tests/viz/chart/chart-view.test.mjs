@@ -364,13 +364,12 @@ test('ChartView._displaySeriesData: without conversion wiring, data is unchanged
   assert.strictEqual(view._displaySeriesData('usSavingsAccount.balance', data), data);
 });
 
-test('ChartView._displaySeriesData: metrics.<account> converts via injected registry (kind says metric)', () => {
-  // design 10 §Phase 4 — RecordBalanceAction stores account balances under
-  // metrics.<stateKey>; state-paths types them 'metric', but registerAccount
-  // stamps them as the account currency. Conversion must use the injected registry.
+test('ChartView._displaySeriesData: an account balance converts via the injected registry (kind says metric)', () => {
+  // design 10 §Phase 4: whatever kind the view was told, conversion follows the
+  // injected (stamped) registry, which knows the account's currency.
   const reg = new StateSchemaRegistry();
   reg.registerAccount('usStockAccount', { currency: { code: 'USD' }, type: 'brokerage' });
-  assert.equal(reg.resolve('metrics.usStockAccount').currencyCode, 'USD');
+  assert.equal(reg.resolve('usStockAccount.balance').currencyCode, 'USD');
 
   const view = makeView({
     schemaRegistry: reg,
@@ -378,7 +377,7 @@ test('ChartView._displaySeriesData: metrics.<account> converts via injected regi
     displaySettings: { displayCurrency: 'AUD' },
     rateStateProvider: () => ({ effectiveExchangeRates: { USD_AUD: 1.55 } }),
   });
-  view._seriesKinds.set('metrics.usStockAccount', 'metric'); // what typeForPath would set
-  const out = view._displaySeriesData('metrics.usStockAccount', [[0, 1000], [1, 2000]]);
+  view._seriesKinds.set('usStockAccount.balance', 'metric'); // a wrong kind must not stop conversion
+  const out = view._displaySeriesData('usStockAccount.balance', [[0, 1000], [1, 2000]]);
   assert.deepStrictEqual(out, [[0, 1550], [1, 3100]]);
 });

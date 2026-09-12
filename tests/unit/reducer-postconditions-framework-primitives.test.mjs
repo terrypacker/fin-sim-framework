@@ -32,21 +32,16 @@ const DATE = new Date('2030-06-15');
 
 // ─── BalanceSnapshotReducer (I1/I8) ────────────────────────────────────────────
 
-test('BalanceSnapshotReducer: reads a dotted fieldPath and writes only metrics[metricKey] (I1/I8)', () => {
+test('BalanceSnapshotReducer: a pure no-op, with or without a fieldPath (design 101 W-D10)', () => {
+  // RECORD_BALANCE is a pipeline-flush marker. The balance copy into
+  // metrics[metricKey] it once made is retired: it duplicated <stateKey>.balance and
+  // went stale whenever growth or a shock moved the balance without one.
   const r = new BalanceSnapshotReducer();
-  const state = { savingsAccount: { balance: 5000 }, metrics: { other: 1 } };
-  const next = runReducer(r, state, makeAction('RECORD_BALANCE', { fieldPath: 'savingsAccount.balance', metricKey: 'savings' }), DATE);
-  assert.equal(next.metrics.savings, 5000);
-  assert.equal(next.metrics.other, 1, 'I8: existing metrics preserved');
-  assert.deepEqual(next.savingsAccount, { balance: 5000 }, 'I8: source field untouched');
-});
-
-test('BalanceSnapshotReducer: absent fieldPath is a pure no-op (I8)', () => {
-  const r = new BalanceSnapshotReducer();
-  const prev = { savingsAccount: { balance: 5000 } };
-  const next = runReducer(r, structuredClone(prev), makeAction('RECORD_BALANCE', {}), DATE);
-  assertStateUnchanged(prev, next);
-  assert.equal(next.metrics, undefined, 'no metrics written when fieldPath absent');
+  for (const payload of [{ fieldPath: 'savingsAccount.balance', metricKey: 'savings' }, {}]) {
+    const prev = { savingsAccount: { balance: 5000 }, metrics: { other: 1 } };
+    const next = runReducer(r, structuredClone(prev), makeAction('RECORD_BALANCE', payload), DATE);
+    assertStateUnchanged(prev, next);
+  }
 });
 
 // ─── ScriptedReducer (I1/I2/I8) ────────────────────────────────────────────────

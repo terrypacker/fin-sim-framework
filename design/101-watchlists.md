@@ -19,6 +19,8 @@ stamped registry (§9.7). **W3 ✅ (12 Sep)**: the Watchlist panel is built (§5
 advances, and the regold is additive-only (§6.5). **W5 ✅ (12 Sep)**: the Securities and
 Holdings panels put a ☆ beside the values they can watch (§6.6). **W4 ✅ (12 Sep)**: lists
 export and import as a definition JSON, and the active list's series downloads as CSV (§8.3).
+**M2 ✅ (12 Sep)**: the balance copies are retired and the State panel's Metrics section is
+gone. The regold only removed `metrics.<stateKey>` (§7.2).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -557,6 +559,53 @@ the dynamic `fx_transfer_<from>_<to>`. That makes 27 emit sites in all.
 both, `metrics` is exactly the five derived aggregates, and W-D9 (drop the Metrics section)
 removes nothing the tree does not already show.
 
+### 7.2 As built (M2, 12 Sep 2026)
+
+- **The reducer.** `BalanceSnapshotReducer.reduce` returns `newState(state)`, whatever
+  the action carries. `RECORD_BALANCE` stays as a pipeline-flush marker: every emit site,
+  the class and its type registration are unchanged, and `RecordBalanceAction` still
+  accepts and serializes `fieldPath` / `metricKey`.
+- **The load-time seeds.** Both retirement toolsets used to seed
+  `metrics[stateKey] = balance` at load. §7.1 named only the AU one, but the US toolset
+  did the same. Both seeds are gone, and `metrics` still starts as `{}`.
+- **Schema and labels.**
+  - The `metrics.${stateKey}` registration is removed.
+  - `FieldFormatter.contextLabel` no longer maps `metrics.<k>` to an account's name. A
+    metric is labelled only by its own key.
+  - Saved watches of `metrics.<stateKey>` were already rewritten to `<stateKey>.balance`
+    on load (W1).
+- **The State panel (W-D9).**
+  - The Metrics section is removed from `StatePanelView`, the plugin markup and the app's
+    teardown, along with its private history buffer. `clearMetricHistory` is now
+    `clearFieldHistory`.
+  - `metrics` renders as an ordinary branch.
+  - **One consequence to note: the State tree now starts expanded.** It is the panel's
+    only content, and a collapsed default would open an empty panel. The ▼ toggle still
+    collapses it.
+- **Docs.** The `SimulationState` comment, the `RecordBalanceAction`/reducer docs, the
+  loan-payment comment and the README bullet now give §7's definition.
+- **Tests.**
+  - The reducer postcondition is now "a pure no-op, with or without a fieldPath".
+  - The two `intl-retirement-scenario` tests assert the account balance and the *absence*
+    of a copy.
+  - `evt-real-property` drops its two metric assertions; its `.balance` assertions stay.
+  - `field-format`, `chart-view`, `chart-presenter` and `state-panel-view` moved to
+    `.balance` paths, or pin the new behaviour.
+- **Regold: removals only (verified).**
+  - `probe-regold-additive.mjs` gained a removals-only mode.
+    `--removals=balance-copies` allows only `metrics.<k>` where the committed fixture has
+    `<k>.balance`; `--removals=<regex>` is for M3.
+  - All 13 fixtures lost exactly their copies, 161 in total (§2.5's count), with nothing
+    added or changed.
+- **In the running app** (International Retirement run to 2041):
+  - `state.metrics` holds no balance copy;
+  - neither the Metrics section nor its container exists;
+  - the tree is open with a Metrics branch;
+  - the Overview watchlist still plots Net Worth;
+  - there are no new console messages.
+- **What remains in `metrics`** is the derived aggregates plus the flow keys, which M3
+  retires.
+
 ---
 
 ## 8. Architecture
@@ -934,12 +983,12 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M1** ✅ | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. See §6.5. | — (parallel to W) | **additive only** (verified) |
 | **W4** ✅ | Export/import definition JSON + series CSV (§8.1). Browser-verified. See §8.3. | W3 | none |
 | **W5** ✅ | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). Index-level context labels. Browser-verified. See §6.6. | W2, M1 | none |
-| **M2** `[ ]` | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** |
+| **M2** ✅ | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). Both toolset seeds removed; State tree opens expanded. See §7.2. | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** (verified: 161) |
 | **M3** `[ ]` | Retire the flow amounts (§7.1): remove the 27 finance `RecordMetricAction` emit sites, alias `metrics.monthly_expenses` → `monthlyExpenses`, keep saved watches of other retired keys muted, and update one test plus the golden action-coverage manifest. | Q1 ✅, M2 | **removals of `metrics.<flow key>` only** |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
 Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1 ✅** alongside. Then **W4 ✅ / W5 ✅**,
-then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
+then **M2 ✅**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
 

@@ -630,11 +630,6 @@ export class StateSchemaRegistry {
     if ('interestRate' in account)      this.register(`${stateKey}.interestRate`, ParameterValueType.rate());
     this.register(`${stateKey}.minimumBalance`,   vt);
     this.register(`${stateKey}.loanBalance`,      vt);
-    // The per-account balance is also recorded into state.metrics[stateKey] via
-    // RecordBalanceAction(`${stateKey}.balance`, stateKey) for charting; type it
-    // as the account's currency so the chart/state-panel convert it (design 10
-    // §Phase 4) — otherwise it falls through the generic `metrics.*` → metric glob.
-    this.register(`metrics.${stateKey}`,          vt);
     // Holdings per-account stamp with the account's currency (design 25 §5.6).
     // Front-inserted so the coded per-account pattern wins over the generic
     // code-less `*.holdings.*` globs registered in the constructor.

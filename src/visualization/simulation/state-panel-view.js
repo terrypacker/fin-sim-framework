@@ -19,7 +19,7 @@ import { FieldFormatter } from '../state/field-format.js';
 import { buildFieldRow, buildStaticRow } from '../state/field-row.js';
 
 /**
- * StatePanelView — pure DOM layer for state/metrics panels and node detail.
+ * StatePanelView — pure DOM layer for the State panel and node detail.
  *
  * Owns:
  *  - State panel rendering (updateStatePanel, renderState, createStateDetails)
@@ -44,11 +44,12 @@ export class StatePanelView extends BaseComponent {
     this._onShowActionDetail = null;
     this._journal           = null;
     this._executionGraph    = null;
-    this._metricHistory     = new Map();
     this._fieldSeriesStore  = null;
     this._isPathWatched     = () => false;
     this._onWatchToggle     = null;
-    this._stateCollapsed    = true;
+    // Open by default: with the Metrics section gone (design 101 W-D9) the tree is the
+    // panel's only content, and a collapsed default would show an empty panel.
+    this._stateCollapsed    = false;
     this._filterText        = '';
     // Design 101 §9.5: text leaves (ids, symbols, labels, config flags) are hidden
     // until asked for. Status text (residency, the current period) and filter
@@ -225,18 +226,8 @@ export class StatePanelView extends BaseComponent {
       this._pendingState = last.stateSnapshot;
     }
     if (this._pendingState) {
-      this._bufferMetrics(this._pendingDate, this._pendingState.metrics);
       this._renderStatePanel(this._pendingDate, this._pendingState);
       this._updateFailureBanner(this._pendingState);
-    }
-  }
-
-  _bufferMetrics(date, metrics) {
-    if (!metrics || !date) return;
-    for (const [key, value] of Object.entries(metrics)) {
-      if (typeof value !== 'number' || !isFinite(value)) continue;
-      if (!this._metricHistory.has(key)) this._metricHistory.set(key, []);
-      this._metricHistory.get(key).push({ date: new Date(date), value });  // unbounded (R10.2)
     }
   }
 
@@ -252,8 +243,8 @@ export class StatePanelView extends BaseComponent {
     if (this._pendingState) this._renderStatePanel(this._pendingDate, this._pendingState);
   }
 
-  clearMetricHistory() {
-    this._metricHistory.clear();
+  /** Drop every captured field series (a new scenario is a new history). */
+  clearFieldHistory() {
     this._fieldSeriesStore?.clear();
   }
 
@@ -313,42 +304,12 @@ export class StatePanelView extends BaseComponent {
 
   _renderStatePanel(date, state) {
     if (!state) return;
-    const { metrics, ...rest } = state;
-
-    this._renderMetricsPanel(metrics, $('cumulativeMetricsContent'));
-
-    const newStateDetails = this.createStateDetails('tpl-state-details', date, rest);
+    // `metrics` is an ordinary branch of the tree (design 101 W-D9). What makes a field
+    // first-class now is a watchlist, not a section of its own.
+    const newStateDetails = this.createStateDetails('tpl-state-details', date, state);
     const stateDetails = $('currentStateContent');
     stateDetails.replaceChildren(newStateDetails);
     stateDetails.style.display = this._stateCollapsed ? 'none' : '';
-  }
-
-  _renderMetricsPanel(metrics, container) {
-    if (!metrics) { container.replaceChildren(); return; }
-    const frag = document.createDocumentFragment();
-
-    for (const [k, v] of Object.entries(metrics)) {
-      const path = `metrics.${k}`;
-      if (typeof v === 'number' && isFinite(v)) {
-        if (!this._matchesFilter(path)) continue;
-        const hist = this._metricHistory.get(k);
-        // Per-account balance metrics are keyed by stateKey (RecordBalanceAction),
-        // so they resolve to the account's name; true metrics (netWorth, …) do not
-        // and keep their beautified key (design 70 §6.1).
-        const label = this._displayName(k) ?? this.toLabel(k);
-        frag.appendChild(this._buildFieldRow({
-          path,
-          value:   v,
-          label,
-          history: hist,
-          onClick: () => this._showFieldHistoryModal(path, this._metricHistory.get(k) ?? [], false, label),
-        }));
-      } else {
-        // Non-numeric metric (object/array): render its leaves like state.
-        this.renderState({ [k]: v }, frag, 'metrics');
-      }
-    }
-    container.replaceChildren(frag);
   }
 
 
@@ -523,9 +484,9 @@ export class StatePanelView extends BaseComponent {
 
   /**
    * A numeric field row (design 101 R2, shared with the Watchlist panel):
-   * [watch checkbox][label][sparkline][value]. The sparkline draws from `history`
-   * (the Metrics section's own buffer) or else the path's full-resolution capture
-   * buffer, so every watched row has one. Row-click opens history.
+   * [watch checkbox][label][sparkline][value]. The sparkline draws from `history` when
+   * given, else the path's full-resolution capture buffer, so every watched row has
+   * one. Row-click opens history.
    */
   _buildFieldRow({ path, value, label = null, history = null, onClick = null }) {
     const series = history ?? this._fieldSeriesStore?.get(path) ?? null;
