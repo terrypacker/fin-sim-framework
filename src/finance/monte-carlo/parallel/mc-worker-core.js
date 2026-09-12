@@ -238,7 +238,15 @@ export function buildIterationRunner(ctx) {
      * from the same shared function, which is why the two agree exactly.
      */
     runIteration(i, params = perturbParams(ctx.base, i, ctx.variables)) {
-      return { seed: i + 1, params, result: runner.runScenario(params, i + 1) };
+      // One path that throws — a strict-mode invariant, a model defect — must not take the
+      // other n − 1 down with it. The path comes back as `error` with its seed and params so
+      // it can be replayed; callers drop it from the statistics and report it.
+      try {
+        return { seed: i + 1, params, result: runner.runScenario(params, i + 1) };
+      } catch (err) {
+        return { seed: i + 1, params, result: null,
+                 error: { message: String(err?.message ?? err), stack: err?.stack ?? null } };
+      }
     },
   };
 }
@@ -291,7 +299,8 @@ export function gridCellParams(ctx, cell, i) {
  * the paired readout use (§7.2).
  */
 export function runGridTask(iter, ctx, { cell, i }) {
-  const { seed, result } = iter.runIteration(i, gridCellParams(ctx, cell, i));
+  const { seed, result, error } = iter.runIteration(i, gridCellParams(ctx, cell, i));
+  if (error) return { cell, seed, error: error.message };
   const [row] = runsToRows([{
     seed,
     scenarioFailed:      result.scenarioFailed,

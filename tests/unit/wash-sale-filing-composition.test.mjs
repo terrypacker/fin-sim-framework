@@ -32,7 +32,7 @@ import assert             from 'node:assert/strict';
 
 import { RebalanceToTargetApplyReducer } from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
 import { UsTaxModule2026 }        from '../../src/finance/tax/us/us-tax-module-2026.js';
-import { UsTaxSettleHandler, UsTaxSettleApplyReducer, PENDING_RETURN_KEY }
+import { UsTaxSettleHandler, UsTaxSettleApplyReducer, PENDING_RETURN_KEY, filedReturnState }
   from '../../src/finance/tax/tax-settle-classes.js';
 import { UsTaxFileHandler, UsTaxFileApplyReducer } from '../../src/finance/tax/us/tax-file-classes.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
@@ -186,6 +186,26 @@ describe('reducer → classifier → settle → April filing (§8.1o)', () => {
     assert.deepEqual(chained, []);
     assert.ok(!(PENDING_RETURN_KEY in next), 'still filed — or next April re-files this year');
     assert.equal(next.usLongTermCapitalLossCarryforward, 77_000, 'the loss stands');
+  });
+
+  test('an accumulator ABSENT at the settle does not leak the filing year into the filed return', () => {
+    // The reset patches only fields that exist, so a field first written after 31 December
+    // is missing from the pre-image — and `{ ...state, ...snapshot }` read it from the
+    // FILING year. Measured on an MC path: a January re-sourced loss reached the prior
+    // return's Pub 514 adjustment and threw the §904 partition invariant.
+    const { settled } = throughSettle('ira');
+    const snapshot    = settled[PENDING_RETURN_KEY];
+    assert.ok(!('usCollectibleGainsYTD' in snapshot), 'precondition: absent at the settle');
+    assert.ok(!('usSourcePassiveCapGainsUsdYTD' in snapshot), 'precondition: absent at the settle');
+
+    const april = { ...settled, usCollectibleGainsYTD: 50_000, usSourcePassiveCapGainsUsdYTD: -103_886 };
+    const filed = filedReturnState(april, snapshot);
+    assert.ok(!('usCollectibleGainsYTD' in filed));
+    assert.ok(!('usSourcePassiveCapGainsUsdYTD' in filed));
+    assert.equal(filed.usCapitalGainsYTD, -80_000, 'snapshotted fields still come from the snapshot');
+
+    assert.deepEqual(file(april).action, file(settled).action,
+      'the filing-year accumulators must not move the prior year\'s return');
   });
 
   test('no wash pending ⇒ no filing is scheduled and no snapshot is taken', () => {

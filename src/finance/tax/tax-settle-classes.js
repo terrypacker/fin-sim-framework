@@ -562,6 +562,26 @@ function _snapshotPreImage(state, patch) {
 }
 
 /**
+ * The state the snapshotted return saw: `state`, with every US accumulator the settle resets
+ * put back to its 31-December value.
+ *
+ * A plain `{ ...state, ...snapshot }` is not that. The reset only patches fields that EXIST
+ * (`field in state`), so a field no reducer had written by 31 December is absent from the
+ * pre-image — and the overlay then reads its value from the FILING-year state instead. A
+ * capital-slice accumulator first written by a January disposal lands in the prior year's
+ * return that way: measured on an MC path, a 2035 re-sourced loss of $103,886 in
+ * `usSourcePassiveCapGainsUsdYTD` zeroed the Pub 514 adjustment on the 2034 return and threw
+ * the §904 partition invariant. Absent at the settle means absent here.
+ */
+export function filedReturnState(state, snapshot) {
+  const out = { ...state };
+  for (const k of [...YTD_FIELDS.US, ...PER_PERSON_US_FIELDS, ...PER_PERSON_US_SCALAR_FIELDS]) {
+    if (!(k in snapshot)) delete out[k];
+  }
+  return Object.assign(out, snapshot);
+}
+
+/**
  * Resets US YTD tax accumulators and, when the computed tax is positive,
  * chains a US_TAX_PAYMENT_DEBIT action to debit the US savings account.
  */

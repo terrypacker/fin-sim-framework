@@ -230,7 +230,10 @@ export class MonteCarloPresenter {
         // Spending runs at ~7.5x (design 89 §20) and a grid never records it, so its rate
         // would overstate a grid's cost several times over.
         if (!spending) this._recordPathRate(started, n);
-        this._configPanel.showProgress(`Completed ${n} runs`);
+        const errored = result.summary.erroredRuns?.length ?? 0;
+        this._configPanel.showProgress(errored
+          ? `Completed ${n - errored} runs — ${errored} errored and excluded (see console)`
+          : `Completed ${n} runs`);
         this._configPanel.enableRun();
         this._showResult(result);
         this._runsPanel.showResults(result.summary, result.runs, this._resultsPanel._metric);
@@ -266,7 +269,9 @@ export class MonteCarloPresenter {
         this._gridRuns = new Map();
         this._gridView = { ref: null, sel: null };
         this._recordPathRate(started, runs);
-        this._configPanel.showProgress(`Completed grid: ${grid.cells.length} cells, ${runs} runs`);
+        const errored = grid.cells.reduce((s, c) => s + (c.errored?.length ?? 0), 0);
+        this._configPanel.showProgress(`Completed grid: ${grid.cells.length} cells, ${runs} runs`
+          + (errored ? ` — ${errored} errored and excluded (see console)` : ''));
         this._configPanel.enableRun();
         this._resultsPanel.showGrid(grid);
       }).catch(err => {

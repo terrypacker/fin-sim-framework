@@ -138,9 +138,17 @@ export class McGridRunner extends IntlRetirementMcRunner {
       referenceCell: referenceCellOf(this.axes, planValues),
       removedFromSampling,
       // Tasks are cell-major and `mapTasks` returns input order, so cell k is one slice.
+      // A path that threw is excluded from its cell's rows and listed on `errored` (see
+      // `IntlRetirementMcRunner.run`), so one bad path cannot abort the whole grid.
       cells: cells.map((c, k) => {
-        const cellRows = rows.slice(k * n, (k + 1) * n);
-        return { values: c.values, rows: cellRows, summary: summarizeGridCell(cellRows, pairingFacts) };
+        const slice    = rows.slice(k * n, (k + 1) * n);
+        const errored  = slice.filter(r => r.error);
+        const cellRows = slice.filter(r => !r.error);
+        for (const r of errored) {
+          console.error(`[McGridRunner] cell ${k} path seed=${r.seed} threw and is excluded: ${r.error}`);
+        }
+        return { values: c.values, rows: cellRows, errored,
+                 summary: summarizeGridCell(cellRows, pairingFacts) };
       }),
       provenance,
       // What `gridCellRuns` needs to rebuild any path's params: one copy of the base

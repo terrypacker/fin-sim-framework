@@ -11,7 +11,7 @@
 import { HandlerEntry }      from '../../../simulation-framework/handlers.js';
 import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { TaxSettleService }  from '../../tax-settle-service.js';
-import { PENDING_RETURN_KEY } from '../tax-settle-classes.js';
+import { PENDING_RETURN_KEY, filedReturnState } from '../tax-settle-classes.js';
 import { resolveWashSales }  from './wash-sale.js';
 import { resize }            from '../../holdings/holding-utils.js';
 
@@ -84,13 +84,15 @@ export class UsTaxFileHandler extends HandlerEntry {
     // ── the delta, as a differential over ONE reconstruction ──────────────────
     //
     // `filed` is the state the return saw: current state, overwritten by the snapshot for
-    // every field the settle disturbed. It is not a perfect reconstruction — `people`,
+    // every field the settle disturbed — and with every accumulator the settle would have
+    // reset but found ABSENT removed, so a filing-year write cannot leak into the prior return
+    // (see `filedReturnState`). It is not a perfect reconstruction — `people`,
     // filing status and residency are read as they are TODAY and may have moved since
     // December — which is exactly why the answer is taken as a DIFFERENCE of two passes over
     // the same object. Every imperfection is present in both passes and cancels. A single
     // pass against the stored liability would bake the drift into the bill.
     // (Design 52 §4.6's with/without measurement, reused for the same reason.)
-    const filed     = { ...state, ...snapshot };
+    const filed     = filedReturnState(state, snapshot);
     const corrected = {
       ...filed,
       // §1091 on the return it belongs to: the loss never existed. Added back BY CHARACTER,

@@ -320,7 +320,16 @@ export class IntlRetirementMcRunner {
    */
   async run(baseParams = {}, onProgress) {
     const { ctx, provenance } = this._prepare(baseParams);
-    const mcRuns = await this._runIterations(ctx, onProgress);
+    const allRuns = await this._runIterations(ctx, onProgress);
+    // A path that threw carries no result, so it cannot enter the statistics — but dropping
+    // it silently would report a success rate over n − k paths as if it were n. It is
+    // excluded loudly instead: logged here and listed on `summary.erroredRuns`.
+    const erroredRuns = allRuns.filter(r => r.error);
+    const mcRuns      = allRuns.filter(r => !r.error);
+    for (const r of erroredRuns) {
+      console.error(`[IntlRetirementMcRunner] path seed=${r.seed} threw and is excluded from the results: `
+        + r.error.message);
+    }
 
     // `summarize` is stateless w.r.t. the two closures a ScenarioRunner is built from,
     // and on the parallel path this thread never builds one — so the aggregation gets
@@ -401,6 +410,9 @@ export class IntlRetirementMcRunner {
     // summary so a report can state what these numbers describe instead of the
     // reader having to assume it was their plan.
     summary.provenance = provenance;
+
+    // Paths that threw, with their seed and params so each can be replayed on its own.
+    summary.erroredRuns = erroredRuns.map(r => ({ seed: r.seed, params: r.params, message: r.error.message }));
 
     // The facts that define this batch's random stream (design 100 §5–6), so a later
     // batch can be checked for pairing against this one instead of assumed paired. On

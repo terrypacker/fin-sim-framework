@@ -55,6 +55,35 @@ test('IntlRetirementMcRunner: produces exactly n run results', async () => {
   assert.strictEqual(runs.length, N);
 });
 
+test('IntlRetirementMcRunner: a path that throws is excluded and reported, not fatal to the batch', async () => {
+  // Seed 2's params throw on read, standing in for any mid-run throw (a strict-mode
+  // invariant killed a 100-path UI batch on one path). The other n − 1 must survive.
+  class ThrowingPathRunner extends IntlRetirementMcRunner {
+    _perturb(base, i, variables) {
+      const p = super._perturb(base, i, variables);
+      if (i === 1) Object.defineProperty(p, 'inflationRate', { enumerable: true, get() { throw new Error('boom'); } });
+      return p;
+    }
+  }
+  const cfgTemplate = IntlRetirementScenario.buildDefaultConfig({ fxProcessModel: 'NONE' }, SIM_START, SIM_END);
+  const origError = console.error;
+  const logged = [];
+  console.error = (...a) => logged.push(a.join(' '));
+  let out;
+  try {
+    out = await new ThrowingPathRunner({ n: N, simStart: SIM_START, simEnd: SIM_END, cfgTemplate }).run();
+  } finally {
+    console.error = origError;
+  }
+  const { runs, summary } = out;
+  assert.strictEqual(runs.length, N - 1);
+  assert.ok(!runs.some(r => r.seed === 2));
+  assert.deepEqual(summary.erroredRuns.map(r => r.seed), [2]);
+  assert.match(summary.erroredRuns[0].message, /boom/);
+  assert.deepEqual(summary.pairing.seeds, [1, 3, 4, 5]);
+  assert.ok(logged.some(l => /seed=2 threw/.test(l)), 'the exclusion is logged, not silent');
+});
+
 // ─── Run shape ────────────────────────────────────────────────────────────────
 
 test('IntlRetirementMcRunner: each run has required fields', async () => {
