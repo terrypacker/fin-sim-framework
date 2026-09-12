@@ -8,7 +8,11 @@ typed renderer that the Watchlist panel builds on. **R1 ✅ (12 Sep)**: registry
 and the untyped-leaf gate. Untyped numeric leaves across the goldens went from 5,136 to 23
 (§9.6). Text rows are hidden behind a toggle, per the user's decision (§9.5).
 **W1 ✅ (12 Sep)**: `WatchlistModel` handles migration, the Overview seed, the
-`metrics.<stateKey>` alias and persistence. It is not wired into the app yet; W2 does that.
+`metrics.<stateKey>` alias and persistence. **W2 ✅ (12 Sep)**: the model is wired in.
+The chart plots the active list's charted entries, every watched path is captured at full
+resolution, a State panel checkbox means "in the active list", the chip ✕ un-charts, and
+there is an active-list picker, `runtime.watchlist`, and `WATCHLIST_CHANGED`. The user
+confirmed the §4 decisions on 12 Sep.
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -173,7 +177,7 @@ them:
 
 ---
 
-## 4. Decisions (proposed; confirm)
+## 4. Decisions (confirmed by the user, 12 Sep 2026; W-D11 stays open as Q1)
 
 | # | Decision | Recommendation | Rationale |
 |---|---|---|---|
@@ -386,6 +390,28 @@ subscribing and reading `active()` plus `FieldSeriesStore`. A value a panel comp
 that is not in state, such as allocation-cube shares or security rollups, **cannot be
 watched**; the path is the contract. Promoting such a value into state is a separate
 decision each time.
+
+### 8.0 As built (W2)
+
+- **`WatchlistController`** lives in `src/visualization/watchlist/watchlist-controller.js`,
+  not inline in `WorkbenchApp`, so it can be unit-tested with fakes. The app builds one per
+  scenario load and destroys it in `destroyScenario`. On every model change it writes the
+  cfg (loading alone never writes), calls `chart.syncActivePaths(chartedPaths)` (only the
+  difference is touched), sets `capture.setPaths(capturePaths)`, refreshes the State panel
+  picker and checkboxes (a coalesced `render()`), and publishes `WATCHLIST_CHANGED`
+  (`reason: 'load'` after a scenario load).
+- **The chart only reads `FieldSeriesStore` now.** `WatchCapture` subscribes synchronously
+  to the sim bus, while the chart drains its queue a frame later. A path charted mid-run is
+  therefore backfilled from the live buffer with points that are still waiting in the
+  chart's queue. `ChartPresenter` remembers the last backfilled date and skips those queued
+  points, so none is plotted twice.
+- **With every list deleted**, checking a row creates a list called "Watchlist" instead of
+  silently doing nothing. `runtime.watchlist.add` does the same.
+- **Renamed** to match the new meaning: `StatePanelView.isPathCharted`/`onChartToggle` are
+  now `isPathWatched`/`onWatchToggle`. The picker reads "Checking adds to [list ▾]" and
+  sits above the filter's text toggle.
+- **Not in W2:** `FIELD_HISTORY_OPEN` and every other maintenance gesture belong to W3.
+  `runtime.watchlist` is §8's four methods.
 
 ### 8.1 Persistence shape
 
@@ -614,7 +640,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **R1** ✅ | Registry correctness (§9.2 R-1, R-2 split, R-3, R-5, R-6, R-8), the `toLabel` acronym fix, the untyped-leaf coverage gate (§9.6), and hidden text rows (§9.5). Display only. | — | none |
 | **R2** `[ ]` | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. | R1 | none |
 | **W1** ✅ | `WatchlistModel` (`src/visualization/watchlist/watchlist-model.js`) + legacy migration + `metrics.<stateKey>` alias + persistence (`activeWatchlistId` marker in `serializeScenario`) + default seed (§5.4, §8.1). Unit tests: `watchlist-model.test.mjs` (migration, round-trip, delete-last, alias, normalization, events) plus serializer cases. Not wired into the app; W2 wires it. | — | none |
-| **W2** `[ ]` | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. | W1 | none |
+| **W2** ✅ | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. Built as §8.2. | W1 | none |
 | **W3** `[ ]` | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. | W2 | none |
 | **M1** `[ ]` | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. | — (parallel to W) | **additive only** |
 | **W4** `[ ]` | Export/import definition JSON + series CSV (§8.1). | W3 | none |
@@ -623,7 +649,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 → W3**, with **M1** alongside. Then **W4 / W5**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
@@ -649,11 +675,10 @@ panel renders through it.
 2. **Q2: Which action carries the market-index step?** It must be an existing action on the
    monthly growth clock, with no new `EventSeries` (§6.2). Resolve with a probe that shows
    the regold is additive-only before committing.
-3. **Q3: Capture every list, or only the active list?** Recommended: every list (W-D2).
-   Revisit only if a user builds watchlists with hundreds of paths.
-4. **Q4: Should the State checkbox mean "in the active watchlist"?** (W-D4.) The alternative
-   is to keep it as "charted" and add a separate ☆ for membership. That adds a second
-   control per row, which UC2 argues against.
+3. **Q3: Capture every list, or only the active list?** **Answered (12 Sep): every list
+   (W-D2).** Revisit only if a user builds watchlists with hundreds of paths.
+4. **Q4: Should the State checkbox mean "in the active watchlist"?** **Answered (12 Sep):
+   yes (W-D4).**
 5. **Q5: Index axis handling.** Should the `index` kind get a third axis bucket, or the
    right axis shared with rates, or should the chart gain a "rebase to 100 / % change"
    mode? Recommended: its own bucket, plus the per-entry override.

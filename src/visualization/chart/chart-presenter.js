@@ -45,12 +45,16 @@ export class ChartPresenter extends BaseComponent {
     this._view             = view;
     this._activePaths      = new Set();
     this._backfilledPaths  = new Set();  // active paths currently shown at snapshot resolution (R10.1)
-    this._fieldStore       = null;       // shared FieldSeriesStore for live buffering (R10.3)
+    this._fieldStore       = null;       // shared FieldSeriesStore, read to backfill on activation
+    this._liveAfter        = new Map();  // path → ms of the last backfilled point (see activatePath)
     this._onChipRemove     = null;       // chip ✕ callback (R7.3)
     this._drainExecEndMsgs = () => [];
   }
 
-  /** Inject the shared FieldSeriesStore so charted paths get full-res live buffers (R10.3). */
+  /**
+   * Inject the shared FieldSeriesStore. The chart only READS it, to backfill a path
+   * when it is activated; WatchCapture fills it (design 101 W2).
+   */
   set fieldStore(store) { this._fieldStore = store ?? null; }
 
   /** Callback (path) when an active-series chip's ✕ is clicked (R7.3). */
@@ -74,7 +78,7 @@ export class ChartPresenter extends BaseComponent {
       const x = document.createElement('button');
       x.className = 'wb-series-chip-x';
       x.textContent = '✕';
-      x.title = 'Remove from chart';
+      x.title = 'Hide from chart (stays in the watchlist)';
       x.addEventListener('click', () => this._onChipRemove?.(path));
       chip.append(label, x);
       host.appendChild(chip);
@@ -112,11 +116,18 @@ export class ChartPresenter extends BaseComponent {
 
       // Allow-list: read ONLY the active set from the snapshot (the hang fix).
       const data = {};
+      const ms   = new Date(msg.date).getTime();
       for (const path of this._activePaths) {
+        // WatchCapture appends synchronously while this queue drains a frame later, so
+        // a path activated mid-run was backfilled with points still waiting here.
+        const after = this._liveAfter.get(path);
+        if (after !== undefined) {
+          if (ms <= after) continue;
+          this._liveAfter.delete(path);
+        }
         const value = get(snap, path);
         if (typeof value === 'number' && isFinite(value)) {
           data[path] = value;
-          this._fieldStore?.append(path, msg.date, value);  // R10.3: full-res live buffer
           if (this._backfilledPaths.has(path)) this._setBackfilled(path, false); // live now (R10.1)
         }
       }
@@ -140,6 +151,7 @@ export class ChartPresenter extends BaseComponent {
   resetHistory() {
     this._view.resetHistory();
     this._backfilledPaths.clear();   // replay re-ingests live data, clearing any coarse badge
+    this._liveAfter.clear();
   }
 
   // ── Active set / watchlist / promote ──────────────────────────────────────────
@@ -176,12 +188,14 @@ export class ChartPresenter extends BaseComponent {
         this._view.addSnapshot(date, { [path]: value });
       }
       this._setBackfilled(path, backfilled && series.length > 0);
+      if (!backfilled && series.length > 0) this._liveAfter.set(path, new Date(series.at(-1).date).getTime());
     }
   }
 
   /** Remove `path` from the active set and drop its series from the chart. */
   deactivatePath(path) {
     this._activePaths.delete(path);
+    this._liveAfter.delete(path);
     this._setBackfilled(path, false);
     this._view.removeSeries?.(path);
     this._renderChips();
@@ -193,14 +207,16 @@ export class ChartPresenter extends BaseComponent {
   }
 
   /**
-   * Seed the chart from a scenario's watchlist on scenario load.
-   * @param {string[]} watchlists
+   * Make the active set exactly `paths`: the charted entries of the active watchlist
+   * (design 101 W2). Only the difference is touched, so a series already on the chart
+   * keeps its data, and a newly charted one is backfilled from the store.
+   * @param {string[]} paths
    * @param {import('../state/field-series-store.js').FieldSeriesStore} [fieldStore]
    */
-  seedWatchlist(watchlists, fieldStore = null) {
-    for (const path of (watchlists ?? [])) {
-      this.activatePath(path, fieldStore);
-    }
+  syncActivePaths(paths, fieldStore = null) {
+    const want = new Set(paths ?? []);
+    for (const path of [...this._activePaths]) if (!want.has(path)) this.deactivatePath(path);
+    for (const path of want) if (!this._activePaths.has(path)) this.activatePath(path, fieldStore);
   }
 
   // ── Annotations / passthrough ───────────────────────────────────────────────────

@@ -44,8 +44,8 @@ export class StatePanelView extends BaseComponent {
     this._executionGraph    = null;
     this._metricHistory     = new Map();
     this._fieldSeriesStore  = null;
-    this._isPathCharted     = () => false;
-    this._onChartToggle     = null;
+    this._isPathWatched     = () => false;
+    this._onWatchToggle     = null;
     this._stateCollapsed    = true;
     this._filterText        = '';
     // Design 101 §9.5: text leaves (ids, symbols, labels, config flags) are hidden
@@ -136,14 +136,40 @@ export class StatePanelView extends BaseComponent {
     this._fieldSeriesStore = store ?? null;
   }
 
-  /** Inject a predicate (path) → bool telling whether a path is currently charted. */
-  set isPathCharted(fn) {
-    this._isPathCharted = fn ?? (() => false);
+  /**
+   * Inject a predicate (path) → bool: whether a path is in the active watchlist,
+   * which is what a row checkbox shows (design 101 W-D4).
+   */
+  set isPathWatched(fn) {
+    this._isPathWatched = fn ?? (() => false);
   }
 
-  /** Callback (path, shouldBeActive) when a row/header chart checkbox is toggled. */
-  set onChartToggle(fn) {
-    this._onChartToggle = fn ?? null;
+  /** Callback (path, shouldBeWatched) when a row/header checkbox is toggled. */
+  set onWatchToggle(fn) {
+    this._onWatchToggle = fn ?? null;
+  }
+
+  /** Callback (watchlistId) when the active-watchlist picker changes. */
+  set onWatchlistSelect(fn) {
+    this._onWatchlistSelect = fn ?? null;
+  }
+
+  /**
+   * Fill the "Checking adds to" picker (design 101 W2) with the lists as { id, name }
+   * and select the active one. With no lists it says so and is disabled: checking a
+   * row then creates a list.
+   */
+  setWatchlists(lists, activeId) {
+    const sel = document.getElementById('lsp-watchlist-select');
+    if (!sel) return;
+    sel.replaceChildren();
+    sel.disabled = !lists?.length;
+    if (!lists?.length) {
+      sel.add(new Option('none yet (checking creates one)', ''));
+      return;
+    }
+    for (const { id, name } of lists) sel.add(new Option(name, id));
+    sel.value = activeId ?? '';
   }
 
   // ── Simulation bus ────────────────────────────────────────────────────────────
@@ -226,6 +252,8 @@ export class StatePanelView extends BaseComponent {
     if (filter) filter.addEventListener('input', e => this.setFilter(e.target.value));
     const showText = document.getElementById('lsp-show-text');
     if (showText) showText.addEventListener('change', e => this.setShowText(e.target.checked));
+    const picker = document.getElementById('lsp-watchlist-select');
+    if (picker) picker.addEventListener('change', e => this._onWatchlistSelect?.(e.target.value));
 
     const header  = document.getElementById('stateSectionHeader');
     const content = document.getElementById('currentStateContent');
@@ -578,16 +606,16 @@ export class StatePanelView extends BaseComponent {
     return row;
   }
 
-  /** A checkbox bound to the chart active set for a single path. */
+  /** A checkbox bound to membership of the active watchlist for a single path. */
   _buildChartToggle(path) {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'lsp-chart-toggle';
-    cb.title = 'Show on chart';
-    cb.checked = this._isPathCharted(path);
+    cb.title = 'In the active watchlist (checking also charts it)';
+    cb.checked = this._isPathWatched(path);
     cb.addEventListener('click', e => e.stopPropagation());
     cb.addEventListener('change', () => {
-      this._onChartToggle?.(path, cb.checked);
+      this._onWatchToggle?.(path, cb.checked);
       this._refreshRows();   // keep parent tri-state + chart in sync
     });
     return cb;
@@ -1762,7 +1790,7 @@ export class StatePanelView extends BaseComponent {
       headerRow.appendChild(caret);
     }
 
-    if (this._onChartToggle && Array.isArray(descendantPaths) && descendantPaths.length > 0) {
+    if (this._onWatchToggle && Array.isArray(descendantPaths) && descendantPaths.length > 0) {
       headerRow.appendChild(this._buildSectionToggle(descendantPaths));
     }
 
@@ -1782,27 +1810,28 @@ export class StatePanelView extends BaseComponent {
     return headerRow;
   }
 
-  /** Tri-state checkbox that activates/deactivates every descendant path (R5). */
+  /** Tri-state checkbox that adds/removes every descendant path to the active watchlist (R5). */
   _buildSectionToggle(descendantPaths) {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'lsp-chart-toggle lsp-section-toggle';
-    cb.title = 'Show all of these on chart';
+    cb.title = 'Add all of these to the active watchlist';
 
-    const charted = descendantPaths.filter(p => this._isPathCharted(p)).length;
+    const charted = descendantPaths.filter(p => this._isPathWatched(p)).length;
     cb.checked       = charted === descendantPaths.length;
     cb.indeterminate = charted > 0 && charted < descendantPaths.length;
 
     cb.addEventListener('click', e => e.stopPropagation()); // don't fold the section
     cb.addEventListener('change', () => {
       const activate = cb.checked;
-      // Soft warning past a threshold — many mixed-type series hurt readability (D18).
+      // Soft warning past a threshold (D18): each added field is charted and captured,
+      // so many at once hurt readability and grow the capture set.
       if (activate && descendantPaths.length > 25 &&
-          !window.confirm(`Charting ${descendantPaths.length} series may be hard to read. Continue?`)) {
+          !window.confirm(`Adding ${descendantPaths.length} fields charts all of them and may be hard to read. Continue?`)) {
         cb.checked = false;
         return;
       }
-      for (const p of descendantPaths) this._onChartToggle?.(p, activate);
+      for (const p of descendantPaths) this._onWatchToggle?.(p, activate);
       this._refreshRows();   // reflect child checkboxes + tri-state after the batch
     });
     return cb;

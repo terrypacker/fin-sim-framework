@@ -278,20 +278,31 @@ test('resetHistory: active-path selection survives a rewind', () => {
   assert.ok(view.calls.addSnapshot.some(c => c.data['usSavingsAccount.balance'] === 9));
 });
 
-// ─── seedWatchlist ──────────────────────────────────────────────────────────────
+// ─── syncActivePaths (design 101 W2: the active list's charted entries) ─────────
 
-test('seedWatchlist: activates all paths in the list', () => {
+test('syncActivePaths: activates every listed path', () => {
   const { presenter } = makePresenter();
-  presenter.seedWatchlist(['metrics.netWorth', 'effectiveExchangeRates.USD_AUD']);
+  presenter.syncActivePaths(['metrics.netWorth', 'effectiveExchangeRates.USD_AUD']);
   assert.ok(presenter.isPathActive('metrics.netWorth'));
   assert.ok(presenter.isPathActive('effectiveExchangeRates.USD_AUD'));
 });
 
-test('seedWatchlist: no-op for null or empty list', () => {
+test('syncActivePaths: no-op for null or empty list on an empty chart', () => {
   const { presenter, controller } = makePresenter();
-  presenter.seedWatchlist(null);
-  presenter.seedWatchlist([]);
+  presenter.syncActivePaths(null);
+  presenter.syncActivePaths([]);
   assert.strictEqual(controller.getAllKeys().length, 0);
+});
+
+test('syncActivePaths: drops paths no longer listed, and leaves kept ones untouched', () => {
+  const { presenter, view } = makePresenter();
+  let backfills = 0;
+  const store = { getOrBackfill: () => { backfills++; return { series: [], backfilled: false }; } };
+  presenter.syncActivePaths(['a', 'b'], store);
+  presenter.syncActivePaths(['b', 'c'], store);
+  assert.deepStrictEqual(presenter.activePaths.sort(), ['b', 'c']);
+  assert.deepStrictEqual(view.calls.removeSeries, ['a']);
+  assert.strictEqual(backfills, 3, "'b' is not re-activated (and re-backfilled) by the second sync");
 });
 
 // ─── wireSimBus filtering ───────────────────────────────────────────────────────
@@ -304,9 +315,9 @@ test('wireSimBus: only EXECUTION_END(EVENT) messages are queued', () => {
   assert.strictEqual(presenter._drainExecEndMsgs().length, 0);
 });
 
-// ─── R10.3 live buffering into the shared FieldSeriesStore ───────────────────────
+// ─── The field store is filled by WatchCapture, only read here (design 101 W2) ───
 
-test('_doRender: appends active-path values to the injected field store (R10.3)', () => {
+test('_doRender: the chart no longer writes the field store', () => {
   const { presenter } = makePresenter();
   const appends = [];
   presenter.fieldStore = { append: (path, date, value) => appends.push([path, value]), getOrBackfill: () => ({ series: [], backfilled: false }) };
@@ -315,7 +326,24 @@ test('_doRender: appends active-path values to the injected field store (R10.3)'
   presenter.activatePath('usSavingsAccount.balance');
   bus.publish(makeExecEndMsg(D1, {}, { usSavingsAccount: { balance: 4242 } }));
   presenter._doRender();
-  assert.deepStrictEqual(appends, [['usSavingsAccount.balance', 4242]]);
+  assert.deepStrictEqual(appends, [], 'capture is WatchCapture\'s job, whatever is charted');
+});
+
+test('_doRender: points already backfilled from the live buffer are not plotted twice', () => {
+  // Capture appends synchronously, so the store can be ahead of this frame queue: a path
+  // charted mid-run is backfilled with D1, and the queued D1 message must not re-add it.
+  const { presenter, view } = makePresenter();
+  const store = { getOrBackfill: () => ({ series: [{ date: D1, value: 5 }], backfilled: false }) };
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish(makeExecEndMsg(D1, { netWorth: 5 }));   // queued, not yet drained
+  presenter.activatePath('metrics.netWorth', store);  // backfills D1 from the live buffer
+  bus.publish(makeExecEndMsg(D2, { netWorth: 6 }));
+  presenter._doRender();
+  const plotted = view.calls.addSnapshot
+    .filter(c => 'metrics.netWorth' in c.data)
+    .map(c => [new Date(c.date).getTime(), c.data['metrics.netWorth']]);
+  assert.deepStrictEqual(plotted, [[D1.getTime(), 5], [D2.getTime(), 6]]);
 });
 
 // ─── R10.1 coarse (backfilled) series badge ─────────────────────────────────────

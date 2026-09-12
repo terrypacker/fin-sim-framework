@@ -59,6 +59,8 @@ import { ConfigurationListComponent } from '../visualization/configuration/confi
 import { ScenarioTabPresenter }       from '../visualization/scenario/scenario-tab-presenter.js';
 import { StatePanelView }             from '../visualization/simulation/state-panel-view.js';
 import { FieldSeriesStore }           from '../visualization/state/field-series-store.js';
+import { WatchCapture }               from '../visualization/watchlist/watch-capture.js';
+import { WatchlistController }        from '../visualization/watchlist/watchlist-controller.js';
 import { SimulationAnimator }         from '../visualization/simulation/simulation-animator.js';
 import { ScenarioTabView }            from '../visualization/scenario/scenario-tab-view.js';
 import { JournalReportingService }    from '../finance/journal-reporting-service.js';
@@ -738,7 +740,6 @@ export class WorkbenchApp extends BaseComponent {
     // in-flight edits back into THIS scenario, even after the active pointer moves
     // to a different scenario on a switch (prevents cross-scenario holdings leak).
     this._loadedCfg = activeConfig;
-    this.scenario.watchlists = activeConfig?.watchlists ?? [];
     // A saved scenario can carry a value the compiler REJECTS rather than repairs — a
     // non-unit allocation mix is the one that happens (design 61 §12.2 Q3). That throw
     // escapes the whole boot path, leaving a blank page whose only diagnosis is a
@@ -807,32 +808,30 @@ export class WorkbenchApp extends BaseComponent {
       rateStateProvider: () => this.scenario?.sim?.state ?? null,
     });
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
-    this.chartPresenter.fieldStore = fieldStore;   // R10.3: full-res live buffering for charted paths
+    this.chartPresenter.fieldStore = fieldStore;   // read to backfill a path when it is charted
     this.chartPresenter.startViz();
 
-    // R9.0/D15: default the chart to a single net-worth line when the scenario has
-    // no saved watchlist (all pre-existing scenarios). netWorth is a real metric (R12).
-    if (!this.scenario.watchlists || this.scenario.watchlists.length === 0) {
-      this.scenario.watchlists = ['metrics.netWorth'];
-    }
-
-    const setCharted = (path, active) => {
-      if (active) {
-        this.chartPresenter.activatePath(path, fieldStore);
-        if (!this.scenario.watchlists.includes(path)) this.scenario.watchlists.push(path);
-      } else {
-        this.chartPresenter.deactivatePath(path);
-        this.scenario.watchlists = this.scenario.watchlists.filter(p => p !== path);
-      }
-      // Persist the watchlist into the active config so it survives save/reload.
-      const cfg = registry.scenarioService.getActive();
-      if (cfg) cfg.watchlists = [...this.scenario.watchlists];
-    };
-    this._statePanelView.isPathCharted = (path) => this.chartPresenter.isPathActive(path);
-    this._statePanelView.onChartToggle = setCharted;
-    // Chip ✕ removes the series and re-syncs the state-panel checkboxes (R7.3).
-    this.chartPresenter.onChipRemove = (path) => { setCharted(path, false); this._statePanelView.refresh(); };
-    this.chartPresenter.seedWatchlist(this.scenario.watchlists, fieldStore);
+    // Design 101 W2: the scenario's watchlists drive the chart (the active list's
+    // charted entries), full-resolution capture (every entry of every list), and the
+    // State panel checkboxes (membership of the active list). The model seeds
+    // "Overview" = [net worth] for a scenario with none (§5.4), replacing D15's seed.
+    this._watchCapture = new WatchCapture({ fieldStore });
+    this._watchCapture.wireSimBus(this.scenario.sim.bus);
+    this._watchlists = new WatchlistController({
+      cfg:        activeConfig,
+      chart:      this.chartPresenter,
+      fieldStore,
+      capture:    this._watchCapture,
+      statePanel: this._statePanelView,
+      bus:        this._wbShell?.runtime.bus ?? null,
+    });
+    this._statePanelView.isPathWatched     = (path) => this._watchlists.isWatched(path);
+    this._statePanelView.onWatchToggle     = (path, on) => this._watchlists.toggleWatched(path, on);
+    this._statePanelView.onWatchlistSelect = (id) => this._watchlists.selectList(id);
+    // Chip ✕ un-charts; the field stays watched and its checkbox stays checked (W-D5).
+    this.chartPresenter.onChipRemove = (path) => this._watchlists.uncharted(path);
+    if (this._wbShell) this._wbShell.runtime.watchlist = this._watchlists.facade();
+    this._watchlists.start();
 
     this.timelinePresenter = new TimelinePresenter({
       controller:    new TimelineController(),
@@ -1075,6 +1074,9 @@ export class WorkbenchApp extends BaseComponent {
     if (this._animator)         this._animator.destroy();
     if (this.timeControls)      this.timeControls.destroy();
     if (this.chartPresenter)  { this.chartPresenter.stopViz(); this.chartPresenter.destroy(); }
+    this._watchlists?.destroy();
+    this._watchCapture?.destroy();
+    if (this._wbShell) this._wbShell.runtime.watchlist = null;
     if (this.configGraphView)   this.configGraphView.destroy();
     if (this.configPresenter)   this.configPresenter.destroy();
     if (this.configList)        this.configList.destroy();
