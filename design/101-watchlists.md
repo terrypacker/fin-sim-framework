@@ -17,7 +17,8 @@ field row are built. The chart takes its kinds, labels and tooltip values from t
 stamped registry (§9.7). **W3 ✅ (12 Sep)**: the Watchlist panel is built (§5.5).
 **M1 ✅ (12 Sep)**: `marketIndex` and `securityIndex` are built. The step rides the period
 advances, and the regold is additive-only (§6.5). **W5 ✅ (12 Sep)**: the Securities and
-Holdings panels put a ☆ beside the values they can watch (§6.6).
+Holdings panels put a ☆ beside the values they can watch (§6.6). **W4 ✅ (12 Sep)**: lists
+export and import as a definition JSON, and the active list's series downloads as CSV (§8.3).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -644,6 +645,49 @@ decision each time.
   behaves the same way. On a user scenario, edits reach storage on the next save of any
   kind (`_persistUserScenarios` persists live records by reference).
 
+### 8.3 As built (W4, 12 Sep 2026)
+
+- **Where.** `src/visualization/watchlist/watchlist-io.js` is pure: `toDefinition`,
+  `parseDefinition`, `unresolvedPaths` and `buildSeriesCsv`. The Watchlist panel's ⇅
+  menu offers *Export "<list>" (JSON)*, *Export all lists (JSON)*, *Import lists (JSON)…*
+  and *Download series (CSV)*.
+- **Definition JSON.** `{ format: "finsim.watchlists", version: 1, exportedAt, watchlists:
+  [{ name, entries }] }`. It carries no ids, because ids are per scenario.
+  - Import also accepts anything with a `watchlists` array, so a scenario cfg (including
+    the legacy `string[]`) is read too.
+  - A wrong format, a newer version or a missing array gets a message saying which, and
+    changes nothing.
+- **Import.** `WatchlistModel.importLists` appends each list with a fresh id and makes the
+  first one active, firing one `import` event.
+  - It applies the same normalization and `metrics.<stateKey>` alias as a load.
+  - A clashing name becomes "Markets (imported)", then "(imported 2)". It is not "(2)",
+    because the picker already prints each list's size in parentheses.
+  - The report counts the imported lists and fields, and names every path absent from
+    this scenario's state at the current date, up to 12. Those entries are kept and show
+    muted (W3), as §8.1 asks. With no run loaded, the report says so instead of guessing.
+- **Series CSV.** `date, <one column per entry>, resolution`.
+  - There is one row per day, and the last value of a day wins. A blank cell means
+    nothing was captured that day; nothing is carried forward.
+  - `resolution` reads `full` when every value in the row came from the live capture,
+    `snapshot` when all came from `SimulationHistory` backfill (a field watched only
+    after the run), and `mixed` otherwise. The facade's `seriesWithResolution` is
+    `FieldSeriesStore.getOrBackfill`.
+  - Values are as stored in state, unconverted and at full precision. A currency
+    column's header names its currency: `US Stock · Balance (USD)`.
+  - Headers are the entry label, else the context label. Two equal headers get the path
+    appended. A formula-like text cell gets a leading apostrophe, because labels can
+    arrive in someone else's definition. The file carries a BOM.
+- **Verified.**
+  - `tests/unit/watchlist-io.test.mjs` (9 cases) and `tests/viz/watchlist-io-plugin.test.mjs`
+    (7 cases, through the real controller and `FieldSeriesStore`).
+  - The running app, International Retirement run to 2041. I intercepted the anchor
+    click so no file was saved, and imported through the real file input.
+  - The series CSV had 362 rows with `full`, `mixed` and `snapshot` all present, and
+    began with the bytes `EF BB BF`.
+  - Export all then import round-tripped. A foreign definition imported with its
+    `metrics.<stateKey>` aliased and its two missing paths muted and named. A bad file
+    was refused with a message.
+
 ### 8.2 Cost
 
 - **Simulation:** unchanged except for the §6 index (a handful of multiplies per period).
@@ -888,13 +932,13 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **W2** ✅ | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. Built as §8.2. | W1 | none |
 | **W3** ✅ | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. See §5.5. | W2 | none |
 | **M1** ✅ | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. See §6.5. | — (parallel to W) | **additive only** (verified) |
-| **W4** `[ ]` | Export/import definition JSON + series CSV (§8.1). | W3 | none |
+| **W4** ✅ | Export/import definition JSON + series CSV (§8.1). Browser-verified. See §8.3. | W3 | none |
 | **W5** ✅ | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). Index-level context labels. Browser-verified. See §6.6. | W2, M1 | none |
 | **M2** `[ ]` | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** |
 | **M3** `[ ]` | Retire the flow amounts (§7.1): remove the 27 finance `RecordMetricAction` emit sites, alias `metrics.monthly_expenses` → `monthlyExpenses`, keep saved watches of other retired keys muted, and update one test plus the golden action-coverage manifest. | Q1 ✅, M2 | **removals of `metrics.<flow key>` only** |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1 ✅** alongside. Then **W4 / W5 ✅**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1 ✅** alongside. Then **W4 ✅ / W5 ✅**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.
