@@ -120,8 +120,19 @@ export class McRunsPanel extends BaseComponent {
     this._sort        = 'metricAsc';
     this._failsOnly   = false;
     this._replaySeed  = null;
+    this._context     = null;
 
     this._renderIdle();
+  }
+
+  /**
+   * A line above the runs naming where they come from, e.g. a grid cell (design 100 §7).
+   * The same seed exists in every cell of a grid, so without it a run's seed does not say
+   * which world it is. Null clears it.
+   */
+  setContext(text) {
+    this._context = text ?? null;
+    if (this._runs.length) this._render();
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
@@ -170,6 +181,12 @@ export class McRunsPanel extends BaseComponent {
     wrapper.className = 'mc-runs-wrapper';
 
     if (this._replaySeed != null) wrapper.appendChild(this._buildReplayBadge());
+    if (this._context) {
+      const ctx = document.createElement('div');
+      ctx.className = 'mc-runs-context';
+      ctx.textContent = this._context;
+      wrapper.appendChild(ctx);
+    }
 
     const header = document.createElement('div');
     header.className = 'node-header';

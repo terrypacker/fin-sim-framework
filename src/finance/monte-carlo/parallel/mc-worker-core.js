@@ -23,6 +23,8 @@ import { summarizeSpendingForRun } from '../../spending-reporting/spending-distr
 import { createMcSampler, extractYearlyTimeSeries, MC_SAMPLER_CADENCE, computeNetWorthUsd, makeMcSeededRng }
   from '../mc-sampling.js';
 import { get, set }              from '../mc-param-paths.js';
+import { computePathShape }      from '../mc-sampling.js';
+import { runsToRows }            from '../mc-analysis.js';
 
 /**
  * The per-iteration Monte Carlo world, in one place, so the SERIAL loop and a WORKER
@@ -247,12 +249,57 @@ export function buildIterationRunner(ctx) {
 // returns that path's record. Mirrors `optimization/parallel/rollout-worker-core.js`.
 
 let _iter = null;
+let _ctx  = null;
 
 /** Rebuild the resident iteration runner from the pool's broadcast context. */
-export function initMcContext(ctx) { _iter = buildIterationRunner(ctx); }
+export function initMcContext(ctx) { _ctx = ctx; _iter = buildIterationRunner(ctx); }
 
-/** Run one iteration by index; returns `{ seed, params, result }`. */
-export function runMcIteration(i) {
+/**
+ * Run one task. A number is a batch iteration and returns `{ seed, params, result }`;
+ * a `{ cell, i }` pair is a grid task and returns that path's analysis row (design 100
+ * §7). One entry for both, so the browser and Node worker shells need no change.
+ */
+export function runMcIteration(payload) {
   if (!_iter) throw new Error('mc worker: initMcContext must run before runMcIteration');
-  return _iter.runIteration(i);
+  return typeof payload === 'number' ? _iter.runIteration(payload) : runGridTask(_iter, _ctx, payload);
+}
+
+// ── Grid cells (design 100 §7) ──────────────────────────────────────────────────
+
+/**
+ * The params for path `i` of grid cell `cell`: the cell's lever values written onto the
+ * base world, then the batch's usual perturbation.
+ *
+ * The overrides go on BEFORE `perturbParams`, and the grid runner has already disabled
+ * every sampled variable that is also an axis, so a draw can never overwrite the lever
+ * the cell exists to set. They are written with the same path-aware `set` the
+ * optimizer's `_applyCandidate` uses, so a lever means the same thing in a grid cell as
+ * in an Opt candidate.
+ */
+export function gridCellParams(ctx, cell, i) {
+  const base = structuredClone(ctx.base);
+  for (const [k, v] of Object.entries(ctx.cells[cell].overrides)) set(base, k, v);
+  return perturbParams(base, i, ctx.variables);
+}
+
+/**
+ * Run one grid task and reduce it to an analysis row (`runsToRows` shape plus `cell`).
+ *
+ * Reduced here, in the worker, not on the main thread. A grid is cells × paths, and
+ * shipping every path's yearly series and param bag back only to drop them is the
+ * memory problem design 100 §4 hit with spending. A row is everything the heatmap and
+ * the paired readout use (§7.2).
+ */
+export function runGridTask(iter, ctx, { cell, i }) {
+  const { seed, result } = iter.runIteration(i, gridCellParams(ctx, cell, i));
+  const [row] = runsToRows([{
+    seed,
+    scenarioFailed:      result.scenarioFailed,
+    outOfFundsDate:      result.outOfFundsDate,
+    finalNetWorthUsd:    result.finalNetWorthUsd,
+    afterTaxNetWorthUsd: result.afterTaxNetWorthUsd,
+    lifetimeRepairSpend: result.lifetimeRepairSpend ?? 0,
+    pathShape:           computePathShape(result.timeSeries),
+  }]);
+  return { cell, ...row };
 }

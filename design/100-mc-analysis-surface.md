@@ -1,7 +1,7 @@
 # 100 — The Monte Carlo analysis surface (in-app)
 
-**Status: PROPOSED (11 Sep 2026). Steps 1–3 BUILT (11 Sep 2026); step 4 needs its own
-design pass. Start at §9 when picking this up.**
+**Status: Steps 1–4 BUILT (11 Sep 2026). In-app checks and the end-of-design review are
+open. Start at §9 when picking this up.**
 
 ## 1. Problem
 
@@ -195,28 +195,160 @@ ordered list of `{ key, draws }`. The counts come from sampling each distributio
 with a counting stream, so a distribution added later is covered without a table to keep
 up to date.
 
-## 7. Step 4 — multi-lever grid (to be designed)
+## 7. Step 4 — multi-lever grid (DESIGNED 11 Sep 2026)
+
+**Decided with the user (11 Sep 2026):** the grid lives in the **MC tab**, and the first
+build covers **both modes** (deterministic and MC cells). §7.3 records the options that
+were weighed.
 
 The app has no 2-D grid. `GridSearchSolver` enumerates optimizer variables but scores
-each cell with one deterministic run; `sweep-scenario` varies one param on the command
-line. Sketch, to be refined before building:
+each cell with one deterministic run, serially on the main thread, and ranks them in a
+top-20 bar chart; `sweep-scenario` varies one param on the command line.
 
-- **Axes** come from the design 98 sweep surface (harvested rows), two at a time, each
-  with a value list.
-- **Deterministic cells first**: one run per cell on the worker pool, heatmap of end NW,
-  after-tax NW or failed/not. Fast, and it shows the shape (the sweep-scenario question,
-  in two dimensions).
-- **MC cells second**: small n per cell with common random numbers across cells, so
-  neighbouring cells are paired. The heatmap shows failure rate, and a cell's tooltip
-  shows the paired rescue counts against a chosen reference cell. The cost is roughly
-  cells × n × seconds-per-path ÷ worker speed-up, which must be shown before launching.
+### 7.1 What exists to build on
 
-Open: whether the grid lives in the MC tab or the Optimize tab, and how its runs relate
-to the baseline slot.
+| Piece | What it gives the grid | Gap |
+|---|---|---|
+| `McWorkerPool` + `mc-worker-core` | one broadcast context, index-seeded tasks, bit-identical to serial | a task is only an index `i`, so one context = one cell |
+| `IntlRetirementMcRunner._prepare` | the resolved base world (schema defaults → plan → balances → overrides) and variable list | none |
+| Opt harvest (`buildOptVariables`) | lever rows with value lists: ENUM `values`, INTEGER/CONTINUOUS `min/max/step` via `valuesForConfig` | none |
+| `summary.pairing`, `pairingMismatches`, `pairedRescues`, `pairedMetric` (step 3) | the paired reading of one cell against another | none |
+| `rollout-worker-pool` (optimizer) | a pool for deterministic rollouts | used only by the MPC cockpit, not the Opt tab |
+
+### 7.2 Proposed decisions
+
+1. **One engine, not two.** A grid is the MC worker pool with a task of `{ cell, i }`
+   instead of `i`. The context carries the base world once plus a small per-cell override
+   list, so the whole grid shards across workers in one pass and a slow cell does not
+   leave cores idle.
+   - **A deterministic cell is the same run with nothing sampled**: no enabled variables,
+     `mcSequenceRisk: false`, one path. It needs no second engine, and a deterministic cell
+     and an MC cell cannot disagree about how a lever is applied.
+   - **Invariant, tested:** the cell at the plan's own values reproduces the single run
+     (deterministic mode) and the MC tab's batch (MC mode, same n and config), exactly.
+     The sim is bit-deterministic, so an exact match is the test.
+2. **Axes come from the Opt harvest; noise comes from the MC config.** A lever is a list
+   of values to try, and that is what an Opt row already is. What varies inside a cell is
+   what the MC panel samples. Two rows are picked as axes, each with its value list.
+3. **Common random numbers by construction.** Every cell runs paths `0…n−1` from the same
+   variable list, so path i is the same world in every cell and any two cells are paired.
+   - **Trap:** an axis that is also an enabled MC variable would be overwritten by the
+     draw, and the axis would be inert. Axis keys are removed from sampling for the whole
+     grid, the same way in every cell (so pairing holds), and the header names them.
+   - Every cell gets a `summary.pairing`, and `pairingMismatches` runs against the
+     reference cell anyway, as a check the construction held.
+4. **Results: a heatmap plus a reference cell.**
+   - Deterministic mode colours by after-tax NW, with failed cells marked.
+   - MC mode colours by failure rate. Each cell shows its rate and path count.
+   - A reference cell (default: the cell at, or nearest to, the plan's values) is chosen
+     by clicking. Each cell's tooltip shows rescues, reverse rescues and the paired
+     after-tax delta against it, exactly as step 3 renders them.
+   - Never a mean of terminal wealth (§2.2).
+5. **A cell keeps rows, not time series.** `runsToRows` output per path (seed, failed,
+   NW, after-tax NW, CAGR, worst 5-yr, drawdown) is everything the heatmap and the paired
+   readout use. Keeping each path's ~45-point series for 25 cells × 200 paths is the
+   memory problem step 2 already hit. Mix and spending telemetry are never on in a grid.
+6. **Cost is shown before launch, then corrected live.**
+   - Before launch: cells × paths = runs, and a time estimate from a measured rate: the
+     last MC batch's paths per second on this plan if there is one, otherwise "measured
+     after the first runs".
+   - During the run: the ETA is re-estimated from completed tasks.
+   - Order of magnitude: about 0.5 s per path per core, so 5 × 5 cells × 200 paths is
+     about 5 minutes on 8 workers. Deterministic 5 × 5 is seconds.
+7. **Scanned, not searched.** Every cell runs. Pass/fail is not monotone along these axes
+   (tax-year, residency and age-gate interactions; `variant-grid.mjs` header), and a
+   non-monotone boundary is what a grid is for seeing.
+8. **Relation to the baseline slot:** none in the first cut. The grid has its own
+   reference cell, paired by construction. Pinning a grid cell as the MC tab's baseline
+   is a possible later link.
+
+### 7.3 For the user to decide
+
+- **Which tab.** Recommended: **the MC tab**, as a Grid mode beside the batch run. The
+  engine, the noise config, the pairing machinery and the paired readout all live there.
+  The Opt tab answers a different question ("the best candidate by a score"), and hosting
+  the grid there would mean the Opt tab reading the MC panel's config across tabs.
+  - Alternative: the Opt tab, where GRID with exactly two enabled axes already enumerates
+    the cells. That path gets a deterministic heatmap nearly free, but MC cells would
+    still need the MC config.
+- **First-cut scope.** Recommended: both modes in one build, since deterministic is MC
+  mode with n = 1 and nothing sampled. The alternative is deterministic only, then MC.
+
+### 7.4 Build order (once 7.3 is settled)
+
+1. `mc-worker-core`: a grid context (base + cell overrides + variables with the axis keys
+   disabled) and a `{ cell, i }` task. Unit tests: the plan-values cell equals the plain
+   batch, bit for bit, serial and sharded.
+2. A `McGridRunner` beside `IntlRetirementMcRunner`, reusing `_prepare`. It returns
+   `{ axes, cells: [{ values, rows, summary }] }`.
+3. The panel: two axis pickers (from the Opt harvest, each with an editable value list),
+   mode (deterministic / MC with n), the cost line, Run.
+4. The heatmap and the reference-cell tooltip. Viz tests in the style of
+   `mc-results-paired.test.mjs`.
+
+### 7.5 Step 4 BUILT (11 Sep 2026)
+
+- **Engine.**
+  - `mc-worker-core.js`: `gridCellParams(ctx, cell, i)` writes the cell's lever values
+    onto the base (the optimizer's `set`), then perturbs. `runGridTask` reduces the path
+    to a `runsToRows` row inside the worker.
+  - `runMcIteration(payload)` takes an index (a batch) or `{ cell, i }` (a grid), so
+    neither worker shell changed.
+  - `computePathShape` moved into `mc-sampling.js` so the worker core can use it without
+    importing the runner; the runner re-exports it.
+- **`mc-grid.js`** (pure): `GRID_MODES`, `MAX_AXIS_VALUES` (15), `nearestIndex`,
+  `cellIndexOf` (row-major, as `cartesianProduct`), `referenceCellOf`, and
+  `summarizeGridCell` (batch-shaped summary plus `pairing`).
+- **`McGridRunner`** extends `IntlRetirementMcRunner` and reuses `_prepare`.
+  - Deterministic mode disables every variable, sets `mcSequenceRisk: false`, and runs
+    one path.
+  - MC mode disables only axis keys and reports them as `removedFromSampling`.
+  - Mix and spending are forced off. `MonteCarloController.runGrid` runs it on the tab's
+    pool.
+- **Panel (MC tab).**
+  - A Batch / Grid toggle. Grid mode offers:
+    - axis pickers from the Opt harvest, grouped as the Opt panel groups them;
+    - typed value editors (a checkbox per ENUM value; min / max / step for numbers);
+    - the plan value under each picker;
+    - a cells mode select.
+  - The cost line reads "cells × paths = runs", with a time estimate from the last run's
+    measured ms per path (spending runs excluded). It also names axes that will leave
+    sampling. The same line shows what stops a run.
+  - During a run the status line shows a live ETA.
+- **Results.** `McResultsPanel.showGrid`:
+  - the heatmap is a table, one hue, and every cell prints its value;
+  - the plan's values are marked in the headers, and the reference cell is outlined;
+  - hover shows paired counts against the reference;
+  - clicking a cell reads it against the reference with step 3's paired blocks and
+    side-by-side table (worded "the reference" / "this cell");
+  - "Make reference" moves the outline.
+- **Tests:** `tests/unit/mc-grid-runner.test.mjs` (MGR-1…6):
+  - the plan-values cell equals the MC batch (MC mode) and the single run
+    (deterministic), bit for bit;
+  - a sampled axis leaves sampling, stays live, and cells stay paired;
+  - sharded equals serial.
+
+  Also `tests/viz/mc-grid.test.mjs` (config panel, heatmap, presenter wiring).
+
+**Found while building:**
+- **An Opt lever can have no plan value.** `rothConversionStartYear` is null on the
+  default plan. The first grid tests used it and passed with `undefined` and `NaN` as
+  axis values, so an inert axis did not fail anything. The tests now require a plan
+  value. In the app, such a lever shows no plan marker and the reference is "nearest"
+  rather than exact.
+- **ENUM plan values compared by `===`.** `spendingStrategy`'s value is an array, so no
+  cell matches the plan exactly. The panel says the reference is the nearest cell.
+  Harmless, but a list-valued lever cannot be marked as the plan's value yet.
+
+**Not in the first cut:**
+- the grid is not carried across a rebuild (the batch result and baseline are);
+- no cell-to-baseline link (§7.2.8);
+- no frontier readout (`variant-grid`'s `last-passing`).
 
 ## 8. Open questions
 
-1. Does the baseline slot survive a scenario switch? **Resolved: no** (step 3). It is
+1. **REVIEW AT THE END**, once the user has used the step 3 UI. Does the baseline slot
+   survive a scenario switch? **Built as: no** (step 3). It is
    keyed to the scenario id, like the result carry. A lever tried as a copy of the plan
    therefore cannot be compared against the original in the app yet. If that is wanted,
    the guard already makes it safe; only the label would need to name both scenarios.
@@ -231,17 +363,36 @@ to the baseline slot.
 a baseline, change one lever's centre (not its spread), and run again. The section should
 render paired. Then set that lever's sd to 0 and run: the banner should name it.
 
-**Next: step 4 (§7) needs a design pass before code.** Open questions: which tab it lives
-in, deterministic cells vs MC cells, and the cost estimate shown before launch. Step 3's
-`pairingMismatches` and `summary.pairing` are what an MC-cell grid would use to check
-that neighbouring cells are paired.
+**Steps 1–4 are built (§3, §4, §5, §7.5). Neither step 3 nor step 4 has been exercised on
+a real plan in the app yet.** First checks:
+- **Step 3:** keep a baseline, change one lever's centre, and run: paired. Set its sd to
+  0 and run: the banner names it.
+- **Step 4:** a deterministic 3 × 3 grid on two levers, then the same grid in MC mode
+  at small n. The cell at the plan's values should match a plain batch at the same n,
+  and the cost line's estimate should be close to the real time.
+
+**Review at the end of design 100** (after the user has used the UI):
+- §8 Q1: should the baseline survive a scenario switch, so a copy of the plan can be
+  compared against the original?
 
 **What step 2 found on a real plan (11 Sep 2026, in the app, 40 paths, mix + spending):**
-- **Design 89's classification list is behind.** The unclassified banner named
-  `US_PERIOD_ADVANCE`, `AU_PERIOD_ADVANCE` and `POOL_FLOW_APPLY` on every path, and
-  UNCLASSIFIED was the largest category by value. Design 97's pool flows were never added
-  to design 89's classification list, and period-advance entries land there too. Fix this
-  in design 89's classification before reading spending totals on a pools plan.
+- **Design 89's classification list was behind. FIXED 11 Sep 2026.** The unclassified
+  banner named `US_PERIOD_ADVANCE`, `AU_PERIOD_ADVANCE` and `POOL_FLOW_APPLY` on every
+  path, and UNCLASSIFIED was the largest category. Measured on one path of the pools
+  plan, by reducer:
+  - **~80%: `PoolFlowReducer` stamping `state.liquidityPools[id].balance`.** It is a
+    per-pool readout of accounts the cube already counts, so its falls were the same money
+    counted twice. `spending-cube.js` now skips `liquidityPools.*`
+    (`DERIVED_BALANCE_PREFIXES`).
+  - **~17%: `POOL_FLOW_APPLY` debiting brokerage accounts.** Now INTERNAL.
+  - **The rest: debits made directly on the period advance.** These are now classified
+    by the journal entry's reducer: Bond Price Adjust and Equity Return are REVALUATION;
+    Bond Maturity and Bond Ladder are INTERNAL. An unlisted reducer still lands in
+    UNCLASSIFIED.
+
+  After the fix the same path has nothing in UNCLASSIFIED, and the §7(a) totality check
+  holds. None of this money was tier 1, so the spending totals were right before the fix.
+  Tests: `tests/unit/spending-cube.test.mjs` CLS-8, CLS-9, CUBE-7.
 - **"Went short" and the failure rate disagreed** by one path (25% vs 22.5%). Design 89
   §20.5 found them identical on its reference plan. The panel now shows the gap; the cause
   is not yet traced (a path that ran short and recovered is the likely one).

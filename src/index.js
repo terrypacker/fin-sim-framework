@@ -180,12 +180,14 @@ import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-re
 import { createReportApis, apiFor, runReport } from './finance/journal-reporting/run-report.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
-import { computePathShape, summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
+import { gridCellRuns, McGridRunner } from './finance/monte-carlo/mc-grid-runner.js';
+import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
-import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng } from './finance/monte-carlo/mc-sampling.js';
-import { perturbParams, samplingSignature, buildIterationRunner, initMcContext, runMcIteration } from './finance/monte-carlo/parallel/mc-worker-core.js';
+import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng, computePathShape } from './finance/monte-carlo/mc-sampling.js';
+import { perturbParams, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
 import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
@@ -512,6 +514,7 @@ import { GraphNodeLineage } from './visualization/graph-builder/graph-node-linea
 import { groupMergeTargets, routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
 import { fmtCompact, fmtWhole } from './visualization/money-format.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
+import { formatAxisValue, formatDuration } from './visualization/monte-carlo/mc-grid-format.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { flattenParams, buildParamStats, paramRowsForRun, fmtParamValue, fmtParamDelta } from './visualization/monte-carlo/mc-run-params.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -1205,6 +1208,14 @@ export const Finance = {
   failureRate,
   failureByBand,
   failureDrivers,
+  gridCellRuns,
+  McGridRunner,
+  GRID_MODES,
+  MAX_AXIS_VALUES,
+  nearestIndex,
+  cellIndexOf,
+  referenceCellOf,
+  summarizeGridCell,
   get,
   set,
   makeMcSeededRng,
@@ -1213,6 +1224,8 @@ export const Finance = {
   buildIterationRunner,
   initMcContext,
   runMcIteration,
+  gridCellParams,
+  runGridTask,
   browserMcSpawn,
   McWorkerPool,
   rollForwardWithControls,
@@ -1977,6 +1990,8 @@ export const Visualization = {
   fmtCompact,
   fmtWhole,
   McConfigPanel,
+  formatAxisValue,
+  formatDuration,
   McResultsPanel,
   flattenParams,
   buildParamStats,

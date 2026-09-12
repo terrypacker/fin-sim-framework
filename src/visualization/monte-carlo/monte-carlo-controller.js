@@ -9,6 +9,7 @@
  */
 
 import { IntlRetirementMcRunner }     from '../../finance/monte-carlo/intl-retirement-mc-runner.js';
+import { McGridRunner }               from '../../finance/monte-carlo/mc-grid-runner.js';
 import { IntlRetirementMcConfig }     from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { ServiceRegistry }             from '../../services/service-registry.js';
 import { McWorkerPool }                from '../../finance/monte-carlo/parallel/mc-worker-pool.js';
@@ -71,6 +72,25 @@ export class MonteCarloController {
     const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
     const runner = new IntlRetirementMcRunner({
       n, mcConfig, simStart, simEnd, cfgTemplate, mix, spending, workerPool: this._workerPool(),
+    });
+    return runner.run(baseParams, onProgress);
+  }
+
+  /**
+   * Run a lever grid (design 100 §7) on the same pool and template as a batch.
+   *
+   * @param {object} opts  as `runMonteCarlo`, plus:
+   * @param {Array}  opts.axes  `[{ paramKey, label, values }]`, one or two
+   * @param {'mc'|'deterministic'} opts.mode
+   * @returns {Promise<object>} see `McGridRunner.run`
+   */
+  async runGrid({
+    simStart, simEnd, n = 100, mcConfig = new IntlRetirementMcConfig(), baseParams = {},
+    axes, mode, onProgress,
+  }) {
+    const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
+    const runner = new McGridRunner({
+      n, mcConfig, simStart, simEnd, cfgTemplate, axes, mode, workerPool: this._workerPool(),
     });
     return runner.run(baseParams, onProgress);
   }

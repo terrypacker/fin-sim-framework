@@ -13,6 +13,7 @@ import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
 import { initEChartWhenReady } from '../components/echarts-init.js';
 import { fmtCompact, fmtWhole } from '../money-format.js';
+import { formatAxisValue } from './mc-grid-format.js';
 import {
   runsToRows, failureByBand, failureDrivers, RETURN_BAND_EDGES,
   pairingMismatches, pairedRescues, pairedMetric, failureRate,
@@ -122,6 +123,7 @@ const METRIC_LABELS = {
  *   clearResults()             — restore idle placeholder
  *   onMetricChange             — callback(metric) fired when the user switches metrics
  *   onKeepBaseline / onClearBaseline — the header's baseline button
+ *   showGrid(grid)             — a lever grid instead of a batch (design 100 §7)
  */
 export class McResultsPanel extends BaseComponent {
   constructor(containerEl) {
@@ -148,12 +150,17 @@ export class McResultsPanel extends BaseComponent {
     this._mixData         = null;
     this._mixClass        = null;
     this._baseline        = null;
+    this._grid            = null;   // design 100 §7
+    this._gridRef         = 0;      // reference cell index
+    this._gridSel         = null;   // cell being read against it
 
     /** Callback fired when the user toggles metrics: onMetricChange(metric) */
     this.onMetricChange = null;
     /** Header baseline button: pin this batch / clear the pinned one. */
     this.onKeepBaseline  = null;
     this.onClearBaseline = null;
+    /** Grid: onGridCellSelected({ ref, sel, shown }) — the cell being read changed. */
+    this.onGridCellSelected = null;
 
     this._renderIdle();
   }
@@ -187,6 +194,7 @@ export class McResultsPanel extends BaseComponent {
     if (this._mixChart)    { this._mixChart.dispose();       this._mixChart    = null; }
     this._mixDiv  = null;
     this._mixData = null;
+    this._grid    = null;
     if (this._wrapperEl)   { this._wrapperEl.remove();       this._wrapperEl   = null; }
     this._fanDataByMetric  = {};
     this._histDataByMetric = {};
@@ -378,6 +386,226 @@ export class McResultsPanel extends BaseComponent {
     }
   }
 
+  // ── Lever grid (design 100 §7) ────────────────────────────────────────────────
+
+  /**
+   * A lever grid in place of a batch: the heatmap, then the selected cell read against
+   * the reference cell with step 3's paired blocks.
+   *
+   * The heatmap is an HTML table, not a chart. There are at most 15 × 15 cells, each must
+   * be clickable and carry its own number, and a table is its own accessible view.
+   * Shading is one hue, light to dark, and never the only encoding.
+   */
+  showGrid(grid, { ref = null, sel = null } = {}) {
+    this._destroyCharts();
+    this._grid    = grid;
+    this._gridRef = ref ?? grid?.referenceCell?.index ?? 0;
+    this._gridSel = sel;
+    this._renderGrid();
+    this._emitGridSelection();
+  }
+
+  /**
+   * Tell the presenter which cell is being read, so the Runs panel can list that cell's
+   * paths: the selected cell, or the reference when nothing is selected.
+   */
+  _emitGridSelection() {
+    if (!this._grid) return;
+    this.onGridCellSelected?.({ ref: this._gridRef, sel: this._gridSel, shown: this._gridSel ?? this._gridRef });
+  }
+
+  _renderGrid() {
+    const g = this._grid;
+    if (this._wrapperEl) { this._wrapperEl.remove(); this._wrapperEl = null; }
+    this._container.innerHTML = '';
+    if (!g?.cells?.length) { this._renderIdle(); return; }
+
+    const det = g.mode === 'deterministic';
+    const [rowAxis, colAxis] = g.axes;
+    const ref = g.cells[this._gridRef];
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mc-results-wrapper mc-grid-results';
+    this._wrapperEl = wrapper;
+
+    const header = document.createElement('div');
+    header.className = 'mc-results-header';
+    header.textContent = `Grid — ${rowAxis.values.length} × ${colAxis ? colAxis.values.length : 1} cells · `
+      + (det ? 'one deterministic run each' : `${g.n} paths each`);
+    wrapper.appendChild(header);
+
+    if (g.removedFromSampling?.length) {
+      wrapper.appendChild(noteEl(`Not sampled in this grid, because they are axes: ${g.removedFromSampling.join(', ')}.`));
+    }
+    if (g.referenceCell && !g.referenceCell.exact) {
+      wrapper.appendChild(noteEl('No cell sits exactly on the plan\'s values, so the reference starts at the nearest one.'));
+    }
+
+    wrapper.appendChild(this._buildGridTable(g, det, ref));
+    wrapper.appendChild(noteEl(det
+      ? 'Each cell: after-tax net worth at the end of its one run; ✗ marks a run that failed. Darker is more.'
+      : 'Each cell: the share of its paths that failed; darker is higher, relative to the worst cell. '
+        + 'Every cell runs the same worlds, so any two cells compare path by path.'));
+    wrapper.appendChild(this._buildGridDetail(g, ref));
+    this._container.appendChild(wrapper);
+  }
+
+  _gridCellLabel(g, index) {
+    const [rowAxis, colAxis] = g.axes;
+    const v = g.cells[index].values;
+    return `${rowAxis.label} ${formatAxisValue(v[0])}`
+      + (colAxis ? `, ${colAxis.label} ${formatAxisValue(v[1])}` : '');
+  }
+
+  _buildGridTable(g, det, ref) {
+    const [rowAxis, colAxis] = g.axes;
+    const metric = (c) => (det ? c.summary.medianAfterTaxNW : c.summary.failureRate);
+    const vals = g.cells.map(metric).filter(v => v != null && Number.isFinite(v));
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    // A failure rate shades from zero, so a cell where nothing failed stays blank. Wealth
+    // shades across the grid's own range, since its zero is not an interesting point.
+    const shade = (v) => {
+      if (v == null || !Number.isFinite(v)) return 0;
+      if (det) return Math.round(10 + 50 * (hi > lo ? (v - lo) / (hi - lo) : 1));
+      return v > 0 && hi > 0 ? Math.round(10 + 50 * (v / hi)) : 0;
+    };
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-grid-table-wrap';
+    const table = document.createElement('table');
+    table.className = `mc-grid-table mc-grid-table--${det ? 'det' : 'mc'}`;
+
+    const colValues = colAxis ? colAxis.values : [null];
+    const thead = document.createElement('thead');
+    // The column axis is named in a row of its own, spanning its values. In the corner it
+    // set the width of the row-header column, and a long lever name pushed every cell off
+    // to the right.
+    if (colAxis) {
+      const axisRow = document.createElement('tr');
+      axisRow.appendChild(document.createElement('th'));
+      const title = document.createElement('th');
+      title.className = 'mc-grid-axis-title';
+      title.colSpan = colValues.length;
+      title.textContent = `${colAxis.label} →`;
+      axisRow.appendChild(title);
+      thead.appendChild(axisRow);
+    }
+    const headRow = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.className = 'mc-grid-corner';
+    corner.textContent = `${rowAxis.label} ↓`;
+    headRow.appendChild(corner);
+    for (const v of colValues) {
+      const th = document.createElement('th');
+      th.textContent = colAxis ? formatAxisValue(v) : (det ? 'After-tax NW' : 'Failure rate');
+      if (colAxis && v === g.planValues?.[1]) { th.classList.add('mc-grid-plan'); th.title = 'The plan\'s value'; }
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const body = document.createElement('tbody');
+    rowAxis.values.forEach((rv, r) => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.textContent = formatAxisValue(rv);
+      if (rv === g.planValues?.[0]) { th.classList.add('mc-grid-plan'); th.title = 'The plan\'s value'; }
+      tr.appendChild(th);
+      colValues.forEach((_, c) => {
+        const index = r * colValues.length + c;
+        const s = g.cells[index].summary;
+        const failed = det && s.failures > 0;
+        const td = document.createElement('td');
+        td.className = 'mc-grid-cell';
+        td.dataset.cell = String(index);
+        td.style.setProperty('--shade', `${shade(metric(g.cells[index]))}%`);
+        td.textContent = det ? `${fmtK(s.medianAfterTaxNW)}${failed ? ' ✗' : ''}` : fmtPct(s.failureRate);
+        if (failed) td.classList.add('mc-grid-cell--failed');
+        if (index === this._gridRef) td.classList.add('mc-grid-cell--ref');
+        if (index === this._gridSel) td.classList.add('mc-grid-cell--sel');
+        td.title = this._gridCellTitle(g, index, det, ref.rows);
+        td.addEventListener('click', () => { this._gridSel = index; this._renderGrid(); this._emitGridSelection(); });
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  /** The hover text: the cell, its number, and its paired reading against the reference. */
+  _gridCellTitle(g, index, det, refRows) {
+    const s = g.cells[index].summary;
+    const lines = [
+      this._gridCellLabel(g, index),
+      det ? `after-tax NW ${fmtMoneyOrDash(s.medianAfterTaxNW)}${s.failures ? ' · the run failed' : ''}`
+          : `failure ${fmtPct(s.failureRate)} (${s.failures} of ${s.n} paths)`,
+    ];
+    if (index === this._gridRef) {
+      lines.push('the reference cell');
+    } else {
+      const rows = g.cells[index].rows;
+      const pm = pairedMetric(refRows, rows, 'afterTaxNW');
+      if (det) {
+        lines.push(`vs reference: after-tax NW ${fmtSignedMoney(pm.p50)}`);
+      } else {
+        const pr = pairedRescues(refRows, rows);
+        lines.push(`vs reference: ${pr.rescues} rescued, ${pr.reverseRescues} reverse, `
+          + `paired Δ P50 ${fmtSignedMoney(pm.p50)}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /** The selected cell against the reference, or a hint when nothing is selected. */
+  _buildGridDetail(g, ref) {
+    const section = document.createElement('div');
+    section.className = 'mc-ab-section mc-grid-detail';
+    const head = document.createElement('div');
+    head.className = 'mc-ab-head';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    head.appendChild(label);
+    section.appendChild(head);
+
+    const sel = this._gridSel;
+    if (sel == null || sel === this._gridRef) {
+      label.textContent = `Reference — ${this._gridCellLabel(g, this._gridRef)}`;
+      section.appendChild(noteEl('Click a cell to read it against the reference (outlined). '
+        + '"Make reference" moves the outline.'));
+      return section;
+    }
+
+    label.textContent = `${this._gridCellLabel(g, sel)} vs reference ${this._gridCellLabel(g, this._gridRef)}`;
+    const make = document.createElement('button');
+    make.className = 'mc-metric-btn mc-grid-make-ref';
+    make.textContent = 'Make reference';
+    make.addEventListener('click', () => {
+      this._gridRef = sel;
+      this._gridSel = null;
+      this._renderGrid();
+      this._emitGridSelection();
+    });
+    head.appendChild(make);
+
+    const cellB = g.cells[sel];
+    // Paired by construction, and checked anyway: the construction is exactly the kind of
+    // thing that breaks quietly (design 100 §6).
+    const mismatches = pairingMismatches(ref.summary.pairing, cellB.summary.pairing);
+    if (mismatches.length) {
+      const banner = document.createElement('div');
+      banner.className = 'mc-ab-banner';
+      banner.textContent = `⚠ Not paired: ${mismatches.join('; ')}.`;
+      section.appendChild(banner);
+    } else {
+      section.append(...this._buildPairedBlocks(ref.rows, cellB.rows, { a: 'the reference', b: 'this cell' }));
+    }
+    section.appendChild(this._buildSideBySideTable(ref.summary, ref.rows, cellB.summary, cellB.rows,
+      { aName: 'Reference', bName: 'This cell' }));
+    return section;
+  }
+
   /** "Keep as baseline", or — when this batch IS the baseline — a pressed "Baseline ✕". */
   _buildBaselineButton(runs) {
     const isBaseline = !!this._baseline && this._baseline.result?.runs === runs;
@@ -441,24 +669,27 @@ export class McResultsPanel extends BaseComponent {
     return section;
   }
 
-  /** Rescue counts, then the paired after-tax NW delta. */
-  _buildPairedBlocks(aRows, bRows) {
+  /**
+   * Rescue counts, then the paired after-tax NW delta. `names` words the two arms: a
+   * baseline and this run in the batch view, the reference and a cell in the grid.
+   */
+  _buildPairedBlocks(aRows, bRows, names = { a: 'the baseline', b: 'this run' }) {
     const r = pairedRescues(aRows, bRows);
     const blocks = [
       badgeGrid([
         { label: 'Reverse Rescues', value: String(r.reverseRescues),
           cls: r.reverseRescues ? 'mc-badge-value--failure' : undefined,
-          title: 'Worlds that survived the baseline and fail in this run.' },
+          title: `Worlds that survived ${names.a} and fail in ${names.b}.` },
         { label: 'Rescues', value: String(r.rescues),
           cls: r.rescues ? 'mc-badge-value--success' : undefined,
-          title: 'Worlds that failed in the baseline and survive in this run.' },
+          title: `Worlds that failed in ${names.a} and survive in ${names.b}.` },
         { label: 'Fail in Both',    value: String(r.both) },
         { label: 'Survive in Both', value: String(r.neither) },
       ]),
     ];
     blocks[0].classList.add('mc-ab-rescues');
     blocks.push(noteEl(r.reverseRescues
-      ? `${r.reverseRescues} world(s) that survived the baseline fail here: state-dependent harm to explain, `
+      ? `${r.reverseRescues} world(s) that survived ${names.a} fail here: state-dependent harm to explain, `
         + 'not noise to average away.'
       : r.rescues
         ? `No world got worse. On survival the change weakly dominates across these ${r.n} paths.`
@@ -468,7 +699,7 @@ export class McResultsPanel extends BaseComponent {
     if (pm.n) {
       const grid = badgeGrid([
         { label: 'Ahead (after-tax NW)',  value: String(pm.wins),
-          title: 'Worlds where this run ends with more after-tax net worth than the baseline.' },
+          title: `Worlds where ${names.b} ends with more after-tax net worth than ${names.a}.` },
         { label: 'Behind (after-tax NW)', value: String(pm.losses),
           cls: pm.losses ? 'mc-badge-value--warning' : undefined },
         { label: 'Paired Δ P10', value: fmtSignedMoney(pm.p10) },
@@ -477,7 +708,7 @@ export class McResultsPanel extends BaseComponent {
       ]);
       grid.classList.add('mc-ab-delta');
       blocks.push(grid, noteEl(
-        `Percentiles of each world's own difference (this run − baseline), not of either batch's level. `
+        `Percentiles of each world's own difference (${names.b} − ${names.a}), not of either arm's level. `
         + `Median relative change ${fmtSignedPct(pm.medianRel)}`
         + (pm.ties ? `; ${pm.ties} tied` : '')
         + (pm.missing ? `; ${pm.missing} path(s) had no after-tax value` : '') + '.'));
@@ -486,7 +717,7 @@ export class McResultsPanel extends BaseComponent {
   }
 
   /** Both batches' headline numbers side by side, with the change. Shown paired or not. */
-  _buildSideBySideTable(aSummary, aRows, bSummary, bRows) {
+  _buildSideBySideTable(aSummary, aRows, bSummary, bRows, { aName = 'Baseline', bName = 'This run' } = {}) {
     const rows = [
       { name: 'Failure rate', a: failureRate(aRows), b: failureRate(bRows), pct: true, lowerIsBetter: true },
       { name: 'P10 Net Worth', a: aSummary?.p10, b: bSummary?.p10 },
@@ -501,7 +732,7 @@ export class McResultsPanel extends BaseComponent {
     const table = document.createElement('table');
     table.className = 'mc-shape-table mc-ab-table';
     table.innerHTML = '<thead><tr><th class="mc-shape-name">Side by side</th>'
-      + '<th>Baseline</th><th>This run</th><th>Change</th></tr></thead>';
+      + `<th>${aName}</th><th>${bName}</th><th>Change</th></tr></thead>`;
     const body = document.createElement('tbody');
     for (const r of rows) {
       const d = (r.a != null && r.b != null) ? r.b - r.a : null;

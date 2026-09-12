@@ -193,6 +193,8 @@ export class WorkbenchApp extends BaseComponent {
     this._mcResultCarry        = null;
     // { baseline, scenarioId } — the MC baseline slot (design 100 §5), carried the same way.
     this._mcBaselineCarry      = null;
+    // { state, scenarioId } — the MC lever grid (design 100 §7), carried the same way.
+    this._mcGridCarry          = null;
 
     // App-lifetime event bus — shared across all app-level services and components.
     this.appBus = new EventBus();
@@ -937,6 +939,12 @@ export class WorkbenchApp extends BaseComponent {
     } else {
       this._mcResultCarry = null;
     }
+    // After the batch, so a grid that was on screen is what shows again.
+    if (this._mcGridCarry?.scenarioId === (activeConfig?.id ?? null)) {
+      this.mcPresenter.restoreGrid(this._mcGridCarry.state, this._activeReplaySeed());
+    } else {
+      this._mcGridCarry = null;
+    }
 
     // ── Scenario Compare ─────────────────────────────────────────────────────
     const comparePaneEl = this._paneHost('scenarioComparePane');
@@ -1026,6 +1034,8 @@ export class WorkbenchApp extends BaseComponent {
     if (this.mcPresenter) {
       const baseline = this.mcPresenter.getBaseline?.() ?? null;
       this._mcBaselineCarry = baseline ? { baseline, scenarioId: this._loadedCfg?.id ?? null } : null;
+      const gridState = this.mcPresenter.getGridState?.() ?? null;
+      this._mcGridCarry = gridState ? { state: gridState, scenarioId: this._loadedCfg?.id ?? null } : null;
     }
 
     // Harvest in-flight free-field domain edits (currency, holdings, names, …)
