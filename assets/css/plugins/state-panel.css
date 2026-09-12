@@ -104,6 +104,25 @@
 }
 .lsp-panel-filter::placeholder { color: var(--text-muted); }
 
+/* Active-watchlist picker (design 101 W2): names the list a checkbox adds to. */
+.lsp-watchlist-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.lsp-watchlist-picker select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  background: var(--bg-panel2, #111);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
 /* "Show text fields" toggle (design 101 §9.5). */
 .lsp-text-toggle {
   display: flex;

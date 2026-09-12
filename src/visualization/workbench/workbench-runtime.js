@@ -16,6 +16,9 @@ export const WB_EVENTS = {
   // reference, so without this the values change under it and the editors keep
   // rendering the stale ones.
   PARAMS_CHANGED:             'workbench.scenario.params.changed',
+  // The active scenario's watchlists changed (design 101 W-D7). Payload:
+  // { reason, watchlistId, path? }; reason 'load' follows a scenario (re)load.
+  WATCHLIST_CHANGED:          'workbench.watchlist.changed',
 };
 
 /**
@@ -35,6 +38,10 @@ export class WorkbenchRuntime {
 
     this._simAdapter = null;    // set by WorkbenchShell after scenario is ready
     this._paneHosts  = new Map();   // see paneHost()
+
+    // The loaded scenario's watchlists (design 101 §8): { has, add, remove, active }.
+    // Re-assigned on every scenario load, so read it at call time, never cache it.
+    this.watchlist  = null;
   }
 
   /**

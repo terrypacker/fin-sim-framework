@@ -500,9 +500,9 @@ test('renderState: numeric leaf becomes an lsp-metric-row with a chart toggle', 
   assert.ok(row.querySelector('.lsp-metric-value').textContent.length > 0, 'value rendered');
 });
 
-test('renderState: checkbox checked-state reflects isPathCharted', () => {
+test('renderState: checkbox checked-state reflects isPathWatched', () => {
   const panel = makePanel();
-  panel.isPathCharted = (p) => p === 'cash';
+  panel.isPathWatched = (p) => p === 'cash';
   const c = document.createElement('div');
   panel.renderState({ cash: 100, tax: 5 }, c);
   const byLabel = (t) => [...c.querySelectorAll('.lsp-metric-row')]
@@ -512,10 +512,10 @@ test('renderState: checkbox checked-state reflects isPathCharted', () => {
   assert.strictEqual(byLabel('Tax').checked,  false);
 });
 
-test('renderState: toggling a row checkbox calls onChartToggle(path, active)', () => {
+test('renderState: toggling a row checkbox calls onWatchToggle(path, active)', () => {
   const panel = makePanel();
   const calls = [];
-  panel.onChartToggle = (path, active) => calls.push([path, active]);
+  panel.onWatchToggle = (path, active) => calls.push([path, active]);
   const c = document.createElement('div');
   panel.renderState({ cash: 100 }, c);
   const cb = c.querySelector('input.lsp-chart-toggle');
@@ -526,7 +526,7 @@ test('renderState: toggling a row checkbox calls onChartToggle(path, active)', (
 
 test('renderState: row checkbox click does not bubble to the row history handler', () => {
   const panel = makePanel();
-  panel.onChartToggle = () => {};
+  panel.onWatchToggle = () => {};
   let rowClicked = false;
   const c = document.createElement('div');
   panel.renderState({ cash: 100 }, c);
@@ -616,8 +616,8 @@ test('renderState: a section whose every descendant is filtered out is omitted',
 
 test('renderHeaderRow: select-all is indeterminate when some descendants are charted', () => {
   const panel = makePanel();
-  panel.onChartToggle = () => {};
-  panel.isPathCharted = (p) => p === 'a.x';
+  panel.onWatchToggle = () => {};
+  panel.isPathWatched = (p) => p === 'a.x';
   const c = document.createElement('div');
   panel.renderState({ a: { x: 1, y: 2 } }, c);
   const cb = c.querySelector('.lsp-section-header input.lsp-section-toggle');
@@ -628,8 +628,8 @@ test('renderHeaderRow: select-all is indeterminate when some descendants are cha
 
 test('renderHeaderRow: select-all checked when all descendants are charted', () => {
   const panel = makePanel();
-  panel.onChartToggle = () => {};
-  panel.isPathCharted = () => true;
+  panel.onWatchToggle = () => {};
+  panel.isPathWatched = () => true;
   const c = document.createElement('div');
   panel.renderState({ a: { x: 1, y: 2 } }, c);
   const cb = c.querySelector('.lsp-section-toggle');
@@ -640,7 +640,7 @@ test('renderHeaderRow: select-all checked when all descendants are charted', () 
 test('renderHeaderRow: toggling select-all activates every descendant path', () => {
   const panel = makePanel();
   const calls = [];
-  panel.onChartToggle = (p, a) => calls.push([p, a]);
+  panel.onWatchToggle = (p, a) => calls.push([p, a]);
   const c = document.createElement('div');
   panel.renderState({ a: { x: 1, y: 2 } }, c);
   const cb = c.querySelector('.lsp-section-toggle');
@@ -649,7 +649,7 @@ test('renderHeaderRow: toggling select-all activates every descendant path', () 
   assert.deepStrictEqual(calls.sort(), [['a.x', true], ['a.y', true]]);
 });
 
-test('renderHeaderRow: no select-all checkbox when onChartToggle is not wired', () => {
+test('renderHeaderRow: no select-all checkbox when onWatchToggle is not wired', () => {
   const panel = makePanel();
   const c = document.createElement('div');
   panel.renderState({ a: { x: 1 } }, c);
@@ -882,4 +882,38 @@ test('display names are inert without a schema registry', () => {
   const c = document.createElement('div');
   panel.renderState({ usSavings2Account: { balance: 5 } }, c);
   assert.strictEqual(c.querySelector('.lsp-section-label').textContent, 'Us Savings2 Account');
+});
+
+// ─── Active-watchlist picker (design 101 W2) ─────────────────────────────────
+
+function pickerDom() {
+  document.body.innerHTML = '<select id="lsp-watchlist-select"></select>';
+  return document.getElementById('lsp-watchlist-select');
+}
+
+test('setWatchlists: fills the picker and selects the active list', () => {
+  const sel = pickerDom();
+  makePanel().setWatchlists([{ id: 'w1', name: 'Overview' }, { id: 'w2', name: 'Markets' }], 'w2');
+  assert.deepStrictEqual([...sel.options].map(o => o.textContent), ['Overview', 'Markets']);
+  assert.strictEqual(sel.value, 'w2');
+  assert.strictEqual(sel.disabled, false);
+});
+
+test('setWatchlists: with no lists the picker says so and is disabled', () => {
+  const sel = pickerDom();
+  makePanel().setWatchlists([], null);
+  assert.strictEqual(sel.disabled, true);
+  assert.match(sel.options[0].textContent, /checking creates one/);
+});
+
+test('initLiveState: choosing a list calls onWatchlistSelect with its id', () => {
+  const sel = pickerDom();
+  const panel = makePanel();
+  const picked = [];
+  panel.onWatchlistSelect = id => picked.push(id);
+  panel.initLiveState();
+  panel.setWatchlists([{ id: 'w1', name: 'A' }, { id: 'w2', name: 'B' }], 'w1');
+  sel.value = 'w2';
+  sel.dispatchEvent(new Event('change'));
+  assert.deepStrictEqual(picked, ['w2']);
 });

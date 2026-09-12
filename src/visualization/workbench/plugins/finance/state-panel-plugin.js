@@ -9,6 +9,10 @@ export class StatePanelPlugin extends WorkbenchComponent {
       <div id="liveStatePanel">
         <input id="lsp-panel-filter" class="lsp-panel-filter" type="text"
                placeholder="Filter fields (e.g. marketValue, balance, USD_AUD)…" />
+        <label class="lsp-watchlist-picker" title="The watchlist a checkbox adds to. The chart plots its charted fields.">
+          <span>Checking adds to</span>
+          <select id="lsp-watchlist-select"></select>
+        </label>
         <label class="lsp-text-toggle" title="Ids, symbols, labels and other text that does not change during a run. A filter that matches one shows it anyway.">
           <input id="lsp-show-text" type="checkbox" /> <span>Show text fields</span>
         </label>
