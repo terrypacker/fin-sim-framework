@@ -76,6 +76,21 @@ describe('McResultsPanel — asset mix section', () => {
     panel.destroy();
   });
 
+  test('the y-axis rescales to the selected class, not a fixed 0–100%', () => {
+    const lowCash = (seed, cash) => ({
+      seed, scenarioFailed: false, finalNetWorthUsd: 1e6, finalNetLiquidity: 1e5,
+      timeSeries: [pt(2030, 100, { EQUITY: 1 - cash, CASH: cash }), pt(2031, 100, { EQUITY: 1 - cash, CASH: cash })],
+    });
+    const { panel, container } = makePanel();
+    panel.showResults(summary, [lowCash(1, 0.01), lowCash(2, 0.02), lowCash(3, 0.03)]);
+    expect(panel._mixChartOption().yAxis.max).toBe(1);
+    container.querySelector('.mc-mix-chip[data-cls="CASH"]').click();
+    const max = panel._mixChartOption().yAxis.max;
+    expect(max).toBeLessThanOrEqual(0.05);
+    expect(max).toBeGreaterThanOrEqual(0.03);
+    panel.destroy();
+  });
+
   test('the chart option carries the failed-path median only when something failed', () => {
     const { panel } = makePanel();
     panel.showResults(summary, MIX_RUNS);

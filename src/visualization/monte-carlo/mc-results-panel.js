@@ -42,6 +42,14 @@ const fmtK      = (v) => fmtCompact(v);
 const fmtDollar = (v) => fmtWhole(v);
 
 function fmtPct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
+
+// Round-number share ceilings for the asset-mix y-axis, so a 3% class isn't drawn on 0–100%.
+const SHARE_AXIS_CEILINGS = [0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 0.8, 1];
+function shareAxisMax(...seriesList) {
+  let hi = 0;
+  for (const s of seriesList) for (const v of s ?? []) if (v != null && v > hi) hi = v;
+  return SHARE_AXIS_CEILINGS.find(c => c >= hi * 1.05) ?? 1;
+}
 function fmtDate(v) { return v instanceof Date ? v.toISOString().slice(0, 7) : '—'; }
 function fmtMoneyOrDash(v) { return v == null || !isFinite(v) ? '—' : fmtWhole(v); }
 
@@ -985,7 +993,9 @@ export class McResultsPanel extends BaseComponent {
     const textDim = readThemeColor('--text-dim');
     const border  = readThemeColor('--border');
     const red     = readThemeColor('--red');
-    const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+    // Rescale per class: pinned at 0–100%, a low-share class is flattened against the floor.
+    const yMax  = shareAxisMax(p90, b[0.5], nFailed > 0 ? failed[cls]?.[0.5] : null);
+    const pct = (v) => (v == null ? '—' : `${+(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`);
 
     const series = [
       { id: 'lo', type: 'line', stack: 'band', data: p10, symbol: 'none', lineStyle: { opacity: 0 },
@@ -1005,7 +1015,7 @@ export class McResultsPanel extends BaseComponent {
       grid: { top: 12, right: 16, bottom: 28, left: 16, containLabel: true },
       xAxis: { type: 'category', data: years, axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace' },
         axisLine: { lineStyle: { color: border } } },
-      yAxis: { type: 'value', min: 0, max: 1, axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: pct },
+      yAxis: { type: 'value', min: 0, max: yMax, axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: pct },
         splitLine: { lineStyle: { color: border } } },
       tooltip: {
         trigger: 'axis',
