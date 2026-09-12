@@ -476,7 +476,12 @@ export class ScenarioSerializer {
       initialState: scenario.initialState ? structuredClone(scenario.initialState) : {},
       params:     scenario.params ?? [],
       toolsets:   scenario?.toolsets ?? [],
-      watchlists: scenario.watchlists ?? [],
+      watchlists: structuredClone(scenario.watchlists ?? []),
+      // design 101 §8.1 — the active watchlist, and the migration marker: a scenario the
+      // WatchlistModel has written always carries the key (null once every list is
+      // deleted), one saved before never does. Carried only when present, so an older
+      // scenario gains no key and its empty list still reads as "seed Overview".
+      ...(Object.hasOwn(scenario, 'activeWatchlistId') ? { activeWatchlistId: scenario.activeWatchlistId ?? null } : {}),
       // Tombstones of deleted default records (design 55 follow-up) — carried so a
       // downloaded/re-imported JSON keeps deletions sticky across Rebuild.
       ...(scenario.deletedDefaults ? { deletedDefaults: scenario.deletedDefaults } : {}),

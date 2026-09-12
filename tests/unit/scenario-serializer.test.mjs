@@ -646,3 +646,31 @@ test('serializeScenario: watchlists survives a serialize→deserialize passthrou
   assert.deepStrictEqual(serialized.watchlists, paths,
     'watchlists should survive a round-trip through serializeScenario');
 });
+
+// design 101 §8.1: named lists + the activeWatchlistId migration marker.
+const wlBase = {
+  id: 'w4', name: 'WL4', simStart: '2026-01-01', simEnd: '2041-01-01',
+  params: [], toolsets: [],
+  persons: [], accounts: [], realProperties: [], collectibles: [],
+  events: [], handlers: [], actions: [], reducers: [], initialState: {},
+};
+
+test('serializeScenario: carries activeWatchlistId and named lists (design 101)', () => {
+  const watchlists = [{ id: 'w1', name: 'Overview',
+    entries: [{ path: 'metrics.netWorth', label: null, charted: true, axis: 'auto' }] }];
+  const cfg = ScenarioSerializer.serializeScenario({ ...wlBase, watchlists, activeWatchlistId: 'w1' });
+  assert.deepStrictEqual(cfg.watchlists, watchlists);
+  assert.strictEqual(cfg.activeWatchlistId, 'w1');
+  assert.notStrictEqual(cfg.watchlists[0], watchlists[0], 'deep-copied, not shared with the live record');
+});
+
+test('serializeScenario: a null activeWatchlistId (every list deleted) is kept, not dropped', () => {
+  const cfg = ScenarioSerializer.serializeScenario({ ...wlBase, watchlists: [], activeWatchlistId: null });
+  assert.ok(Object.hasOwn(cfg, 'activeWatchlistId'));
+  assert.strictEqual(cfg.activeWatchlistId, null);
+});
+
+test('serializeScenario: a scenario without activeWatchlistId gains no key', () => {
+  const cfg = ScenarioSerializer.serializeScenario({ ...wlBase, watchlists: ['metrics.netWorth'] });
+  assert.ok(!Object.hasOwn(cfg, 'activeWatchlistId'));
+});
