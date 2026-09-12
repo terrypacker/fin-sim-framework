@@ -1080,7 +1080,19 @@ test('LiquidityGraph: the Vetoes cell defaults to SOURCE and writes EDGE onto th
   // The sibling edge is untouched: that independence is the whole feature.
   assert.deepStrictEqual(param.value.flows[1].gate,
     { sourceDrawdownUnder: 0.1, drawdownBasis: 'INDEX' });
-  assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS));
+
+  // EDGE beside SOURCE out of one pool is the MIXED set: the SOURCE-scoped g2o still floors
+  // 'growth', so the loader must say so. Captured rather than printed — it is the contract.
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (msg) => warnings.push(String(msg));
+  try {
+    assert.ok(normalizeLiquidityGraph(param.value, ACCOUNTS));
+  } finally {
+    console.warn = warn;
+  }
+  assert.strictEqual(warnings.length, 1);
+  assert.match(warnings[0], /pool 'growth' is the source of 2 gated edges \('g2b', 'g2o'\)/);
 });
 
 test('LiquidityGraph: SOURCE is not written back — a pre-12.4c graph stays byte-identical', () => {
