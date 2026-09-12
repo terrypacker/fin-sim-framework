@@ -1115,6 +1115,29 @@
   "EQUITY_INTL_EX_US": 0.0253,
   "EQUITY_US": 0.011
  },
+ "marketIndex": {
+  "EQUITY_AU": {
+   "price": 55.0946253112,
+   "total": 71.924315035
+  },
+  "EQUITY_INTL_EX_AU": {
+   "price": 64.0946991259,
+   "total": 71.800102122
+  },
+  "EQUITY_INTL_EX_US": {
+   "price": 54.8029205453,
+   "total": 66.8942079241
+  },
+  "EQUITY_US": {
+   "price": 63.4480862874,
+   "total": 69.0964368561
+  },
+  "GOLD": {
+   "price": 140.710042266,
+   "total": 140.710042266
+  }
+ },
+ "marketIndexAsOfMs": 1988064000000,
  "metrics": {
   "auFixedIncomeAccount": 1354.4,
   "auSavingsAccount": 3000,
@@ -1432,6 +1455,32 @@
    "name": "US total market (core)",
    "rateKey": "EQUITY_US",
    "symbol": "CORE"
+  }
+ },
+ "securityIndex": {
+  "sec-alt": {
+   "price": 63.4480862874,
+   "total": 69.0964368561
+  },
+  "sec-auto-EQUITY_AU": {
+   "price": 55.0946253112,
+   "total": 71.924315035
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "price": 64.0946991259,
+   "total": 71.800102122
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "price": 54.8029205453,
+   "total": 66.8942079241
+  },
+  "sec-auto-EQUITY_US": {
+   "price": 63.4480862874,
+   "total": 69.0964368561
+  },
+  "sec-core": {
+   "price": 63.4480862874,
+   "total": 69.0964368561
   }
  },
  "spouseIraAccount": {

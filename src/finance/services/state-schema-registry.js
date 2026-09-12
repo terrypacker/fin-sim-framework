@@ -50,6 +50,8 @@ export class ParameterValueType {
   static date()                { return new ParameterValueType('date'); }
   static text({ status = false } = {}) { return new ParameterValueType('text', { status }); }
   static metric()              { return new ParameterValueType('metric'); }
+  /** A 100-based index level (design 101 §6): unitless, shown as `142.7`. */
+  static index()               { return new ParameterValueType('index'); }
   static unknown()             { return new ParameterValueType('unknown'); }
 }
 
@@ -132,6 +134,10 @@ function _fmt(vt, value) {
       return typeof value === 'number' ? Math.round(value).toLocaleString('en-US') : String(value);
     case 'year':
       return typeof value === 'number' ? String(Math.round(value)) : String(value);
+    case 'index':
+      return typeof value === 'number'
+        ? value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+        : String(value);
     case 'decimal':
       return typeof value === 'number'
         ? value.toLocaleString('en-US', { minimumFractionDigits: vt.precision, maximumFractionDigits: vt.precision })
@@ -549,6 +555,13 @@ export class StateSchemaRegistry {
     this.registerPattern('washPendingLosses.*.units',         ParameterValueType.decimal(4));
     this.registerPattern('washSaleLedger.*.matchedFraction',  ParameterValueType.percentage());
     this.registerPattern('washSaleLedger.*.filedYear',        ParameterValueType.year());
+
+    // Market and security index levels (design 101 §6): 100 at sim start.
+    this.registerPattern('marketIndex.*.price',   ParameterValueType.index());
+    this.registerPattern('marketIndex.*.total',   ParameterValueType.index());
+    this.registerPattern('securityIndex.*.price', ParameterValueType.index());
+    this.registerPattern('securityIndex.*.total', ParameterValueType.index());
+    this.register('marketIndexAsOfMs',            ParameterValueType.date());
 
     // Plan-level scalars.
     this.registerPattern('people.*.lifeExpectancy',     ParameterValueType.integer());

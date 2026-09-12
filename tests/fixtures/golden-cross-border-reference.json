@@ -1098,6 +1098,29 @@
   "EQUITY_INTL_EX_US": 0.0253,
   "EQUITY_US": 0.011
  },
+ "marketIndex": {
+  "EQUITY_AU": {
+   "price": 216.461293094,
+   "total": 474.183094136
+  },
+  "EQUITY_INTL_EX_AU": {
+   "price": 407.652653676,
+   "total": 567.287405834
+  },
+  "EQUITY_INTL_EX_US": {
+   "price": 279.136355058,
+   "total": 495.980868802
+  },
+  "EQUITY_US": {
+   "price": 395.824837895,
+   "total": 507.236695339
+  },
+  "GOLD": {
+   "price": 322.509994371,
+   "total": 322.509994371
+  }
+ },
+ "marketIndexAsOfMs": 2524521600000,
  "metrics": {
   "auFixedIncomeAccount": 2607.47,
   "auSavingsAccount": 3000,
@@ -1356,6 +1379,24 @@
    "name": "US market index",
    "rateKey": "EQUITY_US",
    "symbol": ""
+  }
+ },
+ "securityIndex": {
+  "sec-auto-EQUITY_AU": {
+   "price": 216.461293094,
+   "total": 474.183094136
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "price": 407.652653676,
+   "total": 567.287405834
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "price": 279.136355058,
+   "total": 495.980868802
+  },
+  "sec-auto-EQUITY_US": {
+   "price": 395.824837895,
+   "total": 507.236695339
   }
  },
  "spouseIraAccount": {

@@ -10,6 +10,7 @@
 
 import { OneOffEvent }                    from '../../simulation-framework/events/one-off-event.js';
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
+import { MarketIndexReducer }            from '../../finance/economic-regimes/market-index.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, EQUITY_SLEEVES, PROPERTY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, DEFAULT_RE_BETA, DEFAULT_RE_IDIO } from '../../finance/economic-regimes/rate-keys.js';
@@ -1104,6 +1105,7 @@ export const ECONOMIC_REGIMES = {
       new YieldCurveStepReducer(),  // design 67 §6 — stores the stochastic level deviation
       new EquityReturnReducer(),    // design 74 §5.1 — folds the stochastic equity path onto effective growth (11.5)
       new EquityReturnStepReducer(),// design 74 §5.1 — stores the per-sleeve equity deviation
+      new MarketIndexReducer(),     // design 101 §6 — steps marketIndex/securityIndex at each period advance (10.5)
       new PropertyReturnStepReducer(),// design 75 §4 — stores the per-sleeve property deviation (AssetAppreciationHandler reads it; no fold reducer)
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),

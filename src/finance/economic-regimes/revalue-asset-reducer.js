@@ -12,6 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { resolveRateKey }    from '../holdings/default-allocations.js';
 import { revalueLedger }     from '../assets/investment-account.js';
 import { reprice } from '../holdings/holding-utils.js';
+import { markDownIndexLevels } from './market-index.js';
 
 /**
  * RevalueAssetReducer — applies a shock's instantaneous level effect.
@@ -53,7 +54,10 @@ export class RevalueAssetReducer extends Reducer {
   reduce(state, action) {
     const { rateKey, targetStateKeys, holdingsStateKeys, multiplier } = action;
     if (multiplier == null) return this.newState(state);
-    if (!targetStateKeys?.length && !holdingsStateKeys?.length) return this.newState(state);
+    // The market's own index takes the same markdown (design 101 §6), whether or not any
+    // account holds that market, so it is computed before the no-target early return.
+    const indexPatch = markDownIndexLevels(state, rateKey, multiplier);
+    if (!targetStateKeys?.length && !holdingsStateKeys?.length) return this.newState(state, indexPatch);
 
     const shock = (v) => Math.max(0, (v ?? 0) + +(((v ?? 0) * multiplier).toFixed(2)));
     const updates = {};
@@ -93,6 +97,6 @@ export class RevalueAssetReducer extends Reducer {
       if (entry.value != null) updates[key] = { ...entry, value: shock(entry.value) };
     }
 
-    return this.newState(state, updates);
+    return this.newState(state, { ...updates, ...indexPatch });
   }
 }

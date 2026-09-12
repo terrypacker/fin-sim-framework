@@ -555,6 +555,29 @@
   "EQUITY_INTL_EX_US": 0.0253,
   "EQUITY_US": 0.011
  },
+ "marketIndex": {
+  "EQUITY_AU": {
+   "price": 125.26197045,
+   "total": 157.452998613
+  },
+  "EQUITY_INTL_EX_AU": {
+   "price": 150.661167957,
+   "total": 165.904914006
+  },
+  "EQUITY_INTL_EX_US": {
+   "price": 134.905539874,
+   "total": 159.530577177
+  },
+  "EQUITY_US": {
+   "price": 149.37286838,
+   "total": 160.578147648
+  },
+  "GOLD": {
+   "price": 140.710042266,
+   "total": 140.710042266
+  }
+ },
+ "marketIndexAsOfMs": 1988064000000,
  "metrics": {
   "auHousePropertyLoan": 249669.02,
   "auSavingsAccount": 10227.12,
@@ -704,6 +727,24 @@
    "name": "US market index",
    "rateKey": "EQUITY_US",
    "symbol": ""
+  }
+ },
+ "securityIndex": {
+  "sec-auto-EQUITY_AU": {
+   "price": 125.26197045,
+   "total": 157.452998613
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "price": 150.661167957,
+   "total": 165.904914006
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "price": 134.905539874,
+   "total": 159.530577177
+  },
+  "sec-auto-EQUITY_US": {
+   "price": 149.37286838,
+   "total": 160.578147648
   }
  },
  "superAccount": {
