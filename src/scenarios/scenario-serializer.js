@@ -116,6 +116,7 @@ import { YieldCurveStepReducer }         from '../finance/economic-regimes/yield
 import { YieldCurveTickHandler }         from '../finance/economic-regimes/yield-curve-tick-handler.js';
 import { EquityReturnReducer }           from '../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }       from '../finance/economic-regimes/equity-return-step-reducer.js';
+import { MarketIndexReducer }            from '../finance/economic-regimes/market-index.js';
 import { EquityReturnTickHandler }       from '../finance/economic-regimes/equity-return-tick-handler.js';
 import { PropertyReturnStepReducer }     from '../finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler }     from '../finance/economic-regimes/property-return-tick-handler.js';
@@ -332,7 +333,7 @@ const _ALL_CLASSES = [
   PropertyReturnTickHandler,
   RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
   BondPriceAdjustReducer, BondMaturityReducer, YieldCurveReducer, YieldCurveStepReducer,
-  EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer,
+  EquityReturnReducer, EquityReturnStepReducer, MarketIndexReducer, PropertyReturnStepReducer,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,
 ];

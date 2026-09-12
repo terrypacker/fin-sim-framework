@@ -102,6 +102,7 @@ import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
+import { MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -950,6 +951,7 @@ export const Finance = {
   EconomicShockHandler,
   EquityReturnReducer,
   EquityReturnStepReducer,
+  MarketIndexReducer,
   EquityReturnTickHandler,
   MARKET_GROWTH_PARAMS,
   marketReturnFor,

@@ -91,8 +91,10 @@ export function baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield
  * enough to tip an occasional per-holding `toFixed(2)` the other way, which then
  * compounds (measured: +\$0.10 on a \$312k AU stock balance over two decades). Twelve
  * places is far below any rate anyone authors and far above the residue.
+ *
+ * Exported for the market index (design 101 §6), which must step by exactly this rate.
  */
-function priceOf(total, yld) {
+export function priceOf(total, yld) {
   return +(total - yld).toFixed(12);
 }
 

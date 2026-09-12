@@ -40,6 +40,7 @@ import { US_COMPANY_SALE }   from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { INHERITANCE }       from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
+import { seedIndexLevels }   from '../finance/economic-regimes/market-index.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
 import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
@@ -215,7 +216,25 @@ export class ScenarioLoader {
       this._restoreFromGraph(cfg, services);
     }
 
+    this._seedIndexLevels(cfg, services);
     this._applyRandomSeed(cfg, services);
+  }
+
+  /**
+   * Seed the market and security index levels at 100 (design 101 §6). After the fork,
+   * because it needs the growth rates a toolset seeds and the registry
+   * `_projectSecurities` wrote; here rather than in a toolset's `state()`, for
+   * `_projectSecurities`' reason: one call site that reaches both load paths. A scenario
+   * without growth rates (no economic-regimes toolset) gets no index.
+   *
+   * @private
+   */
+  _seedIndexLevels(cfg, services) {
+    const sim = services?.simulationRegistry?.getPrimary?.();
+    if (!sim?.state || sim.state.marketIndex) return;
+    const start = cfg?.simStart ?? sim.startDate ?? null;
+    if (start == null) return;
+    Object.assign(sim.state, seedIndexLevels(sim.state, new Date(start).getTime()));
   }
 
   /**

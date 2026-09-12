@@ -1097,6 +1097,29 @@
   "EQUITY_INTL_EX_US": 0.0253,
   "EQUITY_US": 0.011
  },
+ "marketIndex": {
+  "EQUITY_AU": {
+   "price": 83.2811299042,
+   "total": 110.129784107
+  },
+  "EQUITY_INTL_EX_AU": {
+   "price": 228.401791428,
+   "total": 253.916020144
+  },
+  "EQUITY_INTL_EX_US": {
+   "price": 260.650892978,
+   "total": 311.555057162
+  },
+  "EQUITY_US": {
+   "price": 233.810816209,
+   "total": 253.14461592
+  },
+  "GOLD": {
+   "price": 147.745544379,
+   "total": 147.745544379
+  }
+ },
+ "marketIndexAsOfMs": 2019600000000,
  "metrics": {
   "auFixedIncomeAccount": 1376.39,
   "auSavingsAccount": 3000,
@@ -1378,6 +1401,32 @@
    "name": "International index fund",
    "rateKey": "EQUITY_INTL_EX_US",
    "symbol": "EXUS"
+  }
+ },
+ "securityIndex": {
+  "sec-auto-EQUITY_AU": {
+   "price": 83.2811299042,
+   "total": 110.129784107
+  },
+  "sec-auto-EQUITY_INTL_EX_AU": {
+   "price": 228.401791428,
+   "total": 253.916020144
+  },
+  "sec-auto-EQUITY_INTL_EX_US": {
+   "price": 260.650892978,
+   "total": 311.555057162
+  },
+  "sec-auto-EQUITY_US": {
+   "price": 233.810816209,
+   "total": 253.14461592
+  },
+  "sec-emp": {
+   "price": 431.433925614,
+   "total": 449.628778952
+  },
+  "sec-exus": {
+   "price": 244.611789126,
+   "total": 292.751075014
   }
  },
  "securityReturnDev": {

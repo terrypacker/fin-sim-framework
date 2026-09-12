@@ -15,6 +15,8 @@ there is an active-list picker, `runtime.watchlist`, and `WATCHLIST_CHANGED`. Th
 confirmed the §4 decisions on 12 Sep. **R2 ✅ (12 Sep)**: `FieldFormatter` and the shared
 field row are built. The chart takes its kinds, labels and tooltip values from the one
 stamped registry (§9.7). **W3 ✅ (12 Sep)**: the Watchlist panel is built (§5.5).
+**M1 ✅ (12 Sep)**: `marketIndex` and `securityIndex` are built. The step rides the period
+advances, and the regold is additive-only (§6.5).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -359,6 +361,66 @@ The change is **additive**: every golden gains the `marketIndex` block, and the 
 registry also gain `securityIndex`. The regold diff must contain **only added keys**. Any
 existing field that moves means the carrier perturbed ordering, and that has to be traced,
 not regolded past.
+
+### 6.5 As built (M1, 12 Sep 2026)
+
+**A correction to §6.2 first.** Equity growth is not on a monthly stream. Every equity
+earnings handler (Roth, IRA, 401(k), US and AU stock, super) fires on a `year-end` event
+(31 Dec 00:00 UTC) at `factor` 1. Only cash and fixed income pass `1/12`. So the index
+steps once a year, and the "same clock" is the annual one.
+
+**Carrier (Q2, answered).** `MarketIndexReducer`
+(`src/finance/economic-regimes/market-index.js`) runs on the existing `US_PERIOD_ADVANCE`
+(1 Jan) and `AU_PERIOD_ADVANCE` (1 Jul) actions. It adds no event and no action.
+
+- It runs at `PRE_PROCESS + 0.5`: after `PeriodAdvanceReducer` (10), and before
+  `RegimeApplyReducer` (11) resets `effectiveGrowthRates` and `EquityReturnReducer` (11.5)
+  folds next year's draw. It therefore reads the rates the 31 Dec growth just used.
+- It steps once for each 31 Dec passed since `marketIndexAsOfMs`, so the 1 Jul advance
+  after a 1 Jan step finds nothing to do.
+- The alternatives were rejected. A new event re-resolves same-date ties and re-golds
+  everything with ordering noise. Riding the earnings applies fails because those are per
+  account, and an empty account short-circuits without one, so the index would skip that
+  year.
+
+**Step rule.** It uses the rates holdings actually get:
+- `price ×= 1 + priceOf(total, yield)` and `total ×= 1 + total`. `priceOf` is the same
+  function `computeHoldingsGrowth` uses, now exported.
+- A security adds `securityReturnOverlay[id]` to both, and its own `dividendYield`
+  replaces the market's.
+- Per-account keys are excluded.
+- Markets are the bare keys of `baseGrowthRates`: the four equity markets and GOLD.
+
+**Shocks.** `RevalueAssetReducer` applies its multiplier to `marketIndex[rateKey]` and to
+every security tracking that key. It does this before its no-target early return, so the
+market is marked down even when nobody holds it.
+
+**Seeding.** `ScenarioLoader._seedIndexLevels` seeds every level at 100 after the load
+fork, so both load paths get it, as with `_projectSecurities`. `marketIndexAsOfMs` is set
+to the last 31 Dec before `simStart`. A scenario without the economic-regimes toolset has
+no growth rates and gets no index.
+
+**Schema.** A new `index` kind is shown as `142.7`, and `marketIndexAsOfMs` is a date.
+The chart puts `index` on the left axis by default. Q5 is still open, and the W3 per-entry
+axis override moves it.
+
+**Verified.**
+- *The invariant* (`tests/unit/market-index.test.mjs`). A lone lot is driven through 8
+  years of real `computeHoldingsGrowth`, including gains, losses and a zero year, with a
+  real `RevalueAssetReducer` crash in between. A wrapper lot tracks `total` and a taxable
+  lot tracks `price`, to 1e-8 relative at every year boundary.
+- *Regold* (`scripts/probes/probe-regold-additive.mjs`, now reusable).
+  - All 13 fixtures only gained keys: `marketIndex` (10), `marketIndexAsOfMs` (1), and
+    `securityIndex` (8, or 12 with authored securities). No field changed and none was
+    removed.
+  - The 10 goldens with no shock or stochastic path equal `100 × (1 + base)^N` exactly,
+    for both price and total, and every run stepped every 31 Dec in its window, including
+    the last.
+  - The shocked/stochastic ones depart from the base rate as they should, with gold
+    untouched by an equity crash and identity securities equal to their market.
+- *Cost* (`scripts/probes/probe-market-index-cost.mjs`). On `cross-border-reference`
+  over 6 interleaved runs, the median was 257.9 ms stubbed and 254.2 ms live, which is
+  inside run-to-run noise.
 
 ### 6.4 Making UC1 one click
 
@@ -737,7 +799,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **W1** ✅ | `WatchlistModel` (`src/visualization/watchlist/watchlist-model.js`) + legacy migration + `metrics.<stateKey>` alias + persistence (`activeWatchlistId` marker in `serializeScenario`) + default seed (§5.4, §8.1). Unit tests: `watchlist-model.test.mjs` (migration, round-trip, delete-last, alias, normalization, events) plus serializer cases. Not wired into the app; W2 wires it. | — | none |
 | **W2** ✅ | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. Built as §8.2. | W1 | none |
 | **W3** ✅ | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. See §5.5. | W2 | none |
-| **M1** `[ ]` | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. | — (parallel to W) | **additive only** |
+| **M1** ✅ | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. See §6.5. | — (parallel to W) | **additive only** (verified) |
 | **W4** `[ ]` | Export/import definition JSON + series CSV (§8.1). | W3 | none |
 | **W5** `[ ]` | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). | W2, M1 | none |
 | **M2** `[ ]` | Metrics cleanup: `BalanceSnapshotReducer` no-op, drop Metrics section, schema/labels/docs, tests (§7). | W1 (alias), W3 | **removals of `metrics.<stateKey>` only** |
@@ -767,9 +829,9 @@ panel renders through it.
 
    *Leaning (a) with the currency audit.* It is what the name has always promised, and it
    matches "a reducer that puts a value into state".
-2. **Q2: Which action carries the market-index step?** It must be an existing action on the
-   monthly growth clock, with no new `EventSeries` (§6.2). Resolve with a probe that shows
-   the regold is additive-only before committing.
+2. **Q2: Which action carries the market-index step?** **Answered (12 Sep):** the period
+   advances, running before the regime reset. Equity grows annually, not monthly. The regold
+   is additive-only. See §6.5.
 3. **Q3: Capture every list, or only the active list?** **Answered (12 Sep): every list
    (W-D2).** Revisit only if a user builds watchlists with hundreds of paths.
 4. **Q4: Should the State checkbox mean "in the active watchlist"?** **Answered (12 Sep):
