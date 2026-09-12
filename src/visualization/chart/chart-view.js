@@ -66,6 +66,7 @@ export class ChartView extends BaseComponent {
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
     this._seriesKinds  = new Map(); // key → ParameterValueType.kind string
     this._seriesLabels = new Map(); // key → legend/tooltip name (design 101 R2 context label)
+    this._seriesAxes   = new Map(); // key → 'left' | 'right': a watch entry's override (design 101 W3)
     this._backfilledSeries = new Set(); // keys shown at snapshot resolution → dashed (R10.1)
     this._formatter    = formatter ?? null; // FieldFormatter: tooltip values (design 101 R2)
 
@@ -114,6 +115,7 @@ export class ChartView extends BaseComponent {
     this._seriesMap.delete(key);
     this._seriesKinds.delete(key);
     this._seriesLabels.delete(key);
+    this._seriesAxes.delete(key);
     this._hiddenSeries.delete(key);
     this._backfilledSeries.delete(key);
     if (!this._chart) return;
@@ -139,6 +141,30 @@ export class ChartView extends BaseComponent {
   setSeriesLabel(key, label) {
     if (label) this._seriesLabels.set(key, label);
     else       this._seriesLabels.delete(key);
+    this._scheduleSeriesRefresh();
+  }
+
+  /**
+   * Force a series onto the 'left' or 'right' axis whatever its kind; 'auto' (or
+   * anything else) returns it to kind-based bucketing (design 101 W3, §6.4).
+   */
+  setSeriesAxis(key, axis) {
+    if (axis === 'left' || axis === 'right') this._seriesAxes.set(key, axis);
+    else                                     this._seriesAxes.delete(key);
+    this._scheduleSeriesRefresh();
+  }
+
+  /**
+   * Re-emit the series with replaceMerge. A renamed series is merged by id, but its
+   * legend entry is keyed by name, so a plain merge would leave the old name behind.
+   */
+  _scheduleSeriesRefresh() {
+    if (!this._chart) return;
+    this.scheduleRender(() => {
+      if (!this._chart) return;
+      const { series, selected } = this._buildSeriesAndLegend();
+      this._chart.setOption({ series, legend: { selected }, yAxis: this._buildYAxes() }, { replaceMerge: ['series'] });
+    });
   }
 
   /** Mark a series as backfilled (snapshot resolution) → rendered dashed (R10.1). */
@@ -209,6 +235,7 @@ export class ChartView extends BaseComponent {
     this._seriesMap.clear();
     this._seriesKinds.clear();
     this._seriesLabels.clear();
+    this._seriesAxes.clear();
     this._backfilledSeries.clear();
     this._colorIdx    = 0;
     this._annotations = {};
@@ -258,6 +285,13 @@ export class ChartView extends BaseComponent {
     return (kind === 'rate' || kind === 'percentage' || kind === 'fxRate') ? 1 : 0;
   }
 
+  /** The axis a series is drawn on: its watch entry's override, else by kind. */
+  _axisIndexFor(key) {
+    const forced = this._seriesAxes.get(key);
+    if (forced) return forced === 'right' ? 1 : 0;
+    return this._kindToAxisIndex(this._seriesKinds.get(key) ?? 'unknown');
+  }
+
   /** A fraction shown as a percentage (rate / percentage kinds; not fxRate). */
   _isPercentKind(kind) {
     return kind === 'rate' || kind === 'percentage';
@@ -268,7 +302,9 @@ export class ChartView extends BaseComponent {
    * percentage. An FX multiplier shares the axis, so one present keeps plain numbers.
    */
   _rightAxisIsPercent() {
-    const kinds = [...this._seriesKinds.values()].filter(k => this._kindToAxisIndex(k) === 1);
+    const kinds = [...this._seriesKinds.keys()]
+      .filter(key => this._axisIndexFor(key) === 1)
+      .map(key => this._seriesKinds.get(key));
     return kinds.length > 0 && kinds.every(k => this._isPercentKind(k));
   }
 
@@ -290,8 +326,7 @@ export class ChartView extends BaseComponent {
     if (!this._displaySettings || !this._currencyConverter || !this._schemaRegistry) return null;
     let hasCurrency = false;
     for (const key of this._seriesMap.keys()) {
-      const axisKind = this._seriesKinds.get(key) ?? 'unknown';
-      if (this._kindToAxisIndex(axisKind) !== 0) continue; // only the left axis
+      if (this._axisIndexFor(key) !== 0) continue; // only the left axis
       if (this._isCurrencySeries(key)) hasCurrency = true;
       else return null;                                    // mixed → ambiguous symbol
     }
@@ -332,8 +367,7 @@ export class ChartView extends BaseComponent {
     const { colorIdx } = this._seriesMap.get(key);
     const cfg        = this._seriesConfig.get(key);
     const color      = cfg?.color ?? this._colorFor(colorIdx);
-    const kind       = this._seriesKinds.get(key) ?? 'unknown';
-    const yAxisIndex = this._kindToAxisIndex(kind);
+    const yAxisIndex = this._axisIndexFor(key);
     const backfilled = this._backfilledSeries.has(key);
     return {
       type:           'line',
@@ -393,8 +427,7 @@ export class ChartView extends BaseComponent {
 
   _buildYAxes() {
     // Determine which axis indices are actually in use
-    const activeKinds = new Set([...this._seriesKinds.values()]);
-    const hasRateAxis = [...activeKinds].some(k => this._kindToAxisIndex(k) === 1);
+    const hasRateAxis = [...this._seriesKinds.keys()].some(key => this._axisIndexFor(key) === 1);
     const rightPercent = this._rightAxisIsPercent();
 
     const leftSymbol = this._symbolFor(this._leftAxisCurrencyCode());

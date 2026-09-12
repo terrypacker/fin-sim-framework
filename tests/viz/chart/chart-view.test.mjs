@@ -314,6 +314,20 @@ test('ChartView._fmtSeriesValue: money in its plotted currency; the rest via the
   assert.strictEqual(view._fmtSeriesValue('effectiveGrowthRates.EQUITY_US', 0.0715), '7.15%');
 });
 
+test('ChartView.setSeriesAxis: an override beats the kind; auto returns to it (design 101 W3)', () => {
+  const view = makeView();
+  view._seriesKinds.set('metrics.netWorth', 'currency');
+  assert.strictEqual(view._axisIndexFor('metrics.netWorth'), 0);
+  view.setSeriesAxis('metrics.netWorth', 'right');
+  assert.strictEqual(view._axisIndexFor('metrics.netWorth'), 1);
+  assert.ok([].concat(view._buildYAxes()).some(a => a.position === 'right'), 'a forced series opens the right axis');
+  view.setSeriesAxis('metrics.netWorth', 'auto');
+  assert.strictEqual(view._axisIndexFor('metrics.netWorth'), 0);
+  view._seriesKinds.set('effectiveGrowthRates.EQUITY_US', 'rate');
+  view.setSeriesAxis('effectiveGrowthRates.EQUITY_US', 'left');
+  assert.strictEqual(view._axisIndexFor('effectiveGrowthRates.EQUITY_US'), 0, 'a rate can be forced left');
+});
+
 test('ChartView._buildYAxes: a rate-only right axis reads as percent (design 101 R-2)', () => {
   const view = makeView();
   view._seriesKinds.set('effectiveGrowthRates.EQUITY_US', 'rate');

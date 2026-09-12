@@ -344,6 +344,30 @@ test('resetHistory: kinds and labels are restored for the surviving selection', 
     'without this a rate series replays on the money axis');
 });
 
+test('applySeriesMeta: a watch label replaces the context label; clearing restores it (W3)', () => {
+  document.body.innerHTML = '<div id="chartActiveSeries"></div>';
+  const { presenter, view } = withFormatter();
+  presenter.activatePath('metrics.superAccount');
+  presenter.applySeriesMeta([{ path: 'metrics.superAccount', label: 'Super', axis: 'auto' }]);
+  assert.deepStrictEqual(view.calls.setSeriesLabel.at(-1), { key: 'metrics.superAccount', label: 'Super' });
+  assert.strictEqual(document.querySelector('#chartActiveSeries .wb-series-chip span').textContent, 'Super');
+  presenter.applySeriesMeta([{ path: 'metrics.superAccount', label: null, axis: 'auto' }]);
+  assert.deepStrictEqual(view.calls.setSeriesLabel.at(-1), { key: 'metrics.superAccount', label: 'AU Super' });
+});
+
+test('applySeriesMeta: an axis override reaches the view, and survives a rewind (W3)', () => {
+  const { presenter, view } = withFormatter();
+  const axes = [];
+  view.setSeriesAxis = (key, axis) => axes.push([key, axis]);
+  presenter.activatePath('metrics.superAccount');
+  presenter.applySeriesMeta([{ path: 'metrics.superAccount', label: null, axis: 'right' }]);
+  presenter.applySeriesMeta([{ path: 'metrics.superAccount', label: null, axis: 'right' }]);  // no-op
+  presenter.resetHistory();
+  assert.deepStrictEqual(axes, [['metrics.superAccount', 'right'], ['metrics.superAccount', 'right']]);
+  presenter.applySeriesMeta([{ path: 'not-charted', label: 'x', axis: 'left' }]);
+  assert.strictEqual(axes.length, 2, 'an entry that is not on the chart is ignored');
+});
+
 test('chips show the context label', () => {
   document.body.innerHTML = '<div id="chartActiveSeries"></div>';
   const { presenter } = withFormatter();

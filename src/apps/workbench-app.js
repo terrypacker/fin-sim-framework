@@ -116,7 +116,7 @@ const ANALYSIS_LAYOUT = {
   sizes: [1, 2, 1],
   left:   { tabs: ['scenario', 'mc-config', 'opt-config'],                    active: 'mc-config'     },
   center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],         active: 'chart'         },
-  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel', 'action-detail'],    active: 'mc-runs'       },
+  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel', 'watchlist', 'action-detail'], active: 'mc-runs' },
   bottom: { tabs: ['journal-report', 'dashboard', 'perf'],                    active: 'dashboard'     },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
@@ -134,7 +134,7 @@ const REVIEW_LAYOUT = {
   sizes: [1, 3, 1],
   left:   { tabs: ['scenario', 'config-list'],                                        active: 'scenario'     },
   center: { tabs: ['timeline', 'chart'],                                              active: 'timeline'     },
-  right:  { tabs: ['state-panel', 'action-detail', 'inspector', 'exec-history', 'lineage'], active: 'state-panel' },
+  right:  { tabs: ['state-panel', 'watchlist', 'action-detail', 'inspector', 'exec-history', 'lineage'], active: 'state-panel' },
   bottom: { tabs: ['journal-report', 'dashboard'],                                    active: 'journal-report' },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
@@ -258,6 +258,12 @@ export class WorkbenchApp extends BaseComponent {
     // otherwise change underneath it while the editors keep showing the old ones.
     this._wbShell.runtime.bus.subscribe(WB_EVENTS.PARAMS_CHANGED, () => {
       this.scenarioTabPresenter?.refreshParams();
+    });
+
+    // Any panel can ask for a field's history (design 101 W-D7); the State panel owns
+    // the modal. The Watchlist panel's row click is the first asker.
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.FIELD_HISTORY_OPEN, ({ path }) => {
+      if (path) this._statePanelView.openFieldHistory(path);
     });
 
     // Show action detail when a row in the cross-action-query panel is clicked.

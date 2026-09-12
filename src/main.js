@@ -8,6 +8,7 @@ import '../assets/css/plugins/config-builder.css';
 import '../assets/css/plugins/config-graph.css';
 import '../assets/css/plugins/timeline.css';
 import '../assets/css/plugins/state-panel.css';
+import '../assets/css/plugins/watchlist.css';
 import '../assets/css/plugins/finance-cards.css';
 import '../assets/css/plugins/inspector.css';
 import '../assets/css/plugins/modals.css';

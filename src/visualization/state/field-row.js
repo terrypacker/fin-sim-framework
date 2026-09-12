@@ -99,13 +99,19 @@ function valueCell(valueText, valueTitle, untyped) {
  * @param {boolean}      [o.untyped]   marks a value with no schema entry
  * @param {number[]|null}[o.history]   values for the sparkline
  * @param {Element|null} [o.toggle]    the checkbox for the first column
+ * @param {Element|null} [o.handle]    an optional cell after the toggle (the Watchlist's drag handle)
+ * @param {Element|null} [o.trail]     an optional cell after the value (the Watchlist's ⋯ menu)
+ * @param {string|null}  [o.extraClass] a class for a caller-specific grid (e.g. `wl-row`)
  * @param {Function|null}[o.onClick]
  */
 export function buildFieldRow({ path, label, valueText, valueTitle = null, untyped = false,
-                                history = null, toggle = null, onClick = null }) {
+                                history = null, toggle = null, handle = null, trail = null,
+                                extraClass = null, onClick = null }) {
   const row = document.createElement('div');
   row.className = 'lsp-metric-row lsp-clickable-row';
+  if (extraClass) row.classList.add(extraClass);
   row.appendChild(toggle ?? document.createElement('span'));
+  if (handle) row.appendChild(handle);
 
   const lbl = document.createElement('span');
   lbl.className = 'lsp-metric-label';
@@ -120,6 +126,7 @@ export function buildFieldRow({ path, label, valueText, valueTitle = null, untyp
   row.appendChild(sparkCell);
 
   row.appendChild(valueCell(valueText, valueTitle, untyped));
+  if (trail) row.appendChild(trail);
   if (onClick) row.addEventListener('click', onClick);
   return row;
 }

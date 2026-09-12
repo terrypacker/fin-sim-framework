@@ -14,7 +14,7 @@ resolution, a State panel checkbox means "in the active list", the chip ✕ un-c
 there is an active-list picker, `runtime.watchlist`, and `WATCHLIST_CHANGED`. The user
 confirmed the §4 decisions on 12 Sep. **R2 ✅ (12 Sep)**: `FieldFormatter` and the shared
 field row are built. The chart takes its kinds, labels and tooltip values from the one
-stamped registry (§9.7).
+stamped registry (§9.7). **W3 ✅ (12 Sep)**: the Watchlist panel is built (§5.5).
 
 **Builds on** `design/31-state-field-exploration.md`, which made every numeric state path
 chartable, moved selection into the State panel, and gave the chart an allow-list
@@ -254,6 +254,49 @@ Default pane: **right**, next to `state-panel`. It is built on `hostPanePlugin` 
   the active list activates the next one), and drag reorder. Deleting the last list leaves
   zero lists. The chart is then empty, which is a legitimate state (§2.1 notes that today it
   cannot be expressed).
+
+### 5.5 As built (W3, 12 Sep 2026)
+
+- **`WatchlistPlugin`** (`plugins/finance/watchlist-plugin.js`, tab id `watchlist`) is
+  self-contained, like `HoldingsPlugin`, not a `hostPanePlugin`. The app builds nothing
+  for it. It works entirely through `runtime.watchlist` and `WATCHLIST_CHANGED`, the
+  cross-panel contract, and holds no list state. Its default place is the right pane after
+  State, and the Analysis and Review presets include it. The closed-tab boot sweep covers
+  it automatically.
+- **Values** are read from `sim.state` on each sim-bus step, coalesced to one per frame,
+  so they follow the run and a scrub. They are formatted through `FieldFormatter` compact
+  (`$3.21M`), with the conversion/untyped hover.
+  - Rows are rebuilt only when a list changes. A step refreshes only the value and
+    sparkline cells, so a drag or an open ⋯ menu survives a running simulation.
+  - A path that is `null` or absent at the current date is muted and reads "not in state
+    at this date".
+- **Sparklines** come from `runtime.watchlist.series(path)`, the full-resolution capture
+  buffer.
+- **The facade grew** to serve the panel. Alongside `has`, `add`, `remove`, `active` it now
+  has `lists`, `activeId`, `setActive`, `create`, `rename`, `duplicate`, `delete`,
+  `setCharted`, `setLabel`, `setAxis`, `moveEntry` and `series`.
+- **An entry's label and axis reach the chart.** The controller passes each charted entry
+  to `ChartPresenter.applySeriesMeta`:
+  - a user label replaces the context label, and clearing it restores that label;
+  - `axis: 'left' | 'right'` forces the series onto that side through
+    `ChartView.setSeriesAxis`. `_axisIndexFor(key)` replaces every per-series use of
+    kind-only bucketing.
+  - label and axis changes re-emit the series with `replaceMerge`, so a renamed legend
+    entry does not linger.
+  - the override survives a rewind.
+- **`FIELD_HISTORY_OPEN {path}`** is published on a row click. The app routes it to
+  `StatePanelView.openFieldHistory`, and the modal opens over the page whether or not the
+  State tab is showing.
+- **Maintenance:**
+  - New and Rename use a prompt. Delete asks for confirmation, naming the field count;
+    deleting the active list activates the next one, and deleting the last leaves an
+    empty-state message with the list buttons disabled.
+  - Drag the ⠿ handle to reorder.
+  - The row's ⋯ menu offers Rename label (blank restores the automatic label), Chart axis
+    (Auto/Left/Right, current value checked), Copy path, Move up/down (a keyboard-reachable
+    alternative to dragging), and Remove from watchlist.
+  - Lists themselves are not reordered in the UI; `moveList` exists in the model.
+- **Not in W3:** export/import and the series CSV (W4), producers on other panels (W5).
 
 ### 5.4 Default for a scenario with no watchlists
 
@@ -693,7 +736,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **R2** ✅ | `FieldFormatter` + a shared row renderer (sparkline included) used by the State panel. The chart's axis, tooltip and chips go through `describe()`, with one registry (R-9). `contextLabel`. See §9.7. | R1 | none |
 | **W1** ✅ | `WatchlistModel` (`src/visualization/watchlist/watchlist-model.js`) + legacy migration + `metrics.<stateKey>` alias + persistence (`activeWatchlistId` marker in `serializeScenario`) + default seed (§5.4, §8.1). Unit tests: `watchlist-model.test.mjs` (migration, round-trip, delete-last, alias, normalization, events) plus serializer cases. Not wired into the app; W2 wires it. | — | none |
 | **W2** ✅ | `WatchCapture`, the chart fed from charted entries, chip ✕ un-charts, State checkbox = membership, active-list label/switcher, `runtime.watchlist` + `WATCHLIST_CHANGED`. Built as §8.2. | W1 | none |
-| **W3** `[ ]` | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. | W2 | none |
+| **W3** ✅ | Watchlist panel: picker, CRUD, rows, live values, sparklines, reorder, label edit, axis override, muted-absent rows, `FIELD_HISTORY_OPEN`. Browser-verified. See §5.5. | W2 | none |
 | **M1** `[ ]` | `marketIndex` / `securityIndex` (§6): carrier (Q2), step, shock hook, schema kind, the holding-tracks-index invariant test, cost probe. | — (parallel to W) | **additive only** |
 | **W4** `[ ]` | Export/import definition JSON + series CSV (§8.1). | W3 | none |
 | **W5** `[ ]` | Producers: Securities ☆ (security + market index), Holdings ☆ (`<stateKey>.holdings[id=…].marketValue`, `pricePerUnit`). | W2, M1 | none |
@@ -701,7 +744,7 @@ Status legend: `[ ]` not started · 🔶 in progress · ✅ complete.
 | **M3** `[ ]` | Flow amounts, per the Q1 answer. | Q1 | depends on Q1 |
 | **Later** | MC Results: the sampler records watched paths at year-boundary cadence and renders fans per entry (`mc-sampling.js` already records a point per year). Scenario Compare: watched paths side by side. | W2 | none |
 
-Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3**, with **M1** alongside. Then **W4 / W5**,
+Build order: **W0 ✅ → R1 ✅ → W1 ✅ → W2 ✅ → R2 ✅ → W3 ✅**, with **M1** alongside. Then **W4 / W5**,
 then **M2**, then **M3**. R1 comes next because it is independent, display-only, and fixes
 live defects (R-1 affects every lot today). R2 has to land before W3, because the Watchlist
 panel renders through it.

@@ -47,7 +47,9 @@ export class ChartPresenter extends BaseComponent {
     this._backfilledPaths  = new Set();  // active paths currently shown at snapshot resolution (R10.1)
     this._fieldStore       = null;       // shared FieldSeriesStore, read to backfill on activation
     this._liveAfter        = new Map();  // path → ms of the last backfilled point (see activatePath)
-    this._labels           = new Map();  // path → legend/chip label, fixed at activation
+    this._labels           = new Map();  // path → legend/chip label shown (a watch's own label wins)
+    this._autoLabels       = new Map();  // path → the context label fixed at activation
+    this._axes             = new Map();  // path → 'left' | 'right': a watch entry's axis override
     this._formatter        = null;       // FieldFormatter over the stamped registry (R2)
     this._onChipRemove     = null;       // chip ✕ callback (R7.3)
     this._drainExecEndMsgs = () => [];
@@ -172,7 +174,11 @@ export class ChartPresenter extends BaseComponent {
   _activate(path) {
     this._activePaths.add(path);
     this._controller.discoverKey(path, groupFor(path));
-    if (this._formatter) this._labels.set(path, this._uniqueLabel(path, this._formatter.contextLabel(path)));
+    if (this._formatter) {
+      const auto = this._uniqueLabel(path, this._formatter.contextLabel(path));
+      this._autoLabels.set(path, auto);
+      this._labels.set(path, auto);
+    }
     this._describeToView(path);
     this._view.setDatasetVisible(path, true);
     this._renderChips();
@@ -184,6 +190,34 @@ export class ChartPresenter extends BaseComponent {
     this._view.setSeriesKind(path, kind);
     const label = this._labels.get(path);
     if (label) this._view.setSeriesLabel?.(path, label);
+    const axis = this._axes.get(path);
+    if (axis) this._view.setSeriesAxis?.(path, axis);
+  }
+
+  /**
+   * Apply each charted watch entry's own label and axis (design 101 W3). A label the
+   * user gave replaces the context label; clearing it restores that label. An axis
+   * other than 'auto' puts the series on that side whatever its kind, which is how a
+   * 100-based index is kept off a millions-of-dollars axis (§6.4).
+   * @param {{ path: string, label: string|null, axis: string }[]} entries
+   */
+  applySeriesMeta(entries) {
+    let chipsDirty = false;
+    for (const { path, label, axis } of entries ?? []) {
+      if (!this._activePaths.has(path)) continue;
+      const nextLabel = label || this._autoLabels.get(path);
+      if (nextLabel && nextLabel !== this._labels.get(path)) {
+        this._labels.set(path, nextLabel);
+        this._view.setSeriesLabel?.(path, nextLabel);
+        chipsDirty = true;
+      }
+      const nextAxis = axis === 'left' || axis === 'right' ? axis : 'auto';
+      if (nextAxis !== (this._axes.get(path) ?? 'auto')) {
+        if (nextAxis === 'auto') this._axes.delete(path); else this._axes.set(path, nextAxis);
+        this._view.setSeriesAxis?.(path, nextAxis);
+      }
+    }
+    if (chipsDirty) this._renderChips();
   }
 
   /**
@@ -229,6 +263,8 @@ export class ChartPresenter extends BaseComponent {
     this._activePaths.delete(path);
     this._liveAfter.delete(path);
     this._labels.delete(path);
+    this._autoLabels.delete(path);
+    this._axes.delete(path);
     this._setBackfilled(path, false);
     this._view.removeSeries?.(path);
     this._renderChips();

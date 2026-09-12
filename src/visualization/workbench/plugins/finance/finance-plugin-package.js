@@ -13,6 +13,7 @@ import { InspectorPlugin }   from './inspector-plugin.js';
 import { TimelinePlugin }    from './timeline-plugin.js';
 import { ChartPlugin }       from './chart-plugin.js';
 import { StatePanelPlugin }  from './state-panel-plugin.js';
+import { WatchlistPlugin }   from './watchlist-plugin.js';
 import { DashboardPlugin }   from './dashboard-plugin.js';
 import { McConfigPlugin }    from './mc-config-plugin.js';
 import { McResultsPlugin }   from './mc-results-plugin.js';
@@ -38,7 +39,7 @@ import { PaychequePlugin }         from './paycheque-plugin.js';
 import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
 
 export { ScenarioPlugin, ParametersPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
-         TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
+         TimelinePlugin, ChartPlugin, StatePanelPlugin, WatchlistPlugin, DashboardPlugin,
          McConfigPlugin, McResultsPlugin, McRunsPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
@@ -60,6 +61,7 @@ export const FINANCE_PLUGINS = [
   { id: 'mc-results',   title: 'MC Results',    component: McResultsPlugin   },
   { id: 'opt-results',  title: 'OPT Results',   component: OptResultsPlugin  },
   { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
+  { id: 'watchlist',    title: 'Watchlist',     component: WatchlistPlugin   },
   { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin    },
   { id: 'allocation',   title: 'Allocation',    component: AllocationPlugin  },
   { id: 'securities',   title: 'Securities',    component: SecuritiesPlugin  },
@@ -93,7 +95,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'config-graph',
   },
   right: {
-    tabs: ['state-panel', 'action-detail', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
+    tabs: ['state-panel', 'watchlist', 'action-detail', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
     active: 'state-panel',
   },
   bottom: {
