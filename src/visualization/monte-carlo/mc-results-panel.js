@@ -19,9 +19,11 @@ import {
   pairingMismatches, pairedRescues, pairedMetric, failureRate,
 } from '../../finance/monte-carlo/mc-analysis.js';
 import {
-  GRID_METRICS, GRID_STATS, GRID_READINGS, FAILURE_RATE,
+  GRID_METRICS, GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_CONSTRAINT_OPS,
   gridMetric, gridCellMetric, rankCells, normalizeGridReading,
+  activeConstraints, gridConstraintCheck, betterOp,
 } from '../../finance/monte-carlo/mc-grid-metrics.js';
+import { buildRowListEditor } from '../components/row-list-editor.js';
 import {
   mixSeriesFromRuns, mixBands, mixByOutcome, thresholdProbabilities, outcomeGapAt,
   DEFAULT_MIX_THRESHOLDS,
@@ -83,6 +85,10 @@ const fmtSignedPct   = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Mat
 const fmtPp          = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} pp`);
 
 const STAT_LABELS = { p10: 'P10', p50: 'P50', p90: 'P90', winRate: 'Win rate' };
+const LEVEL_STAT_OPTIONS = [GRID_STATS.P10, GRID_STATS.P50, GRID_STATS.P90].map(s => [s, STAT_LABELS[s]]);
+const OP_LABELS = { [GRID_CONSTRAINT_OPS.GE]: '≥', [GRID_CONSTRAINT_OPS.LE]: '≤' };
+/** What a constraint's threshold is typed in (design 100 §10.10). */
+const THRESHOLD_HINT = { money: '$', pct: '%', count: 'count' };
 
 /** A grid metric's value in its registry unit (design 100 §10.4). */
 function fmtUnit(unit, v) {
@@ -486,6 +492,7 @@ export class McResultsPanel extends BaseComponent {
 
     const view = this._gridRankView(g, ref);
     wrapper.appendChild(this._buildGridControls(g, det));
+    wrapper.appendChild(this._buildGridConstraints(det));
     if (view.unpaired) {
       const banner = document.createElement('div');
       banner.className = 'mc-ab-banner';
@@ -500,8 +507,16 @@ export class McResultsPanel extends BaseComponent {
     if (view.paired) {
       wrapper.appendChild(noteEl(`Ranked against the reference: ${this._gridCellLabel(g, this._gridRef)}.`));
     }
+    if (view.checks) {
+      const k = view.eligible.filter(Boolean).length;
+      const line = noteEl(k ? `${k} of ${g.cells.length} cells meet the constraints; the rest are greyed and unranked.`
+        : 'No cell meets every constraint, so nothing is ranked.');
+      line.classList.add('mc-grid-qualify');
+      wrapper.appendChild(line);
+    }
     wrapper.appendChild(this._buildGridTable(g, det, ref, view));
     wrapper.appendChild(noteEl(this._gridNote(det, view)));
+    wrapper.appendChild(this._buildGridList(g, det, view));
     wrapper.appendChild(this._buildGridDetail(g, ref));
     this._container.appendChild(wrapper);
   }
@@ -521,8 +536,13 @@ export class McResultsPanel extends BaseComponent {
     const metric  = gridMetric(rank.metric);
     const results = g.cells.map(c => gridCellMetric(c.rows, { ...rank, refRows: ref.rows }));
     const paired  = rank.reading === GRID_READINGS.PAIRED;
+    // Constraints read each cell's own level, so moving the reference never changes which
+    // cells qualify (§10.10). Null when none is active: every cell is in play.
+    const active   = activeConstraints(rank.constraints);
+    const checks   = active.length ? g.cells.map(c => gridConstraintCheck(c.rows, active)) : null;
+    const eligible = checks?.map(c => c.meets) ?? null;
     return {
-      rank, metric, results, ranks: rankCells(results), unpaired, paired,
+      rank, metric, results, ranks: rankCells(results, eligible), unpaired, paired, checks, eligible,
       // A difference has a sign, so it shades on two hues around zero; a win rate does not.
       diverging: paired && (metric.id === FAILURE_RATE || rank.stat !== GRID_STATS.WIN_RATE),
     };
@@ -537,11 +557,7 @@ export class McResultsPanel extends BaseComponent {
     const rank = this._gridRank;
     const bar = document.createElement('div');
     bar.className = 'mc-grid-rank-controls';
-    const set = (patch) => {
-      this._gridRank = normalizeGridReading({ ...this._gridRank, ...patch }, g.mode);
-      this._renderGrid();
-      this._emitGridSelection();
-    };
+    const set = (patch) => this._setGridRank(patch);
     const select = (cls, title, options, value, key) => {
       const s = document.createElement('select');
       s.className = cls;
@@ -584,6 +600,195 @@ export class McResultsPanel extends BaseComponent {
       bar.appendChild(label);
     }
     return bar;
+  }
+
+  /** Change how the cells are read. A re-render, never a re-run; the presenter hears it. */
+  _setGridRank(patch) {
+    this._gridRank = normalizeGridReading({ ...this._gridRank, ...patch }, this._grid.mode);
+    this._renderGrid();
+    this._emitGridSelection();
+  }
+
+  /** Read a cell against the reference, from the heatmap or the list. */
+  _selectGridCell(index) {
+    this._gridSel = index;
+    this._renderGrid();
+    this._emitGridSelection();
+  }
+
+  /**
+   * The constraints editor (design 100 §10.10): typed rows of metric, statistic,
+   * comparison and threshold, in a collapsible section that opens once any is set.
+   */
+  _buildGridConstraints(det) {
+    const rows = this._gridRank.constraints;
+    // The editor edits rows in place and does not say which cell changed. A row whose
+    // metric changed takes that metric's better direction; the user can flip it after.
+    const was = new Map(rows.map(r => [r, r.metric]));
+    const editor = buildRowListEditor({
+      rows,
+      columns: [
+        { field: 'metric', label: 'Metric', type: 'select', width: '2fr',
+          options: GRID_METRICS.map(m => [m.id, m.label]) },
+        ...(det ? [] : [{ field: 'stat', label: 'Statistic', type: 'select',
+          options: (row) => (row?.metric === FAILURE_RATE ? [[GRID_STATS.P50, '—']] : LEVEL_STAT_OPTIONS) }]),
+        { field: 'op', label: '', type: 'select', width: '48px', options: Object.entries(OP_LABELS) },
+        { field: 'threshold', label: 'Threshold', type: 'number', step: 'any',
+          placeholder: (row) => THRESHOLD_HINT[gridMetric(row.metric).unit] },
+      ],
+      newRow: () => ({ metric: FAILURE_RATE, stat: GRID_STATS.P50, op: GRID_CONSTRAINT_OPS.LE, threshold: 10 }),
+      addLabel: '+ Constraint',
+      emptyText: 'No constraints: every cell is ranked.',
+      onChange: () => {
+        for (const r of rows) if (was.has(r) && was.get(r) !== r.metric) r.op = betterOp(r.metric);
+        this._setGridRank({ constraints: rows });
+      },
+    });
+    return this._gridSection('mc-grid-constraints', '_gridConstraintsOpen', rows.length > 0,
+      `Constraints${activeConstraints(rows).length ? ` (${activeConstraints(rows).length} active)` : ''}`, editor);
+  }
+
+  /** A collapsible section whose open state outlives the re-render a change causes. */
+  _gridSection(cls, openKey, openByDefault, title, body) {
+    const details = document.createElement('details');
+    details.className = `mc-grid-section ${cls}`;
+    details.open = this[openKey] ?? openByDefault;
+    details.addEventListener('toggle', () => { this[openKey] = details.open; });
+    const summary = document.createElement('summary');
+    summary.textContent = title;
+    details.append(summary, body);
+    return details;
+  }
+
+  /** A constraint in words: "P10 Net-liquidity trough (real) ≥ $50k". */
+  _constraintText(c, det) {
+    const m = gridMetric(c.metric);
+    const stat = det || m.id === FAILURE_RATE ? '' : `${STAT_LABELS[c.stat]} `;
+    const t = m.unit === 'pct' ? `${c.threshold}%` : m.unit === 'money' ? fmtK(c.threshold) : String(c.threshold);
+    return `${stat}${m.label} ${OP_LABELS[c.op]} ${t}`;
+  }
+
+  /** What a cell missed, with its own value beside each constraint. */
+  _missText(misses, det) {
+    return misses.map(({ constraint: c, value, unavailable }) => `${this._constraintText(c, det)} `
+      + `(${unavailable ? 'unavailable' : fmtUnit(gridMetric(c.metric).unit, value)})`).join('; ');
+  }
+
+  /**
+   * The ranked list (design 100 §10.10 C): one row per cell with the ranking column and
+   * the chosen columns side by side. A header click sorts, a second reverses; a row click
+   * selects the cell as a heatmap click does.
+   */
+  _buildGridList(g, det, view) {
+    const { rank, metric: m, results, ranks, checks, paired } = view;
+    const statOf = (id, stat) => (det || id === FAILURE_RATE ? '' : `${STAT_LABELS[stat]} `);
+
+    // The chosen columns read levels. One that repeats the ranking column is dropped.
+    const repeats = (c) => !paired && !rank.survivorsOnly && c.metric === m.id
+      && (m.id === FAILURE_RATE || c.stat === rank.stat);
+    const seen = new Set();
+    const chosen = rank.columns.filter(c => !repeats(c)).map(c => {
+      const cm  = gridMetric(c.metric);
+      const res = g.cells.map(cell => gridCellMetric(cell.rows, c));
+      return { key: `col:${c.metric}:${c.stat}`, label: `${statOf(c.metric, c.stat)}${cm.label}`, res, better: cm.better,
+        text: (k) => this._gridValueText(res[k], { metric: cm, rank: { stat: c.stat }, paired: false }, false) };
+    }).filter(c => !seen.has(c.key) && seen.add(c.key));
+
+    const heads = [
+      { key: 'rank', label: '#' },
+      // The axes are named once, in the header; a row carries only its values. The full
+      // label on every row pushed the value columns off the pane.
+      { key: 'cell', label: g.axes.map(a => a.label).join(' · ') },
+      { key: 'objective', label: `${paired ? 'Δ ' : ''}${statOf(m.id, rank.stat)}${m.label}`
+        + (rank.survivorsOnly ? ' (survivors)' : '') },
+      ...chosen,
+      ...(checks ? [{ key: 'meets', label: 'Meets' }] : []),
+    ];
+
+    // Sort keys: smaller sorts first in a column's natural order (best first); null sorts
+    // last in either direction. The ranking column sorts by rank, which already places
+    // degenerate and ineligible cells.
+    const valueKey = (r, better) => (r.unavailable || r.degenerate || !Number.isFinite(r.value) ? null
+      : (better === 'higher' ? -r.value : r.value));
+    const sort = rank.listSort;
+    const keyOf = {
+      rank: k => ranks[k], objective: k => ranks[k], cell: k => k,
+      meets: k => (checks ? (checks[k].meets ? 0 : 1) : null),
+      ...Object.fromEntries(chosen.map(c => [c.key, k => valueKey(c.res[k], c.better)])),
+    }[sort.key] ?? (k => ranks[k]);
+    const order = g.cells.map((_, k) => k).sort((a, b) => {
+      const x = keyOf(a), y = keyOf(b);
+      if (x == null || y == null) return (x == null) - (y == null) || a - b;
+      return (sort.reversed ? y - x : x - y) || a - b;
+    });
+
+    const table = document.createElement('table');
+    table.className = 'mc-shape-table mc-grid-list';
+    const headRow = document.createElement('tr');
+    for (const { key, label } of heads) {
+      const th = document.createElement('th');
+      th.dataset.key = key;
+      th.title = 'Sort on this column; click again to reverse';
+      th.textContent = label + (sort.key === key ? (sort.reversed ? ' ↑' : ' ↓') : '');
+      th.addEventListener('click', () => this._setGridRank({
+        listSort: { key, reversed: sort.key === key ? !sort.reversed : false },
+      }));
+      headRow.appendChild(th);
+    }
+    table.appendChild(document.createElement('thead')).appendChild(headRow);
+
+    const body = table.appendChild(document.createElement('tbody'));
+    for (const k of order) {
+      const tr = document.createElement('tr');
+      tr.className = 'mc-grid-list-row';
+      tr.dataset.cell = String(k);
+      if (k === this._gridRef) tr.classList.add('mc-grid-list-row--ref');
+      if (k === this._gridSel) tr.classList.add('mc-grid-list-row--sel');
+      if (view.eligible && !view.eligible[k]) tr.classList.add('mc-grid-list-row--excluded');
+      const name = cell(g.cells[k].values.map(v => formatAxisValue(v)).join(' · ')
+        + (k === this._gridRef ? ' (ref)' : ''), 'mc-shape-name');
+      name.title = this._gridCellLabel(g, k);
+      tr.append(
+        cell(ranks[k] != null ? `#${ranks[k]}` : '—'),
+        name,
+        cell(this._gridValueText(results[k], view, k === this._gridRef)),
+        ...chosen.map(c => cell(c.text(k))),
+      );
+      if (checks) tr.appendChild(cell(checks[k].meets ? '✓' : `✗ ${this._missText(checks[k].misses, det)}`, 'mc-grid-list-meets'));
+      tr.addEventListener('click', () => this._selectGridCell(k));
+      body.appendChild(tr);
+    }
+
+    const section = document.createElement('div');
+    section.className = 'mc-ab-section mc-grid-list-section';
+    const label = document.createElement('div');
+    label.className = 'mc-section-label';
+    label.textContent = 'Cells, ranked';
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-grid-table-wrap';
+    wrap.appendChild(table);
+    section.append(label, this._buildGridColumns(det), wrap);
+    return section;
+  }
+
+  /** The list's columns: a reorderable row-list of metric and statistic. */
+  _buildGridColumns(det) {
+    const rows = this._gridRank.columns;
+    const editor = buildRowListEditor({
+      rows,
+      reorderable: true,
+      columns: [
+        { field: 'metric', label: 'Metric', type: 'select', width: '2fr',
+          options: GRID_METRICS.map(m => [m.id, m.label]) },
+        ...(det ? [] : [{ field: 'stat', label: 'Statistic', type: 'select',
+          options: (row) => (row?.metric === FAILURE_RATE ? [[GRID_STATS.P50, '—']] : LEVEL_STAT_OPTIONS) }]),
+      ],
+      newRow: () => ({ metric: 'afterTaxNW', stat: GRID_STATS.P50 }),
+      addLabel: '+ Column',
+      emptyText: 'Only the ranking column.',
+      onChange: () => this._setGridRank({ columns: rows }),
+    });
+    return this._gridSection('mc-grid-columns', '_gridColumnsOpen', false, 'Columns', editor);
   }
 
   /** What the cells show, in a sentence under the table. */
@@ -728,8 +933,9 @@ export class McResultsPanel extends BaseComponent {
         if (view.paired && res.reverseRescues) td.classList.add('mc-grid-cell--harm');
         if (index === this._gridRef) td.classList.add('mc-grid-cell--ref');
         if (index === this._gridSel) td.classList.add('mc-grid-cell--sel');
+        if (view.eligible && !view.eligible[index]) td.classList.add('mc-grid-cell--excluded');
         td.title = this._gridCellTitle(g, index, det, ref.rows, view, maxRank);
-        td.addEventListener('click', () => { this._gridSel = index; this._renderGrid(); this._emitGridSelection(); });
+        td.addEventListener('click', () => this._selectGridCell(index));
         tr.appendChild(td);
       });
       body.appendChild(tr);
@@ -753,6 +959,8 @@ export class McResultsPanel extends BaseComponent {
         + this._gridValueText(view.results[index], view, index === this._gridRef)
         + (rank != null ? ` · rank #${rank} of ${maxRank}` : ''),
     ];
+    const check = view.checks?.[index];
+    if (check && !check.meets) lines.push(`misses: ${this._missText(check.misses, det)}`);
     if (index === this._gridRef) {
       lines.push('the reference cell');
     } else {

@@ -1,8 +1,8 @@
 # 100 — The Monte Carlo analysis surface (in-app)
 
 **Status: Steps 1–4 BUILT (11 Sep 2026). Step 5, ranking grid cells by a chosen
-criterion, DESIGNED 12 Sep 2026 (§10); phase 1 BUILT 12 Sep 2026 (§10.9), phase 2 not
-started. In-app checks and the end-of-design review are open. Start at §9 when picking
+criterion, DESIGNED 12 Sep 2026 (§10); phase 1 BUILT 12 Sep 2026 (§10.9); phase 2
+BUILT 12 Sep 2026 (§10.10, §10.11). In-app checks and the end-of-design review are open. Start at §9 when picking
 this up.**
 
 ## 1. Problem
@@ -376,8 +376,9 @@ a real plan in the app yet.** First checks:
 **Step 5 phase 1 is built (§10.9), not yet exercised on a real plan in the app.** First
 check: an MC grid at small n, ranked on the P10 real net-liquidity trough. Cells with 10%
 or more failures should read "fails" and rank last; survivors-only should give them
-values. Then switch to Δ vs reference and move the reference. Phase 2 (§10.7) needs its
-short design pass after that. F and G (§10.8) are not designed.
+values. Then switch to Δ vs reference and move the reference. Phase 2 is built
+(§10.11): add "failure rate ≤ 10%", check the greyed cells against the list's Meets
+column, and sort the list on a column. F and G (§10.8) are not designed.
 
 **Review at the end of design 100** (after the user has used the UI):
 - §8 Q1: should the baseline survive a scenario switch, so a copy of the plan can be
@@ -636,9 +637,7 @@ a decision.
   constraint are greyed out and unranked, and the header says how many of the cells
   qualify. It uses the same registry and `gridCellMetric`, so a constraint and a ranking
   cannot disagree about a number.
-- Needs its own short design pass once phase 1 has been used on a real plan: which
-  columns the list shows by default, and whether a constraint set is saved with the
-  scenario.
+- The design pass is §10.10.
 
 ### 10.8 Later — noted, not yet designed
 
@@ -670,9 +669,9 @@ a decision.
     `.mc-grid-stat`, `.mc-grid-reading` and `.mc-grid-survivors`.
   - Each cell prints its value (`.mc-grid-val`), its rank (`.mc-grid-rank`) and, when
     survivors-only is on, the survivor count (`.mc-grid-sub`).
-  - The best cell is outlined outside its border, apart from the reference and selection
-    outlines.
+  - The best cell's rank mark is drawn in the theme accent (`--accent-primary`).
   - Level shading uses one hue, and darker is better. A paired Δ shades green or red.
+    The tint is scaled to at most 36% of the hue, so the text reads over the darkest cell.
   - The metric's caveat line sits above the table, and the tooltip gains a
     "metric · rank #k of N" line.
 - **Paired reading (D).**
@@ -700,3 +699,118 @@ a decision.
   falls. It always ranks higher-is-better.
 - **A new grid keeps the ranking** only when its mode matches the last grid's. A
   deterministic grid ranked on the failure rate would be pass/fail, which ✗ already shows.
+
+**Polished after use in the app (12 Sep 2026):**
+- **The best cell is not ringed in green.** In the paired failure reading, every cell that
+  ties the reference ranks #1, so a green ring marked 12 of 16 cells. It made "no
+  different" read as "better", in the same hue as a gain. The #1 mark is now drawn in the
+  theme accent instead.
+- **Harm is a warning-coloured border**, not warning-coloured text: orange text over a red
+  loss fill did not read.
+- **A zero count or difference has no sign.** Tied cells read `0 / 0`, not `+0 / −0`.
+
+### 10.10 Phase 2 design (12 Sep 2026)
+
+**Decided with the user:**
+- **List columns:** the ranking column, then failure rate, P50 after-tax NW and P10
+  trough, with any duplicate of the ranking column dropped. The user can add, remove and
+  reorder columns.
+- **Constraints are session state.** They live in `_gridView.rank`, beside the ranking,
+  and travel with it across a rebuild and onto the next grid of the same mode. The grid's
+  axes and results are not saved with the scenario, so a saved constraint would have no
+  grid to apply to.
+- **Constraints read levels only.** A constraint is the cell's own value, so moving the
+  reference never changes which cells qualify. The objective can still rank on Δ.
+- **The list sits under the heatmap**, always shown, between the heatmap and the cell
+  detail.
+
+**E, constraints.**
+- A constraint is `{ metric, stat, op, threshold }`, edited as typed rows in the
+  row-list editor: a metric, a statistic (P10, P50 or P90; hidden for the failure rate and
+  in deterministic mode), `≥` or `≤`, and a threshold.
+- **The threshold is typed in the unit the panel prints:** dollars, a percentage (10 means
+  10%) or a count. One helper converts it, so a percentage constraint cannot be compared
+  with a fraction by mistake.
+- A new row starts as "failure rate ≤ 10%". Picking a metric sets `op` to its better
+  direction (`≥` for higher-is-better); the user can flip it.
+- **A row with a blank threshold is inactive.** It stays in the editor, so a half-typed
+  row is not lost, and it does not count.
+- **What a constraint reads:**
+  - It is taken over all of the cell's paths. Survivors-only is a way of viewing the
+    ranking, not part of the test.
+  - A degenerate value (§10.3.4) is still a number, about zero, so "P10 trough ≥ \$y"
+    fails it on its own; there is no special case.
+  - An unavailable metric fails the constraint, and the reason says so.
+- **In the heatmap:** a cell that misses any active constraint is greyed, unshaded and
+  unranked, and its tooltip lists what it missed. Ranks, shading and the best mark are
+  computed over the qualifying cells only. A line above the table reads "k of N cells meet
+  the constraints". If none qualify it says so, and nothing is ranked.
+- `rankCells(results, eligible)` takes the qualifying mask. `gridConstraintCheck(rows,
+  constraints, mode)` returns `{ meets, misses }` from `gridCellMetric`, so a constraint
+  and a column cannot disagree about a number.
+
+**C, the ranked list.**
+- A table with one row per cell: rank, the cell's axis values, the ranking column (on the
+  current reading, Δ included), then the chosen columns. The chosen columns read levels,
+  each at its own statistic.
+- When constraints are active, a "Meets" column shows ✓, or ✗ with what the cell missed.
+- **Order:** by rank by default, with unranked cells last. A header click sorts on that
+  column, and a second click reverses it. The sort is kept in the view state.
+- The reference row is marked and the selected row is highlighted. A row click selects
+  the cell, as a heatmap click does.
+- The columns are a reorderable row-list of `{ metric, stat }`; its "+ Add" appends P50
+  after-tax NW.
+- The constraints and columns editors are collapsible sections. The constraints section
+  opens when any constraint is set.
+
+**Build order:**
+1. **Pure.** Add `normalizeGridConstraints`, `normalizeGridColumns`,
+   `gridConstraintCheck`, and the `eligible` mask on `rankCells`, to `mc-grid-metrics.js`.
+   `normalizeGridReading` carries `constraints`, `columns` and `listSort`. Unit tests:
+   `op` and units, a blank row is inactive, unavailable fails, the failure rate ignores
+   `stat`, deterministic mode forces P50, and ranks cover the eligible cells only.
+2. **Constraints in the heatmap.** The editor, the greyed cells, the count line, and
+   ranks over the qualifiers. Viz tests.
+3. **The list.** The table, the sort, row selection and the columns editor. Viz tests,
+   plus a presenter test that the constraints survive `getGridState` / `restoreGrid`.
+
+### 10.11 Phase 2 BUILT (12 Sep 2026)
+
+- **Pure (`mc-grid-metrics.js`).**
+  - New: `GRID_CONSTRAINT_OPS`, `DEFAULT_GRID_COLUMNS`, `betterOp`,
+    `normalizeGridConstraints`, `activeConstraints`, `normalizeGridColumns`,
+    `constraintThreshold` and `gridConstraintCheck(rows, constraints)`.
+  - `rankCells(results, eligible)` ranks only the eligible cells.
+  - `normalizeGridReading` carries `constraints`, `columns` and `listSort` in both modes.
+- **Panel.**
+  - A collapsible "Constraints" section (`.mc-grid-constraints`) below the "Rank by"
+    controls. A cell that misses a constraint gets `.mc-grid-cell--excluded`, and its
+    tooltip gains a "misses: …" line. The `.mc-grid-qualify` line gives the count.
+  - The list (`.mc-grid-list`, "Cells, ranked") sits between the heatmap note and the
+    cell detail, with a collapsible "Columns" editor (`.mc-grid-columns`).
+  - `_setGridRank` and `_selectGridCell` are now shared by the heatmap, the editors and
+    the list.
+- **Tests:**
+  - MGM-11…15;
+  - four viz tests in `tests/viz/mc-grid.test.mjs`: a constraint greys and re-ranks;
+    better direction and none qualifying; the list's sort and selection; the columns;
+  - the presenter round trip now carries a constraint.
+
+  All unit and viz tests pass.
+
+**Decided while building:**
+- **`gridConstraintCheck` takes no mode.** The constraints are normalized per mode, so a
+  deterministic constraint already reads P50.
+- **The ranking column sorts by rank, not by its raw value.** Rank already places
+  degenerate and ineligible cells, and a paired Δ and a win rate sort correctly without a
+  case of their own.
+- **A boundary value meets its constraint** (a 1e-9 tolerance), so a typed "20" admits a
+  cell at exactly 20%.
+
+**Polished after a first look on a real plan (12 Sep 2026, 4 × 4 house-sale-year grid):**
+- **The list names the axes once.** The header reads "AU House Sale Year · US House Sale
+  Year" and each row shows "2027 · 2028", with the full label on hover. Repeating the full
+  label on every row pushed the value columns and Meets off the pane.
+- **The editors take the grid's 10px size.** The shared row-list editor is sized for the
+  scenario forms, and among the grid controls it was the largest thing on the pane. The
+  override is scoped to `.mc-grid-section`.

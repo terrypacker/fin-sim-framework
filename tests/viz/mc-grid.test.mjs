@@ -324,6 +324,112 @@ describe('McResultsPanel — ranking grid cells (design 100 §10)', () => {
   });
 });
 
+const keysOf    = (root) => [...root.querySelectorAll('.mc-grid-list thead th')].map(th => th.dataset.key);
+const listOrder = (root) => [...root.querySelectorAll('.mc-grid-list-row')].map(tr => tr.dataset.cell);
+
+describe('McResultsPanel — constraints and the ranked list (design 100 §10.10)', () => {
+  test('a constraint greys the cells that miss it and ranks only the rest', () => {
+    const container = mount();
+    const panel = new McResultsPanel(container);
+    const seen = [];
+    panel.onGridCellSelected = (v) => seen.push(v);
+    panel.showGrid(GRID);
+    expect(container.querySelector('.mc-grid-qualify')).toBeNull();
+    expect(container.querySelector('.mc-grid-constraints').open).toBe(false);
+
+    // "+ Constraint" starts as failure rate ≤ 10%: cells 1 (25%) and 3 (50%) miss it.
+    container.querySelector('.mc-grid-constraints [data-id="addRow"]').click();
+    expect([...container.querySelectorAll('.mc-grid-cell--excluded')].map(c => c.dataset.cell)).toEqual(['1', '3']);
+    expect(rankOf(container)).toEqual(['#1', null, '#1', null]);
+    expect(container.querySelector('.mc-grid-qualify').textContent).toContain('2 of 4 cells meet the constraints');
+    expect(container.querySelector('.mc-grid-cell[data-cell="3"]').title).toContain('misses: Failure rate ≤ 10% (50.0%)');
+    expect(container.querySelector('.mc-grid-constraints summary').textContent).toBe('Constraints (1 active)');
+    expect(seen.at(-1).rank.constraints).toEqual([{ metric: 'failureRate', stat: 'p50', op: '<=', threshold: 10 }]);
+
+    // The threshold is typed in percent. A blank one leaves the row inactive, not deleted.
+    const threshold = () => container.querySelector('.mc-grid-constraints input[data-id="threshold"]');
+    threshold().value = '30';
+    threshold().dispatchEvent(new Event('change'));
+    expect(container.querySelector('.mc-grid-qualify').textContent).toContain('3 of 4');
+    threshold().value = '';
+    threshold().dispatchEvent(new Event('change'));
+    expect(container.querySelector('.mc-grid-qualify')).toBeNull();
+    expect(container.querySelectorAll('.mc-grid-constraints .age-band-row:not(.age-band-header)')).toHaveLength(1);
+    panel.destroy();
+  });
+
+  test('picking a metric takes its better direction; when nothing qualifies, nothing ranks', () => {
+    const container = mount();
+    const panel = new McResultsPanel(container);
+    panel.showGrid(GRID, { rank: { constraints: [{ metric: 'failureRate', op: '<=', threshold: 10 }] } });
+    expect(container.querySelector('.mc-grid-constraints').open).toBe(true);
+
+    pick(container, '.mc-grid-constraints select[data-id="metric"]', 'troughRealNetLiq');
+    expect(container.querySelector('.mc-grid-constraints select[data-id="op"]').value).toBe('>=');
+    // P50 trough ≥ $10: every cell clears it, even the one with two failed paths.
+    expect(container.querySelector('.mc-grid-qualify').textContent).toContain('4 of 4');
+
+    const threshold = container.querySelector('.mc-grid-constraints input[data-id="threshold"]');
+    threshold.value = '100000';
+    threshold.dispatchEvent(new Event('change'));
+    expect(container.querySelector('.mc-grid-qualify').textContent).toBe('No cell meets every constraint, so nothing is ranked.');
+    expect(rankOf(container)).toEqual([null, null, null, null]);
+    panel.destroy();
+  });
+
+  test('the ranked list: one row per cell, sortable, and a row click selects the cell', () => {
+    const container = mount();
+    const panel = new McResultsPanel(container);
+    panel.showGrid(GRID);
+    // The failure-rate column repeats the ranking column, so only the other two defaults show.
+    expect(keysOf(container)).toEqual(['rank', 'cell', 'objective', 'col:afterTaxNW:p50', 'col:troughRealNetLiq:p10']);
+    // Ranks #1, #2, #1, #3; ties keep grid order.
+    expect(listOrder(container)).toEqual(['0', '2', '1', '3']);
+    // The header names the axes once; a row carries its values, with the full label on hover.
+    expect(container.querySelector('.mc-grid-list th[data-key="cell"]').textContent).toBe('Retire year · Spend');
+    const refName = container.querySelector('.mc-grid-list-row--ref .mc-shape-name');
+    expect(refName.textContent).toBe('2032 · 4% (ref)');
+    expect(refName.title).toBe('Retire year 2032, Spend 4%');
+
+    const head = (key) => container.querySelector(`.mc-grid-list th[data-key="${key}"]`);
+    head('cell').click();
+    expect(listOrder(container)).toEqual(['0', '1', '2', '3']);
+    head('cell').click();
+    expect(listOrder(container)).toEqual(['3', '2', '1', '0']);
+    expect(head('cell').textContent).toBe('Retire year · Spend ↑');
+    // A value column sorts best first, and a "fails" (degenerate) value sorts last.
+    head('col:troughRealNetLiq:p10').click();
+    expect(listOrder(container)).toEqual(['0', '2', '1', '3']);
+    expect(container.querySelector('.mc-grid-list-row[data-cell="1"]').textContent).toContain('fails');
+
+    container.querySelector('.mc-grid-list-row[data-cell="1"]').click();
+    expect(container.querySelector('.mc-grid-cell--sel').dataset.cell).toBe('1');
+    expect(container.querySelector('.mc-grid-list-row--sel').dataset.cell).toBe('1');
+
+    // With a constraint the list gains a Meets column naming what each cell missed.
+    container.querySelector('.mc-grid-constraints [data-id="addRow"]').click();
+    expect(keysOf(container).at(-1)).toBe('meets');
+    expect(container.querySelector('.mc-grid-list-row[data-cell="3"]').textContent).toContain('✗ Failure rate ≤ 10% (50.0%)');
+    expect([...container.querySelectorAll('.mc-grid-list-row--excluded')].map(r => r.dataset.cell).sort()).toEqual(['1', '3']);
+    panel.destroy();
+  });
+
+  test('the columns are the user\'s: a new ranking metric frees the failure-rate column, and a removal sticks', () => {
+    const container = mount();
+    const panel = new McResultsPanel(container);
+    const seen = [];
+    panel.onGridCellSelected = (v) => seen.push(v);
+    panel.showGrid(GRID);
+    pick(container, '.mc-grid-metric', 'nw');
+    expect(keysOf(container)).toContain('col:failureRate:p50');
+
+    container.querySelector('.mc-grid-columns [data-id="removeRow"]').click();
+    expect(keysOf(container)).not.toContain('col:failureRate:p50');
+    expect(seen.at(-1).rank.columns).toEqual([{ metric: 'afterTaxNW', stat: 'p50' }, { metric: 'troughRealNetLiq', stat: 'p10' }]);
+    panel.destroy();
+  });
+});
+
 describe('MonteCarloPresenter — grid wiring', () => {
   afterEach(() => ServiceRegistry.resetAll());
 
@@ -364,10 +470,13 @@ describe('MonteCarloPresenter — grid wiring', () => {
     const metricSel = view.resultsPane.querySelector('.mc-grid-metric');
     metricSel.value = 'afterTaxNW';
     metricSel.dispatchEvent(new Event('change'));
+    // So are the constraints (design 100 §10.10): session state, beside the ranking.
+    view.resultsPane.querySelector('.mc-grid-constraints [data-id="addRow"]').click();
 
     // Carried across a rebuild with how it was being read.
     const state = presenter.getGridState();
     expect(state).toMatchObject({ showing: 'grid', ref: 3, sel: 0, rank: { metric: 'afterTaxNW' } });
+    expect(state.rank.constraints).toEqual([{ metric: 'failureRate', stat: 'p50', op: '<=', threshold: 10 }]);
     presenter.destroy();
 
     const view2 = { configPane: mount(), resultsPane: mount(), runsPane: mount(), destroy() {} };
@@ -379,6 +488,7 @@ describe('MonteCarloPresenter — grid wiring', () => {
     again.restoreGrid(state);
     expect(view2.resultsPane.querySelector('.mc-grid-cell--sel').dataset.cell).toBe('0');
     expect(view2.resultsPane.querySelector('.mc-grid-metric').value).toBe('afterTaxNW');
+    expect([...view2.resultsPane.querySelectorAll('.mc-grid-cell--excluded')].map(c => c.dataset.cell)).toEqual(['1', '3']);
     expect(view2.runsPane.querySelector('.mc-runs-context').textContent).toContain('Retire year 2030');
     again.destroy();
   });

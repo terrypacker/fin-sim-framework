@@ -105,13 +105,114 @@ export function normalizeGridReading(reading, mode) {
     survivorsOnly: false,
     ...(reading ?? {}),
   };
+  // Phase 2 (§10.10): the constraints, the list's columns and its sort travel with the
+  // ranking, so a re-render, a rebuild and the next grid of the same mode keep them.
+  const extra = {
+    constraints: normalizeGridConstraints(r.constraints, mode),
+    columns:     normalizeGridColumns(r.columns, mode),
+    listSort:    normalizeListSort(r.listSort),
+  };
   if (!BY_ID.has(r.metric)) r.metric = det ? 'afterTaxNW' : FAILURE_RATE;
-  if (det) return { metric: r.metric, stat: GRID_STATS.P50, reading: GRID_READINGS.LEVEL, survivorsOnly: false };
+  if (det) return { metric: r.metric, stat: GRID_STATS.P50, reading: GRID_READINGS.LEVEL, survivorsOnly: false, ...extra };
   if (!Object.values(GRID_READINGS).includes(r.reading)) r.reading = GRID_READINGS.LEVEL;
   if (!Object.values(GRID_STATS).includes(r.stat)) r.stat = GRID_STATS.P50;
   if (r.stat === GRID_STATS.WIN_RATE && r.reading !== GRID_READINGS.PAIRED) r.stat = GRID_STATS.P50;
   r.survivorsOnly = !!r.survivorsOnly && r.metric !== FAILURE_RATE;
-  return r;
+  return { ...r, ...extra };
+}
+
+// ── Constraints and list columns (design 100 §10.10) ─────────────────────────────
+
+export const GRID_CONSTRAINT_OPS = Object.freeze({ GE: '>=', LE: '<=' });
+
+/** The statistics a level can be read at; the win rate needs the paired reading. */
+const LEVEL_STATS = [GRID_STATS.P10, GRID_STATS.P50, GRID_STATS.P90];
+
+/** The list's columns before the user chooses any (§10.10). */
+export const DEFAULT_GRID_COLUMNS = Object.freeze([
+  Object.freeze({ metric: FAILURE_RATE,       stat: GRID_STATS.P50 }),
+  Object.freeze({ metric: 'afterTaxNW',       stat: GRID_STATS.P50 }),
+  Object.freeze({ metric: 'troughRealNetLiq', stat: GRID_STATS.P10 }),
+]);
+
+/** A metric's better direction as a comparison: `≥` for higher-is-better. */
+export function betterOp(metricId) {
+  return gridMetric(metricId).better === 'higher' ? GRID_CONSTRAINT_OPS.GE : GRID_CONSTRAINT_OPS.LE;
+}
+
+/**
+ * A level statistic valid for the metric and mode: the failure rate takes none, and a
+ * deterministic cell has one path, so both read P50.
+ */
+function levelStat(metricId, stat, mode) {
+  if (mode === GRID_MODES.DETERMINISTIC || metricId === FAILURE_RATE) return GRID_STATS.P50;
+  return LEVEL_STATS.includes(stat) ? stat : GRID_STATS.P50;
+}
+
+/**
+ * Constraint rows made valid: an unknown metric is dropped, and a bad statistic or
+ * comparison falls back. A blank threshold is kept as null, because a half-typed row is
+ * still the user's row; it is inactive (`activeConstraints`), not deleted.
+ */
+export function normalizeGridConstraints(list, mode) {
+  return (Array.isArray(list) ? list : []).filter(c => c && BY_ID.has(c.metric)).map(c => ({
+    metric:    c.metric,
+    stat:      levelStat(c.metric, c.stat, mode),
+    op:        Object.values(GRID_CONSTRAINT_OPS).includes(c.op) ? c.op : betterOp(c.metric),
+    threshold: Number.isFinite(c.threshold) ? c.threshold : null,
+  }));
+}
+
+/** The constraints that take part: those with a threshold. */
+export function activeConstraints(constraints) {
+  return (constraints ?? []).filter(c => c.threshold != null);
+}
+
+/** The list's chosen columns; absent means the defaults, while `[]` is a real choice. */
+export function normalizeGridColumns(list, mode) {
+  return (Array.isArray(list) ? list : DEFAULT_GRID_COLUMNS).filter(c => c && BY_ID.has(c.metric))
+    .map(c => ({ metric: c.metric, stat: levelStat(c.metric, c.stat, mode) }));
+}
+
+/** The list's sort: a column key, and whether the column's natural order is reversed. */
+function normalizeListSort(s) {
+  return { key: typeof s?.key === 'string' ? s.key : 'rank', reversed: !!s?.reversed };
+}
+
+/**
+ * A constraint's threshold in the metric's own unit. It is typed in the unit the panel
+ * prints, so a percentage metric's "10" means 0.10. The one place that converts, so a
+ * percentage is never compared with a fraction by mistake.
+ */
+export function constraintThreshold(c) {
+  return gridMetric(c.metric).unit === 'pct' ? c.threshold / 100 : c.threshold;
+}
+
+// Absorbs the float error of a percentage typed in whole numbers (7 / 100 vs 0.07).
+const CONSTRAINT_EPS = 1e-9;
+
+/**
+ * Whether a cell meets every active constraint, and what it missed.
+ *
+ * A constraint reads the cell's own level over all its paths, through `gridCellMetric`,
+ * so a constraint and a list column cannot disagree about a number. Survivors-only is a
+ * way of viewing the ranking, not part of the test. A degenerate value is still a number
+ * (about zero), so a floor fails it without a special case; an unavailable metric fails.
+ *
+ * @param {Array} rows          the cell's analysis rows
+ * @param {Array} constraints   normalized constraints; inactive ones are skipped
+ * @returns {{ meets: boolean, misses: Array<{ constraint: object, value: number|null, unavailable: boolean }> }}
+ */
+export function gridConstraintCheck(rows, constraints) {
+  const misses = [];
+  for (const c of activeConstraints(constraints)) {
+    const r = gridCellMetric(rows, { metric: c.metric, stat: c.stat });
+    const t = constraintThreshold(c);
+    const ok = !r.unavailable && Number.isFinite(r.value)
+      && (c.op === GRID_CONSTRAINT_OPS.GE ? r.value >= t - CONSTRAINT_EPS : r.value <= t + CONSTRAINT_EPS);
+    if (!ok) misses.push({ constraint: c, value: r.unavailable ? null : r.value, unavailable: r.unavailable });
+  }
+  return { meets: misses.length === 0, misses };
 }
 
 /**
@@ -195,19 +296,23 @@ export function gridCellMetric(rows, {
  * them). A cell with no value, or an unavailable metric, has no rank (null).
  *
  * @param {Array} results  `gridCellMetric` results, one per cell, all on one reading
+ * @param {Array<boolean>|null} [eligible]  the cells that meet the constraints (§10.10);
+ *        the others get no rank and take no part in the order. Null ranks every cell.
  * @returns {Array<number|null>}
  */
-export function rankCells(results) {
+export function rankCells(results, eligible = null) {
   const better = results.find(r => r.better)?.better ?? 'higher';
   const key    = (v) => (better === 'higher' ? -v : v);
-  const ranked = (r) => !r.unavailable && !r.degenerate && Number.isFinite(r.value);
+  const inPlay = results.map((r, k) => eligible?.[k] !== false);
+  const ranked = (r, k) => inPlay[k] && !r.unavailable && !r.degenerate && Number.isFinite(r.value);
+  const degenerate = (r, k) => inPlay[k] && r.degenerate && !r.unavailable;
 
   const distinct = [...new Set(results.filter(ranked).map(r => key(r.value)))].sort((a, b) => a - b);
-  const degen = [...new Set(results.filter(r => r.degenerate).map(r => r.failureRate))].sort((a, b) => a - b);
+  const degen = [...new Set(results.filter(degenerate).map(r => r.failureRate))].sort((a, b) => a - b);
 
-  return results.map(r => {
-    if (ranked(r)) return distinct.indexOf(key(r.value)) + 1;
-    if (r.degenerate && !r.unavailable) return distinct.length + degen.indexOf(r.failureRate) + 1;
+  return results.map((r, k) => {
+    if (ranked(r, k)) return distinct.indexOf(key(r.value)) + 1;
+    if (degenerate(r, k)) return distinct.length + degen.indexOf(r.failureRate) + 1;
     return null;
   });
 }

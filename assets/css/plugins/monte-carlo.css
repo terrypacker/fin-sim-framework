@@ -363,6 +363,42 @@
 .mc-grid-cell--degenerate .mc-grid-val { color: var(--text-dim); font-style: italic; }
 /* Border, not text colour: warning text over a red loss fill did not read. */
 .mc-grid-cell--harm                    { border-color: var(--warning); }
+/* Misses a constraint (design 100 §10.10): unshaded and unranked already, and faded. */
+.mc-grid-cell--excluded                { opacity: 0.45; }
+.mc-grid-cell--excluded .mc-grid-val   { color: var(--text-dim); }
+.mc-grid-qualify { color: var(--text-muted); }
+
+/* The constraints and columns editors: collapsible, and no wider than their rows need. */
+.mc-grid-section {
+  margin: 4px 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+.mc-grid-section > summary { cursor: pointer; color: var(--text-muted); }
+.mc-grid-section .row-list-editor { margin-top: 4px; max-width: 520px; }
+/* The shared editor is sized for the scenario forms; here it sits among 10px grid
+   controls, so it takes their size. */
+.mc-grid-section .row-list-editor .age-band-row { gap: 4px; }
+.mc-grid-section .row-list-editor .age-band-input {
+  font-size: 10px;
+  padding: 1px 4px;
+  height: 20px;
+}
+.mc-grid-section .row-list-editor .age-band-remove { height: 20px; font-size: 9px; }
+.mc-grid-section .row-list-editor .age-band-add-btn { font-size: 10px; padding: 1px 8px; }
+
+.mc-grid-list th { cursor: pointer; user-select: none; }
+/* Rank and cell read as labels, so they align left over their left-aligned values. */
+.mc-grid-list th[data-key="rank"],
+.mc-grid-list th[data-key="cell"],
+.mc-grid-list td:first-child { text-align: left; }
+.mc-grid-list-row { cursor: pointer; }
+.mc-grid-list-row:hover td      { background: var(--bg-panel2); }
+.mc-grid-list-row--sel td       { background: var(--accent-primary-bg); }
+.mc-grid-list-row--ref .mc-shape-name { color: var(--text-primary); font-weight: 700; }
+.mc-grid-list-row--excluded td  { color: var(--text-dim); opacity: 0.6; }
+.mc-grid-list .mc-grid-list-meets { text-align: left; }
+
 .mc-grid-val  { white-space: nowrap; }
 .mc-grid-sub  { margin-left: 3px; font-size: 8px; color: var(--text-dim); }
 .mc-grid-rank { display: block; font-size: 8px; color: var(--text-dim); }
