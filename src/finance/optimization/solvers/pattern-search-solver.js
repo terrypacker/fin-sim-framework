@@ -59,6 +59,7 @@ export class PatternSearchSolver {
 
   async solve(problem, {
     onProgress, signal,
+    workerPool     = null,   // rollouts run off the main thread (still one at a time)
     budget         = this.budget,
     seed           = this.seed,
     noImproveLimit = this.noImproveLimit,
@@ -67,7 +68,7 @@ export class PatternSearchSolver {
     const rng    = makeSeededRng(seed);
     // A non-positive patience means "no convergence early-out".
     const patience = noImproveLimit > 0 ? noImproveLimit : Infinity;
-    const ledger = new EvalLedger(problem, { onProgress, budget, noImproveLimit: patience, signal });
+    const ledger = new EvalLedger(problem, { onProgress, budget, noImproveLimit: patience, signal, workerPool });
     const n      = problem.variables.length;
 
     const evalVec = (vec) => ledger.evaluate(problem.decode(vec));

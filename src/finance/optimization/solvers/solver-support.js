@@ -89,7 +89,10 @@ export class EvalLedger {
     const hit = this._cache.get(key);
     if (hit) return hit;
 
-    const { result, score } = this.problem.evaluate(candidate);
+    // With a pool the single rollout still leaves the main thread: the sequential
+    // solvers (pattern search, annealing, QP line search) gain no parallelism from
+    // it, but the page stays responsive while each simulation runs.
+    const [{ result, score }] = await this._computeEntries([candidate]);
     const entry = this._record(candidate, result, score);
     await new Promise(resolve => setTimeout(resolve, 0));
     return entry;

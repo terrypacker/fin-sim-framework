@@ -49,10 +49,10 @@ export async function qpPolish(problem, start, {
   relStep     = 0.02,     // FD step as a fraction of each continuous dim's range
   minStepFrac = 1e-4,     // stop when the trial move shrinks below this fraction of range
   backtracks  = 8,
-  onProgress, signal,
+  onProgress, signal, workerPool = null,
 } = {}) {
   const vars   = problem.variables ?? [];
-  const ledger = new EvalLedger(problem, { onProgress, budget, signal });
+  const ledger = new EvalLedger(problem, { onProgress, budget, signal, workerPool });
 
   // Evaluate the incumbent first so `ledger.best` can never fall below it.
   let x = problem.encode(start ?? {});
@@ -72,18 +72,20 @@ export async function qpPolish(problem, start, {
     const f0 = curScore;
 
     // 1) Finite-difference gradient + diagonal Hessian over the continuous coords.
-    const g = new Array(cont.length).fill(0);
-    const H = new Array(cont.length).fill(0);
-    for (let i = 0; i < cont.length && !ledger.exhausted; i++) {
-      const k = cont[i];
-      const h = Math.max(relStep * range[i], 1e-9);
-      const xp = x.slice(); xp[k] = clamp(x[k] + h, bounds[i][0], bounds[i][1]);
-      const xm = x.slice(); xm[k] = clamp(x[k] - h, bounds[i][0], bounds[i][1]);
-      const fp = await evalAt(xp);
-      const fm = await evalAt(xm);
-      g[i] = (fp - fm) / (2 * h);
-      H[i] = (fp - 2 * f0 + fm) / (h * h);
-    }
+    //    The 2·n probes are independent, so they go as ONE batch — parallel across a
+    //    worker pool when wired. A batch the budget cuts short can't form a whole
+    //    gradient, and no line-search step could be paid for anyway, so stop there.
+    const hs     = cont.map((_, i) => Math.max(relStep * range[i], 1e-9));
+    const probes = [];
+    cont.forEach((k, i) => {
+      const xp = x.slice(); xp[k] = clamp(x[k] + hs[i], bounds[i][0], bounds[i][1]);
+      const xm = x.slice(); xm[k] = clamp(x[k] - hs[i], bounds[i][0], bounds[i][1]);
+      probes.push(problem.decode(xp), problem.decode(xm));
+    });
+    const fd = await ledger.evaluateBatch(probes);
+    if (fd.length < probes.length) break;
+    const g = cont.map((_, i) => (fd[2 * i].score - fd[2 * i + 1].score) / (2 * hs[i]));
+    const H = cont.map((_, i) => (fd[2 * i].score - 2 * f0 + fd[2 * i + 1].score) / (hs[i] * hs[i]));
 
     // 2) Diagonal projected-Newton (concave) / gradient-ascent (otherwise) step.
     const dir = g.map((gi, i) => (H[i] < -1e-12 ? -gi / H[i] : gi * range[i]));
@@ -144,6 +146,7 @@ export class QpPolishSolver {
       budget:     runOpts.polishBudget ?? this.polishBudget,
       onProgress: runOpts.onProgress,
       signal:     runOpts.signal,
+      workerPool: runOpts.workerPool,
     });
 
     // Merge both stages; the global best ⊇ base.best (polish starts from it and is

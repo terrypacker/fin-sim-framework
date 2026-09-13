@@ -71,6 +71,7 @@ export class OptimizationPresenter {
 
   destroy() {
     this._unsubSettings?.();
+    this._controller.destroy?.();
     this._configPanel.destroy();
     this._resultsPanel.destroy();
     this._runsPanel.destroy();

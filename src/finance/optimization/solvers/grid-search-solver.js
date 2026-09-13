@@ -43,20 +43,36 @@ export class GridSearchSolver {
    * @param {Function} [opts.onProgress] - (completed, total) after each evaluation.
    * @param {number}   [opts.budget]     - Cap on evaluations (exhaustive by default).
    * @param {AbortSignal} [opts.signal]  - Cooperative early-stop.
+   * @param {object} [opts.workerPool]   - RolloutWorkerPool; rolls the grid in parallel chunks.
    * @returns {Promise<{ candidates, best, evaluations, solver }>}
    */
-  async solve(problem, { onProgress, budget = Infinity, signal } = {}) {
+  async solve(problem, { onProgress, budget = Infinity, signal, workerPool = null } = {}) {
     const all   = GridSearchSolver.enumerate(problem.variables);
     const total = Math.min(all.length, budget);
     const results = [];
 
-    for (let i = 0; i < total; i++) {
-      if (signal?.aborted) break;
-      const { result, score } = problem.evaluate(all[i]);
-      results.push({ candidate: all[i], result, score });
-      if (onProgress) onProgress(i + 1, total);
-      // Yield so the UI stays responsive during long sweeps.
-      await new Promise(resolve => setTimeout(resolve, 0));
+    if (workerPool) {
+      // Chunked so abort and progress still land between chunks; the score is
+      // applied here because objectives carry functions and stay on this thread.
+      workerPool.setProblem(problem);
+      const chunk = workerPool.size * 2;
+      for (let i = 0; i < total && !signal?.aborted; i += chunk) {
+        const batch   = all.slice(i, Math.min(i + chunk, total));
+        const rolled  = await workerPool.map(batch);
+        rolled.forEach((result, j) => {
+          results.push({ candidate: batch[j], result, score: problem._scoreResult(result) });
+        });
+        if (onProgress) onProgress(results.length, total);
+      }
+    } else {
+      for (let i = 0; i < total; i++) {
+        if (signal?.aborted) break;
+        const { result, score } = problem.evaluate(all[i]);
+        results.push({ candidate: all[i], result, score });
+        if (onProgress) onProgress(i + 1, total);
+        // Yield so the UI stays responsive during long sweeps.
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
 
     results.sort((a, b) => b.score - a.score);

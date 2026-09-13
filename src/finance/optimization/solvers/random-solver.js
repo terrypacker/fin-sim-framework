@@ -61,13 +61,13 @@ export class RandomSolver {
     this.sampling = sampling; // 'lhs' | 'uniform'
   }
 
-  async solve(problem, { onProgress, signal, budget = this.budget, seed = this.seed, sampling = this.sampling } = {}) {
+  async solve(problem, { onProgress, signal, workerPool = null, budget = this.budget, seed = this.seed, sampling = this.sampling } = {}) {
     const rng = makeSeededRng(seed);
 
     // Never request more samples than the grid holds (∞-safe: null → use budget).
     const cc        = problem.candidateCount();
     const effBudget = cc == null ? budget : Math.min(budget, cc);
-    const ledger    = new EvalLedger(problem, { onProgress, budget: effBudget, signal });
+    const ledger    = new EvalLedger(problem, { onProgress, budget: effBudget, signal, workerPool });
 
     if (problem.variables.length === 0) {
       await ledger.evaluate({});
@@ -75,9 +75,13 @@ export class RandomSolver {
     }
 
     if (sampling === 'lhs') {
-      for (const candidate of latinHypercube(problem.variables, effBudget, rng)) {
-        if (ledger.exhausted) break;
-        await ledger.evaluate(candidate);
+      // The whole design is drawn up front, so with a pool it rolls in chunks, one
+      // per core pair. `evaluateBatch` folds in order, so this is bit-identical to
+      // the one-at-a-time loop; a chunk of 1 IS that loop.
+      const design = latinHypercube(problem.variables, effBudget, rng);
+      const chunk  = workerPool ? workerPool.size * 2 : 1;
+      for (let i = 0; i < design.length && !ledger.exhausted; i += chunk) {
+        await ledger.evaluateBatch(design.slice(i, i + chunk));
       }
     } else {
       // Uniform: guard against an infinite loop when the unique space is small.

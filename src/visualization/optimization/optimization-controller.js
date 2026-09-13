@@ -13,6 +13,7 @@ import { OPTIMIZATION_OBJECTIVES }      from '../../finance/optimization/optimiz
 import { OptimizationProblem }          from '../../finance/optimization/optimization-problem.js';
 import { createSolver }                 from '../../finance/optimization/solvers/solver-registry.js';
 import { ServiceRegistry }              from '../../services/service-registry.js';
+import { RolloutWorkerPool }            from '../../finance/optimization/parallel/rollout-worker-pool.js';
 
 /**
  * OptimizationController — domain logic for the Optimization tab.
@@ -21,8 +22,33 @@ import { ServiceRegistry }              from '../../services/service-registry.js
  * runs the selected solver (design 38), returning structured results. The exact
  * GRID solver is the default; pattern search / annealing / random are selected
  * via solverKey with their own option knobs.
+ *
+ * Owns a rollout worker pool, so no simulation runs on the main thread. Before it,
+ * a CEM generation (32 rollouts back to back, ~19 s) froze the page long enough
+ * for Chrome to offer "Page Unresponsive". Batch solvers (grid, CEM, LHS random, the
+ * QP gradient) roll across every core; the sequential ones (pattern search,
+ * annealing) still roll one at a time, but in a worker. Lazy, controller-owned and
+ * reused across runs, with the same `typeof Worker` guard as the MC controller
+ * (`monte-carlo-controller.js`), which keeps it out of Node tests.
  */
 export class OptimizationController {
+  constructor({ parallel = true } = {}) {
+    this._parallel = parallel;
+    this._pool     = undefined;   // lazy
+  }
+
+  /** The controller-owned pool, or null where Web Workers don't exist. */
+  _workerPool() {
+    if (!this._parallel || typeof Worker === 'undefined') return null;
+    if (this._pool === undefined) this._pool = new RolloutWorkerPool();
+    return this._pool;
+  }
+
+  /** Terminate the pool on teardown so worker threads don't leak. */
+  destroy() {
+    if (this._pool) { this._pool.terminate(); this._pool = undefined; }
+  }
+
   /**
    * Execute an optimization asynchronously with the selected solver.
    *
@@ -62,7 +88,16 @@ export class OptimizationController {
     });
 
     const solver = createSolver(solverKey, solverOptions);
-    const { candidates, best, evaluations } = await solver.solve(problem, { onProgress });
+    let solved;
+    try {
+      solved = await solver.solve(problem, { onProgress, workerPool: this._workerPool() });
+    } catch (err) {
+      // A worker-level error poisons the pool for good; drop it so the next Run
+      // respawns instead of failing instantly on the same dead workers.
+      this.destroy();
+      throw err;
+    }
+    const { candidates, best, evaluations } = solved;
 
     return {
       candidates,

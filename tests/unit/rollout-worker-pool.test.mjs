@@ -16,6 +16,7 @@ import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES }
 import { RolloutWorkerPool, rolloutContext }
   from '../../src/finance/optimization/parallel/rollout-worker-pool.js';
 import { CemSolver }        from '../../src/finance/optimization/solvers/cem-solver.js';
+import { createSolver }     from '../../src/finance/optimization/solvers/solver-registry.js';
 import { nodeRolloutSpawn } from './helpers/node-rollout-spawn.mjs';
 
 /*
@@ -107,4 +108,32 @@ describe('RolloutWorkerPool (design 46 Phase 0.5 P-b)', () => {
       seq.candidates.map(c => [c.candidate.inflationRate, c.score]),
     );
   });
+
+  // The OPT tab hands its pool to EVERY solver, not just CEM: batch solvers roll in
+  // parallel, sequential ones roll one at a time in a worker. Either way the answer
+  // must not depend on whether the pool is there.
+  const SOLVERS = [
+    ['GRID',                {}],
+    ['RANDOM',              { budget: 6, seed: 3 }],
+    ['PATTERN_SEARCH',      { budget: 8, seed: 3 }],
+    ['SIMULATED_ANNEALING', { budget: 8, seed: 3 }],
+    ['QP_POLISH',           { budget: 8, polishBudget: 6, seed: 3 }],
+  ];
+  for (const [key, opts] of SOLVERS) {
+    test(`${key} with the pool is bit-identical to ${key} without it`, async () => {
+      const seq  = await createSolver(key, opts).solve(realProblem());
+      const pool = new RolloutWorkerPool({ size: 3, spawn: nodeRolloutSpawn() });
+      let par;
+      try {
+        par = await createSolver(key, opts).solve(realProblem(), { workerPool: pool });
+      } finally {
+        pool.terminate();
+      }
+      assert.equal(par.evaluations, seq.evaluations);
+      assert.deepStrictEqual(
+        par.candidates.map(c => [c.candidate.inflationRate, c.score]),
+        seq.candidates.map(c => [c.candidate.inflationRate, c.score]),
+      );
+    });
+  }
 });
