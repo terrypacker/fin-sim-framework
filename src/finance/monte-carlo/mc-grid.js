@@ -70,8 +70,11 @@ function finite(xs) {
   return xs.filter(x => x != null && Number.isFinite(x)).sort((a, b) => a - b);
 }
 
-/** Linear-interpolated percentile, the runner's formula; null when empty. */
-function percentile(xs, p) {
+/**
+ * Linear-interpolated percentile, the runner's formula; null when empty. Exported so the
+ * grid's ranking (`mc-grid-metrics.js`) and these summaries cannot use two formulas.
+ */
+export function percentile(xs, p) {
   const v = finite(xs);
   if (!v.length) return null;
   const idx = p * (v.length - 1);

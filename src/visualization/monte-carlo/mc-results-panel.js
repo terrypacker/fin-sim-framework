@@ -19,6 +19,10 @@ import {
   pairingMismatches, pairedRescues, pairedMetric, failureRate,
 } from '../../finance/monte-carlo/mc-analysis.js';
 import {
+  GRID_METRICS, GRID_STATS, GRID_READINGS, FAILURE_RATE,
+  gridMetric, gridCellMetric, rankCells, normalizeGridReading,
+} from '../../finance/monte-carlo/mc-grid-metrics.js';
+import {
   mixSeriesFromRuns, mixBands, mixByOutcome, thresholdProbabilities, outcomeGapAt,
   DEFAULT_MIX_THRESHOLDS,
 } from '../../finance/allocation-reporting/mix-distribution.js';
@@ -78,6 +82,31 @@ const fmtSignedMoney = (v) => (v == null || !isFinite(v) ? '—' : `${v >= 0 ? '
 const fmtSignedPct   = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)}%`);
 const fmtPp          = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} pp`);
 
+const STAT_LABELS = { p10: 'P10', p50: 'P50', p90: 'P90', winRate: 'Win rate' };
+
+/** A grid metric's value in its registry unit (design 100 §10.4). */
+function fmtUnit(unit, v) {
+  if (v == null || !isFinite(v)) return '—';
+  if (unit === 'money') return fmtK(v);
+  if (unit === 'pct')   return fmtPct(v);
+  return String(+v.toFixed(1));
+}
+
+/** A paired difference in the metric's unit: compact money, points, or a count. */
+function fmtSignedUnit(unit, v) {
+  if (v == null || !isFinite(v)) return '—';
+  if (unit === 'pct') return fmtPp(v);
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  return unit === 'money' ? `${sign}${fmtK(Math.abs(v))}` : `${sign}${+Math.abs(v).toFixed(1)}`;
+}
+
+function spanEl(cls, text) {
+  const el = document.createElement('span');
+  el.className = cls;
+  el.textContent = text;
+  return el;
+}
+
 /** A `.mc-badge-grid` of `{ label, value, cls?, title? }` cards. */
 function badgeGrid(badges) {
   const grid = document.createElement('div');
@@ -131,7 +160,8 @@ const METRIC_LABELS = {
  *   clearResults()             — restore idle placeholder
  *   onMetricChange             — callback(metric) fired when the user switches metrics
  *   onKeepBaseline / onClearBaseline — the header's baseline button
- *   showGrid(grid)             — a lever grid instead of a batch (design 100 §7)
+ *   showGrid(grid, { ref, sel, rank }) — a lever grid instead of a batch (design 100 §7),
+ *                                ranked on `rank` (design 100 §10)
  */
 export class McResultsPanel extends BaseComponent {
   constructor(containerEl) {
@@ -161,6 +191,7 @@ export class McResultsPanel extends BaseComponent {
     this._grid            = null;   // design 100 §7
     this._gridRef         = 0;      // reference cell index
     this._gridSel         = null;   // cell being read against it
+    this._gridRank        = null;   // what the cells show and are ranked on (design 100 §10)
 
     /** Callback fired when the user toggles metrics: onMetricChange(metric) */
     this.onMetricChange = null;
@@ -404,22 +435,26 @@ export class McResultsPanel extends BaseComponent {
    * be clickable and carry its own number, and a table is its own accessible view.
    * Shading is one hue, light to dark, and never the only encoding.
    */
-  showGrid(grid, { ref = null, sel = null } = {}) {
+  showGrid(grid, { ref = null, sel = null, rank = null } = {}) {
     this._destroyCharts();
-    this._grid    = grid;
-    this._gridRef = ref ?? grid?.referenceCell?.index ?? 0;
-    this._gridSel = sel;
+    this._grid     = grid;
+    this._gridRef  = ref ?? grid?.referenceCell?.index ?? 0;
+    this._gridSel  = sel;
+    this._gridRank = normalizeGridReading(rank, grid?.mode);
     this._renderGrid();
     this._emitGridSelection();
   }
 
   /**
    * Tell the presenter which cell is being read, so the Runs panel can list that cell's
-   * paths: the selected cell, or the reference when nothing is selected.
+   * paths (the selected cell, or the reference when nothing is selected), and what the
+   * cells are ranked on, so a re-render keeps it.
    */
   _emitGridSelection() {
     if (!this._grid) return;
-    this.onGridCellSelected?.({ ref: this._gridRef, sel: this._gridSel, shown: this._gridSel ?? this._gridRef });
+    this.onGridCellSelected?.({
+      ref: this._gridRef, sel: this._gridSel, shown: this._gridSel ?? this._gridRef, rank: this._gridRank,
+    });
   }
 
   _renderGrid() {
@@ -449,13 +484,168 @@ export class McResultsPanel extends BaseComponent {
       wrapper.appendChild(noteEl('No cell sits exactly on the plan\'s values, so the reference starts at the nearest one.'));
     }
 
-    wrapper.appendChild(this._buildGridTable(g, det, ref));
-    wrapper.appendChild(noteEl(det
-      ? 'Each cell: after-tax net worth at the end of its one run; ✗ marks a run that failed. Darker is more.'
-      : 'Each cell: the share of its paths that failed; darker is higher, relative to the worst cell. '
-        + 'Every cell runs the same worlds, so any two cells compare path by path.'));
+    const view = this._gridRankView(g, ref);
+    wrapper.appendChild(this._buildGridControls(g, det));
+    if (view.unpaired) {
+      const banner = document.createElement('div');
+      banner.className = 'mc-ab-banner';
+      banner.textContent = `⚠ Not paired with the reference: ${view.unpaired.join('; ')}. Showing levels instead.`;
+      wrapper.appendChild(banner);
+    }
+    if (view.metric.caveat) {
+      const caveat = noteEl(view.metric.caveat);
+      caveat.classList.add('mc-grid-caveat');
+      wrapper.appendChild(caveat);
+    }
+    if (view.paired) {
+      wrapper.appendChild(noteEl(`Ranked against the reference: ${this._gridCellLabel(g, this._gridRef)}.`));
+    }
+    wrapper.appendChild(this._buildGridTable(g, det, ref, view));
+    wrapper.appendChild(noteEl(this._gridNote(det, view)));
     wrapper.appendChild(this._buildGridDetail(g, ref));
     this._container.appendChild(wrapper);
+  }
+
+  /**
+   * Every cell's value and rank on the chosen reading (design 100 §10). The paired reading
+   * needs every cell paired with the reference. The construction guarantees that and this
+   * checks anyway, falling back to levels with the reason named (§10.3.6).
+   */
+  _gridRankView(g, ref) {
+    let rank = this._gridRank;
+    let unpaired = null;
+    if (rank.reading === GRID_READINGS.PAIRED) {
+      unpaired = g.cells.map(c => pairingMismatches(ref.summary.pairing, c.summary.pairing)).find(m => m.length) ?? null;
+      if (unpaired) rank = normalizeGridReading({ ...rank, reading: GRID_READINGS.LEVEL }, g.mode);
+    }
+    const metric  = gridMetric(rank.metric);
+    const results = g.cells.map(c => gridCellMetric(c.rows, { ...rank, refRows: ref.rows }));
+    const paired  = rank.reading === GRID_READINGS.PAIRED;
+    return {
+      rank, metric, results, ranks: rankCells(results), unpaired, paired,
+      // A difference has a sign, so it shades on two hues around zero; a win rate does not.
+      diverging: paired && (metric.id === FAILURE_RATE || rank.stat !== GRID_STATS.WIN_RATE),
+    };
+  }
+
+  /**
+   * "Rank by" controls: the metric, then (MC mode only) the statistic, the reading and
+   * survivors-only. A deterministic cell has one path, so it has none of those three.
+   * A change re-renders; nothing re-runs.
+   */
+  _buildGridControls(g, det) {
+    const rank = this._gridRank;
+    const bar = document.createElement('div');
+    bar.className = 'mc-grid-rank-controls';
+    const set = (patch) => {
+      this._gridRank = normalizeGridReading({ ...this._gridRank, ...patch }, g.mode);
+      this._renderGrid();
+      this._emitGridSelection();
+    };
+    const select = (cls, title, options, value, key) => {
+      const s = document.createElement('select');
+      s.className = cls;
+      s.title = title;
+      for (const [v, text] of options) {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = text;
+        s.appendChild(o);
+      }
+      s.value = value;
+      s.addEventListener('change', () => set({ [key]: s.value }));
+      return s;
+    };
+
+    bar.append(spanEl('mc-grid-rank-label', 'Rank by'),
+      select('mc-grid-metric', 'What each cell shows and is ranked on',
+        GRID_METRICS.map(m => [m.id, m.label]), rank.metric, 'metric'));
+    if (det) return bar;
+
+    const paired = rank.reading === GRID_READINGS.PAIRED;
+    if (rank.metric !== FAILURE_RATE) {
+      const stats = [GRID_STATS.P10, GRID_STATS.P50, GRID_STATS.P90, ...(paired ? [GRID_STATS.WIN_RATE] : [])];
+      bar.appendChild(select('mc-grid-stat', 'Which percentile of the cell\'s paths (or of the paired difference)',
+        stats.map(s => [s, STAT_LABELS[s]]), rank.stat, 'stat'));
+    }
+    bar.appendChild(select('mc-grid-reading', 'Each cell\'s own value, or its difference from the reference world by world',
+      [[GRID_READINGS.LEVEL, 'Level'], [GRID_READINGS.PAIRED, 'Δ vs reference']], rank.reading, 'reading'));
+
+    if (rank.metric !== FAILURE_RATE) {
+      const label = document.createElement('label');
+      label.className = 'mc-grid-survivors-label';
+      label.title = 'Take the statistic over the paths that survived (paired: the worlds where both cells survive)';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'mc-grid-survivors';
+      box.checked = rank.survivorsOnly;
+      box.addEventListener('change', () => set({ survivorsOnly: box.checked }));
+      label.append(box, document.createTextNode(' Survivors only'));
+      bar.appendChild(label);
+    }
+    return bar;
+  }
+
+  /** What the cells show, in a sentence under the table. */
+  _gridNote(det, { rank, metric: m, paired }) {
+    const stat = STAT_LABELS[rank.stat];
+    const ranked = '#n is the cell\'s rank.';
+    if (det) return `Each cell: ${m.label} on its one run; ✗ marks a run that failed. Darker is better; ${ranked}`;
+    const same = ' Every cell runs the same worlds, so any two cells compare path by path.';
+    if (paired) {
+      if (m.id === FAILURE_RATE) {
+        return 'Each cell: worlds it rescues / makes worse than the reference; ⚠ marks state-dependent harm. '
+          + `Green is better than the reference, red is worse; ${ranked}`;
+      }
+      if (rank.stat === GRID_STATS.WIN_RATE) {
+        return `Each cell: the share of worlds where its ${m.label} beats the reference's. Darker is better; ${ranked}`;
+      }
+      return `Each cell: the ${stat} of its ${m.label} minus the reference's, world by world. `
+        + `Green is better than the reference, red is worse; ${ranked}`;
+    }
+    if (m.id === FAILURE_RATE) return `Each cell: the share of its paths that failed. Darker is better; ${ranked}${same}`;
+    const pool  = rank.survivorsOnly ? 'surviving paths (their count beside it)' : 'paths';
+    const fails = m.zeroOnFailure && !rank.survivorsOnly
+      ? ` "fails" marks a cell whose ${stat} falls among its failed paths; those rank last, fewest failures first.`
+      : '';
+    return `Each cell: the ${stat} of ${m.label} across its ${pool}. Darker is better; ${ranked}${fails}${same}`;
+  }
+
+  /** A cell's printed value on the view's reading. */
+  _gridValueText(res, { metric: m, rank, paired }, isRef) {
+    if (res.unavailable) return '—';
+    if (res.degenerate)  return 'fails';
+    if (paired) {
+      if (isRef) return 'ref';
+      // A zero count carries no sign: "−0" read as a loss that was not there.
+      if (m.id === FAILURE_RATE) {
+        return `${res.rescues ? '+' : ''}${res.rescues} / ${res.reverseRescues ? '−' : ''}${res.reverseRescues}`
+          + (res.reverseRescues ? ' ⚠' : '');
+      }
+      if (rank.stat === GRID_STATS.WIN_RATE) return fmtPct(res.value);
+      return fmtSignedUnit(m.unit, res.value);
+    }
+    return fmtUnit(m.unit, res.value);
+  }
+
+  /**
+   * Each cell's shade (and hue, for a difference). Darker is better for every metric
+   * (§10.3.5): values are turned so higher is better, then spread over the grid's own
+   * range. A difference shades on its size, green where it beats the reference and red
+   * where it trails. Unranked and degenerate cells stay blank, and so does a grid where
+   * every cell ties, because nothing there stands out.
+   */
+  _gridShades({ results, ranks, diverging }) {
+    const turned = results.map((r, k) => (ranks[k] == null || r.degenerate ? null
+      : (r.better === 'higher' ? r.value : -r.value)));
+    const vals = turned.filter(v => v != null);
+    if (diverging) {
+      const max = Math.max(0, ...vals.map(Math.abs));
+      return turned.map(v => (v == null || v === 0 || !(max > 0)) ? { shade: 0, tone: null }
+        : { shade: Math.round(10 + 50 * Math.abs(v) / max), tone: v > 0 ? 'gain' : 'loss' });
+    }
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    return turned.map(v => ({ shade: v == null || !(hi > lo) ? 0 : Math.round(10 + 50 * (v - lo) / (hi - lo)), tone: null }));
   }
 
   _gridCellLabel(g, index) {
@@ -465,18 +655,13 @@ export class McResultsPanel extends BaseComponent {
       + (colAxis ? `, ${colAxis.label} ${formatAxisValue(v[1])}` : '');
   }
 
-  _buildGridTable(g, det, ref) {
+  _buildGridTable(g, det, ref, view) {
     const [rowAxis, colAxis] = g.axes;
-    const metric = (c) => (det ? c.summary.medianAfterTaxNW : c.summary.failureRate);
-    const vals = g.cells.map(metric).filter(v => v != null && Number.isFinite(v));
-    const lo = Math.min(...vals), hi = Math.max(...vals);
-    // A failure rate shades from zero, so a cell where nothing failed stays blank. Wealth
-    // shades across the grid's own range, since its zero is not an interesting point.
-    const shade = (v) => {
-      if (v == null || !Number.isFinite(v)) return 0;
-      if (det) return Math.round(10 + 50 * (hi > lo ? (v - lo) / (hi - lo) : 1));
-      return v > 0 && hi > 0 ? Math.round(10 + 50 * (v / hi)) : 0;
-    };
+    const { metric: m, results, ranks } = view;
+    const shades  = this._gridShades(view);
+    // The best cell is outlined only when something ranks below it: a grid where every
+    // cell ties has no best cell to point at.
+    const maxRank = Math.max(0, ...ranks.filter(r => r != null));
 
     const wrap = document.createElement('div');
     wrap.className = 'mc-grid-table-wrap';
@@ -505,7 +690,7 @@ export class McResultsPanel extends BaseComponent {
     headRow.appendChild(corner);
     for (const v of colValues) {
       const th = document.createElement('th');
-      th.textContent = colAxis ? formatAxisValue(v) : (det ? 'After-tax NW' : 'Failure rate');
+      th.textContent = colAxis ? formatAxisValue(v) : (view.paired ? `Δ ${m.label}` : m.label);
       if (colAxis && v === g.planValues?.[1]) { th.classList.add('mc-grid-plan'); th.title = 'The plan\'s value'; }
       headRow.appendChild(th);
     }
@@ -522,16 +707,28 @@ export class McResultsPanel extends BaseComponent {
       colValues.forEach((_, c) => {
         const index = r * colValues.length + c;
         const s = g.cells[index].summary;
+        const res = results[index];
         const failed = det && s.failures > 0;
         const td = document.createElement('td');
         td.className = 'mc-grid-cell';
         td.dataset.cell = String(index);
-        td.style.setProperty('--shade', `${shade(metric(g.cells[index]))}%`);
-        td.textContent = det ? `${fmtK(s.medianAfterTaxNW)}${failed ? ' ✗' : ''}` : fmtPct(s.failureRate);
+        td.style.setProperty('--shade', `${shades[index].shade}%`);
+        if (shades[index].tone) td.classList.add(`mc-grid-cell--${shades[index].tone}`);
+        td.appendChild(spanEl('mc-grid-val',
+          this._gridValueText(res, view, index === this._gridRef) + (failed ? ' ✗' : '')));
+        if (res.survivors != null) {
+          const sub = spanEl('mc-grid-sub', String(res.survivors));
+          sub.title = 'surviving paths';
+          td.appendChild(sub);
+        }
+        if (ranks[index] != null) td.appendChild(spanEl('mc-grid-rank', `#${ranks[index]}`));
         if (failed) td.classList.add('mc-grid-cell--failed');
+        if (res.degenerate) td.classList.add('mc-grid-cell--degenerate');
+        if (ranks[index] === 1 && maxRank > 1) td.classList.add('mc-grid-cell--best');
+        if (view.paired && res.reverseRescues) td.classList.add('mc-grid-cell--harm');
         if (index === this._gridRef) td.classList.add('mc-grid-cell--ref');
         if (index === this._gridSel) td.classList.add('mc-grid-cell--sel');
-        td.title = this._gridCellTitle(g, index, det, ref.rows);
+        td.title = this._gridCellTitle(g, index, det, ref.rows, view, maxRank);
         td.addEventListener('click', () => { this._gridSel = index; this._renderGrid(); this._emitGridSelection(); });
         tr.appendChild(td);
       });
@@ -543,12 +740,18 @@ export class McResultsPanel extends BaseComponent {
   }
 
   /** The hover text: the cell, its number, and its paired reading against the reference. */
-  _gridCellTitle(g, index, det, refRows) {
+  _gridCellTitle(g, index, det, refRows, view, maxRank) {
     const s = g.cells[index].summary;
+    const m = view.metric;
+    const stat = !det && m.id !== FAILURE_RATE ? `${STAT_LABELS[view.rank.stat]} ` : '';
+    const rank = view.ranks[index];
     const lines = [
       this._gridCellLabel(g, index),
       det ? `after-tax NW ${fmtMoneyOrDash(s.medianAfterTaxNW)}${s.failures ? ' · the run failed' : ''}`
           : `failure ${fmtPct(s.failureRate)} (${s.failures} of ${s.n} paths)`,
+      `${view.paired ? 'vs reference, ' : ''}${stat}${m.label}: `
+        + this._gridValueText(view.results[index], view, index === this._gridRef)
+        + (rank != null ? ` · rank #${rank} of ${maxRank}` : ''),
     ];
     if (index === this._gridRef) {
       lines.push('the reference cell');

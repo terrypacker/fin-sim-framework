@@ -36,6 +36,10 @@ export const RETURN_BAND_EDGES = Object.freeze([-1, 0, 0.04, 0.05, 0.06, 0.07, 0
  * `oof` is an ISO date string, as in the arm files: consumers read the year with
  * `oof.slice(0, 4)`, and `String(date)` would put the weekday there instead.
  *
+ * Field names match the lab's MC arm rows (`scripts/lib/mc.mjs`), so a grid metric id
+ * means the same field in both (design 100 §10.5). A field the run does not carry maps
+ * to null, never to zero: a null drops out of a percentile, a zero would rank.
+ *
  * @param {Array} runs  `IntlRetirementMcRunner.run()` → `runs`
  */
 export function runsToRows(runs) {
@@ -45,10 +49,16 @@ export function runsToRows(runs) {
     oof:          r.outOfFundsDate ? new Date(r.outOfFundsDate).toISOString().slice(0, 10) : null,
     nw:           r.finalNetWorthUsd ?? null,
     afterTaxNW:   r.afterTaxNetWorthUsd ?? null,
+    netLiq:       r.finalNetLiquidity ?? null,
+    taxPaid:      r.cumulativeTaxesPaid ?? null,
+    deficit:      r.cumulativeDeficit ?? null,
+    deficitMonths: r.deficitMonths ?? null,
     netWorthCagr: r.pathShape?.netWorthCagr ?? null,
     worst5yrCagr: r.pathShape?.worst5yrCagr ?? null,
     maxDrawdown:  r.pathShape?.maxDrawdown ?? null,
-    troughRealNetLiq: r.pathShape?.troughRealNetLiquidity ?? null,
+    troughRealNetLiq:   r.pathShape?.troughRealNetLiquidity ?? null,
+    troughRealDrawdown: r.pathShape?.troughRealDrawdown ?? null,
+    minRealNetLiq:      r.pathShape?.minRealNetLiquidity ?? null,
     repairSpend:  r.lifetimeRepairSpend ?? null,
   }));
 }

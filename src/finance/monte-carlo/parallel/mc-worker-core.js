@@ -313,6 +313,12 @@ export function runGridTask(iter, ctx, { cell, i }) {
     outOfFundsDate:      result.outOfFundsDate,
     finalNetWorthUsd:    result.finalNetWorthUsd,
     afterTaxNetWorthUsd: result.afterTaxNetWorthUsd,
+    // Design 100 §10.5: the batch runner's `runs` carry these, so a grid cell must too,
+    // or a metric rankable on a batch would be null on the cell that reproduces it.
+    finalNetLiquidity:   result.finalNetLiquidity,
+    cumulativeTaxesPaid: result.cumulativeTaxesPaid,
+    cumulativeDeficit:   result.cumulativeDeficit,
+    deficitMonths:       result.deficitMonths,
     lifetimeRepairSpend: result.lifetimeRepairSpend ?? 0,
     pathShape:           computePathShape(result.timeSeries),
   }]);

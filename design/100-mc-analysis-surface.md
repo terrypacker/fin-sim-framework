@@ -1,7 +1,9 @@
 # 100 — The Monte Carlo analysis surface (in-app)
 
-**Status: Steps 1–4 BUILT (11 Sep 2026). In-app checks and the end-of-design review are
-open. Start at §9 when picking this up.**
+**Status: Steps 1–4 BUILT (11 Sep 2026). Step 5, ranking grid cells by a chosen
+criterion, DESIGNED 12 Sep 2026 (§10); phase 1 BUILT 12 Sep 2026 (§10.9), phase 2 not
+started. In-app checks and the end-of-design review are open. Start at §9 when picking
+this up.**
 
 ## 1. Problem
 
@@ -371,6 +373,12 @@ a real plan in the app yet.** First checks:
   at small n. The cell at the plan's values should match a plain batch at the same n,
   and the cost line's estimate should be close to the real time.
 
+**Step 5 phase 1 is built (§10.9), not yet exercised on a real plan in the app.** First
+check: an MC grid at small n, ranked on the P10 real net-liquidity trough. Cells with 10%
+or more failures should read "fails" and rank last; survivors-only should give them
+values. Then switch to Δ vs reference and move the reference. Phase 2 (§10.7) needs its
+short design pass after that. F and G (§10.8) are not designed.
+
 **Review at the end of design 100** (after the user has used the UI):
 - §8 Q1: should the baseline survive a scenario switch, so a copy of the plan can be
   compared against the original?
@@ -433,3 +441,262 @@ a real plan in the app yet.** First checks:
   during load, so design 99 retired-rate warnings never print from the CLI.
 - **`run-scenario --params`** diffs numeric params only; it missed `liquidityGraphEnabled`.
 - **Step 2 wishlist:** a threshold editor (typed rows) and §21.4's stacked percentile bar.
+
+## 10. Step 5 — rank grid cells by a chosen criterion (DESIGNED 12 Sep 2026)
+
+**Agreed with the user (12 Sep 2026):**
+- **Phase 1** covers options A (a metric selector), B (wider rows) and D (paired ranking).
+- **Phase 2** covers C (a ranked list) and E (a constraint, then an objective).
+- F (a frontier readout) and G (a headless MC grid) are noted in §10.8 and left to be
+  designed later.
+
+### 10.1 Problem
+
+A grid cell shows one fixed number: the failure rate in MC mode, and median after-tax net
+worth in deterministic mode (`McResultsPanel._buildGridTable`). Many questions are not
+about failure. A liquidity-reserve study ranks its arms on the real net-liquidity trough
+(design 97 §18). A wrapper question ranks on after-tax NW (design 84 §6.4a). A tax
+question ranks on lifetime tax. The lab already asks all of these through
+`mc-report --metric` and `variant-grid`'s `report.metric`; the in-app grid can ask none of
+them, and it never orders the cells at all.
+
+### 10.2 What exists to build on
+
+| Piece | What it gives | Gap |
+|---|---|---|
+| Grid cell `rows` (`runsToRows`) | per path: `failed`, `oof`, `nw`, `afterTaxNW`, `netWorthCagr`, `worst5yrCagr`, `maxDrawdown`, `troughRealNetLiq`, `repairSpend` | no end net liquidity, lifetime tax, deficit, whole-path floor or trough drawdown |
+| Worker `evaluate()` (`parallel/mc-worker-core.js`) | already computes `finalNetLiquidity`, `cumulativeTaxesPaid`, `cumulativeDeficit` and `deficitMonths` for every path; the batch runner's `runs` carry them | `runGridTask` drops them, and `gridCellRuns` hard-codes `finalNetLiquidity: null` |
+| `pairedMetric(a, b, key)` | the paired difference on any row field | used for `afterTaxNW` only in the app |
+| `grid-report.mjs` `MONEY_METRICS` | the lab's allowlist: `netWorth`, `netLiq`, `afterTaxNW`, `taxPaid`, `deficit` | lab only, and in the lab's row shape (`netWorth`, `oofDate`) |
+| `mc-report --metric`, `--floor` | a paired MC readout on any row field; the trough vs whole-path floor distinction | lab only |
+
+### 10.3 Decisions
+
+1. **One metric registry, in `src`.** A new `src/finance/monte-carlo/mc-grid-metrics.js`
+   holds one entry per rankable criterion:
+   - `id`, `label` and the row `field`;
+   - `better`: `'higher'` or `'lower'`;
+   - `unit`: `money`, `rate` or `count`, which chooses the formatter;
+   - `zeroOnFailure`: true when a failed path sits at about zero by construction (§10.3.4);
+   - `caveat`: one line the panel prints whenever the metric is selected, or null.
+
+   The registry is an allowlist, as `MONEY_METRICS` is. A misspelled field would otherwise
+   render a plausible table of nulls.
+
+2. **Computed from rows on demand, not stored in the summary.** Cells already keep their
+   rows, and a percentile across 225 cells × a few hundred paths is instant. Changing the
+   metric is a re-render, never a re-run. `summarizeGridCell` does not grow a field per
+   metric. A grid whose rows predate a field shows that metric as unavailable, not as zero.
+   - **Invariant, tested:** the registry's P50 after-tax NW equals
+     `summary.medianAfterTaxNW`, and its P10 trough equals
+     `summary.pathShape.p10TroughRealNetLiquidity`, for every cell. That rules out two
+     percentile formulas; the registry uses `mc-grid.js`'s `percentile`.
+
+3. **Three controls: metric, statistic, reading.**
+   - **Metric:** any registry entry.
+   - **Statistic:** in MC mode, P10, P50 or P90 across the cell's paths. The failure rate
+     takes no statistic. Deterministic mode has one path and hides the control.
+   - **Reading:** level, or paired Δ vs the reference cell (§10.3.6). MC mode only. In
+     deterministic mode Δ against a fixed reference ranks exactly as the level does.
+   - **Defaults:** MC mode opens on the failure rate and deterministic mode on after-tax
+     NW, which is what each shows today. A first render of an existing grid is unchanged
+     apart from the rank marks.
+
+4. **Failed paths in a "zero on failure" metric.** A path that ran out of funds has a real
+   net-liquidity trough of about zero by construction (`computePathShape`'s header). A cell
+   whose failure rate is at least p therefore has a Pp trough of about zero, and every such
+   cell ties at zero. Ranking on that number ranks on noise.
+   - **Default: the percentile is taken over all paths, and a degenerate cell is flagged.**
+     For a `zeroOnFailure` metric, a cell whose failure rate is at least the chosen
+     percentile shows "fails" instead of a value and ranks after every non-degenerate cell,
+     ordered among themselves by failure rate.
+   - **Option: survivors only.** A toggle takes the statistic over the surviving paths and
+     prints the survivor count in each cell. It answers "how deep is the trough when the
+     plan survives". The count is shown because a cell with three survivors is not
+     comparable with one that has two hundred.
+   - **This refines the "failure first" ordering discussed on 12 Sep.** Ranking every
+     metric failure-first would reduce the metric to a tie-break, and in MC mode almost no
+     two cells share a failure rate. Failure takes precedence only where the metric cannot
+     tell failed paths apart.
+   - `zeroOnFailure` entries: end net liquidity, the post-peak trough and the whole-path
+     floor.
+
+5. **Rank is shown, not only implied by shade.**
+   - Dense ranking in the metric's `better` direction. Tied cells share a rank; degenerate
+     and missing cells rank last, in that order.
+   - Each cell prints its value and a small rank mark (`#1`, `#2` …). The best cell gets
+     an extra outline, distinct from the reference outline.
+   - **Shading: darker is better, for every metric.** Today a darker MC cell means a
+     higher failure rate, which is worse, while a darker deterministic cell means more
+     wealth, which is better. A ranked view should make the best cell stand out whatever
+     the metric. Level shading spans the grid's own range. The panel's note sentence
+     changes to match.
+   - Paired Δ shades on a diverging scale: two hues around zero, with the reference cell
+     neutral, because a Δ has a sign and a one-hue ramp would hide it.
+   - Colour is never the only encoding (§7.5): the value and the rank are printed.
+
+6. **Paired reading (option D).** Every cell runs the same worlds (§7.2.3), so a cell can
+   be ranked on its difference from the reference, world by world.
+   - **Money and ratio metrics:** the statistic is taken over the paired Δ distribution
+     (`pairedMetric` on the metric's field). The statistic control gains a **win rate**
+     choice: the share of worlds where this cell beats the reference.
+   - **Failure rate:** the paired reading ranks exactly as the level does, because
+     rescues − reverse rescues is the difference in failure counts. It is still worth
+     showing: each cell prints `+rescues / −reverse`, and a cell with reverse rescues
+     carries the state-dependent-harm mark that step 3 uses.
+   - **Moving the reference re-ranks the grid.** The header names the reference, so a
+     ranking is never read without it.
+   - `pairingMismatches` against the reference already runs (§7.2.3). A mismatch hides
+     the paired reading and names the reason, as the baseline section does.
+
+7. **The lab's rules carry over.**
+   - Never a mean of terminal wealth. The statistics are percentiles only.
+   - Selecting nominal net worth prints `mc-report`'s warning: it prices a pre-tax dollar
+     at par with a Roth dollar, so use after-tax NW for any question about where wealth
+     sits.
+   - Lifetime tax prints: lower is not always better, because a conversion pays tax now to
+     pay less later. Read it with after-tax NW.
+   - The whole-path floor prints: on a plan still accumulating at t0 it is the opening
+     balance, which no lever can change, so prefer the post-peak trough (the reason
+     `mc-report --floor` is not the default).
+   - The header prints n. At small n a gap of one or two paths is noise; the paired
+     reading is the honest comparison for small effects.
+
+8. **The selection lives in the presenter**, beside the reference cell, so a re-render,
+   a click or a reference move keeps it.
+
+### 10.4 The registry, phase 1
+
+| Metric | Row field | Better | Zero on failure | Caveat |
+|---|---|---|---|---|
+| Failure rate | `failed` | lower | — | — |
+| After-tax net worth | `afterTaxNW` | higher | no | — |
+| Net worth (nominal) | `nw` | higher | no | wrapper warning |
+| Net liquidity at the horizon (nominal) | `netLiq` (new) | higher | yes | — |
+| Real net-liquidity trough, post-peak | `troughRealNetLiq` | higher | yes | read with the failure rate |
+| Real net-liquidity floor, whole path | `minRealNetLiq` (new) | higher | yes | opening-balance warning |
+| Trough drawdown | `troughRealDrawdown` (new) | lower | no | — |
+| Realized NW CAGR | `netWorthCagr` | higher | no | — |
+| Worst 5-year CAGR | `worst5yrCagr` | higher | no | — |
+| Max drawdown | `maxDrawdown` | lower | no | counts the house |
+| Lifetime tax | `taxPaid` (new) | lower | no | tax-timing warning |
+| Cumulative shortfall | `deficit` (new) | lower | no | — |
+| Months short | `deficitMonths` (new) | lower | no | — |
+
+`repairSpend` stays on the row but is not a ranking criterion: it describes a draw, not
+a decision.
+
+### 10.5 Rows (option B)
+
+`runsToRows` gains `netLiq`, `taxPaid`, `deficit`, `deficitMonths`, `minRealNetLiq` and
+`troughRealDrawdown`. The batch runner's `runs` already carry the sources.
+`runGridTask` passes the four `evaluate()` fields it drops today, and `gridCellRuns` maps
+`netLiq` back to `finalNetLiquidity` instead of null.
+- The change is additive, and it touches rows, not state, so the goldens do not move.
+- A row is about fifteen numbers, so a 15 × 15 × 200 grid stays small (§7.2.5).
+- The field names match the lab's MC rows (`scripts/lib/mc.mjs`), so a metric id means
+  the same thing in both places. The deterministic lab rows (`scripts/lib/run.mjs`) say
+  `netWorth` and `oofDate`; reconciling those is §10.8 G.
+
+### 10.6 Phase 1 build order
+
+1. **Rows.** Widen `runsToRows`, `runGridTask` and `gridCellRuns`. Tests: the new fields
+   are present and finite on a plan-values cell, and that cell's rows still equal the
+   batch's bit for bit (extend MGR-1).
+2. **Registry and pure ranking.** `mc-grid-metrics.js`: `GRID_METRICS`,
+   `gridCellMetric(cell, { metric, stat, reading, refRows, survivorsOnly })` returning
+   `{ value, text, degenerate, n }`, and `rankCells(values, better)`. Unit tests:
+   - the two §10.3.2 invariants against `summarizeGridCell`;
+   - a `zeroOnFailure` cell at a failure rate of p or more is degenerate, and ranks after
+     every valid cell;
+   - survivors-only takes the percentile over survivors and reports their count;
+   - ties share a rank;
+   - the paired Δ equals `pairedMetric`'s p10/p50/p90 and win rate;
+   - the paired failure reading's net rescues equal the difference in failure counts;
+   - a field missing from old rows gives "unavailable", not zero.
+3. **Panel.** Metric, statistic, reading and survivors-only controls above the heatmap.
+   Direction-aware shading, rank marks, the best-cell outline, the caveat line, and the
+   tooltip carrying the metric. The presenter holds the selection. Viz tests: changing a
+   control re-renders without re-running; the default render still shows the failure rate
+   (MC) and after-tax NW (deterministic); a degenerate cell prints "fails".
+4. **Paired reading.** The diverging shade, the `+rescues / −reverse` failure cells, the
+   harm mark, re-ranking on a reference move, and the mismatch banner. Viz tests in the
+   style of `mc-results-paired.test.mjs`.
+
+### 10.7 Phase 2 — a ranked list and a constraint
+
+- **C, the ranked list.** A sortable table under the heatmap with one row per cell. Its
+  columns are the phase 1 selection plus a chosen set of other metrics (default: failure
+  rate, P50 after-tax NW, P10 trough). A header click sorts; the reference row is marked;
+  clicking a row selects the cell, as a heatmap click does. It lets several criteria be
+  read at once, and it reads a one-axis grid better than a one-column heatmap does.
+- **E, constraint then objective.** "Among the cells where failure ≤ x% and P10 trough
+  ≥ \$y, rank by z." Constraints are typed rows (metric, statistic, comparison,
+  threshold) built from the row-list editor, never a JSON text area. Cells that miss a
+  constraint are greyed out and unranked, and the header says how many of the cells
+  qualify. It uses the same registry and `gridCellMetric`, so a constraint and a ranking
+  cannot disagree about a number.
+- Needs its own short design pass once phase 1 has been used on a real plan: which
+  columns the list shows by default, and whether a constraint set is saved with the
+  scenario.
+
+### 10.8 Later — noted, not yet designed
+
+- **F, a frontier readout.** Port `grid-report`'s `last-passing` reduction: for each row,
+  the last column that passes, with the off-grid markers (`<lo`, a trailing `+`) and the
+  non-monotone flip warning. In MC mode, "passes" needs a threshold (failure ≤ x%). The
+  in-app grid has at most two axes, so this is a one-dimensional frontier per row, not
+  `variant-grid`'s reduction along a third axis. Open questions: more than two axes in
+  the app, and whether the frontier takes E's constraint as its pass test.
+- **G, a headless MC grid and one shared registry.** A `scripts/montecarlo/mc-grid.mjs
+  --spec` that runs `McGridRunner` in Node, writes its cells' rows to a file, and
+  re-reports them with the same registry. It would make an in-app grid reproducible and
+  re-reportable on the command line, as `mc-run` and `mc-report` are for a batch. It
+  needs the lab's deterministic row names (`netWorth`, `oofDate`) reconciled with the MC
+  names, or an adapter, before `grid-report` can share the registry.
+
+### 10.9 Phase 1 BUILT (12 Sep 2026)
+
+- **Rows (B).**
+  - `runsToRows` gained `netLiq`, `taxPaid`, `deficit`, `deficitMonths`,
+    `troughRealDrawdown` and `minRealNetLiq`.
+  - `runGridTask` passes on the four `evaluate()` fields it used to drop.
+  - `gridCellRuns` maps them back to run records, so `finalNetLiquidity` is no longer null.
+- **Registry and ranking (A).** `mc-grid-metrics.js` holds `GRID_METRICS` (the 13 entries
+  of §10.4), `normalizeGridReading`, `gridCellMetric` and `rankCells`. `mc-grid.js` now
+  exports `percentile`, so the ranking and the cell summary share one formula.
+- **Panel.**
+  - "Rank by" controls above the heatmap: `.mc-grid-metric`, and in MC mode also
+    `.mc-grid-stat`, `.mc-grid-reading` and `.mc-grid-survivors`.
+  - Each cell prints its value (`.mc-grid-val`), its rank (`.mc-grid-rank`) and, when
+    survivors-only is on, the survivor count (`.mc-grid-sub`).
+  - The best cell is outlined outside its border, apart from the reference and selection
+    outlines.
+  - Level shading uses one hue, and darker is better. A paired Δ shades green or red.
+  - The metric's caveat line sits above the table, and the tooltip gains a
+    "metric · rank #k of N" line.
+- **Paired reading (D).**
+  - The reference cell prints "ref".
+  - A failure cell prints `+rescues / −reverse`, with ⚠ and `.mc-grid-cell--harm` when it
+    makes a world worse.
+  - If any cell is not paired with the reference, a banner names the reason and the
+    cells show levels.
+- **Presenter.** The ranking lives in `_gridView.rank`. It is carried across a rebuild
+  (`getGridState` / `restoreGrid`) and onto the next grid of the same mode.
+- **Tests:**
+  - `tests/unit/mc-grid-metrics.test.mjs` (MGM-1…10);
+  - MCA-2, extended with the new fields;
+  - MGR-3: the new fields are on every grid row, and they equal the batch's;
+  - `tests/viz/mc-grid.test.mjs`: five ranking tests, plus the existing ones updated for
+    darker = better and the rank marks.
+
+  All unit and viz tests pass.
+
+**Decided while building:**
+- **A grid where every cell ties** shades blank and outlines no best cell, because nothing
+  there stands out. Before, a deterministic grid shaded every cell dark in that case.
+- **Survivors-only in the paired reading** keeps only the worlds where both cells survive.
+- **The win rate of a lower-is-better metric** is the share of worlds where the value
+  falls. It always ranks higher-is-better.
+- **A new grid keeps the ranking** only when its mode matches the last grid's. A
+  deterministic grid ranked on the failure rate would be pass/fail, which ✗ already shows.

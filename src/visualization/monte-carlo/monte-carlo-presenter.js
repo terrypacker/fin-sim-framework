@@ -265,16 +265,19 @@ export class MonteCarloPresenter {
             + (left != null && done < total ? ` · about ${formatDuration(left)} left` : ''));
         },
       }).then(grid => {
+        // Keep what the cells are ranked on for the next grid of the same mode: the
+        // question usually outlives one set of axes (design 100 §10.3.8).
+        const rank = grid.mode === this._lastGrid?.mode ? (this._gridView.rank ?? null) : null;
         this._lastGrid = grid;
         this._showing  = 'grid';
         this._gridRuns = new Map();
-        this._gridView = { ref: null, sel: null };
+        this._gridView = { ref: null, sel: null, rank };
         this._recordPathRate(started, runs);
         const errored = grid.cells.reduce((s, c) => s + (c.errored?.length ?? 0), 0);
         this._configPanel.showProgress(`Completed grid: ${grid.cells.length} cells, ${runs} runs`
           + (errored ? ` — ${errored} errored and excluded (see console)` : ''));
         this._configPanel.enableRun();
-        this._resultsPanel.showGrid(grid);
+        this._resultsPanel.showGrid(grid, this._gridView);
       }).catch(err => {
         this._configPanel.showProgress(`Error: ${err.message}`);
         this._configPanel.enableRun();
@@ -288,8 +291,8 @@ export class MonteCarloPresenter {
    * a grid path can be inspected and replayed like a batch run. A context line names the
    * cell, because seed N exists in every cell.
    */
-  _onGridCellSelected({ ref, sel, shown }) {
-    this._gridView = { ref, sel };
+  _onGridCellSelected({ ref, sel, shown, rank = null }) {
+    this._gridView = { ref, sel, rank };
     const g = this._lastGrid;
     if (!g?.cells?.[shown]) return;
     if (!this._gridRuns.has(shown)) this._gridRuns.set(shown, gridCellRuns(g, shown));
@@ -314,7 +317,7 @@ export class MonteCarloPresenter {
     if (!state?.grid?.cells) return;
     this._lastGrid = state.grid;
     this._gridRuns = new Map();
-    this._gridView = { ref: state.ref ?? null, sel: state.sel ?? null };
+    this._gridView = { ref: state.ref ?? null, sel: state.sel ?? null, rank: state.rank ?? null };
     if (state.showing !== 'grid') return;
     this._showing = 'grid';
     this._runsPanel.setReplaySeed(replaySeed);

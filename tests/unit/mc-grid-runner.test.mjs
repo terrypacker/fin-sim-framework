@@ -92,6 +92,13 @@ describe('McGridRunner (design 100 §7)', () => {
     const cellRuns = gridCellRuns(g, 0);
     assert.deepStrictEqual(cellRuns.map(r => r.seed), plain.runs.map(r => r.seed));
     assert.deepStrictEqual(cellRuns.map(r => r.params), plain.runs.map(r => r.params));
+
+    // Design 100 §10.5: the fields a cell ranks on are on every grid row, and they are the
+    // batch's numbers (the deepStrictEqual above already holds them equal).
+    for (const k of ['netLiq', 'taxPaid', 'deficit', 'deficitMonths', 'troughRealDrawdown', 'minRealNetLiq']) {
+      assert.ok(g.cells[0].rows.every(r => Number.isFinite(r[k])), `${k} is on every grid row`);
+    }
+    assert.deepStrictEqual(cellRuns.map(r => r.finalNetLiquidity), plain.runs.map(r => r.finalNetLiquidity));
   });
 
   test('MGR-4 a deterministic cell at the plan\'s values is the single run, exactly', async () => {

@@ -34,17 +34,22 @@ test('MCA-2 runsToRows maps the runner shape to analysis rows', () => {
   const rows = shared.runsToRows([{
     seed: 7, scenarioFailed: true, outOfFundsDate: new Date(Date.UTC(2051, 5, 1)),
     finalNetWorthUsd: 10, afterTaxNetWorthUsd: 8, lifetimeRepairSpend: 3,
-    pathShape: { netWorthCagr: 0.01, worst5yrCagr: -0.1, maxDrawdown: 0.4, troughRealNetLiquidity: 0 },
+    finalNetLiquidity: 5, cumulativeTaxesPaid: 2, cumulativeDeficit: 1, deficitMonths: 4,
+    pathShape: { netWorthCagr: 0.01, worst5yrCagr: -0.1, maxDrawdown: 0.4, troughRealNetLiquidity: 0,
+                 troughRealDrawdown: 1, minRealNetLiquidity: 0 },
   }, { seed: 8, scenarioFailed: false }]);
 
   assert.deepEqual(rows[0], {
     seed: 7, failed: true, oof: '2051-06-01', nw: 10, afterTaxNW: 8,
-    netWorthCagr: 0.01, worst5yrCagr: -0.1, maxDrawdown: 0.4, troughRealNetLiq: 0, repairSpend: 3,
+    netLiq: 5, taxPaid: 2, deficit: 1, deficitMonths: 4,
+    netWorthCagr: 0.01, worst5yrCagr: -0.1, maxDrawdown: 0.4,
+    troughRealNetLiq: 0, troughRealDrawdown: 1, minRealNetLiq: 0, repairSpend: 3,
   });
   // A run without pathShape (older result) maps to nulls, never zeros.
   assert.equal(rows[1].failed, false);
   assert.equal(rows[1].oof, null);
   assert.equal(rows[1].netWorthCagr, null);
+  assert.equal(rows[1].netLiq, null, 'a field the run does not carry is null, never zero');
 });
 
 test('MCA-3 the return bands count negative realized growth', () => {

@@ -184,8 +184,9 @@ import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRe
 import { summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
+import { GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_METRICS, gridMetric, normalizeGridReading, gridCellMetric, rankCells } from './finance/monte-carlo/mc-grid-metrics.js';
 import { gridCellRuns, McGridRunner } from './finance/monte-carlo/mc-grid-runner.js';
-import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
+import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, percentile, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng, computePathShape } from './finance/monte-carlo/mc-sampling.js';
 import { perturbParams, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
@@ -1227,6 +1228,14 @@ export const Finance = {
   failureRate,
   failureByBand,
   failureDrivers,
+  GRID_STATS,
+  GRID_READINGS,
+  FAILURE_RATE,
+  GRID_METRICS,
+  gridMetric,
+  normalizeGridReading,
+  gridCellMetric,
+  rankCells,
   gridCellRuns,
   McGridRunner,
   GRID_MODES,
@@ -1234,6 +1243,7 @@ export const Finance = {
   nearestIndex,
   cellIndexOf,
   referenceCellOf,
+  percentile,
   summarizeGridCell,
   get,
   set,
