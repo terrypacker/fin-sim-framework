@@ -51,6 +51,10 @@ const TARGETS = {
   // episode's tail into another's calibration.
   DOTCOM_2000_LITE:       { episode: 'Dot-com (Aug 2000 – Feb 2003)', depth: -0.437, trough: 30, back: 81 },
   LOST_DECADE_2000:       { episode: 'Lost decade (Mar 2000 – Mar 2010)', depth: null, trough: null, back: 156, cum10: -0.201 },
+  // Shiller/Cowles monthly, Aug 1892 → Aug 1896 (MEASUREMENTS §1, §10).
+  RAILROAD_PANIC_1893:    { episode: 'Panic of 1893 (Aug 1892 – Aug 1896)', depth: -0.322, trough: 48, back: 76 },
+  // From Aug 1873, the last pre-panic month (MEASUREMENTS §11).
+  RAILROAD_PANIC_1873:    { episode: 'Panic of 1873 (Aug 1873 – Jun 1877)', depth: -0.451, trough: 46, back: 77 },
 };
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');

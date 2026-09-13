@@ -1,0 +1,2280 @@
+        TWO DEPRESSIONS, ONE BANKING COLLAPSE
+
+
+
+
+                      Chay Fisher and Christopher Kent
+
+
+
+
+                          Research Discussion Paper
+                                  1999-06
+
+
+
+
+                                  June 1999
+
+                         System Stability Department
+
+                          Reserve Bank of Australia
+
+
+
+
+We would like to thank Philip Lowe, Marianne Gizycki, David Merrett,
+Bryan Fitz-Gibbon, David Gruen and Peter Stebbing for helpful suggestions.
+Thanks to David Merrett and David Pope for early advice and encouragement.
+Thanks also to Adrian McMahon for help in preparing this document. Any
+remaining errors are our own. The views expressed are those of the authors and
+should not be attributed to the Reserve Bank of Australia.
+                                    Abstract
+
+The depression of the 1890s in Australia was associated with the collapse of the
+banking system, whereas problems in the financial system during the 1930s
+depression were far less severe. This is despite the fact that the initial
+macroeconomic shock during the 1930s depression was at least as large as that
+during the 1890s depression. We show that variation in the performance of the
+financial sector during the two depressions was due to differences in the condition
+of the financial sector well before each depression. Differences in real external
+factors and government policies were not sufficient to explain variation in the
+performance of the financial sector.
+
+
+
+
+                    JEL Classification Numbers: N10, N20
+ Keywords: Australian economic depressions, financial instability, banking crises
+
+
+
+
+                                         i
+                              Table of Contents
+
+1.    Introduction                                                   1
+
+2.    Two Depressions: Output and Banking                            3
+      2.1    Output During the Depressions                           3
+      2.2    1890s Banking Collapse versus 1930s Banking Problems    6
+             2.2.1 Trading banks                                     9
+             2.2.2 Savings banks                                    14
+
+3.    A Comparison of Indicators of Financial System Stability      17
+      3.1    Investment – Public and Private                        18
+      3.2    Speculation in the Property Market                     22
+      3.3    Credit                                                 24
+      3.4    Banks’ Balance Sheets and Foreign Borrowing            26
+      3.5    Risk Management – Prudence and Diversification         28
+      3.6    Competitive Pressures                                  33
+
+4.    Real Macroeconomic Features of the Two Depressions            35
+      4.1    Exogenous External Factors                             35
+      4.2    Exogenous Internal Factors                             38
+             4.2.1 Population                                       38
+             4.2.2 Weather conditions                               39
+             4.2.3 The gold standard                                40
+             4.2.4 Fiscal and monetary policy                       41
+
+5.    Discussion and Concluding Remarks                             44
+
+Appendix A: Data Sources and Descriptions                           46
+
+Appendix B: Additional Data                                         49
+
+References                                                          50
+
+                                      ii
+          TWO DEPRESSIONS, ONE BANKING COLLAPSE
+
+
+                          Chay Fisher and Christopher Kent
+
+1.      Introduction
+
+Over the past 150 years, Australia has experienced two macroeconomic
+depressions, both of which coincided with worldwide depressions.1 The first of
+these was in the 1890s and the second in the 1930s. These were also times of
+financial distress both domestically and in the rest of the world. For Australia
+there were many similarities across both depressions. Indeed Sinclair (1965, p. 85)
+suggests: ‘There is such an obvious similarity between the economic depressions
+which occurred in Australia in the 1890s and the 1930s that it is tempting to
+suggest that history was repeating itself in the latter case’.2 However, in this paper
+we highlight one of the major differences between the two depressions. Namely,
+the 1890s involved the collapse of a significant proportion of the Australian
+financial system, whereas the disruption to the financial system in the 1930s was
+comparatively mild.
+
+The fact that Australia did not experience a major financial crisis during the 1930s
+is remarkable in a number of respects. First, the initial fall in real output during the
+1930s was just as large as the initial fall during the 1890s – that is, around
+10 per cent during the first year of each depression. Second, the world depression
+was worse, and the Australian terms of trade fell further, during the 1930s than
+during the 1890s. Third, both the United States and, to a lesser extent, the United
+Kingdom experienced more severe financial crises during the 1930s than during
+the 1890s.3
+
+
+
+1 Before these, there was a severe depression in the 1840s.
+2 Sinclair actually concludes that one major difference was the relative influence of internal and
+  external factors in terms of the underlying causes of the depressions. He shows that internal
+  factors were more relevant to the 1890s depression while external factors were more relevant
+  to the 1930s depression.
+3 For a description of the world depression see Kindelberger (1973; 1989) and for discussion of
+  the problems in the US financial system see Chandler (1970).
+                                                 2
+
+The central argument of this paper is that variation in the performance of the
+financial system across the two depressions was primarily due to variation in the
+condition of the financial system prior to each depression. We show this by
+examining the behaviour of a range of indicators of financial stability over the
+decade prior to each depression.4 These indicators are:
+
+        (i) the level and nature of investment;
+        (ii) property market speculation;
+        (iii) credit growth;
+        (iv) capital inflows;
+        (v) degree of risk management within the financial system; and
+        (vi) competitive pressures in the financial sector.
+
+Each indicator suggests that the financial system during the 1880s was becoming
+increasingly vulnerable to adverse shocks. During that period there was a
+sustained increase in private investment associated with extraordinary levels of
+building activity and intense speculation in the property market. This was
+accompanied by rapid credit growth, fuelled in part by substantial capital inflows
+(much of which appears to have been channelled through financial intermediaries).
+At the same time, banks allowed their level of risk to increase in an attempt to
+maintain market share in the face of greater competition from a proliferation of
+new non-bank financial institutions.
+
+In contrast, if anything there was only a moderate decline in measures of financial
+system stability during the 1920s compared with the 1880s experience. It is
+therefore not surprising that whereas the financial system essentially collapsed
+following the substantial shock to real output in the first year of the 1890s
+depression, a shock of at least the same magnitude during the first year of the
+1930s depression had relatively little impact on what was clearly a more robust
+financial system.
+
+
+
+4   Shann (1927) makes one of the earliest comparisons of the stability of the financial system of
+    the 1880s with the 1920s. This took the form of a reminder for readers in the late 1920s of the
+    problems that had developed through the 1880s.
+                                                  3
+
+An alternative to our pre-conditions hypothesis is that the variation in the
+performance of the financial sector across the two depressions was due to
+variation in a range of factors external to the financial system. External factors
+such as shocks to world output or government policies, for example, may have
+caused the 1890s depression to be deeper in terms of real output, which may in
+turn have contributed to the 1890s financial crisis. If this were true, it would
+reduce the significance of the financial pre-conditions in explaining variation in
+the performance of the financial system. For this reason we consider the role of
+those factors outside the financial system which may have directly contributed to
+variation in the behaviour of real output across the two depressions.
+
+The paper proceeds as follows. Section 2 begins with an overview of the timing
+and nature of the two depressions in terms of the real sector of the economy, and
+then outlines the variation in the performance of the financial system across the
+two depressions. Section 3 suggests that these different financial outcomes
+followed naturally from differences in the degree of financial stability in the years
+leading up to each of the two depressions. In Section 4 we consider the role of
+external factors which may have affected the performance of the real sector,
+including government policies and real shocks emanating from overseas. Section 5
+summarises the main findings of the paper.
+
+
+2.        Two Depressions: Output and Banking
+
+2.1       Output During the Depressions
+
+In Australia, real GDP fell by around 10 per cent in the first year of both
+depressions – that is, 1892 and 1931 respectively.5 However, the depression of the
+1890s was substantially deeper and more prolonged than the depression of the
+
+5    The data prior to Federation are likely to be less reliable than post-Federation, although there
+     is no reason to believe that the statistics prior to 1900 are biased in any general way. On
+     occasion we comment on crucial data issues in the main text, though a detailed description of
+     the data and sources is left to Appendix A. A few brief comments are, however, warranted at
+     this stage. With regards to the precise timing of the depressions, there is some debate as to
+     whether real GDP (available annually) is the best measure to use (Valentine 1984). This and
+     other debates in the literature often depend on the interpretation of inadequate data, or on the
+     validity (or otherwise) of aggregating data across the colonies/states (Boehm 1971). However,
+     these problems are not of great concern to the main arguments of this paper.
+                                               4
+
+1930s (Figure 1). Real GDP fell by a further 7 per cent in 1893, coinciding with
+the collapse of the banking system. Growth returned in subsequent years, although
+it was moderate and erratic. It was not until 1899 that the level of real GDP had
+surpassed the previous peak set eight years earlier. In contrast, during the 1930s
+depression, growth resumed in 1932, and by 1934 the level of real GDP had
+surpassed the previous peak of 1930. Because of the relatively high rate of
+population growth during the 1890s,6 the 1890s depression was even deeper than
+the 1930s depression in terms of real GDP per capita (Figure 2). Real GDP
+per capita fell by around 20 per cent over the 1890s, compared with a fall of only
+about 10 per cent over the 1930s.7
+
+                  Figure 1: Real GDP Index – 1890s versus 1930s
+                             1891 = 100 and 1930 = 100
+         1926       1928      1930      1932       1934       1936           1938        1940
+     Index                                                                                  Index
+
+
+
+       120                                                                                  120
+                                                     1930s depression
+                                                          (Top scale)
+       110                                                                                  110
+
+
+
+       100                                                                                  100
+
+
+
+        90                                                                                  90
+                                                                  1890s depression
+                                                                        (Bottom scale)
+
+        80                                                                                  80
+         1887       1889      1891      1893       1895       1897           1899        1901
+
+
+
+6 The population increased at an annual average rate of 1.7 per cent between 1891 and 1901
+  compared with an annual average rate of about 1 per cent between 1933 and 1947. These dates
+  correspond to years in which censuses were conducted.
+7 A comparison of real GDP per capita over a longer period (not shown) confirms that the
+  greater depth of the 1890s depression did not reflect more variable economic cycles over this
+  earlier period. If anything, real GDP per capita was more variable in the two decades to 1930
+  than in the two decades to 1891.
+                                                  5
+                              Figure 2: Real GDP per Capita
+                                1891 = 100 and 1930 = 100
+          1926        1928      1930       1932       1934       1936        1938       1940
+      Index                                                                                Index
+
+
+
+        110                                                                                110
+                                                        1930s depression
+                                                             (Top scale)
+        100                                                                                100
+
+
+
+          90                                                                               90
+
+
+
+          80                                                                               80
+                                                                    1890s depression
+                                                                       (Bottom scale)
+
+          70                                                                               70
+           1887      1889       1891       1893       1895       1897        1899       1901
+
+
+The corollary of a deeper, longer depression is more substantial and sustained
+deflation. Figure 3 shows that, from 1891 to 1897, retail prices fell by more than
+20 per cent. By comparison, the fall in the 1930s episode was smaller at around
+15 per cent, and over a shorter period – from 1930 to 1933. Figure 3 also shows
+that there was a large fall in retail prices from 1890 to 1891, before the downturn
+in output. This was due almost entirely to falls in house rents which constitute
+40 per cent of this retail price index. As we mention in Section 3.2, the property
+market turned down in the late 1880s and was an important factor leading to the
+collapse of the financial system.8
+
+
+
+
+8   The implicit price deflator for GDP implies that deflation was actually more severe during the
+    1930s, although this is driven largely by the fact that export prices fell further in the 1930s.
+    The retail price of groceries in Sydney suggests that deflation was not quite as deep in the
+    1890s as the 1930s, but was more prolonged; however, NSW did not appear to suffer as large
+    a fall in output as Victoria during the 1890s.
+                                          6
+                 Figure 3: Retail Price Index – 1890s versus 1930s
+                            1891 = 100 and 1930 = 100
+          1926     1928    1930    1932       1934      1936        1938     1940
+      Index                                                                     Index
+
+       120                                                                      120
+
+
+       110                                                                      110
+
+
+       100                                                                      100
+                                                         1930s depression
+                                                               (Top scale)
+        90                                                                      90
+
+
+        80                                                                      80
+                                     1890s depression
+                                       (Bottom scale)
+        70                                                                      70
+
+
+        60                                                                      60
+         1887     1889     1891    1893       1895      1897        1899     1901
+
+
+It seems reasonable to assert that the rise in unemployment and the fall in
+employment would have been worse during the 1890s than during the 1930s.
+However, this is difficult to establish because comparable data on unemployment
+in the 1890s and 1930s depressions are limited. Statistics on the employment
+status of trade union members indicate that unemployment peaked at almost
+30 per cent in 1932; no comparable data exist for the 1890s depression. One series
+that is available in both periods is the unemployment rate for members of the
+Amalgamated Society of Engineers, Australia. This indicates that although the
+peak rate of unemployment was higher in the 1930s depression (almost 26 per cent
+in 1931 compared with 16 per cent in 1894), unemployment returned to
+pre-depression levels more rapidly as the economy recovered.
+
+2.2     1890s Banking Collapse versus 1930s Banking Problems
+
+The 1890s depression was characterised by a severe financial crisis, whereas the
+financial problems during the 1930s were relatively mild by comparison. In the
+1890s, more than half of the trading banks of note issue suspended payment and a
+                                                  7
+
+large number of non-bank financial institutions failed.9 This compares to the
+failure of only a few, mostly smaller institutions during the 1930s. Some
+indication of the depth of the crisis of the 1890s is provided in Figure 4 which
+shows the ratio of total bank credit to GDP. Over the course of the 1890s
+depression, bank credit to GDP fell from above 70 per cent at its peak to about
+40 per cent by the turn of the century. In contrast, from a peak of about 45 per cent
+in the early 1930s this ratio had declined to 38 per cent by the beginning of the
+Second World War.
+
+                                     Figure 4: Bank Credit
+                                    Per cent of nominal GDP
+          %                                                                              %
+
+
+         70                                                                              70
+
+
+         60                                                                              60
+
+
+         50                                                                              50
+
+
+         40                                                                              40
+
+
+         30                                                                              30
+
+
+         20                                                                              20
+          1860      1870     1880      1890     1900     1910      1920     1930      1940
+
+
+
+
+9   The colonial banking regulations allowed trading banks to issue their own notes, which were
+    widely used as a medium of exchange. However, to do so they became subject to legislation
+    which among other things required them to submit regular statistical returns. In this paper we
+    define banks to be the note issuing trading banks and the savings banks. This excludes a range
+    of institutions that are often referred to either as banks, ‘land’ banks or ‘fringe’ banks. While
+    these institutions were an important part of the credit cycle of the 1880s and 1890s, data are
+    not readily available. It appears that in terms of their nature and behaviour, these institutions
+    were most like the building societies.
+                                               8
+
+Clearly, the cycle in bank credit during the 1880s and 1890s was greatly
+exaggerated. If anything, the cycle in total credit was likely to have been even
+more pronounced during the 1890s than it was for bank credit because of the
+behaviour of building societies, finance companies and the ‘land’ and other
+‘fringe’ banks. Data on credit provided by these financial institutions are difficult
+to obtain. However, data on assets of financial institutions show that building
+societies and finance companies grew extremely rapidly through the 1880s – their
+share of financial system assets rose from 12 per cent in 1885 to more than
+21 per cent by 1892 (Figure 5).10 These institutions also lost market share very
+rapidly through the 1890s depression, especially building societies. In contrast,
+through the late 1920s and early 1930s, the asset shares by institution remained
+relatively stable. Banks lost some ground, but mainly to managed funds and funds
+administered by trustee companies – neither of which were a substantial source of
+credit.11
+
+The data shown in Figure 5 do not include a number of important financial
+institutions, including the land finance companies and institutions that are
+sometimes referred to as banks because they accepted deposits and provided
+cheque facilities. However, it is worth noting that both of these types of institution
+played a key role in the 1890s episode – they tended to be newer, less conservative
+institutions, more willing to lend for speculative purposes, and were more likely to
+have failed in the financial crisis of the 1890s.
+
+
+
+
+10 We do not have data on assets held by building societies and finance companies prior to the
+   mid 1880s. Their share of financial system assets at this time was not actually zero as is
+   suggested in Figure 5. Nevertheless, the rapid growth of these institutions through the 1880s
+   as implied by the data in Figure 5 is consistent with other evidence (for example, see
+   Boehm 1971).
+11 These institutions provided some lending for mortgages, but this represented less than a
+   quarter of their total assets (Royal Commission 1937).
+                                                9
+                      Figure 5: Assets of Financial Institutions
+                          Per cent of financial system assets
+        %                                                                         %
+
+
+
+        80                                                                         80
+
+
+
+        60                                                                         60
+
+
+                   Building societies
+        40                                                                         40
+                   Pastoral finance companies
+                   Managed funds
+                   Trustee companies
+        20                                                                         20
+                   Savings banks
+                   Trading banks
+         0                                                                        0
+         1861     1871     1881     1891     1901       1911   1921   1931     1941
+
+
+2.2.1 Trading banks
+
+The financial system in the years prior to the banking crisis of 1893 was
+dominated by the private trading banks of note issue. In the early 1880s there were
+26 trading banks12 controlling around 90 per cent of the assets of the financial
+system (Figure 5). The growth of other financial institutions over the 1880s
+resulted in the market share of trading banks falling to less than 70 per cent by the
+early 1890s. Building societies and pastoral finance companies grew particularly
+quickly in tandem with the property price boom during the second half of the
+1880s (Pope 1991, Merrett 1991 and Boehm 1971). By the beginning of 1893,
+there were 23 trading banks in operation.13
+
+
+
+12 This does not include the Mercantile Bank of Australia which did not enter official returns
+  until 1887, even though it was established in 1877.
+13 Boehm (1971) lists 22 Australian trading banks in operation at the beginning of 1893. We
+  have included the Bank of New Zealand, which commenced operations in Melbourne in 1872.
+  We did not include the Bank of South Australia because a major part of their business had
+  been acquired by the Union Bank of Australia in 1892.
+                                              10
+
+The structure of the financial system underwent considerable change over the
+period between the two depressions. Consolidation among the trading banks was
+perhaps the most significant development. There were 11 amalgamations of
+trading banks between 1917 and 1927, leaving 10 trading banks at the onset of the
+1930s depression. Trading banks also lost market share over the intervening years,
+mainly at the expense of savings banks, while building societies failed to regain
+the share of the financial system that they had lost in the crash of the 1890s
+(Figure 5).
+
+The problems experienced by the banking sector during the depressions can be
+illustrated in two complementary ways: by examining the movement of deposits;
+and by describing the numbers and details of bank failures.
+
+Trading banks suffered a loss of deposits during both depressions, although the
+loss was more rapid, larger and more sustained over the 1890s compared with the
+1930s (Figure 6). In the two years to 1894, trading bank deposits fell by
+15 per cent and did not reach a trough until 1898, by which time they had fallen a
+further 5 per cent. In contrast, from 1929 to 1931 trading bank deposits fell by less
+than 10 per cent and recovered rapidly thereafter.14
+
+The performance of the trading banks over the 1890s was even worse than
+suggested by the movement in aggregate deposits, since these data include
+deposits frozen as the result of the reconstruction of many trading banks.15
+
+
+
+
+14 Due to significant deflation, real deposits, and deposits as a share of nominal GDP, rose
+   sharply during the early years of both depressions. However, the fall in nominal deposits
+   weakened banks because their lending contracts were specified in nominal terms.
+15 Merrett (1993a) discusses some of the problems with the money supply data contained in
+   Butlin, Hall and White (1971). Problems with these data arise from the treatment of deposits
+   frozen in the suspended banks. Merrett presents a revised series showing that the fall in the
+   money supply may have been larger than shown by the series we have used. This strengthens
+   our finding that the fall in trading bank deposits was larger in the 1890s than the 1930s.
+                                             11
+          Figure 6: Trading Bank Nominal Deposits – 1890s and 1930s
+                          1892 = 100 and 1929 = 100
+         1923     1925     1927    1929     1931     1933         1935      1937   1939
+     Index                                                                            Index
+
+
+       120                                                                            120
+                                                       1930s depression
+                                                              (Top scale)
+       110                                                                            110
+
+
+       100                                                                            100
+
+
+        90                                                                            90
+
+
+                                           1890s depression
+        80                                   (Bottom scale)
+                                                                                      80
+
+
+        70                                                                            70
+         1886     1888     1890    1892     1894     1896         1898      1900   1902
+
+
+During the financial turmoil of the late 1880s and early 1890s, the first institutions
+to experience problems were the land finance companies and building societies
+that had been established during the property boom. Pope (1991) suggests that
+between 1891 and 1893, 54 deposit-taking financial intermediaries closed their
+doors (with 60 per cent of these closing permanently). The first trading bank to fail
+in 1893 was the Federal Bank of Australia which went into liquidation in January,
+but the banking panic started in earnest with the suspension of payment by the
+Commercial Bank of Australia in April of that year (Merrett 1989).16 These two
+banks were both exposed to the property market through loans to the land finance
+companies. Initially, runs on the banks of note issue focused on these two banks,
+and those known to be similarly exposed to the property market. Although there
+was a widespread loss of confidence in the banks, Merrett (1991) suggests that at
+least initially, customers were able to differentiate between institutions and some
+depositors transferred funds from the weaker banks to the older, more established
+banks. These included the Bank of Australasia, the Bank of New South Wales and
+
+16 Previously, the Bank of Van Diemen’s Land went into liquidation in 1891 and the Mercantile
+  Bank of Australia and the New Oriental Bank Corporation went into liquidation in 1892.
+                                               12
+
+the Union Bank of Australia, which had tended to be more conservative in their
+lending practices through the boom period of the 1880s.
+
+In total, 13 trading banks were forced to close their doors in the first five months
+of 1893 (Royal Commission 1937, paragraph 96). However, by early August, 12
+of these banks had undergone a process of reconstruction and were able to
+reopen.17
+
+Although the details differed between institutions, reconstruction of the suspended
+banks generally involved the formation of a new limited liability company with
+the same name, writing off capital, converting some deposits into equity and
+deferring the payment of the remainder of deposits. Another important factor in
+the reconstructions was that shareholders were required to inject large sums of
+additional capital into the new company (this can be seen in the sharp rise in the
+ratio of paid up capital to assets for the trading banks, Figure 13, Section 3.5).
+Over the course of the resolution of the financial crisis, the 13 trading banks that
+had suspended payments were forced to write off an amount in excess of the initial
+value of their capital in 1893. They wrote off 40 per cent (£4.4 million) of their
+capital in the first year of the crisis. This proved to be inadequate and from 1894 to
+1909 these banks were forced to write off an additional £7.4 million worth of
+capital. This was more than the £5.9 million of new capital which had been issued
+from 1893 to 1909.
+
+At the time of their closure, the banks that suspended payment controlled around
+half of the total deposits of the trading banks in Australia. In general, the
+reconstruction process resulted in the immediate release of very small deposits, but
+for the majority of depositors, receipts were issued for the value of the deposit, to
+be paid some time in the future. Over 85 per cent of deposits in the suspended
+banks were repayable in cash, and the remainder were converted to securities such
+as preference shares.
+
+
+
+17 It has been suggested that banks may have favoured reconstruction as a way of avoiding
+  liquidation, irrespective of the resulting costs to creditors (Pope 1987). An alternative view is
+  presented by Merrett (1993b) who suggests that the reconstruction schemes were necessary in
+  order to end the runs on banks and minimise potential losses to creditors. Further, the Royal
+  Commission (1937) suggests that of those banks that suspended only the Commercial
+  Banking Company of Sydney did so unnecessarily.
+                                           13
+
+Of the deposits repayable in cash, the majority were paid back between 1893 and
+1901, however, payment was not finalised in some cases until as late as 1918
+(Royal Commission 1937, paragraph 224). So although most depositors ended up
+being paid (with interest), there were considerable indirect losses in terms of
+reduced liquidity by having deposits frozen, as evidenced by the fact that many
+customers opted to sell their deposit receipts in secondary markets for less than
+face value (Royal Commission 1937). Moreover, some depositors incurred direct
+losses due to the failure of the Federal Bank and the City of Melbourne Bank
+which went into liquidation in 1895. These losses totalled around £4 million
+(about 4 per cent of total trading bank deposits in 1891).
+
+In contrast to the 1890s experience, only three financial institutions suspended
+payment in the 1930s depression, none of which were trading banks. The largest
+of these was the Government Savings Bank of NSW (GSB), which had been
+experiencing pressure on deposits throughout 1930. Sykes (1988) suggests that it
+was not these withdrawals per se but rather political influences that resulted in the
+run on deposits that forced the closure of the bank. In the lead up to the NSW
+State election in October 1930, statements by the incumbent Nationalist
+Government predicted financial collapse if a Labor Government was elected. This
+caused public alarm, which was further inflamed when the Labor party won the
+election and the public became aware that the government had defaulted on the
+payment of interest due to the GSB. On 1 April 1931, the NSW Government also
+defaulted on interest payments due to British holders of government bonds and
+this triggered a run on deposits at the GSB which led to the closure of the bank in
+April of that year. In early May, the bank was temporarily reopened (with the
+backing of the Commonwealth Bank) in order to release deposits for individuals
+with ‘necessitous circumstances’. However, it was not until December 1931 that
+the bank was merged with the Commonwealth Bank.18
+
+The other two institutions to suspend payment were the Primary Producers’ Bank
+of Australia and the Federal Deposit Bank Limited. Although the 1937 Royal
+Commission suggests that the Primary Producers’ Bank was not in a hopeless
+position, it had lost almost 40 per cent of its deposits in 18 months and was
+liquidated. At the date of suspension, deposits equalled £1.2 million, less than half
+
+18 This followed protracted negotiations which began in May between the Commonwealth Bank
+  and the NSW Government regarding the conditions under which the merger would take place.
+                                            14
+
+of 1 per cent of total bank deposits in 1931. After the sale of debts of the bank,
+creditors were repaid 98.75 per cent of their funds, but shareholders received
+nothing (paid up capital just prior to suspension had been valued at almost
+£½ million).
+
+The Federal Deposit Bank was, in effect, more like a building society than a bank.
+After it was forced to suspend payment, it was taken over by the Brisbane
+Permanent Building and Banking Company Limited and arrangements were made
+to pay depositors in full. Shareholders were paid in shares of the new company
+(Sykes 1988).
+
+In addition to the above closures, there were a number of mergers following
+depositor withdrawals and liquidity problems. The Australian Bank of Commerce
+merged with the Bank of NSW in 1931 after profits of the former had fallen by
+over 50 per cent from their level in 1930.19 The other merger was that of the State
+Savings Bank of Western Australia with the Commonwealth Savings Bank in
+1932, due to the illiquid position of the former and the fallout from the suspension
+of the GSB.
+
+The only other significant run was on deposits at the Commonwealth Bank itself
+after it took over the business of the GSB. This run was stopped by statements by
+the Chairman of the Commonwealth Bank that dispelled fears that the Bank was in
+financial difficulties (Royal Commission 1937). However, more generally, the
+Commonwealth Bank did not contribute to the more stable position of the
+financial system leading into the 1930s depression, either in terms of monetary
+policy, or in terms of playing a regulatory role in the banking system (Schedvin
+1992; Commonwealth Bank of Australia 1936).
+
+2.2.2 Savings banks
+
+By 1871 there was at least one savings bank operating in each of the colonies
+(Butlin 1986). Savings banks were either government owned and run through post
+offices, or run by government-nominated trustees and commissioners. Compared
+
+
+19 The Royal Commission (1937, paragraph 281) concludes from statements by the Chairman of
+  the Australian Bank of Commerce that ‘...the bank would have experienced some difficulty in
+  continuing to carry on its business without assistance’.
+                                                15
+
+with trading banks, savings banks controlled a small, though increasing, share of
+total financial system assets.20 Despite their size, the performance of the savings
+banks provides an interesting comparison with trading banks. Whereas trading
+banks suffered a sharp fall in deposits in the 1890s, some failed and even more
+closed their doors for a short time, savings bank deposits rose steadily through the
+1890s, albeit from a small base (Figure 7). This difference between the two types
+of institutions through the 1890s may have reflected a perception that savings
+banks were safe havens, given their tendency to invest heavily in government
+securities and their implicit colonial government guarantees.21 Over the 1880s,
+savings banks invested 26 per cent of their assets in government securities,
+compared with 1.3 per cent for trading banks.
+
+           Figure 7: Savings Bank Nominal Deposits – 1890s and 1930s
+                            1892 = 100 and 1929 = 100
+         1927       1928      1929       1930         1931       1932        1933        1934
+     Index                                                                                  Index
+
+
+
+
+       140                                                                                  140
+
+                                                                      1890s depression
+                                                                        (Bottom scale)
+       120                                                                                  120
+
+
+
+
+       100                                                                                  100
+                                                     1930s depression
+                                                        (Top scale)
+
+
+         80                                                                                 80
+          1890      1891      1892       1893         1894       1895        1896        1897
+
+
+
+20 Their share increased from 7 per cent on average over the five years to 1891 to 24 per cent on
+  average over the five years to 1930.
+21 Indeed, the Victorian Government promised to guarantee deposits in the Commissioner’s
+  Savings Bank if it agreed to merge with the Post Office Savings Bank of Victoria (Murray and
+  White 1992).
+                                              16
+
+Even though the increase in savings bank deposits through the 1890s was not large
+in absolute terms, it highlights an important point – namely, that the runs on
+financial institutions were not driven purely by self-fulfilling expectations that all
+financial institutions would fail. Rather, runs were specific to those institutions
+which were unable to demonstrate their soundness in the face of increasing
+fragility across much of the financial system.
+
+One of the significant structural changes between the two depressions was the gain
+in market share of the savings banks – by the late 1920s, savings bank deposits
+accounted for about 40 per cent of total bank deposits. From 1929 to 1931, savings
+bank deposits fell by 14 per cent (or £32 million), compared with a fall of
+8 per cent (or £27 million) for trading bank deposits over the same period
+(compare Figure 6 with Figure 7). However, a significant part of the fall in savings
+bank deposits was accounted for by the GSB, which lost £14.5 million of deposits
+from June 1930 to April 1931; although, it seems that some of these deposits were
+placed into the Commonwealth Savings Bank (Royal Commission 1937,
+paragraph 351).
+
+Apart from concerns regarding the GSB, the fall in savings bank deposits may
+have reflected the tendency of people to draw upon their savings during difficult
+times (Royal Commission 1937, paragraph 351). Because savings banks were in a
+relatively sound condition, these withdrawals did not seem to raise concerns
+regarding the viability of these institutions.22 In this way, the increased proportion
+of deposits held in savings banks appears to have been one of the factors that
+enhanced the stability of the financial system in the 1930s and limited the extent
+of runs on deposits.
+
+In summary, although there were runs on banks during the 1930s, they were
+largely confined to smaller institutions. The major trading banks survived the
+1930s relatively unscathed and there were no losses to depositors in the trading
+banks. This was not the case in the 1890s when there were direct losses to
+depositors due to the failure of the Federal Bank of Australia and the City of
+Melbourne Bank and indirect losses due to the freezing of deposits while banks
+
+
+22 One indication of the relative soundness of savings banks is the fact that their holdings of
+  government securities averaged about 50 per cent of total assets over the 1920s, compared
+  with an average of about 15 per cent for trading banks.
+                                               17
+
+were restructured. Also, a large number of non-bank financial institutions failed in
+the 1880s and 1890s. We have not considered the magnitude of these losses here,
+but they were significant and should not be overlooked in any comparison of the
+two episodes.23 Again this contrasted with the experience of the 1930s, during
+which there were only small direct losses to depositors due to the failure of the
+Primary Producers’ Bank, in addition to indirect losses arising from the
+suspension of payment by the GSB.
+
+
+3.      A Comparison of Indicators of Financial System Stability
+
+The central thesis of this paper is that the variation in the performance of the
+financial system across the 1890s and 1930s stems mainly from differences in the
+condition of the financial systems that were evident well before the economic
+downturn in each episode. This is demonstrated by comparing six broad indicators
+of financial system stability across the decade or so prior to each depression.
+
+We refer to financial instability in terms of the ex ante probability of a financial
+system disturbance of sufficient size that it implies noticeable macroeconomic
+effects (Kent and Debelle 1999).24 In this paper we focus on indicators that relate
+mostly to the degree of credit risk in the financial system, although we also discuss
+the related issue of liquidity risk. The indicators we focus on include:
+
+       (i) the level and nature of investment;
+       (ii) property market speculation;
+       (iii) credit growth;
+
+23 An indication of the magnitude of these losses is provided by the fact that deposits in
+   Victorian building societies fell by about 50 per cent (£2.7 million) from 1890 to 1892, and
+   the number of registered building societies in Victoria fell from 70 to 56 over the same period
+   (Boehm 1971). In 1891 and 1892, almost £3 million of Australian deposits were at risk
+   following the suspension of the Melbourne ‘land’ banks (Boehm 1971); although details of
+   the eventual losses are not readily available.
+24 For a recent discussion of the issues related to defining system stability see Crockett (1997).
+   Bernanke and Gertler (1990) present a model of the relationship between financial fragility
+   and performance in the investment sector and the economy overall. They define financial
+   stability as depending on the net worth of potential borrowers. Mishkin (1997) describes
+   financial instability as occurring when information flows are disrupted to such an extent that
+   the financial system cannot efficiently channel funds to productive investment projects.
+                                               18
+
+       (iv) capital inflows;
+       (v) degree of risk management within the financial system; and
+       (vi) competitive pressures in the financial sector.
+These indicators are of course closely related, and it is not clear that there exists an
+obvious ranking of their importance for system stability.25 Arguably the level of
+credit and the speed at which credit is expanding are the key factors behind many
+episodes of financial instability. Even so, we choose investment as a starting point
+for the discussion since it relates to many other indicators and points to the source
+of the initial positive shock that triggered the expansion and subsequent
+instability.
+
+3.1     Investment – Public and Private
+
+Total national investment grew strongly leading up to both depressions, and then
+fell dramatically at the outset of each depression. As a share of GDP, investment
+was not that much higher through the 1880s compared with the 1920s – averaging
+around 18 per cent in both decades. However, investment had remained relatively
+high over a longer period leading up to the 1890s.26 It had been above 15 per cent
+of GDP for 17 consecutive years to 1891, whereas it had been above this level
+over only 10 consecutive years to 1929. Moreover, what distinguished the 1880s
+from the 1920s was the composition of investment, in terms of both the split
+between public and private investment, and the nature of this investment
+(Figure 8). These compositional differences had implications for the relative
+stability of the financial system over these episodes.
+
+Private investment as a share of GDP was sustained at a higher level, and over a
+longer period, prior to the 1890s depression than it was prior to the 1930s
+
+
+25 There are potentially many other indicators of financial instability. For example, a credit
+   financed consumption boom, an overvalued real exchange rate, a rapid increase in interest
+   rates (particularly in foreign financial markets which are the source of capital flows) or
+   inappropriate fiscal and monetary policies, to name a few. We discuss some of these later in
+   the paper.
+26 The level of investment in the late nineteenth and early twentieth centuries was quite low as a
+   share of GDP compared with the post-Second World War average of around 25 per cent (Edey
+   and Britten-Jones 1990). However, it is hard to make comparisons across these eras due to
+   disparities in the level of development and the comparability of data.
+                                         19
+
+depression. Although highly volatile, private investment averaged about
+11 per cent of GDP from 1875 to 1891, compared with an average of just under
+9 per cent from 1920 to 1930. Investment reached a seven-year high of about
+13 per cent of GDP in 1888, coinciding with the peak of the property price boom
+(see below). Through both depressions investment fell rapidly, though the fall in
+the 1890s was larger and lasted longer than was the case during the 1930s.
+
+           Figure 8: Investment, Building Activity and Bank Credit
+                               Per cent of GDP
+               %               Investment expenditure          %
+                          (Five-year centred moving average)
+               12                                              12
+                                     Private
+               10                                              10
+                8                                              8
+                6                                              6
+                            Public
+                4                                              4
+
+               %                                               %
+                                        Building activity
+               14                                              14
+               12                                              12
+               10                                              10
+                8                                              8
+                6                                              6
+
+               %                                               %
+                                        Bank credit
+               70                                              70
+               60                                              60
+               50                                              50
+               40                                              40
+               30                                              30
+
+                1860 1870 1880 1890 1900 1910 1920 1930 1940
+                                             20
+
+Public investment spending also grew strongly leading up to both depressions, but
+was lower on average during the 1880s than during the 1920s – 7 per cent
+compared with about 9 per cent of GDP.
+
+These differences between the two episodes affected financial stability in a
+number of ways. The financial system will become less stable if a substantial
+proportion of lending by financial institutions is used to fund increasingly riskier
+investment projects. This was more likely during the 1880s than the 1920s because
+aggregate investment had been sustained at a high level for longer, and private
+investment was a much larger share of aggregate investment. It is plausible that
+relatively high levels of investment, if sustained over a very long period of time,
+will lead to increasingly riskier projects being undertaken, especially when
+investment is concentrated in only a few sectors of the economy (as it was during
+the 1880s). Also, a higher share of private investment implies more exposure for
+financial institutions to the risks inherent in these projects. This follows from the
+fact that private investment was (and still is) more reliant on financial
+intermediation than government investment. Furthermore, a greater share of public
+investment should directly reduce the volatility of aggregate demand since
+governments are generally better placed to fund investment projects even during
+downturns.27
+
+Figure 8 clearly shows that compared with public investment, private investment
+fell earlier and further, and stayed lower for longer during both depressions. Also,
+the cycle in private investment was strongly correlated with the cycle in bank
+credit during the 1880s and 1890s. However, this relationship was not nearly as
+strong over the 1920s and 1930s.
+
+The investment boom of the 1870s and 1880s was driven by a number of factors.
+Extremely high rates of population growth during the 1870s and 1880s helped to
+drive rapid real GDP growth – output was expanding rapidly through the
+application of imported capital and labour to the development of many previously
+unexploited resources and investment opportunities. However, productivity
+growth was not especially strong. That is, output per capita grew consistently,
+though not that rapidly – from 1861 to 1891, GDP per capita grew on average
+
+27 However, governments were less able/willing to raise taxes during the 1890s depression and
+  had relied on funds from London to fund investment over the 1880s (see below).
+                                               21
+
+about 1 per cent per annum, compared with an average of almost 3 per cent per
+annum in the 30 years following the Second World War. A very high demand for
+housing was driven by population growth and bolstered by wealth accumulated in
+the agricultural sector and in the gold fields flowing back into the major cities.
+Underlying these developments in the private sector, governments were increasing
+spending on infrastructure such as railways and communications.
+
+Therefore, it is not surprising that investment in the 1870s and 1880s was
+dominated by construction activity. The strength of construction over this period
+cannot be overemphasised since it represented the biggest building boom in
+Australia’s history (Figure 8). Much of it was concentrated in urban centres,
+especially Melbourne which was undergoing rapid expansion and was the focal
+point for speculation in the property market which eventually spread to other
+colonies (Boehm 1971). From 1875 to 1891, building activity as a share of GDP
+averaged around 14 per cent, compared with an average of only 9 per cent from
+1920 to 1930.28 It would not be an overstatement to claim that this level of activity
+over the 17 years to 1891 represented the most extravagant of building booms.
+
+Even though population growth provided a fundamental reason for the
+construction boom of the 1870s and 1880s, building activity remained high even
+after the rate of population growth slowed markedly towards the end of the
+1880s.29 This by itself was a source of instability.
+
+Population growth in the 1920s was considerably slower than during the 1870s
+and 1880s. Hence, the pressure on the property market was nowhere near as great
+– construction activity did increase, though a greater proportion of this was public.
+During the 1920s, public construction accounted for slightly more than half of
+building activity (Butlin 1962). In contrast, private activity accounted for on
+average 60 per cent of the construction during the boom years of the 1870s and
+1880s.
+
+
+
+
+28 During the building booms of the early 1970s and late 1980s the share of construction in GDP
+  was less than 9 per cent and 8 per cent respectively.
+29 However, there was considerable variation across the colonies in terms of the timing of the
+  building cycles and changes in rates of population growth (Boehm 1971).
+                                               22
+
+In summary, one of the major differences between the two depression episodes
+was the unprecedented building boom prior to the 1890s depression. A large
+proportion of this activity was undertaken by the private sector. The dramatic
+boom and bust in private investment, building activity and bank credit were all
+closely related over the 1880s and 1890s. Cycles in these indicators were
+comparatively muted through the 1920s and 1930s.
+
+3.2     Speculation in the Property Market
+
+During both episodes, rising asset prices, especially for property, went hand in
+hand with increasing investment and building activity. Downturns in asset prices,
+investment and building activity were just as closely related.30 Melbourne was the
+centre of a boom in property prices that reached a peak in 1888 (Boehm 1971).
+Boehm highlights a number of factors driving this boom, including strong
+population growth, particularly among the working age population and
+urbanisation.31 The land boom was supported by the large number of building
+societies that opened (Figure 5) and the view that one couldn’t lose money by
+investing in land (Cannon 1966). Legislation covering building societies was
+changed in 1876 to allow them to buy and sell land themselves. This resulted in
+building societies becoming little more than ‘speculative operations’ which added
+to the inflationary pressure on land and property values. Although an accurate time
+series of property price data is unavailable, Silberberg (1975) presents data
+suggesting that the average net nominal annual rate of return on land in Melbourne
+was about 35 per cent from 1880 to 1892. No comparable studies are available for
+the 1920s. Cannon (1966) cites anecdotal evidence such as a city block in
+Melbourne almost doubling in value in a couple of months in late 1887, while
+Daly (1982) estimates that the average price of land in Sydney increased by over
+80 per cent from 1880 to 1884. Land prices also increased rapidly in the first half
+of the 1920s, but Daly suggests prices remained relatively stable leading into the
+depression.
+
+
+
+30 Kiyotaki and Moore (1997) present a theoretical model based on such a relationship. For a
+   description of the relationship between property prices, credit and output in Australia during
+   the property booms of the 1970s and 1980s see Kent and Lowe (1997).
+31 Victoria’s population increased by 278 000 (or 32 per cent) from 1881 to 1891. By absorbing
+   about 75 per cent of this increase, Melbourne’s population grew by over 70 per cent.
+                                                 23
+
+In order to provide a rough approximation to movements in property prices we
+attempted to exploit data on the aggregate capital value of ratable properties in
+Melbourne and Sydney. Movements in this measure reflect changes in prices, as
+well as changes in the volume and quality of properties – both of which we would
+expect to be on an upward trend or at least not likely to decline rapidly. Figure 9
+compares aggregate capital values over the two depression episodes for the cities
+of Melbourne and Sydney.32 Figure 9 suggests that price rises over both boom
+periods and in both cities were of similar orders of magnitude.33 However, this
+finding is at odds with contemporary and historical accounts of the two cycles.
+
+                             Figure 9: Capital Value of Property
+                                   1892 = 100, 1930 = 100
+          1918 1922         1926 1930 1934            1922    1926 1930 1934 1938
+      Index                                                                     Index
+                     City of Melbourne                       City of Sydney
+
+
+       100                                                                            100
+
+
+
+
+        80                                                                            80
+               1930s
+             depression            1890s
+              (Top scale)
+                                 depression
+                                (Bottom scale)
+        60                                                                            60
+
+
+
+
+        40                                                                           40
+         1880 1884          1888 1892    1896         1884    1888 1892 1896      1900
+
+
+
+
+32 Given that the regions defined by the cities of Melbourne and Sydney were relatively small
+   and already well developed (even by the early 1880s), it is reasonable to assume that increases
+   in volumes would have been limited. Other things being equal, ongoing quality improvements
+   imply that rising capital values of property will overstate true price rises.
+33 However, the fall in capital values in Melbourne during the 1890s downturn was particularly
+   large, suggesting ex post that the initial rise was especially unsustainable.
+                                              24
+
+One reason why these data might not fully reflect price rises is that capital values
+were determined for the purposes of tax assessments by the valuation departments
+of city councils. Councils generally adopted a conservative approach by
+attempting to value property according to the underlying or ‘real’ value of
+property as opposed to the current market value of property. If this process was
+done methodically and consistently for both episodes then the capital values
+should provide a reasonable indication of the relative size of the cycles in property
+prices over the two episodes. However, the Sydney Morning Herald (1930)
+suggests that, at least for Sydney, the practice of more conservative council
+evaluations had been ignored during the boom leading up to the 1930s and that
+valuations were influenced by a ‘…number of spectacular sales of city properties’.
+Thus, while capital values of the 1880s may have underestimated actual price
+rises, this bias seems to have been less prevalent in the 1920s.
+
+Despite the paucity of data, anecdotal evidence and contemporary accounts
+suggest that speculation in property markets was much more acute during the
+1880s than the 1920s. This conclusion is supported by a comparison of building
+activity across these two decades. The combination of extraordinary high levels of
+construction and substantial speculation in property markets were important
+factors behind increasing vulnerability of the financial system through the 1880s.
+This effect was reinforced by the cycle in credit.
+
+3.3    Credit
+
+Historically one of the major causes of financial instability has been rapid
+increases in bank lending in conjunction with unsustainable rises in asset prices. In
+recent times the catalyst for this process has been financial deregulation. In a way,
+this force was also present in the 1880s. The Australian banking system in the
+1800s had operated under direction of the British Treasury in accordance to the
+‘real bills doctrine’, which among other things prohibited lending backed by
+land.34 However, Pope (1991) suggests that after the arrival of ‘responsible
+government’ in the 1850s, these regulations were largely ignored and banks
+
+
+34 Prior to the 1850s, the British Treasury had laid down regulations for colonial banks
+  governing aspects of banking such as debt-to-capital ratios, loans to directors and frequency of
+  statistical returns. For Australia, perhaps the most significant regulation was that which
+  prevented property being taken as security against advances (Butlin 1986; Pope 1991).
+                                             25
+
+increasingly engaged in lending for speculative purposes. Increasing willingness
+to ignore the real bills doctrine was at least in part a response to increasing
+competition from non-bank financial institutions (Section 3.6).
+
+The result of these changes was a dramatic increase in the ratio of bank credit to
+GDP (Figure 10). This rise was sizeable compared with the experience of the
+1920s. Although data on the direction of lending is not readily available over the
+earlier episode,35 contemporary accounts suggest that a large proportion of lending
+in the 1880s was directed to property speculation and development. This is
+consistent with the very high level of building activity (Figure 8), and the fact that
+the cycle in building activity coincided with cycles in credit and property prices.
+
+                     Figure 10: Bank Credit – 1880s and 1920s
+                              Per cent of nominal GDP
+        %                1880s                               1920s                 %
+
+
+        70                                                                         70
+
+
+        60                                                                         60
+
+
+        50                                                                         50
+
+
+        40                                                                         40
+
+
+        30                                                                         30
+
+
+        20                                                                         20
+         1880          1890          1900         1920         1930        1940
+
+
+
+
+35 Data for selected years and (five) selected trading banks are available around the 1930s
+  depression (Butlin, Hall and White 1971). Advances allocated specifically for building
+  purposes among these banks represented around 4 per cent of their total advances in 1927 and
+  1935 (although, this fell to 3.6 per cent in 1930).
+                                                     26
+3.4     Banks’ Balance Sheets and Foreign Borrowing
+
+The rapid expansion of banks’ balance sheets contributed to the instability of the
+banking system leading up to the crash in 1893. The rise in credit over the 1880s
+was so dramatic that banks were unable to fund their lending through increases in
+domestic deposits. Bank advances as a share of deposits rose over the 1880s,
+reversing an earlier downward trend (Figure 11). Banks were able to make
+
+              Figure 11: Ratio of Trading Bank Advances to Deposits
+                   %                                  Bank credit                      %
+                   70                              (Per cent of GDP)                   70
+                   60                                                                  60
+                   50                                                                  50
+                   40                                                                  40
+                   30                                                                  30
+
+                   %              Bank advances to deposits ratio                      %
+                 140                                                                   140
+
+                 120                                                                   120
+
+                 100                                                                   100
+
+                   80                                                                  80
+
+                   %                                  Capital inflows                  %
+                    9                                (Per cent of GDP)                 9
+                    6                                                                  6
+                    3                                                                  3
+                    0                                                                  0
+                   -3                                                                  -3
+                   -6                                          -6
+                    1860 1870 1880 1890 1900 1910 1920 1930 1940
+Note:   Data on capital flows before and after 1901 are not directly comparable; hence, there is a break in this
+        series between 1900 and 1901 (details are contained in Appendix A).
+                                              27
+
+advances in excess of their Australian deposits by seeking deposits in Britain,
+leaving the banking system exposed to external developments. This is consistent
+with the substantial increase in capital inflows over this period. Capital inflow was
+above 6 per cent of GDP for eight consecutive years during the 1880s; it breached
+this level in only two years during the 1920s.36
+
+Through the 1920s, trading banks expanded their lending, but at a rate more in line
+with increases in Australian deposits. The greater conservatism of the banking
+sector, particularly with regard to credit policy, was an important factor in
+providing a more stable financial system leading into the 1930s depression.
+
+The proportion of private sector borrowing to total borrowing was higher in the
+1880s than the 1920s (Schedvin 1970).37 This may have insulated the financial
+system from overseas developments in the 1930s relative to the 1890s for two
+reasons. First, the public sector is generally perceived to represent a lower credit
+risk than the private sector.38 Second, when funds are channelled through the
+banking system, in addition to the risk of default by the final user of the credit,
+there is also the risk of default by the intermediary. From 1886 to 1891, Australian
+bank liabilities to British residents averaged 45 per cent of liabilities within
+Australia. This ratio averaged only 15 per cent from 1920 to 1927 (Butlin, Hall
+and White 1971).
+
+The cessation of capital flows in both episodes was due in part to financial turmoil
+in the US and UK. The majority of overseas borrowing during the 1880s was done
+in London. The Barings crisis in 1890 led to a reduction in the availability of
+British credit. Barings was a London discount house which faced liquidity
+difficulties in mid 1890 due to its exposures in South America. The default on
+these loans brought attention to all overseas securities and Australian governments
+found it difficult to raise new loans in Britain (Boehm 1971). Because
+
+
+
+36 Capital flows in Figure 11 prior to 1900 are based on indirect estimates from Butlin (1962).
+   While a range of other estimates of capital flows are available (for example, direct estimates
+   from Butlin 1962 and indirect estimates from Boehm 1971) they display broadly similar
+   movements, especially over the 1880s and early 1890s.
+37 This is also consistent with the pattern of investment and building activity.
+38 However, the default on debt by the NSW State Government during the 1930s depression may
+   have shaken this belief.
+                                            28
+
+governments encountered difficulties raising new loans, the Australian private
+sector also found it more difficult to borrow money in Britain.
+
+Schedvin (1970) suggests that some loans were obtained from New York during
+the 1920s, but the majority of borrowing was still done in London. The London
+market was disrupted in the late 1920s by speculative activity in Europe and large
+outflows associated with the stock market boom in New York. London was
+virtually cut off as a source of funds for Australian long-term borrowing in early
+1929 (Royal Commission 1937, paragraph 114).
+
+In summary, the build up in credit during the 1880s was more substantial than in
+the 1920s and it was also more reliant on large capital inflows, much of this in the
+form of private borrowing. This increased the instability of the financial system by
+increasing its vulnerability to foreign financial shocks.
+
+3.5    Risk Management – Prudence and Diversification
+
+The degree of prudence of the banking system declined over the 1880s. Trading
+banks were increasing their risk – as measured, for example, by the ratio of
+lending to deposits – at the same time as reducing liquidity. One measure of
+liquidity is the ratio of trading bank cash balances to deposits within Australia
+(Figure 12). Cash balances consisted of coin, bullion and Australian notes.
+
+This measure of liquidity actually behaved similarly in the periods prior to each
+depression. The trading banks’ cash-to-deposits ratio fell from the relatively high
+levels of the 1870s to a trough of 13.8 per cent in 1883, before picking up and
+stabilising until the onset of the depression. Despite a sharp fall in deposits in
+1893, trading banks were able to increase their cash balances and hence, liquidity
+rose sharply.39 They were able to do this by reducing advances to such an extent as
+to more than offset the fall in deposits and by raising new capital. The
+cash-to-deposits ratio fell over the 1920s. In 1929 the ratio was around 17 per cent
+– a similar level to the years immediately prior to the 1890s episode. Indeed,
+
+
+
+39 While cash balances in the trading banks increased from 1892 to 1893, they fell by about
+  6 per cent from March to June 1893 (based on seasonally adjusted quarterly averages). From
+  March to June 1893 the ratio of cash balances to deposits remained at about 19 per cent.
+                                                       29
+
+Schedvin (1970) suggests that the banking system experienced a severe liquidity
+crisis towards the end of 1929.
+
+                           Figure 12: Trading Bank Liquid Assets
+                                Per cent of Australian deposits
+        %                                                                                  %
+
+        35                                                                                  35
+
+        30                                                                                  30
+
+        25                                                                                  25
+
+        20                                                                                  20
+
+        15                                                                                  15
+
+        10                                                                                  10
+
+         5                                                                                 5
+
+         0                                                                                  0
+         1860       1870       1880       1890        1900       1910      1920   1930   1940
+Note:   Liquid assets are defined as coin, bullion and Australian notes.
+
+
+When comparing the ability of the banking system to withstand large shocks, it is
+also useful to examine a broader measure of the soundness of the system. When
+trading banks’ holdings of government and municipal securities are added to cash
+balances, the ratio to deposits averaged around 40 per cent over the second half of
+the 1920s – double the average ratio over the second half of the 1880s. This
+enabled the banking system to better withstand the macroeconomic downturn and
+subsequent increases in loan defaults.
+
+Declining levels of prudence over the 1880s are also reflected in a decline in the
+ratio of paid up capital to assets, while retained earnings as a proportion of assets
+remained flat (Figure 13). This was due to a rapid increase in assets as well as
+relatively high dividend rates, averaging 8.3 per cent of shareholders’ funds over
+the 1880s.
+                                                30
+
+In contrast, through the 1920s trading banks increased paid up capital and retained
+earnings at a faster rate than total assets, reflecting the greater conservatism in the
+banking system. The ratio of shareholders’ funds to assets was increased to nearly
+20 per cent in 1929, from 13 per cent ten years earlier. During the 1930s, the
+trading banks were able to draw on these funds.
+
+With lower capitalisation of the banks during the early 1890s relative to the late
+1920s and early 1930s there was a greater probability of a given internal or
+external shock leading to bank insolvency. Hence, variation in bank capitalisation
+was an important explanator of variation in financial system stability.
+
+            Figure 13: Trading Banks – Capital and Retained Earnings
+                                Per cent of assets
+        %                                                                   %
+
+
+       25                                                                    25
+              Shareholders’ funds
+       20                                                                    20
+
+
+       15                                                                    15
+
+                            Paid up capital
+       10                                                                    10
+
+
+        5                                                                    5
+                                    Retained earnings
+
+        0                                                                   0
+        1880         1890           1900       1910     1920   1930      1940
+
+
+Increased geographical diversification of lending within a given bank tends to
+increase the stability of the financial system by reducing banks’ exposures to
+specific regions or industries. Of the 23 trading banks operating at the start of the
+1890s depression, only ten were in existence at the start of the 1930s depression.
+Each of these ten banks increased the share of assets held outside their home state
+between the two depressions (see Appendix B for details). In fact, banks were
+tending to spread their lending more evenly across all of the six Australian States
+                                                      31
+
+and New Zealand. This is demonstrated by examining each bank’s distribution of
+the share of their advances across these seven regions. Figure 14 shows that from
+1891 to 1929 there was an almost universal reduction in the variance of these
+distributions.40
+
+                 Figure 14: Standard Deviation of the Share of
+                      Trading Bank Advances by Region
+        Banks are ranked in descending order by asset size from left to right
+        %                                                                                           %
+                                                      1891
+        35                                                                                           35
+                                                      1929
+        30                                                                                           30
+
+        25                                                                                           25
+
+        20                                                                                           20
+
+        15                                                                                           15
+
+        10                                                                                           10
+
+         5                                                                                           5
+
+         0                                                                                           0
+             avg BNSW CBC NBA Asia BNZ ESA UBA CBA QNB BA
+Note:   The average is calculated by weighting together distributions of individual banks according to each bank’s
+        share of total advances.
+
+
+Another important factor affecting risk is the extent of management control over
+lending practices. It would appear that this control was increasingly lax over the
+1880s. In part, this was due to the rapid expansion of branch networks.
+Butlin, S.J. (1977; 1986) shows that the number of trading bank branches rose
+
+
+40 For simplicity we have chosen to focus only on the geographical dispersion of lending. We
+   did not attempt to systematically account for differences in the size of the economies of the
+   seven regions. However, a casual examination of Table B1 (Appendix B) suggests that for
+   most banks in the sample, the shares of lending across regions was more closely correlated
+   with the economic size of regions in 1929 than it was in 1891.
+                                              32
+
+from about 800 in the late 1870s to a peak of 1 534 in 1892.41 Through the
+depression, trading bank branch numbers fell to 1 235 by 1896, and grew
+thereafter, although at a more moderate pace than before.
+
+Rapid expansion of branch numbers can become a problem for an individual bank
+if there is a loss of internal control. This view is emphasised by Merrett (1989)
+who further suggests that the demand for competent bankers exceeded supply as
+branch networks expanded. Some evidence of over expansion of branches is
+provided by comparing the behaviour of those banks that suspended payment in
+1893 with those that did not, in terms of the rate of branch expansion over the
+1880s. The average bank that suspended payment in 1893 had added 53 branches
+to its network from 1880 to 1891 compared with only 21 branches for the average
+bank that did not suspend payment in 1893.42 These figures represent average
+growth rates of about 150 per cent and 90 per cent respectively for the suspending
+and non-suspending banks. Interestingly, the banks that suspended payment in
+1893 were also larger in 1880 than the average non-failing bank – 52 branches
+compared with 32 branches respectively.
+
+In contrast, it seems that the pressure on banks to expand their branch networks
+had eased following consolidation of the trading banks after the First World War,
+and the lack of competition from non-bank financial institutions. Trading bank
+branches grew on average by about 43 per cent between 1921 and 1930.
+
+An additional factor in increasing the instability of the banking sector in the 1880s
+was the widening mismatch of the maturity profiles of assets and liabilities
+(Merrett 1989). Banks began to make a greater proportion of loans on a
+longer-term basis, while the majority of liabilities remained as shorter-term
+
+
+41 Certainly, compared with Britain, Australians were grossly oversupplied with bank branches
+   even during the early 1880s (Pope 1987). In England and Wales in 1880 for every bank branch
+   there were about 12 000 persons. The comparable number for Scotland was 4 000 persons,
+   and for Australia, only 2 500 persons. By 1891 this had fallen to around 2 000 persons. The
+   geographical dispersion of economic activity may have justified branch numbers in Australia
+   being relatively higher than in the United Kingdom. However, much of the Australian
+   population was contained in urban centres, even during the mid to late nineteenth century
+   (Boehm 1971).
+42 There is a fair degree of variation around these averages within the two banking groups, but
+   the conclusions are robust to the exclusion of the outlying observations.
+                                         33
+
+deposits. The result was a decline in the liquidity of banks’ balance sheets, at a
+time when loan repayments began to decline.
+
+3.6    Competitive Pressures
+
+During the 1880s, banks faced increasing competitive pressure from the
+emergence of a large number of non-bank financial institutions. This led to banks
+increasing their level of risk in order to maintain returns, and was one of the
+important catalysts for the excessive expansion of their balance sheets.
+
+One of the primary aims of these newer institutions was the provision of finance
+for property speculation. Banks which had been competing on a non-price basis
+through avenues such as increasing branch numbers were now forced to compete
+for market share with the new institutions. To achieve this, banks lowered their
+credit standards and became involved in speculative activities, including loans to
+the new land finance companies (Boehm 1971).
+
+By contrast, leading up to the 1930s depression, although the trading banks had
+lost market share, it was mainly to the more conservative savings banks. Building
+societies and other non-bank financial institutions failed to regain the market share
+they had lost in the late 1880s and early 1890s (Figure 5).
+
+Also, within the set of trading banks there had been considerable consolidation
+between the two depressions. Between 1917 and 1927 there were 11
+amalgamations between the trading banks, leaving 10 at the onset of the 1930s
+depression. There was one further amalgamation in 1931. This move towards
+consolidation may have lessened competition in the banking sector at the same
+time as providing a vehicle for banks to diversify geographically.
+
+Almost all of the indicators we have examined imply a dramatic increase in the
+vulnerability of the financial system through the 1880s and early 1890s to adverse
+macroeconomic shocks. Private investment was relatively high, reflecting an
+extraordinary building boom which helped to ignite, and was then extended by,
+speculation in the property market. Simultaneously, there was a massive build up
+in the level of intermediated finance, supported by large private capital inflows.
+Increasing risk in the financial system came hand-in-hand with reductions in the
+capital ratios of banks. Banks’ greater appetite for risk was driven by competitive
+                                             34
+
+pressures arising from a rash of new non-bank financial institutions. Non-banks
+and (many, though not all) trading banks became all too willing to lend for
+speculative purposes using a seemingly inexhaustible supply of funds from
+overseas.
+
+While many of these pressures were present during the 1920s, they were smaller in
+magnitude. Private investment was lower, as was building activity. It appears that
+speculation in property markets was less vigorous. A rise in credit came late in the
+decade and was relatively minor, as were capital inflows. At the same time there
+were a number of positive developments for financial stability. Capital ratios of
+banks increased strongly over the 1920s and banks were more diversified
+geographically than they had been during the 1880s. Finally, a notable absence of
+competition from non-bank financial institutions and earlier consolidation among
+the trading banks helped to foster more prudent lending by banks.
+
+Determining the cause of the greater conservatism in the banking industry during
+the 1920s compared with the 1880s is beyond the scope of this paper.43 Instead,
+we make three brief observations. First, amalgamation within the set of trading
+banks and the earlier failure of ‘fringe’ bank and non-bank financial institutions
+helped to produce a less competitive environment. Second, the greater
+conservatism in the 1920s may have been due in part to the memory of the disaster
+of the 1890s.44 Third, the conservatism of the banking system through the 1920s
+appears to owe nothing to the role of the Commonwealth Bank. The
+Commonwealth Bank played no active part in setting prudential standards
+(Schedvin 1992). Indeed, the Commonwealth Bank did not regard itself to be a
+central bank in any effective sense until as late as 1929 (Commonwealth Bank of
+Australia 1936).
+
+
+43 See discussion in Schedvin (1970).
+44 Butlin and Boyce (1985) suggest that during the early 1930s, first-hand experience of the
+  1890s depression focused bankers’ attention on the need for sound financial management.
+  There is some evidence in the 1920s and early 1930s of references regarding the experience of
+  the 1890s – for example, see The Australasian Insurance and Banking Record (AIBR) (1930),
+  Vol. LIV, No. 9, p. 777. Also, a history of the Commercial Banking Company of Sydney
+  shows that some very senior staff of the 1880s and 1890s still held senior positions through
+  the 1920s and early 1930s (Commercial Banking Company of Sydney 1934). In fact, George
+  Judah Cohen was a director of the bank from 1885 to 1933, and held the position of chairman
+  in 1892 and then again from 1900 to 1933.
+                                                 35
+
+4.        Real Macroeconomic Features of the Two Depressions
+
+So far we have shown that the financial system prior to the 1890s depression
+showed clear signs of increasing instability, whereas prior to the 1930s depression
+the financial system displayed evidence of relative stability. In this section of the
+paper we examine whether variation in the financial pre-conditions was the
+primary reason for the difference in the performance of the real and financial
+sectors during the two depressions. To this end we consider the role that factors
+outside the financial system may have played. We examine a number of external
+and internal exogenous real factors before examining the importance of
+government policies. We conclude that those differences that did exist in terms of
+the performance of the real economy were either not significant enough, or were
+even working in the wrong direction, to explain the financial crisis.
+
+4.1       Exogenous External Factors
+
+Although there is some debate in the literature about the relative importance of
+internal and external factors in causing both the 1890s and 1930s depressions,
+there is little doubt that the external sector played a significant role in both.45
+
+The United Kingdom and the United States both experienced depressions in the
+1890s and 1930s, although the 1930s depression was more severe in both
+countries. Real GDP fell in the UK by around 3 per cent from 1891 to 1893. Real
+GNP in the US fell by around 5 per cent in 1893 and by a further 3 per cent in
+1894.46 By comparison, in the US, real GDP fell for four consecutive years, from
+
+45 See Sinclair (1965) and Valentine (1985) for a discussion of this debate.
+46 In the UK, real GDP growth had been stagnant since the early 1870s (Pollard and Crossley
+     1968) and Britain’s major influence on the Australian economy was through the cessation of
+     capital flows following the Barings crisis in 1890. Although the depression in the US was
+     worse than the UK during the 1890s, trade flows between the US and Australia were still
+     relatively small. There is no real consensus regarding the cause of the US depression in the
+     1890s. However, Friedman and Schwartz (1963) suggest that in the early 1890s there was a
+     loss of confidence in the ability of the US government to maintain the gold standard. This
+     caused expectations of a devaluation of the US dollar, which in turn caused funds to flow out
+     of the US (this may have been exacerbated by the Barings crisis, which caused a general loss
+     of confidence on behalf of British investors). The downturn was also fuelled by a crisis in the
+     financial sector – the US stock market crashed in mid 1893 and a month or so later there was a
+     widespread loss of confidence in the banks, leading to some suspensions and some failures.
+     For a recent discussion of these events see Rockoff (1998).
+                                             36
+
+1930 to 1933, with a fall of 15 per cent in the worst year of 1932. The 1930s
+depression was less severe in the UK than the US, with output declining by
+5 per cent from 1929 to 1931.
+
+Relative falls in Australia’s terms of trade across the two depressions reflect the
+greater severity of the world depression of the 1930s compared with the 1890s.
+The terms of trade fell gradually over most of the 1880s and early 1890s
+(Figure 15). Over the 11 years to 1894, the terms of trade fell by over 25 per cent.
+The falls in the terms of trade leading up to, and during the early years of, the
+1930s depression were more dramatic. Between 1925 and 1932, the terms of trade
+fell by nearly 50 per cent; the fall in 1932 alone was a substantial 25 per cent
+(Jonson and Stevens 1983).
+
+It is not surprising that the larger fall in the terms of trade during the late 1920s
+and early 1930s was associated with a more marked decline in nominal exports
+than was the case over the 1890s (Figure 15).47 This confirms Sinclair’s (1965)
+observation that the influence of the external sector occurred mainly through
+capital flows in the 1890s depression.
+
+In real terms, exports increased through both depressions – with similar and
+moderate increases over the five years following output peaks in 1891 and 1930
+(Figure 15). It is true that real exports rose more rapidly in the first three years of
+the 1930s depression compared with the 1890s depression, although it is difficult
+to know how much of this difference can be explained by the devaluation of the
+exchange rate in the 1930s (Section 4.2.3). Firstly, the better performance did not
+last beyond three years, suggesting that special factors in the export sector may
+have been relevant. Secondly, the financial crisis of the 1890s may have made it
+difficult for producers and exporters to obtain working capital and trade finance.
+
+
+
+47 The degree of openness of the Australian economy was broadly similar over the two episodes.
+  Therefore, a given-sized decline in the terms of trade should have had a similar impact. The
+  sum of exports and imports, expressed as a percentage of GDP, suggests a trend decline in the
+  degree of openness from the 1870s to the 1930s; although the average over the 1880s was
+  similar to that over the 1920s – 35 per cent versus 34 per cent. Commonwealth tariffs imposed
+  after Federation, and increased following the First World War, suggest that the economy had
+  become more closed. For a history of protectionism in Australia see Anderson and
+  Garnaut (1987), and Pope and Manger (1984).
+                                          37
+              Figure 15: Terms of Trade and Exports
+                      1891=100 and 1930=100
+    1921       1924         1927       1930         1933        1936     1939
+Index                                                                       Index
+                                                   Terms of trade
+ 140                                                                        140
+                                                 1930s depression
+ 120                                                (Top scale)
+                                                                            120
+
+ 100                                                                        100
+                   1890s depression
+                      (Bottom scale)
+  80                                                                        80
+
+  60                                                                        60
+   1882        1885          1888       1891        1894          1897   1900
+
+
+    1921       1924         1927       1930         1933        1936     1939
+Index                                                                       Index
+                                               Nominal exports
+ 120                                                                        120
+                                               1930s depression
+                                                  (Top scale)
+ 100                                                                        100
+
+  80                                                                        80
+                              1890s
+                             depression
+  60                                                                        60
+                            (Bottom scale)
+
+  40                                                                        40
+   1882        1885          1888       1891        1894          1897   1900
+
+
+    1921       1924         1927       1930         1933        1936     1939
+Index                                                                       Index
+                Real exports
+ 120                                                                        120
+           1930s depression
+ 100          (Top scale)
+                                                                            100
+                                                 1890s depression
+                                                   (Bottom scale)
+  80                                                                        80
+
+  60                                                                        60
+
+  40                                                                        40
+   1882        1885          1888       1891        1894          1897   1900
+                                             38
+
+In summary, the decline in world output was more substantial during the 1930s
+depression. Accordingly, the decline in the terms of trade was more pronounced
+for the 1930s episode than it was for the 1890s. Movements in nominal exports
+partially reflected these terms of trade declines. The rise in real exports was
+broadly comparable over the full course of both depression episodes. Therefore, it
+seems clear that the more substantial decline in real output during the 1890s
+depression cannot be explained by the size and impact of external real shocks. We
+now turn to the question of internal factors in the real sector.
+
+4.2    Exogenous Internal Factors
+
+4.2.1 Population
+
+An underlying feature of Australia’s economic development in the second half of
+the nineteenth century was the rapid growth of the population and workforce. The
+population increased at an average annual rate of 3.1 per cent from 1871 to 1881,
+and 3.4 per cent from 1881 to 1891 – rates well above all other countries of the
+Western world (Butlin 1958), and higher than Australia has experienced for any
+extended period since that time. This rapid population growth was a significant
+factor behind the high and sustained real GDP growth from 1871 to 1891.48 In
+fact, the fall in real GDP during the 1890s depression coincided with a slowdown
+in the rate of population growth to 1.7 per cent per annum on average over this
+decade. Population growth also slowed from the 1920s into the 1930s, although
+this was much less marked than during the 1890s depression.49
+
+Rapid population growth through the 1870s and 1880s was undoubtedly a factor
+behind the high level of building activity over this period. Hence, population
+growth contributed indirectly to increasing financial system instability prior to the
+1890s depression. There is a relatively close positive relationship between annual
+population growth and residential investment across the three major colonies of
+NSW, Victoria and Queensland (Boehm 1971 and Butlin 1962). Population
+
+48 Population growth depends on factors which are both endogenous and exogenous to the
+   Australian economy. Clearly population growth will impact on real GDP growth, just as
+   economic prospects will influence prospective immigrants. Similarly, prospective immigrants
+   will be influenced by exogenous conditions in their home countries.
+49 Population growth averaged 1.7 per cent per annum from the census dates of 1921 to 1933,
+   and then fell to an average of 1 per cent per annum between 1933 and 1947.
+                                        39
+
+growth peaked in the first half of the 1880s in both NSW and Queensland, as did
+new residential capital formation. Population growth was increasing over the
+1880s in Victoria, and peaked quite dramatically in 1888. This was also a peak
+year for new residential construction, and property prices in Victoria.
+
+In the early 1890s, population growth rates turned down rapidly having peaked in
+the first half of the 1880s. This reflected continued falls in the growth rates in
+NSW and a rapid downturn in the growth rate in Victoria. Despite the trend
+decline in aggregate population growth rates, aggregate building activity (as a
+share of GDP) remained at a high level throughout the 1880s and into 1891. In this
+way, population growth had an important role in initiating the building boom,
+although it was not responsible for sustaining the boom for so many years (except
+perhaps in Victoria). Finally, population growth was not an entirely exogenous
+factor. During the early years of the 1890s depression, some of the fall in
+population growth should probably be attributed to an endogenous response by
+prospective immigrants to the rapid decline in living standards.
+
+4.2.2 Weather conditions
+
+Australia’s reliance on pastoral industries for export income means that growth is
+influenced by climatic conditions. Other than 1888, seasons had generally been
+good leading up to the 1890s depression. However, Australia was hit by a severe
+drought between 1895 and 1903 (Boehm 1971), which led to a sharp fall in
+pastoral output as a share of GDP over this period (Figure 16). This may have
+been an additional factor in the relatively slow recovery from depression in the
+1890s compared with the 1930s. However, the fall in the ratio of pastoral output to
+GDP in the three years following the 1891 peak in output was relatively minor. In
+other words, the drought cannot explain the relatively large fall in real GDP prior
+to 1895, and therefore, it cannot explain the collapse of the financial system in
+1893.
+                                         40
+                       Figure 16: Nominal Pastoral Output
+                             Per cent of nominal GDP
+       %                                                                   %
+
+
+
+       20                                                                  20
+
+                               1891
+       15                                                                  15
+
+
+
+       10                                                                  10
+
+                                                          1930
+        5                                                                  5
+
+
+
+        0                                                                  0
+        1860    1870    1880      1890   1900   1910   1920      1930   1940
+
+
+4.2.3 The gold standard
+
+Prior to 1931, Australia’s exchange rate was determined by the gold standard,
+except for the period between 1914 and 1925 (Schedvin 1970). Under the gold
+standard, the exchange rate moved within a narrow range that was determined by
+the gold points. Gold points were the level of the exchange rate at which it became
+more profitable to import or export gold instead of buying or selling bills of
+exchange at bank rates. During the period leading up to the 1890s depression, the
+exchange rate generally moved within 1 per cent either side of par with sterling
+(Butlin, Hall and White 1971). The major departure from parity was a large
+depreciation of the buying rate in May 1893, as the surviving banks imported gold
+to help replenish their reserves after the banking crash.
+
+After being suspended during the First World War, the gold standard was
+reinstated in Australia in 1925. As the external position worsened during 1929, the
+exchange rate came under pressure. However, the private trading banks, and the
+Commonwealth Bank, attempted to resist devaluation and tried to maintain parity
+with sterling throughout 1930 – in part out of the fear of creating inflation
+                                         41
+
+(Butlin and Boyce 1985). It was the Bank of New South Wales which eventually
+placed pressure on the other trading banks to devalue. The exchange rate was
+devalued in late 1930, and by the end of January 1931, £100 sterling bought £130
+Australian (Schedvin 1970). Butlin and Boyce conclude that the decision of the
+trading banks to resist devaluation had led to very tight monetary conditions
+through 1930, which helped to add to the problems of the depression. Also, the
+policies of these banks (including the Commonwealth Bank) during 1931 and
+1932 acted to delay the reduction in bank interest rates, thereby slowing recovery.
+Finally, the low level of foreign exchange reserves in 1930 (brought about by the
+failure to devalue earlier) prevented fiscal policy from taking a more active role; in
+fact, government spending had to be curtailed significantly (Section 4.2.4).
+
+While it seems plausible that the devaluation in 1931 played some role in
+supporting demand after the initial downturn in output, it is difficult to determine
+the significance of this effect. Certainly, real exports grew more rapidly in the
+early years of the 1930s than during the 1890s (Figure 15), but this was not
+sustained beyond a few years.
+
+Also, the ratio of nominal imports to GDP fell further during the 1930s depression
+than the 1890s depression. This may have reflected the relative price effect of the
+devaluation, that is, switching demand towards the non-traded sector. However,
+increased protectionism at about this time (Footnote 47) and the higher relative
+cost of imports, reflected in the large terms of trade decline, also played a role.
+
+Another way of addressing this issue is to ask whether the 1890s depression might
+have been less severe if there had been some form of devaluation. No doubt this
+should have had some positive impact on growth. However, it seems very unlikely
+that devaluation would have been sufficient to prevent the financial collapse. Prior
+to the substantial fall in output in 1893, events in the early 1890s had already set a
+course towards the collapse of the banking system. Most telling of all, property
+prices had turned down as early as the late 1880s, and the crisis in the non-bank
+financial sector was well under way by 1891.
+
+4.2.4 Fiscal and monetary policy
+
+Federation and the formation of the Commonwealth Bank meant that there was
+greater potential for fiscal and monetary policy to act in combination to stimulate
+                                              42
+
+aggregate demand during the 1930s depression. We argued above that devaluation
+of the exchange rate in 1931 played some role in alleviating the impact of the
+significant downturn in the terms of trade. However, in subsequent years, policy is
+best characterised as having been only mildly expansionary.
+
+The aggregate government budget had been in deficit prior to both depressions,
+but by less than 1 per cent of GDP. The deficit reached a high of only 1.3 per cent
+of GDP in 1893, whereas it reached 4 per cent and 3 per cent of GDP in 1931 and
+1932 respectively. Even though it might appear as if policy had been loosened
+substantially in the early years of the 1930s depression, a closer examination of
+the details of fiscal and monetary policy changes suggests otherwise.
+
+The fiscal deficits of the early 1930s appear to have been an endogenous response
+to a few special factors. Aggregate government expenditure actually fell from
+1930 to 1932, by the same amount (17 per cent in nominal terms) as it did from
+1891 to 1893. Within the expenditure categories, charges for debt increased in the
+1930s, in part because of the impact of devaluation on debt denominated in
+pounds sterling (Barnard 1985).
+
+Total tax revenue fell by 12 per cent from 1891 to 1893 and by 6 per cent from
+1930 to 1932. Falls in tax revenue were driven primarily by large falls in customs
+revenue associated with declining import values – this loss was particularly large
+during the 1930s episode (despite increases in tariff rates). In the 1930s, the fall in
+customs revenue was partially offset by increases in income tax revenue and the
+imposition of a new sales tax. In this way, total tax revenues did not fall by as
+much as they did during the early 1890s.50
+
+Fiscal policy was not more expansionary during the 1930s in part because of the
+reluctance of the Commonwealth Bank to provide credit to the public sector (for
+details see Butlin and Boyce 1985). Much of the Federal Government deficit
+during the early 1930s appears to have been financed by the sale of treasury bills
+to the Commonwealth Bank (precise data is not readily available). The extent of
+
+50 Government businesses were also an important component of both revenue and expenditure.
+  Expenditure on Commonwealth and State government businesses fell by 38 and 35 per cent
+  from 1891 to 1893 and from 1930 to 1932 respectively. However, the percentage fall in
+  revenue from these businesses was twice as large in the latter period – 14 per cent versus
+  7 per cent – thereby helping to contribute to the more substantial budget deficit in the 1930s.
+                                         43
+
+this finance was limited by the Commonwealth Bank because of its fears regarding
+inflation over the longer term. To this end the Commonwealth Bank also pressured
+the Government to reduce the stock of outstanding treasury bills from 1932 until
+the end of 1935. In the meantime, the Commonwealth Bank sold some of its
+holdings of treasury bills to private banks at reasonably attractive interest rates,
+thereby helping to keep interest rates relatively high.
+
+One of the changes in financial arrangements that occurred between the two
+depressions was the passing of note issue from the private trading banks to the
+Commonwealth Government. The relevance of the form of note issue on the
+stability of the financial system is unclear, although it seems that the existence of
+private notes per se was not a factor in the relative instability of the financial
+system leading up to the 1890s depression (Rohling and Tapley 1998).
+Merrett (1991) suggests that there is evidence of depositors moving their money to
+the stronger banks as confidence in the banking system deteriorated in the early
+1890s. Moving deposits to other note issuing banks indicates that in itself, the
+existence of private notes was not enough to explain the banking crisis of the early
+1890s. Indeed, the ability of banks to issue their own notes may have been a factor
+in limiting the severity of the banking crisis in NSW in 1893. The NSW
+Government declared the notes of certain banks to be ‘legal tender’, which
+allowed banks to meet withdrawals of deposits with their own notes. Therefore,
+customers faced the same risk whether their funds were in the form of a deposit
+with a certain bank or in the form of notes of that bank. It appears that this
+realisation by customers helped to limit runs on these banks.
+
+Other actions of colonial governments during the 1890s did not prove so
+successful. The Victorian Government declared a bank holiday for five days at the
+start of May 1893. However, the stronger Melbourne banks ignored the regulation
+and opened for business. This helped alleviate the panic, but also drew further
+attention to those banks that shut their doors during the holiday.
+
+To summarise, neither fiscal nor monetary policy can be characterised as truly
+expansionary during the 1930s (beyond the impact of the devaluation in 1931).
+Attempts to expand the fiscal deficit more vigorously were resisted by the
+Commonwealth Bank. In both the 1890s and 1930s depressions, fiscal expenditure
+fell by similar percentage amounts, while expenditure on debt payments increased
+                                        44
+
+during the 1930s depression. Also, in the 1930s the tax base was broadened with
+increases of existing tax rates and the imposition of new taxes.
+
+Therefore, it would seem that the differences in government policy across the
+depressions were not sufficient to explain the significant variation in the
+performance of the financial sector. The same can be said of variation in real
+external shocks across the two depressions. In fact, the real external shocks of the
+late 1920s and early 1930s were much more substantial than during the early
+1890s; although the impact of the significant decline in the terms of trade on
+output was at least partially offset by the expansionary effect of the nominal
+devaluation in 1931. Also, variation in the rates of population growth can help to
+explain why the building boom of the 1880s was much more substantial than that
+of the 1920s. But this does not help to explain the larger decline in real GDP
+per capita in the early years of the 1890s depression (compared with the 1930s).
+Finally, severe drought conditions were a factor in extending the 1890s depression
+beyond 1894, but were not relevant to the earlier decline in real output and the
+financial crisis of 1893.
+
+
+5.     Discussion and Concluding Remarks
+
+This paper has focused on one of the major differences between the Australian
+depressions of the 1890s and 1930s. During the 1890s, a substantial proportion of
+the financial system collapsed: many finance companies and building societies
+went out of business; 13 of the 23 trading banks were forced to close their doors
+and required reconstruction before reopening; trading bank deposits fell
+substantially over most of the decade; and bank credit declined dramatically, from
+highs of over 70 per cent of GDP to about 40 per cent by the turn of the century. In
+contrast, the financial problems of the 1930s were relatively mild: only three
+financial institutions suspended payment; the fall in the level of deposits was more
+moderate; and there was only a relatively small decline in bank credit.
+
+This variation in the performance of the financial sector across the depressions
+occurred despite the fact that the initial macroeconomic shock was at least as large
+in the first year of the 1930s depression as it was in the 1890s depression.
+Variation in financial performance across the two depressions was primarily due
+to variation in the condition of the financial sector well before each depression.
+                                         45
+
+Financial fragility leading up to the 1890s was evident in a range of indicators: the
+very rapid rise in the share of credit to GDP; relatively high levels of private
+investment in the form of an unprecedented building boom; the appearance of a
+new set of financial institutions increased competition facing banks and led to
+lending for speculative purposes; this led to a property price bubble and a rapid
+expansion of banks’ balance sheets; lending was spurred in part through readily
+available funds from London; all the while, the level of prudence in the banking
+system was declining.
+
+This trend towards greater instability through the 1880s meant that the financial
+system was more susceptible to the initial downturn in the macroeconomy.
+Further, the collapse of the financial system helped to extend the macroeconomic
+decline for many years.
+
+Although there was a boom of sorts leading up to the 1930s depression, the same
+factors which led to financial instability during the 1880s were more muted, or
+operating in the opposite direction during the 1920s. For example, the rise in the
+share of bank credit to GDP was smaller and started from a lower base; the share
+of building activity in GDP was much lower, although there was still a sizeable
+increase in property prices; the ratio of trading bank advances to deposits was
+rising only slowly from a low base and capital inflows were not sustained at the
+same levels, nor for as long, as during the 1880s; a greater proportion of bank
+assets were being held in the form of government securities during the 1920s; and
+in contrast to the 1880s, trading banks were increasing both capital and retained
+earnings at a faster rate than their total assets.
+
+Differences in external and internal real factors that did exist were not significant
+enough, or were working in the wrong direction, to explain the dramatic difference
+in the performance of the financial sector across the two depressions. The real
+external shock was more substantial in the 1930s depression – that is, a bigger
+worldwide depression and larger fall in the terms of trade. The devaluation in
+1931 helped to offset this partially, but it is hard to argue that this effect can
+explain much of the variation in the performance of the financial sector. Aside
+from this devaluation, monetary and fiscal policies were not actively expansionary
+through the 1930s.
+                                        46
+
+Appendix A: Data Sources and Descriptions
+
+Most of the data described below are recorded on a calendar year basis prior to
+either 1901 or 1915 and on a financial year basis thereafter. For details of the few
+exceptions see the original sources.
+
+Building activity: from Butlin, N.G. (1962), Australian Domestic Product,
+Investment and Foreign Borrowing, 1861–1938/39 (ADP), Table 2, output of
+construction industry, from 1861 to 1940. Share of construction to GDP for the
+1970s and 1980s is from Foster, R.A. (1996), ‘Australian Economic Statistics,
+1949–50 to 1994–95’, Reserve Bank of Australia Occasional Paper No. 8,
+Table 5.9.
+
+Capital flows: for 1861–1900, ADP Table 250, indirect estimate of long-term
+capital inflows. For 1901–1940, data are from Vamplew, W. (ed.) (1987),
+Australians: Historical Statistics (AHS), Table ITFC 101–106 apparent capital
+inflow.
+
+Exports: for 1861–1900 AHS, Table ITFC 48–51. For 1901–1945, AHS Table
+ITFC 122–151. No data is available for 1914. Real exports are calculated by
+deflating nominal exports using the export price index, AHS Table ITFC 81–83.
+
+Fiscal data: AHS Table GF (various) and Barnard (1986).
+
+Imports: for 1861–1900 AHS, Table ITFC 22–35, including gold imports. For
+1901–1945, sum of imports excluding gold and imports of gold, AHS Table ITFC
+167–181.
+
+Investment expenditure: private investment is gross private capital formation –
+AHS, Table ANA 65–71. Public investment is gross public capital formation and
+includes local and semi government capital formation. For 1860–1900 gross
+public capital formation is the sum of public capital formation (excluding local
+authorities), AHS Table ANA 82–90 and gross capital formation of local and semi
+government authorities from AHS Table ANA 91–97. From 1901 onwards, public
+investment is from AHS, Table ANA 104–118 and includes investment by local
+and semi government authorities.
+                                       47
+
+Output: GDP in current prices for 1861–1900 is from ADP, Table 1, p. 6, col. 2
+and is GDP at market prices. From 1900/01 onwards data are from AHS, Table
+ANA 129. Real GDP (1910/11 prices) is calculated by deflating this series by the
+GDP price deflator index in AHS, Table PC 79.
+
+Pastoral output: expressed as a ratio to GDP by factor cost, ADP, Table 2.
+
+Population: from AHS, Table POP 17–25. Between census dates, population
+figures are interpolated.
+
+Property prices: capital value of ratable property in the City of Melbourne,
+Commonwealth Bureau of Census and Statistics Victorian Yearbook, various
+issues. Capital value of ratable property in the City of Sydney, Commonwealth
+Bureau of Census and Statistics NSW Statistical Register, various issues and
+Commonwealth Bureau of Census and Statistics Official Yearbook of NSW,
+various issues.
+
+Retail price index and retail price of groceries in Sydney: AHS, Tables PC 31
+and PC 8.
+
+Terms of trade: for 1870–1900 AHS Table ITFC 81–83. For 1901–1945
+Butlin (1984) Table Aa 21.
+
+UK and US output: Mitchell (1992, 1993).
+
+Unemployment: unemployment rate of trade union members, Jonson and Stevens
+(1983). Unemployment rate of Amalgamated Society of Engineers, Australia,
+AHS, Table LAB 98–100.
+
+Bank Data
+
+The source for the majority of bank data is Butlin, S.J, A.R. Hall and R.C. White.
+(1971), ‘Australian Banking and Monetary Statistics 1817–1945’, Reserve Bank
+of Australia Occasional Paper No. 4A (OP4A). For details of bank numbers, and
+dates of amalgamations, liquidations and suspensions see OP4A pp. 103–105 and
+Royal Commission (1937).
+                                        48
+
+Australian banks liabilities to British residents: OP4A, Table 4(ii).
+
+Bank credit: for 1861–1945 sum of trading bank advances and all other assets
+within Australia (OP4A, Table 1) and savings bank mortgage loans (OP4A,
+Table 53(i) and 53(ii)). Trading bank data includes the Commonwealth Bank from
+1913 onwards. Trading banks included in this series are the banks of note issue.
+
+Total assets of financial institutions: Pope (1986), Table 1. Assets of managed
+funds is the sum of the assets of life insurance offices, pension funds and trustee
+companies.
+
+Trading bank advances by State: for 1929, sworn averages for the quarter ended
+31 December 1929 – Australian States and New Zealand, The Australasian
+Insurance and Banking Record (AIBR), Vol. LIV, February 1930, p.137. For
+1891, summary of deposits, advances, and coin and bullion-fourth quarter 1891,
+AIBR, Vol. XVI, February 1892.
+
+Trading bank deposits: consists of all deposits within Australia. Source OP4A,
+Table 1. Savings bank deposits OP4A, Table 53(i) and 53(ii).
+
+Trading bank liquid assets: is the sum of trading banks holdings of coin, bullion
+and Australian notes, OP4A, Table 1. For 1893–1900 includes Queensland
+treasury notes. Quarterly seasonally adjusted data on cash balances and deposits is
+from OP4A, Table 19.
+
+Trading bank shareholders’ funds: OP4A, Table 3. Prior to 1893 paid up capital
+consists of paid up ordinary capital. From 1893 paid up capital is the sum of
+ordinary capital and preference capital. Retained earnings are ‘reserves’ as
+reported on banks’ balance sheets – Butlin, Hall and White (1971) advise caution
+in interpreting this series. These series exclude a number of trading banks, whose
+business was primarily undertaken outside of Australia, and do not incorporate the
+Commonwealth Bank of Australia.
+
+Trading and savings banks’ holdings of government securities: trading banks,
+OP4A, Table 1. Savings banks, OP4A, Table 53(i).
+
+Trading bank branches: Butlin S.J. (1977; 1986).
+                                                    49
+
+Trading bank dividend rate: return on capital and reserves, source OP4A,
+Table 3.
+
+Appendix B: Additional Data
+
+                    Table B1: Trading Banks Advances By State
+                Per cent of total, December 1891 versus December 1929
+Bank           Head Office        NSW        VIC         QLD       SA        WA         TAS        NZ
+
+BA             Adelaide             0.0       0.0         0.0    100.0        0.0        0.0        0.0
+                                    2.1       2.5         0.2     90.7        4.5        0.0        0.0
+
+Asia           London             23.8       50.2         8.5       4.4       0.0        3.2       9.9
+                                  33.9       32.8         6.2       4.1       5.5        2.0      15.5
+
+BNSW           Sydney             55.1       20.0        11.2       2.7       0.8        0.0      10.3
+                                  50.1       13.4         9.1       1.9      13.6        0.4      11.5
+
+CBC            Sydney             89.1        0.0        10.9       0.0       0.0        0.0        0.0
+                                  69.0       24.3         5.8       0.8       0.0        0.0        0.0
+
+CBoA           Melbourne          16.1       73.3         4.0       4.7       1.9        0.0        0.0
+                                  18.9       43.6        11.5       9.5       3.7        4.9        7.9
+
+ESA            London             38.6       43.9         1.9     15.5        0.0        0.0        0.0
+                                  26.1       47.4         6.5      9.2        3.8        7.0        0.0
+
+NBA            Melbourne           4.6       67.6         0.0     19.6        8.2        0.0        0.0
+                                  17.9       46.6        10.0     13.3       11.7        0.5        0.0
+
+QNB            Brisbane             1.8       0.0        98.2       0.0       0.0        0.0        0.0
+                                    8.4      10.3        81.4       0.0       0.0        0.0        0.0
+
+UBA            London             31.6       27.8        13.8       5.2       3.1        4.2      14.4
+                                  29.4       24.5         5.5       8.0      10.5        1.2      20.9
+
+BNZ            New Zealand        10.7        9.0         0.0       2.1       0.0        0.0      78.1
+                                   6.9       13.9         0.0       0.0       0.0        0.0      79.2
+Notes:   BA – Bank of Adelaide. Asia – Bank of Australasia. BNSW – Bank of New South Wales. CBC –
+         Commercial Banking Company of Sydney. CBoA – Commercial Bank of Australia. ESA – English,
+         Scottish and Australian Bank. NBA – National Bank of Australasia. QNB – Queensland National Bank.
+         UBA – Union Bank of Australia. BNZ – Bank of New Zealand.
+                                     50
+
+References
+
+Anderson, K. and R. Garnaut (1987), Australian Protectionism: Extent, Causes
+and Effects, Allen and Unwin, Sydney.
+
+The Australasian Insurance and Banking Record, various issues, McCarron,
+Bird and Co., Melbourne.
+
+Barnard, A. (1985), ‘Australian Government Finances: A Statistical Overview,
+1850–1982’, Australian National University Working Papers in Economic History
+No. 59.
+
+Barnard, A. (1986), ‘Some Government Financial Data 1850 to 1982’, Australian
+National University Source Papers in Economic History No. 13.
+
+Bernanke, B. and M. Gertler (1990), ‘Financial Fragility and Economic
+Performance’, Quarterly Journal of Economics, 105(1), pp. 87–114.
+
+Boehm, E.A. (1971), Prosperity and Depression in Australia 1887–1897, Oxford
+University Press, London.
+
+Butlin, M.W. and P.M. Boyce (1985), ‘Monetary Policy in Depression and
+Recovery’, Australian National University Working Papers in Economic History
+No. 44.
+
+Butlin, N.G. (1958), ‘The Shape of the Australian Economy, 1861–1900’, The
+Economic Record, 34(67), pp. 10–29.
+
+Butlin, N.G. (1962), Australian Domestic Product, Investment and Foreign
+Borrowing 1861–1938/39, Cambridge University Press, London.
+
+Butlin, N.G. (1984), ‘Select Comparative Economic Statistics 1900–1940:
+Australia and Britain, Canada, Japan, New Zealand and U.S.A’, Australian
+National University Source Papers in Economic History No. 4.
+
+Butlin, S.J. (1977), ‘Australian Bank Branches 1817–1914’, Australian Economic
+History Review, XVII(2), pp. 166–169.
+                                     51
+Butlin, S.J. (1986), The Australian Monetary System 1851 to 1914, Ambassador
+Press, Sydney.
+
+Butlin, S.J., A.R. Hall and R.C. White (1971), ‘Australian Banking and
+Monetary Statistics 1817–1945’, Reserve Bank of Australia Occasional Paper
+No. 4A.
+
+Cannon, M. (1966), The Land Boomers, Melbourne University Press, Melbourne.
+
+Chandler, L.V. (1970), America's Greatest Depression 1929–1941, Harper and
+Row, New York.
+
+Commercial Banking Company of Sydney (1934), A Century of Banking: The
+Commercial Banking Company of Sydney Limited, 1834–1934., W.C. Penfold and
+Co. Ltd., Sydney.
+
+Commonwealth Bank of Australia (1936), Reply to Questionnaire, submission
+to the Royal Commission on the Monetary and Banking Systems in Australia,
+March.
+
+Crockett, A. (1997), ‘Why is Financial Stability a Goal of Public Policy?’, in
+Maintaining Financial Stability in a Global Economy, a Symposium Sponsored by
+The Federal Reserve Bank of Kansas City, Jackson Hole, Wyoming,
+August 28–30, pp. 7–36.
+
+Daly, M.T. (1982), Sydney Boom Sydney Bust: The City and its Property Market
+1850–1981, George Allen & Unwin, Sydney.
+
+Edey, M. and M. Britten-Jones (1990), ‘Saving and Investment’, in S. Grenville
+(ed.), The Australian Macroeconomy in the 1980s, Proceedings of a Conference,
+Reserve Bank of Australia, Sydney, pp. 79–145.
+
+Foster, R.A. (1996), ‘Australian Economic Statistics, 1949–50 to 1994–95’,
+Reserve Bank of Australia Occasional Paper No. 8.
+
+Friedman, M. and A.J. Schwartz (1963), A Monetary History of the United
+States 1867–1960, Princeton University Press, Princeton.
+                                       52
+Jonson, P.D. and G.R. Stevens (1983), ‘The 1930s and the 1980s: Some Facts’,
+Reserve Bank of Australia Research Discussion Paper No. 8303.
+
+Kent, C. and G. Debelle (1999), ‘Trends in the Australian Banking System:
+Implications for Financial System Stability and Monetary Policy’, Reserve Bank
+of Australia Research Discussion Paper No. 1999-05.
+
+Kent, C. and P. Lowe (1997), ‘Property-Price Cycles and Monetary Policy’, in
+The Role of Asset Prices in the Formulation of Monetary Policy, BIS Conference
+Papers Vol. 5, pp. 239–263.
+
+Kindleberger, C.P. (1973), The World in Depression 1929–1939, Allen Lane the
+Penguin Press, London.
+
+Kindleberger, C.P. (1989), Manias, Panics, and Crashes: A History of Financial
+Crises, Basic Books, New York.
+
+Kiyotaki, N. and J. Moore (1997), ‘Credit Cycles’, Journal of Political Economy,
+105(2), pp. 211–248.
+
+Merrett, D.T. (1989), ‘Australian Banking Practice and the Crisis of 1893’,
+Australian Economic History Review, XXIX(1), pp. 60–85.
+
+Merrett, D.T. (1991), ‘Financial Institutions Under Pressure: Are the Right
+Lessons Being Learnt From the 1890s’, Economic Papers, 10(1), pp. 1–10.
+
+Merrett, D.T. (1993a), ‘The 1893 Bank Crashes and Monetary Aggregates’,
+Reserve Bank of Australia Research Discussion Paper No. 9303.
+
+Merrett, D.T. (1993b), ‘Preventing Bank Failure: Could the Commercial Bank of
+Australia have been saved by its peers in 1893?’, Victorian Historical Journal,
+64(2), pp. 122–142.
+
+Mishkin, F. (1997), ‘The Causes and Propagation of Financial Instability: Lessons
+for Policymakers’, in Maintaining Financial Stability in a Global Economy, a
+Symposium Sponsored by The Federal Reserve Bank of Kansas City, Jackson
+Hole, Wyoming, August 28–30, pp. 55–96.
+                                      53
+Mitchell, B.R. (1992), International Historical Statistics: Europe 1750–1988,
+Stockton Press Ltd, New York.
+
+Mitchell, B.R. (1993), International Historical Statistics: The Americas
+1750–1988, Stockton Press Ltd, New York.
+
+Murray, R. and K. White (1992), A Bank for the People: A History of the State
+Bank of Victoria, Hargreen Publishing Company, Melbourne.
+
+Pollard, S. and D.W. Crossley (1968), The Wealth of Britain 1085–1966,
+B.T. Batsford Ltd, London.
+
+Pope, D. (1986), ‘Australian Money and Banking Statistics’, Australian National
+University Source Papers in Economic History No. 11.
+
+Pope, D. (1987), ‘Bankers and Banking Business, 1860–1914’, Australian
+National University Working Papers in Economic History No. 85.
+
+Pope, D. (1991), ‘Bank Deregulation Yesterday and Today: Lessons of History’,
+Australian National University Working Papers in Economic History No. 156.
+
+Pope, D. and G. Manger (1984), ‘The Tariff and Australian Manufacturers’
+International Competitiveness: 1901–1930’, Mimeo, University of New South
+Wales.
+
+Rockoff, H. (1998), ‘How long did it take the United States to become an Optimal
+Currency Area?’, paper presented at Monetary Unions Conference, City
+University Business School, London, Friday 14 May.
+
+Rohling, T. and M. Tapley (1998), ‘Optimal Regulation of Electronic Money:
+Lessons from the ‘Free Banking’ Era in Australia’, Economic Papers, 17(4),
+pp. 7–29.
+
+Royal Commission into the Monetary and Banking Systems in Australia
+(1937), Report, Commonwealth Government Printer, Canberra.
+                                      54
+Schedvin, C.B. (1970), Australia and the Great Depression: A Study of Economic
+Development and Policy in the 1920s and 1930s, Sydney University Press,
+Sydney.
+
+Schedvin, C.B. (1992), In Reserve: Central Banking in Australia, 1945–75, Allen
+and Unwin, Sydney.
+
+Shann, E.O.G. (1927), The Boom of 1890 – and Now, Cornstalk Publishing
+Company, Sydney.
+
+Silberberg, R. (1975), ‘Rates of Return on Melbourne Land Investment,
+1880–92’, Economic Record, 51, pp. 203–217.
+
+Sinclair, W.A. (1965), ‘The Depression of the 1890s and the 1930s in Australia:
+A Comparison’, in Drohan, N.T. and J.H. Day (eds), Readings in Australian
+Economics, Cassell Australia Ltd, Melbourne, pp. 85–92.
+
+Sydney Morning Herald (1930), ‘Comprehensive Improvement Scheme that will
+Materially Affect the Value of Land in the City Area’, 8 January 1930.
+
+Sykes, T. (1988), Two Centuries of Panic: A History of Corporate Collapses in
+Australia, Allen & Unwin Australia, Sydney.
+
+Valentine, T.J. (1984), ‘The Depression of The Nineteen Thirties’, Macquarie
+University Centre for Studies in Money, Banking and Finance Working Paper
+No. 8452B.
+
+Valentine, T.J. (1985), ‘The Causes of Depression in Australia’, Macquarie
+University Centre for Studies in Money, Banking and Finance Working Paper
+No. 8550B.
+
+Vamplew, W. (ed.) (1987), Australians: Historical Statistics, Fairfax, Syme and
+Weldon Associates, Netley, South Australia.
+

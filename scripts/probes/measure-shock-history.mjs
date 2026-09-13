@@ -88,7 +88,9 @@ function drawdown(series, from, to) {
   }
   peak = best.peak;
   const trough = best.trough;
-  const recover = series.find(r => r.date > peak.date && r.v >= peak.v);
+  // Searched from the TROUGH, not the peak: a month that merely TIES the peak before the
+  // slide starts (the 1890s Cowles index sat at 5.62 for months) is not a recovery.
+  const recover = series.find(r => r.date > trough.date && r.v >= peak.v);
   return {
     peakDate: peak.date, peakValue: peak.v,
     troughDate: trough.date, troughValue: trough.v,
@@ -157,6 +159,8 @@ const EPISODES = [
   { key: 'COVID',       label: 'Pandemic crash',    from: '2020-01-01', to: '2020-12-31', preset: 'COVID_2020_LITE' },
   { key: 'STAGFLATION', label: 'Stagflation',       from: '1972-12-01', to: '1982-12-31', preset: 'STAGFLATION_1970S_LITE' },
   { key: 'CORRECTION',  label: '2018 correction',   from: '2018-08-01', to: '2019-06-30', preset: 'MILD_CORRECTION' },
+  { key: 'RAILROAD',    label: 'Panic of 1893',     from: '1892-01-01', to: '1899-12-31', preset: 'RAILROAD_PANIC_1893' },
+  { key: 'PANIC_1873',  label: 'Panic of 1873',     from: '1872-01-01', to: '1880-12-31', preset: 'RAILROAD_PANIC_1873' },
 ];
 
 // ── report ────────────────────────────────────────────────────────────────────
@@ -443,6 +447,146 @@ for (const [name, id] of [['Case-Shiller US national', 'CSUSHPINSA'],
   say(`| ${name} | ${d.peakDate} | ${d.troughDate} | ${pct(d.depth)} | ${d.grindMonths} mo | `
     + `${d.recoverMonths != null ? `${d.recoverMonths} mo (${d.recoverDate})` : '—'} |`);
 }
+say('');
+
+// 10. The 1890s ---------------------------------------------------------------
+// NBER Macrohistory series (via FRED) — the only scripted monthly record of the decade.
+const rrStk  = fred('M11005USM293NNBR');   // American railroad stock prices
+const rrBdP  = fred('M11016USM052NNBR');   // American railroad bond prices, high grade
+const rrBdY  = fred('M13019USM156NNBR');   // American railroad bond yields, high grade
+const callM  = fred('M13001USM156NNBR');   // call money rates, mixed collateral
+const cpNY   = fred('M13002US35620M156NNBR'); // commercial paper rates, New York
+const gold   = fred('M1476AUSM027NNBR');   // US monetary gold stock
+const snyder = fred('M04051USM324NNBR');   // Snyder index of the general price level
+const fails  = fred('M09028USM474NNBR');   // number of business failures, monthly 1893-
+const rrMile = fred('A02082USA374NNBR');   // miles of railroad built per year
+const shCpi  = shiller('CPI');
+const mean   = (s, a, b) => { const w = between(s, a, b); return w.reduce((x, r) => x + r.v, 0) / w.length; };
+
+say('## 10. The 1890s — the railroad bust (`RAILROAD_PANIC_1893`)');
+say('');
+say('Monthly series from the **NBER Macrohistory Database**, served by FRED (`M…NNBR` ids;');
+say('`SOURCES.md`). Australian context is the RBA\'s *Two Depressions, One Banking Collapse*');
+say('(RDP 1999-06, `RBA-RDP1999-06-two-depressions.pdf`), which has no share-price series —');
+say('so every non-US figure in the preset is asserted, sign-supported by that paper.');
+say('');
+say('### 10a. Equity and bond prices');
+say('');
+say('| series | peak | trough | depth | peak→trough | back to peak |');
+say('|---|---|---|---|---|---|');
+for (const [name, s] of [['S&P (Cowles/Shiller)', spx], ['S&P real (Shiller)', spre],
+                         ['S&P real TOTAL return', sptr], ['Railroad stocks (NBER)', rrStk],
+                         ['Railroad bonds, high grade (price)', rrBdP], ['US monetary gold stock', gold]]) {
+  const d = drawdown(s, '1892-01-01', '1899-12-31');
+  say(`| ${name} | ${d.peakDate} | ${d.troughDate} | ${pct(d.depth)} | ${d.grindMonths} mo | `
+    + `${d.recoverMonths != null ? `${d.recoverMonths} mo (${d.recoverDate})` : '—'} |`);
+}
+say('');
+const pre = at(spx, '1893-04-01').v, post = at(spx, '1893-07-01').v, pk = drawdown(spx, '1892-01-01', '1899-12-31');
+say(`**The panic months.** S&P ${pre} (Apr 1893) → ${post} (Jul 1893): ${pct(post / pre - 1)} in three`);
+say(`months, ${pct((post / pre - 1) / pk.depth, 0)} of the whole ${pct(pk.depth)} fall. From the Aug 1892 peak to Jan 1893 the`);
+say(`index moved ${pct(at(spx, '1893-01-01').v / pk.peakValue - 1)} — a plateau, not the start of the slide.`);
+say('');
+say('### 10b. The year-end path, relative to January 1893');
+say('');
+say('Equity growth in the model is applied at year-end, so this is the path a preset can');
+say('actually be fitted to. The price indices bottom in 1896; the real TOTAL return barely');
+say('dips at all, because prices were falling and the dividend yield was ~4-5 %.');
+say('');
+say('| Dec of | S&P | railroad stocks | Snyder price level | Shiller CPI (wholesale splice) | S&P real total return |');
+say('|---|---|---|---|---|---|');
+const rel = (s, d) => at(s, d).v / at(s, '1893-01-01').v - 1;
+for (let y = 1893; y <= 1900; y++) {
+  const d = `${y}-12-01`;
+  say(`| ${y} | ${pct(rel(spx, d))} | ${pct(rel(rrStk, d))} | ${pct(rel(snyder, d))} | ${pct(rel(shCpi, d))} | ${pct(rel(sptr, d))} |`);
+}
+say('');
+say('Snyder is the general price level; Shiller\'s pre-1913 CPI is spliced from wholesale');
+say('prices, which swing far harder than a household basket. The preset uses Snyder.');
+say('');
+say('### 10c. Money and bond rates');
+say('');
+say('| series | 1890-92 mean | Jan 1893 | 1893 peak | Aug-Dec 1893 | 1894-96 mean | 1897-99 mean |');
+say('|---|---|---|---|---|---|---|');
+for (const [name, s] of [['NY commercial paper', cpNY], ['Call money', callM], ['Railroad bond yield, high grade', rrBdY]]) {
+  const peak93 = Math.max(...between(s, '1893-01-01', '1893-12-31').map(r => r.v));
+  say(`| ${name} | ${mean(s, '1890-01-01', '1892-12-31').toFixed(2)} % | ${at(s, '1893-01-01').v.toFixed(2)} % | `
+    + `${peak93.toFixed(2)} % | ${mean(s, '1893-08-01', '1893-12-31').toFixed(2)} % | `
+    + `${mean(s, '1894-01-01', '1896-12-31').toFixed(2)} % | ${mean(s, '1897-01-01', '1899-12-31').toFixed(2)} % |`);
+}
+say('');
+say('No central bank existed (the Fed dates from 1913): the 1893 spike is a liquidity');
+say('squeeze and the easy money after it is slack demand for credit, not a policy choice.');
+say('These are HIGH-grade railroad bonds — the survivors. The receiverships wiped out the');
+say('lower grades, and nothing on disk measures that.');
+say('');
+say('### 10d. The build-out, and the failures');
+say('');
+const miles = (y) => at(rrMile, `${y}-01-01`).v;
+say(`Miles of railroad built per year (\`A02082USA374NNBR\`): ${miles(1882)} in 1882, ${miles(1887)} in 1887 (the peak),`);
+say(`${miles(1892)} in 1892, ${miles(1896)} in 1896 — ${pct(miles(1896) / miles(1887) - 1)} from the 1887 peak. The 1873 bust had`);
+say(`the same shape: ${miles(1871)} in 1871 to ${miles(1875)} in 1875 (${pct(miles(1875) / miles(1871) - 1)}).`);
+say('');
+const f93 = between(fails, '1893-01-01', '1893-12-31');
+const f96 = between(fails, '1896-01-01', '1896-12-31');
+say(`Business failures (\`M09028USM474NNBR\`, starts 1893): ${f93.reduce((x, r) => x + r.v, 0)} in 1893, peaking at `
+  + `${Math.max(...f93.map(r => r.v))}/month in ${f93.find(r => r.v === Math.max(...f93.map(q => q.v))).date.slice(0, 7)}; `
+  + `${f96.reduce((x, r) => x + r.v, 0)} in 1896.`);
+say('');
+say('NBER dates two contractions: Jan 1893 → Jun 1894 (17 months) and Dec 1895 → Jun 1897');
+say('(18 months), `NBER-business-cycle-dates.txt`. A double dip the model cannot draw at');
+say('annual equity resolution; the preset fits the envelope.');
+say('');
+
+// 11. The 1870s ---------------------------------------------------------------
+say('## 11. The 1870s — the first railroad bust (`RAILROAD_PANIC_1873`)');
+say('');
+say('Same NBER Macrohistory series as §10. Everything is measured from **August 1873**, the');
+say('last month before Jay Cooke & Co. failed: the running-peak row in §1 starts in April');
+say('1872, and the sixteen months between were a drift, not the crisis.');
+say('');
+const A73 = '1873-08-01';
+const rel73 = (s, d) => at(s, d).v / at(s, A73).v - 1;
+const post73 = between(spx, '1873-09-01', '1880-12-31');
+const tr73 = post73.reduce((m, r) => (r.v < m.v ? r : m), post73[0]);
+const back73 = spx.find(r => r.date > tr73.date && r.v >= at(spx, A73).v);
+say(`**The panic months.** S&P ${at(spx, A73).v} (Aug 1873) → ${at(spx, '1873-11-01').v} (Nov 1873): `
+  + `${pct(rel73(spx, '1873-11-01'))}. Trough ${pct(tr73.v / at(spx, A73).v - 1)} in ${tr73.date.slice(0, 7)} `
+  + `(${months(A73, tr73.date)} months); back to the pre-panic level ${back73.date.slice(0, 7)} `
+  + `(${months(A73, back73.date)} months).`);
+say('');
+say('### 11a. The path, by anniversary of the panic (relative to Aug 1873)');
+say('');
+say('| Aug of | S&P | railroad stocks | Snyder price level | S&P real total return | S&P dividend |');
+say('|---|---|---|---|---|---|');
+for (let y = 1874; y <= 1881; y++) {
+  const d = `${y}-08-01`;
+  say(`| ${y} | ${pct(rel73(spx, d))} | ${pct(rel73(rrStk, d))} | ${pct(rel73(snyder, d))} | `
+    + `${pct(rel73(sptr, d))} | ${pct(rel73(spdiv, d))} |`);
+}
+say('');
+say(`A relief rally through 1874-75, then the second slide of 1876-77 — the reverse of 1893,`);
+say(`which did most of its damage in the panic itself. Snyder's price level: ${pct(rel73(snyder, '1878-12-01'))} by`);
+say('December 1878, and it never came back; it only stopped falling.');
+say('');
+say('### 11b. Money and bond rates');
+say('');
+say('| series | 1870-72 mean | Aug 1873 | 1873 H2 peak | Oct-Dec 1873 | 1874-76 mean | 1877-79 mean |');
+say('|---|---|---|---|---|---|---|');
+for (const [name, s] of [['NY commercial paper', cpNY], ['Call money', callM], ['Railroad bond yield, high grade', rrBdY]]) {
+  const peak = Math.max(...between(s, '1873-07-01', '1873-12-31').map(r => r.v));
+  say(`| ${name} | ${mean(s, '1870-01-01', '1872-12-31').toFixed(2)} % | ${at(s, A73).v.toFixed(2)} % | `
+    + `${peak.toFixed(2)} % | ${mean(s, '1873-10-01', '1873-12-31').toFixed(2)} % | `
+    + `${mean(s, '1874-01-01', '1876-12-31').toFixed(2)} % | ${mean(s, '1877-01-01', '1879-12-31').toFixed(2)} % |`);
+}
+say('');
+say(`High-grade railroad bond PRICES rose from ${at(rrBdP, '1873-01-01').v} (Jan 1873) to `
+  + `${at(rrBdP, '1879-01-01').v} (Jan 1879), ${pct(at(rrBdP, '1879-01-01').v / at(rrBdP, '1873-01-01').v - 1)}:`);
+say('a bond bull market through the whole depression, for the grade that survived.');
+say('');
+say('NBER dates the contraction Oct 1873 → Mar 1879: **65 months**, the longest in its');
+say('record (`NBER-business-cycle-dates.txt`). No non-US market is on disk for the decade —');
+say('FRED\'s NBER UK share series begin in 1887 — so the preset is US-led by necessity.');
 say('');
 
 const text = out.join('\n') + '\n';

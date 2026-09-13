@@ -64,6 +64,21 @@ curl -sSL --fail --max-time 60 -o /tmp/nber-cycles.html \
   "https://www.nber.org/research/data/us-business-cycle-expansions-and-contractions"
 python3 ../nber-to-txt.py /tmp/nber-cycles.html NBER-business-cycle-dates.txt
 
+echo "The 1890s — NBER Macrohistory Database, via FRED"
+fred M11005USM293NNBR       # American railroad stock prices, monthly 1855-1937
+fred M11016USM052NNBR       # American railroad bond prices, high grade, 1857-1937
+fred M13019USM156NNBR       # American railroad bond yields, high grade, 1857-1937
+fred M13001USM156NNBR       # call money rates, mixed collateral, 1857-1970
+fred M13002US35620M156NNBR  # commercial paper rates, New York, 1857-1971
+fred M1476AUSM027NNBR       # US monetary gold stock, 1878-1914
+fred M04051USM324NNBR       # Snyder index of the general price level, 1860-1939
+fred M09028USM474NNBR       # number of business failures, 1893-1933
+fred A02082USA374NNBR       # miles of railroad built per year, 1831-1911
+echo "  RBA   RDP 1999-06, Australia's 1890s depression + banking collapse"
+curl -sSL --fail --max-time 60 -o RBA-RDP1999-06-two-depressions.pdf \
+  "https://www.rba.gov.au/publications/rdp/1999/pdf/rdp1999-06.pdf"
+pdftotext -layout RBA-RDP1999-06-two-depressions.pdf RBA-RDP1999-06-two-depressions.txt
+
 echo "S&P 500 monthly, 1871- (Shiller)"
 # shillerdata.com serves the workbook behind a CDN blob URL; it is the .xls that
 # accompanies *Irrational Exuberance*, and it carries the S&P 500 DIVIDEND series

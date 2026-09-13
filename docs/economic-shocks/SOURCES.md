@@ -81,6 +81,32 @@ is scoped to a `market` rather than a country. `FRED-QUSN628BIS` / `QAUN628BIS` 
 `QAUR628BIS` (BIS residential property prices) give the AU comparison, and say that
 Australia had no GFC housing bust worth modelling.
 
+### The 1890s — `RAILROAD_PANIC_1893`
+
+The NBER Macrohistory Database (digitized from the NBER's pre-war research files) is the
+only scripted monthly record of the 1890s, and FRED serves it under `M…NNBR` / `A…NNBR`
+ids. Titles are FRED's; the page notes carry no units beyond "index" or "percent".
+
+| series | what | used for |
+|---|---|---|
+| `FRED-M11005USM293NNBR` | American railroad stock prices, monthly 1855–1937 | the sector the bust was about. Railroads dominated the Cowles index, so it runs almost on top of Shiller's S&P — which is the evidence that the S&P depth IS the railroad depth |
+| `FRED-M11016USM052NNBR`, `FRED-M13019USM156NNBR` | high-grade railroad bond prices and yields, 1857–1937 | `FIXED_INCOME_US` — and only the *surviving* grade; there is no default series |
+| `FRED-M13002US35620M156NNBR` | NY commercial paper rates, 1857–1971 | `PRIME_US` in a decade with no central bank: the panic spike and the easy money after it |
+| `FRED-M13001USM156NNBR` | call money rates, 1857–1970 | cross-check on the commercial-paper spike |
+| `FRED-M04051USM324NNBR` | Snyder's general price level, 1860–1939 | `inflationAdjustment`. Preferred over Shiller's pre-1913 CPI, which is a wholesale splice and shows twice the deflation |
+| `FRED-M1476AUSM027NNBR` | US monetary gold stock, 1878–1914 | context: the Treasury gold drain of 1893–96 |
+| `FRED-M09028USM474NNBR` | number of business failures, monthly 1893– | context: how hard 1893 hit; starts in the crisis year, so it has no pre-crisis baseline |
+| `FRED-A02082USA374NNBR` | miles of railroad built per year, 1831–1911 | the capex bust itself (−87 % peak to trough). Calibrates nothing — the model has no sector axis — but it is why the preset exists |
+| `RBA-RDP1999-06-two-depressions.pdf` (+ `.txt`) | Fisher & Kent, *Two Depressions, One Banking Collapse*, RBA Research Discussion Paper 1999-06 | Australia's 1893: 13 trading banks suspended in five months; real GDP −10 % in 1892 and −7 % in 1893, not back to peak until 1899; retail prices −20 %+ over 1891–97. No share prices, so it supports the SIGN of every AU figure in the preset, never the magnitude. Route: `rba.gov.au/publications/rdp/1999/pdf/rdp1999-06.pdf`, flattened with `pdftotext -layout` |
+
+`RAILROAD_PANIC_1873` uses the same files and needs none of its own. The NBER series all
+start before 1860, and Shiller starts in 1871.
+
+Not on disk, and therefore not in either preset: railroad mileage in receivership, bank
+suspension counts for the US, and any pre-1900 non-US share-price index. FRED's NBER UK
+share series were checked: British railway shares (`M11014GB00LONM324NNBR`) begin in 1887
+and the industrial indices in 1919. The only 1870s UK series is consols (government bonds).
+
 ### Cycle dating
 
 `NBER-business-cycle-dates.txt` and `FRED-USREC`. These fix the *duration* half of every

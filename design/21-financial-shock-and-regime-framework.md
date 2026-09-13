@@ -1246,3 +1246,78 @@ more rungs on this one. Two candidates, both currently unmodelled:
 Both would compose the same way severity does: another scalar on the regime, another
 threshold on the strategy, no new tags. That is the property worth preserving — the reason to
 keep the tag vocabulary small is precisely so that adding an axis later stays cheap.
+
+---
+
+## 25. `RAILROAD_PANIC_1893` — the first pre-war preset
+
+**Status**: Built (2026-09-12). Evidence: `docs/economic-shocks/MEASUREMENTS.md` §10;
+user-facing: `docs/economic-shocks/README.md` §4. Tests: `shock-library-tags-and-sleeves.test.mjs`.
+
+Added as the library's technology-build-out bust. Every figure is sourced from the NBER
+Macrohistory Database via FRED (`M…NNBR` series, `SOURCES.md`), Shiller/Cowles, and RBA
+RDP 1999-06. The decisions that aren't obvious from the preset:
+
+- **Snyder's general price level, not Shiller's CPI.** Before 1913, Shiller's CPI is spliced
+  from wholesale prices and shows about twice the deflation. `inflationAdjustment` indexes
+  household spending, so it takes the general price level.
+- **The deflation leg stays in, and it helps a retiree.** Nominal S&P −32 % against a real
+  total return that was positive within two years (§10b). A modern re-run with an easing
+  central bank would not deflate. That arm now ships as a derived preset,
+  `AI_CAPEX_BUST_1893` (§25.2).
+- **Non-US sleeves carry the US figure, and the source only supports the sign.** No pre-1900 non-US
+  share index is scripted. The RBA paper shows Australia's 1893 was, if anything, worse.
+  The alternative, leaving AU unshocked, would claim that no crash happened.
+- **Trough one year-end early by choice.** Model 36 months against a measured 48. The
+  measured year-end path is flat over 1894-96, and forcing the trough to year 4 pushed
+  back-to-peak from 72 to 84+ months against a measured 76 (§21.2's resolution limit).
+- **No credit channel.** Only high-grade railroad bonds are on disk. The receiverships that
+  defined the episode for bondholders are not measurable here and not expressible in the
+  framework, so a bond sleeve under this preset is flattered. A `creditLossAdjustment` on
+  fixed income would be the change if it ever matters.
+
+A probe fix landed with it: `measure-shock-history.mjs`'s back-to-peak search began at
+the peak, so a month that tied the peak before the slide (the 1890s Cowles index sat at
+5.62 for months) counted as a recovery. It now searches from the trough. No existing
+row in `MEASUREMENTS.md` changed.
+
+### 25.1 `RAILROAD_PANIC_1873`
+
+Added the same day, from series already on disk (MEASUREMENTS §11). It differs from the
+1893 preset in three decisions:
+
+- **Measured from the pre-panic month, not the running peak.** §1's running peak is April
+  1872, sixteen months before Jay Cooke failed. The preset measures depth (−45.1 %), stress
+  window (46 months) and back-to-peak (77) from August 1873, so that drift is not counted
+  as crisis.
+- **A double dip, drawn with an offsetting `relief` leg.** A single U_REBOUND drag bottomed
+  at −37 % against −45 %, because the episode rallied in 1874 before its second slide. A
+  +0.48 tailwind for 24 months sits against a −0.50 drag on U_REBOUND/108. The fit is −44.6 %
+  at 48 months, back at 84. `applySeverity` scales positive and negative `returnAdjustment`
+  alike, so the offset survives a sweep. This is the first preset with a positive equity leg.
+  It is also the cheapest way to express §23.1's "a shock cannot ramp up" without a
+  `startOffsetMonths`, which would be the cleaner fix.
+- **US-led because nothing else is on disk.** FRED's NBER UK share series begin in 1887.
+  The preset prices only `EQUITY_US` and `EQUITY_INTL_EX_AU`, so SHOCKTAG-6 changed from
+  "cut dividends on all four sleeves" to "cut dividends on every sleeve the preset
+  price-shocks". Every earlier preset satisfies both forms. The invariant was always about
+  a sleeve that takes a price hit and keeps paying its full yield.
+
+### 25.2 `AI_CAPEX_BUST_1893` — the first derived preset
+
+The user asked for a no-deflation version of 1893 in the library itself, not a custom shock
+authored per scenario. It ships as `AI_CAPEX_BUST_1893`. It is **derived**, not copied: the
+library object is built as `{ ...HISTORICAL_SHOCKS, AI_CAPEX_BUST_1893 }`, and the new
+entry spreads `RAILROAD_PANIC_1893` and filters out the `prices` leg. So a recalibration of
+1893 cannot fork the two. SHOCKTAG-9 asserts the relationship against the live preset.
+
+It breaks §23.3's "one episode per preset" on purpose, and says so in its name and JSDoc.
+It changes exactly one variable, so the pair reads as a clean A/B: the deflation cushion
+against its absence. It does NOT modernize the rate legs (1893's −1 pp against the GFC's
+−5 pp). Doing that would make it a second authored guess stacked on the first, and the
+comparison would no longer isolate anything. A harder easing belongs in a separate shock
+scheduled alongside.
+
+It needs its own `shockId`, because regime ids on the stack are
+`regime-<shockId>-<legId>`. With a shared id, running both arms in one scenario would
+collapse their legs into one regime each (the distinct-id rule of §19).

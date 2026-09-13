@@ -193,14 +193,21 @@ test('SHOCKTAG-5: the stress window expires on its own clock while the price leg
 
 // ─── sleeve coverage ─────────────────────────────────────────────────────────
 
-test('SHOCKTAG-6: a preset that cuts dividends on one equity sleeve cuts them on all four', () => {
+test('SHOCKTAG-6: a preset that cuts dividends cuts them on every sleeve it price-shocks', () => {
   for (const [id, shock] of Object.entries(SHOCK_LIBRARY)) {
+    // The sleeves whose PRICE this preset moves, by level break or by drag. A US-led preset
+    // (RAILROAD_PANIC_1873) leaves EQUITY_AU alone entirely, and is not asked to cut the
+    // dividend of a sleeve it never touched.
+    const priced = new Set([
+      ...[].concat(shock.levelEffects?.equityRevaluation ?? []).flatMap(e => e?.rateKeys ?? []),
+      ...legsOf(shock).flatMap(l => Object.keys(l.regime?.returnAdjustment ?? {})),
+    ].filter(k => EQUITY_SLEEVES.includes(k)));
     for (const leg of legsOf(shock)) {
       const div = leg.regime?.dividendAdjustment;
       if (!div) continue;
       const named = Object.keys(div).filter(k => EQUITY_SLEEVES.includes(k));
       if (named.length === 0) continue;
-      const missing = EQUITY_SLEEVES.filter(k => !(k in div));
+      const missing = [...priced].filter(k => !(k in div));
       assert.deepEqual(missing, [],
         `${id} cuts dividends on ${named.join('/')} but not ${missing.join('/')} — `
         + 'effectiveDividendAdjustments is keyed by the HOLDING\'s rate key, so an unnamed '
@@ -248,11 +255,33 @@ test('SHOCKTAG-8: only the sharp falls trigger panic, and the control arm is hel
   // PanicSell is an ENTRY reaction — nobody panics into year six of a lost decade.
   const panics = Object.keys(SHOCK_LIBRARY)
     .filter(id => tagsOf(id).includes(REGIME_TAG.PANIC_SELL_TRIGGER)).sort();
-  assert.deepEqual(panics, ['COVID_2020_LITE', 'DOTCOM_2000_LITE', 'MARKET_CRASH_2008_LITE']);
+  // 1893 and 1873 are on the list because they were panics: −21.3 % and −18.7 % in their
+  // three panic months (MEASUREMENTS §10, §11).
+  assert.deepEqual(panics, ['AI_CAPEX_BUST_1893', 'COVID_2020_LITE', 'DOTCOM_2000_LITE',
+    'MARKET_CRASH_2008_LITE', 'RAILROAD_PANIC_1873', 'RAILROAD_PANIC_1893']);
 
   // …but every equity preset except the control arm is at least STRESSED.
   const stressed = Object.keys(SHOCK_LIBRARY)
     .filter(id => tagsOf(id).includes(REGIME_TAG.ECONOMIC_STRESS)).sort();
-  assert.deepEqual(stressed, ['COVID_2020_LITE', 'DOTCOM_2000_LITE', 'LOST_DECADE_2000',
-    'MARKET_CRASH_2008_LITE', 'MILD_CORRECTION', 'STAGFLATION_1970S_LITE']);
+  assert.deepEqual(stressed, ['AI_CAPEX_BUST_1893', 'COVID_2020_LITE', 'DOTCOM_2000_LITE',
+    'LOST_DECADE_2000', 'MARKET_CRASH_2008_LITE', 'MILD_CORRECTION', 'RAILROAD_PANIC_1873',
+    'RAILROAD_PANIC_1893', 'STAGFLATION_1970S_LITE']);
+});
+
+test('SHOCKTAG-9: the AI capex bust is exactly 1893 minus its deflation leg', () => {
+  const ai   = SHOCK_LIBRARY.AI_CAPEX_BUST_1893;
+  const base = SHOCK_LIBRARY.RAILROAD_PANIC_1893;
+
+  // The one variable the arm exists to change: no leg moves the price level.
+  assert.ok(base.legs.some(l => l.regime?.inflationAdjustment), '1893 itself does deflate');
+  assert.equal(ai.legs.filter(l => l.regime?.inflationAdjustment).length, 0,
+    'the AI arm must carry no inflationAdjustment on any leg');
+
+  // Everything else is 1893's, so the pair is a one-variable comparison. Stated against the
+  // live preset, not a copy, so a recalibration of 1893 cannot silently fork the two.
+  assert.deepEqual(ai.legs, base.legs.filter(l => l.id !== 'prices'));
+  assert.deepEqual(ai.levelEffects, base.levelEffects);
+  assert.equal(ai.severity, base.severity);
+  assert.deepEqual(ai.recovery, base.recovery);
+  assert.notEqual(ai.shockId, base.shockId, 'its own id, or regime ids collide on the stack');
 });

@@ -79,7 +79,7 @@ import { REGIME_TAG } from '../economic-regimes/regime-tag.js';
  *
  * Keys are stable identifiers stored in `parameters.shockPreset`.
  */
-export const SHOCK_LIBRARY = Object.freeze({
+const HISTORICAL_SHOCKS = {
 
   /**
    * Global financial crisis (Oct 2007 – Mar 2009) — the fast, deep, GLOBAL crash.
@@ -671,6 +671,259 @@ export const SHOCK_LIBRARY = Object.freeze({
   },
 
   /**
+   * Panic of 1893 — the RAILROAD bust: a capital-spending boom in a new network technology,
+   * financed on credit, that ran out of return. The oldest episode in the library, and the
+   * one to reach for when the question is "what if an infrastructure build-out over-shoots".
+   *
+   * Calibrated to (MEASUREMENTS §1, §10):
+   *   - S&P (Cowles/Shiller) −32.2 % over 48 months, Aug 1892 → Aug 1896, back to the prior
+   *     peak at 76. The railroad stock index alone: −32.7 % over 53, back at 82 — railroads
+   *     WERE the market then, so the two paths are nearly the same line.
+   *   - FAST ENTRY, THEN A GRIND. The index was flat from Aug 1892 to Jan 1893, fell 5 % by
+   *     April, and then 21.3 % in the three panic months Apr → Jul 1893. The rest came in a
+   *     sideways-to-down grind with a second dip in 1896 (NBER dates TWO contractions,
+   *     Jan 1893–Jun 1894 and Dec 1895–Jun 1897). So this is the reverse of the GFC: the
+   *     level break is most of the fall and the drag is the tail.
+   *   - The CAPEX collapse is the defining fact: miles of new railroad built fell from
+   *     12,876 in 1887 to 1,654 in 1896 (−87 %). The framework has no sector axis, so that
+   *     number calibrates nothing here — it is why the preset exists, not what it moves.
+   *
+   * Four things distinguish it from every other preset in the library:
+   *
+   *  1. **Deflation.** The general price level fell ~10 % and stayed down for four years
+   *     (Snyder, §10). A gold-standard economy with no central bank; nobody eased. In this
+   *     framework deflation LOWERS spending, so it partly CUSHIONS a retiree — real total
+   *     returns were far milder than the nominal price fall (§10). That is faithful to 1893
+   *     and is the first thing to question before reading this preset as a modern forecast.
+   *  2. **Money-market spike, then easy money.** NY commercial paper went 5.0 % → 10.9 % at
+   *     the panic (Jul 1893) and then averaged 4.2 % for 1894-96: a liquidity squeeze, not a
+   *     policy hike, so it lives on its own short leg.
+   *  3. **High-grade bonds were the refuge.** Top-grade railroad bond yields spiked only
+   *     +0.3 pp and then FELL ~0.5 pp over the decade. Lower-grade railroad bonds defaulted
+   *     wholesale (the receiverships), and the framework has no credit-default channel —
+   *     so a bond sleeve here behaves like the survivors, which flatters it.
+   *  4. **Dividends were cut hard and slowly**: S&P dividends per share −28 % over 36
+   *     months — deeper than the GFC's −22 %. Railroads in receivership paid nothing.
+   *
+   * Market structure: the 1890s were a GLOBAL bust (Baring crisis in London 1890; Australia's
+   * banking collapse in 1893, where 13 trading banks suspended in five months and real GDP
+   * fell ~10 % then a further 7 % — RBA RDP 1999-06). There is no scripted non-US share-price
+   * series for the decade, so every non-US sleeve carries the US figure: SIGN SUPPORTED
+   * (the RBA paper), MAGNITUDE ASSERTED. By the RBA's account Australia's depression was the
+   * deeper of the two, so the AU sleeve is more likely understated than overstated.
+   *
+   * No FX leg: the US and the Australian colonies were both on gold/sterling parities, so
+   * there is no floating USD/AUD to calibrate against (and the AUD did not float until 1983).
+   */
+  RAILROAD_PANIC_1893: {
+    shockId:  'RAILROAD_PANIC_1893',
+    name:     'Railroad Panic (1893-style)',
+    severity: 0.32,                     // the measured trough depth
+    levelEffects: {
+      // The Apr → Jul 1893 panic, −21.3 % in three months (§10): the front-loaded part of
+      // the fall. One entry for all four sleeves — see "Market structure" above.
+      equityRevaluation: [
+        { rateKeys: ['EQUITY_US', 'EQUITY_INTL_EX_AU', 'EQUITY_INTL_EX_US', 'EQUITY_AU'], multiplier: -0.213 },
+      ],
+    },
+    legs: [
+      // 48 months: the measured Cowles/Shiller peak→trough. The first five of those were a
+      // flat plateau before the panic, but the rule is the measured window (§1), and the
+      // 1896 second dip is what makes the trough that late.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER],
+        recovery: { profile: 'L', durationMonths: 48 },
+      },
+      {
+        id: 'equity',
+        regime: {
+          returnAdjustment: {
+            EQUITY_US: -0.135, EQUITY_INTL_EX_AU: -0.135,
+            EQUITY_INTL_EX_US: -0.135, EQUITY_AU: -0.135,
+          },
+        },
+        // U_REBOUND/84: the drag holds through the 1894-96 grind, is spent around year 4.5,
+        // and a STRONG tailwind follows — the 1897-1900 recovery took the index from its
+        // trough to +22 % over the 1893 level in four years.
+        recovery: { profile: 'U_REBOUND', durationMonths: 84, reboundStart: 0.65, reboundPeak: 1.45 },
+      },
+      {
+        id: 'markets',
+        regime: {
+          // S&P dividends per share −28 % over 36 months, back to the prior peak at 78
+          // (MEASUREMENTS §3). U/72 is flat for the 36-month slide, then fades by month 72.
+          // The non-US sleeves take the US figure, as everywhere in this library.
+          dividendAdjustment: {
+            EQUITY_US: -0.28, EQUITY_AU: -0.28,
+            EQUITY_INTL_EX_AU: -0.28, EQUITY_INTL_EX_US: -0.28,
+          },
+        },
+        recovery: { profile: 'U', durationMonths: 72 },
+      },
+      {
+        id: 'prices',
+        regime: {
+          // Snyder's general price level fell 78 → 70-72 and held there from 1894 to 1897
+          // (§10): about −9 % over four years, i.e. −2.3 %/yr, which is −4.8 pp against a
+          // 2.5 % baseline. L because the level stayed down and then turned up in 1897.
+          // AU: retail prices fell by more than 20 % from 1891 to 1897 (RBA RDP 1999-06,
+          // Figure 3) — the same order, held to the same window. Asserted, sign supported.
+          //
+          // Shiller's pre-1913 CPI shows twice the fall (−20 %); it is a WHOLESALE-price
+          // splice, and wholesale prices swing far harder than a household's basket. Snyder
+          // is the general price level, which is what spending indexation means.
+          inflationAdjustment: { US: -0.05, AU: -0.05 },
+        },
+        recovery: { profile: 'L', durationMonths: 48 },
+      },
+      {
+        id: 'panic',
+        regime: {
+          // The liquidity squeeze: NY commercial paper 5.04 % (1890-92 mean) → 10.88 % (Jul
+          // 1893), averaging 6.57 % over Aug-Dec and under 4 % by December; high-grade
+          // railroad bond yields +0.32 pp at the worst (§10c). V/8 fades it through the autumn.
+          returnAdjustment:       { FIXED_INCOME_US: 0.003 },
+          interestRateAdjustment: { FIXED_INCOME_US: 0.003, PRIME_US: 0.058 },
+        },
+        recovery: { profile: 'V', durationMonths: 8 },
+      },
+      {
+        id: 'rates',
+        regime: {
+          // Then easy money for years: commercial paper averaged 4.17 % over 1894-96 and
+          // 3.82 % over 1897-99 against 5.04 % before (−0.9 to −1.2 pp); high-grade railroad
+          // bond yields 3.74 % → 3.53 % → 3.24 % (§10c). No AU rates: no series on disk.
+          returnAdjustment:       { FIXED_INCOME_US: -0.004 },
+          interestRateAdjustment: { FIXED_INCOME_US: -0.004, PRIME_US: -0.010 },
+        },
+        recovery: { profile: 'U', durationMonths: 84 },
+      },
+    ],
+    recovery: { profile: 'U_REBOUND', durationMonths: 84 },
+  },
+
+  /**
+   * Panic of 1873 — the FIRST railroad bust, and the harsher one. Jay Cooke & Co. failed in
+   * September 1873 on Northern Pacific railroad bonds it could not place, and the market
+   * closed for ten days. NBER dates the contraction that followed at **65 months** (Oct 1873
+   * → Mar 1879) — the longest in its record.
+   *
+   * Calibrated to (MEASUREMENTS §1, §11), measured from Aug 1873, the last pre-panic month:
+   *   - S&P (Cowles/Shiller) −18.7 % in the three panic months, a RELIEF RALLY through 1874
+   *     (−10.1 % a year on), then a second slide to **−45.1 % in June 1877** (46 months),
+   *     back to the pre-panic level in January 1880 (77). The running-peak figure in §1 is
+   *     −47.3 % from April 1872; the 16 months before the panic were a drift, not the crisis.
+   *   - Railroad construction fell 77 % (1871 → 1875, §10d), as in 1893.
+   *
+   * What makes it different from RAILROAD_PANIC_1893:
+   *
+   *  1. **Deeper and slower, with the bottom three and a half years in.** 1893 did most of
+   *     its damage in the panic; 1873 did less in the panic and most of it in 1876-77. So
+   *     this preset is the one for "the crash was survivable, and then it kept going".
+   *  2. **The double dip is drawn, not flattened.** A single drag cannot rally in year one
+   *     and slide in years three and four — it bottomed at −37 % trying. So a `relief` leg
+   *     carries a TAILWIND that holds for 24 months against a much larger drag that outlives
+   *     it. The two nearly cancel while both live (the 1874-75 relief, flat prices), and the
+   *     drag is left alone for the 1876-77 slide. `applySeverity` scales both legs by the
+   *     same ratio, so a severity sweep keeps the shape.
+   *  3. **Dividends −45.5 %** over 60 months — the worst cut on disk outside 1929-33 (§3).
+   *  4. **Deflation of ~5 %/yr for five years** (Snyder −23 % by Dec 1878), and high-grade
+   *     railroad bonds RALLIED: their price rose from 64.6 to 81.3 between Jan 1873 and
+   *     Jan 1879 (§11). Same caveat as 1893: in this framework deflation lowers spending and
+   *     cushions a retiree — the real total return was positive by the end of 1874.
+   *
+   * US-LED, deliberately. Unlike 1893 there is no source on disk for ANY non-US market in
+   * the 1870s — FRED's NBER UK share series start in 1887 — so this preset shocks EQUITY_US
+   * and EQUITY_INTL_EX_AU (a global basket that is ~70 % US by weight, the same reasoning as
+   * MILD_CORRECTION) and leaves EQUITY_AU and EQUITY_INTL_EX_US alone. That is a gap in the
+   * evidence, not a claim that nothing happened abroad.
+   */
+  RAILROAD_PANIC_1873: {
+    shockId:  'RAILROAD_PANIC_1873',
+    name:     'Railroad Panic (1873-style)',
+    severity: 0.45,                     // measured trough from the pre-panic month
+    levelEffects: {
+      // The three panic months, Aug → Nov 1873: −18.7 % (§11).
+      equityRevaluation: [
+        { rateKeys: ['EQUITY_US', 'EQUITY_INTL_EX_AU'], multiplier: -0.187 },
+      ],
+    },
+    legs: [
+      // 46 months: pre-panic month → the June 1877 trough. Not the 62 of the running-peak
+      // row in §1, which starts sixteen months before anything happened.
+      {
+        id:       'stress',
+        tags:     [REGIME_TAG.ECONOMIC_STRESS, REGIME_TAG.PANIC_SELL_TRIGGER],
+        recovery: { profile: 'L', durationMonths: 46 },
+      },
+      {
+        id: 'equity',
+        regime: {
+          returnAdjustment: { EQUITY_US: -0.50, EQUITY_INTL_EX_AU: -0.50 },
+        },
+        // U_REBOUND/108: full strength while the relief leg lives, then it alone drives the
+        // 1876-77 slide, is spent around month 57, and a moderate tailwind (0.5) takes the
+        // book back to its pre-panic level in year seven against a measured 77 months.
+        recovery: { profile: 'U_REBOUND', durationMonths: 108, reboundStart: 0.525, reboundPeak: 0.5 },
+      },
+      {
+        // The 1874 relief rally. Positive, and deliberately almost as large as the drag: net
+        // of both the book gains a few percent a year for two years, which is what it did
+        // (−18.7 % after the panic, −10.1 % a year later, −11.3 % the year after, §11).
+        id: 'relief',
+        regime: {
+          returnAdjustment: { EQUITY_US: 0.48, EQUITY_INTL_EX_AU: 0.48 },
+        },
+        recovery: { profile: 'L', durationMonths: 24 },
+      },
+      {
+        id: 'markets',
+        regime: {
+          // S&P dividends per share −45.5 % over 60 months, back to the prior peak at 120
+          // (MEASUREMENTS §3). Only the two sleeves this preset prices — see US-LED above.
+          dividendAdjustment: { EQUITY_US: -0.455, EQUITY_INTL_EX_AU: -0.455 },
+        },
+        recovery: { profile: 'U', durationMonths: 120 },
+      },
+      {
+        id: 'prices',
+        regime: {
+          // Snyder's general price level −23.2 % from Aug 1873 to Dec 1878 (§11): −4.8 %/yr
+          // over 64 months, i.e. about −7 pp against a 2.5 % baseline. L/66 ends at the NBER
+          // trough (Mar 1879); the level never came back, it just stopped falling. US only —
+          // nothing on disk speaks to Australian prices in the 1870s.
+          inflationAdjustment: { US: -0.07 },
+        },
+        recovery: { profile: 'L', durationMonths: 66 },
+      },
+      {
+        id: 'panic',
+        regime: {
+          // NY commercial paper 7.06 % (Aug 1873) → 16.50 % (Oct), averaging 13.60 % over
+          // Oct-Dec and 9.8 % by December; call money touched a 61 % monthly average.
+          // High-grade railroad bond yields +0.44 pp at the worst (§11).
+          returnAdjustment:       { FIXED_INCOME_US: 0.004 },
+          interestRateAdjustment: { FIXED_INCOME_US: 0.004, PRIME_US: 0.094 },
+        },
+        recovery: { profile: 'V', durationMonths: 6 },
+      },
+      {
+        id: 'rates',
+        regime: {
+          // Then a decade of falling rates: commercial paper 5.52 % over 1874-76 and 5.01 %
+          // over 1877-79 against 7.06 % (−1.5 to −2.1 pp); high-grade railroad bond yields
+          // 6.06 % → 5.51 % → 5.01 % (§11b). U/120 because the long end kept falling.
+          returnAdjustment:       { FIXED_INCOME_US: -0.008 },
+          interestRateAdjustment: { FIXED_INCOME_US: -0.008, PRIME_US: -0.018 },
+        },
+        recovery: { profile: 'U', durationMonths: 120 },
+      },
+    ],
+    recovery: { profile: 'U_REBOUND', durationMonths: 108 },
+  },
+
+  /**
    * Bear flattener (design 67 §6) — a curve-SHAPE shock: short rates rise sharply while
    * the long end barely moves, so the curve flattens. Priced as an additive twist over
    * the base shape (positive spread deltas concentrated at the short tenors). V-shaped
@@ -731,7 +984,37 @@ export const SHOCK_LIBRARY = Object.freeze({
     recovery: { profile: 'L', durationMonths: 18 },
   },
 
-});
+};
+
+/**
+ * AI capex bust — `RAILROAD_PANIC_1893` WITHOUT its deflation leg. An AUTHORED stress, not a
+ * historical episode, and the one preset in the library that is derived rather than written.
+ *
+ * The question it answers: what does a network build-out bust do to a plan when the economy
+ * around it is modern? The equity, dividend and rate legs are 1893's, unchanged: a −21.3 %
+ * panic break, a grind to −33 %, dividends −28 %, a money-market spike and then easier money
+ * (MEASUREMENTS §10). What is gone is the `prices` leg. In 1893 prices fell ~9 % because the
+ * US was on gold with no central bank. In this framework that deflation LOWERS a household's
+ * spending, which made 1893 far kinder to a retiree than its price chart suggests: the real
+ * total return was positive by 1894 (§10b). A bust met by a central bank that eases would not
+ * deflate, so that cushion goes, and inflation runs at the scenario's baseline throughout.
+ *
+ * What it deliberately does NOT change, so the arm stays a one-variable comparison against
+ * 1893: the rate legs keep 1893's size (−1 pp prime, −0.4 pp bonds), which is milder than a
+ * modern easing cycle (GFC: prime −5 pp, MEASUREMENTS §5); every sleeve keeps the US figure;
+ * and the bond sleeve still behaves like the surviving high grade. A scenario that wants
+ * aggressive rate cuts should add a second shock rather than edit this one.
+ *
+ * Derived, not copied, so a recalibration of 1893 flows straight through.
+ */
+const AI_CAPEX_BUST_1893 = {
+  ...HISTORICAL_SHOCKS.RAILROAD_PANIC_1893,
+  shockId: 'AI_CAPEX_BUST_1893',
+  name:    'AI Capex Bust (1893 railroad path, no deflation)',
+  legs:    HISTORICAL_SHOCKS.RAILROAD_PANIC_1893.legs.filter(leg => leg.id !== 'prices'),
+};
+
+export const SHOCK_LIBRARY = Object.freeze({ ...HISTORICAL_SHOCKS, AI_CAPEX_BUST_1893 });
 
 /**
  * Ordered list of {value, label} option descriptors for the `shockPreset` param.
@@ -744,6 +1027,9 @@ export const SHOCK_PRESET_OPTIONS = Object.freeze([
   { value: 'COVID_2020_LITE',        label: 'Pandemic Crash (COVID-style, −19 %, fast rebound)' },
   { value: 'DOTCOM_2000_LITE',       label: 'Dot-Com Bust (2000-2002 style, −44 % over 30 mo)' },
   { value: 'LOST_DECADE_2000',       label: 'Lost Decade (2000-2012 style, flat for 10 yrs)' },
+  { value: 'RAILROAD_PANIC_1893',    label: 'Railroad Panic (1893-style, −32 % over 4 yrs, deflation)' },
+  { value: 'RAILROAD_PANIC_1873',    label: 'Railroad Panic (1873-style, −45 % double dip, US-led)' },
+  { value: 'AI_CAPEX_BUST_1893',     label: 'AI Capex Bust (1893 railroad path, no deflation)' },
   { value: 'MILD_CORRECTION',        label: 'Mild Correction (−11.5 % US equity)' },
   { value: 'SF_BAY_HOUSING_CRASH',   label: 'SF Bay Housing Crash (−45 %, regional)' },
   { value: 'CURVE_BEAR_FLATTENER',   label: 'Bear Flattener (yield curve, short up)' },
