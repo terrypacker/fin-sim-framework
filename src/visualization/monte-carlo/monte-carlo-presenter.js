@@ -17,7 +17,7 @@ import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
-import { buildOptVariables }       from '../../finance/optimization/intl-retirement-opt-config.js';
+import { buildGridAxes }           from '../../finance/optimization/intl-retirement-opt-config.js';
 import { get }                     from '../../finance/monte-carlo/mc-param-paths.js';
 import { formatDuration, formatAxisValue } from './mc-grid-format.js';
 import { gridCellRuns }            from '../../finance/monte-carlo/mc-grid-runner.js';
@@ -333,16 +333,17 @@ export class MonteCarloPresenter {
   }
 
   /**
-   * The levers a grid axis can be: the Opt harvest (design 100 §7.2), each with the
-   * plan's value so the panel can show it. Schema defaults are layered under the plan
-   * here, and only for that display value, so a lever the plan leaves at its default
-   * still shows the value the sim runs at.
+   * The levers a grid axis can be: the Opt harvest plus the MC-flagged scalars
+   * (design 100 §7.2, amended — e.g. a property's value against its sale year), each
+   * with the plan's value so the panel can show it. Schema defaults are layered under
+   * the plan here, and only for that display value, so a lever the plan leaves at its
+   * default still shows the value the sim runs at.
    */
   _resolveGridAxes() {
     const base      = this._resolveBaseParams();
     const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
     const withDefaults = { ...paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema()), ...base };
-    return buildOptVariables(base, this._scenario?.accounts, { cfg: activeCfg })
+    return buildGridAxes(base, this._scenario?.accounts, { cfg: activeCfg })
       .map(v => ({ ...v, planValue: get(withDefaults, v.paramKey) }));
   }
 

@@ -16,7 +16,8 @@ import { MARKET_GROWTH_PARAMS } from '../../scenarios/toolsets/economic-regimes-
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
 import { lookupLifeTable }          from './life-tables.js';
-import { indexParamSchema, resolveSweepVariables, harvestSweepVariables } from '../param-schema-utils.js';
+import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
+         groupWithAliasSuccessor } from '../param-schema-utils.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -537,7 +538,7 @@ export class IntlRetirementMcConfig {
     ];
     const harvested = harvestSweepVariables(contributed, schema, params,
       { flag: 'mc', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: mcRowFor });
-    const resolved = [...contributed, ...harvested]
+    const resolved = groupWithAliasSuccessor([...contributed, ...harvested], schema, INTL_RETIREMENT_PARAM_ALIASES)
       .filter(cfg => {
         // Non-array-indexed keys (flat or dot-separated): always keep.
         // Their cfg.value/cfg.mean acts as the reference when the key is absent

@@ -274,6 +274,26 @@ export function resolveSweepVariables(entries, schemaByKey, baseParams = {}) {
 }
 
 /**
+ * File a legacy-keyed row under the group of the generated key it aliases, when the
+ * loaded plan carries that key. `usHouseSaleYear` then sits beside the same house's
+ * `prop.<sk>.value` / `appreciationRate` rows ("US · US House") instead of alone in
+ * "Real Properties", so one property's levers read as one group in both the MC and
+ * the Opt / grid lists. Without a generated successor (an unloaded cfg) a row keeps
+ * its own group.
+ *
+ * @param {Array<object>} entries  sweep rows
+ * @param {Array<object>} schema   static + generated param schema
+ * @param {object}        aliases  legacy key → generated key
+ */
+export function groupWithAliasSuccessor(entries, schema, aliases = {}) {
+  const groupOf = new Map(schema.filter(s => s?.key && s.group).map(s => [s.key, s.group]));
+  return entries.map(e => {
+    const group = groupOf.get(aliases[e.paramKey]);
+    return group && group !== e.group ? { ...e, group } : e;
+  });
+}
+
+/**
  * The sweep kinds a harvested row can take (design 98 W3.4). A schema flag may
  * name one explicitly (`mc: 'rate'`) when inference would pick wrongly — a scale
  * centred on 1.0, a volatility centred on 0.11.

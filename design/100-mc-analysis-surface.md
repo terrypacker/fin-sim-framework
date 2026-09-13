@@ -232,6 +232,16 @@ top-20 bar chart; `sweep-scenario` varies one param on the command line.
 2. **Axes come from the Opt harvest; noise comes from the MC config.** A lever is a list
    of values to try, and that is what an Opt row already is. What varies inside a cell is
    what the MC panel samples. Two rows are picked as axes, each with its value list.
+   - **Amended 13 Sep 2026:** axes are the Opt harvest **plus every `mc`-flagged scalar it
+     does not already offer**, shaped by the same `optRowFor` ranges
+     (`buildGridAxes`, beside `buildOptVariables`). A grid scans "what if this were X",
+     which is as meaningful for an uncertain quantity as for a choice. The motivating
+     case is a property's starting value (`prop.<sk>.value`) against its sale year:
+     the value grows along the property's path to whichever year it sells in. Those
+     rows stay out of `buildOptVariables`, since `opt: true` means the household
+     chooses the quantity, and an optimizer handed a house's value would pick the
+     highest. Gate: `lever-reaches-loaded-sim` LRS-2 (every grid lever is live on a
+     loaded plan) and LRS-4 (value × sale year).
 3. **Common random numbers by construction.** Every cell runs paths `0…n−1` from the same
    variable list, so path i is the same world in every cell and any two cells are paired.
    - **Trap:** an axis that is also an enabled MC variable would be overwritten by the

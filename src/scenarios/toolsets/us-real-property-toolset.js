@@ -41,9 +41,9 @@ const _rentalParams = (p) => ({
  *
  * Schedules:
  *   One-off US_HOUSE_SALE event for each US real property whose
- *   plannedSaleYear is set.  The sale price is baked in at the property's
- *   initial value; users who need appreciation-adjusted pricing should
- *   register their own one-off event instead.
+ *   plannedSaleYear is set.  The sale price is the property's value on the
+ *   sale date (UsHouseSaleHandler reads state), so it carries the appreciation
+ *   and return path from the authored starting value.
  *
  * Handlers:  UsHouseSaleHandler  (handles US_HOUSE_SALE events)
  * Reducers:  UsHouseSaleApplyReducer (handles US_HOUSE_SALE_APPLY)

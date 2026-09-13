@@ -42,9 +42,9 @@ const _rentalParams = (p) => ({
  *
  * Schedules:
  *   One-off AU_HOUSE_SALE event for each AU real property whose
- *   plannedSaleYear is set.  The sale price is baked in at the property's
- *   initial value; users who need appreciation-adjusted pricing should
- *   register their own one-off event instead.
+ *   plannedSaleYear is set.  The sale price is the property's value on the
+ *   sale date (AuHouseSaleHandler reads state), so it carries the appreciation
+ *   and return path from the authored starting value.
  *
  * Handlers:  AuHouseSaleHandler  (handles AU_HOUSE_SALE events)
  * Reducers:  AuHouseSaleApplyReducer (handles AU_HOUSE_SALE_APPLY)

@@ -33,7 +33,8 @@ import { IntlRetirementMcRunner } from '../../src/finance/monte-carlo/intl-retir
 import { McGridRunner }           from '../../src/finance/monte-carlo/mc-grid-runner.js';
 import { GRID_MODES }             from '../../src/finance/monte-carlo/mc-grid.js';
 import { gridCellParams }         from '../../src/finance/monte-carlo/parallel/mc-worker-core.js';
-import { buildOptVariables }      from '../../src/finance/optimization/intl-retirement-opt-config.js';
+import { buildOptVariables, buildGridAxes } from '../../src/finance/optimization/intl-retirement-opt-config.js';
+import { OPT_PARAM_TYPES }        from '../../src/finance/optimization/optimization-objectives.js';
 import { get }                    from '../../src/finance/monte-carlo/mc-param-paths.js';
 import { applyParamBagToConfig, resolveAliasCenters } from '../../src/scenarios/scenario-param-apply.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
@@ -97,11 +98,11 @@ test('LRS-1 a legacy-keyed lever centres on its generated successor\'s plan valu
     'the wage variable centres on the plan\'s wage, not the hardcoded default');
 });
 
-test('LRS-2 every MC variable and Opt lever reaches the loaded sim', () => {
+test('LRS-2 every MC variable and Opt / grid lever reaches the loaded sim', () => {
   const cfg = loadedCfg();
   const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
   const levers = new Map();
-  for (const v of [...ctx.variables, ...buildOptVariables(ctx.base, null, { cfg })]) levers.set(v.paramKey, v);
+  for (const v of [...ctx.variables, ...buildGridAxes(ctx.base, null, { cfg })]) levers.set(v.paramKey, v);
 
   const plan = loadCell(ctx, {});
   assert.strictEqual(loadCell(ctx, {}), plan, 'the plan cell loads deterministically');
@@ -128,4 +129,53 @@ test('LRS-3 an MC grid on the AU house sale year: the column moves the result', 
   assert.deepStrictEqual(grid.planValues, [2030], 'the axis has the plan\'s value, so a reference cell');
   const [a, b] = grid.cells.map(c => c.rows[0].nw);
   assert.notStrictEqual(a, b, 'two sale years inside the horizon must not end on the same net worth');
+});
+
+// The property's starting value is uncertain, not chosen: an MC lever (`mc: true`) but
+// never an Opt one. The grid offers it anyway (design 100 §7.2, amended), so a range of
+// values can be scanned against a range of sale years; the value then grows along the
+// property's path to whichever year it sells in.
+test('LRS-4 a grid of AU house value × sale year: every cell is its own world', async () => {
+  const cfg = loadedCfg();
+  const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
+  const VALUE = 'prop.auHouseProperty.value';
+  const YEAR  = 'prop.auHouseProperty.plannedSaleYear';
+  const plan  = get(ctx.base, VALUE);
+  assert.ok(plan > 0, 'the plan carries a starting value for the AU house');
+
+  assert.ok(!buildOptVariables(ctx.base, null, { cfg }).some(v => v.paramKey === VALUE),
+    'the optimizer is not offered the house value — nobody chooses it');
+  const row = buildGridAxes(ctx.base, null, { cfg }).find(v => v.paramKey === VALUE);
+  assert.ok(row, 'the grid offers the house value as an axis');
+  assert.strictEqual(row.type, OPT_PARAM_TYPES.CONTINUOUS);
+  assert.deepStrictEqual([row.min, row.max], [plan * 0.5, plan * 1.5]);
+
+  const grid = await new McGridRunner({
+    simEnd: SIM_END, cfgTemplate: cfg, mode: GRID_MODES.DETERMINISTIC,
+    axes: [{ paramKey: VALUE, values: [plan * 0.8, plan] }, { paramKey: YEAR, values: [2030, 2033] }],
+  }).run();
+
+  assert.deepStrictEqual(grid.planValues, [plan, 2030]);
+  assert.ok(grid.referenceCell.exact, 'the plan cell is on the grid');
+  const nw = grid.cells.map(c => c.rows[0].nw);
+  assert.strictEqual(new Set(nw).size, 4, 'no two cells end on the same net worth');
+  // Row-major, last axis fastest: [0.8×, 2030] [0.8×, 2033] [plan, 2030] [plan, 2033].
+  assert.ok(nw[2] > nw[0] && nw[3] > nw[1], 'a dearer house ends richer, in either sale year');
+});
+
+// One property's levers read as one group in both panel modes. The sale year is offered
+// under the legacy `auHouseSaleYear` key (it covers the generated one), so it must be
+// filed under the generated key's group, beside the same house's value.
+test('LRS-5 a house\'s value and sale year share one group, in the batch list and the grid axes', () => {
+  const cfg = loadedCfg();
+  const { ctx } = new IntlRetirementMcRunner({ simEnd: SIM_END, cfgTemplate: cfg })._prepare({});
+  const groupsIn = (rows) => Object.fromEntries(rows
+    .filter(v => ['prop.auHouseProperty.value', 'auHouseSaleYear'].includes(v.paramKey))
+    .map(v => [v.paramKey, v.group]));
+  for (const [mode, rows] of [['batch', ctx.variables], ['grid', buildGridAxes(ctx.base, null, { cfg })]]) {
+    const g = groupsIn(rows);
+    assert.ok(g['prop.auHouseProperty.value'], `${mode}: the house value is offered`);
+    assert.strictEqual(g.auHouseSaleYear, g['prop.auHouseProperty.value'],
+      `${mode}: the sale year sits in the house's own group`);
+  }
 });

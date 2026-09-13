@@ -16,7 +16,8 @@ import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchem
 import { SLEEVE_ORDER_MODES, LOT_STRATEGIES } from '../holdings/holdings-selection.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { US_STATE_CODES }             from '../tax/state/us-states.js';
-import { indexParamSchema, resolveSweepVariables, harvestSweepVariables } from '../param-schema-utils.js';
+import { indexParamSchema, resolveSweepVariables, harvestSweepVariables,
+         groupWithAliasSuccessor } from '../param-schema-utils.js';
 import { INTL_RETIREMENT_PARAM_ALIASES } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../scenarios/params/scenario-param-generator.js';
 
@@ -615,6 +616,7 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
   ];
   list = [...list, ...harvestSweepVariables(list, schema, params,
     { flag: 'opt', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: optRowFor })];
+  list = groupWithAliasSuccessor(list, schema, INTL_RETIREMENT_PARAM_ALIASES);
   // Build-time filter (design 58): when the caller supplies the scenario's accounts,
   // drop the Lever-B weight axes for roles no account backs. Those dimensions are
   // flat in the objective (nothing consumes their rank), so sweeping them only
@@ -639,4 +641,25 @@ export function buildOptVariables(params, accounts = null, { cfg = null } = {}) 
   // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
   // whose strategy isn't selected). Identity is maintained once, in the schema.
   return resolveSweepVariables(list, schemaByKey(), params);
+}
+
+/**
+ * The levers an MC grid axis can be (design 100 §7.2, amended 13 Sep 2026): the Opt
+ * list above, PLUS every `mc`-flagged scalar it does not already offer, shaped as a
+ * value list by the same `optRowFor` ranges.
+ *
+ * A grid scans "what if this were X", which is as meaningful for an uncertain quantity
+ * (a property's value, an inflation rate) as for a household choice. Those rows stay
+ * OUT of `buildOptVariables`: `opt: true` means "the household chooses this", and an
+ * optimizer handed a house's value would just pick the highest one.
+ */
+export function buildGridAxes(params, accounts = null, { cfg = null } = {}) {
+  const list = buildOptVariables(params, accounts, { cfg });
+  const schema = [
+    ...IntlRetirementScenario.buildFullParamSchema(),
+    ...(cfg ? ScenarioParamGenerator.generate(cfg) : []),
+  ];
+  const uncertain = harvestSweepVariables(list, schema, params,
+    { flag: 'mc', aliases: INTL_RETIREMENT_PARAM_ALIASES, rowFor: optRowFor });
+  return [...list, ...resolveSweepVariables(uncertain, schemaByKey(), params)];
 }
