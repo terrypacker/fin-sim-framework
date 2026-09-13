@@ -11,6 +11,7 @@
 import { ScenarioRunner }             from '../../simulation-framework/scenario.js';
 import { IntlRetirementScenario, resolveBalanceCenters } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
+import { resolveAliasCenters }        from '../../scenarios/scenario-param-apply.js';
 import { IntlRetirementMcConfig, CENTER_SOURCES, refineCenterSource } from './intl-retirement-mc-config.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../param-schema-utils.js';
 import { buildIterationRunner, perturbParams, samplingSignature } from './parallel/mc-worker-core.js';
@@ -219,7 +220,11 @@ export class IntlRetirementMcRunner {
     //   4. baseParams       — an explicit caller override wins over all of them.
     const schemaDefaults = paramSchemaDefaults(IntlRetirementScenario.buildFullParamSchema());
     const balanceCenters = resolveBalanceCenters(cfgTemplate);
-    const base = { ...schemaDefaults, ...templateParams, ...balanceCenters, ...baseParams, endDate: simEnd };
+    // Legacy-keyed levers (`auHouseSaleYear`, the wages) centre on their generated
+    // successor's value — a loaded cfg carries only that one.
+    const aliasCenters   = resolveAliasCenters(rawTemplate);
+    const base = { ...schemaDefaults, ...templateParams, ...aliasCenters, ...balanceCenters, ...baseParams,
+                   endDate: simEnd };
     // Harvest from the raw template: its records carry the generated per-record params
     // (design 98 W3). Once, here on the main thread — workers get resolved `variables`.
     const variables  = this.mcConfig.buildVariables(base, { cfg: rawTemplate });

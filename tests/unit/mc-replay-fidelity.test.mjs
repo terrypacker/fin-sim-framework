@@ -99,6 +99,53 @@ test('applyParamBagToConfig: a typed entry still wins its own key', () => {
     'a key with no typed entry has only the flat map to travel in');
 });
 
+// ─── Alias pairs: a lever base carries BOTH names; the one a lever moved wins ────
+
+/** A loaded cfg whose US house sells in `plan` (typed entry under the generated key). */
+function makeLoadedSaleCfg(plan) {
+  return {
+    scenarioClass: IntlRetirementScenario,
+    params: [{ name: 'prop.usHouseProperty.plannedSaleYear', value: plan, type: 'Number' }],
+    parameters: {},
+    realProperties: [{ stateKey: 'usHouseProperty', plannedSaleYear: plan }],
+  };
+}
+
+test('applyParamBagToConfig: a lever on the LEGACY key beats the generated key at plan', () => {
+  const cfg = makeLoadedSaleCfg(2030);
+  applyParamBagToConfig(cfg, { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': 2030 });
+
+  assert.strictEqual(cfg.params[0].value, 2034,
+    'the base carries the generated key at the plan value; letting it win made every cell '
+    + 'of an auHouseSaleYear grid run the plan\'s sale year');
+  assert.strictEqual(cfg.parameters['prop.usHouseProperty.plannedSaleYear'], 2034,
+    'the loader drops the legacy key when the target is present, so the target must agree');
+});
+
+test('applyParamBagToConfig: a lever on the GENERATED key beats the legacy key at plan', () => {
+  const cfg = makeLoadedSaleCfg(2030);
+  applyParamBagToConfig(cfg, { usHouseSaleYear: 2030, 'prop.usHouseProperty.plannedSaleYear': 2034 });
+
+  assert.strictEqual(cfg.params[0].value, 2034);
+  assert.strictEqual(cfg.realProperties[0].plannedSaleYear, 2034,
+    'the direct sale-year patch reads the legacy key, so it must carry the lever too');
+});
+
+test('applyParamBagToConfig: a legacy lever wins when the plan never sells (null)', () => {
+  const cfg = makeLoadedSaleCfg(null);
+  applyParamBagToConfig(cfg, { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': null });
+
+  assert.strictEqual(cfg.params[0].value, 2034, 'a null plan value is still a plan value');
+});
+
+test('applyParamBagToConfig: reconciling never mutates the caller\'s bag', () => {
+  const bag = { usHouseSaleYear: 2034, 'prop.usHouseProperty.plannedSaleYear': 2030 };
+  applyParamBagToConfig(makeLoadedSaleCfg(2030), bag);
+
+  assert.strictEqual(bag['prop.usHouseProperty.plannedSaleYear'], 2030,
+    'the bag is a run\'s recorded params; replay re-applies it');
+});
+
 // ─── End-to-end: an MC iteration replayed from its own (params, seed) ────────────
 
 /**

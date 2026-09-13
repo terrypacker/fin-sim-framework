@@ -9,8 +9,9 @@
  */
 
 import { ServiceRegistry }     from '../../services/service-registry.js';
-import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }      from '../../scenarios/scenario-loader.js';
+import { applyParamBagToConfig, resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth, computeNetWorthInclSpeculative } from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
@@ -147,7 +148,8 @@ export class OptimizationProblem {
    * already-merged base, the same way it pre-seeds `_serializedTemplate`.
    */
   _resolveBase() {
-    this._resolvedBase ??= { ...scenarioParamValues(this._rawTemplate()), ...this.baseParams };
+    const raw = this._rawTemplate();
+    this._resolvedBase ??= { ...scenarioParamValues(raw), ...resolveAliasCenters(raw), ...this.baseParams };
     return this._resolvedBase;
   }
 
@@ -353,13 +355,9 @@ export class OptimizationProblem {
     scenario.buildSim({ telemetry: 'off' });
 
     const cfg = structuredClone(this._cfgTemplate());
-    cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
-    applyRealPropertySaleYearParams(cfg, params);
-    if (Array.isArray(cfg.params)) {
-      for (const p of cfg.params) {
-        if (params[p.name] !== undefined) p.value = params[p.name];
-      }
-    }
+    // The same function an MC iteration and the Replay button use, so a lever key means
+    // one thing everywhere (aliased legacy keys included).
+    applyParamBagToConfig(cfg, params);
     new ScenarioLoader().load(cfg, registry);
     return scenario.sim;
   }

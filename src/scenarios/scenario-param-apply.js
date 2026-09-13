@@ -10,6 +10,66 @@
 
 import { ScenarioLoader } from './scenario-loader.js';
 import { applyRealPropertySaleYearParams } from './intl-retirement-scenario.js';
+import { scenarioParamValues } from '../finance/param-schema-utils.js';
+
+/**
+ * The plan value of every legacy alias key, read from its generated successor.
+ *
+ * A LOADED cfg carries an aliased quantity only under the generated key (the loader
+ * renamed it), but some MC / Opt levers are still keyed on the legacy name
+ * (`auHouseSaleYear`, `primaryMonthlyWage`, …). Without this a lever base has no value
+ * for them: the MC row centres on its hardcoded default and a grid axis has no plan
+ * value or reference cell. Merge it into a lever base alongside `resolveBalanceCenters`.
+ * A legacy key the cfg already carries is left alone.
+ *
+ * @param {object} cfg  scenario config
+ * @returns {Object<string, *>} legacy key → the generated key's value
+ */
+export function resolveAliasCenters(cfg) {
+  if (!cfg) return {};
+  const values  = scenarioParamValues(cfg);
+  const centers = {};
+  for (const [legacy, target] of ScenarioLoader.paramAliasesFor(cfg)) {
+    if (target == null || values[legacy] !== undefined) continue;
+    if (values[target] !== undefined) centers[legacy] = values[target];
+  }
+  return centers;
+}
+
+/** The cfg's own value for `key`: its typed entry, else the flat bag. */
+function templateValue(cfg, key) {
+  const typed = Array.isArray(cfg.params) ? cfg.params.find(p => p.name === key) : undefined;
+  return typed ? typed.value : cfg.parameters?.[key];
+}
+
+/**
+ * Make each alias pair in the bag agree, keeping the one a lever moved.
+ *
+ * A lever base carries both names of an aliased quantity at the plan value (the
+ * generated key from the loaded cfg, the legacy key from `resolveAliasCenters`), and a
+ * lever writes only one of them. Downstream the generated key wins — the typed entry
+ * takes `params[target]` first and the loader drops the legacy key when the target is
+ * present — so a lever on the legacy key was silently inert: every cell of an
+ * `auHouseSaleYear` grid ran the plan's sale year.
+ *
+ * The key that moved is the one that differs from the cfg's own value. When the cfg has
+ * no value to compare against, the target wins, which is the loader's rule.
+ * Returns a copy when anything changes; the caller's bag (a run's recorded params) is
+ * never mutated.
+ */
+function reconcileAliasPairs(cfg, params) {
+  let bag = params;
+  for (const [legacy, target] of ScenarioLoader.paramAliasesFor(cfg)) {
+    if (target == null || params[legacy] === undefined || params[target] === undefined) continue;
+    if (params[legacy] === params[target]) continue;
+    const own  = templateValue(cfg, target);
+    const plan = own !== undefined ? own : templateValue(cfg, legacy);
+    if (bag === params) bag = { ...params };
+    if (plan !== undefined && params[target] === plan) bag[target] = params[legacy];
+    else bag[legacy] = params[target];
+  }
+  return bag;
+}
 
 /**
  * Apply a flat param bag — a Monte Carlo iteration's sampled params, or an optimizer
@@ -52,6 +112,7 @@ import { applyRealPropertySaleYearParams } from './intl-retirement-scenario.js';
  */
 export function applyParamBagToConfig(cfg, params) {
   if (!cfg || !params) return cfg;
+  params = reconcileAliasPairs(cfg, params);
 
   // The flat map: carries aliased, nested and untyped keys into the loader.
   cfg.parameters = { ...(cfg.parameters ?? {}), ...params };

@@ -79,7 +79,7 @@ import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-app
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute, resolveSubstituteSecurity } from './finance/behavioral/substitute-holding.js';
 import { TaxGainHarvestHandler } from './finance/behavioral/tax-gain-harvest-handler.js';
-import { TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
+import { tlhNoSubstituteRecordReducer, TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { US, AU, COUNTRY_CODES, currencyForCountry, defaultCurrencyForCountry, normalizeCountryCode } from './finance/country-codes.js';
@@ -102,8 +102,8 @@ import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
-import { MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { INDEX_BASE, indexMarkets, lastYearEndBefore, yearEndsBetween, seedIndexLevels, stepIndexLevels, markDownIndexLevels, MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
 import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
@@ -167,7 +167,7 @@ import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTer
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
-import { couponFederalExempt, couponStateExempt, baseDividendYield, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
+import { couponFederalExempt, couponStateExempt, baseDividendYield, priceOf, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withSleeveInclude, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { SECURITY_FIELDS, makeSecurity, buildSecurityRegistry, assertAllocationMatch, identityGroupOf, SYNTHETIC_SECURITY_PREFIX, syntheticSecurityId, syntheticEquitySecurities, scenarioSecurityRegistry } from './finance/holdings/security.js';
@@ -346,7 +346,7 @@ import { indexLimit, ROUNDING } from './finance/tax/statutory-indexation.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { toCcy, toUSD, toAUD, TAX_FX_PAIR, taxFxRate } from './finance/tax/tax-fx.js';
-import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, PENDING_RETURN_KEY, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { withoutUsSourceIncome, UsTaxSettleHandler, AuTaxSettleHandler, PENDING_RETURN_KEY, filedReturnState, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, DRAWDOWN_TAX_ACTION_TYPES, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { TAX_SETTLE_ACTION_TYPES, settleActionTypeFor, isTaxSettleEntry, primaryTaxSettleEntries } from './finance/tax/tax-settle-entries.js';
 import { WORKSHEET_COLUMNS, buildTaxWorksheetRows, worksheetRowsFromDocuments, verifyWorksheetRows, toCsv, cellText, tableDocumentToCsv } from './finance/tax/tax-worksheet-export.js';
 import { taxYearLabel, auFyLabel } from './finance/tax/tax-year-label.js';
@@ -381,7 +381,7 @@ import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PR
 import { decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { RETIRED_RATE_PARAMS, INTEREST_DEFAULTS, retireRateParams } from './scenarios/retired-rate-params.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
-import { applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
+import { resolveAliasCenters, applyParamBagToConfig } from './scenarios/scenario-param-apply.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { listScenarioSecurities, upsertScenarioSecurity, deleteScenarioSecurity, scenarioSecurityUsage } from './scenarios/scenario-securities.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -496,6 +496,7 @@ import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { RenderScheduler } from './visualization/components/render-scheduler.js';
 import { buildRowListEditor, readRowList } from './visualization/components/row-list-editor.js';
+import { normalizeFilter, matchesFilter, FilteredFoldState } from './visualization/components/text-filter.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
 import { DecisionGraphPresenter } from './visualization/decision-graph/decision-graph-presenter.js';
 import { DgConfigPanel } from './visualization/decision-graph/dg-config-panel.js';
@@ -544,8 +545,10 @@ import { DashCardsComponent } from './visualization/simulation/dash-cards-compon
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
+import { FieldFormatter } from './visualization/state/field-format.js';
+import { renderSparkline, buildFieldRow, buildStaticRow } from './visualization/state/field-row.js';
 import { FieldSeriesStore } from './visualization/state/field-series-store.js';
-import { flattenStatePaths, typeForPath, STATE_FIELD_GROUPS, groupFor } from './visualization/state/state-paths.js';
+import { flattenStatePaths, typeForPath, toLabel, STATE_FIELD_GROUPS, groupFor } from './visualization/state/state-paths.js';
 import { readThemeColor, CHART_PALETTE } from './visualization/theme.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TaxDocumentModal } from './visualization/timeline/tax-document-modal.js';
@@ -553,6 +556,11 @@ import { TimelineController } from './visualization/timeline/timeline-controller
 import { TimelinePresenter } from './visualization/timeline/timeline-presenter.js';
 import { TimelineView } from './visualization/timeline/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
+import { WatchCapture } from './visualization/watchlist/watch-capture.js';
+import { WATCH_PATH_ATTR, watchStarHtml, isWatchStarClick, bindWatchStars } from './visualization/watchlist/watch-star.js';
+import { WatchlistController } from './visualization/watchlist/watchlist-controller.js';
+import { WATCHLIST_FORMAT, WATCHLIST_FORMAT_VERSION, toDefinition, parseDefinition, unresolvedPaths, buildSeriesCsv } from './visualization/watchlist/watchlist-io.js';
+import { OVERVIEW_NAME, LEGACY_LIST_NAME, OVERVIEW_SEED_PATH, WATCH_AXES, balanceCopyKeys, aliasWatchPath, WatchlistModel } from './visualization/watchlist/watchlist-model.js';
 import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
@@ -905,6 +913,7 @@ export const Finance = {
   resolveSubstitute,
   resolveSubstituteSecurity,
   TaxGainHarvestHandler,
+  tlhNoSubstituteRecordReducer,
   TaxLossHarvestHandler,
   AccountBuilder,
   PersonBuilder,
@@ -951,8 +960,15 @@ export const Finance = {
   EconomicShockHandler,
   EquityReturnReducer,
   EquityReturnStepReducer,
-  MarketIndexReducer,
   EquityReturnTickHandler,
+  INDEX_BASE,
+  indexMarkets,
+  lastYearEndBefore,
+  yearEndsBetween,
+  seedIndexLevels,
+  stepIndexLevels,
+  markDownIndexLevels,
+  MarketIndexReducer,
   MARKET_GROWTH_PARAMS,
   marketReturnFor,
   PrimeRelinkReducer,
@@ -1135,6 +1151,7 @@ export const Finance = {
   couponFederalExempt,
   couponStateExempt,
   baseDividendYield,
+  priceOf,
   computeHoldingsGrowth,
   computeHoldingsDividends,
   computeHoldingsCoupons,
@@ -1615,6 +1632,7 @@ export const Finance = {
   UsTaxSettleHandler,
   AuTaxSettleHandler,
   PENDING_RETURN_KEY,
+  filedReturnState,
   UsTaxSettleApplyReducer,
   AuTaxSettleApplyReducer,
   DRAWDOWN_TAX_ACTION_TYPES,
@@ -1842,6 +1860,7 @@ export const Scenarios = {
   retireRateParams,
   synthesizeWeightedPriorities,
   ScenarioLoader,
+  resolveAliasCenters,
   applyParamBagToConfig,
   ScenarioRegistry,
   listScenarioSecurities,
@@ -1949,6 +1968,9 @@ export const Visualization = {
   RenderScheduler,
   buildRowListEditor,
   readRowList,
+  normalizeFilter,
+  matchesFilter,
+  FilteredFoldState,
   ConfigurationListComponent,
   DecisionGraphPresenter,
   DgConfigPanel,
@@ -2039,9 +2061,14 @@ export const Visualization = {
   PlaybackProgressComponent,
   SimulationAnimator,
   StatePanelView,
+  FieldFormatter,
+  renderSparkline,
+  buildFieldRow,
+  buildStaticRow,
   FieldSeriesStore,
   flattenStatePaths,
   typeForPath,
+  toLabel,
   STATE_FIELD_GROUPS,
   groupFor,
   readThemeColor,
@@ -2055,6 +2082,25 @@ export const Visualization = {
   fmt,
   fmtUTC,
   fmtLocal,
+  WatchCapture,
+  WATCH_PATH_ATTR,
+  watchStarHtml,
+  isWatchStarClick,
+  bindWatchStars,
+  WatchlistController,
+  WATCHLIST_FORMAT,
+  WATCHLIST_FORMAT_VERSION,
+  toDefinition,
+  parseDefinition,
+  unresolvedPaths,
+  buildSeriesCsv,
+  OVERVIEW_NAME,
+  LEGACY_LIST_NAME,
+  OVERVIEW_SEED_PATH,
+  WATCH_AXES,
+  balanceCopyKeys,
+  aliasWatchPath,
+  WatchlistModel,
 };
 
 export const Workbench = {

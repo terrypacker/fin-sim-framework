@@ -13,6 +13,7 @@ import { McResultsPanel }          from './mc-results-panel.js';
 import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig, refineCenterSource } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { resolveBalanceCenters, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { resolveAliasCenters } from '../../scenarios/scenario-param-apply.js';
 import { scenarioParamValues, paramSchemaDefaults } from '../../finance/param-schema-utils.js';
 import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
@@ -358,7 +359,9 @@ export class MonteCarloPresenter {
     const snapshot  = (instance && !Array.isArray(instance)) ? instance : {};
     // Balance MC levers key on legacy flat keys whose value lives on the account records
     // (a holdings-bearing balance isn't a plain param), so resolve them from the cfg;
-    // they win over the params bag, which can hold a stale copy.
-    return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveBalanceCenters(activeCfg) };
+    // they win over the params bag, which can hold a stale copy. Other legacy-keyed
+    // levers (the house sale years, the wages) take their generated successor's value.
+    return { ...snapshot, ...scenarioParamValues(activeCfg), ...resolveAliasCenters(activeCfg),
+             ...resolveBalanceCenters(activeCfg) };
   }
 }
