@@ -1052,6 +1052,7 @@ export class ScenarioLoader {
       if (s.description) entry.description = s.description;
       if (s.node)        entry.node        = s.node;
       if (s.options)     entry.options     = s.options;
+      if (s.optionLabels) entry.optionLabels = s.optionLabels;
       if (s.optionDefaults) entry.optionDefaults = s.optionDefaults;
       if (s.dynamicOptionsFrom) entry.dynamicOptionsFrom = s.dynamicOptionsFrom;
       // `optionsFrom` names a SCENARIO COLLECTION the choices are read from at render
@@ -1125,6 +1126,10 @@ export class ScenarioLoader {
       // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
       // added to spendingStrategy must surface on already-saved scenarios.
       if (s.options)                                         p.options     = s.options;
+      // optionLabels ride with `options`: what the dropdown SHOWS for each stored id
+      // (design 102 §3). Schema-owned, so a relabel reaches already-saved scenarios.
+      if (s.optionLabels)        p.optionLabels = s.optionLabels;
+      else if (p.optionLabels)   delete p.optionLabels;
       // optionDefaults rides with `options` for the RateKeyMap editors: `options` is the
       // closed key list, `optionDefaults` the built-in fallback each blank cell resolves
       // to. Both are schema-owned, so a re-calibrated default (say a property beta) must

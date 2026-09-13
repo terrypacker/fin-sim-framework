@@ -53,6 +53,10 @@ export class EquityReturnStepReducer extends Reducer {
       next.securityReturnDev       = { ...action.securityDeviation };
       next.securityReturnDriftComp = { ...(action.securityDriftComp ?? {}) };
     }
+    // The HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3): which historical year was
+    // just replayed and how many years of its block remain. Written only when the handler
+    // sent it, so the other models gain no state key.
+    if (action.bootstrap != null) next.equityReturnBootstrap = { ...action.bootstrap };
     return this.newState(state, next);
   }
 }

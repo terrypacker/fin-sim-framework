@@ -514,6 +514,10 @@ export class StateSchemaRegistry {
     this.registerPattern('equityReturnDev.*',         ParameterValueType.rate());
     this.registerPattern('equityReturnDriftComp.*',   ParameterValueType.rate());
     this.register('equityReturnMarketDev',            ParameterValueType.rate());
+    // The historical bootstrap's block cursor (design 102 §4.3).
+    this.register('equityReturnBootstrap.index',      ParameterValueType.integer());
+    this.register('equityReturnBootstrap.year',       ParameterValueType.integer());
+    this.register('equityReturnBootstrap.remaining',  ParameterValueType.integer());
     this.registerPattern('propertyReturnDev.*',       ParameterValueType.rate());
     this.registerPattern('propertyReturnDriftComp.*', ParameterValueType.rate());
     this.register('propertyReturnMarketDev',          ParameterValueType.rate());

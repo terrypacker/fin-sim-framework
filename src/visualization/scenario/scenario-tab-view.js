@@ -597,7 +597,9 @@ export class ScenarioTabView {
         }
         enumOptions.forEach(opt => {
           const el = document.createElement('option');
-          el.value = opt; el.textContent = opt;
+          // `optionLabels` maps a stored id to what the dropdown shows (design 102 §3),
+          // so an id can be renamed for the reader without breaking a saved scenario.
+          el.value = opt; el.textContent = param.optionLabels?.[opt] ?? opt;
           valueInput.appendChild(el);
         });
         valueInput.value = param.value ?? (param.options?.[0] ?? '');

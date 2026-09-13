@@ -102,7 +102,8 @@ import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
-import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, HISTORICAL_BOOTSTRAP_SERIES, EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { HISTORICAL_EQUITY_RETURNS } from './finance/economic-regimes/historical-equity-returns.js';
 import { INDEX_BASE, indexMarkets, lastYearEndBefore, yearEndsBetween, seedIndexLevels, stepIndexLevels, markDownIndexLevels, MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -961,7 +962,11 @@ export const Finance = {
   EconomicShockHandler,
   EquityReturnReducer,
   EquityReturnStepReducer,
+  EQUITY_RETURN_MODEL_IDS,
+  EQUITY_RETURN_MODEL_LABELS,
+  HISTORICAL_BOOTSTRAP_SERIES,
   EquityReturnTickHandler,
+  HISTORICAL_EQUITY_RETURNS,
   INDEX_BASE,
   indexMarkets,
   lastYearEndBefore,

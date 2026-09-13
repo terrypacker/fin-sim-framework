@@ -28,7 +28,7 @@ import { YieldCurveStepReducer }          from '../../finance/economic-regimes/y
 import { YieldCurveTickHandler }          from '../../finance/economic-regimes/yield-curve-tick-handler.js';
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
-import { EquityReturnTickHandler }        from '../../finance/economic-regimes/equity-return-tick-handler.js';
+import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS } from '../../finance/economic-regimes/equity-return-tick-handler.js';
 import { PropertyReturnStepReducer }      from '../../finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler }      from '../../finance/economic-regimes/property-return-tick-handler.js';
 import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
@@ -492,7 +492,8 @@ export const ECONOMIC_REGIMES = {
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
       { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
-      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
+      // `bootstrap` is the HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3); other models omit it.
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any() } },
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
@@ -718,9 +719,23 @@ export const ECONOMIC_REGIMES = {
         group:        'Economic Shocks',
         mc:           false,
         opt:          false,
-        options:      FX_PROCESS_MODEL_IDS,
+        // Design 102 §3: the ids are what saved scenarios store, so they stay; the labels
+        // say what each process does to a RETURN.
+        options:      EQUITY_RETURN_MODEL_IDS,
+        optionLabels: EQUITY_RETURN_MODEL_LABELS,
         defaultValue: 'WHITE_NOISE',
-        description:  'Process for the market factor. WHITE_NOISE (default) draws an independent shock each year — equity returns are close to IID. MEAN_REVERTING (Ornstein-Uhlenbeck) makes consecutive annual returns POSITIVELY correlated, at e^(-k) for the reversion speed k: a down year is followed by another below-average year. It reverts the LEVEL toward the anchor over time, which for a return means the return persists — measured at +0.60 for k=0.5 (design 97 §20.9, probe-return-autocorrelation.mjs). Neither process makes a crash predict a rebound, so neither supports a "wait for the recovery before selling" rule. Only used when Stochastic Equity Returns is on.',
+        description:  'Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real US years (1871–2023), re-centred on your anchor and rescaled to Equity Return Volatility. That keeps history\'s fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history\'s +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on; Monte Carlo turns that on for every path.',
+      },
+      {
+        key:          'equityReturnBootstrapBlock',
+        label:        'Historical Bootstrap Block Length (years)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 5,
+        visibleWhen:  { param: 'equityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        description:  'How many consecutive historical years are replayed before jumping to a new random start year (design 102 §4.3). Longer blocks keep more of history\'s multi-year runs and pull-backs, but draw from fewer distinct sequences. 1 replays single years in random order, which throws away any link between neighbouring years. The default of 5 is the usual n^(1/3) rule for a 153-year series. Only used with the Historical bootstrap model.',
       },
       {
         key:          'equityReturnReversionSpeed',
@@ -734,6 +749,8 @@ export const ECONOMIC_REGIMES = {
         mc:           false,
         opt:          false,
         defaultValue: 0.3,
+        // Design 102 §3: read only by the persistent-returns process.
+        visibleWhen:  { param: 'equityReturnModel', equals: 'MEAN_REVERTING' },
         description:  'Ornstein-Uhlenbeck pull-back speed k, per year. Consecutive annual returns end up correlated at e^(-k), which is POSITIVE — so a LOWER k is MORE persistent (k=0.15 measures +0.83; k=0.9 measures +0.41), and this is a momentum knob, not a rebound one. Unlike the FX and yield-curve reversion speeds, which run on levels and do mean-revert, this runs on a return. Ignored under WHITE_NOISE. No setting of it makes a down year predict an up year: see design 97 §20.9 for what that rules out. Only used when Stochastic Equity Returns is on with MEAN_REVERTING.',
       },
       {
@@ -1079,6 +1096,7 @@ export const ECONOMIC_REGIMES = {
             beta:           p.equityReturnBeta      ?? {},
             idioVol:        p.equityReturnIdioVol   ?? {},
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
+            blockLength:    p.equityReturnBootstrapBlock ?? 5,
           })]
         : []),
       // Stochastic property return path (design 75 §4) — only when on. `marketVol` matches

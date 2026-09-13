@@ -337,7 +337,8 @@ re-measuring after this lands.**
    would capture fat tails and volatility clustering for free, and is arguably *more*
    defensible than Gaussian for a 44-year retirement question. It needs a bundled return
    series and makes "vol" non-parametric (no longer an MC-sampleable scalar). Worth it as a
-   Phase 5 alternative model id? Answer: yes
+   Phase 5 alternative model id? Answer: yes. **Built as design 102** (`HISTORICAL_BOOTSTRAP`),
+   which keeps `vol` sampleable by rescaling the historical deviations to it.
 4. **Should inflation get a path too?** Correlated real-return risk is the honest framing, and
    a 4% inflation path with 10% nominal returns is a very different world from 2%/8%. Bigger
    scope; possibly design 75. Answer: if we can roll it in here then do it, if not 75
