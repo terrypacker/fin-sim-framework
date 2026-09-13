@@ -282,7 +282,7 @@ export class BaseScenario extends SimGraphNode {
   /**
    * @param {object} [o]
    * @param {number} [o.seed=1]
-   * @param {'full'|'journal'|'metrics'|'off'} [o.telemetry='full'] Observation
+   * @param {'full'|'diffs'|'journal'|'metrics'|'off'} [o.telemetry='full'] Observation
    *   cost of the run — see TELEMETRY_LEVELS (design 78 §4.3). Batch callers
    *   (Monte Carlo, optimizer, scripts/) should ask for the level they need
    *   here rather than poking sim.silent after the fact.

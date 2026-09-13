@@ -20,11 +20,11 @@
  *
  * ─── read this before choosing an n ──────────────────────────────────────────
  *
- * **Recording spending forces `telemetry: 'full'`, and that is 7.5x an ordinary MC
- * iteration.** A spending cube is built from `stateDiff`, and `stateDiff` is skipped
- * entirely in silent mode — a `journal`-level run yields a perfectly well-formed journal
- * whose cube totals **zero**, which is the quiet kind of wrong. Measured on the reference
- * plan: `off` 530 ms/iteration, `full` 3,963 ms.
+ * **Recording spending forces a non-silent run (`telemetry: 'diffs'`), and that is 7.5x
+ * an ordinary MC iteration.** A spending cube is built from `stateDiff`, and `stateDiff` is
+ * skipped entirely in silent mode — a `journal`-level run yields a perfectly well-formed
+ * journal whose cube totals **zero**, which is the quiet kind of wrong. Measured on the
+ * reference plan: `off` 530 ms/iteration, `full` 3,963 ms.
  *
  * So budget roughly **4 seconds per path**: n=50 is ~3 minutes, n=200 is ~13, n=1000 is
  * over an hour. Start small. Design 82 §8.1 could afford to put allocation into MC

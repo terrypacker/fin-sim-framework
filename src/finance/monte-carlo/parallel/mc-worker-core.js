@@ -176,13 +176,19 @@ export function buildIterationRunner(ctx) {
       // higher in 2 (mean −0.10%, worst −1.17%). A retired plan spends faster than it
       // compounds within a year, so a mid-year reading sits ABOVE the year-end one.
       // See design 82 §8.3; an arm JSON from before this change is not comparable.
-      // `spending` forces FULL telemetry, and nothing less will do: the spending cube
-      // reads `stateDiff`, which `silent` mode skips entirely (simulation.js records the
-      // journal regardless of silent, but with a null diff). A 'journal'-level run
-      // therefore yields a well-formed journal whose cube totals zero — the quiet kind
-      // of wrong. Measured 7.5x, which is why this is opt-in (design 89 §20).
+      // `spending` needs a NON-silent run: the spending cube reads `stateDiff`, which
+      // `silent` mode skips entirely (simulation.js records the journal regardless of
+      // silent, but with a null diff). A 'journal'-level run therefore yields a
+      // well-formed journal whose cube totals zero — the quiet kind of wrong.
+      //
+      // 'diffs', NOT 'full'. 'full' also keeps ~2,000 whole-state history snapshots,
+      // an ~85k-node execution graph and a state clone per event day — ~470 MB of a
+      // ~540 MB iteration on the reference plan, none of it read here. With eight pool
+      // workers each holding one iteration, that crashed the tab. 'diffs' is ~70 MB and
+      // the result is bit-identical. Still ~7x an 'off' run (design 89 §20), which is
+      // why this stays opt-in.
       scenario.buildSim({
-        seed, telemetry: ctx.spending ? 'full' : 'off', sampler,
+        seed, telemetry: ctx.spending ? 'diffs' : 'off', sampler,
         samplerCadence: MC_SAMPLER_CADENCE,
       });
 

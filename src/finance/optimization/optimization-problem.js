@@ -346,7 +346,11 @@ export class OptimizationProblem {
       simStart: this.simStart,
       simEnd:   this.simEnd,
     });
-    scenario.buildSim();
+    // 'off' at BUILD time. This used to build at the default 'full' and set silent +
+    // journal off afterwards, which left history snapshots on: ~2,000 whole-state
+    // clones (~220 MB on the reference plan) per rollout, on the main thread for the
+    // Optimization tab, read by nothing — rollToSnapshot clones state itself.
+    scenario.buildSim({ telemetry: 'off' });
 
     const cfg = structuredClone(this._cfgTemplate());
     cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
@@ -467,8 +471,6 @@ export class OptimizationProblem {
         nowMs:         new Date(sim.currentDate).getTime(),
       });
     }
-    sim.silent = true;
-    sim.journal.enabled = false;
     return sim;
   }
 

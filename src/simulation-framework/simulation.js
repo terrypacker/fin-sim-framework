@@ -97,30 +97,45 @@ const _yearEnd = year => new Date(Date.UTC(year, 11, 31));
 /**
  * Telemetry levels (design 78 §4.3).
  *
- * A run's *observation* cost is governed by three independent switches — silent,
- * journal.enabled, history.enableSnapshots — which callers had to set one at a
- * time at each site, with no name for the combination being asked for and no way
- * to state one up front. These name the four combinations that are wanted.
+ * A run's *observation* cost is governed by independent switches — silent,
+ * journal.enabled, history.enableSnapshots, the execution graph and the journal's
+ * per-day state snapshots — which callers had to set one at a time at each site,
+ * with no name for the combination being asked for and no way to state one up
+ * front. These name the combinations that are wanted.
  *
  * The contract: **telemetry suppresses observation, never computation.** Derived
  * metrics write real state that downstream code reads, so they run at every
  * level, including `off`.
  *
  *   full     everything — the workbench UI. Default.
+ *   diffs    the journal WITH per-reducer `stateDiff`, and nothing else that
+ *            accumulates: no history snapshots, no execution graph, no journal
+ *            snapshots. What a spending cube reads (design 89) — Monte Carlo's
+ *            `spending` telemetry. `full` also records those three, and on the
+ *            reference plan they are ~470 MB of a ~540 MB run that nobody reads;
+ *            eight pool workers holding that at once crashed the tab.
  *   journal  journal only, no bus/clones/diffs — ScenarioCompareRunner, which
  *            diffs journal entries between two scenarios.
  *   metrics  history snapshots only — for callers that need to look back at
- *            whole past states, e.g. the optimizer's MPC rollToSnapshot seam.
- *   off      nothing — the scripts/ batch tooling, and Monte Carlo, which
- *            collects its yearly series via a `sampler` instead (§4.5).
+ *            whole past states.
+ *   off      nothing — the scripts/ batch tooling, the optimizer's rollouts, and
+ *            Monte Carlo, which collects its yearly series via a `sampler`
+ *            instead (§4.5).
  *
- * @type {Object<string, {silent: boolean, journal: boolean, snapshots: boolean}>}
+ * `graph` and `journalSnapshots` only mean anything when `silent` is false, so on
+ * the silent levels they are moot — and left `true`, so a caller that overrides
+ * `opts.silent: false` on one of them keeps exactly the behaviour it had before
+ * these two switches existed. Only `diffs` turns them off.
+ *
+ * @type {Object<string, {silent: boolean, journal: boolean, snapshots: boolean,
+ *   graph: boolean, journalSnapshots: boolean}>}
  */
 export const TELEMETRY_LEVELS = {
-  full:    { silent: false, journal: true,  snapshots: true  },
-  journal: { silent: true,  journal: true,  snapshots: false },
-  metrics: { silent: true,  journal: false, snapshots: true  },
-  off:     { silent: true,  journal: false, snapshots: false },
+  full:    { silent: false, journal: true,  snapshots: true,  graph: true,  journalSnapshots: true  },
+  diffs:   { silent: false, journal: true,  snapshots: false, graph: false, journalSnapshots: false },
+  journal: { silent: true,  journal: true,  snapshots: false, graph: true,  journalSnapshots: true  },
+  metrics: { silent: true,  journal: false, snapshots: true,  graph: true,  journalSnapshots: true  },
+  off:     { silent: true,  journal: false, snapshots: false, graph: true,  journalSnapshots: true  },
 };
 
 /**
@@ -210,6 +225,8 @@ export class Simulation {
     this._reducerObservers = opts.reducerObservers ?? null;
     this.silent = opts.silent ?? level.silent; // when true: skip bus, clones, diffs
     this.journal = new Journal({ enabled: opts.enableJournal ?? level.journal });
+    // Per-day whole-state clones in the journal (replay fast-forward). Off at 'diffs'.
+    this._journalSnapshots = opts.journalSnapshots ?? level.journalSnapshots;
 
     // Optional (state, date) => record. Lets a caller collect a time series
     // without paying for full-state history snapshots — see design 78 §4.5 and
@@ -240,7 +257,7 @@ export class Simulation {
 
     this.nextEventInstanceId = 0;
 
-    if (graph && !this.silent) {
+    if (graph && !this.silent && (opts.executionGraph ?? level.graph)) {
       this.executionGraph = new ExecutionGraph(graph);
       this.graphRecorder  = new GraphRecorder(this.executionGraph);
     } else {
@@ -785,7 +802,7 @@ export class Simulation {
         this.graphRecorder.endNode(eventNodeId);
       }
 
-      if (this.journal.enabled) {
+      if (this.journal.enabled && this._journalSnapshots) {
         this.journal.addSnapshot(new Date(this.currentDate), this.state);
       }
     }

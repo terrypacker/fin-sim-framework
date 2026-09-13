@@ -17,11 +17,13 @@
  *
  * ─── the constraint that shapes everything here ──────────────────────────────
  *
- * **A spending cube needs `stateDiff`, and `stateDiff` exists only at `telemetry: 'full'`.**
+ * **A spending cube needs `stateDiff`, and `stateDiff` exists only on a non-silent run.**
  * Measured on the reference plan: `off` 530 ms/iteration, `journal` 719 ms — but a
  * `journal`-level run produces entries with **null `stateDiff`** (`silent` skips the state
- * clone; see `simulation.js`'s own comment), so the cube computes exactly **zero**. Only
- * `full` works, at **3,963 ms** — 7.5x the MC default.
+ * clone; see `simulation.js`'s own comment), so the cube computes exactly **zero**. Only a
+ * non-silent run works, at **3,963 ms** — 7.5x the MC default. MC asks for `diffs`, not
+ * `full`: the same journal, without the ~470 MB of history snapshots, execution graph and
+ * journal snapshots `full` also keeps per iteration (bit-identical cube).
  *
  * That is why design 82 §8.1 could put allocation into MC cheaply and this cannot follow:
  * an allocation is a **stock**, readable from live state at an instant with no journal at

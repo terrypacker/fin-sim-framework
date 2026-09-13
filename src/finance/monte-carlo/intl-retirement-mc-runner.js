@@ -129,11 +129,11 @@ export class IntlRetirementMcRunner {
    * @param {boolean}                   [opts.spending=false] - Also record the classified
    *        SPENDING summary on every path (design 89 §11.1 phase 6). Off by default for
    *        the same reason as `mix`, but the price is far higher and worth stating: a
-   *        spending cube is built from `stateDiff`, which only exists at
-   *        `telemetry: 'full'`, so switching this on takes an iteration from ~530 ms to
-   *        ~3,960 ms on the reference plan — **7.5x**. A `journal`-level run is NOT a
-   *        cheaper middle: it produces entries whose `stateDiff` is null, and the cube
-   *        silently computes zero. See spending-distribution.js.
+   *        spending cube is built from `stateDiff`, which only exists on a non-silent
+   *        run (`telemetry: 'diffs'`), so switching this on takes an iteration from
+   *        ~530 ms to ~3,960 ms on the reference plan — **7.5x**. A `journal`-level run
+   *        is NOT a cheaper middle: it produces entries whose `stateDiff` is null, and
+   *        the cube silently computes zero. See spending-distribution.js.
    * @param {boolean} [opts.parallel=false] - Run the iterations on a Web Worker pool
    *        instead of the main thread (design 89 §21.7). Opt-in, and ignored where
    *        `Worker` does not exist, so every existing caller keeps its current path.

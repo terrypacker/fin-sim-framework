@@ -118,6 +118,24 @@ test('TELEMETRY-4: sampler collects a series without full-state snapshots', () =
     'a sample must be taken at exactly the moments a snapshot would have been');
 });
 
+test("TELEMETRY-6: 'diffs' keeps every stateDiff and drops what nothing reads", () => {
+  // The level exists for Monte Carlo's spending telemetry, which reads ONLY the journal's
+  // per-reducer stateDiffs. 'full' also kept history snapshots, an execution graph and a
+  // per-day journal state clone — ~470 MB an iteration, eight workers at once — and that
+  // crashed the MC tab. The diffs must be exactly 'full's, or the spending cube moves.
+  const full  = runAt('full');
+  const diffs = runAt('diffs');
+  const stateDiffs = (r) => r.sim.journal.journal.map(e => e.stateDiff);
+
+  assert.ok(stateDiffs(diffs).some(d => d?.length > 0), "'diffs' must populate stateDiff (a null diff zeroes the spending cube)");
+  assert.equal(diffs.journalEntries, full.journalEntries, 'same journal entries as full');
+  assert.deepEqual(stateDiffs(diffs), stateDiffs(full), 'every stateDiff must match full exactly');
+
+  assert.equal(diffs.sim.executionGraph, null, "'diffs' must not record an execution graph");
+  assert.equal(diffs.sim.journal.snapshots.size, 0, "'diffs' must not keep journal state snapshots");
+  assert.ok(full.sim.journal.snapshots.size > 0, "'full' still keeps journal state snapshots");
+});
+
 test('TELEMETRY-5: explicit opts still override the level', () => {
   // Back-compat: callers predating the levels set the switches directly.
   const { sim } = loadScenarioSim({
