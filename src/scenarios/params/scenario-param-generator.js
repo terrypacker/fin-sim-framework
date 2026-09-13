@@ -29,6 +29,7 @@ import {
   BALANCE_TARGET,
 } from './record-param-templates.js';
 import { INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
+import { recordFieldValue } from './record-field-rounding.js';
 // The namespace list lives in a dependency-free module so mc-param-paths can use it
 // without loading the templates (design 98 W0); re-exported so importers are unchanged.
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './generated-param-keys.js';
@@ -178,13 +179,16 @@ export class ScenarioParamGenerator {
         key:          `${prefix}.${identity}.${t.field}`,
         label:        `${recordName} — ${t.label}`,
         type:         t.money ? 'Money' : t.type,
-        group,
-        defaultValue: record[t.deriveDefaultFrom ?? t.field],
+        // A template field may file itself outside its record's group — the move-in
+        // date sits in "Cross Border" beside moveYear, the lever it is swept against.
+        group:        t.group ?? group,
+        defaultValue: recordFieldValue(record, t.deriveDefaultFrom ?? t.field),
         node,
         mc:           t.mc  ?? false,
         opt:          t.opt ?? false,
       };
       if (t.hidden)  entry.hidden  = t.hidden;
+      if (t.fractionalYear) entry.fractionalYear = true;
       if (t.options) entry.options = t.options;
       // Field-level description (design 55 §4) → the param's hover tooltip in the
       // Scenario panel. Without it the tooltip falls back to the generated key

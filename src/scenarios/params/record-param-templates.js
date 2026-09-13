@@ -168,6 +168,15 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
     description: 'Annual appreciation rate for this property, as a fraction (0.04 = 4%).' },
   { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
     description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
+  // The move-in date (`mainResidenceFrom`, design 83 G7) as a sweepable FRACTIONAL year,
+  // filed in Cross Border beside moveYear. Sweep it against the sale year: the AU
+  // s118-185 exemption is a smooth day count, but the US §121 2-of-5 use test is a cliff
+  // at 730 days, so the fraction is what lets a grid sample either side of it. Blank
+  // (no move-in date) harvests no lever — there is no centre to sweep around.
+  { field: 'mainResidenceFromYear', label: 'Main Residence From', type: 'Number', mc: true, opt: true,
+    nullable: true, group: 'Cross Border', fractionalYear: true,
+    description: 'The date this property became the main residence, as a fractional year ' +
+      '(2031.5 = 1 Jul 2031). Writes the property\'s move-in date. Blank when it has none.' },
   // Primary-residence flag (design 55 §4). Boolean, never an MC/Opt target. Drives the
   // capital-gains exclusion at sale — US IRC §121 ($250k Single / $500k MFJ) and, for a
   // foreign dwelling of an AU resident, the AU main-residence absence rule. Exposing it

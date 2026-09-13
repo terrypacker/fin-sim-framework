@@ -35,9 +35,12 @@ function schemaByKey() {
  * `Date.UTC(year, …)` truncates and the axis runs half a year early (F10, W0b).
  * Enums have no categorical distribution, so they are Opt-only.
  */
-function mcRowFor(kind, center) {
+function mcRowFor(kind, center, entry) {
   switch (kind) {
     case 'year':
+      // A date-backed year writes a date, not Date.UTC(year, …), so its draw keeps the
+      // fraction — rounding it would erase the sub-year position of §121's 730-day cliff.
+      if (entry?.fractionalYear) return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1 };
       return { type: DISTRIBUTION_TYPES.NORMAL, mean: center, stdDev: 1.5, integer: true };
     case 'rate':
       return { type: DISTRIBUTION_TYPES.NORMAL, mean: center,

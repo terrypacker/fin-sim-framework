@@ -30,6 +30,7 @@
 
 import { loadHtml, makeMockContainer } from '../../helpers/viz-utils.js';
 import { RealPropertyEditor } from '../../../src/visualization/assets/real-property-editor.js';
+import { ParamFieldLinks }    from '../../../src/visualization/scenario/param-field-links.js';
 
 const PURCHASE_FIELDS = ['purchaseYear', 'purchasePrice', 'purchasePriceIsNominal', 'purchaseFundFrom'];
 const HISTORY_FIELDS  = ['acquisitionDate', 'mainResidenceMode', 'mainResidenceFrom',
@@ -228,5 +229,36 @@ describe('main-residence history dropdown', () => {
     expect(data.isPrimaryResidence).toBe(true);
     expect(data.mainResidenceFrom).toBeNull();
     expect(data.mainResidenceUntil).toBe('2030-06-01');
+  });
+
+  test('Save keeps the move-in lever param in step, so "Never" survives a Rebuild', () => {
+    // The lever param cascades onto the record BEFORE it is re-read from it, so a stale
+    // 2036 left in the param wrote 2036-01-01 straight back over "Never".
+    const param = { name: 'prop.auHouseProperty.mainResidenceFromYear', value: 2036,
+      node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'mainResidenceFromYear' } };
+    const saved = [];
+    let paramChanges = 0;
+    const editor = new RealPropertyEditor({
+      container: makeMockContainer(), people: [], accounts: ACCOUNTS,
+      node: { id: 'p1', stateKey: 'auHouseProperty', mainResidenceFrom: '2036-01-01' },
+      links: new ParamFieldLinks([param]),
+      onParamChange: () => { paramChanges++; },
+      onSave: (d) => saved.push(d),
+    });
+    editor.render();
+    const el = editor._rootEl;
+    const save = () => el.querySelector('[data-id="saveBtn"]').click();
+
+    setMode(el, 'never');
+    save();
+    expect(saved.at(-1).mainResidenceFrom).toBeNull();
+    expect(param.value).toBeNull();
+    expect(paramChanges).toBe(1);
+
+    setMode(el, 'moved-in');
+    el.querySelector('[data-id="mainResidenceFrom"]').value = '2031-07-01';
+    save();
+    expect(saved.at(-1).mainResidenceFrom).toBe('2031-07-01');
+    expect(param.value).toBe(2031.5);
   });
 });

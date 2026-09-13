@@ -184,7 +184,7 @@ import { DEFAULT_MC_VARIABLE_CONFIGS, CENTER_SOURCES, refineCenterSource, IntlRe
 import { summarizeProvenance, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { RETURN_BAND_EDGES, runsToRows, pairedRescues, pairedMetric, pairingMismatches, failureRate, failureByBand, failureDrivers } from './finance/monte-carlo/mc-analysis.js';
-import { GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_METRICS, gridMetric, normalizeGridReading, gridCellMetric, rankCells } from './finance/monte-carlo/mc-grid-metrics.js';
+import { GRID_STATS, GRID_READINGS, FAILURE_RATE, GRID_METRICS, gridMetric, normalizeGridReading, GRID_CONSTRAINT_OPS, DEFAULT_GRID_COLUMNS, betterOp, normalizeGridConstraints, activeConstraints, normalizeGridColumns, constraintThreshold, gridConstraintCheck, gridCellMetric, rankCells } from './finance/monte-carlo/mc-grid-metrics.js';
 import { gridCellRuns, McGridRunner } from './finance/monte-carlo/mc-grid-runner.js';
 import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, percentile, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
@@ -201,7 +201,7 @@ import { resolveStaticLevers, foldScheduleBakes, mergeResolved } from './finance
 import { HARVEST_FORMS, COLLAPSE_RULES, requiresIncludes, isIncludesRequirement, requirementSatisfied, harvestDecisions, pointHarvest, collapseConsecutive, ageAt, resolveBirthDate, _internals } from './finance/mpc/harvest.js';
 import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
 import { replayDecisions } from './finance/mpc/replay.js';
-import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
+import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables, buildGridAxes } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
 import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, windowedDeficit, infeasibilityOf, isFeasibleResult, INFEASIBLE_OFFSET, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, objectiveIsWindowable, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
@@ -219,7 +219,7 @@ import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/so
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, resolveAttributionAsset, resolveAttributionFractions, accumulateByOwnership } from './finance/ownership-utils.js';
 import { defaultPoolSize, WorkerPool } from './finance/parallel/worker-pool.js';
-import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, marketRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables, SWEEP_KINDS, sweepKindOf, harvestSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers, controllableVariables, scenarioParamValues, primeRatesOf, marketRatesOf, paramSchemaDefaults, indexParamSchema, resolveSweepVariables, groupWithAliasSuccessor, SWEEP_KINDS, sweepKindOf, harvestSweepVariables } from './finance/param-schema-utils.js';
 import { auFinancialYearOf, monthlyAuSuper } from './finance/payroll/au-super-caps.js';
 import { DEFAULT_MATCH_TIERS, matchedFraction, resolveMatchTiers, monthlyK401 } from './finance/payroll/k401-limits.js';
 import { WAGE_APPLY_TYPES, WITHHELD_TYPE, CONTRIBUTION_STREAMS, monthKeyOf, listPaycheques, buildPaycheque, buildContributionsByYear, buildSuperCapRows } from './finance/payroll/paycheque-report.js';
@@ -377,7 +377,7 @@ import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey } from './scenarios/params/generated-param-keys.js';
-import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField } from './scenarios/params/record-field-rounding.js';
+import { WHOLE_NUMBER_RECORD_FIELDS, roundRecordField, FRACTIONAL_YEAR_DATE_FIELDS, dateToFractionalYear, fractionalYearToIsoDate, recordFieldValue, recordFieldPatch } from './scenarios/params/record-field-rounding.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { RETIRED_RATE_PARAMS, INTEREST_DEFAULTS, retireRateParams } from './scenarios/retired-rate-params.js';
@@ -1234,6 +1234,14 @@ export const Finance = {
   GRID_METRICS,
   gridMetric,
   normalizeGridReading,
+  GRID_CONSTRAINT_OPS,
+  DEFAULT_GRID_COLUMNS,
+  betterOp,
+  normalizeGridConstraints,
+  activeConstraints,
+  normalizeGridColumns,
+  constraintThreshold,
+  gridConstraintCheck,
   gridCellMetric,
   rankCells,
   gridCellRuns,
@@ -1294,6 +1302,7 @@ export const Finance = {
   replayDecisions,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
+  buildGridAxes,
   IntlRetirementOptimizer,
   valuesForConfig,
   cartesianProduct,
@@ -1349,6 +1358,7 @@ export const Finance = {
   paramSchemaDefaults,
   indexParamSchema,
   resolveSweepVariables,
+  groupWithAliasSuccessor,
   SWEEP_KINDS,
   sweepKindOf,
   harvestSweepVariables,
@@ -1855,6 +1865,11 @@ export const Scenarios = {
   isGeneratedParamKey,
   WHOLE_NUMBER_RECORD_FIELDS,
   roundRecordField,
+  FRACTIONAL_YEAR_DATE_FIELDS,
+  dateToFractionalYear,
+  fractionalYearToIsoDate,
+  recordFieldValue,
+  recordFieldPatch,
   BALANCE_TARGET,
   ACCOUNT_PARAM_TEMPLATES,
   PERSON_PARAM_TEMPLATE,

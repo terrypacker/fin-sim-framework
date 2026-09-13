@@ -38,6 +38,12 @@ const _round6 = x => Math.round(x * 1e6) / 1e6;
 function optRowFor(kind, center, entry) {
   switch (kind) {
     case 'year': {
+      // A date-backed year (the move-in date) keeps its fraction: §121's 2-of-5 test is
+      // a cliff at 730 days, which whole-year steps would stride straight over.
+      if (entry?.fractionalYear) {
+        return { type: OPT_PARAM_TYPES.CONTINUOUS,
+          min: _round6(center - 2), max: _round6(center + 2), step: 0.5 };
+      }
       const c = Math.round(center);
       return { type: OPT_PARAM_TYPES.INTEGER, min: c - 5, max: c + 5, step: 1 };
     }
@@ -157,7 +163,9 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     label:    'US→AU Move Year',
     type:     OPT_PARAM_TYPES.INTEGER,
     min: 2026, max: 2035, step: 1,
-    group:    'People',
+    // The schema's group, so the grid and Opt lists file it where the MC batch list
+    // does — beside the move-in-date levers it is swept against.
+    group:    'Cross Border',
     enabled:  false,
   },
 

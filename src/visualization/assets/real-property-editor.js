@@ -17,6 +17,7 @@
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry as _countryCurrency } from '../../finance/country-codes.js';
+import { dateToFractionalYear } from '../../scenarios/params/record-field-rounding.js';
 
 /**
  * RealPropertyEditor — renders the real-property edit form from
@@ -282,7 +283,9 @@ export class RealPropertyEditor extends BaseComponent {
     deleteBtn.style.display = isEdit ? '' : 'none';
 
     this.listen(el.querySelector('[data-id="saveBtn"]'), 'click', () => {
-      if (this.onSave) this.onSave(this._readForm(el));
+      const data = this._readForm(el);
+      this._syncMainResidenceParam(data);
+      if (this.onSave) this.onSave(data);
     });
 
     this.listen(deleteBtn, 'click', () => {
@@ -328,6 +331,23 @@ export class RealPropertyEditor extends BaseComponent {
     // dropdown owns it (design 83 §7b.2c). A checkbox alongside that dropdown could be
     // set to contradict it — "not a primary residence" ticked against "main residence
     // throughout" — and the two would then disagree about the same property.
+  }
+
+  /**
+   * Keep the move-in lever (`prop.<sk>.mainResidenceFromYear`) in step with the date the
+   * history dropdown just wrote. The param is the source of truth on Rebuild, and the
+   * cascade runs BEFORE the generated params are re-read from their records — so a stale
+   * lever year would write its date straight back over "Never a main residence". Not a
+   * bindParamLinkedField: the dropdown owns three fields at once, and the record keeps
+   * the exact date string; the lever at the same year is a cascade no-op.
+   */
+  _syncMainResidenceParam(data) {
+    const param = this._links?.getParamFor('realProperty', this._node?.stateKey, 'mainResidenceFromYear');
+    if (!param) return;
+    const year = dateToFractionalYear(data.mainResidenceFrom);
+    if (param.value === year) return;
+    param.value = year;
+    this.onParamChange?.();
   }
 
   _readForm(el) {
