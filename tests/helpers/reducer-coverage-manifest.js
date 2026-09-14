@@ -137,6 +137,8 @@ export const COVERED = [
   // Yield-curve dynamics (design 67 §6 Phase 3) — yield-curve.test.mjs / evt-yield-curve-dynamics.test.mjs
   'YieldCurveReducer', 'YieldCurveStepReducer',
   'EquityReturnReducer', 'EquityReturnStepReducer',
+  // Stochastic inflation path + joint history (design 103) — inflation-path.test.mjs
+  'InflationStepReducer', 'InflationPathReducer',
   // Market / security index levels (design 101 §6) — market-index.test.mjs
   'MarketIndexReducer',
   // Stochastic property return path (design 75 §4) — property-return-paths.test.mjs

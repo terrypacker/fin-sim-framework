@@ -973,7 +973,9 @@ export function applyStochastic(cfg, set, s = {}) {
   if (s.equity) {
     set('equityReturnStochastic', true);
     if (s.equityVol   != null) set('equityReturnVol', s.equityVol);
-    if (s.equityModel != null) set('equityReturnModel', s.equityModel);
+    // Monte Carlo has its own process switch (design 102 §7 Q3) and would otherwise
+    // replace the pinned model with its default, so pin both.
+    if (s.equityModel != null) { set('equityReturnModel', s.equityModel); set('mcEquityReturnModel', s.equityModel); }
     // Only meaningful under MEAN_REVERTING; see design 97 §20, where the wait-for-the-recovery
     // rule turns out to be a bet on exactly this number.
     if (s.equityReversion != null) set('equityReturnReversionSpeed', s.equityReversion);

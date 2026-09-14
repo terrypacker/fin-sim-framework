@@ -111,8 +111,9 @@ describe('MC per-iteration seed', () => {
   });
 
   test('stochastic OFF ⇒ seed variation is inert (deterministic MC unchanged)', async () => {
-    // Design 98 M3: MC runs the path by default, so OFF is now an explicit opt-out.
-    const { runs } = await seedOnlyRunner(4).run({ mcSequenceRisk: false });
+    // Design 98 M3: MC runs the path by default, so OFF is now an explicit opt-out — and
+    // since design 103 §6 the inflation path is a second one, on its own switch.
+    const { runs } = await seedOnlyRunner(4).run({ mcSequenceRisk: false, mcInflationPath: false });
     const nw = runs.map(r => Math.round(r.finalNetWorthUsd));
     assert.equal(new Set(nw).size, 1, 'seed threading perturbed a run with no stochastic path');
   });

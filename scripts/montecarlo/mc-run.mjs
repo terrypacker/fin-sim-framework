@@ -177,7 +177,7 @@ console.log('');
 function describeRisk() {
   const parts = [];
   parts.push(paths ? `stochastic equity paths (vol ${vol}, drift ${drift})`
-    : planPaths ? 'stochastic equity paths (MC default, plan settings — mcSequenceRisk)'
+    : planPaths ? `stochastic equity paths (MC default: ${scenarioParamValues(base.cfg).mcEquityReturnModel ?? 'HISTORICAL_BOOTSTRAP'}, plan settings — mcSequenceRisk / mcEquityReturnModel)`
     : 'constant sampled return (plan sets mcSequenceRisk: false)');
   if (propertyPaths) parts.push('stochastic property path');
   if (shock) parts.push('manufactured crash');

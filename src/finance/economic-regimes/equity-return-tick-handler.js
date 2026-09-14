@@ -10,7 +10,7 @@
 
 import { HandlerEntry }                    from '../../simulation-framework/handlers.js';
 import { FX_PROCESS_MODELS, FX_PROCESS_MODEL_IDS, gaussianFrom } from '../fx/fx-process-models.js';
-import { EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } from './rate-keys.js';
+import { RATE_KEYS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } from './rate-keys.js';
 import { HISTORICAL_EQUITY_RETURNS }       from './historical-equity-returns.js';
 
 /**
@@ -29,7 +29,7 @@ export const EQUITY_RETURN_MODEL_IDS = [...FX_PROCESS_MODEL_IDS, 'HISTORICAL_BOO
  */
 export const EQUITY_RETURN_MODEL_LABELS = Object.freeze({
   WHITE_NOISE:          'White noise — independent years (default)',
-  HISTORICAL_BOOTSTRAP: 'Historical bootstrap — replay US years 1871–2023 in blocks',
+  HISTORICAL_BOOTSTRAP: 'Historical bootstrap — replay market years in blocks (US 1871–2023, AU 1958–2023)',
   MEAN_REVERTING:       'Persistent returns (momentum) — stress test only',
   RANDOM_WALK:          'Random walk of the return — unbounded, not for equities',
   NONE:                 'None — no deviation (the anchor every year)',
@@ -44,19 +44,56 @@ export const EQUITY_RETURN_MODEL_LABELS = Object.freeze({
  *     GEOMETRIC σ²/2 compensation exact on the historical data. History isn't Gaussian, so
  *     it differs from the sample σ² (about 4% smaller on this series).
  */
-export const HISTORICAL_BOOTSTRAP_SERIES = (() => {
-  const r    = HISTORICAL_EQUITY_RETURNS.returns;
-  const n    = r.length;
-  const mean = r.reduce((s, x) => s + x, 0) / n;
-  const sd   = Math.sqrt(r.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1));
-  const geo  = Math.exp(r.reduce((s, x) => s + Math.log(1 + x), 0) / n) - 1;
+function bootstrapWindow(fromYear) {
+  const all   = HISTORICAL_EQUITY_RETURNS.returns;
+  const start = fromYear - HISTORICAL_EQUITY_RETURNS.firstYear;
+  const r     = all.slice(start);
+  const n     = r.length;
+  const mean  = r.reduce((s, x) => s + x, 0) / n;
+  const sd    = Math.sqrt(r.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1));
+  const geo   = Math.exp(r.reduce((s, x) => s + Math.log(1 + x), 0) / n) - 1;
   return Object.freeze({
-    firstYear:  HISTORICAL_EQUITY_RETURNS.firstYear,
-    deviations: Object.freeze(r.map(x => x - mean)),
+    firstYear:  HISTORICAL_EQUITY_RETURNS.firstYear,   // calendar year of SERIES index 0
+    start,                                            // series index of the window's first year
+    deviations: Object.freeze(r.map(x => x - mean)),  // indexed from `start`
     sd,
     dragVar:    2 * (mean - geo),
   });
+}
+
+/**
+ * The windows the bootstrap can draw from. FULL is the whole series. POSTWAR (1951–) is
+ * the window design 103's joint mode uses, so equity, inflation and yields share a monetary
+ * era. Each window is re-centred on its OWN mean, so the anchor stays the centre whichever
+ * window runs.
+ */
+export const HISTORICAL_BOOTSTRAP_WINDOWS = Object.freeze({
+  FULL:    bootstrapWindow(HISTORICAL_EQUITY_RETURNS.firstYear),
+  POSTWAR: bootstrapWindow(1951),
+});
+
+/** The FULL window (design 102's series), kept under its original name. */
+export const HISTORICAL_BOOTSTRAP_SERIES = HISTORICAL_BOOTSTRAP_WINDOWS.FULL;
+
+/**
+ * The AU market's own history, re-centred (design 102 §6): its real price return in each
+ * year from 1958, minus the 1958– mean. The AU replay uses it in place of `β·market + idio`
+ * for the EQUITY_AU sleeve whenever the bootstrap's year has AU data. `sd` is the unit the
+ * replay rescales against.
+ */
+export const HISTORICAL_AU_SERIES = (() => {
+  const { firstYear, returns } = HISTORICAL_EQUITY_RETURNS.au;
+  const n    = returns.length;
+  const mean = returns.reduce((s, x) => s + x, 0) / n;
+  const sd   = Math.sqrt(returns.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1));
+  return Object.freeze({ firstYear, deviations: Object.freeze(returns.map(x => x - mean)), sd });
 })();
+
+/** The AU series' index for a calendar year, or -1 when AU has no data for it. */
+function auIndex(year) {
+  const i = year - HISTORICAL_AU_SERIES.firstYear;
+  return Number.isInteger(i) && i >= 0 && i < HISTORICAL_AU_SERIES.deviations.length ? i : -1;
+}
 
 /**
  * EquityReturnTickHandler — stochastic equity RETURN PATH (design 74 §4/§5.1). The
@@ -77,6 +114,12 @@ export const HISTORICAL_BOOTSTRAP_SERIES = (() => {
  * idiosyncratic term:
  *
  *     dev[sleeve] = beta[sleeve] · marketDev  +  σ_idio[sleeve] · √dt · z_sleeve
+ *
+ * The one exception is the AU replay (design 102 §6, `auReplay`, bootstrap only): in a
+ * historical year with AU data, the EQUITY_AU sleeve takes the AU market's OWN deviation
+ * for that year instead, rescaled to the sleeve's model sd √(β²·vol² + σ_idio²). So the
+ * AU market keeps the volatility its beta and idio settings imply, but its path, including
+ * its co-movement with the US that year, is history's.
  *
  * One market draw drives every sleeve, so the *systematic* risk survives portfolio
  * aggregation (design 74 §4 rejects independent per-sleeve draws — they diversify away
@@ -106,7 +149,9 @@ export const HISTORICAL_BOOTSTRAP_SERIES = (() => {
  * holds it** (design 94 §6.2: conditioning the cursor on holdings would make the random
  * path a function of portfolio state, which changes under every MPC rollout, optimizer
  * probe and replay branch). The bootstrap draws its market uniform only in a year that
- * starts a block, so it consumes fewer uniforms than the Gaussian models.
+ * starts a block, so it consumes fewer uniforms than the Gaussian models, and an AU replay
+ * year skips the AU idio draw. Both depend only on the historical year, never on the
+ * portfolio, so the cursor stays deterministic.
  *
  * Determinism: the only randomness is drawn from the snapshot-safe sim.rng (its cursor
  * is captured/restored in every history snapshot), and the bootstrap's block cursor lives
@@ -114,11 +159,11 @@ export const HISTORICAL_BOOTSTRAP_SERIES = (() => {
  * reproduce the same path byte-for-byte.
  */
 export class EquityReturnTickHandler extends HandlerEntry {
-  static description = 'Draws one market factor from the seeded sim.rng (or the next year of a historical block, design 102), loads each equity sleeve on it via beta (+ optional idiosyncratic term), applies the per-security overlay, and emits EQUITY_RETURN_STEP_APPLY (design 74 §5.1, design 94 §6.2).';
+  static description = 'Draws one market factor from the seeded sim.rng (or the next year of a historical block, design 102), loads each equity sleeve on it via beta (+ optional idiosyncratic term) — or replays the AU market\'s own year — applies the per-security overlay, and emits EQUITY_RETURN_STEP_APPLY (design 74 §5.1, design 94 §6.2).';
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, dt = 1 } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', blockLength = 5, window = 'FULL', auReplay = true, dt = 1 } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of EQUITY_RETURN_MODEL_IDS
@@ -127,6 +172,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
     this.idioVol              = idioVol ?? {};   // per-sleeve idiosyncratic sd; absent ⇒ 0
     this.driftComp            = driftComp;       // 'GEOMETRIC' (add σ²/2) or 'NONE' (design 74 §5.3)
     this.blockLength          = blockLength;     // consecutive historical years per block (HISTORICAL_BOOTSTRAP only)
+    this.window               = window;          // 'FULL' or 'POSTWAR' (design 103 joint mode) — HISTORICAL_BOOTSTRAP only
+    this.auReplay             = auReplay;        // replay the AU market's own year where it has data (HISTORICAL_BOOTSTRAP only)
     this.dt                   = dt;              // tick interval in years (annual)
     this.generatedActionTypes = ['EQUITY_RETURN_STEP_APPLY'];
   }
@@ -134,7 +181,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static fromJSON(d) {
     const h = new this({
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
-      beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength, dt: d.dt,
+      beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, blockLength: d.blockLength,
+      window: d.window, auReplay: d.auReplay, dt: d.dt,
     });
     h.id = d.id;
     return h;
@@ -144,8 +192,14 @@ export class EquityReturnTickHandler extends HandlerEntry {
     return {
       ...super.toJSON(),
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
-      beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength, dt: this.dt,
+      beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, blockLength: this.blockLength,
+      window: this.window, auReplay: this.auReplay, dt: this.dt,
     };
+  }
+
+  /** The bootstrap window this handler draws from (FULL unless told otherwise). */
+  _window() {
+    return HISTORICAL_BOOTSTRAP_WINDOWS[this.window] ?? HISTORICAL_BOOTSTRAP_WINDOWS.FULL;
   }
 
   call({ sim, state }) {
@@ -155,8 +209,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
       ({ marketDev, bootstrap } = this._bootstrapStep(sim, state));
       // The drag the rescaled series actually has (design 102 §4.4). Scaling by s scales
       // the arithmetic-minus-geometric gap by ≈ s², the same way it scales a variance.
-      const scale = this.vol / HISTORICAL_BOOTSTRAP_SERIES.sd;
-      marketVar   = scale * scale * HISTORICAL_BOOTSTRAP_SERIES.dragVar;
+      const w     = this._window();
+      const scale = this.vol / w.sd;
+      marketVar   = scale * scale * w.dragVar;
     } else {
       const step = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.WHITE_NOISE;
       const prev = state.equityReturnMarketDev ?? 0;
@@ -165,6 +220,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
       marketDev = step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: zMarket });
       marketVar = this.vol * this.vol;
     }
+    // Design 102 §6: the AU market replays its own year when the bootstrap's year has AU data.
+    const auIdx = bootstrapping && this.auReplay ? auIndex(bootstrap.year) : -1;
 
     const geometric = this.driftComp === 'GEOMETRIC';
     const deviation = {};
@@ -177,12 +234,20 @@ export class EquityReturnTickHandler extends HandlerEntry {
       const beta    = this.beta[sleeve]    ?? DEFAULT_EQUITY_BETA[sleeve] ?? 1.0;
       // Design 90 §7.4 — absent ⇒ the sourced default, not 0. An explicit 0 still skips.
       const idioVol = this.idioVol[sleeve] ?? DEFAULT_EQUITY_IDIO[sleeve] ?? 0;
-      let dev = beta * marketDev;
-      // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced
-      // and the market-only path reproduces exactly (design 74 §4 ⚠️).
-      if (idioVol > 0) {
-        const zIdio = gaussianFrom(sim.rng);
-        dev += idioVol * Math.sqrt(this.dt) * zIdio;
+      let dev;
+      if (sleeve === RATE_KEYS.EQUITY_AU && auIdx >= 0) {
+        // The AU replay: history's AU year, rescaled to the sd the sleeve's settings imply.
+        // No idio draw, because history supplies AU's own part.
+        const sleeveSd = Math.sqrt(beta * beta * this.vol * this.vol + idioVol * idioVol);
+        dev = HISTORICAL_AU_SERIES.deviations[auIdx] * (sleeveSd / HISTORICAL_AU_SERIES.sd);
+      } else {
+        dev = beta * marketDev;
+        // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced
+        // and the market-only path reproduces exactly (design 74 §4 ⚠️).
+        if (idioVol > 0) {
+          const zIdio = gaussianFrom(sim.rng);
+          dev += idioVol * Math.sqrt(this.dt) * zIdio;
+        }
       }
       deviation[sleeve] = dev;
       // Volatility-drag compensation (design 74 §5.3). Adding a mean-0 shock to a
@@ -193,7 +258,8 @@ export class EquityReturnTickHandler extends HandlerEntry {
       // arithmetic mean and leaves the drag in. This is a deterministic, mean-nonzero
       // term kept SEPARATE from the stochastic deviation so `equityReturnDev` stays
       // pure mean-0. (Exact for WHITE_NOISE. For HISTORICAL_BOOTSTRAP the market "variance"
-      // is the series' measured drag, which is exact on history itself. For MEAN_REVERTING
+      // is the series' measured drag, which is exact on history itself; the AU replay is
+      // rescaled to the same sleeve variance, so the same term applies. For MEAN_REVERTING
       // the stationary variance is HIGHER than σ², so GEOMETRIC under-compensates.)
       sleeveVar[sleeve]  = beta * beta * marketVar + idioVol * idioVol;
       driftComp[sleeve] = geometric
@@ -277,19 +343,24 @@ export class EquityReturnTickHandler extends HandlerEntry {
    * @private
    */
   _bootstrapStep(sim, state) {
-    const { deviations, sd, firstYear } = HISTORICAL_BOOTSTRAP_SERIES;
+    // The cursor's `index` is a SERIES index; the window maps it to its own deviations.
+    // Under FULL (start 0) this is design 102's arithmetic exactly. A prior cursor outside
+    // the window (never, within one run) starts a fresh block rather than reading off it.
+    const { deviations, sd, firstYear, start } = this._window();
     const n     = deviations.length;
     const prior = state.equityReturnBootstrap;
-    let index, remaining;
-    if (prior?.remaining > 0) {
-      index     = (prior.index + 1) % n;
+    const inWindow = prior != null && prior.index >= start && prior.index < start + n;
+    let rel, remaining;
+    if (prior?.remaining > 0 && inWindow) {
+      rel       = (prior.index - start + 1) % n;
       remaining = prior.remaining - 1;
     } else {
-      index     = Math.floor(sim.rng() * n);
+      rel       = Math.floor(sim.rng() * n);
       remaining = Math.max(1, Math.round(this.blockLength)) - 1;
     }
+    const index = start + rel;
     return {
-      marketDev: deviations[index] * (this.vol / sd),
+      marketDev: deviations[rel] * (this.vol / sd),
       bootstrap: { index, year: firstYear + index, remaining },
     };
   }

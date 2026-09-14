@@ -10,6 +10,7 @@
 
 import { HandlerEntry }                    from '../../simulation-framework/handlers.js';
 import { FX_PROCESS_MODELS, gaussianFrom } from '../fx/fx-process-models.js';
+import { HISTORICAL_JOINT_WINDOW, jointWindowIndex } from './inflation-tick-handler.js';
 
 const COUNTRIES = ['US', 'AU'];
 
@@ -37,30 +38,41 @@ export class YieldCurveTickHandler extends HandlerEntry {
   static type        = 'YieldCurveTickHandler';
   static eventType   = 'YIELD_CURVE_TICK';
 
-  constructor({ vol = 0.01, reversionSpeed = 0.3, dt = 1 } = {}) {
+  constructor({ vol = 0.01, reversionSpeed = 0.3, historical = false, dt = 1 } = {}) {
     super(null, 'Yield Curve Tick');
     this.vol                  = vol;             // annualized sd of the level (in rate units)
     this.reversionSpeed       = reversionSpeed;  // OU pull-back speed per year
+    this.historical           = historical;      // joint mode: the equity bootstrap's year supplies the shock (design 103 §5.1)
     this.dt                   = dt;              // tick interval in years (annual)
     this.generatedActionTypes = ['YIELD_CURVE_STEP_APPLY'];
   }
 
   static fromJSON(d) {
-    const h = new this({ vol: d.vol, reversionSpeed: d.reversionSpeed, dt: d.dt });
+    const h = new this({ vol: d.vol, reversionSpeed: d.reversionSpeed, historical: d.historical, dt: d.dt });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), vol: this.vol, reversionSpeed: this.reversionSpeed, dt: this.dt };
+    return { ...super.toJSON(), vol: this.vol, reversionSpeed: this.reversionSpeed, historical: this.historical, dt: this.dt };
   }
 
   call({ sim, state }) {
     const step = FX_PROCESS_MODELS.MEAN_REVERTING;
+    // Design 103 §5.1 (B2): in joint mode the shock is the US 10-year yield change of the
+    // historical year the equity bootstrap just replayed, re-centred and rescaled to `vol`,
+    // so a 1970s year raises yields while it raises inflation. No RNG draw. There's no
+    // AU 10-year series before 1969, so AU takes the same-year US change (a global-rates
+    // assumption). No cursor, or a year outside 1951–, falls back to the Gaussian draw.
+    const idx = this.historical ? jointWindowIndex(state.equityReturnBootstrap?.year) : -1;
+    const shock = idx >= 0
+      ? HISTORICAL_JOINT_WINDOW.gs10.shocks[idx] * (this.vol / HISTORICAL_JOINT_WINDOW.gs10.sd)
+      : null;
     return COUNTRIES.map((cc) => {
       const prev = state.yieldCurveLevelDev?.[cc] ?? 0;
-      const z    = gaussianFrom(sim.rng);
-      const next = step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z });
+      const next = shock != null
+        ? prev * Math.exp(-this.reversionSpeed * this.dt) + shock
+        : step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: gaussianFrom(sim.rng) });
       return { type: 'YIELD_CURVE_STEP_APPLY', country: cc, deviation: next };
     });
   }

@@ -59,13 +59,16 @@ export class EquityReturnReducer extends Reducer {
     // percentage points on one 31 Dec. Publishing it here puts it on the sleeve's clock.
     const overlay = resolveSecurityOverlay(state);
     if (!dev) return this.newState(state, overlay);
-    const hasDev = EQUITY_SLEEVES.some(k => ((dev[k] ?? 0) + (comp[k] ?? 0)) !== 0);
+    // Design 103 §5.2: in joint mode each market's nominal return also carries its
+    // country's inflation deviation (the bootstrap's deviation is REAL). Absent otherwise.
+    const pass   = state.equityInflationPassThrough ?? {};
+    const hasDev = EQUITY_SLEEVES.some(k => ((dev[k] ?? 0) + (comp[k] ?? 0) + (pass[k] ?? 0)) !== 0);
     if (!hasDev) return this.newState(state, overlay);   // no sleeve path ⇒ overlay only
 
     const eff     = state.effectiveGrowthRates ?? {};
     const nextEff = { ...eff };
     for (const sleeve of EQUITY_SLEEVES) {
-      const d = (dev[sleeve] ?? 0) + (comp[sleeve] ?? 0);
+      const d = (dev[sleeve] ?? 0) + (comp[sleeve] ?? 0) + (pass[sleeve] ?? 0);
       if (d === 0) continue;
       if (nextEff[sleeve] != null) nextEff[sleeve] = nextEff[sleeve] + d;
       // Sweep per-account `<sleeve>::<stateKey>` variants so each account priced off its

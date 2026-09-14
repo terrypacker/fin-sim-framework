@@ -123,6 +123,19 @@ export const EQUITY_SLEEVES = Object.freeze([
 ]);
 
 /**
+ * The country whose inflation each equity market's return is measured in (design 103
+ * §5.2): the ex-AU index is quoted to an Australian investor in AUD, and the ex-US one to
+ * an American in USD. Joint mode adds that country's inflation deviation to the market's
+ * nominal return.
+ */
+export const EQUITY_SLEEVE_COUNTRY = Object.freeze({
+  [RATE_KEYS.EQUITY_AU]:         'AU',
+  [RATE_KEYS.EQUITY_INTL_EX_AU]: 'AU',
+  [RATE_KEYS.EQUITY_INTL_EX_US]: 'US',
+  [RATE_KEYS.EQUITY_US]:         'US',
+});
+
+/**
  * Default per-MARKET beta on the shared market factor, and idiosyncratic vol, sourced
  * (design 90 §7.4). Overridable via the `equityReturnBeta` / `equityReturnIdioVol` params.
  *

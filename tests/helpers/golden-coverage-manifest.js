@@ -267,6 +267,9 @@ export const KNOWN_GAPS = [
   // runs with `equityReturnStochastic` on, which is what the note above asked for. The
   // SHOCK family left it at §8.1o: `wash-sale-harvest` authors a dated crash, because a
   // book that only ever appreciates gives a tax-loss harvester nothing to sell.
+  // INFLATION_STEP_APPLY (design 103) is off by default in single runs, and no golden turns
+  // it on. Its mechanics are pinned in inflation-path.test.mjs.
+  'INFLATION_STEP_APPLY',
   'PROPERTY_RETURN_STEP_APPLY',
   'REMOVE_REGIME_APPLY',
   'YIELD_CURVE_STEP_APPLY',

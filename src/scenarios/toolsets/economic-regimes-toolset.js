@@ -29,6 +29,9 @@ import { YieldCurveTickHandler }          from '../../finance/economic-regimes/y
 import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler, EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS } from '../../finance/economic-regimes/equity-return-tick-handler.js';
+import { InflationTickHandler, INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, jointInflationActive } from '../../finance/economic-regimes/inflation-tick-handler.js';
+import { InflationStepReducer }           from '../../finance/economic-regimes/inflation-step-reducer.js';
+import { InflationPathReducer }           from '../../finance/economic-regimes/inflation-path-reducer.js';
 import { PropertyReturnStepReducer }      from '../../finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler }      from '../../finance/economic-regimes/property-return-tick-handler.js';
 import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
@@ -486,8 +489,8 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler, PropertyReturnTickHandler, InflationTickHandler],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, PropertyReturnStepReducer, InflationStepReducer, InflationPathReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -495,6 +498,9 @@ export const ECONOMIC_REGIMES = {
       // `bootstrap` is the HISTORICAL_BOOTSTRAP block cursor (design 102 §4.3); other models omit it.
       { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any(), bootstrap: ValueType.any() } },
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
+      // Design 103 §4.2. `historicalYear` only in joint mode; `passThrough` only when set.
+      // Design 104 adds `primeDeviation` / `primeFloor`, only in "follows inflation" prime mode.
+      { type: 'INFLATION_STEP_APPLY', fields: { deviation: ValueType.any(), floor: ValueType.number(), historicalYear: ValueType.number(), passThrough: ValueType.any(), primeDeviation: ValueType.any(), primeFloor: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -600,6 +606,24 @@ export const ECONOMIC_REGIMES = {
         description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
       },
       {
+        // Design 104: EITHER the schedule OR the inflation link, never both. The default is
+        // the schedule mode so a saved plan with a schedule keeps it; with no rows, it's
+        // the flat prime setting, as before.
+        key:          'primeRateModel',
+        label:        'Prime Rate Mode',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['SCHEDULE', 'INFLATION_LINKED'],
+        optionLabels: {
+          SCHEDULE:         'Fixed, or stepped by the Prime Rate Schedule (default)',
+          INFLATION_LINKED: 'Follows inflation — the Prime Rate Schedule is ignored',
+        },
+        defaultValue: 'SCHEDULE',
+        description:  'How the US and AU prime (central-bank policy) rates move during the run. Choose ONE. "Fixed, or stepped by the Prime Rate Schedule": the rates stay at US / AU Prime Rate, except where a Prime Rate Schedule row sets them for a year. "Follows inflation": each year the rates move toward the inflation path the way central banks have since 1955 (design 104), and the schedule is ignored. That mode needs Stochastic Inflation on; Monte Carlo turns inflation on by default. Either way, prime-linked cash accounts and variable-rate loans follow prime plus their spread.',
+      },
+      {
         key:          'primeSchedule',
         label:        'Prime Rate Schedule',
         type:         'PrimeScheduleList',
@@ -607,7 +631,113 @@ export const ECONOMIC_REGIMES = {
         mc:           false,
         opt:          false,
         defaultValue: [],
-        description:  'Optional per-year central-bank policy path: each row sets the absolute PRIME_US / PRIME_AU rate taking effect that year and holding until the next row. A step compiles into a scheduled Prime move that fans out to every Prime-linked cash account and variable loan (design 56 §5).',
+        visibleWhen:  { param: 'primeRateModel', equals: 'SCHEDULE' },
+        description:  'Used only when Prime Rate Mode is "Fixed, or stepped by the Prime Rate Schedule" (not with "Follows inflation"). Optional per-year central-bank policy path: each row sets the absolute PRIME_US / PRIME_AU rate taking effect that year and holding until the next row. A step compiles into a scheduled Prime move that fans out to every Prime-linked cash account and variable loan (design 56 §5).',
+      },
+      {
+        key:          'primeInflationResponseUs',
+        label:        'Prime Follows Inflation — US Response (β)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 1.3,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'How far the US policy rate eventually moves per point of inflation above or below its anchor: 1.3 means a sustained +1 point of inflation ends up raising prime 1.3 points. Measured at 1.27–1.31 on US rates 1955–2025 (1.98 since 1983). Above 1 is the "Taylor principle": real rates rise when inflation does. Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primeInflationResponseAu',
+        label:        'Prime Follows Inflation — AU Response (β)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 1.3,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'How far the AU cash rate eventually moves per point of AU inflation above or below its anchor. Defaults to the US post-war value; the RBA measured 1.76 over 1991–2024, a short and calm sample. Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primeInflationSmoothingUs',
+        label:        'Prime Follows Inflation — US Smoothing (ρ)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.6,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'How gradually the US rate moves: the share of last year\'s gap it keeps. 0.6 closes 40% of the gap to its target each year; 0 moves all the way at once; closer to 1 is slower. Measured at 0.61–0.63 on US rates 1955–2025. Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primeInflationSmoothingAu',
+        label:        'Prime Follows Inflation — AU Smoothing (ρ)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.75,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'How gradually the AU cash rate moves: the share of last year\'s gap it keeps. 0.75 is the RBA\'s measured value for 1991–2024 (25% of the gap a year). Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primeFloorUs',
+        label:        'Prime Follows Inflation — US Floor',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.0025,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'The lowest the US policy rate can go when following inflation (0.0025 = 0.25%, where the Fed held it in 2009–15 and 2020–21). Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primeFloorAu',
+        label:        'Prime Follows Inflation — AU Floor',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.001,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'The lowest the AU cash rate can go when following inflation (0.001 = 0.10%, the RBA\'s 2020–22 low). Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primePolicyNoiseUs',
+        label:        'Prime Follows Inflation — US Policy Noise',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'Optional yearly random policy moves that inflation doesn\'t explain, as a standard deviation (0.013 = 1.3 points, the size history shows around the inflation rule). 0 (default) = off: the rate answers inflation only. Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'primePolicyNoiseAu',
+        label:        'Prime Follows Inflation — AU Policy Noise',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0,
+        visibleWhen:  { param: 'primeRateModel', equals: 'INFLATION_LINKED' },
+        description:  'Optional yearly random AU policy moves that inflation doesn\'t explain, as a standard deviation (history: about 0.9 points since 1991). 0 (default) = off. Only used when Prime Rate Mode is "Follows inflation".',
+      },
+      {
+        key:          'mcPrimeRateModel',
+        label:        'Monte Carlo: Prime Rate Mode',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['AUTO', 'SCENARIO', 'SCHEDULE', 'INFLATION_LINKED'],
+        optionLabels: {
+          AUTO:             'Automatic — follows inflation unless the plan uses a Prime Rate Schedule (default)',
+          SCENARIO:         'Same as single runs (Prime Rate Mode)',
+          SCHEDULE:         'Fixed, or stepped by the Prime Rate Schedule',
+          INFLATION_LINKED: 'Follows inflation — the Prime Rate Schedule is ignored',
+        },
+        defaultValue: 'AUTO',
+        description:  'The prime rate mode every Monte Carlo path runs. Automatic (default): a plan that set Prime Rate Mode to "Follows inflation", or has no Prime Rate Schedule, follows each path\'s inflation. A plan with a schedule keeps it, since the two modes are either/or. Following inflation needs Monte Carlo: Stochastic Inflation Path on.',
       },
       {
         key:          'usYieldCurveShape',
@@ -693,6 +823,144 @@ export const ECONOMIC_REGIMES = {
         description:  'When on (default), every Monte Carlo iteration runs the stochastic equity return path — its own year-by-year returns, with the markets able to diverge — on top of the sampled long-run mean (Equity Return Shift). Single runs are unaffected. Turn off to make Monte Carlo sample the long-run mean only.',
       },
       {
+        // Design 102 §7 Q3: Monte Carlo gets its OWN process choice rather than reading
+        // `equityReturnModel`. The same reason `mcSequenceRisk` exists: the loader
+        // materializes the schema default into every saved plan, so a plan that never chose
+        // WHITE_NOISE and one that did look the same, and changing that default would not
+        // reach plans already saved.
+        key:          'mcEquityReturnModel',
+        label:        'Monte Carlo: Equity Return Process',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['SCENARIO', ...EQUITY_RETURN_MODEL_IDS],
+        // WHITE_NOISE is the single-run default, not this one's, so its "(default)" is dropped here.
+        optionLabels: { SCENARIO: 'Same as single runs (Equity Return Process Model)', ...EQUITY_RETURN_MODEL_LABELS,
+                        WHITE_NOISE: 'White noise — independent years',
+                        HISTORICAL_BOOTSTRAP: `${EQUITY_RETURN_MODEL_LABELS.HISTORICAL_BOOTSTRAP} (default)` },
+        defaultValue: 'HISTORICAL_BOOTSTRAP',
+        visibleWhen:  { param: 'mcSequenceRisk', truthy: true },
+        description:  'The equity return process every Monte Carlo path runs. The default, Historical bootstrap, replays blocks of real historical years (US 1871–2023, and AU\'s own history from 1958) re-centred on your anchor, and matches history better than white noise on autocorrelation, multi-year pull-back and crash skew (design 102 §2). "Same as single runs" uses Equity Return Process Model instead. Only used when Monte Carlo: Stochastic Return Path is on.',
+      },
+      // ── Stochastic inflation path (design 103) ──────────────────────────────────
+      {
+        key:          'inflationStochastic',
+        label:        'Stochastic Inflation',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on (design 103), each country\'s inflation wanders around its anchor (Inflation Rate / AU Inflation Rate) year by year, with post-war persistence: a high-inflation year tends to be followed by another. Everything priced in today\'s money follows it: expenses, wages, Social Security, tax brackets, TIPS and house running costs. Off by default, so runs stay byte-identical. Monte Carlo turns it on for every path (Monte Carlo: Stochastic Inflation Path); this switch governs single runs.',
+      },
+      {
+        key:          'inflationModel',
+        label:        'Inflation Process Model',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      INFLATION_MODEL_IDS,
+        optionLabels: INFLATION_MODEL_LABELS,
+        defaultValue: 'GAUSSIAN',
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'Gaussian (default): a mean-reverting walk calibrated to post-war inflation, with US and AU correlated. Historical, joint with equity: each year\'s inflation surprise is the one from the SAME post-war historical year (1951–2023) the equity bootstrap is replaying, so a 1970s stretch brings its high inflation and its poor real returns together. Nominal equity returns also carry the inflation surprise, and bond yields follow that year\'s 10-year yield change when Stochastic Yield Curve is on. Joint mode needs the equity path on with Historical bootstrap; otherwise it runs as Gaussian.',
+      },
+      {
+        key:          'inflationPathVolUs',
+        label:        'Inflation Path Volatility — US',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.028,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'How far US inflation wanders from its anchor: the long-run standard deviation of the yearly rate (0.028 = 2.8 points, measured on US CPI 1951–2023, design 103 §2). In joint mode it rescales the historical surprises.',
+      },
+      {
+        key:          'inflationPathVolAu',
+        label:        'Inflation Path Volatility — AU',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.03,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'How far AU inflation wanders from its anchor. AU\'s post-war measurement (4.4 points) is dominated by the 1970s–80s wage spiral and the 1951 wool boom, so 3.0 is the default (design 103 §4.1). In joint mode it rescales the historical surprises.',
+      },
+      {
+        key:          'inflationReversionSpeedUs',
+        label:        'Inflation Reversion Speed — US (k)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.33,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'How quickly a US inflation surprise fades, per year. This year\'s deviation keeps e^(−k) of last year\'s: 0.33 keeps 0.72, a half-life of about 2 years, matching US CPI 1951–2023. Lower is more persistent. Unlike the equity persistence knob, this runs on a LEVEL, so it genuinely mean-reverts.',
+      },
+      {
+        key:          'inflationReversionSpeedAu',
+        label:        'Inflation Reversion Speed — AU (k)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.33,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'How quickly an AU inflation surprise fades, per year. Defaults to the US value; AU\'s own post-war measurement is 0.46 (half-life about 1.5 years).',
+      },
+      {
+        key:          'inflationPathCorrelation',
+        label:        'Inflation Path US–AU Correlation',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.35,
+        visibleWhen:  [{ param: 'inflationStochastic', truthy: true }, { param: 'inflationModel', equals: 'GAUSSIAN' }],
+        description:  'Correlation between each year\'s US and AU inflation surprises (0.35 = the measured correlation of their year-on-year changes, 1951–2024). Gaussian only; joint mode uses the historical years\' own correlation.',
+      },
+      {
+        key:          'inflationPathFloor',
+        label:        'Inflation Path Floor',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: -0.05,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'The lowest yearly inflation rate the path can produce (−0.05 = 5% deflation). No US or AU year since 1951 fell below −1%, so this only trims a Gaussian tail.',
+      },
+      {
+        // Design 103 §6 — a separate switch for the same loader reason as mcSequenceRisk.
+        key:          'mcInflationPath',
+        label:        'Monte Carlo: Stochastic Inflation Path',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        description:  'When on (default), every Monte Carlo path runs the stochastic inflation path on top of its sampled inflation anchor, so each path lives through its own inflation history, including high-inflation decades. Single runs are unaffected. Turn off to hold each path\'s inflation at its sampled rate.',
+      },
+      {
+        key:          'mcInflationModel',
+        label:        'Monte Carlo: Inflation Process',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['AUTO', 'SCENARIO', ...INFLATION_MODEL_IDS],
+        optionLabels: { AUTO: 'Automatic — joint with equity under the historical bootstrap, Gaussian otherwise (default)',
+                        SCENARIO: 'Same as single runs (Inflation Process Model)',
+                        ...INFLATION_MODEL_LABELS,
+                        GAUSSIAN: 'Gaussian — persistent, US and AU correlated' },
+        defaultValue: 'AUTO',
+        visibleWhen:  { param: 'mcInflationPath', truthy: true },
+        description:  'The inflation process every Monte Carlo path runs. Automatic (default) samples inflation jointly with equity whenever the Monte Carlo equity process is the historical bootstrap, so each path\'s inflation surprises, equity returns and yield changes come from the same historical years.',
+      },
+      {
         key:          'equityReturnVol',
         label:        'Equity Return Volatility',
         type:         'Number',
@@ -724,7 +992,7 @@ export const ECONOMIC_REGIMES = {
         options:      EQUITY_RETURN_MODEL_IDS,
         optionLabels: EQUITY_RETURN_MODEL_LABELS,
         defaultValue: 'WHITE_NOISE',
-        description:  'Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real US years (1871–2023), re-centred on your anchor and rescaled to Equity Return Volatility. That keeps history\'s fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history\'s +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on; Monte Carlo turns that on for every path.',
+        description:  'Process for the market factor. White noise (WHITE_NOISE, default) draws an independent shock each year. Annual US returns since 1871 have a lag-1 autocorrelation of +0.01, so this matches history year to year. Historical bootstrap (HISTORICAL_BOOTSTRAP, design 102) replays blocks of consecutive real historical years (US 1871–2023), re-centred on your anchor and rescaled to Equity Return Volatility; the AU market replays its own history for the same year from 1958 (Historical Bootstrap — Replay AU Market History). That keeps history\'s fat left tail and its mild multi-year pull-back without fitting a parameter to either. Persistent returns (MEAN_REVERTING) applies an Ornstein-Uhlenbeck step to the RETURN, so consecutive years are POSITIVELY correlated at e^(-k): +0.74 at the default k=0.3, against history\'s +0.01. Long-run outcomes spread about 3.5× wider than white noise, so treat it as a stress test, not a realistic world (design 97 §20.9, design 102 §2). No process makes a crash predict a rebound. Only used when Stochastic Equity Returns is on. Monte Carlo turns that on for every path, and uses its own process setting (Monte Carlo: Equity Return Process, default Historical bootstrap) unless that is set to "Same as single runs".',
       },
       {
         key:          'equityReturnBootstrapBlock',
@@ -736,6 +1004,17 @@ export const ECONOMIC_REGIMES = {
         defaultValue: 5,
         visibleWhen:  { param: 'equityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
         description:  'How many consecutive historical years are replayed before jumping to a new random start year (design 102 §4.3). Longer blocks keep more of history\'s multi-year runs and pull-backs, but draw from fewer distinct sequences. 1 replays single years in random order, which throws away any link between neighbouring years. The default of 5 is the usual n^(1/3) rule for a 153-year series. Only used with the Historical bootstrap model.',
+      },
+      {
+        key:          'equityReturnBootstrapAuReplay',
+        label:        'Historical Bootstrap — Replay AU Market History',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: true,
+        visibleWhen:  { param: 'equityReturnModel', equals: 'HISTORICAL_BOOTSTRAP' },
+        description:  'When on (default), the AU market replays its OWN history in the same historical year the US market is replaying (OECD Australian share prices, 1958–2023, after inflation), instead of following the US market through its beta plus random noise. So AU-specific episodes, such as the 11-year recovery after 2008, come through. Rescaled so the AU market\'s volatility matches your beta and idiosyncratic settings. Historical years before 1958 use the random noise. Price-only data, so year-to-year dividend variation is not included (design 102 §6).',
       },
       {
         key:          'equityReturnReversionSpeed',
@@ -986,7 +1265,11 @@ export const ECONOMIC_REGIMES = {
     }
 
     // Optional Prime rate path (design 56 §5, Phase 2b) → scheduled PRIME_* moves.
-    schedulePrimeRateSteps(p.primeSchedule, p, context.startDate, context.endDate, events);
+    // Design 104: the schedule and the inflation link are either/or. In "follows inflation"
+    // mode the schedule is ignored, not composed.
+    if (p.primeRateModel !== 'INFLATION_LINKED') {
+      schedulePrimeRateSteps(p.primeSchedule, p, context.startDate, context.endDate, events);
+    }
 
     // Optional yield-curve path (design 67 §6) → scheduled curve twists.
     scheduleYieldCurveSteps(p.yieldCurveSchedule, p, context.endDate, events);
@@ -994,14 +1277,34 @@ export const ECONOMIC_REGIMES = {
     // Optional stochastic curve evolution (design 67 §6) — an annual tick series that
     // drives the seeded-RNG level walk. Scheduled only when on, so default runs draw
     // no randomness and stay byte-identical.
+    // Design 103 §5.1: in joint mode the yield tick reads the equity bootstrap's year, so
+    // it must fire AFTER the equity tick (order 0). Only in joint mode, so every other run
+    // keeps its exact event order.
+    const joint = jointInflationActive(p);
     if (p.yieldCurveStochastic) {
       events.push(new EventSeries({
         name:     'Yield Curve Tick',
         type:     'YIELD_CURVE_TICK',
         interval: 'year-end',
         startOffset: 1,
+        ...(joint ? { order: 3 } : {}),
         enabled:  true,
         color:    '#7E57C2',
+      }));
+    }
+
+    // Optional stochastic inflation path (design 103 §4.2). Annual, `order: 2` so it fires
+    // after the equity tick (0) and the property tick (1) on the same year-end; joint mode
+    // reads the equity cursor that tick just advanced. Scheduled only when on.
+    if (p.inflationStochastic) {
+      events.push(new EventSeries({
+        name:     'Inflation Tick',
+        type:     'INFLATION_TICK',
+        interval: 'year-end',
+        startOffset: 1,
+        order:    2,
+        enabled:  true,
+        color:    '#FFA726',
       }));
     }
 
@@ -1074,13 +1377,36 @@ export const ECONOMIC_REGIMES = {
     const behavioralHandlers = (context.parameters.behavioralStrategies ?? [])
       .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.handlers(context) ?? []);
     const p = context.parameters;
+    // Design 103 §5.1: joint mode ties equity (POSTWAR window), inflation and yields to the
+    // same historical year. The same rule the schedule used.
+    const joint = jointInflationActive(p);
     return [
       new EconomicShockHandler({ rateKeyToStateKeys, allAccountStateKeys }),
       new EconomicRecoveryTickHandler(),
       // Stochastic curve evolution (design 67 §6) — only when on, so the sim.rng is
       // untouched otherwise and runs stay byte-identical.
       ...(p.yieldCurveStochastic
-        ? [new YieldCurveTickHandler({ vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3 })]
+        ? [new YieldCurveTickHandler({ vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3, historical: joint })]
+        : []),
+      // Stochastic inflation path (design 103 §4) — only when on.
+      ...(p.inflationStochastic
+        ? [new InflationTickHandler({
+            vol:            { US: p.inflationPathVolUs ?? 0.028, AU: p.inflationPathVolAu ?? 0.03 },
+            reversionSpeed: { US: p.inflationReversionSpeedUs ?? 0.33, AU: p.inflationReversionSpeedAu ?? 0.33 },
+            correlation:    p.inflationPathCorrelation ?? 0.35,
+            model:          joint ? 'HISTORICAL_JOINT' : 'GAUSSIAN',
+            floor:          p.inflationPathFloor ?? -0.05,
+            passThrough:    joint,
+            // Design 104: the prime rate follows inflation — only in that mode.
+            prime: p.primeRateModel === 'INFLATION_LINKED'
+              ? {
+                  beta:  { US: p.primeInflationResponseUs  ?? 1.3,    AU: p.primeInflationResponseAu  ?? 1.3 },
+                  rho:   { US: p.primeInflationSmoothingUs ?? 0.6,    AU: p.primeInflationSmoothingAu ?? 0.75 },
+                  noise: { US: p.primePolicyNoiseUs        ?? 0,      AU: p.primePolicyNoiseAu        ?? 0 },
+                  floor: { US: p.primeFloorUs              ?? 0.0025, AU: p.primeFloorAu              ?? 0.001 },
+                }
+              : null,
+          })]
         : []),
       // Stochastic equity return path (design 74 §5.1) — only when on, so the sim.rng is
       // untouched otherwise and runs stay byte-identical.
@@ -1097,6 +1423,11 @@ export const ECONOMIC_REGIMES = {
             idioVol:        p.equityReturnIdioVol   ?? {},
             driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
             blockLength:    p.equityReturnBootstrapBlock ?? 5,
+            // Design 103 §5.1: joint mode draws only post-war years, the era the inflation
+            // and yield series share.
+            window:         joint ? 'POSTWAR' : 'FULL',
+            // Design 102 §6: the AU market replays its own history where the year has data.
+            auReplay:       p.equityReturnBootstrapAuReplay ?? true,
           })]
         : []),
       // Stochastic property return path (design 75 §4) — only when on. `marketVol` matches
@@ -1136,6 +1467,8 @@ export const ECONOMIC_REGIMES = {
       new EquityReturnStepReducer(),// design 74 §5.1 — stores the per-sleeve equity deviation
       new MarketIndexReducer(),     // design 101 §6 — steps marketIndex/securityIndex at each period advance (10.5)
       new PropertyReturnStepReducer(),// design 75 §4 — stores the per-sleeve property deviation (AssetAppreciationHandler reads it; no fold reducer)
+      new InflationPathReducer(),   // design 103 §4.2 — folds the inflation deviation onto effectiveInflationRates (11.5)
+      new InflationStepReducer(),   // design 103 §4.2 — stores the inflation deviation, floor and equity pass-through
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),
       ...behavioralReducers,

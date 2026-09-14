@@ -10,17 +10,26 @@
  */
 
 /**
- * build-historical-equity-returns.mjs — design 102 §4.1.
+ * build-historical-equity-returns.mjs — designs 102 §4.1 / §6 and 103 §5.3.
  *
- * Generates `src/finance/economic-regimes/historical-equity-returns.js`, the bundled annual
- * series the HISTORICAL_BOOTSTRAP equity return model resamples. The engine runs in the
- * browser with no runtime dependencies, so it cannot read `docs/` at run time. This script
- * is the one place the CSV is parsed, and the generated module is committed.
+ * Generates the bundled annual series the historical models resample:
  *
- * Series: Shiller S&P 500 `real_total_return_price` (dividends reinvested, deflated by CPI),
- * sampled each January, giving one SIMPLE annual real total return per calendar year. It's
- * REAL rather than nominal because inflation is its own process in the engine (design 102
- * §4.2). Shiller's prices are monthly AVERAGES, so every return is slightly smoothed.
+ *   - `src/finance/economic-regimes/historical-equity-returns.js` — S&P 500 real total
+ *     return, January to January, 1871– (the HISTORICAL_BOOTSTRAP equity model), plus the
+ *     AU market's real price return, 1958– (the AU replay, design 102 §6);
+ *   - `src/finance/economic-regimes/historical-macro.js` — US inflation, AU inflation and
+ *     the US 10-year yield change, 1950– (the joint inflation and yield models, design 103).
+ *
+ * The engine runs in the browser with no runtime dependencies, so it cannot read `docs/`
+ * at run time. This script is the one place the CSVs are parsed, and the generated modules
+ * are committed.
+ *
+ * Every series is keyed by the calendar year the change happens in, so year y of one lines
+ * up with year y of another:
+ *   - Shiller series (equity, US CPI, GS10) run January y → January y+1. Shiller's prices
+ *     are monthly AVERAGES, so each return is slightly smoothed.
+ *   - The OECD AU share price index also runs January y → January y+1 (monthly averages).
+ *   - AU CPI is the OECD year-on-year change at Q4 of year y.
  *
  * Usage: node scripts/dev/build-historical-equity-returns.mjs
  */
@@ -28,34 +37,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath }               from 'node:url';
 
-const root = fileURLToPath(new URL('../../', import.meta.url));
-const SRC  = 'docs/economic-shocks/data/Shiller-SP500-monthly.csv';
-const OUT  = 'src/finance/economic-regimes/historical-equity-returns.js';
-
-const [header, ...lines] = readFileSync(root + SRC, 'utf8').trim().split(/\r?\n/);
-const cols = header.split(',');
-const col  = (name) => { const i = cols.indexOf(name); if (i < 0) throw new Error(`${SRC}: no column ${name}`); return i; };
-const iDate = col('observation_date');
-const iTr   = col('real_total_return_price');
-
-const january = lines
-  .map(l => l.split(','))
-  .filter(c => c[iDate].slice(5, 7) === '01' && c[iTr] !== '')
-  .map(c => ({ year: Number(c[iDate].slice(0, 4)), tr: Number(c[iTr]) }));
-
-// Each return is the year that STARTS in January `year` and ends the next January.
-const returns = [];
-for (let i = 1; i < january.length; i++) {
-  if (january[i].year !== january[i - 1].year + 1) throw new Error(`gap before ${january[i].year}`);
-  returns.push(Number((january[i].tr / january[i - 1].tr - 1).toFixed(6)));
-}
-const firstYear = january[0].year;
-const lastYear  = firstYear + returns.length - 1;
-
-const rows = [];
-for (let i = 0; i < returns.length; i += 8) rows.push('    ' + returns.slice(i, i + 8).map(r => r.toFixed(6).padStart(9)).join(','));
-
-writeFileSync(root + OUT, `/*
+const root     = fileURLToPath(new URL('../../', import.meta.url));
+const DATA     = 'docs/economic-shocks/data/';
+const SHILLER  = DATA + 'Shiller-SP500-monthly.csv';
+const AU_CPI   = DATA + 'FRED-CPALTT01AUQ659N.csv';
+const AU_PRICE = DATA + 'FRED-SPASTT01AUM661N.csv';
+const LICENSE  = `/*
  * Copyright (c) 2026 Terry Packer.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,24 +50,134 @@ writeFileSync(root + OUT, `/*
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
- */
+ */`;
+
+function readCsv(file) {
+  const [header, ...lines] = readFileSync(root + file, 'utf8').trim().split(/\r?\n/);
+  const cols = header.split(',');
+  return lines.map(l => { const c = l.split(','); return Object.fromEntries(cols.map((k, i) => [k, c[i]])); });
+}
+const rows6 = (xs, indent = '    ') => {
+  const out = [];
+  for (let i = 0; i < xs.length; i += 8) out.push(indent + xs.slice(i, i + 8).map(r => r.toFixed(6).padStart(9)).join(','));
+  return out.join(',\n');
+};
+
+// ── Shiller, one row per January ─────────────────────────────────────────────────
+const january = new Map(readCsv(SHILLER)
+  .filter(r => r.observation_date.slice(5, 7) === '01')
+  .map(r => [Number(r.observation_date.slice(0, 4)), r]));
+const years = [...january.keys()].sort((a, b) => a - b);
+
+// AU CPI, year-on-year at Q4 of each calendar year.
+const auQ4 = new Map(readCsv(AU_CPI)
+  .filter(r => r.observation_date.slice(5, 7) === '10')
+  .map(r => [Number(r.observation_date.slice(0, 4)), Number(r.CPALTT01AUQ659N) / 100]));
+
+// ── 1. US equity real total return, 1871– ────────────────────────────────────────
+const trYears = years.filter(y => january.get(y).real_total_return_price !== '');
+const returns = [];
+for (let i = 1; i < trYears.length; i++) {
+  if (trYears[i] !== trYears[i - 1] + 1) throw new Error(`gap before ${trYears[i]}`);
+  const tr = (y) => Number(january.get(y).real_total_return_price);
+  returns.push(Number((tr(trYears[i]) / tr(trYears[i - 1]) - 1).toFixed(6)));
+}
+const firstYear = trYears[0];
+const lastYear  = firstYear + returns.length - 1;
+
+// ── 2. AU equity real price return, 1958– (design 102 §6) ────────────────────────
+// Nominal price return January to January, deflated by that year's AU CPI. PRICE only:
+// the OECD index carries no dividends. The replay uses deviations from the mean, so a
+// steady dividend yield cancels out; only its year-to-year variation is lost.
+const auJan = new Map(readCsv(AU_PRICE)
+  .filter(r => r.observation_date.slice(5, 7) === '01')
+  .map(r => [Number(r.observation_date.slice(0, 4)), Number(r.SPASTT01AUM661N)]));
+const AU_FIRST = Math.min(...auJan.keys());
+const auReturns = [];
+for (let y = AU_FIRST; y <= lastYear; y++) {
+  if (!auJan.has(y) || !auJan.has(y + 1)) throw new Error(`AU share price missing for ${y}`);
+  if (!auQ4.has(y)) throw new Error(`AU CPI missing for ${y}`);
+  const nominal = auJan.get(y + 1) / auJan.get(y) - 1;
+  auReturns.push(Number(((1 + nominal) / (1 + auQ4.get(y)) - 1).toFixed(6)));
+}
+
+const EQUITY_OUT = 'src/finance/economic-regimes/historical-equity-returns.js';
+writeFileSync(root + EQUITY_OUT, `${LICENSE}
 
 // GENERATED by scripts/dev/build-historical-equity-returns.mjs from
-// ${SRC}. Do not hand-edit — re-run the script.
+// ${SHILLER}, ${AU_PRICE}
+// and ${AU_CPI}. Do not hand-edit — re-run the script.
 
 /**
  * Annual REAL total returns of the S&P 500, ${firstYear}–${lastYear} (design 102 §4.1). Entry i is the
  * simple return from January of \`firstYear + i\` to the following January, dividends
  * reinvested, deflated by CPI. Source: Robert Shiller's monthly S&P data (monthly-average
  * prices, so each return is slightly smoothed relative to month-end prices).
+ *
+ * \`au\` is the Australian market, ${AU_FIRST}–${lastYear} (design 102 §6): the OECD share price
+ * index for Australia, January to January, deflated by AU CPI (OECD, Q4 year-on-year).
+ * PRICE only — no dividends — and in AUD. Entry i is the year \`au.firstYear + i\`, the
+ * same calendar year as the US entry for that year.
  */
 export const HISTORICAL_EQUITY_RETURNS = Object.freeze({
   source:    'Shiller S&P 500 real total return, January to January',
   basis:     'real',
   firstYear: ${firstYear},
   returns:   Object.freeze([
-${rows.join(',\n')},
+${rows6(returns)},
+  ]),
+  au: Object.freeze({
+    source:    'OECD share prices, Australia (SPASTT01AUM661N), January to January, deflated by OECD AU CPI',
+    basis:     'real price (no dividends), AUD',
+    firstYear: ${AU_FIRST},
+    returns:   Object.freeze([
+${rows6(auReturns, '      ')},
+    ]),
+  }),
+});
+`);
+console.log(`wrote ${EQUITY_OUT}: ${returns.length} US returns ${firstYear}–${lastYear}; ${auReturns.length} AU returns ${AU_FIRST}–${lastYear}`);
+
+// ── 3. macro series, 1950– (design 103 §5.3) ─────────────────────────────────────
+// 1950 is one year before the joint window (1951–) so the AR(1) fit has its first lag.
+const MACRO_FIRST = 1950;
+const us = [], au = [], gs10 = [];
+for (let y = MACRO_FIRST; y <= lastYear; y++) {
+  const a = january.get(y), b = january.get(y + 1);
+  if (!a || !b || a.CPI === '' || b.CPI === '' || a.GS10 === '' || b.GS10 === '') throw new Error(`Shiller CPI/GS10 missing for ${y}`);
+  if (!auQ4.has(y)) throw new Error(`AU CPI missing for ${y}`);
+  us.push(Number((Number(b.CPI) / Number(a.CPI) - 1).toFixed(6)));
+  au.push(Number(auQ4.get(y).toFixed(6)));
+  gs10.push(Number(((Number(b.GS10) - Number(a.GS10)) / 100).toFixed(6)));
+}
+const MACRO_OUT = 'src/finance/economic-regimes/historical-macro.js';
+
+writeFileSync(root + MACRO_OUT, `${LICENSE}
+
+// GENERATED by scripts/dev/build-historical-equity-returns.mjs from
+// ${SHILLER} and ${AU_CPI}.
+// Do not hand-edit — re-run the script.
+
+/**
+ * Annual macro series, ${MACRO_FIRST}–${lastYear} (design 103 §5.3), keyed by the calendar year the
+ * change happens in, so entry i of each series is the same year as entry i of the others
+ * and as HISTORICAL_EQUITY_RETURNS' year \`firstYear + i\`.
+ *   - usInflation: Shiller CPI, January to January (simple rate).
+ *   - auInflation: OECD CPI Australia, year-on-year at Q4 (simple rate).
+ *   - gs10Change:  change in Shiller's US 10-year yield, January to January (rate units).
+ */
+export const HISTORICAL_MACRO = Object.freeze({
+  source:      'Shiller CPI and GS10 (January to January); OECD CPI Australia (Q4 year-on-year)',
+  firstYear:   ${MACRO_FIRST},
+  usInflation: Object.freeze([
+${rows6(us)},
+  ]),
+  auInflation: Object.freeze([
+${rows6(au)},
+  ]),
+  gs10Change:  Object.freeze([
+${rows6(gs10)},
   ]),
 });
 `);
-console.log(`wrote ${OUT}: ${returns.length} annual returns, ${firstYear}–${lastYear}`);
+console.log(`wrote ${MACRO_OUT}: ${us.length} years, ${MACRO_FIRST}–${lastYear}`);

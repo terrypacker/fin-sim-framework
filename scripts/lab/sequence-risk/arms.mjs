@@ -203,7 +203,7 @@ export function arms(facility = DEFAULTS.facility) {
  */
 export const PROCESSES = Object.freeze([
   { key: 'WHITE_NOISE',    label: 'IID, ρ≈0 — a down year says nothing about the next',
-    params: { equityReturnModel: 'WHITE_NOISE' } },
+    params: { equityReturnModel: 'WHITE_NOISE', mcEquityReturnModel: 'SCENARIO' } },
   { key: 'MEAN_REVERTING', label: 'OU on the return, ρ≈+0.61 — a down year predicts ANOTHER down year',
-    params: { equityReturnModel: 'MEAN_REVERTING', equityReturnReversionSpeed: 0.5 } },
+    params: { equityReturnModel: 'MEAN_REVERTING', equityReturnReversionSpeed: 0.5, mcEquityReturnModel: 'SCENARIO' } },
 ]);

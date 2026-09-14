@@ -199,6 +199,19 @@ export function pairingMismatches(a, b) {
     const on = (x) => (x ? 'on' : 'off');
     out.push(`sequence risk ${on(a.mcSequenceRisk)} vs ${on(b.mcSequenceRisk)}`);
   }
+  // Design 102 §7 Q3. Both records must carry it: one from before the field existed says
+  // nothing about which process it ran, and "differs" would be a guess.
+  else if (a.equityModel !== undefined && b.equityModel !== undefined && a.equityModel !== b.equityModel) {
+    out.push(`equity process ${a.equityModel} vs ${b.equityModel}`);
+  }
+  // Design 103 §6 — the inflation process, under the same rule for records that predate it.
+  if (a.inflationModel !== undefined && b.inflationModel !== undefined && a.inflationModel !== b.inflationModel) {
+    out.push(`inflation process ${a.inflationModel ?? 'off'} vs ${b.inflationModel ?? 'off'}`);
+  }
+  // Design 104 — the prime rate mode, same rule.
+  if (a.primeModel !== undefined && b.primeModel !== undefined && a.primeModel !== b.primeModel) {
+    out.push(`prime rate mode ${a.primeModel} vs ${b.primeModel}`);
+  }
 
   const aKeys = (a.sampled ?? []).map(s => s.key);
   const bKeys = (b.sampled ?? []).map(s => s.key);

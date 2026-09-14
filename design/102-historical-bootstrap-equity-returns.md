@@ -1,13 +1,15 @@
 # 102 — Historical block bootstrap for equity returns
 
-**Status: BUILT (13 Sep 2026), Phase 1 (equity only).** Answers design 74 §8 Q3
+**Status: COMPLETE (13 Sep 2026).** Phase 1 (the US bootstrap), the AU replay (§6), and
+every open question answered (§7). The joint-years half of §6 was built as design 103.
+Answers design 74 §8 Q3
 ("historical bootstrap as a Phase 5 model id? — yes"). Also relabels the equity process
 dropdown, because the analysis that motivated the bootstrap showed `MEAN_REVERTING` does
 the opposite of what its name says for a return (§2, §3).
 
 Measurement: `scripts/probes/probe-equity-process-fit.mjs`. Data generator:
 `scripts/dev/build-historical-equity-returns.mjs`. Tests:
-`tests/unit/equity-return-bootstrap.test.mjs`.
+`tests/unit/equity-return-bootstrap.test.mjs`, `tests/unit/equity-return-au-replay.test.mjs`.
 
 ---
 
@@ -94,13 +96,13 @@ saved ones (like `options`), and the Enum editor renders `optionLabels[id] ?? id
 | id | label |
 |---|---|
 | `WHITE_NOISE` | White noise — independent years (default) |
-| `HISTORICAL_BOOTSTRAP` | Historical bootstrap — replay US years 1871–2023 in blocks |
+| `HISTORICAL_BOOTSTRAP` | Historical bootstrap — replay market years in blocks (US 1871–2023, AU 1958–2023) |
 | `MEAN_REVERTING` | Persistent returns (momentum) — stress test only |
 | `RANDOM_WALK` | Random walk of the return — unbounded, not for equities |
 | `NONE` | None — no deviation (the anchor every year) |
 
-`equityReturnReversionSpeed` now shows only when the model is `MEAN_REVERTING`, and the new
-block length only under `HISTORICAL_BOOTSTRAP`.
+`equityReturnReversionSpeed` now shows only when the model is `MEAN_REVERTING`, and the
+bootstrap's block length and AU replay only under `HISTORICAL_BOOTSTRAP`.
 
 ## 4. The bootstrap
 
@@ -110,7 +112,8 @@ block length only under `HISTORICAL_BOOTSTRAP`.
 `docs/economic-shocks/data/Shiller-SP500-monthly.csv` and committed. The engine runs in the
 browser with no runtime dependencies and can't read `docs/`. It holds 153 simple annual real
 total returns (dividends reinvested), each from January of year *y* to January of *y + 1*,
-1871–2023. A unit test re-derives every value from the CSV, so the two can't drift.
+1871–2023, plus the AU series of §6. A unit test re-derives every value from the CSVs, so
+the two can't drift.
 
 Shiller's prices are monthly averages, so each return is slightly smoothed relative to
 month-end prices, and the deepest crashes are a little shallower than intraday figures.
@@ -119,7 +122,8 @@ month-end prices, and the deepest crashes are a little shallower than intraday f
 
 - **Real, not nominal.** Inflation is its own process in the engine (sampled per MC path).
   Nominal returns would import historical inflation noise into equity without the matching
-  inflation path. Phase 2 (§6) samples them together.
+  inflation path. Design 103's joint mode samples them together, and adds the year's
+  inflation surprise back onto the nominal return.
 - **Re-centred.** The series mean is subtracted once at load, so each deviation is mean-0 and
   the scenario's anchor (the CMA total return, plus the MC's sampled Equity Return Shift)
   stays the centre. Replaying raw history would silently import 1871–2023 US returns as the
@@ -130,13 +134,17 @@ month-end prices, and the deepest crashes are a little shallower than intraday f
 Each annual tick either continues the current block with the next consecutive historical
 year, or, when the block is exhausted, draws **one** uniform from `sim.rng` for a new start
 year and begins a block of `equityReturnBootstrapBlock` years (default 5). The series wraps
-from 2023 to 1871.
+from its last year to its first.
 
+- **Windows.** `FULL` (1871–2023) is the default. `POSTWAR` (1951–2023) is what design
+  103's joint mode uses, so equity, inflation and yields share a monetary era. Each window
+  is re-centred, and drag-compensated, on its own statistics, and wraps within itself. The
+  cursor's `index` stays a series index, so FULL's arithmetic is unchanged.
 - **Cursor in state.** `state.equityReturnBootstrap = { index, year, remaining }` is the year
   just replayed and the years left in its block. It's written by `EquityReturnStepReducer`
   from the action's `bootstrap` field, so snapshots, replays and MPC/optimizer rollouts
   resume the same block. `year` also lets a watchlist show which historical year a path is
-  living through.
+  living through, and it's the year design 103's inflation and yield ticks read.
 - **RNG cursor.** The bootstrap consumes one uniform per block instead of one Gaussian (two
   uniforms) per year, so switching models re-orders every later draw in the shared stream
   (FX, yield curve, property repairs). That's expected: every stochastic consumer shares one
@@ -145,16 +153,15 @@ from 2023 to 1871.
   the other models' actions carry no `bootstrap` field. Default runs and every golden are
   byte-identical.
 - **Block length 5** is the usual n^(1/3) rule for n = 153, and in §2 it's the setting that
-  matches VR5 and VR10. Fixed blocks were chosen over the stationary (random-length)
-  bootstrap because they are simpler to explain and to inspect in state. Open question 2.
+  matches VR5 and VR10. Fixed blocks, not stationary (random-length) ones (§7 Q2).
 
 ### 4.4 Vol scaling and drift compensation
 
-- **`equityReturnVol` rescales the deviations** by vol / sd(series). This keeps
+- **`equityReturnVol` rescales the deviations** by vol / sd(series) (§7 Q1). This keeps
   `equityReturnVol` a live MC variable (it is `mc: true`; ignoring it under the bootstrap
   would leave an inert lever), and keeps the property path's betas meaning the same thing.
   The series' own simple-return sd is 0.178, and the default vol is 0.18, so at the default
-  the bootstrap replays history at 1.01× its size. Open question 1.
+  the bootstrap replays history at 1.01× its size.
 - **GEOMETRIC compensation** uses the series' measured drag, `dragVar = 2 × (arithmetic −
   geometric mean)`, scaled by (vol / sd)², in place of σ². It is **exact on history
   itself**: at an anchor equal to history's geometric mean, replaying the whole series
@@ -164,13 +171,13 @@ from 2023 to 1871.
 ### 4.5 Interactions
 
 - **Monte Carlo:** `perturbParams` forces `equityReturnStochastic` on for every path unless
-  `mcSequenceRisk` is false, and the model comes from the scenario. So setting the
-  scenario's model to `HISTORICAL_BOOTSTRAP` makes every MC path a different sequence of
-  historical blocks, seeded by path index. Paired A/B comparisons still hold, because path
-  *i* draws the same blocks in both arms.
-- **Other equity markets:** there is only a US series. AU and international markets load on
-  the bootstrapped US market factor through their betas, plus their own Gaussian
-  idiosyncratic vol (design 90 §7.4). Their idiosyncratic part is still Gaussian (§6).
+  `mcSequenceRisk` is false, and runs the process `mcEquityReturnModel` names: by default
+  `HISTORICAL_BOOTSTRAP` (§7 Q3). So every MC path is a different sequence of historical
+  blocks, seeded by path index. Paired A/B comparisons still hold, because path *i* draws
+  the same blocks in both arms.
+- **Other equity markets:** the AU market replays its own history from 1958 (§6). The
+  ex-US and ex-AU markets load on the bootstrapped US market factor through their betas,
+  plus their own Gaussian idiosyncratic vol (design 90 §7.4).
 - **Property:** with the equity path on, the property path reuses
   `state.equityReturnMarketDev`, which is now the bootstrapped deviation, so property rides
   history too. Its own drift compensation still uses the Gaussian `marketVol²`, a small
@@ -183,11 +190,53 @@ from 2023 to 1871.
 
 - It can't produce an economy history hasn't seen. The worst 10-year real stretch it can
   replay is 1871–2023's.
-- It carries US history only, from the market that did best.
+- It carries US history, from the market that did best, plus AU from 1958. The ex-US and
+  ex-AU markets' own parts are still Gaussian.
 - It has no valuation conditioning. The anchor carries that (§2).
-- Inflation, bonds and equity are still sampled independently of each other (§6).
+- Inflation and bond yields follow the same historical years only in design 103's joint
+  mode (the MC default under the bootstrap). Otherwise they are independent of equity.
 
-## 6. Phase 2 (not built)
+## 6. Phase 2 — built (joint years as design 103; the AU replay here)
+
+**The AU replay (built 13 Sep 2026).** With the bootstrap on and
+`equityReturnBootstrapAuReplay` on (the default), a historical year that has AU data sets
+the EQUITY_AU sleeve's deviation to the AU market's OWN deviation for that year, instead of
+`β·market + idio`:
+
+- **Data:** the OECD share price index for Australia (`FRED-SPASTT01AUM661N`, monthly from
+  1958, no gaps), January to January, deflated by AU CPI (OECD, Q4 year-on-year). That gives
+  66 real annual returns, 1958–2023, carried as `HISTORICAL_EQUITY_RETURNS.au` by the same
+  generator, and re-derived from the CSVs in `equity-return-au-replay.test.mjs`. It's
+  **price-only**. The replay uses deviations from the mean, so a steady dividend yield
+  cancels out; only its year-to-year variation is lost.
+- **Scaling:** rescaled to the sleeve's model sd √(β²·vol² + σ_idio²), so the AU beta and
+  idiosyncratic settings keep setting AU's volatility (the same choice as §7 Q1). History
+  supplies the path, and with it AU's actual co-movement with the US that year. Drift
+  compensation is unchanged, since the variance it compensates is the same.
+- **Coverage:** historical years before 1958 keep `β·market + idio`. That's most of the
+  FULL window (1871–1957), and 1951–1957 of design 103's POSTWAR window.
+- **RNG:** a replay year skips the AU idio draw. That depends only on the historical year,
+  so the cursor stays deterministic.
+- The ex-AU and ex-US markets still follow the US factor plus Gaussian idio. There's no
+  long free series for either.
+
+**Check** (probe §4; engine figures over 1958–2023 years only, 500 paths × 40 years):
+
+| | AU sd | corr with US |
+|---|---|---|
+| history, 1958–2023 | 0.187 | +0.60 |
+| model settings (β 0.43, idio 0.13, vol 0.18) | 0.151 | +0.51 |
+| engine, replay on | 0.150 | **+0.60** |
+| engine, replay off | 0.148 | +0.47 |
+
+The replay brings AU's co-movement with the US to history's value while keeping the
+settings' volatility. **Finding:** AU's measured volatility over 1958–2023 (18.7%) is above
+what the sourced beta and idio settings imply (15.1%). The settings come from the capital
+market assumption providers (design 90 §7.4), and this series includes the 1970s–80s and
+is price-only, so they weren't changed. A plan that wants history's AU volatility can raise
+the AU idio setting to about 0.16.
+
+The original Phase 2 notes, kept for the record:
 
 - **Joint years.** Sample equity, CPI inflation and the 10-year yield *by the same
   historical year*, so stagflation, or equity falling while bonds rally, arrives together.
@@ -196,14 +245,20 @@ from 2023 to 1871.
 - **An AU series** (OECD `SPASTT01AUM661N` is price-only from 1958) for AU-market
   idiosyncratic deviations, instead of Gaussian.
 
-## 7. Open questions (for owner review)
+## 7. Questions — answered (owner, 13 Sep 2026)
 
-1. **Rescale to `equityReturnVol`, or replay history at its own size?** Built as rescale, to
-   keep the MC vol lever live. At the default vol the difference is 1%.
-2. **Fixed or stationary blocks?** Fixed is built. The stationary bootstrap avoids a slight
-   bias at block joins but makes the cursor a random length.
-3. **Should MC default to `HISTORICAL_BOOTSTRAP`?** It matches history better than white
-   noise on every measure in §2. It is not the default yet, because every existing MC
-   result would move.
-4. **Retire `MEAN_REVERTING` for equities?** Relabelled rather than removed, to keep saved
-   studies loading. A later step could hide it behind an "advanced" flag.
+1. **Rescale to `equityReturnVol`, or replay history at its own size?** **Rescale**, to keep
+   the MC vol lever live. At the default vol the difference is 1%. The AU replay follows the
+   same rule.
+2. **Fixed or stationary blocks?** **Fixed.** The stationary bootstrap avoids a slight bias
+   at block joins but makes the cursor a random length, which is harder to inspect.
+3. **Should MC default to `HISTORICAL_BOOTSTRAP`?** **Yes.** Built as a separate param,
+   `mcEquityReturnModel` (default `HISTORICAL_BOOTSTRAP`; `SCENARIO` defers to
+   `equityReturnModel`), for the reason `mcSequenceRisk` is separate: the loader
+   materializes schema defaults into saved plans, so changing `equityReturnModel`'s default
+   would not reach them. `perturbParams` writes the resolved model into each path's params,
+   and the pairing record carries it as `equityModel`, so two batches that ran different
+   processes are flagged as unpaired. Single runs are unchanged.
+4. **Retire `MEAN_REVERTING` for equities?** **No — keep it relabelled** as "Persistent
+   returns (momentum) — stress test only". Saved studies still load, and Monte Carlo no
+   longer uses it by default.

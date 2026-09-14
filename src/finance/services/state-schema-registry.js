@@ -514,6 +514,13 @@ export class StateSchemaRegistry {
     this.registerPattern('equityReturnDev.*',         ParameterValueType.rate());
     this.registerPattern('equityReturnDriftComp.*',   ParameterValueType.rate());
     this.register('equityReturnMarketDev',            ParameterValueType.rate());
+    // The stochastic inflation path (design 103 §4.2, §5.2).
+    this.registerPattern('inflationDev.*',               ParameterValueType.rate());
+    this.register('inflationFloor',                      ParameterValueType.rate());
+    this.registerPattern('equityInflationPassThrough.*', ParameterValueType.rate());
+    // The prime rate's response to inflation (design 104).
+    this.registerPattern('primeDev.*',                   ParameterValueType.rate());
+    this.registerPattern('primeFloor.*',                 ParameterValueType.rate());
     // The historical bootstrap's block cursor (design 102 §4.3).
     this.register('equityReturnBootstrap.index',      ParameterValueType.integer());
     this.register('equityReturnBootstrap.year',       ParameterValueType.integer());

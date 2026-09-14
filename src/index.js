@@ -102,14 +102,18 @@ import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
-import { EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, HISTORICAL_BOOTSTRAP_SERIES, EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { EQUITY_RETURN_MODEL_IDS, EQUITY_RETURN_MODEL_LABELS, HISTORICAL_BOOTSTRAP_WINDOWS, HISTORICAL_BOOTSTRAP_SERIES, HISTORICAL_AU_SERIES, EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
 import { HISTORICAL_EQUITY_RETURNS } from './finance/economic-regimes/historical-equity-returns.js';
+import { HISTORICAL_MACRO } from './finance/economic-regimes/historical-macro.js';
+import { InflationPathReducer } from './finance/economic-regimes/inflation-path-reducer.js';
+import { InflationStepReducer } from './finance/economic-regimes/inflation-step-reducer.js';
+import { INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, HISTORICAL_JOINT_WINDOW, jointInflationActive, jointWindowIndex, InflationTickHandler } from './finance/economic-regimes/inflation-tick-handler.js';
 import { INDEX_BASE, indexMarkets, lastYearEndBefore, yearEndsBetween, seedIndexLevels, stepIndexLevels, markDownIndexLevels, MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
 import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler } from './finance/economic-regimes/property-return-tick-handler.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, EQUITY_SLEEVES, EQUITY_SLEEVE_COUNTRY, DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO, PROPERTY_SLEEVES, DEFAULT_RE_BETA, DEFAULT_RE_IDIO, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { STRESS_TAGS, regimeMeetsSeverity, stressRegimes, isStressed } from './finance/economic-regimes/regime-stress.js';
@@ -190,7 +194,7 @@ import { gridCellRuns, McGridRunner } from './finance/monte-carlo/mc-grid-runner
 import { GRID_MODES, MAX_AXIS_VALUES, nearestIndex, cellIndexOf, referenceCellOf, percentile, summarizeGridCell } from './finance/monte-carlo/mc-grid.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { computeNetWorthUsd, computeHouseValueUsd, MC_SAMPLER_CADENCE, createMcSampler, extractYearlyTimeSeries, makeMcSeededRng, computePathShape } from './finance/monte-carlo/mc-sampling.js';
-import { perturbParams, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
+import { perturbParams, mcPrimeModel, mcInflationModel, mcEquityModel, samplingSignature, buildIterationRunner, initMcContext, runMcIteration, gridCellParams, runGridTask } from './finance/monte-carlo/parallel/mc-worker-core.js';
 import { browserMcSpawn, McWorkerPool } from './finance/monte-carlo/parallel/mc-worker-pool.js';
 import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords, readDecisionRuns } from './finance/mpc/apply-forward.js';
 import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
@@ -964,9 +968,20 @@ export const Finance = {
   EquityReturnStepReducer,
   EQUITY_RETURN_MODEL_IDS,
   EQUITY_RETURN_MODEL_LABELS,
+  HISTORICAL_BOOTSTRAP_WINDOWS,
   HISTORICAL_BOOTSTRAP_SERIES,
+  HISTORICAL_AU_SERIES,
   EquityReturnTickHandler,
   HISTORICAL_EQUITY_RETURNS,
+  HISTORICAL_MACRO,
+  InflationPathReducer,
+  InflationStepReducer,
+  INFLATION_MODEL_IDS,
+  INFLATION_MODEL_LABELS,
+  HISTORICAL_JOINT_WINDOW,
+  jointInflationActive,
+  jointWindowIndex,
+  InflationTickHandler,
   INDEX_BASE,
   indexMarkets,
   lastYearEndBefore,
@@ -984,6 +999,7 @@ export const Finance = {
   RATE_KEY_META,
   RATE_KEY_CLASS_MEMBERS,
   EQUITY_SLEEVES,
+  EQUITY_SLEEVE_COUNTRY,
   DEFAULT_EQUITY_BETA,
   DEFAULT_EQUITY_IDIO,
   PROPERTY_SLEEVES,
@@ -1262,6 +1278,9 @@ export const Finance = {
   set,
   makeMcSeededRng,
   perturbParams,
+  mcPrimeModel,
+  mcInflationModel,
+  mcEquityModel,
   samplingSignature,
   buildIterationRunner,
   initMcContext,

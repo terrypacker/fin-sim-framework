@@ -105,8 +105,9 @@ describe('McGridRunner (design 100 §7)', () => {
     const plan   = planValue(LEVER);
     const allOff = IntlRetirementMcConfig.fromVariableConfigs(
       DEFAULT_MC_VARIABLE_CONFIGS.map(v => ({ ...v, enabled: false })));
+    // The plan's own single run: both stochastic MC paths off (designs 98 M3, 103 §6).
     const single = await new IntlRetirementMcRunner({ n: 1, simEnd: SIM_END, cfgTemplate: template(), mcConfig: allOff })
-      .run({ mcSequenceRisk: false });
+      .run({ mcSequenceRisk: false, mcInflationPath: false });
 
     const g = await grid({ n: 50, mode: GRID_MODES.DETERMINISTIC, axes: [{ paramKey: LEVER, values: [plan, plan + 2] }] }).run();
 

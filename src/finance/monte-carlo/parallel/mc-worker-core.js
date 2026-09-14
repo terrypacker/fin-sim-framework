@@ -89,9 +89,76 @@ export function perturbParams(baseParams, i, variables) {
   // 90 §7.4's market dispersion) whatever a single run does, so the anchor's sd can mean
   // estimation uncertainty alone. Opt out with `mcSequenceRisk: false`. Written into the
   // iteration's params, so `r.params` records it and a replay runs the same path.
-  if (perturbed.mcSequenceRisk !== false) perturbed.equityReturnStochastic = true;
+  if (perturbed.mcSequenceRisk !== false) {
+    perturbed.equityReturnStochastic = true;
+    // Design 102 §7 Q3 — and runs it under Monte Carlo's own process choice.
+    perturbed.equityReturnModel = mcEquityModel(perturbed);
+  }
+  // Design 103 §6 — and the stochastic inflation path, on its own switch.
+  if (perturbed.mcInflationPath !== false) {
+    perturbed.inflationStochastic = true;
+    perturbed.inflationModel      = mcInflationModel(perturbed);
+  }
+  // Design 104 — the prime rate mode (fixed/scheduled OR following inflation).
+  perturbed.primeRateModel = mcPrimeModel(perturbed);
 
   return perturbed;
+}
+
+/**
+ * The prime-rate mode a Monte Carlo path runs (design 104 §6). `mcPrimeRateModel`:
+ *   - 'AUTO' (the default, also when absent): the scenario's own choice when it is
+ *     INFLATION_LINKED, or when it authored a Prime Rate Schedule. Otherwise, with the
+ *     inflation path running, INFLATION_LINKED, so a path's policy rate answers its inflation.
+ *     A schedule is never overridden: the modes are either/or, and a written schedule is a
+ *     choice.
+ *   - 'SCENARIO': the scenario's `primeRateModel` as it is.
+ *   - 'SCHEDULE' / 'INFLATION_LINKED': as given.
+ *
+ * @param {object} params  an iteration's (or the batch's base) params
+ * @returns {'SCHEDULE'|'INFLATION_LINKED'}
+ */
+export function mcPrimeModel(params) {
+  const m        = params?.mcPrimeRateModel ?? 'AUTO';
+  const scenario = params?.primeRateModel ?? 'SCHEDULE';
+  if (m === 'SCENARIO') return scenario;
+  if (m !== 'AUTO') return m;
+  if (scenario === 'INFLATION_LINKED') return scenario;
+  const hasSchedule = Array.isArray(params?.primeSchedule) && params.primeSchedule.length > 0;
+  return !hasSchedule && mcInflationModel(params) != null ? 'INFLATION_LINKED' : 'SCHEDULE';
+}
+
+/**
+ * The inflation process a Monte Carlo path runs (design 103 §6), or null when the path is
+ * off (`mcInflationPath: false`). `mcInflationModel`: 'AUTO' (the default, also when absent)
+ * runs HISTORICAL_JOINT whenever the path's equity process is the historical bootstrap, so
+ * the two share their historical years, and GAUSSIAN otherwise. 'SCENARIO' defers to the
+ * single-run `inflationModel`. Any other value is used as given.
+ *
+ * @param {object} params  an iteration's (or the batch's base) params
+ * @returns {string|null}
+ */
+export function mcInflationModel(params) {
+  if (params?.mcInflationPath === false) return null;
+  const m = params?.mcInflationModel ?? 'AUTO';
+  if (m === 'SCENARIO') return params?.inflationModel ?? 'GAUSSIAN';
+  if (m === 'AUTO') return mcEquityModel(params) === 'HISTORICAL_BOOTSTRAP' ? 'HISTORICAL_JOINT' : 'GAUSSIAN';
+  return m;
+}
+
+/**
+ * The equity return process a Monte Carlo path runs (design 102 §7 Q3), or null when the
+ * path is off (`mcSequenceRisk: false`). `mcEquityReturnModel` wins unless it is
+ * 'SCENARIO', which defers to the single-run `equityReturnModel`. Absent means the
+ * default, HISTORICAL_BOOTSTRAP, the same way an absent `mcSequenceRisk` means on.
+ *
+ * @param {object} params  an iteration's (or the batch's base) params
+ * @returns {string|null}
+ */
+export function mcEquityModel(params) {
+  if (params?.mcSequenceRisk === false) return null;
+  const m = params?.mcEquityReturnModel ?? 'HISTORICAL_BOOTSTRAP';
+  return m === 'SCENARIO' ? (params?.equityReturnModel ?? 'WHITE_NOISE') : m;
 }
 
 /**

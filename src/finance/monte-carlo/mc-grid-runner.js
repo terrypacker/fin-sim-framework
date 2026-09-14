@@ -9,7 +9,7 @@
  */
 
 import { IntlRetirementMcRunner } from './intl-retirement-mc-runner.js';
-import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams } from './parallel/mc-worker-core.js';
+import { buildIterationRunner, runGridTask, samplingSignature, gridCellParams, mcEquityModel, mcInflationModel, mcPrimeModel } from './parallel/mc-worker-core.js';
 import { cartesianProduct } from '../optimization/opt-values.js';
 import { get } from './mc-param-paths.js';
 import { GRID_MODES, referenceCellOf, summarizeGridCell } from './mc-grid.js';
@@ -101,7 +101,7 @@ export class McGridRunner extends IntlRetirementMcRunner {
       : ctx.variables.filter(v => v.enabled && axisKeys.includes(v.paramKey)).map(v => v.paramKey);
     const variables = ctx.variables.map(v =>
       (v.enabled && (det || axisKeys.includes(v.paramKey))) ? { ...v, enabled: false } : v);
-    const base = det ? { ...ctx.base, mcSequenceRisk: false } : ctx.base;
+    const base = det ? { ...ctx.base, mcSequenceRisk: false, mcInflationPath: false } : ctx.base;
 
     const cells = cartesianProduct(this.axes.map(a => a.values)).map(values => ({
       values,
@@ -132,6 +132,9 @@ export class McGridRunner extends IntlRetirementMcRunner {
     const pairingFacts = {
       sampled:        samplingSignature(gctx.variables),
       mcSequenceRisk: gctx.base.mcSequenceRisk !== false,
+      equityModel:    mcEquityModel(gctx.base),
+      inflationModel: mcInflationModel(gctx.base),
+      primeModel:     mcPrimeModel(gctx.base),
     };
     return {
       mode: this.mode,

@@ -42,6 +42,10 @@ function makeRunner(opts = {}) {
   return new IntlRetirementMcRunner({ n: N, simStart: SIM_START, simEnd: SIM_END, ...opts, cfgTemplate });
 }
 
+// MC runs the stochastic equity path (design 98 M3) and the inflation path (design 103 §6)
+// by default; a test of the parameter SAMPLER alone turns both off.
+const NO_STOCHASTIC_PATHS = Object.freeze({ mcSequenceRisk: false, mcInflationPath: false });
+
 // ─── Smoke test ───────────────────────────────────────────────────────────────
 
 test('IntlRetirementMcRunner: run() completes without error', async () => {
@@ -196,7 +200,7 @@ test('IntlRetirementMcRunner: constant-only config produces identical net worth 
   const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(constantConfigs);
 
   const runner = makeRunner({ mcConfig });
-  const { runs } = await runner.run();
+  const { runs } = await runner.run(NO_STOCHASTIC_PATHS);
 
   const first = runs[0].finalNetWorthUsd;
   for (const r of runs) {
@@ -210,7 +214,7 @@ test('IntlRetirementMcRunner: all-disabled mcConfig produces n identical runs', 
   const allDisabled = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({ ...c, enabled: false }));
   const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(allDisabled);
   const runner = makeRunner({ mcConfig });
-  const { runs } = await runner.run();
+  const { runs } = await runner.run(NO_STOCHASTIC_PATHS);
   assert.strictEqual(runs.length, N);
   const first = runs[0].finalNetWorthUsd;
   for (const r of runs) assert.strictEqual(r.finalNetWorthUsd, first);

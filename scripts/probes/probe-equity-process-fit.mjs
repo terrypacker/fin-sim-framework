@@ -167,7 +167,37 @@ for (const [label, opts] of MODELS) {
   console.log(`${label.padEnd(36)} ${med('sd').toFixed(3)} ${f(med('ac1'), 2)}  ${med('vr5').toFixed(2)}  ${med('vr10').toFixed(2)}  ${med('vr20').toFixed(2)}  ${f(med('skew'), 2)}  ${pct(q[0]).padStart(6)}  ${pct(q[1]).padStart(7)}  ${pct(q[2]).padStart(7)}  ${pct(q[2] - q[0]).padStart(6)}   ${pct(geo)}`);
 }
 
-// ── 4. valuation ─────────────────────────────────────────────────────────────────
+// ── 4. the AU market (design 102 §6) ─────────────────────────────────────────────
+// Is the AU replay consistent with the AU sleeve's beta and idio settings? The model
+// implies corr(AU, US) = β·σ / √(β²σ² + σ_idio²). History gives one number for 1958–2023,
+// and the engine with the replay on should land near it, since it replays those years.
+{
+  const { HISTORICAL_AU_SERIES } = await import('../../src/finance/economic-regimes/equity-return-tick-handler.js');
+  const { DEFAULT_EQUITY_BETA, DEFAULT_EQUITY_IDIO } = await import('../../src/finance/economic-regimes/rate-keys.js');
+  const AU = RATE_KEYS.EQUITY_AU;
+  const au = HISTORICAL_AU_SERIES;
+  const usSame = simple.slice(au.firstYear - years[0], au.firstYear - years[0] + au.deviations.length);
+  const corr = (a, b) => { const ma = mean(a), mb = mean(b); let s = 0, sa = 0, sb = 0; a.forEach((v, i) => { s += (v - ma) * (b[i] - mb); sa += (v - ma) ** 2; sb += (b[i] - mb) ** 2; }); return s / Math.sqrt(sa * sb); };
+  const beta = DEFAULT_EQUITY_BETA[AU], idio = DEFAULT_EQUITY_IDIO[AU], vol = 0.18;
+  console.log(`\nAU MARKET (OECD, real price, 1958–2023, n=${au.deviations.length})`);
+  console.log(`  history:        sd ${au.sd.toFixed(3)}   corr with US ${f(corr(au.deviations, usSame), 2)}`);
+  console.log(`  model settings: sd ${Math.sqrt(beta * beta * vol * vol + idio * idio).toFixed(3)}   corr with US ${f(beta * vol / Math.sqrt(beta * beta * vol * vol + idio * idio), 2)}   (β ${beta}, idio ${idio}, vol ${vol})`);
+  for (const auReplay of [true, false]) {
+    const h = new EquityReturnTickHandler({ model: 'HISTORICAL_BOOTSTRAP', vol, auReplay });
+    const us = [], aus = [];
+    for (let p = 0; p < 500; p++) {
+      let state = {};
+      for (let t = 0; t < 40; t++) {
+        const a = h.call({ sim: { rng }, state })[0];
+        state = reducer.reduce(state, a);
+        if (a.bootstrap.year >= au.firstYear) { us.push(a.deviation[RATE_KEYS.EQUITY_US]); aus.push(a.deviation[AU]); }
+      }
+    }
+    console.log(`  engine, replay ${auReplay ? 'on ' : 'off'}: sd ${sdev(aus).toFixed(3)}   corr with US ${f(corr(aus, us), 2)}   (years 1958–2023 only)`);
+  }
+}
+
+// ── 5. valuation ─────────────────────────────────────────────────────────────────
 // CAPE10 = real price / trailing 10-year mean real earnings, against the next 10 years' mean
 // real log return. Overlapping windows, so only about n/10 observations are independent.
 const byYear = new Map(jan.map(c => [Number(at(c, 'observation_date').slice(0, 4)), c]));

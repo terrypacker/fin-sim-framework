@@ -120,6 +120,9 @@ import { MarketIndexReducer }            from '../finance/economic-regimes/marke
 import { EquityReturnTickHandler }       from '../finance/economic-regimes/equity-return-tick-handler.js';
 import { PropertyReturnStepReducer }     from '../finance/economic-regimes/property-return-step-reducer.js';
 import { PropertyReturnTickHandler }     from '../finance/economic-regimes/property-return-tick-handler.js';
+import { InflationTickHandler }          from '../finance/economic-regimes/inflation-tick-handler.js';
+import { InflationStepReducer }          from '../finance/economic-regimes/inflation-step-reducer.js';
+import { InflationPathReducer }          from '../finance/economic-regimes/inflation-path-reducer.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/handlers/asset-appreciation-handler.js';
 
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
@@ -330,7 +333,7 @@ const _ALL_CLASSES = [
   LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler,
-  PropertyReturnTickHandler,
+  PropertyReturnTickHandler, InflationTickHandler, InflationStepReducer, InflationPathReducer,
   RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
   BondPriceAdjustReducer, BondMaturityReducer, YieldCurveReducer, YieldCurveStepReducer,
   EquityReturnReducer, EquityReturnStepReducer, MarketIndexReducer, PropertyReturnStepReducer,
