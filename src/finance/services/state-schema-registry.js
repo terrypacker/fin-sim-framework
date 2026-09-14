@@ -516,6 +516,8 @@ export class StateSchemaRegistry {
     this.register('equityReturnMarketDev',            ParameterValueType.rate());
     // The stochastic inflation path (design 103 §4.2, §5.2).
     this.registerPattern('inflationDev.*',               ParameterValueType.rate());
+    // The standardized global and per-country inflation factors (design 103 §10).
+    this.registerPattern('inflationLatent.*',            ParameterValueType.decimal(4));
     this.register('inflationFloor',                      ParameterValueType.rate());
     this.registerPattern('equityInflationPassThrough.*', ParameterValueType.rate());
     // The prime rate's response to inflation (design 104).

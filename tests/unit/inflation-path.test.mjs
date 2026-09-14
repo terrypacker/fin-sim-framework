@@ -9,13 +9,16 @@
  */
 
 /**
- * inflation-path.test.mjs — design 103 (stochastic inflation path + joint history).
+ * inflation-path.test.mjs — design 103 (stochastic inflation path + joint history, §10
+ * revision: skewed, level-scaled swings and a shared global factor).
  *
  *   - the bundled macro series is in sync with the CSVs it is generated from;
- *   - GAUSSIAN: σ is the stationary sd, persistence is e^(−k), US–AU correlate at ρ, and
- *     every tick takes exactly four uniforms;
- *   - HISTORICAL_JOINT: the innovation is the equity cursor's year's residual, with no
- *     RNG draw, reproducing the historical path; no cursor falls back to GAUSSIAN;
+ *   - the skew map keeps the mean at the anchor, never crosses the bound, and has sd σ;
+ *   - GAUSSIAN over a long run: sd σ, rarely below 0, and US–AU levels correlated as the
+ *     lognormal map of the latent correlation w + (1−w)·ρ predicts; 6 uniforms a year
+ *     (4 when the global share is 0);
+ *   - HISTORICAL_JOINT: the cursor year's standardized residuals drive both factors, with
+ *     no RNG draw; no cursor falls back to GAUSSIAN;
  *   - the step reducer, the fold (with its floor) and the equity pass-through;
  *   - the yield curve's historical shock and the equity bootstrap's POSTWAR window;
  *   - e2e: off is inert, on is seed-reproducible, and joint mode wires all three together.
@@ -25,7 +28,7 @@ import { test, describe } from 'node:test';
 import assert             from 'node:assert/strict';
 import { readFileSync }   from 'node:fs';
 
-import { InflationTickHandler, HISTORICAL_JOINT_WINDOW, jointWindowIndex } from '../../src/finance/economic-regimes/inflation-tick-handler.js';
+import { InflationTickHandler, HISTORICAL_JOINT_WINDOW, jointWindowIndex, skewedInflationDeviation } from '../../src/finance/economic-regimes/inflation-tick-handler.js';
 import { InflationStepReducer }  from '../../src/finance/economic-regimes/inflation-step-reducer.js';
 import { InflationPathReducer }  from '../../src/finance/economic-regimes/inflation-path-reducer.js';
 import { EquityReturnReducer }   from '../../src/finance/economic-regimes/equity-return-reducer.js';
@@ -34,6 +37,7 @@ import { EquityReturnTickHandler, HISTORICAL_BOOTSTRAP_WINDOWS } from '../../src
 import { EquityReturnStepReducer } from '../../src/finance/economic-regimes/equity-return-step-reducer.js';
 import { HISTORICAL_MACRO }      from '../../src/finance/economic-regimes/historical-macro.js';
 import { RATE_KEYS, EQUITY_SLEEVES } from '../../src/finance/economic-regimes/rate-keys.js';
+import { gaussianFrom }          from '../../src/finance/fx/fx-process-models.js';
 import { loadScenarioSim }       from '../helpers/scenario-harness.js';
 
 const W = HISTORICAL_JOINT_WINDOW;
@@ -45,10 +49,18 @@ const countingRng = (inner = mkRng()) => { const r = () => { r.calls++; return i
 const noRng = () => { throw new Error('joint mode must not draw'); };
 const mean = (x) => x.reduce((s, v) => s + v, 0) / x.length;
 const sd   = (x) => { const m = mean(x); return Math.sqrt(x.reduce((s, v) => s + (v - m) ** 2, 0) / (x.length - 1)); };
+// A loop, not Math.min(...x): spreading 10⁵ arguments overflows the call stack.
+const min  = (x) => x.reduce((m, v) => (v < m ? v : m), Infinity);
 const corr = (a, b) => { const ma = mean(a), mb = mean(b); let s = 0, sa = 0, sb = 0; a.forEach((v, i) => { s += (v - ma) * (b[i] - mb); sa += (v - ma) ** 2; sb += (b[i] - mb) ** 2; }); return s / Math.sqrt(sa * sb); };
+const ANCHORS = { inflationRates: { US: 0.03, AU: 0.03 } };
+
+/** The skew's s for a σ at a given distance above the bound. */
+const sOf = (vol, span) => Math.sqrt(Math.log(1 + (vol / span) ** 2));
+/** Pearson correlation of two lognormals whose underlying normals correlate at r. */
+const lognormalCorr = (r, s1, s2) => (Math.exp(r * s1 * s2) - 1) / Math.sqrt((Math.exp(s1 * s1) - 1) * (Math.exp(s2 * s2) - 1));
 
 /** Step the inflation handler `years` times through the real step reducer. */
-function walk(h, rng, years, state = {}) {
+function walk(h, rng, years, state = { ...ANCHORS }) {
   const reducer = new InflationStepReducer();
   const out = [];
   for (let t = 0; t < years; t++) {
@@ -86,6 +98,7 @@ describe('historical macro series', () => {
       assert.ok(Math.abs(mean(W[cc].residuals)) < 1e-12, `${cc} residual mean`);
       assert.ok(W[cc].phi > 0.5 && W[cc].phi < 0.9, `${cc} φ ${W[cc].phi}`);
     }
+    assert.ok(W.residualCorr > 0.1 && W.residualCorr < 0.5, `residual corr ${W.residualCorr}`);
     assert.ok(Math.abs(mean(W.gs10.shocks)) < 1e-12);
     assert.equal(jointWindowIndex(1950), -1);
     assert.equal(jointWindowIndex(1951), 0);
@@ -93,28 +106,75 @@ describe('historical macro series', () => {
   });
 });
 
+// ─── the skew map (§10.1) ────────────────────────────────────────────────────────
+
+describe('skewedInflationDeviation', () => {
+  test('keeps the mean at the anchor, never crosses the bound, and has sd σ', () => {
+    // mulberry32, not mkRng: mkRng's multiply runs past 2⁵³ and loses its low bits, which
+    // is fine for "same stream twice" tests but biases a 200k-draw sd by ~4%.
+    let a = 3 >>> 0;
+    const rng = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const opts = { anchor: 0.03, bound: -0.01, vol: 0.028 };
+    const infl = Array.from({ length: 200000 }, () => 0.03 + skewedInflationDeviation(gaussianFrom(rng), opts));
+    assert.ok(Math.abs(mean(infl) - 0.03) < 0.0005, `mean ${mean(infl)}`);
+    assert.ok(min(infl) > -0.01, 'never below the bound');
+    assert.ok(Math.abs(sd(infl) / 0.028 - 1) < 0.03, `sd ${sd(infl)}`);
+    // Skewed: the upside tail is longer than the downside one.
+    const sorted = [...infl].sort((a, b) => a - b);
+    assert.ok(sorted[Math.floor(0.99 * sorted.length)] - 0.03 > 0.03 - sorted[Math.floor(0.01 * sorted.length)]);
+  });
+
+  test('an anchor at or below the bound leaves no room to move', () => {
+    assert.equal(skewedInflationDeviation(2, { anchor: -0.01, bound: -0.01, vol: 0.03 }), 0);
+    assert.equal(skewedInflationDeviation(2, { anchor: -0.02, bound: -0.01, vol: 0.03 }), 0);
+  });
+});
+
 // ─── GAUSSIAN ────────────────────────────────────────────────────────────────────
 
 describe('InflationTickHandler — GAUSSIAN', () => {
-  test('σ is the stationary sd, persistence is e^(−k), and US–AU correlate at ρ', () => {
-    const h = new InflationTickHandler({ vol: { US: 0.028, AU: 0.03 }, reversionSpeed: { US: 0.33, AU: 0.5 }, correlation: 0.35 });
-    const { actions } = walk(h, mkRng(7), 40000);
-    const us = actions.map(a => a.deviation.US), au = actions.map(a => a.deviation.AU);
-    assert.ok(Math.abs(sd(us) / 0.028 - 1) < 0.05, `US sd ${sd(us)}`);
-    assert.ok(Math.abs(sd(au) / 0.03 - 1) < 0.05, `AU sd ${sd(au)}`);
-    assert.ok(Math.abs(corr(us.slice(1), us.slice(0, -1)) - Math.exp(-0.33)) < 0.02, 'US persistence');
-    assert.ok(Math.abs(corr(au.slice(1), au.slice(0, -1)) - Math.exp(-0.5)) < 0.02, 'AU persistence');
-    // The innovations (not the levels) carry ρ.
-    const innov = (x, k) => x.slice(1).map((v, i) => v - Math.exp(-k) * x[i]);
-    assert.ok(Math.abs(corr(innov(us, 0.33), innov(au, 0.5)) - 0.35) < 0.03, 'innovation correlation');
+  const sUS = sOf(0.028, 0.04), sAU = sOf(0.03, 0.04);
+
+  test('over a long run: sd σ, rarely below 0, and US–AU levels correlated as the latent predicts', () => {
+    const h = new InflationTickHandler({ vol: { US: 0.028, AU: 0.03 }, globalShare: 0.4, correlation: 0.35 });
+    const { actions } = walk(h, mkRng(7), 60000);
+    const us = actions.map(a => 0.03 + a.deviation.US), au = actions.map(a => 0.03 + a.deviation.AU);
+    assert.ok(Math.abs(sd(us) / 0.028 - 1) < 0.06, `US sd ${sd(us)}`);
+    assert.ok(Math.abs(sd(au) / 0.03 - 1) < 0.06, `AU sd ${sd(au)}`);
+    assert.ok(Math.abs(mean(us) - 0.03) < 0.002, `US mean ${mean(us)}`);
+    for (const [cc, x] of [['US', us], ['AU', au]]) {
+      // At a 3% anchor about 3% of years dip below 0, as in the low-inflation eras (US
+      // 1983–2023 and AU since 1993 both averaged under 3% and had 2–3% of years below 0);
+      // it was 14–16% before design 103 §10.1.
+      const below = x.filter(v => v < 0).length / x.length;
+      assert.ok(below < 0.05, `${cc} years below 0: ${below}`);
+      assert.ok(min(x) > -0.01, `${cc} never below the bound`);
+    }
+    const expected = lognormalCorr(0.4 + 0.6 * 0.35, sUS, sAU);
+    assert.ok(Math.abs(corr(us, au) - expected) < 0.06, `level corr ${corr(us, au)} vs ${expected}`);
   });
 
-  test('every tick takes exactly four uniforms, whatever ρ is', () => {
+  test('a global share of 0 lets the countries correlate only through ρ, so much less', () => {
+    const { actions } = walk(new InflationTickHandler({ globalShare: 0, correlation: 0.35 }), mkRng(8), 40000);
+    const c = corr(actions.map(a => a.deviation.US), actions.map(a => a.deviation.AU));
+    const expected = lognormalCorr(0.35, sUS, sAU);
+    assert.ok(Math.abs(c - expected) < 0.06, `level corr ${c} vs ${expected}`);
+    assert.ok(c < lognormalCorr(0.61, sUS, sAU) - 0.15, 'the global factor is what lifts the co-movement');
+  });
+
+  test('six uniforms a year with a global factor, four without, whatever ρ is', () => {
     for (const correlation of [0, 0.35, 1]) {
-      const rng = countingRng();
-      walk(new InflationTickHandler({ correlation }), rng, 5);
-      assert.equal(rng.calls, 20, `ρ=${correlation}`);
+      const r6 = countingRng(); walk(new InflationTickHandler({ correlation }), r6, 5);
+      assert.equal(r6.calls, 30, `ρ=${correlation}`);
+      const r4 = countingRng(); walk(new InflationTickHandler({ correlation, globalShare: 0 }), r4, 5);
+      assert.equal(r4.calls, 20, `ρ=${correlation}, no global factor`);
     }
+  });
+
+  test('the latent factors are stored and walked', () => {
+    const { actions, state } = walk(new InflationTickHandler(), mkRng(9), 3);
+    assert.deepEqual(Object.keys(state.inflationLatent).sort(), ['AU', 'US', 'g']);
+    assert.deepEqual(state.inflationLatent, actions[2].latent);
   });
 });
 
@@ -123,43 +183,43 @@ describe('InflationTickHandler — GAUSSIAN', () => {
 describe('InflationTickHandler — HISTORICAL_JOINT', () => {
   const joint = (opts = {}) => new InflationTickHandler({ model: 'HISTORICAL_JOINT', ...opts });
 
-  test('the innovation is the cursor year\'s residual, rescaled, with no RNG draw', () => {
-    const h = joint();
-    const a = h.call({ sim: { rng: noRng }, state: { equityReturnBootstrap: { year: 1974 } } })[0];
-    const i = 1974 - 1951;
+  test('the normal scores are standard normal and keep the residuals\' order', () => {
     for (const cc of ['US', 'AU']) {
-      const expected = W[cc].residuals[i] * (h.innovationSd(cc) / W[cc].sd);
-      assert.ok(Math.abs(a.deviation[cc] - expected) < 1e-15, cc);
+      const ns = W[cc].normalScores;
+      assert.ok(Math.abs(mean(ns)) < 1e-9 && Math.abs(sd(ns) - 1) < 1e-9, cc);
+      // Same ranking as the residuals, but thin-tailed: history's 4.6σ AU year becomes ~2.5σ.
+      const byRes = W[cc].residuals.map((_, i) => i).sort((i, j) => W[cc].residuals[i] - W[cc].residuals[j]);
+      byRes.slice(1).forEach((i, k) => assert.ok(ns[i] > ns[byRes[k]], `${cc} order`));
+      assert.ok(Math.max(...ns) < 2.6, `${cc} max ${Math.max(...ns)}`);
     }
-    assert.equal(a.historicalYear, 1974);
+    assert.ok(W.normalScoreCorr > 0.1 && W.normalScoreCorr < 0.5);
   });
 
-  test('at the fitted k and σ, replaying the window reproduces history\'s inflation path', () => {
-    // σ chosen so the rescale is 1, and k = −ln φ, so the step is exactly the AR(1) fit.
-    const vol = {}, reversionSpeed = {};
-    for (const cc of ['US', 'AU']) {
-      reversionSpeed[cc] = -Math.log(W[cc].phi);
-      vol[cc] = W[cc].sd / Math.sqrt(1 - W[cc].phi ** 2);
-    }
-    const h = joint({ vol, reversionSpeed });
-    const series = { US: HISTORICAL_MACRO.usInflation, AU: HISTORICAL_MACRO.auInflation };
-    let state = { inflationDev: { US: series.US[0] - W.US.mean, AU: series.AU[0] - W.AU.mean } };
-    const reducer = new InflationStepReducer();
-    for (let y = 1951; y <= 2023; y++) {
-      const a = h.call({ sim: { rng: noRng }, state: { ...state, equityReturnBootstrap: { year: y } } })[0];
-      state = reducer.reduce(state, a);
-      for (const cc of ['US', 'AU']) {
-        // Off only by the residuals' re-centring, which accumulates at most m/(1−φ).
-        assert.ok(Math.abs(state.inflationDev[cc] - (series[cc][y - 1950] - W[cc].mean)) < 0.005, `${cc} ${y}`);
-      }
-    }
+  test('the cursor year\'s normal-scored residuals drive both factors, with no RNG draw', () => {
+    const h = joint({ globalShareJoint: 0.2, globalReversionSpeed: 0.1, reversionSpeed: { US: 0.33, AU: 0.5 } });
+    const a = h.call({ sim: { rng: noRng }, state: { ...ANCHORS, equityReturnBootstrap: { year: 1974 } } })[0];
+    const i = 1974 - 1951;
+    const eUS = W.US.normalScores[i], eAU = W.AU.normalScores[i];
+    const eg  = (eUS + eAU) / Math.sqrt(2 + 2 * W.normalScoreCorr);
+    const step = (k, e) => Math.sqrt(1 - Math.exp(-2 * k)) * e;
+    assert.ok(Math.abs(a.latent.g  - step(0.1, eg))   < 1e-15);
+    assert.ok(Math.abs(a.latent.US - step(0.33, eUS)) < 1e-15);
+    assert.ok(Math.abs(a.latent.AU - step(0.5, eAU))  < 1e-15);
+    assert.equal(a.historicalYear, 1974);
+    // 1974 was a US inflation surprise to the upside.
+    assert.ok(a.deviation.US > 0);
+  });
+
+  test('the same year and state always give the same step', () => {
+    const st = { ...ANCHORS, equityReturnBootstrap: { year: 1990 }, inflationLatent: { g: 0.3, US: -0.2, AU: 0.1 } };
+    assert.deepEqual(joint().call({ sim: { rng: noRng }, state: st }), joint().call({ sim: { rng: noRng }, state: st }));
   });
 
   test('no cursor (or a year outside 1951–) falls back to GAUSSIAN and draws', () => {
-    for (const state of [{}, { equityReturnBootstrap: { year: 1929 } }]) {
+    for (const state of [{ ...ANCHORS }, { ...ANCHORS, equityReturnBootstrap: { year: 1929 } }]) {
       const rng = countingRng();
       const a = joint().call({ sim: { rng }, state })[0];
-      assert.equal(rng.calls, 4);
+      assert.equal(rng.calls, 6);
       assert.ok(!('historicalYear' in a));
     }
   });
@@ -168,10 +228,11 @@ describe('InflationTickHandler — HISTORICAL_JOINT', () => {
 // ─── reducers ────────────────────────────────────────────────────────────────────
 
 describe('inflation reducers', () => {
-  test('the step reducer stores the deviation and floor, and the pass-through only when asked', () => {
+  test('the step reducer stores the deviation, latent and floor, and the pass-through only when asked', () => {
     const r = new InflationStepReducer();
-    const plain = r.reduce({}, { type: 'INFLATION_STEP_APPLY', deviation: { US: 0.01, AU: -0.02 }, floor: -0.05 });
+    const plain = r.reduce({}, { type: 'INFLATION_STEP_APPLY', deviation: { US: 0.01, AU: -0.02 }, latent: { g: 0.1, US: 0.2, AU: -0.3 }, floor: -0.05 });
     assert.deepEqual(plain.inflationDev, { US: 0.01, AU: -0.02 });
+    assert.deepEqual(plain.inflationLatent, { g: 0.1, US: 0.2, AU: -0.3 });
     assert.equal(plain.inflationFloor, -0.05);
     assert.ok(!('equityInflationPassThrough' in plain));
 
@@ -260,10 +321,16 @@ describe('inflation path — e2e', () => {
   test('Gaussian on: the price level moves off the deterministic path, reproducibly', () => {
     const off = run({}).inflationAccumulator;
     const on  = run({ inflationStochastic: true });
-    assert.ok(on.inflationDev);
+    assert.ok(on.inflationDev && on.inflationLatent);
     assert.notEqual(on.inflationAccumulator.US, off.US);
     assert.deepEqual(run({ inflationStochastic: true }).inflationAccumulator, on.inflationAccumulator);
     assert.notDeepEqual(run({ inflationStochastic: true, randomSeed: 8 }).inflationAccumulator, on.inflationAccumulator);
+  });
+
+  test('the global share reaches the handler', () => {
+    const a = run({ inflationStochastic: true, inflationGlobalShare: 0 }).inflationAccumulator;
+    const b = run({ inflationStochastic: true, inflationGlobalShare: 0.8 }).inflationAccumulator;
+    assert.notDeepEqual(a, b);
   });
 
   test('joint: equity replays post-war years, and inflation and nominal equity follow them', () => {

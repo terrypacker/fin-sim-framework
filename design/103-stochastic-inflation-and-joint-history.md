@@ -253,3 +253,108 @@ rates up. Plan a before/after run on a real plan before trusting either number.
   Gaussian mode, as designed, has none.
 - **Not built:** the before/after MC measurement on a real plan (§6). It's a long run to
   schedule separately.
+
+## 10. Revision (13 Sep 2026): skewed swings and a shared global factor
+
+The owner saw AU inflation at −3% while the US sat at +3%, in a single run of their plan.
+The config was right; the process wasn't. Measured over 2,000 paths × 44 years, both
+anchors at 3%:
+
+| | US years < 0 | AU years < 0 | AU years < −2% | US–AU level corr |
+|---|---|---|---|---|
+| history 1951–2023 | 2.7% | 1.4% | 0.0% | 0.59 |
+| Gaussian, as built in §9 | **13.9%** | **15.5%** | 4.6% | 0.34 |
+| joint, as built in §9 | 9.3% | 8.0% | 1.1% | 0.40 |
+
+Two flaws, both fixed here:
+
+### 10.1 Skewed, level-scaled swings
+
+The §4.1 process swung symmetrically, and just as far at a 3% anchor as in the 1970s.
+Real inflation spikes up and rarely dips below zero, and its swings grow with its level.
+Inflation is now a lower bound F plus a lognormal distance above it:
+
+    inflation = F + (A − F)·exp(s·y − s²/2),   s = √ln(1 + (σ / (A − F))²)
+
+`y` is a standardized latent (below). The average stays at the anchor A and the stationary
+sd stays σ (the existing settings keep their meaning), but inflation can't cross F, and a
+lower anchor gives smaller swings. `inflationLowerBoundUs/Au` default to −1%.
+`inflationPathFloor` stays as a hard clamp on the effective rate, including regimes.
+
+### 10.2 A shared global factor
+
+§4.1 correlated only the two countries' yearly surprises (ρ, 0.35). History's surprises
+correlate at just 0.26 (the AR(1) residuals), yet the LEVELS correlate at 0.59: both
+countries share a slow global cycle, high together in the 1970s and low together since the
+1990s. Each country's latent is now
+
+    y[cc] = √w·g + √(1 − w)·x[cc]
+
+where g is a slow global OU (`inflationGlobalReversionSpeed`, default 0.1, a half-life of
+about 7 years) and x[cc] is the country's own OU (the existing speed and ρ). The global
+share w (`inflationGlobalShare`) defaults to 0.4.
+
+- **Gaussian mode** draws the global surprise from a third normal, only when w > 0.
+- **Joint mode** takes the historical year's standardized residuals as each country's
+  surprise, and their normalized average as the global one, so the whole step stays
+  historical with no RNG draw.
+
+The factors live in `state.inflationLatent`; `state.inflationDev` keeps its meaning (rate
+units), so the fold, the prime link (design 104) and the equity pass-through are unchanged.
+
+### 10.3 Calibration
+
+Only the new settings were tuned, because saved plans carry the existing ones as stored
+values. A grid over w ∈ {0…0.6}, k_global ∈ {0.05, 0.1, 0.2} and F ∈ {−1%, −0.5%},
+simulated at history's own anchors and sds over history-length (73-year) paths, scored on
+persistence, level and change correlation, and years below 0:
+
+| | persistence US/AU | level corr | change corr | below 0 US/AU | within-path sd US/AU |
+|---|---|---|---|---|---|
+| history | 0.72 / 0.73 | 0.59 | 0.32 | 2.7% / 1.4% | 2.8 / 4.4 |
+| **chosen: F −1%, w 0.4, k 0.1** | 0.70 / 0.69 | 0.55 | 0.42 | 1.0% / 1.0% | 2.3 / 3.5 |
+| skew only (w 0) | — | 0.32 | 0.29 | 1.0% / 1.0% | — |
+
+The trade-offs: yearly changes co-move a little more than history's, and a single path
+wanders a little less than history's one path, because the slow shared factor puts more of
+the variation between paths than within one. The run-level check is
+`probe-inflation-joint.mjs` §4.
+
+At a 3% anchor, about 3% of years fall below 0. That's consistent with history's
+low-inflation eras (US 1983–2023 and AU since 1993 both averaged under 3%, with 2–3% of
+years below 0). The 1.4–2.7% post-war figures come from higher averages.
+
+### 10.4 Joint mode: normal scores and its own global share
+
+Built the same way as Gaussian mode, joint mode double-counted. Measured at history's
+anchors and sds, 2,000 paths × 40 years:
+
+| joint-mode variant | sd (US) | 10y p95 | below 0 US/AU | level corr | stagflation gap |
+|---|---|---|---|---|---|
+| raw residuals, w 0.4 (first build of §10) | 4.4% | 10.9% | 1.7% / 1.2% | 0.69 | −9.3 |
+| normal scores, w 0.4 | 3.4% | 9.3% | 3.1% / 2.6% | 0.71 | — |
+| independent Gaussian global factor, w 0.4 | 2.1% | 6.4% | 0.7% / 0.6% | 0.54 | −9.5 |
+| **normal scores, historical global, rescaled, w 0.2** | 2.4% | 7.5% | 1.1% / 0.8% | **0.63** | **−11.4** |
+| same at w 0.4 | 2.4% | 7.5% | 1.1% / 1.0% | 0.73 | −10.7 |
+| history 1951–2023 | 2.8% | 8.7% (worst) | 2.7% / 1.4% | 0.59 | −13.2 |
+
+Two causes:
+
+1. **History's surprises are already fat-tailed and skewed** (kurtosis 4.7 US, 8.2 AU; the
+   1951 AU wool boom is a 4.6σ year). The skew map, calibrated on normal surprises, skewed
+   them a second time. Joint mode now uses **normal scores**: each residual replaced by the
+   normal quantile of its rank. That keeps which years were surprises, their order, and
+   their same-year US–AU link, and lets the skew map supply the skew once.
+2. **The global surprise is the normalized average of the two countries' own**, so it
+   correlates at λ = √((1+r)/2) ≈ 0.78 with each. The two parts add variance instead of
+   splitting it (the latent sd was about 1.28), and they over-correlate the countries. With
+   only two countries, the common part can't be separated from history's own surprises
+   (the remainders are exact opposites), so instead:
+   - the latent is divided by its exact sd, `√(1 + 2√(w(1−w))·λ·√(1−a_g²)·√(1−a²)/(1−a_g·a))`,
+     which restores σ's meaning;
+   - joint mode has its own share, `inflationGlobalShareJoint`, default **0.2**, which
+     reproduces the 0.59 level correlation.
+
+   An independent Gaussian global factor would have kept one shared w, but it diluted the
+   stagflation link (−9.5) and made joint mode draw from the RNG. The chosen form stays
+   fully historical and keeps the strongest link (−11.4 against history's −13.2).

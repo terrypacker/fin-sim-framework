@@ -39,6 +39,8 @@ export class InflationStepReducer extends Reducer {
   reduce(state, action) {
     if (action?.deviation == null) return this.newState(state);
     const next = { inflationDev: { ...action.deviation } };
+    // The global and per-country latent factors the next tick walks (design 103 §10).
+    if (action.latent != null) next.inflationLatent = { ...action.latent };
     if (typeof action.floor === 'number') next.inflationFloor = action.floor;
     if (action.passThrough) {
       next.equityInflationPassThrough = Object.fromEntries(

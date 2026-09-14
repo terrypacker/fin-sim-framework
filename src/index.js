@@ -107,7 +107,7 @@ import { HISTORICAL_EQUITY_RETURNS } from './finance/economic-regimes/historical
 import { HISTORICAL_MACRO } from './finance/economic-regimes/historical-macro.js';
 import { InflationPathReducer } from './finance/economic-regimes/inflation-path-reducer.js';
 import { InflationStepReducer } from './finance/economic-regimes/inflation-step-reducer.js';
-import { INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, HISTORICAL_JOINT_WINDOW, jointInflationActive, jointWindowIndex, InflationTickHandler } from './finance/economic-regimes/inflation-tick-handler.js';
+import { INFLATION_MODEL_IDS, INFLATION_MODEL_LABELS, HISTORICAL_JOINT_WINDOW, jointInflationActive, jointWindowIndex, skewedInflationDeviation, InflationTickHandler } from './finance/economic-regimes/inflation-tick-handler.js';
 import { INDEX_BASE, indexMarkets, lastYearEndBefore, yearEndsBetween, seedIndexLevels, stepIndexLevels, markDownIndexLevels, MarketIndexReducer } from './finance/economic-regimes/market-index.js';
 import { MARKET_GROWTH_PARAMS, marketReturnFor } from './finance/economic-regimes/market-returns.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -981,6 +981,7 @@ export const Finance = {
   HISTORICAL_JOINT_WINDOW,
   jointInflationActive,
   jointWindowIndex,
+  skewedInflationDeviation,
   InflationTickHandler,
   INDEX_BASE,
   indexMarkets,

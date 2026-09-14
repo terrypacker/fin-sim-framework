@@ -500,7 +500,8 @@ export const ECONOMIC_REGIMES = {
       { type: 'PROPERTY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       // Design 103 §4.2. `historicalYear` only in joint mode; `passThrough` only when set.
       // Design 104 adds `primeDeviation` / `primeFloor`, only in "follows inflation" prime mode.
-      { type: 'INFLATION_STEP_APPLY', fields: { deviation: ValueType.any(), floor: ValueType.number(), historicalYear: ValueType.number(), passThrough: ValueType.any(), primeDeviation: ValueType.any(), primeFloor: ValueType.any() } },
+      // Design 103 §10 adds `latent`, the standardized global and per-country factors.
+      { type: 'INFLATION_STEP_APPLY', fields: { deviation: ValueType.any(), latent: ValueType.any(), floor: ValueType.number(), historicalYear: ValueType.number(), passThrough: ValueType.any(), primeDeviation: ValueType.any(), primeFloor: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -876,7 +877,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.028,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'How far US inflation wanders from its anchor: the long-run standard deviation of the yearly rate (0.028 = 2.8 points, measured on US CPI 1951–2023, design 103 §2). In joint mode it rescales the historical surprises.',
+        description:  'How far US inflation wanders from its anchor: the long-run standard deviation of the yearly rate (0.028 = 2.8 points, measured on US CPI 1951–2023, design 103 §2). The swings are skewed, bigger upward than downward, and shrink when the anchor sits close to Inflation Lower Bound (design 103 §10.1).',
       },
       {
         key:          'inflationPathVolAu',
@@ -887,7 +888,7 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: 0.03,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'How far AU inflation wanders from its anchor. AU\'s post-war measurement (4.4 points) is dominated by the 1970s–80s wage spiral and the 1951 wool boom, so 3.0 is the default (design 103 §4.1). In joint mode it rescales the historical surprises.',
+        description:  'How far AU inflation wanders from its anchor. AU\'s post-war measurement (4.4 points) is dominated by the 1970s–80s wage spiral and the 1951 wool boom, so 3.0 is the default (design 103 §4.1). The swings are skewed, bigger upward than downward, and shrink when the anchor sits close to Inflation Lower Bound (design 103 §10.1).',
       },
       {
         key:          'inflationReversionSpeedUs',
@@ -931,7 +932,62 @@ export const ECONOMIC_REGIMES = {
         opt:          false,
         defaultValue: -0.05,
         visibleWhen:  { param: 'inflationStochastic', truthy: true },
-        description:  'The lowest yearly inflation rate the path can produce (−0.05 = 5% deflation). No US or AU year since 1951 fell below −1%, so this only trims a Gaussian tail.',
+        description:  'A hard lower clamp on the yearly inflation rate, applied after everything else, including shocks and regimes (−0.05 = 5% deflation). The path itself approaches Inflation Lower Bound instead and practically never reaches this.',
+      },
+      {
+        key:          'inflationLowerBoundUs',
+        label:        'Inflation Lower Bound — US',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: -0.01,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'The rate US inflation approaches in its lowest years but never crosses (design 103 §10.1). Inflation is modelled as this bound plus a skewed distance above it, so it can spike up but only drifts gently down, and its swings grow when it runs high, as it has since 1951 (2.7% of US years below 0, none below −0.7%). −0.01 puts about 1% of years below zero.',
+      },
+      {
+        key:          'inflationLowerBoundAu',
+        label:        'Inflation Lower Bound — AU',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: -0.01,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'The rate AU inflation approaches in its lowest years but never crosses (1.4% of AU years since 1951 were below 0, none below −0.3%). −0.01 puts about 1% of years below zero.',
+      },
+      {
+        key:          'inflationGlobalShare',
+        label:        'Inflation Path Global Share',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.4,
+        visibleWhen:  { param: 'inflationStochastic', truthy: true },
+        description:  'How much of each country\'s inflation swings comes from a slow global cycle shared by the US and AU, from 0 (none) to 1 (all). History has both high together in the 1970s and low together since the 1990s: their inflation LEVELS correlated at 0.59 over 1951–2023, even though their yearly surprises correlated at only 0.26–0.35. 0.4 reproduces that (design 103 §10.2). 0 lets the two countries drift apart for years.',
+      },
+      {
+        key:          'inflationGlobalReversionSpeed',
+        label:        'Inflation Path Global Reversion Speed (k)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.1,
+        visibleWhen:  [{ param: 'inflationStochastic', truthy: true }, { param: 'inflationGlobalShare', gt: 0 }],
+        description:  'How quickly the shared global inflation cycle fades, per year: 0.1 keeps 0.90 of it each year, a half-life of about 7 years, so it moves on the scale of decades. Only used when Inflation Path Global Share is above 0.',
+      },
+      {
+        key:          'inflationGlobalShareJoint',
+        label:        'Inflation Path Global Share (joint mode)',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.2,
+        visibleWhen:  [{ param: 'inflationStochastic', truthy: true }, { param: 'inflationModel', equals: 'HISTORICAL_JOINT' }],
+        description:  'The global cycle\'s share when inflation is historical and joint with equity (Monte Carlo\'s default). It is smaller than Inflation Path Global Share because in this mode the global cycle is built from the same historical years as each country\'s own surprises, so it already moves with them. 0.2 reproduces history\'s 0.59 US–AU level correlation; 0.4 would give about 0.73 (design 103 §10.4).',
       },
       {
         // Design 103 §6 — a separate switch for the same loader reason as mcSequenceRisk.
@@ -1394,6 +1450,11 @@ export const ECONOMIC_REGIMES = {
             vol:            { US: p.inflationPathVolUs ?? 0.028, AU: p.inflationPathVolAu ?? 0.03 },
             reversionSpeed: { US: p.inflationReversionSpeedUs ?? 0.33, AU: p.inflationReversionSpeedAu ?? 0.33 },
             correlation:    p.inflationPathCorrelation ?? 0.35,
+            // Design 103 §10: the shared global cycle and the skew's lower bounds.
+            globalShare:          p.inflationGlobalShare          ?? 0.4,
+            globalShareJoint:     p.inflationGlobalShareJoint     ?? 0.2,
+            globalReversionSpeed: p.inflationGlobalReversionSpeed ?? 0.1,
+            lowerBound:     { US: p.inflationLowerBoundUs ?? -0.01, AU: p.inflationLowerBoundAu ?? -0.01 },
             model:          joint ? 'HISTORICAL_JOINT' : 'GAUSSIAN',
             floor:          p.inflationPathFloor ?? -0.05,
             passThrough:    joint,

@@ -148,29 +148,40 @@ const noIdio   = Object.fromEntries(EQUITY_SLEEVES.map(k => [k, 0]));
 
 console.log(`\n4. THE ENGINE'S INFLATION PATH (${PATHS} paths × ${YEARS} years, POSTWAR equity bootstrap, US anchor ${pct(usAnchor)})\n`);
 console.log('mode                 ac1     sd   10y infl p5 .. p95   real equity dev: infl > 5% vs ≤ 5% (gap)');
+// Design 103 §10 — anchors at each country's post-war mean, so "below 0" and the spread are
+// like-for-like with history; the handler reads the anchors from state.
+const auAnchor = HISTORICAL_JOINT_WINDOW.AU.mean;
 for (const model of ['GAUSSIAN', 'HISTORICAL_JOINT']) {
   const rng = mulberry32(11);
   const eqH = new EquityReturnTickHandler({ model: 'HISTORICAL_BOOTSTRAP', window: 'POSTWAR', vol: HISTORICAL_BOOTSTRAP_WINDOWS.POSTWAR.sd, idioVol: noIdio });
-  const inH = new InflationTickHandler({ model });
+  const inH = new InflationTickHandler({ model, vol: { US: sd(range(usInfl, 1951, 2023)), AU: sd(range(auInfl, 1951, 2023)) } });
   const eqR = new EquityReturnStepReducer(), inR = new InflationStepReducer();
-  const ac1s = [], sds = [], dec10 = [], hi = [], lo = [];
+  const ac1s = [], sds = [], dec10 = [], hi = [], lo = [], lvl = [];
+  let belowUs = 0, belowAu = 0, n = 0;
   for (let p = 0; p < PATHS; p++) {
-    let state = {};
-    const infl = [], eq = [];
+    let state = { inflationRates: { US: usAnchor, AU: auAnchor } };
+    const infl = [], inflAu = [], eq = [];
     for (let t = 0; t < YEARS; t++) {
       const e = eqH.call({ sim: { rng }, state })[0];
       state = eqR.reduce(state, e);
       const i = inH.call({ sim: { rng }, state })[0];
       state = inR.reduce(state, i);
       infl.push(Math.max(-0.05, usAnchor + i.deviation.US));
+      inflAu.push(Math.max(-0.05, auAnchor + i.deviation.AU));
       eq.push(e.deviation[RATE_KEYS.EQUITY_US]);
     }
-    ac1s.push(ac(infl, 1)); sds.push(sd(infl));
+    ac1s.push(ac(infl, 1)); sds.push(sd(infl)); lvl.push(corrAB(infl, inflAu));
+    belowUs += infl.filter(v => v < 0).length; belowAu += inflAu.filter(v => v < 0).length; n += YEARS;
     dec10.push(Math.exp(mean(infl.slice(0, 10).map(Math.log1p))) - 1);
     infl.forEach((v, t) => (v > 0.05 ? hi : lo).push(eq[t]));
   }
   const q = (a, x) => { const s = [...a].sort((m, n) => m - n); return s[Math.floor(x * (s.length - 1))]; };
   console.log(`${model.padEnd(18)} ${f2(q(ac1s, 0.5))}  ${pct(q(sds, 0.5)).padStart(6)}   ${pct(q(dec10, 0.05))} .. ${pct(q(dec10, 0.95))}        `
-    + `${pct(mean(hi))} vs ${pct(mean(lo))} (${pct(mean(hi) - mean(lo))})`);
+    + `${pct(mean(hi))} vs ${pct(mean(lo))} (${pct(mean(hi) - mean(lo))})   below 0: US ${pct(belowUs / n)} AU ${pct(belowAu / n)}   US–AU level corr ${f2(q(lvl, 0.5))}`);
 }
-console.log(`history 1951–2023    ${f2(ac(range(usInfl, 1951, 2023), 1))}  ${pct(sd(range(usInfl, 1951, 2023))).padStart(6)}   (10y range above)       gap ${pct(mean(hi.map(p => p[1])) - mean(lo.map(p => p[1])))}`);
+{
+  const u = range(usInfl, 1951, 2023), a = range(auInfl, 1951, 2023);
+  const [lu, la] = paired(usInfl, auInfl, 1951, 2023);
+  console.log(`history 1951–2023    ${f2(ac(u, 1))}  ${pct(sd(u)).padStart(6)}   (10y range above)       gap ${pct(mean(hi.map(p => p[1])) - mean(lo.map(p => p[1])))}   `
+    + `below 0: US ${pct(u.filter(v => v < 0).length / u.length)} AU ${pct(a.filter(v => v < 0).length / a.length)}   US–AU level corr ${f2(corrAB(lu, la))}`);
+}

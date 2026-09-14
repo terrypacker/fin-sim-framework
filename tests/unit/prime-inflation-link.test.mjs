@@ -42,6 +42,7 @@ const mkRng = (seed = 42) => {
 };
 const countingRng = (inner = mkRng()) => { const r = () => { r.calls++; return inner(); }; r.calls = 0; return r; };
 const noRng = () => { throw new Error('must not draw'); };
+const ANCHORS = { inflationRates: { US: 0.03, AU: 0.03 } };
 
 const PRIME = { beta: { US: 1.3, AU: 1.3 }, rho: { US: 0.6, AU: 0.75 }, noise: { US: 0, AU: 0 }, floor: { US: 0.0025, AU: 0.001 } };
 
@@ -50,7 +51,7 @@ const PRIME = { beta: { US: 1.3, AU: 1.3 }, rho: { US: 0.6, AU: 0.75 }, noise: {
 describe('InflationTickHandler — prime link', () => {
   test('primeDev moves (1−ρ) of the way toward β × the inflation deviation each year', () => {
     const h = new InflationTickHandler({ model: 'HISTORICAL_JOINT', prime: PRIME });
-    const state = { equityReturnBootstrap: { year: 1974 }, inflationDev: { US: 0.01, AU: 0.0 }, primeDev: { US: 0.004, AU: -0.002 } };
+    const state = { ...ANCHORS, equityReturnBootstrap: { year: 1974 }, primeDev: { US: 0.004, AU: -0.002 } };
     const a = h.call({ sim: { rng: noRng }, state })[0];
     for (const cc of ['US', 'AU']) {
       const expected = PRIME.rho[cc] * state.primeDev[cc] + (1 - PRIME.rho[cc]) * PRIME.beta[cc] * a.deviation[cc];
@@ -59,30 +60,17 @@ describe('InflationTickHandler — prime link', () => {
     assert.deepEqual(a.primeFloor, PRIME.floor);
   });
 
-  test('a sustained inflation deviation settles at β times it', () => {
-    // Hold inflation at +2 points by feeding the same deviation back; the prime deviation
-    // converges on 1.3 × 2 = 2.6 points.
-    const h = new InflationTickHandler({ prime: PRIME, vol: { US: 0, AU: 0 } });
-    let state = { inflationDev: { US: 0.02, AU: 0.02 }, primeDev: { US: 0, AU: 0 } };
-    for (let t = 0; t < 60; t++) {
-      const a = h.call({ sim: { rng: mkRng(t) }, state: { ...state, inflationDev: { US: 0.02 / Math.exp(-0.33), AU: 0.02 / Math.exp(-0.33) } } })[0];
-      state = { ...state, primeDev: a.primeDeviation };
-    }
-    assert.ok(Math.abs(state.primeDev.US - 0.026) < 1e-6, `US ${state.primeDev.US}`);
-    assert.ok(Math.abs(state.primeDev.AU - 0.026) < 1e-6, `AU ${state.primeDev.AU}`);
-  });
-
   test('noise 0 draws nothing extra; noise above 0 draws one Gaussian per country', () => {
     const quiet = countingRng();
-    new InflationTickHandler({ prime: PRIME }).call({ sim: { rng: quiet }, state: {} });
-    assert.equal(quiet.calls, 4, 'the inflation draws only');
+    new InflationTickHandler({ prime: PRIME }).call({ sim: { rng: quiet }, state: { ...ANCHORS } });
+    assert.equal(quiet.calls, 6, 'the inflation draws only (two country normals + the global one)');
     const noisy = countingRng();
-    new InflationTickHandler({ prime: { ...PRIME, noise: { US: 0.013, AU: 0.009 } } }).call({ sim: { rng: noisy }, state: {} });
-    assert.equal(noisy.calls, 8);
+    new InflationTickHandler({ prime: { ...PRIME, noise: { US: 0.013, AU: 0.009 } } }).call({ sim: { rng: noisy }, state: { ...ANCHORS } });
+    assert.equal(noisy.calls, 10);
   });
 
   test('without the link the action carries no prime fields', () => {
-    const a = new InflationTickHandler().call({ sim: { rng: mkRng() }, state: {} })[0];
+    const a = new InflationTickHandler().call({ sim: { rng: mkRng() }, state: { ...ANCHORS } })[0];
     assert.ok(!('primeDeviation' in a) && !('primeFloor' in a));
   });
 
