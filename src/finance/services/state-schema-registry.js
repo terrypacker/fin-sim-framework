@@ -196,6 +196,14 @@ export class StateSchemaRegistry {
     this.registerPattern('*.contributionBasis', ParameterValueType.currency());
     this.registerPattern('*.earningsBasis',     ParameterValueType.currency());
     this.registerPattern('*.derivedIncomeBasis', ParameterValueType.currency());
+    // Design 105 — a super fund's income-year CGT tally (SuperCapitalGainApplyReducer).
+    this.registerPattern('*.capitalGainsYTD.fy',               ParameterValueType.year());
+    this.registerPattern('*.capitalGainsYTD.discountableGain', ParameterValueType.currency());
+    this.registerPattern('*.capitalGainsYTD.otherGain',        ParameterValueType.currency());
+    this.registerPattern('*.capitalGainsYTD.capitalLoss',      ParameterValueType.currency());
+    this.registerPattern('*.capitalGainsYTD.carriedLoss',      ParameterValueType.currency());
+    this.registerPattern('*.capitalGainsYTD.netGain',          ParameterValueType.currency());
+    this.registerPattern('*.capitalGainsYTD.revenueGain',      ParameterValueType.currency());
     // Per-country residency cost-base step-up / per-lot AU cost base (design 36 §12.2).
     this.registerPattern('*.costBaseStepUpByCountry.*',   ParameterValueType.currency());
     this.registerPattern('*.holdings.*.costBaseByCountry.*', ParameterValueType.currency());

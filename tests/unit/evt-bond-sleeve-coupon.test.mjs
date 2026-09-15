@@ -146,7 +146,9 @@ test('EVT-BOND-SLV-6: an IRA BOND sleeve reinvests its coupon into a new-vintage
   assert.ok(Math.abs(acct.balance - sumMv) < 0.01, '§4.4: balance stays synced to Σ holdings');
 });
 
-test('EVT-BOND-SLV-7: a super BOND sleeve reinvests its coupon (deferred, no immediate AU tax booked) (§G10b)', () => {
+// Design 105 §8: super's coupon is the FUND's income, taxed in the fund and reinvested net;
+// the reinvest mechanics this pins are unchanged (super-bond-income.test.mjs has the tax).
+test('EVT-BOND-SLV-7: a super BOND sleeve reinvests its coupon (net of fund tax, never the member\'s AU tax) (§G10b)', () => {
   const sim = run({ residencyState: 'NE', monthlyExpenses: 0, inflationAdjust: false, auFixedIncomeInterestRate: 0.05 },
     (cfg) => seedBondSleeve('super', cfg));
   sim.stepTo(new Date(Date.UTC(2027, 0, 2)));

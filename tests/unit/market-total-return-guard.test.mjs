@@ -103,10 +103,20 @@ function probeState(state, stateKey, rateKey) {
   };
 }
 
-/** The one money action a handler returns; super's GROSS, before the fund's tax. */
+/**
+ * The one money action a handler returns. For super, the return before the fund's tax
+ * AND before its franking credit, since neither is the market's. Since design 105 the
+ * fund is taxed on income only, so `grossAmount` is the income base, not the whole
+ * return. Undo the fund's arithmetic instead: net + t·(income + credit) − credit.
+ */
 function earned(actions) {
   const a = actions.find(x => typeof x?.type === 'string' && typeof x.amount === 'number');
-  return a ? (a.grossAmount ?? a.amount) : 0;
+  if (!a) return 0;
+  if (a.type === 'SUPER_EARNINGS_APPLY') {
+    const credit = a.frankingCredit ?? 0;
+    return a.amount + (a.taxRate ?? 0) * ((a.grossAmount ?? 0) + credit) - credit;
+  }
+  return a.grossAmount ?? a.amount;
 }
 
 /** One year's return on the probe lot: growth plus every dividend paid on top. */

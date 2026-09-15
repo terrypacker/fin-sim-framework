@@ -121,21 +121,17 @@ test('per-account: untouched accounts compound at exactly their configured rate'
   const expectedWhole = {
     rothAccount:  us.total,
     iraAccount:   us.total,
-    // Design 77 §5.1 — an accumulation-phase super account compounds NET of the 15%
-    // Div 295 fund earnings tax, because the fund pays that tax out of the member's
-    // own assets. This is the one account whose credited return is below its
-    // configured rate, and it is the point of the design: pre-77 the balance
-    // compounded gross and the tax was separately taken from the member's AU cash.
-    // The prebuilt's members are in accumulation for these three early years; once
-    // they pass 60 the rate reverts to the full `superGrowthRate` (see evt-super).
-    // Design 99 P5c: super bootstraps across AU and ex-AU (APRA's MySuper split), so its
-    // gross rate is the mix-weighted blend of the two markets' totals.
-    // Design 90 §8.4: plus the franking credit on the AU slice's dividend (30/70 of it),
-    // which the fund also keeps net of its 15%.
-    superAccount: (Object.entries(DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER])
-      .reduce((s, [k, w]) => s + w * marketReturnFor(p, k).total, 0)
+    // An accumulation-phase super account pays the fund's 15% out of its own assets
+    // (design 77 §5.1), but only on INCOME (design 105): its dividends are taxed as
+    // derived, and its price growth is untaxed until a lot is sold. The prebuilt's members
+    // are in accumulation for these three early years. Design 99 P5c: super bootstraps
+    // across AU and ex-AU (APRA's MySuper split), so each market contributes its total
+    // less 15% of its yield. Design 90 §8.4: plus the franking credit on the AU slice's
+    // dividend (30/70 of it), which the fund keeps net of its 15%.
+    superAccount: Object.entries(DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER])
+      .reduce((s, [k, w]) => s + w * (marketReturnFor(p, k).total - SUPER_TAX_RATE * marketReturnFor(p, k).yield), 0)
       + DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER].EQUITY_AU * au.yield * (0.30 / 0.70)
-        * (p.superFrankedPercent ?? 1)) * (1 - SUPER_TAX_RATE),
+        * (p.superFrankedPercent ?? 1) * (1 - SUPER_TAX_RATE),
   };
   // Equity sleeves of the mixed books still grow at exactly the equity rate.
   const expectedEquitySleeve = {

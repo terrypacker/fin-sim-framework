@@ -15,6 +15,8 @@ import { getBirthDate } from '../../residency-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { debitLedgerForLoss } from '../../assets/investment-account.js';
 import { SUPER_TAX_RATE, superEarningsTaxRate } from '../../tax/au/super-tax-rate.js';
+import { scaleHoldings, lotVintage } from '../../holdings/holding-utils.js';
+import { auFinancialYearOf } from '../../payroll/au-super-caps.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -437,6 +439,152 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
         stateKey: key,
         taxRate: action.taxRate,
       }]
+    );
+  }
+}
+
+/**
+ * The discount a complying super fund takes on a discount capital gain: one third,
+ * ITAA 1997 s115-100(b). 15% × (1 − ⅓) is the familiar 10%.
+ */
+export const SUPER_CGT_DISCOUNT = 1 / 3;
+
+/**
+ * A complying fund's net capital gain for the income year so far (design 105), by the
+ * s102-5(1) method statement:
+ *
+ *   Step 1 — this year's capital losses reduce this year's capital gains;
+ *   Step 2 — the net capital losses carried from earlier years (s102-10, applied in
+ *            the order made, s102-15) reduce what is left;
+ *   Step 5 — the discount (s115-100(b)) applies to the discount gains that remain.
+ *            Steps 3–4 quarantine residential amounts, which a fund's shares never are.
+ *
+ * Losses are applied to NON-discount gains first. That order leaves the most discount
+ * standing, and Step 1's Note 3 leaves the order within a category to the taxpayer: a
+ * fund's shares all fall in the single non-residential category.
+ *
+ * @returns {number} the net capital gain, never negative
+ */
+export function superNetCapitalGain({ discountableGain = 0, otherGain = 0, capitalLoss = 0, carriedLoss = 0 } = {}) {
+  let losses       = Math.max(0, capitalLoss) + Math.max(0, carriedLoss);
+  const other      = Math.max(0, otherGain - losses);
+  losses           = Math.max(0, losses - otherGain);
+  const discounted = Math.max(0, discountableGain - losses);
+  return other + discounted * (1 - SUPER_CGT_DISCOUNT);
+}
+
+/** The loss an income year carries forward: its unused carried loss plus its own net loss. */
+function _lossCarriedOutOf(ytd) {
+  if (!ytd) return 0;
+  return Math.max(0, +((ytd.carriedLoss ?? 0) + (ytd.capitalLoss ?? 0)
+    - (ytd.discountableGain ?? 0) - (ytd.otherGain ?? 0)).toFixed(2));
+}
+
+/**
+ * The fund's tax rate on INCOME derived on `date` for the member of `account`: 15% in
+ * accumulation, 0% in pension phase (the age-60 proxy, `superEarningsTaxRate`). Shared by
+ * the reducers that tax fund income they did not compute in a super handler: bond
+ * coupons and accretion (design 105 §8).
+ */
+export function superFundTaxRateOn(state, account, date) {
+  const asOf = date instanceof Date ? date : (date != null ? new Date(date) : null);
+  return superEarningsTaxRate(_memberAgeOn(state, account, asOf));
+}
+
+/** The fund member's whole years of age on `asOf`; 0 when unknown (accumulation). */
+function _memberAgeOn(state, account, asOf) {
+  if (!asOf) return 0;
+  const people    = state.people ?? {};
+  const keys      = Object.keys(people);
+  const personKey = keys.find(k => people[k]?.id != null && people[k].id === account?.ownerId)
+    ?? (account?.ownerId != null && people[account.ownerId] ? account.ownerId : keys[0]);
+  const bd = personKey != null ? getBirthDate(state, personKey) : null;
+  if (!bd) return 0;
+  const years = asOf.getUTCFullYear() - bd.getUTCFullYear();
+  const hadBirthday = asOf.getUTCMonth() > bd.getUTCMonth()
+    || (asOf.getUTCMonth() === bd.getUTCMonth() && asOf.getUTCDate() >= bd.getUTCDate());
+  return hadBirthday ? years : years - 1;
+}
+
+/**
+ * Design 105 — a super fund's capital gains, taxed on REALISATION.
+ *
+ * SUPER_CAPITAL_GAIN comes from the rebalancer's sale of super lots: the gain on each
+ * lot, split by the 12-month discount test (s115-25), with losses kept. This reducer adds
+ * it to the fund's income-year tally (`capitalGainsYTD`), re-works the year's net capital
+ * gain (`superNetCapitalGain`), and withholds 15% of the CHANGE from the fund. So a
+ * later loss in the same year gives back tax an earlier gain drew.
+ *
+ * A BOND lot's gain or loss is not capital (design 105 §8): s295-85(3)(b)(i) lets the
+ * ordinary-income rules apply to a fund's bond, and TOFA (s230-15) does the same for a
+ * fund of 100 million or more. It arrives as a signed `revenueGain`, is taxed at 15% with
+ * no discount, and a revenue LOSS reduces the year's taxable income, capital gains
+ * included, so it is refunded at 15% straight away (a fund always has other income for it
+ * to absorb). A capital loss never reduces revenue gains, which the arithmetic keeps:
+ * `netGain` is floored at 0 before `revenueGain` is added.
+ *
+ * The fund pays from fund assets (design 77 §5.1): balance and holdings fall pro rata,
+ * and the tax comes off earnings first. The change is chained as SUPER_EARNINGS_TAX, so
+ * it reaches `auPersonSuperTaxYTD`, `fundTax` and `cumulativeTaxesPaid` with the rest of
+ * the fund's tax.
+ *
+ * Pension phase (member ≥ 60, the model's proxy): the gain AND the loss are disregarded
+ * (s118-320), so nothing is recorded.
+ *
+ * The tally rolls over lazily, on the first disposal in a new AU income year, carrying
+ * forward whatever loss the old year did not use.
+ */
+export class SuperCapitalGainApplyReducer extends Reducer {
+  static type        = 'SuperCapitalGainApplyReducer';
+  static description = 'Nets a super fund\'s realised capital gain into its income-year tally (one-third discount, losses carried forward), withholds 15% of the change in net capital gain from the fund and chains SUPER_EARNINGS_TAX; disregarded in pension phase.';
+  static actionType  = 'SUPER_CAPITAL_GAIN';
+
+  constructor() {
+    super('Super Capital Gain Apply', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes   = ['SUPER_CAPITAL_GAIN'];
+    this.generatedActionTypes = ['SUPER_EARNINGS_TAX'];
+  }
+
+  reduce(state, action, date) {
+    const key = action.stateKey ?? 'superAccount';
+    const sa  = state[key];
+    if (!sa) return this.newState(state);
+    const asOf = date instanceof Date ? date : (date != null ? new Date(date) : null);
+    if (superEarningsTaxRate(_memberAgeOn(state, sa, asOf)) === 0) return this.newState(state);
+
+    const prev = sa.capitalGainsYTD ?? null;
+    const fy   = asOf ? auFinancialYearOf(asOf) : (prev?.fy ?? null);
+    const base = prev && prev.fy === fy ? prev
+      : { fy, discountableGain: 0, otherGain: 0, capitalLoss: 0, carriedLoss: _lossCarriedOutOf(prev), netGain: 0, revenueGain: 0 };
+    const next = {
+      ...base,
+      discountableGain: +(base.discountableGain + (action.discountableGain ?? 0)).toFixed(2),
+      otherGain:        +(base.otherGain        + (action.otherGain        ?? 0)).toFixed(2),
+      capitalLoss:      +(base.capitalLoss      + (action.capitalLoss      ?? 0)).toFixed(2),
+      revenueGain:      +((base.revenueGain ?? 0) + (action.revenueGain    ?? 0)).toFixed(2),
+    };
+    next.netGain = +superNetCapitalGain(next).toFixed(2);
+    // The year's taxable amount from disposals: the net capital gain (never negative) plus
+    // the signed revenue gain on bonds.
+    const gainDelta = +((next.netGain + next.revenueGain) - (base.netGain + (base.revenueGain ?? 0))).toFixed(2);
+    const tax       = +(gainDelta * SUPER_TAX_RATE).toFixed(2);
+    if (tax === 0) return this.newState(state, { [key]: { ...sa, capitalGainsYTD: next } });
+
+    const newBalance = +(sa.balance - tax).toFixed(2);
+    const ledger = tax > 0
+      ? debitLedgerForLoss(sa, tax)
+      : { earningsBasis: +((sa.earningsBasis ?? 0) - tax).toFixed(2) };
+    return this.newState(
+      state,
+      {
+        [key]: {
+          ...sa, ...ledger,
+          balance:  newBalance,
+          holdings: scaleHoldings(sa.holdings, sa.balance, newBalance, lotVintage(state, sa)),
+          capitalGainsYTD: next,
+        },
+      },
+      [{ type: 'SUPER_EARNINGS_TAX', amount: gainDelta, stateKey: key, taxRate: SUPER_TAX_RATE }],
     );
   }
 }

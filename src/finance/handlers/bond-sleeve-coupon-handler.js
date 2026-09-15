@@ -38,8 +38,10 @@ import { computeHoldingsCoupons, couponFiringIndex, resolvePrevailingCouponRate 
  *                  chain. Present for symmetry/completeness; no account is wired
  *                  with it today (US_STOCK bonds use INTL_BOND_COUPON instead).
  *   - 'au'       → AU ordinary income (chains AU_SAVINGS_EARNINGS_TAX)
- *   - 'deferred' → tax-deferred/free wrapper (401k/IRA/Roth/super): balance only,
+ *   - 'deferred' → tax-deferred/free wrapper (401k/IRA/Roth): balance only,
  *                  taxed (or not, for Roth) on the eventual withdrawal.
+ *   - 'super'    → an AU super fund: the coupon is the fund's income, taxed in the
+ *                  fund as it is paid (design 105 §8).
  *
  * @param {object} opts
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry

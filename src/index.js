@@ -14,7 +14,7 @@ import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au
 import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
-import { SuperContributionApplyReducer, SuperSacrificeApplyReducer, SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
+import { SuperContributionApplyReducer, SuperSacrificeApplyReducer, SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { bondPrincipalUnits, isForeignBondAccount, section988ForBondPrincipal, section988ForRedemption } from './finance/account-rules/bond-currency-basis.js';
@@ -634,6 +634,7 @@ export const Finance = {
   SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer,
   SuperEarningsApplyReducer,
+  SuperCapitalGainApplyReducer,
   SuperContributionHandler,
   SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler,

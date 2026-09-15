@@ -38,15 +38,16 @@
  *     the `<= 0` guard. Bond PRICE moves are not on this path: BOND/CASH sleeves are
  *     skipped by the growth path and marked to market by `BondPriceAdjustReducer`.
  *
- * Super is the one asymmetric case: a loss reaches the member's balance in full but
- * carries no Div 295 base, because the fund is taxed on earnings and a losing year
- * produces none. See the note at `SuperEarningsHandler.call`.
+ * Super is taxed on its INCOME here and nowhere else (design 105). Its price moves, up
+ * or down, carry no fund tax until a gain is realised. See the note at
+ * `SuperEarningsHandler.call`.
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
-import { computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsFrankingCredits } from '../holdings/holdings-earnings.js';
+import { computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome } from '../holdings/holdings-earnings.js';
+import { HoldingTransactAction, VALUE_KIND } from '../holdings/holding-actions.js';
 import { getBirthDate } from '../residency-utils.js';
 import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
 
@@ -666,35 +667,14 @@ export class SuperEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
     };
     const gross = computeHoldingsGrowth(growthArgs);
-    // Design 90 §8.4 — the franking credit on the fund's AU dividends. The dividend
-    // itself is already inside `gross` (the market total); the credit is on top of it.
-    const creditArgs = { state, stateKey, fallbackRateKey: this.rateKey, fallbackYield: this.defaultYield, frankedPercent: this.frankedPercent };
-    const credit = computeHoldingsFrankingCredits(creditArgs);
-    if (gross.amount === 0 && credit.amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
-
-    // A LOSS reaches the member's balance in full, and carries NO Div 295 base
-    // (design 84 G12). The fund's 15% earnings tax is levied on earnings; a losing
-    // year produces none, and the fund does not receive a refund — the loss becomes
-    // a carried-forward deduction against the fund's FUTURE earnings, which is a
-    // fidelity item this model does not carry (it would make the levy path-dependent
-    // across years). Withholding nothing therefore slightly OVER-taxes a fund that
-    // has losing years, which is the conservative direction. `grossAmount: 0` keeps
-    // `auSuperTaxYTD` off a negative base rather than crediting a phantom refund.
-    //
-    // The franking credit is the exception, and it is not a phantom: dividends are paid
-    // in a down year too, and the credit is refundable whatever the fund's other income
-    // (s67-25). So a loss year still receives the whole credit, and the classifier books
-    // it as a negative fund tax. (Strictly the credit is also assessable, so a loss
-    // smaller than the credit leaves a small taxable residue; with no loss carry-forward
-    // in this model, charging it would be the only place a loss offsets anything.)
-    if (gross.amount < 0) {
-      return [
-        { type: 'SUPER_EARNINGS_APPLY', amount: +(gross.amount + credit.amount).toFixed(2), grossAmount: 0,
-          frankingCredit: credit.amount, stateKey, taxRate: 0 },
-        ...gross.holdingActions,
-        ...credit.holdingActions,
-        new RecordBalanceAction(`${stateKey}.balance`, stateKey),
-      ];
+    // The yield slice of that total, per lot, and the franking credit on its AU part
+    // (design 90 §8.4). The dividend is inside `gross`; the credit is on top of it.
+    const income = computeFundIncome({
+      state, stateKey, fallbackRateKey: this.rateKey, fallbackYield: this.defaultYield,
+      frankedPercent: this.frankedPercent,
+    });
+    if (gross.amount === 0 && income.dividend === 0 && income.credit === 0) {
+      return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     }
 
     // Pension/retirement phase (member ≥ 60, condition-of-release proxy — same
@@ -705,27 +685,51 @@ export class SuperEarningsHandler extends HandlerEntry {
     const age       = birthDate && date ? getAge(birthDate, date) : 0;
     const taxRate   = superEarningsTaxRate(age);
 
-    // Design 77 §5.1 — the fund pays the 15% earnings tax out of FUND assets, so
-    // what reaches the member is growth NET of it. Re-running the growth with
-    // `factor: 1 - taxRate` (rather than scaling `gross` after the fact) keeps the
-    // balance increment and the per-holding transacts internally consistent: both
-    // come out of the same rounding pass, so the §4.4 invariant
-    // (Σ holdings.marketValue === balance) survives the withholding.
+    // Design 105 — a fund is taxed on INCOME as it is derived, and on capital growth
+    // only when a gain is realised (ITAA 1997 s295-85). Realisation belongs to
+    // SuperCapitalGainApplyReducer. So each lot's return splits in two:
     //
-    // `grossAmount` rides along so the classifier can record the tax against the
-    // base it is actually levied on. It is the accrual basis for auSuperTaxYTD;
-    // the member's cash is never touched (that was the pre-77 bug).
-    const net = taxRate > 0 ? computeHoldingsGrowth({ ...growthArgs, factor: 1 - taxRate }) : gross;
-    // Design 90 §8.4 — the credit joins the fund's assessable income (s207-20(1)) and
-    // offsets its tax (s207-20(2)), refundably (s67-25). Net of both, the member keeps
-    // `credit × (1 − t)`: the whole credit in pension phase, 85% of it in accumulation.
-    // Same second-pass-with-`factor` shape as the growth, for the same §4.4 reason.
-    const netCredit = taxRate > 0 ? computeHoldingsFrankingCredits({ ...creditArgs, factor: 1 - taxRate }) : credit;
+    //   - the dividend, plus its franking credit on an AU lot, is income. The fund pays
+    //     `t` on (dividend + credit) and the credit offsets that tax, refundably
+    //     (s207-20, s67-25; design 90 §8.4). What is left is reinvested as NEW UNITS
+    //     carrying cost base: that money bought units, it did not appreciate.
+    //   - the rest is a PRICE move, untaxed until sold, with no cost base.
+    //
+    // A loss year is no longer a special case. A price fall was never taxable, and the
+    // dividends paid in a down year are income like any other (design 84 G12's loss
+    // branch withheld nothing, which left that income untaxed).
+    //
+    // The fund pays from FUND assets (design 77 §5.1), so the member's cash is never
+    // touched. `grossAmount` is the income base the classifier levies `t` on.
+    const holdings    = state?.[stateKey]?.holdings ?? [];
+    const growthByLot = new Map(gross.holdingActions.map(a => [a.holdingId, a.marketValueDelta]));
+    const incomeByLot = new Map(income.lots.map(l => [l.holdingId, l]));
+    const holdingActions = [];
+    let amount = holdings.length ? 0
+      : gross.amount - income.dividend + (income.dividend + income.credit) * (1 - taxRate);
+    for (const h of holdings) {
+      if (!h) continue;
+      const lot        = incomeByLot.get(h.id);
+      const dividend   = lot?.dividend ?? 0;
+      const credit     = lot?.credit ?? 0;
+      const price      = +((growthByLot.get(h.id) ?? 0) - dividend).toFixed(2);
+      const reinvested = +((dividend + credit) * (1 - taxRate)).toFixed(2);
+      if (price !== 0) {
+        holdingActions.push(new HoldingTransactAction({
+          stateKey, holdingId: h.id, marketValueDelta: price, costBasisDelta: 0, valueKind: VALUE_KIND.PRICE,
+        }));
+      }
+      if (reinvested !== 0) {
+        holdingActions.push(new HoldingTransactAction({
+          stateKey, holdingId: h.id, marketValueDelta: reinvested, costBasisDelta: reinvested, valueKind: VALUE_KIND.UNITS,
+        }));
+      }
+      amount += price + reinvested;
+    }
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount: +(net.amount + netCredit.amount).toFixed(2), grossAmount: gross.amount,
-        frankingCredit: credit.amount, stateKey, taxRate },
-      ...net.holdingActions,
-      ...netCredit.holdingActions,
+      { type: 'SUPER_EARNINGS_APPLY', amount: +amount.toFixed(2), grossAmount: income.dividend,
+        frankingCredit: income.credit, stateKey, taxRate },
+      ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

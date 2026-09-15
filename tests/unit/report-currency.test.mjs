@@ -465,7 +465,9 @@ test('e2e: a cross-border run reconciles with state.cumulativeTaxesPaid', async 
 
   assert.strictEqual(currency, 'USD');
   assert.ok(target > 0, 'the run must actually pay tax for this to check anything');
-  assert.ok(fundTaxUsd > 0, 'and hold AU super, so the fundTax term is exercised');
+  // Non-zero, not positive: since design 105 the fund is taxed on income only, and its
+  // franking refunds (design 90 §8.4) can make the fund's tax net negative over a run.
+  assert.ok(fundTaxUsd !== 0, 'and hold AU super, so the fundTax term is exercised');
   assert.ok(withheldUsd > 0, 'and withhold FICA, so the withholding term is exercised');
   assert.ok(withheldUsd / target > 0.1,
     `withholding must be a material share of the total for this to bite, got ${withheldUsd} of ${target}`);

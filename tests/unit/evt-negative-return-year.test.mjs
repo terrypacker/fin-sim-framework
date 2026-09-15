@@ -207,19 +207,26 @@ test('G12: a super loss withholds no fund earnings tax', () => {
 
   assert.ok(apply, 'the loss must still reach the member');
   assert.equal(apply.amount, -200_000, 'the member takes the loss in full');
-  assert.equal(apply.grossAmount, 0, 'no Div 295 base — the fund is taxed on earnings, and there were none');
-  assert.equal(apply.taxRate, 0, 'no withholding, and no phantom refund');
+  // Design 105: the base is the fund's INCOME. A price fall is an unrealised loss, which
+  // neither draws tax nor refunds any; this fund paid no dividend, so there is no base.
+  assert.equal(apply.grossAmount, 0, 'no Div 295 base — no income, and a price fall is not realised');
+  assert.equal(apply.frankingCredit, 0, 'and no phantom refund');
 });
 
-test('G12: a super GAIN still withholds Div 295 (the design 77 path is intact)', () => {
+test('G12: a super GAIN withholds Div 295 on its income only (design 105)', () => {
   const state = stateWith('superAccount');
-  const h = new SuperEarningsHandler({ stateRegistry: registryFor('superAccount'), role: 'SUPER', defaultRate: 0.10 });
+  const h = new SuperEarningsHandler({
+    stateRegistry: registryFor('superAccount'), role: 'SUPER', defaultRate: 0.10,
+    defaultYield: 0.03, frankedPercent: 0,
+  });
   const actions = h.call({ state, data: {}, date: new Date('2040-06-30') });
   const apply = actions.find(a => a.type === 'SUPER_EARNINGS_APPLY');
 
-  assert.equal(apply.grossAmount, 100_000);
-  assert.ok(apply.taxRate > 0, 'accumulation-phase earnings are still taxed in-fund');
-  assert.ok(apply.amount < apply.grossAmount, 'the member receives growth net of the levy');
+  // 100,000 of return on 1,000,000, 30,000 of it dividends. The fund withholds 15% of the
+  // dividends; the 70,000 of price growth is not taxed until a lot is sold.
+  assert.equal(apply.grossAmount, 30_000, 'the Div 295 base is the income, not the whole return');
+  assert.ok(apply.taxRate > 0, 'accumulation-phase income is still taxed in-fund');
+  assert.equal(apply.amount, 95_500, 'the member receives the return less 15% of the dividends');
 });
 
 // ─── one-directional receipts keep the guard ─────────────────────────────────

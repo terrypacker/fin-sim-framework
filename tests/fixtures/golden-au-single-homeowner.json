@@ -125,7 +125,7 @@
   "primary": 0
  },
  "auPersonSuperTaxYTD": {
-  "primary": -8398.59
+  "primary": -12496.04
  },
  "auPersonTaxLossPool": {
   "primary": 0
@@ -211,7 +211,7 @@
    "nonConcessionalYTD": 0,
    "qualifyingEarningsYTD": 0,
    "sgYTD": 0,
-   "tsbAtFyStart": 1401042.04,
+   "tsbAtFyStart": 2078136.46,
    "unusedByFy": {
     "2060": 87500,
     "2061": 90000,
@@ -585,7 +585,7 @@
  "cumulativeConsumptionMarginalUtility": 0.000838163623252,
  "cumulativeConsumptionUtility": 948.44038481,
  "cumulativeConsumptionUtilityCount": 480,
- "cumulativeTaxesPaid": 853595.4206,
+ "cumulativeTaxesPaid": 742455.6041,
  "currentPeriods": {
   "AU": {
    "endMs": 3045168000000,
@@ -632,7 +632,7 @@
   "discretionary": 6850.2793632,
   "essential": 15983.9851808
  },
- "foreignGeneralIncomeYTD": 6062809.03714,
+ "foreignGeneralIncomeYTD": 6106611.66526,
  "foreignPassiveCapGainsYTD": 1017364.95,
  "foreignPassiveIncomeYTD": 1559776.38,
  "ftcCurrentForeignTax": 6883.5932,
@@ -739,8 +739,8 @@
  },
  "marketIndexAsOfMs": 3029443200000,
  "metrics": {
-  "netLiquidity": 2482388.35,
-  "netWorth": 5272867.56,
+  "netLiquidity": 3212132.41,
+  "netWorth": 6002611.62,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -898,9 +898,9 @@
  },
  "superAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 1359799.16,
+  "balance": 2089543.22,
   "balanceAtResidencyChange": null,
-  "contributionBasis": 105092.689157,
+  "contributionBasis": 148895.317274,
   "costBaseStepUpByCountry": null,
   "country": "AU",
   "currency": {
@@ -909,7 +909,7 @@
   },
   "derivedIncomeBasis": 0,
   "drawdownPriority": 2,
-  "earningsBasis": 1254706.44562,
+  "earningsBasis": 1940647.9175,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -917,7 +917,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 42488.4650022,
+    "costBasis": 572468.400231,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -928,9 +928,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 618010.41,
+    "marketValue": 919521.58,
     "maturityDate": null,
-    "pricePerUnit": 1161.25378455,
+    "pricePerUnit": 362.21549578,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -938,7 +938,7 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 532.19237345,
+    "units": 2538.60363724,
     "zeroCoupon": false
    },
    {
@@ -947,7 +947,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 62604.225876,
+    "costBasis": 298669.554195,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -958,9 +958,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 741788.75,
+    "marketValue": 1170021.64,
     "maturityDate": null,
-    "pricePerUnit": 1541.00903119,
+    "pricePerUnit": 1040.28047517,
     "purchaseDate": null,
     "rateKey": "EQUITY_INTL_EX_AU",
     "rollAtMaturity": false,
@@ -968,7 +968,7 @@
     "securityId": "sec-auto-EQUITY_INTL_EX_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 481.365610112,
+    "units": 1124.71748067,
     "zeroCoupon": false
    }
   ],
@@ -988,7 +988,7 @@
  "usFilingSingleBase": true,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 542411.43,
- "usOrdinaryIncomeYTD": 6605220.46714,
+ "usOrdinaryIncomeYTD": 6649023.09526,
  "usPenaltyYTD": 0,
  "usPersonHousehold": false,
  "usSeEarningsYTD": 0,

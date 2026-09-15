@@ -108,9 +108,12 @@ describe('design 76 P2 — super tax follows the member end to end', () => {
     const primary = superTax.primary ?? 0;
     const spouse  = superTax.spouse  ?? 0;
 
-    assert.ok(primary > 0 && spouse > 0, `both members should accrue super tax, got ${primary}/${spouse}`);
+    // Non-zero, not positive: since design 105 the fund is taxed on income only, and
+    // the franking refund on its AU dividends (design 90 §8.4) can exceed the 15% on
+    // them, so a year's fund tax may be a refund. Attribution is what this pins.
+    assert.ok(primary !== 0 && spouse !== 0, `both members should accrue super tax, got ${primary}/${spouse}`);
     // 50k vs 350k ⇒ the spouse should bear several times the tax, not an equal half.
-    assert.ok(spouse > primary * 3,
+    assert.ok(Math.abs(spouse) > Math.abs(primary) * 3,
       `spouse super tax (${spouse}) should dwarf primary's (${primary}) at 50k vs 350k balances`);
   });
 });

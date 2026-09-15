@@ -212,7 +212,7 @@
  "auOrdinaryIncomeYTD": 0,
  "auPersonCapitalGainsYTD": {
   "primary": 0,
-  "spouse": 8316.866
+  "spouse": 8043.539
  },
  "auPersonCapitalLossPool": {
   "primary": 0,
@@ -232,7 +232,7 @@
  },
  "auPersonDiscountableGainsYTD": {
   "primary": 0,
-  "spouse": 8316.866
+  "spouse": 8043.539
  },
  "auPersonEarnedIncomeYTD": {
   "primary": 0,
@@ -255,16 +255,16 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 95024.0971118,
-  "spouse": 48161.7586809
+  "primary": 95033.8001118,
+  "spouse": 48171.4616809
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
-  "spouse": 8316.866
+  "spouse": 8043.539
  },
  "auPersonSuperTaxYTD": {
-  "primary": 6822.6165,
-  "spouse": 5321.746
+  "primary": 4959.7025,
+  "spouse": -218.4235
  },
  "auPersonTaxLossPool": {
   "primary": 0,
@@ -275,12 +275,12 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 93083.0571118,
-  "spouse": 48155.5086809
+  "primary": 93092.7601118,
+  "spouse": 48165.2116809
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
   "primary": 0,
-  "spouse": 8316.866
+  "spouse": 8043.539
  },
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
@@ -396,7 +396,7 @@
    "nonConcessionalYTD": 0,
    "qualifyingEarningsYTD": 0,
    "sgYTD": 0,
-   "tsbAtFyStart": 353579.79,
+   "tsbAtFyStart": 344336.42,
    "unusedByFy": {
     "2027": 32500,
     "2028": 32500,
@@ -411,7 +411,7 @@
    "nonConcessionalYTD": 0,
    "qualifyingEarningsYTD": 0,
    "sgYTD": 0,
-   "tsbAtFyStart": 136889.13,
+   "tsbAtFyStart": 133910.37,
    "unusedByFy": {
     "2027": 32500,
     "2028": 32500,
@@ -611,7 +611,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 234677.21528,
+ "cumulativeTaxesPaid": 241178.412827,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -734,7 +734,7 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 14776.9528021
+  "2032": 14776.769938
  },
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
@@ -1139,8 +1139,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 2905883.4,
-  "netWorth": 6419792.15,
+  "netLiquidity": 2908849,
+  "netWorth": 6418337.94,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1817,7 +1817,7 @@
  },
  "spouseStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 315762.72,
+  "balance": 317944.83,
   "country": "US",
   "currency": {
    "code": "USD"
@@ -1831,17 +1831,17 @@
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": {
-     "AU": 7522.68
+     "AU": 7319.11
     },
-    "costBasis": 187886.09,
-    "id": "tlh-sec-auto-EQUITY_US-1924905600000",
+    "costBasis": 190364.21,
+    "id": "tlh-sec-auto-EQUITY_US-1924905600000-1091",
     "label": "US market index",
-    "marketValue": 258952.25,
-    "pricePerUnit": 62.26055799,
+    "marketValue": 263001.34,
+    "pricePerUnit": 62.26058842,
     "purchaseDate": "2026-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 4159.17008041
+    "units": 4224.20260841
    },
    {
     "acquisitionDateByCountry": {
@@ -1853,44 +1853,44 @@
      "AU": 0
     },
     "costBasis": 0,
-    "id": "tlh-sec-auto-EQUITY_US-1924905600000-2",
+    "id": "tlh-sec-auto-EQUITY_US-1924905600000",
     "label": "US market index",
     "marketValue": 0,
-    "pricePerUnit": 42.58504188,
+    "pricePerUnit": 42.58504543,
     "purchaseDate": "2030-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 1.7e-7
+    "units": 3.7e-7
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 35057.49,
+    "costBasis": 35289.18,
     "id": "tlh-sec-alt-1988064000000",
     "label": "US large cap (alternate index)",
-    "marketValue": 45036.14,
-    "pricePerUnit": 62.26056023,
+    "marketValue": 45333.78,
+    "pricePerUnit": 62.26059212,
     "purchaseDate": "2032-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-alt",
-    "units": 723.34941794
+    "units": 728.12959946
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 9165.49,
+    "costBasis": 7480.49,
     "id": "tlh-sec-alt-1988064000000-2",
     "label": "US large cap (alternate index)",
-    "marketValue": 11774.33,
-    "pricePerUnit": 62.2605824,
+    "marketValue": 9609.71,
+    "pricePerUnit": 62.26057393,
     "purchaseDate": "2032-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-alt",
-    "units": 189.11371442
+    "units": 154.34663373
    }
   ],
   "minimumBalance": 0,
@@ -1909,8 +1909,17 @@
  },
  "spouseSuperAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 171649.91,
-  "balanceAtResidencyChange": 120937.09,
+  "balance": 173345.08,
+  "balanceAtResidencyChange": 116352.33,
+  "capitalGainsYTD": {
+   "capitalLoss": 0,
+   "carriedLoss": 0,
+   "discountableGain": 0,
+   "fy": 2029,
+   "netGain": 0,
+   "otherGain": 0,
+   "revenueGain": 13830.44
+  },
   "contributionBasis": 90000,
   "costBaseStepUpByCountry": null,
   "country": "AU",
@@ -1918,9 +1927,9 @@
    "code": "AUD",
    "symbol": "A$"
   },
-  "derivedIncomeBasis": 30937.09,
+  "derivedIncomeBasis": 26352.33,
   "drawdownPriority": 3,
-  "earningsBasis": 81649.91,
+  "earningsBasis": 83345.08,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -1928,21 +1937,21 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 62691.82,
+    "costBasis": 66858.79,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1893456000000",
     "issuingState": null,
     "label": "",
-    "marketValue": 69177.04,
-    "pricePerUnit": 106.35638942,
+    "marketValue": 69277.62,
+    "pricePerUnit": 101.88918406,
     "purchaseDate": "2030-01-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 650.4267433
+    "units": 679.93105099
    },
    {
     "acquisitionDateByCountry": null,
@@ -1950,21 +1959,21 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 95222.09,
+    "costBasis": 94851.2,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1893456000000-2",
     "issuingState": null,
     "label": "",
-    "marketValue": 102472.87,
-    "pricePerUnit": 107.61459867,
+    "marketValue": 104067.46,
+    "pricePerUnit": 109.26504227,
     "purchaseDate": "2030-01-01T00:00:00.000Z",
     "rateKey": "EQUITY_INTL_EX_AU",
     "securityId": "sec-auto-EQUITY_INTL_EX_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 952.2209
+    "units": 952.43142583
    }
   ],
   "loanBalance": 0,
@@ -1989,8 +1998,17 @@
  "stateSsIncomeYTD": 0,
  "superAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 400438.35,
-  "balanceAtResidencyChange": 320813.12,
+  "balance": 391892.49,
+  "balanceAtResidencyChange": 309602.75,
+  "capitalGainsYTD": {
+   "capitalLoss": 0,
+   "carriedLoss": 0,
+   "discountableGain": 44588.59,
+   "fy": 2032,
+   "netGain": 31852.38,
+   "otherGain": 2126.65,
+   "revenueGain": 467.75
+  },
   "contributionBasis": 180000,
   "costBaseStepUpByCountry": null,
   "country": "AU",
@@ -1998,24 +2016,24 @@
    "code": "AUD",
    "symbol": "A$"
   },
-  "derivedIncomeBasis": 199416.43,
+  "derivedIncomeBasis": 188588.73,
   "drawdownPriority": 2,
-  "earningsBasis": 220438.35,
+  "earningsBasis": 211892.5,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
-    "acquisitionPriceLevel": 1.10135855023,
+    "acquisitionPriceLevel": 1.1048007732,
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 147099.07,
-    "couponRate": 0.031042,
+    "costBasis": 144615.54,
+    "couponRate": 0.03062,
     "dividendYield": null,
     "duration": 5,
     "id": "reb-BOND-1782864000000",
     "issuingState": null,
     "label": "",
-    "marketValue": 154503.28,
+    "marketValue": 151588.79,
     "purchaseDate": "2026-07-01T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none",
@@ -2024,13 +2042,13 @@
    {
     "acquisitionPriceLevel": 1.03,
     "allocation": "BOND",
-    "costBasis": 1554.59,
+    "costBasis": 1246.95,
     "couponFrequency": 2,
     "couponRate": 0.04,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2026",
     "issuingState": null,
     "label": "Reinvested coupons 2026",
-    "marketValue": 1705.97,
+    "marketValue": 1368.38,
     "purchaseDate": "2026-12-31T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2038,13 +2056,13 @@
    {
     "acquisitionPriceLevel": 1.03,
     "allocation": "BOND",
-    "costBasis": 3203.08,
+    "costBasis": 2557.87,
     "couponFrequency": 2,
     "couponRate": 0.04,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2027",
     "issuingState": null,
     "label": "Reinvested coupons 2027",
-    "marketValue": 3515,
+    "marketValue": 2806.95,
     "purchaseDate": "2027-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2052,13 +2070,13 @@
    {
     "acquisitionPriceLevel": 1.0609,
     "allocation": "BOND",
-    "costBasis": 3332.49,
+    "costBasis": 2645.58,
     "couponFrequency": 2,
     "couponRate": 0.04,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2028",
     "issuingState": null,
     "label": "Reinvested coupons 2028",
-    "marketValue": 3657.01,
+    "marketValue": 2903.19,
     "purchaseDate": "2028-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2066,71 +2084,71 @@
    {
     "acquisitionPriceLevel": 1.092727,
     "allocation": "BOND",
-    "costBasis": 3623.31,
+    "costBasis": 2861.57,
     "couponFrequency": 2,
     "couponRate": 0.02,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2029",
     "issuingState": null,
     "label": "Reinvested coupons 2029",
-    "marketValue": 3785.91,
+    "marketValue": 2990.09,
     "purchaseDate": "2029-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
    },
    {
     "acquisitionDateByCountry": null,
-    "acquisitionPriceLevel": 1.15684553402,
+    "acquisitionPriceLevel": 1.15716659637,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 13406.27,
+    "costBasis": 12567.38,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1893456000000",
     "issuingState": null,
     "label": "",
-    "marketValue": 18324.42,
-    "pricePerUnit": 106.35638051,
+    "marketValue": 16439.21,
+    "pricePerUnit": 101.88907106,
     "purchaseDate": "2030-01-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 172.29262515
+    "units": 161.34416505
    },
    {
     "acquisitionDateByCountry": null,
-    "acquisitionPriceLevel": 1.15675250952,
+    "acquisitionPriceLevel": 1.15715210592,
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 19922.33,
+    "costBasis": 17654.19,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1893456000000-2",
     "issuingState": null,
     "label": "",
-    "marketValue": 27144.2,
-    "pricePerUnit": 107.61461361,
+    "marketValue": 24694.66,
+    "pricePerUnit": 109.26502984,
     "purchaseDate": "2030-01-01T00:00:00.000Z",
     "rateKey": "EQUITY_INTL_EX_AU",
     "securityId": "sec-auto-EQUITY_INTL_EX_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 252.23525959
+    "units": 226.00697252
    },
    {
     "acquisitionPriceLevel": 1.12550881,
     "allocation": "BOND",
-    "costBasis": 3871.23,
+    "costBasis": 3048.39,
     "couponFrequency": 2,
     "couponRate": 0.02,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2030",
     "issuingState": null,
     "label": "Reinvested coupons 2030",
-    "marketValue": 3862.01,
+    "marketValue": 3041.13,
     "purchaseDate": "2030-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2138,13 +2156,13 @@
    {
     "acquisitionPriceLevel": 1.1592740743,
     "allocation": "BOND",
-    "costBasis": 3949.05,
+    "costBasis": 3100.43,
     "couponFrequency": 2,
     "couponRate": 0.02,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2031",
     "issuingState": null,
     "label": "Reinvested coupons 2031",
-    "marketValue": 3939.65,
+    "marketValue": 3093.05,
     "purchaseDate": "2031-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2152,13 +2170,13 @@
    {
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "BOND",
-    "costBasis": 5422.75,
+    "costBasis": 4370.03,
     "couponFrequency": 2,
     "couponRate": 0.02,
     "id": "reinvest-superAccount-none||FIXED_INCOME_AU-2032",
     "issuingState": null,
     "label": "Reinvested coupons 2032",
-    "marketValue": 5409.84,
+    "marketValue": 4359.63,
     "purchaseDate": "2032-06-30T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none"
@@ -2169,21 +2187,21 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 888.52,
+    "costBasis": 805.28,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1972252800000",
     "issuingState": null,
     "label": "",
-    "marketValue": 1112.04,
-    "pricePerUnit": 106.35642193,
+    "marketValue": 996.19,
+    "pricePerUnit": 101.88924032,
     "purchaseDate": "2032-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_AU",
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 10.45578612
+    "units": 9.77723093
    },
    {
     "acquisitionDateByCountry": null,
@@ -2191,21 +2209,21 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 1312,
+    "costBasis": 1166.91,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1972252800000-2",
     "issuingState": null,
     "label": "",
-    "marketValue": 1647.27,
-    "pricePerUnit": 107.61461154,
+    "marketValue": 1496.46,
+    "pricePerUnit": 109.26499699,
     "purchaseDate": "2032-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_INTL_EX_AU",
     "securityId": "sec-auto-EQUITY_INTL_EX_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 15.30712211
+    "units": 13.69565379
    },
    {
     "acquisitionDateByCountry": null,
@@ -2213,14 +2231,14 @@
     "allocation": "BOND",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 171831.75,
+    "costBasis": 176114.77,
     "couponRate": 0.0204761904762,
     "dividendYield": null,
     "duration": 5,
     "id": "reb-BOND-1988150400000",
     "issuingState": null,
     "label": "",
-    "marketValue": 171831.75,
+    "marketValue": 176114.77,
     "purchaseDate": "2033-01-01T00:00:00.000Z",
     "rateKey": "FIXED_INCOME_AU",
     "taxExemption": "none",
@@ -2236,9 +2254,9 @@
   "stateKey": "superAccount",
   "targetBand": 0.02,
   "targetComposition": {
-   "BOND": 0.879562159818,
+   "BOND": 0.888677336231,
    "CASH": 0,
-   "EQUITY": 0.120437840182,
+   "EQUITY": 0.111322663769,
    "GOLD": 0
   },
   "type": "super"
@@ -2306,7 +2324,7 @@
   "value": 1315931.78
  },
  "usInvestmentInterestCarryforward": 0,
- "usLongTermCapitalLossCarryforward": 175466.52,
+ "usLongTermCapitalLossCarryforward": 172424.85,
  "usNegativeIncomeYTD": 0,
  "usNetInvestmentIncomeYTD": 0,
  "usOrdinaryIncomeYTD": 0,
@@ -2330,47 +2348,47 @@
    }
   },
   "foreignGeneralIncomeYTD": 0,
-  "foreignPassiveCapGainsYTD": -52211.74,
-  "foreignPassiveIncomeYTD": -51309.0174194,
-  "ftcCurrentForeignTax": 31635.6101766,
+  "foreignPassiveCapGainsYTD": -50200.24,
+  "foreignPassiveIncomeYTD": -49297.5174194,
+  "ftcCurrentForeignTax": 31636.8994266,
   "ftcCurrentGeneral": 0,
   "ftcCurrentPassive": 0,
   "ftcCurrentResourced": 0,
   "ftcPoolGeneral": {},
   "ftcPoolPassive": {},
   "ftcPoolResourced": {},
-  "usCapitalGainsYTD": -52211.74,
+  "usCapitalGainsYTD": -50200.24,
   "usCollectibleGainsYTD": 0,
   "usInvestmentInterestCarryforward": 0,
-  "usLongTermCapitalLossCarryforward": 123254.78,
+  "usLongTermCapitalLossCarryforward": 122224.61,
   "usNegativeIncomeYTD": 0,
-  "usNetInvestmentIncomeYTD": 6379.90258065,
-  "usOrdinaryIncomeYTD": 178323.433281,
+  "usNetInvestmentIncomeYTD": 6392.42258065,
+  "usOrdinaryIncomeYTD": 178335.953281,
   "usPassiveLossCarryforward": 0,
   "usPenaltyYTD": 0,
   "usSeEarningsYTD": 0,
   "usSection988DisallowedLossYTD": 0,
   "usSection988GainYTD": 0,
   "usShortTermCapitalGainsYTD": 0,
-  "usShortTermCapitalLossCarryforward": 8437.89,
+  "usShortTermCapitalLossCarryforward": 8980.84,
   "usSourceCapGainsUsdYTD": 0,
-  "usSourceDividendsUsdYTD": 4821.63,
+  "usSourceDividendsUsdYTD": 4834.15,
   "usSourceGeneralUsdYTD": 171943.5307,
   "usSourceInterestUsdYTD": 655.55,
-  "usSourceOrdinaryUsdYTD": 177420.7107,
-  "usSourcePassiveUsdYTD": 5477.18,
+  "usSourceOrdinaryUsdYTD": 177433.2307,
+  "usSourcePassiveUsdYTD": 5489.7,
   "usSsWagesByPersonYTD": {
    "primary": 114629.020467,
    "spouse": 57314.5102334
   },
   "usSsWagesYTD": 171943.5307,
-  "usTaxPaidOnUsSourceAud": 18626.4781766,
+  "usTaxPaidOnUsSourceAud": 18629.7347266,
   "usWithheldYTD": 13153.68
  },
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 459219.298775,
+  "balance": 459563.833539,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2384,7 +2402,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 459219.298775,
+    "costBasis": 459563.833539,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2395,7 +2413,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 459219.298775,
+    "marketValue": 459563.833539,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -2417,7 +2435,7 @@
  "usSection988DisallowedLossYTD": 0,
  "usSection988GainYTD": 0,
  "usShortTermCapitalGainsYTD": 0,
- "usShortTermCapitalLossCarryforward": 5437.89,
+ "usShortTermCapitalLossCarryforward": 5980.84,
  "usSourceCapGainsAudYTD": 0,
  "usSourceCapGainsUsdYTD": 0,
  "usSourceDividendsUsdYTD": 0,
@@ -2434,7 +2452,7 @@
  "usSsWagesYTD": 0,
  "usStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 92728.75,
+  "balance": 93167.7,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2450,102 +2468,83 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
-     "AU": 3157.54
+     "AU": 3271.47
     },
-    "costBasis": 40249.54,
+    "costBasis": 38899.05,
     "couponRate": null,
     "dividendYield": null,
     "duration": null,
     "id": "reb-EQUITY-1877558400000",
     "issuingState": null,
     "label": "",
-    "marketValue": 22952.44,
-    "pricePerUnit": 53.85962273,
+    "marketValue": 21812.06,
+    "pricePerUnit": 53.85963775,
     "purchaseDate": "2029-07-01T00:00:00.000Z",
     "rateKey": "EQUITY_INTL_EX_US",
     "securityId": "sec-auto-EQUITY_INTL_EX_US",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 426.15300361
-   },
-   {
-    "acquisitionDateByCountry": {
-     "AU": 1940630400000
-    },
-    "acquisitionPriceLevel": 1.19405229653,
-    "allocation": "EQUITY",
-    "costBaseByCountry": {
-     "AU": 0
-    },
-    "costBasis": 0,
-    "id": "tlh-sec-alt-1924905600000",
-    "label": "US large cap (alternate index)",
-    "marketValue": 0,
-    "pricePerUnit": 40.03842671,
-    "purchaseDate": "2030-12-31T00:00:00.000Z",
-    "rateKey": "EQUITY_US",
-    "securityId": "sec-alt",
-    "units": 2e-7
+    "units": 404.97970114
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 7072.82,
+    "costBasis": 6905.85,
     "id": "tlh-sec-auto-EQUITY_US-1956441600000",
     "label": "US market index",
-    "marketValue": 10340.67,
-    "pricePerUnit": 57.39736398,
+    "marketValue": 10096.55,
+    "pricePerUnit": 57.58534607,
     "purchaseDate": "2031-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 180.15931888
+    "units": 175.33193233
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 31253.74,
+    "costBasis": 31420.71,
     "id": "tlh-sec-auto-EQUITY_US-1956441600000-2",
     "label": "US market index",
-    "marketValue": 45693.89,
-    "pricePerUnit": 56.3423651,
+    "marketValue": 45938.01,
+    "pricePerUnit": 56.51081177,
     "purchaseDate": "2031-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 811.00411591
+    "units": 812.90656712
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 5226.25,
+    "costBasis": 3993.91,
     "id": "tlh-sec-auto-EQUITY_US-1956441600000-3",
     "label": "US market index",
-    "marketValue": 7640.93,
-    "pricePerUnit": 56.20369801,
+    "marketValue": 5839.21,
+    "pricePerUnit": 56.40760952,
     "purchaseDate": "2031-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 135.95066286
+    "units": 103.51812548
    },
    {
     "acquisitionDateByCountry": null,
     "acquisitionPriceLevel": 1.19405229653,
     "allocation": "EQUITY",
     "costBaseByCountry": null,
-    "costBasis": 4172.84,
+    "costBasis": 6485.41,
     "id": "tlh-sec-auto-EQUITY_US-1956441600000-4",
     "label": "US market index",
-    "marketValue": 6100.82,
-    "pricePerUnit": 56.08583403,
+    "marketValue": 9481.87,
+    "pricePerUnit": 56.22227681,
     "purchaseDate": "2031-12-31T00:00:00.000Z",
     "rateKey": "EQUITY_US",
     "securityId": "sec-auto-EQUITY_US",
-    "units": 108.77648706
+    "units": 168.6496979
    }
   ],
   "minimumBalance": 0,
@@ -2562,26 +2561,26 @@
   },
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 27100.4972359,
+ "usTaxPaidOnUsSourceAud": 27104.7665559,
  "usWithheldYTD": 0,
  "washPendingLosses": [
   {
    "group": "sec-auto-EQUITY_US",
    "heldFromMs": 1782864000000,
-   "longLoss": 39838.06,
+   "longLoss": 40101.34,
    "ms": 1988064000000,
    "shortLoss": 0,
    "stateKey": "spouseStockAccount",
-   "units": 723.349158
+   "units": 728.129572
   },
   {
    "group": "sec-auto-EQUITY_US",
    "heldFromMs": 1877558400000,
-   "longLoss": 12373.68,
+   "longLoss": 10098.9,
    "ms": 1988064000000,
    "shortLoss": 0,
    "stateKey": "spouseStockAccount",
-   "units": 189.113488
+   "units": 154.346678
   }
  ],
  "washSaleLedger": [
@@ -2596,18 +2595,18 @@
    "stateKey": "usStockAccount"
   },
   {
-   "deferred": 10683.43,
-   "disallowedLong": 10683.43,
+   "deferred": 8719.38,
+   "disallowedLong": 8719.38,
    "disallowedShort": 0,
    "filedYear": 2030,
    "group": "sec-auto-EQUITY_US",
-   "matchedFraction": 0.8568,
+   "matchedFraction": 0.6272,
    "ms": 1924905600000,
    "stateKey": "usStockAccount"
   },
   {
-   "deferred": 7524.75,
-   "disallowedLong": 7524.75,
+   "deferred": 7321.11,
+   "disallowedLong": 7321.11,
    "disallowedShort": 0,
    "filedYear": 2030,
    "group": "sec-alt",
@@ -2616,8 +2615,8 @@
    "stateKey": "spouseStockAccount"
   },
   {
-   "deferred": 51546.96,
-   "disallowedLong": 51546.96,
+   "deferred": 49852.97,
+   "disallowedLong": 49852.97,
    "disallowedShort": 0,
    "filedYear": 2030,
    "group": "sec-alt",

@@ -122,6 +122,8 @@ export const COVERED = [
   'SUPER_SACRIFICE_APPLY',
   'SUPER_EARNINGS_APPLY',
   'SUPER_EARNINGS_TAX',
+  // design 105 — `wash-sale-harvest` rebalances super in accumulation phase.
+  'SUPER_CAPITAL_GAIN',
   // design 94 §8.1o — the `wash-sale-harvest` golden. The §1091 family: the harvester's
   // sell-and-rebuy, and the April filing that resolves the windows the 31-December settle
   // could not see and assesses the balance due. Before it, `washPendingLosses` and

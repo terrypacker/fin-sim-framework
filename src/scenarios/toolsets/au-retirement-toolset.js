@@ -46,7 +46,7 @@ import {
   SuperContributionApplyReducer, SuperSacrificeApplyReducer,
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
-  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
   SuperContributionHandler, SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
 } from '../../finance/account-rules/au/au-super-classes.js';
@@ -96,7 +96,7 @@ export const AU_RETIREMENT = {
       SuperContributionApplyReducer, SuperSacrificeApplyReducer,
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
-      SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+      SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
     ],
     actions: [
       // `section988` — design 87 §14.4 item 2, the §988 character declaration the currency
@@ -181,6 +181,9 @@ export const AU_RETIREMENT = {
       // `frankingCredit` (design 90 §8.4) is the GROSS credit on the fund's AU dividends.
       { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      // design 105 — a super lot sold by the rebalancer: the realised gain split by the
+      // 12-month discount test, and the loss, before the fund's netting.
+      { type: 'SUPER_CAPITAL_GAIN',               fields: { stateKey: ValueType.text(), discountableGain: ValueType.currency('AUD'), otherGain: ValueType.currency('AUD'), capitalLoss: ValueType.currency('AUD'), revenueGain: ValueType.currency('AUD') } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
       // personId — see the US_RETIREMENT declaration of this shared type; the two must
@@ -726,13 +729,13 @@ export const AU_RETIREMENT = {
     // (design 66 §G10a — the event carries `firingsPerYear`). These
     // accounts run off the equity-growth earnings handler (no BOND return), and had
     // no coupon stream, so a BOND sleeve here (design-61 allocation lever) earned
-    // nothing. super coupon is tax-deferred (super environment); au-stock coupon is
-    // AU ordinary income. Fallback rate is the AU fixed-income rate.
+    // nothing. A super coupon is the FUND's income, taxed in the fund (design 105 §8);
+    // an au-stock coupon is AU ordinary income. Fallback rate is the AU fixed-income rate.
     const bondCouponEvent = context.schedulesById['BOND_SLEEVE_COUPON'];
     if (bondCouponEvent) {
       const auBondSleeveAccounts = [
         ...auStockAccts.map(a => ({ acct: a, role: ACCOUNT_ROLES.AU_STOCK, taxMode: 'au' })),
-        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'deferred' })),
+        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'super' })),
       ];
       for (const { acct, role, taxMode } of auBondSleeveAccounts) {
         const h = new BondSleeveCouponHandler({
@@ -750,7 +753,8 @@ export const AU_RETIREMENT = {
 
     // Non-cash bond accretion — zero-coupon/OID + TIPS inflation indexation
     // (design 66 §G5/§G6) — on AU equity-served accounts. au-stock accretion is AU
-    // ordinary income ('au'); super defers it. TIPS index to AU CPI (country 'AU').
+    // ordinary income ('au'); super's is the fund's income, taxed in the fund ('super',
+    // design 105 §8). TIPS index to AU CPI (country 'AU').
     // Shares the annual BOND_ACCRETION event scheduled by US_RETIREMENT; the apply
     // reducer is registered there too (taxMode-branching). No-ops without an
     // accreting bond.
@@ -758,7 +762,7 @@ export const AU_RETIREMENT = {
     if (bondAccretionEvent) {
       const auAccretionAccounts = [
         ...auStockAccts.map(a => ({ acct: a, role: ACCOUNT_ROLES.AU_STOCK, taxMode: 'au' })),
-        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'deferred' })),
+        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'super' })),
       ];
       for (const { acct, role, taxMode } of auAccretionAccounts) {
         const h = new BondAccretionHandler({
@@ -866,6 +870,7 @@ export const AU_RETIREMENT = {
       new SuperWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new SuperEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperCapitalGainApplyReducer(),
     );
 
     // Mortality reducers (only if not already registered by US_RETIREMENT).

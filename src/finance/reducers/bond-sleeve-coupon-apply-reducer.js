@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { mergeCouponReinvestLots } from '../holdings/holdings-earnings.js';
 import { creditDerivedIncome } from '../assets/investment-account.js';
+import { superFundTaxRateOn } from '../account-rules/au/au-super-classes.js';
 
 /**
  * Handles BOND_SLEEVE_COUPON_APPLY actions — coupon interest on the BOND sleeve of
@@ -22,8 +23,12 @@ import { creditDerivedIncome } from '../assets/investment-account.js';
  * value, so this reducer only bumps the scalar — mirroring StockEarningsApplyReducer).
  * Then applies tax by `taxMode`:
  *
- *   - 'deferred' → tax-deferred/free wrapper (401k/IRA/Roth/super): balance only,
+ *   - 'deferred' → tax-deferred/free wrapper (401k/IRA/Roth): balance only,
  *                  no immediate tax; the eventual withdrawal taxes the grown balance.
+ *   - 'super'    → an AU super fund (design 105 §8). A coupon is the FUND's ordinary
+ *                  income (s6-5): it pays 15% in accumulation, 0% in pension phase
+ *                  (s295-385/390), out of the coupon itself. The net is reinvested and
+ *                  the tax chains SUPER_EARNINGS_TAX, into fund tax.
  *   - 'au'       → chains AU_SAVINGS_EARNINGS_TAX { amount, residency } so the AU
  *                  tax module folds the coupon into auOrdinaryIncomeYTD (interest is
  *                  AU ordinary income), matching cash-sleeve interest.
@@ -43,21 +48,34 @@ export class BondSleeveCouponApplyReducer extends Reducer {
   constructor({ accountService, stateRegistry } = {}) {  // deps accepted for API symmetry
     super('Bond Sleeve Coupon Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['BOND_SLEEVE_COUPON_APPLY'];
-    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_TAX', 'BOND_COUPON_TAX'];
+    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_TAX', 'BOND_COUPON_TAX', 'SUPER_EARNINGS_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { amount, federalTaxableAmount, stateTaxableAmount, taxMode = 'deferred', residency } = action;
     const key  = action.stateKey;
     const acct = state[key];
     if (!acct || !(amount > 0)) return this.newState(state);
+
+    // Design 105 §8 — a super fund pays its tax out of the coupon, so only the net is
+    // reinvested. Each bucket shrinks by the same rate, so the vintage lots are unchanged
+    // in kind and simply smaller.
+    const fundRate = taxMode === 'super' ? superFundTaxRateOn(state, acct, date) : 0;
+    const rawBuckets = action._reinvestBuckets;
+    const buckets = fundRate > 0 && Array.isArray(rawBuckets)
+      ? rawBuckets.map(b => ({ ...b, amount: +((b.amount ?? 0) * (1 - fundRate)).toFixed(2) }))
+      : rawBuckets;
+    const credited = fundRate > 0
+      ? (Array.isArray(buckets) && buckets.length
+        ? +buckets.reduce((s, b) => s + (b.amount ?? 0), 0).toFixed(2)
+        : +(amount * (1 - fundRate)).toFixed(2))
+      : amount;
 
     // §G10b reinvestment risk: reinvest the coupon into a new-vintage BOND lot at the
     // prevailing yield (the handler no longer emits per-source reinvest actions). Sync
     // the balance to Σ marketValue so §4.4 holds. Absent buckets (direct-reduce unit
     // tests / pre-G10b callers) ⇒ credit the scalar balance only (holdings synced
     // elsewhere by the handler's HoldingTransactActions).
-    const buckets = action._reinvestBuckets;
     let nextAcct;
     if (Array.isArray(buckets) && buckets.length) {
       const holdings = mergeCouponReinvestLots(acct.holdings ?? [], {
@@ -68,15 +86,21 @@ export class BondSleeveCouponApplyReducer extends Reducer {
       });
       const balance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
       // Design 84 G2 — a coupon is DERIVED income; the ledger moves with the balance.
-      nextAcct = { ...acct, ...creditDerivedIncome(acct, amount), holdings, balance };
+      nextAcct = { ...acct, ...creditDerivedIncome(acct, credited), holdings, balance };
     } else {
-      nextAcct = { ...acct, ...creditDerivedIncome(acct, amount), balance: acct.balance + amount };
+      nextAcct = { ...acct, ...creditDerivedIncome(acct, credited), balance: acct.balance + credited };
     }
     const base = { ...state, [key]: nextAcct };
 
     if (taxMode === 'deferred') {
-      // 401k / IRA / Roth / super — no immediate tax; taxed (or not, for Roth) on withdrawal.
+      // 401k / IRA / Roth — no immediate tax; taxed (or not, for Roth) on withdrawal.
       return this.newState(base);
+    }
+
+    if (taxMode === 'super') {
+      return this.newState(base, {}, fundRate > 0
+        ? [{ type: 'SUPER_EARNINGS_TAX', amount, stateKey: key, taxRate: fundRate }]
+        : []);
     }
 
     if (taxMode === 'au') {

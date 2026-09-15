@@ -366,8 +366,15 @@ function runDefaultIntlRetirement() {
 //
 //   lifetime tax   791,312 -> 720,372    (-70,940; Σ credit × (1 − t) over the run is 124,225)
 //   net worth   11,884,551 -> 12,025,741 (+141,190, +1.19%)
-const EXPECTED_LIFETIME_TAX = 720_372;
-const EXPECTED_NET_WORTH     = 12_025_741;
+//
+// MOVED again by design 105 (super taxed on income, and on capital gains only when
+// realised). This plan's super never sells a lot in accumulation, so the whole move is
+// the yearly 15% on price growth coming off; the fund-tax identity still closes exactly:
+//
+//   lifetime tax   720,372 -> 678,972    (-41,400)
+//   net worth   12,025,741 -> 12,148,274 (+122,533, +1.02%)
+const EXPECTED_LIFETIME_TAX = 678_972;
+const EXPECTED_NET_WORTH     = 12_148_274;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

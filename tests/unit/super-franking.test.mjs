@@ -9,16 +9,22 @@
  */
 
 /**
- * Design 90 §8.4 — franking credits inside super.
+ * Design 90 §8.4 — franking credits inside super, under design 105's income-only tax.
  *
- * The fund's AU dividend is inside the market total it grows at; the credit on it
- * (s202-60(2): cash × 30/70) is on top, refundable to a complying fund (s67-25) and
- * kept in pension phase (s207-110(2)(b)). Net to the member: `credit × (1 − t)`.
- * The fund's tax on it: `t × credit − credit` — negative, a refund.
+ * The fund's dividend is INCOME: taxed at the fund rate `t` as it is derived, with the
+ * franking credit on an AU dividend (s202-60(2): cash × 30/70) added to the base and
+ * offset against the tax, refundably (s207-20, s67-25). It is also kept in pension
+ * phase (s207-110(2)(b)). Price growth is untaxed until a lot is sold (design 105). Per
+ * lot, the member therefore keeps
  *
- * Expectations are derived from the AU lot the fund actually bootstraps (design 99
- * P5c splits un-authored super into AU and ex-AU lots), so these tests pin the
- * arithmetic, not the APRA mix.
+ *     (growth − dividend)  +  (dividend + credit) × (1 − t)
+ *
+ * and the fund books `t × (dividends + credits) − credits`, which can be negative.
+ *
+ * These configs carry no ECONOMIC_REGIMES, so the handler's AU fallback yield and total
+ * reach EVERY lot (the same fallback growth has always used). The yields are set equal
+ * so the arithmetic below says that plainly. The credit still arises on the AU lot only,
+ * because franking keys off the lot's market, not its yield.
  */
 
 import { test, beforeEach } from 'node:test';
@@ -33,8 +39,7 @@ import { frankingCreditOn } from '../../src/finance/tax/au/franking.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
-const AU_YIELD    = 0.04;
-const EXAU_YIELD  = 0.02;
+const YIELD        = 0.04;
 const ACCUMULATION = '1990-01-01';
 const PENSION      = '1962-01-01';
 
@@ -60,8 +65,8 @@ function config({ birthDate, total = 0.07, frankedPercent } = {}) {
       usEquityGrowthRate: 0, intlExUsEquityGrowthRate: 0,
       usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
-      auEquityGrowthRate: total, auEquityDividendYield: AU_YIELD,
-      intlExAuEquityGrowthRate: total, intlExAuEquityDividendYield: EXAU_YIELD,
+      auEquityGrowthRate: total, auEquityDividendYield: YIELD,
+      intlExAuEquityGrowthRate: total, intlExAuEquityDividendYield: YIELD,
       ...(frankedPercent != null ? { superFrankedPercent: frankedPercent } : {}),
     },
     persons: [{
@@ -93,78 +98,106 @@ function config({ birthDate, total = 0.07, frankedPercent } = {}) {
   };
 }
 
-/** The fund's AU-equity market value before any earnings — the franked base. */
-function auLotValue(sim) {
-  const lots = sim.state.superAccount.holdings.filter(h =>
-    (h.rateKey ?? RATE_KEYS.EQUITY_AU) === RATE_KEYS.EQUITY_AU
-    && h.allocation !== 'BOND' && h.allocation !== 'CASH');
-  assert.ok(lots.length > 0, 'super bootstrapped no AU equity lot');
-  return lots.reduce((s, h) => s + h.marketValue, 0);
+const round2 = x => +x.toFixed(2);
+
+/**
+ * The fund's equity lots before any earnings, with each lot's dividend and credit worked
+ * exactly as the handler works them (per lot, rounded to cents).
+ */
+function lots(sim, pct = 1) {
+  const out = sim.state.superAccount.holdings
+    .filter(h => h.allocation !== 'BOND' && h.allocation !== 'CASH')
+    .map(h => {
+      const dividend = round2(h.marketValue * YIELD);
+      const isAu     = (h.rateKey ?? RATE_KEYS.EQUITY_AU) === RATE_KEYS.EQUITY_AU;
+      const credit   = isAu ? round2(frankingCreditOn(dividend, { frankedPercent: pct })) : 0;
+      return { mv: h.marketValue, dividend, credit, isAu };
+    });
+  assert.ok(out.some(l => l.isAu) && out.some(l => !l.isAu), 'super should bootstrap an AU and an ex-AU lot');
+  return out;
 }
 
-const creditOn = (auMv, pct = 1) => +frankingCreditOn(+(auMv * AU_YIELD).toFixed(2), { frankedPercent: pct }).toFixed(2);
-const round2   = x => +x.toFixed(2);
+/** Member's balance after one year at total `r` and fund rate `t`, lot by lot. */
+function expectedBalance(ls, r, t) {
+  return round2(ls.reduce((s, l) =>
+    s + l.mv + round2(round2(l.mv * r) - l.dividend) + round2((l.dividend + l.credit) * (1 - t)), 0));
+}
 
-test('§8.4: accumulation — the member keeps 85% of the credit; the fund books t·credit − credit', () => {
-  const sim   = load(config({ birthDate: ACCUMULATION }));
-  const auMv  = auLotValue(sim);
-  const credit = creditOn(auMv);
-  assert.ok(credit > 0);
+/** The fund tax the year books: t on (dividends + credits), less the credits. */
+const expectedFundTax = (ls, t) => {
+  const d = ls.reduce((s, l) => s + l.dividend, 0);
+  const c = ls.reduce((s, l) => s + l.credit, 0);
+  return d * t + c * t - c;
+};
 
+test('§8.4: accumulation — income taxed at 15%, the credit offsets it, price growth untaxed', () => {
+  const sim = load(config({ birthDate: ACCUMULATION }));
+  const ls  = lots(sim);
   sim.stepTo(new Date(2027, 0, 15)); // one year-end earnings accrual
 
-  const netCredit = round2(frankingCreditOn(round2(auMv * AU_YIELD)) * 0.85);
-  assert.strictEqual(sim.state.superAccount.balance, round2(100000 + 7000 * 0.85 + netCredit));
-  assert.ok(Math.abs(sim.state.auPersonSuperTaxYTD.primary - (1050 + credit * 0.15 - credit)) < 1e-6);
+  assert.strictEqual(sim.state.superAccount.balance, expectedBalance(ls, 0.07, 0.15));
+  assert.ok(Math.abs(sim.state.auPersonSuperTaxYTD.primary - expectedFundTax(ls, 0.15)) < 1e-6);
 });
 
 test('§8.4: pension phase — the whole credit is paid, and the fund tax is a refund of it', () => {
-  const sim   = load(config({ birthDate: PENSION }));
-  const credit = creditOn(auLotValue(sim));
+  const sim    = load(config({ birthDate: PENSION }));
+  const ls     = lots(sim);
+  const credit = ls.reduce((s, l) => s + l.credit, 0);
 
   sim.stepTo(new Date(2027, 0, 15));
 
   assert.strictEqual(sim.state.superAccount.balance, round2(107000 + credit));
   assert.ok(Math.abs(sim.state.auPersonSuperTaxYTD.primary + credit) < 1e-6);
+  // Only the AU lot franks: a credit worked on the whole 4,000 of dividends would be larger.
+  assert.ok(credit < frankingCreditOn(4000));
 });
 
-test('§8.4: superFrankedPercent 0 reproduces the pre-§8.4 model exactly', () => {
+test('§8.4: superFrankedPercent 0 leaves only the income tax (15% of the dividends)', () => {
   const sim = load(config({ birthDate: ACCUMULATION, frankedPercent: 0 }));
   sim.stepTo(new Date(2027, 0, 15));
 
-  assert.strictEqual(sim.state.superAccount.balance, 105950);
-  assert.strictEqual(sim.state.auPersonSuperTaxYTD.primary, 1050);
+  // 7,000 of return, 4,000 of it dividends: 600 of fund tax, none on the price growth.
+  assert.strictEqual(sim.state.superAccount.balance, 106400);
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD.primary, 600);
 });
 
 test('§8.4: superFrankedPercent scales the credit (partial franking)', () => {
   const sim    = load(config({ birthDate: PENSION, frankedPercent: 0.5 }));
-  const credit = creditOn(auLotValue(sim), 0.5);
+  const credit = lots(sim, 0.5).reduce((s, l) => s + l.credit, 0);
 
   sim.stepTo(new Date(2027, 0, 15));
 
   assert.strictEqual(sim.state.superAccount.balance, round2(107000 + credit));
 });
 
-test('§8.4: a loss year still receives the credit (dividends are paid in a down year)', () => {
-  const sim    = load(config({ birthDate: ACCUMULATION, total: -0.20 }));
-  const credit = creditOn(auLotValue(sim));
+test('§8.4: a loss year still taxes its dividends and pays its credit', () => {
+  const sim = load(config({ birthDate: ACCUMULATION, total: -0.20 }));
+  const ls  = lots(sim);
 
   sim.stepTo(new Date(2027, 0, 15));
 
-  // No Div 295 base on the loss (design 84 G12); the credit arrives whole and is the
-  // fund's only tax item — a refund.
-  assert.strictEqual(sim.state.superAccount.balance, round2(80000 + credit));
-  assert.ok(Math.abs(sim.state.auPersonSuperTaxYTD.primary + credit) < 1e-6);
+  // The price fall carries no tax and no refund (design 105 — it is unrealised). The
+  // dividends paid in the down year are income like any other.
+  assert.strictEqual(sim.state.superAccount.balance, expectedBalance(ls, -0.20, 0.15));
+  assert.ok(Math.abs(sim.state.auPersonSuperTaxYTD.primary - expectedFundTax(ls, 0.15)) < 1e-6);
 });
 
-test('§8.4: only AU equity franks — an all-ex-AU fund gets no credit', () => {
-  const cfg = config({ birthDate: PENSION });
-  cfg.parameters.auEquityDividendYield = 0; // the AU lot pays nothing; ex-AU still yields 2%
-  const sim = load(cfg);
+test('§8.4: reinvested income carries cost base; price growth does not', () => {
+  const sim    = load(config({ birthDate: PENSION }));
+  const before = new Map(sim.state.superAccount.holdings.map(h => [h.id, h.costBasis]));
+  const ls     = new Map(sim.state.superAccount.holdings.map(h => {
+    const l = lots(sim).find(x => x.mv === h.marketValue);
+    return [h.id, l];
+  }));
+
   sim.stepTo(new Date(2027, 0, 15));
 
-  assert.strictEqual(sim.state.superAccount.balance, 107000);
-  assert.strictEqual(sim.state.auPersonSuperTaxYTD.primary, 0);
+  for (const h of sim.state.superAccount.holdings) {
+    const l = ls.get(h.id);
+    if (!l) continue;
+    // Pension phase: the whole dividend + credit is reinvested, and it is new money.
+    assert.strictEqual(round2(h.costBasis - before.get(h.id)), round2(l.dividend + l.credit));
+  }
 });
 
 test('§8.4: SuperEarningsHandler round-trips frankedPercent, defaulting to 1', () => {

@@ -82,6 +82,7 @@ export const COVERED = [
   // C — AU (reducer-postconditions-au.test.mjs)
   'AuSavingsContributionApplyReducer', 'AuSavingsEarningsApplyReducer', 'AuSavingsWithdrawalApplyReducer',
   'SuperContributionApplyReducer', 'SuperEarningsApplyReducer', 'SuperWithdrawalContribApplyReducer',
+  'SuperCapitalGainApplyReducer',
   // design 95 §9.1 phase 6b — the two member streams that could not share the
   // concessional reducer (no cash debit / no Div 295 respectively).
   'SuperSacrificeApplyReducer', 'SuperNonConcessionalApplyReducer',

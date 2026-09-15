@@ -1272,9 +1272,9 @@ so a naive sum over it reads the fund-tax change as double what `cumulativeTaxes
 moved. Filter on `entry.reducer` before summing any multi-reducer action.
 
 **Still not modelled** (unchanged, and now the fund's largest remaining gaps):
-- the fund's CGT treatment — the 15% is levied on *unrealised* growth every year, with no
-  one-third discount. It runs the same direction as this gap and may be larger. It is the
-  next item worth measuring.
+- ~~the fund's CGT treatment~~ — **BUILT as design 105** (15 Sep 2026): the fund is taxed on
+  income yearly and on capital gains only when realised, with the one-third discount and
+  losses carried forward.
 - the 45-day qualified-person rule (§2.3).
 - the transfer balance cap (design 77 §4.2).
 - the fund's loss carry-forward (design 84 G12).

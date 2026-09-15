@@ -50,6 +50,10 @@ function makeSuperConfig({
   superContribBasis  = 0,
   superEarningsBasis = 0,
   superGrowthRate    = 0,
+  // Design 105 — the yield slice of that total, the fund's taxable INCOME. No
+  // ECONOMIC_REGIMES here, so the handler's AU fallback yield reaches every lot.
+  superYield         = 0,
+  frankedPercent     = null,
   birthDate          = '1966-01-01', // turns 60 on 2026-01-01
 } = {}) {
   return {
@@ -62,7 +66,8 @@ function makeSuperConfig({
       usEquityDividendYield: 0, intlExUsEquityDividendYield: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       // design 99: `superGrowthRate` is now the AU market total the fund earns
-      auEquityGrowthRate: superGrowthRate, auEquityDividendYield: 0, intlExAuEquityGrowthRate: superGrowthRate, intlExAuEquityDividendYield: 0,
+      auEquityGrowthRate: superGrowthRate, auEquityDividendYield: superYield, intlExAuEquityGrowthRate: superGrowthRate, intlExAuEquityDividendYield: superYield,
+      ...(frankedPercent != null ? { superFrankedPercent: frankedPercent } : {}),
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate,
@@ -325,10 +330,10 @@ test('EVT-23: Super earnings are not US taxable', () => {
 // in the second sim year, ~end of 2027).
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-23: super earnings taxed at 15% in accumulation phase (member < 60)', () => {
+test('EVT-23: super INCOME taxed at 15% in accumulation phase (member < 60)', () => {
   const { sim } = loadToolsetScenario(makeSuperConfig({
     superBalance: 100000, superContribBasis: 100000,
-    superGrowthRate: 0.07,
+    superGrowthRate: 0.07, superYield: 0.03, frankedPercent: 0,
     birthDate: '1990-01-01', // age ~37 — accumulation phase
   }));
   // Sample after exactly one year-end earnings event. Earnings now accrue from
@@ -336,10 +341,25 @@ test('EVT-23: super earnings taxed at 15% in accumulation phase (member < 60)', 
   // capture a single year of 7% growth (the prior startOffset(1) fired at 2027).
   sim.stepTo(new Date(2027, 0, 15));
 
-  // 7000 of GROSS earnings accrued, the fund paid 1050 of Div 295 tax out of them,
-  // and 5950 reached the member (design 77 §5.1).
-  assert.strictEqual(sim.state.superAccount.balance, 105950);
-  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 1050); // 15% of 7000
+  // 7000 of total return, 3000 of it dividends. The fund pays 450 of Div 295 tax on the
+  // dividends out of its own assets (design 77 §5.1); the 4000 of price growth is not
+  // taxed until a lot is sold (design 105). Franking off, to isolate the income tax.
+  assert.strictEqual(sim.state.superAccount.balance, 106550);
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 450); // 15% of 3000
+});
+
+test('EVT-23: super PRICE growth is not taxed as it accrues (design 105)', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    superBalance: 100000, superContribBasis: 100000,
+    superGrowthRate: 0.07, superYield: 0,
+    birthDate: '1990-01-01', // accumulation phase — the rate is 15%, the base is 0
+  }));
+  sim.stepTo(new Date(2027, 0, 15));
+
+  // No yield: the whole 7% is price growth, an unrealised gain. ITAA 1997 s295-85 taxes
+  // a fund's gain on realisation, so none of it is withheld this year.
+  assert.strictEqual(sim.state.superAccount.balance, 107000);
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 0);
 });
 
 test('EVT-23: the fund earnings tax never touches the member’s own cash (design 77)', () => {

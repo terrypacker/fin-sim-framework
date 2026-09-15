@@ -198,7 +198,7 @@ import {
   SuperContributionApplyReducer, SuperSacrificeApplyReducer,
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
-  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
 } from '../finance/account-rules/au/au-super-classes.js';
 import {
   AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
@@ -323,7 +323,7 @@ const _ALL_CLASSES = [
   SuperContributionApplyReducer, SuperSacrificeApplyReducer,
   SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer,
   SuperWithdrawalContribApplyReducer,
-  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer,
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,

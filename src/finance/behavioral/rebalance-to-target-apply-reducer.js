@@ -11,7 +11,8 @@
 import { Reducer, PRIORITY }    from '../../simulation-framework/reducers.js';
 import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldings }      from '../holdings/holdings-fifo.js';
-import { disposalTermFields, auCpiRate } from '../holdings/holding-period.js';
+import { disposalTermFields, auCpiRate, isLongTerm } from '../holdings/holding-period.js';
+import { ACCOUNT_ROLES }        from '../state/account-roles.js';
 import { compactLots, LOT_POLICIES, promoteToUnitised, prevailingPrice, instrumentOf } from '../holdings/holding-utils.js';
 import { resolveRateKey, resolveEquityMarketMix } from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
@@ -114,7 +115,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
   constructor() {
     super('Rebalance To Target Apply', PRIORITY.POSITION_UPDATE);
     this.reducedActionTypes   = ['REBALANCE_TO_TARGET_APPLY'];
-    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN'];
+    this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX', 'AU_STOCK_WITHDRAWAL_TAX', 'COLLECTIBLE_SALE_TAX', 'SECTION_988_GAIN', 'SUPER_CAPITAL_GAIN'];
   }
 
   reduce(state, action, date) {
@@ -147,6 +148,11 @@ export class RebalanceToTargetApplyReducer extends Reducer {
     // an amount DERIVED by the trust estate and therefore assessable under s99B when
     // it is eventually distributed. Accumulated here and reclassified at the end.
     let shelteredGain = 0;
+    // Design 105 — a super fund's sell is a CGT event for the FUND (ITAA 1997 s295-85),
+    // unlike the other sheltered wrappers. Tallied per lot and handed to
+    // SuperCapitalGainApplyReducer, which nets and taxes it.
+    const isSuper  = role === ACCOUNT_ROLES.SUPER;
+    const superCgt = { discountableGain: 0, otherGain: 0, capitalLoss: 0, revenueGain: 0 };
 
     // ── Sell legs first (delta < 0) — frees value the buy legs redeploy ──────────
     for (const { allocation, delta } of legs) {
@@ -196,6 +202,25 @@ export class RebalanceToTargetApplyReducer extends Reducer {
           const totalBasis = matching.reduce((sum, h) => sum + (h.costBasis ?? 0), 0);
           if (availMv > 0) shelteredGain += Math.max(0, +(take * (1 - totalBasis / availMv)).toFixed(2));
         }
+        // Design 105 — the same pro-rata sale, lot by lot, because super's gain is taxed
+        // and a lot's 12-month test (s115-25) is its own. Losses count here, where
+        // `shelteredGain` above floors them: s102-5 nets them against gains. A lot with
+        // no `purchaseDate` (a bootstrap lot, held before the run) reads as oldest, the
+        // convention `_purchaseTs` already carries.
+        if (isSuper && allocation !== ALLOCATION.CASH && availMv > 0) {
+          for (const h of matching) {
+            const mv = h.marketValue ?? 0;
+            if (mv <= 0) continue;
+            const sold = take * (mv / availMv);
+            const gain = sold * (1 - (h.costBasis ?? 0) / mv);
+            // A fund's bond is on revenue account, not capital (s295-85(3)(b)(i); TOFA
+            // s230-15 for a large fund): its gain or loss is signed ordinary income.
+            if (allocation === ALLOCATION.BOND) superCgt.revenueGain += gain;
+            else if (gain < 0) superCgt.capitalLoss -= gain;
+            else if (auAsOfMs == null || isLongTerm('AU', auAsOfMs - _purchaseTs(h))) superCgt.discountableGain += gain;
+            else superCgt.otherGain += gain;
+          }
+        }
         holdings = _reduceProRata(holdings, allocation, take);
       }
     }
@@ -237,6 +262,16 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey,
         traits, priceLevel: auLevel, siblings: matching,
       })];
+    }
+
+    if (isSuper && (superCgt.discountableGain || superCgt.otherGain || superCgt.capitalLoss || superCgt.revenueGain)) {
+      taxActions.push({
+        type: 'SUPER_CAPITAL_GAIN', stateKey,
+        discountableGain: +superCgt.discountableGain.toFixed(2),
+        otherGain:        +superCgt.otherGain.toFixed(2),
+        capitalLoss:      +superCgt.capitalLoss.toFixed(2),
+        revenueGain:      +superCgt.revenueGain.toFixed(2),
+      });
     }
 
     holdings = _sweepDust(holdings);

@@ -30,12 +30,14 @@
  *     liability, not the fund's.
  *   - **Transfer balance cap** — the pension-phase 0% rate applies only to the
  *     portion supporting a retirement-phase income stream. See §4.2 of design 77.
- *   - **CGT discount inside the fund** — the fund's one-third discount, and the fact
- *     that this rate is levied on unrealised growth every year rather than on
- *     realisation. Both make the *effective* rate on fund earnings lower than 15%.
+ *   - **A fund's fair-value election** under TOFA (Div 230), which would tax unrealised
+ *     bond price moves each year. It is an election, not the default.
  *
- * Franking credits inside the fund ARE modelled (design 90 §8.4): see
- * `computeHoldingsFrankingCredits` and the SUPER_EARNINGS_TAX classifier.
+ * Modelled elsewhere: franking credits inside the fund (design 90 §8.4); the fund's CGT,
+ * on realisation with the one-third discount (design 105); and its bond income — coupons
+ * and accretion as derived, bond gains on revenue account (design 105 §8). See
+ * `computeFundIncome`, `SuperCapitalGainApplyReducer`, `superFundTaxRateOn` and the
+ * SUPER_EARNINGS_TAX classifier.
  */
 export const SUPER_TAX_RATE = 0.15;
 

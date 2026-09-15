@@ -412,20 +412,18 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
 }
 
 /**
- * The franking credits a superannuation fund receives on its Australian-equity lots
- * (design 90 §8.4).
+ * A superannuation fund's INCOME for the year, per lot (design 105, design 90 §8.4).
  *
- * A fund's AU dividend is already inside the market total it grows at, so only the
- * CREDIT is new money: per lot, the cash dividend `computeHoldingsDividends` would pay
- * (same yield resolver, same regime cut), then s202-60(2) on it. Only `EQUITY_AU` lots
- * frank — an ex-AU dividend carries no Australian credit.
+ * A fund is taxed on income as it is derived, and on capital growth only when a gain is
+ * realised (ITAA 1997 s295-85). So its earnings handler needs each lot's yield slice
+ * separated from its price slice: the cash dividend the lot pays (the same yield resolver
+ * and regime cut `computeHoldingsDividends` uses) and, on `EQUITY_AU` lots only, the
+ * franking credit on it (s202-60(2)). An ex-AU dividend carries no Australian credit.
  *
- * The credit is refundable to a complying fund (ITAA 1997 s67-25(1); (1A) excludes only
- * non-complying funds) and survives the pension-phase exemption (s207-110(2)(b)), so the
- * caller credits it in full, less the fund's own rate on it via `factor`.
+ * The credit is refundable to a complying fund (s67-25(1); (1A) excludes only
+ * non-complying funds) and survives the pension-phase exemption (s207-110(2)(b)).
  *
- * Each lot's share is reinvested with `VALUE_KIND.UNITS` — a refund is new money, not a
- * price move.
+ * BOND, CASH and GOLD lots pay no dividend here. A bond's coupon has its own path.
  *
  * @param {object} opts
  * @param {object} opts.state
@@ -433,10 +431,10 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * @param {string} opts.fallbackRateKey  - rate key for a lot without one
  * @param {number|null} [opts.fallbackYield=null] - below the market's yield (see `baseDividendYield`)
  * @param {number} [opts.frankedPercent=1]
- * @param {number} [opts.factor=1]       - `1 − fund rate` for the part that reaches the member
- * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ * @returns {{ dividend: number, credit: number,
+ *             lots: { holdingId: string, dividend: number, credit: number }[] }}
  */
-export function computeHoldingsFrankingCredits({ state, stateKey, fallbackRateKey, fallbackYield = null, frankedPercent = 1, factor = 1 }) {
+export function computeFundIncome({ state, stateKey, fallbackRateKey, fallbackYield = null, frankedPercent = 1 }) {
   const account    = state?.[stateKey];
   const holdings   = account?.holdings ?? [];
   const adjMap     = state?.effectiveDividendAdjustments ?? {};
@@ -444,36 +442,32 @@ export function computeHoldingsFrankingCredits({ state, stateKey, fallbackRateKe
 
   // Rounded exactly as computeHoldingsDividends rounds the dividend it would pay.
   const cashDividend = (mv, yld, rk) => +(mv * Math.max(0, yld * (1 + (adjMap[rk] ?? 0)))).toFixed(2);
-  const creditFor    = cash => +(frankingCreditOn(cash, { frankedPercent }) * factor).toFixed(2);
+  const creditOn     = (cash, rk) => rk === RATE_KEYS.EQUITY_AU
+    ? +frankingCreditOn(cash, { frankedPercent }).toFixed(2) : 0;
 
   if (!holdings.length) {
-    if (fallbackRateKey !== RATE_KEYS.EQUITY_AU) return { amount: 0, holdingActions: [] };
     const y0 = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;
-    return { amount: creditFor(cashDividend(account?.balance ?? 0, y0, fallbackRateKey)), holdingActions: [] };
+    const dividend = cashDividend(account?.balance ?? 0, y0, fallbackRateKey);
+    return { dividend, credit: creditOn(dividend, fallbackRateKey), lots: [] };
   }
 
-  let total = 0;
-  const holdingActions = [];
+  let dividendTotal = 0;
+  let creditTotal   = 0;
+  const lots = [];
   for (const h of holdings) {
     if (!h) continue;
     if (h.allocation === 'BOND' || h.allocation === 'CASH' || h.allocation === 'GOLD') continue;
-    const inst = instrumentOf(h, securities);
-    const rk   = inst.rateKey ?? fallbackRateKey;
-    if (rk !== RATE_KEYS.EQUITY_AU) continue;
-    const yld    = baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield);
-    const credit = creditFor(cashDividend(h.marketValue ?? 0, yld, rk));
-    total += credit;
-    if (credit !== 0) {
-      holdingActions.push(new HoldingTransactAction({
-        stateKey,
-        holdingId:        h.id,
-        marketValueDelta: credit,
-        costBasisDelta:   0,
-        valueKind:        VALUE_KIND.UNITS,
-      }));
-    }
+    const inst     = instrumentOf(h, securities);
+    const rk       = inst.rateKey ?? fallbackRateKey;
+    const yld      = baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield);
+    const dividend = cashDividend(h.marketValue ?? 0, yld, rk);
+    const credit   = creditOn(dividend, rk);
+    if (dividend === 0 && credit === 0) continue;
+    dividendTotal += dividend;
+    creditTotal   += credit;
+    lots.push({ holdingId: h.id, dividend, credit });
   }
-  return { amount: +total.toFixed(2), holdingActions };
+  return { dividend: +dividendTotal.toFixed(2), credit: +creditTotal.toFixed(2), lots };
 }
 
 /**
