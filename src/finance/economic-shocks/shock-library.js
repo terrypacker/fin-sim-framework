@@ -357,10 +357,11 @@ const HISTORICAL_SHOCKS = {
    *
    * `EQUITY_INTL_EX_AU` moves with it, though, because that sleeve is a global-ex-Australia
    * basket — roughly 70 % US by weight — and a US correction is most of what it holds. It
-   * was priced at the framework's market-factor loading for the sleeve AS IT THEN WAS
-   * (`DEFAULT_EQUITY_BETA`, 0.95): −0.115 × 0.95 and −0.418 × 0.95. Design 90 §7.4 sourced
-   * that beta at 0.81 (11 Sep 2026); this preset was deliberately NOT re-priced with it — a
-   * shock preset is a historical episode, and re-calibrating one is its own decision.
+   * is priced at the framework's market-factor loading for the sleeve
+   * (`DEFAULT_EQUITY_BETA`, 0.81 — design 90 §7.4): −0.115 × 0.81 and −0.418 × 0.81. It was
+   * first priced at the then-default 0.95 (−0.109 / −0.397) and re-priced on 15 Sep 2026
+   * once the sourced beta landed. The figures are literals, not derived at load: an MC
+   * beta override must not silently re-size a named episode.
    * Leaving it out meant an AU household whose growth sleeve is a global fund felt nothing
    * at all from the library's control-arm correction.
    *
@@ -379,7 +380,7 @@ const HISTORICAL_SHOCKS = {
     levelEffects: {
       equityRevaluation: [
         { rateKeys: ['EQUITY_US'],           multiplier: -0.115 },
-        { rateKeys: ['EQUITY_INTL_EX_AU'],   multiplier: -0.109 },
+        { rateKeys: ['EQUITY_INTL_EX_AU'],   multiplier: -0.093 },
       ],
     },
     // The legs form, purely so the stress window can be stated separately from the price
@@ -394,7 +395,7 @@ const HISTORICAL_SHOCKS = {
       {
         id: 'equity',
         regime: {
-          returnAdjustment: { EQUITY_US: -0.418, EQUITY_INTL_EX_AU: -0.397 },
+          returnAdjustment: { EQUITY_US: -0.418, EQUITY_INTL_EX_AU: -0.339 },
         },
         recovery: { profile: 'V_REBOUND', durationMonths: 24, reboundStart: 0.12, reboundPeak: 0.55 },
       },

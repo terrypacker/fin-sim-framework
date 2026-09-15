@@ -447,7 +447,7 @@ market USD/AUD history for the 1970s. The major-currencies dollar index fell **1
 
 ### `MILD_CORRECTION` — Mild Correction
 
-**What it does.** −11.5 % on `EQUITY_US` and −10.9 % on `EQUITY_INTL_EX_AU`, with a fast
+**What it does.** −11.5 % on `EQUITY_US` and −9.3 % on `EQUITY_INTL_EX_AU`, with a fast
 rebound that regains the prior peak in 12 months. No FX, no rates, no inflation, **no
 dividend cut**, and **no tags** — see §1.
 
@@ -460,7 +460,7 @@ preset that leaves `EQUITY_AU` and `EQUITY_INTL_EX_US` alone. `EQUITY_INTL_EX_AU
 because that sleeve is a global-ex-Australia basket — roughly 70 % US by weight — and
 leaving it out meant an AU household whose growth sleeve is a global fund felt nothing at
 all from the library's control arm. It is priced at the framework's own market-factor
-loading for the sleeve (`DEFAULT_EQUITY_BETA` = 0.95), not at a fresh guess.
+loading for the sleeve (`DEFAULT_EQUITY_BETA` = 0.81, design 90 §7.4), not at a fresh guess.
 
 ---
 

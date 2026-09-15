@@ -1087,8 +1087,9 @@ Tests: `equity-market-dispersion.test.mjs` (the defaults reproduce σ and ρ; US
 opposite directions about a third of years; an explicit 0 is pure single-factor); tests about
 the zero-idio path now state their zeros.
 
-**Deliberately not re-priced:** the `MILD_CORRECTION` shock preset sizes its ex-AU fall at the
-OLD ex-AU beta (0.95). A preset is a historical episode; re-calibrating one is its own decision.
+**`MILD_CORRECTION` re-priced (15 Sep 2026, user decision):** the shock preset's ex-AU leg was
+sized at the OLD ex-AU beta (0.95). It now uses 0.81: level −0.109 → −0.093, drag
+−0.397 → −0.339. Left out of the original step as its own decision; no golden uses the preset.
 
 ---
 

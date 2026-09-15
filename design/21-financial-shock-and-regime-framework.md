@@ -754,7 +754,8 @@ Closed in two passes:
   the international figures are the US figure, flagged like the AU one (§20.2).
 - `MILD_CORRECTION` stays deliberately US-**led**, but now also moves `EQUITY_INTL_EX_AU`:
   that sleeve is a global-ex-Australia basket, ~70 % US by weight, priced at the framework's
-  own `DEFAULT_EQUITY_BETA` of 0.95 rather than a fresh guess. It still leaves `EQUITY_AU`
+  own `DEFAULT_EQUITY_BETA` rather than a fresh guess (0.95 at the time; re-priced to the
+  sourced 0.81 on 2026-09-15, design 90 §7.4). It still leaves `EQUITY_AU`
   and `EQUITY_INTL_EX_US` alone, which is the property that makes it the control arm.
 
 Detector: `shock-library-tags-and-sleeves.test.mjs` SHOCKTAG-6/7, which fail if a future
