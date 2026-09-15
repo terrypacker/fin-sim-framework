@@ -178,8 +178,9 @@ export const AU_RETIREMENT = {
       // design 77 §5.1 — `amount` is NET of the fund's Div 295 earnings tax, `grossAmount`
       // is the pre-tax base and `taxRate` the rate applied (0 in pension phase). All three
       // must be declared or pickPayload drops them and the journal cannot explain the split.
-      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
-      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      // `frankingCredit` (design 90 §8.4) is the GROSS credit on the fund's AU dividends.
+      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), grossAmount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
+      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), frankingCredit: ValueType.currency('AUD'), stateKey: ValueType.text(), taxRate: ValueType.number() } },
       { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
       { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
       // personId — see the US_RETIREMENT declaration of this shared type; the two must
@@ -252,6 +253,14 @@ export const AU_RETIREMENT = {
       },
       // `superGrowthRate`, `auStockGrowthRate` and `auStockDividendRate` are RETIRED by
       // design 99 P2: super and AU stock earn their holdings' market returns (Market Rates).
+      {
+        // Design 90 §8.4. Default 1 matches the individual path (franking.js): no sourced
+        // aggregate ASX franking level is on disk, and 0 reproduces the pre-§8.4 model.
+        key: 'superFrankedPercent', label: 'Super Franked Percent',
+        type: 'Number', group: 'AU Retirement', mc: false, opt: false,
+        defaultValue: 1,
+        description: 'Fraction of the dividends on super\'s Australian shares that are franked (1 = fully franked, 0 = no franking credits). The fund receives a credit of 30/70 of the franked dividend (ITAA97 s202-60(2)) and it is refundable (s67-25): it offsets the fund\'s 15% tax in accumulation, and is paid in full in pension phase. Only the AU equity part of super earns it; international shares carry no Australian credit.',
+      },
       {
         // Shared key with US_RETIREMENT (merge dedupes by key). Kept identical in
         // its Money metadata so the effective param is consistent regardless of
@@ -644,6 +653,8 @@ export const AU_RETIREMENT = {
           // Design 99 P2 — the fund's holdings earn their markets' total return. This is
           // only the last resort, for a config without ECONOMIC_REGIMES' rate maps.
           defaultRate:   marketReturnFor(p, SuperEarningsHandler.rateKey).total,
+          frankedPercent: p.superFrankedPercent ?? 1,
+          defaultYield:   marketReturnFor(p, SuperEarningsHandler.rateKey).yield,
         });
         h.handledEvents.push(superEvent);
         handlers.push(h);

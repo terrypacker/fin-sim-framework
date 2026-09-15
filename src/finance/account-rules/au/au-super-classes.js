@@ -396,6 +396,10 @@ export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
  * pre-tax base, forwarded to the classifier so `auSuperTaxYTD` records the levy.
  * Absent on pre-77 serialized actions ⇒ falls back to `amount`, reproducing the
  * old (gross-credit, gross-base) arithmetic exactly.
+ *
+ * Design 90 §8.4 — `action.frankingCredit` is the gross franking credit on the fund's AU
+ * dividends. `amount` already includes the part of it the member keeps; it is forwarded
+ * so the classifier can book the fund's refund. Absent ⇒ 0, the pre-§8.4 arithmetic.
  */
 export class SuperEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'SuperEarningsApplyReducer';
@@ -429,6 +433,7 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
       [{
         type: 'SUPER_EARNINGS_TAX',
         amount: action.grossAmount ?? action.amount,
+        frankingCredit: action.frankingCredit ?? 0,
         stateKey: key,
         taxRate: action.taxRate,
       }]

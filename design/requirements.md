@@ -56,7 +56,7 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-20 | Super | Contribution | + contribution | N | Super (15%, always) | N | ✅ |
 | EVT-21 | Super | Withdrawal – Contribution | − contribution | N | N (age 60+) | N | ✅ |
 | EVT-22 | Super | Withdrawal – Earnings | − earnings | Ordinary Income | N (age 60+) | N | ✅ |
-| EVT-23 | Super | Earnings | + earnings | N | Super (15%, always) | N | ✅ |
+| EVT-23 | Super | Earnings | + earnings (+ franking credit on AU dividends) | N | Super (15% accumulation, 0% pension) less refundable franking credit | N | ✅ |
 | EVT-24 | 401K | Contribution | + contribution | Negative Income (pre-tax) | N | N | ✅ |
 | EVT-25 | 401K | Earnings / Withdrawal | + earnings | Ordinary Income | N | N | ✅ |
 | EVT-26 | AU Brokerage | Stocks – Div Franked as Resident | + contribution (basis) | Ordinary Income | Ordinary Income (cash + gross-up) + Franking Credit offset | Y | ✅ |

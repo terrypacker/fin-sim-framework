@@ -717,6 +717,9 @@ systematically over-generous for one that does.
 
 ### 8.4 Two more, if AU shares go into super
 
+> **BUILT as design 90 §8.4** (15 Sep 2026). Both bullets are answered there: the credit is
+> refunded to the fund, and it joins the Div 295 base, so the fund keeps `credit × (1 − t)`.
+
 - **Franking credits inside the fund are unmodelled**, and `super-tax-rate.js` says so
   explicitly in its "NOT modelled here" list. The fund rate is 15%, and **0% in pension phase**
   (`superEarningsTaxRate`), against a 30% credit — so a complying fund holding franked

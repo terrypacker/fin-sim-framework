@@ -46,7 +46,7 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
-import { computeHoldingsGrowth, computeHoldingsDividends } from '../holdings/holdings-earnings.js';
+import { computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsFrankingCredits } from '../holdings/holdings-earnings.js';
 import { getBirthDate } from '../residency-utils.js';
 import { superEarningsTaxRate } from '../tax/au/super-tax-rate.js';
 
@@ -629,7 +629,7 @@ export class SuperEarningsHandler extends HandlerEntry {
   static eventType   = 'INTL_SUPER_EARNINGS';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, defaultRate = null, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, defaultRate = null, rateKey = null, frankedPercent = 1, defaultYield = null } = {}) {
     super(null, 'Super Earnings');
     this.stateRegistry = stateRegistry;
     this.role          = role;
@@ -637,17 +637,23 @@ export class SuperEarningsHandler extends HandlerEntry {
     this._stateKeyFixed = stateKey;
     this.defaultRate   = defaultRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
+    // Design 90 §8.4 — fraction of the fund's AU dividends that carry a franking credit
+    // (the `superFrankedPercent` param). 1 = fully franked, 0 = the pre-§8.4 model.
+    this.frankedPercent = frankedPercent;
+    // The AU yield's last resort, beside `defaultRate`: a config without ECONOMIC_REGIMES
+    // seeds no `marketDividendYields`, and without this the credit would silently be 0.
+    this.defaultYield  = defaultYield;
     this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, defaultRate: d.defaultRate ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, defaultRate: d.defaultRate ?? null, frankedPercent: d.frankedPercent ?? 1, defaultYield: d.defaultYield ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, defaultRate: this.defaultRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, defaultRate: this.defaultRate, frankedPercent: this.frankedPercent, defaultYield: this.defaultYield };
   }
 
   call({ data, state, date }) {
@@ -660,7 +666,11 @@ export class SuperEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
     };
     const gross = computeHoldingsGrowth(growthArgs);
-    if (gross.amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // Design 90 §8.4 — the franking credit on the fund's AU dividends. The dividend
+    // itself is already inside `gross` (the market total); the credit is on top of it.
+    const creditArgs = { state, stateKey, fallbackRateKey: this.rateKey, fallbackYield: this.defaultYield, frankedPercent: this.frankedPercent };
+    const credit = computeHoldingsFrankingCredits(creditArgs);
+    if (gross.amount === 0 && credit.amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     // A LOSS reaches the member's balance in full, and carries NO Div 295 base
     // (design 84 G12). The fund's 15% earnings tax is levied on earnings; a losing
@@ -670,10 +680,19 @@ export class SuperEarningsHandler extends HandlerEntry {
     // across years). Withholding nothing therefore slightly OVER-taxes a fund that
     // has losing years, which is the conservative direction. `grossAmount: 0` keeps
     // `auSuperTaxYTD` off a negative base rather than crediting a phantom refund.
+    //
+    // The franking credit is the exception, and it is not a phantom: dividends are paid
+    // in a down year too, and the credit is refundable whatever the fund's other income
+    // (s67-25). So a loss year still receives the whole credit, and the classifier books
+    // it as a negative fund tax. (Strictly the credit is also assessable, so a loss
+    // smaller than the credit leaves a small taxable residue; with no loss carry-forward
+    // in this model, charging it would be the only place a loss offsets anything.)
     if (gross.amount < 0) {
       return [
-        { type: 'SUPER_EARNINGS_APPLY', amount: gross.amount, grossAmount: 0, stateKey, taxRate: 0 },
+        { type: 'SUPER_EARNINGS_APPLY', amount: +(gross.amount + credit.amount).toFixed(2), grossAmount: 0,
+          frankingCredit: credit.amount, stateKey, taxRate: 0 },
         ...gross.holdingActions,
+        ...credit.holdingActions,
         new RecordBalanceAction(`${stateKey}.balance`, stateKey),
       ];
     }
@@ -697,9 +716,16 @@ export class SuperEarningsHandler extends HandlerEntry {
     // base it is actually levied on. It is the accrual basis for auSuperTaxYTD;
     // the member's cash is never touched (that was the pre-77 bug).
     const net = taxRate > 0 ? computeHoldingsGrowth({ ...growthArgs, factor: 1 - taxRate }) : gross;
+    // Design 90 §8.4 — the credit joins the fund's assessable income (s207-20(1)) and
+    // offsets its tax (s207-20(2)), refundably (s67-25). Net of both, the member keeps
+    // `credit × (1 − t)`: the whole credit in pension phase, 85% of it in accumulation.
+    // Same second-pass-with-`factor` shape as the growth, for the same §4.4 reason.
+    const netCredit = taxRate > 0 ? computeHoldingsFrankingCredits({ ...creditArgs, factor: 1 - taxRate }) : credit;
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount: net.amount, grossAmount: gross.amount, stateKey, taxRate },
+      { type: 'SUPER_EARNINGS_APPLY', amount: +(net.amount + netCredit.amount).toFixed(2), grossAmount: gross.amount,
+        frankingCredit: credit.amount, stateKey, taxRate },
       ...net.holdingActions,
+      ...netCredit.holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

@@ -30,8 +30,12 @@
  *     liability, not the fund's.
  *   - **Transfer balance cap** — the pension-phase 0% rate applies only to the
  *     portion supporting a retirement-phase income stream. See §4.2 of design 77.
- *   - **Franking credits / CGT discount inside the fund** — the fund's own offsets,
- *     which make the *effective* rate on fund earnings lower than 15%.
+ *   - **CGT discount inside the fund** — the fund's one-third discount, and the fact
+ *     that this rate is levied on unrealised growth every year rather than on
+ *     realisation. Both make the *effective* rate on fund earnings lower than 15%.
+ *
+ * Franking credits inside the fund ARE modelled (design 90 §8.4): see
+ * `computeHoldingsFrankingCredits` and the SUPER_EARNINGS_TAX classifier.
  */
 export const SUPER_TAX_RATE = 0.15;
 

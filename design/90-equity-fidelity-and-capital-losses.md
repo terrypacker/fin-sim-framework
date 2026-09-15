@@ -1,8 +1,8 @@
 # 90 — Equity fidelity and capital losses
 
 **Status** (2026-08-13): **steps 1–9 BUILT.** Per-section status is on each heading; §9 has
-the ordered list. Open: §7.4 (correlation structure), §8.4 (franking inside super), and the
-out-of-scope list in §11. §4.5's own two deferred items are now closed — §904(b)(2) built
+the ordered list. Open: §7.4 (correlation structure) and the out-of-scope list in §11. §8.4
+(franking inside super) was BUILT on 2026-09-15. §4.5's own two deferred items are now closed — §904(b)(2) built
 as step 9 (§4.6), §904(f)/(g) measured and closed as unreachable (§4.7).
 
 *(This line read "PROPOSED. No code written." until 2026-08-12, through five landed steps.
@@ -1093,7 +1093,7 @@ sized at the OLD ex-AU beta (0.95). It now uses 0.81: level −0.109 → −0.09
 
 ---
 
-## 8. AU franked dividends  ✅ BUILT (step 7 — gaps 1–3; §8.4 super franking still open)
+## 8. AU franked dividends  ✅ BUILT (step 7 — gaps 1–3; §8.4 super franking built 15 Sep 2026)
 
 **Implementation record.** `src/finance/tax/au/franking.js` holds the s202-60(2)
 arithmetic and the company-rate table; `AU_DIVIDEND_FRANKED_RESIDENT_TAX` books
@@ -1119,10 +1119,11 @@ limit is now floored at 0 separately, because "the Commissioner owes you a refun
 "there is no liability left to relieve" are different states that one `Math.max`
 conflated. The design 71 §6 identity still holds by construction, positive or negative.
 
-**Not built, and why.** §8.4 (franking credits inside super) stays open — a 15% fund rate
-against a 30% credit is a systematic refund, and in pension phase the whole credit is
-refundable, but the reference plan holds no AU shares in super so it is unmeasurable
-today. The 45-day qualified-person rule stays a documented non-model per §2.3: its text is
+**Not built at step 7, and why.** §8.4 (franking credits inside super) was left open — a
+15% fund rate against a 30% credit is a systematic refund, and in pension phase the whole
+credit is refundable, but the reference plan then held no AU shares in super so it was
+unmeasurable. Design 99 P5c gave super a 39.7% AU sleeve, and §8.4 below is the build.
+The 45-day qualified-person rule stays a documented non-model per §2.3: its text is
 not on disk, and a buy-and-hold plan clears 45 days on every holding anyway.
 
 
@@ -1162,6 +1163,121 @@ refundable credit can drive net tax negative, and the fix is to distinguish "ref
 "clamped", not to relax the invariant.
 
 **User has data for this section.** Ask before building.
+
+### 8.4 Franking credits inside super  ✅ BUILT (15 Sep 2026)
+
+**Why it became measurable.** Design 99 P5c gave an un-authored super account APRA's
+MySuper equity split — 39.7% AU, 60.3% international — so every plan with super now holds
+franked shares inside the fund. Before this build the fund's AU dividend was inside the
+market total it grew at, taxed at the fund rate like any other earnings, and no credit
+ever arose. That understates super, which is the opposite direction to gaps 1–2.
+
+**What the Act says (ITAA 1997, on disk).**
+- s202-60(2) — the credit is `cash × r/(1 − r)`: 30/70 at the full company rate
+  (`franking.js`, unchanged).
+- s207-20(1)/(2) — the receiving entity, here the fund, includes the credit in assessable
+  income and gets an equal offset.
+- s67-25(1) — Div 207 offsets are refundable. Subsection (1A) excludes only *non-complying*
+  funds, so a complying fund gets the refund.
+- s207-110(1)(b)(i) and (2)(b) — where the dividend is exempt current pension income
+  (s295-385/390), the fund *still* gets the s207-20 offset. In pension phase the whole
+  credit comes back as cash.
+
+**The arithmetic.** For a fund at rate `t` (15% in accumulation, 0% from 60):
+
+    fund tax on the year  = t × (gross + credit) − credit
+    member keeps          = (gross + credit) × (1 − t)
+
+The credit simply joins the gross earnings base. That answers design 76 §8.4's second
+bullet about the interaction with Div 295 withholding: the handler's existing
+second-pass-with-`factor` shape carries it unchanged.
+
+The credit is sized per lot, on `EQUITY_AU` lots only (an ex-AU dividend carries no
+Australian credit). The lot's cash dividend uses `computeHoldingsDividends`' rule — the
+same yield resolver and the same regime dividend cut — and the credit on it is s202-60(2)
+× `superFrankedPercent`.
+
+On the default mix: 0.397 × 3.43% = 1.36% of the balance arrives as AU dividends, and the
+credit on that is 0.58% of the balance. The fund keeps **+0.50%/yr** in accumulation and
+**+0.58%/yr** in pension phase — about 7–8% on super's net return.
+
+**Decisions (user, 15 Sep 2026).**
+1. **A negative fund tax is a refund, and is booked as one.** `auSuperTaxYTD` /
+   `auPersonSuperTaxYTD`, `AU_TAX_SETTLE_APPLY.fundTax` and so `cumulativeTaxesPaid` can
+   all go negative in a year. Flooring would forfeit a refund the fund really receives.
+2. **Loss years still receive the whole credit.** Dividends are paid in a down year, and
+   the credit is refundable whatever the fund's other income. Strictly the credit is also
+   assessable, so a loss smaller than the credit leaves a small taxable residue. With no
+   loss carry-forward in the model (design 84 G12), charging it would be the only place a
+   loss offsets anything, so it is not charged. This is documented in the handler.
+3. **`superFrankedPercent`** (AU Retirement, default 1, `mc`/`opt` off). The default is 1
+   because no sourced aggregate ASX franking level is on disk, matching the individual
+   path. The real aggregate is below 1, so the default overstates the refund somewhat.
+   Setting 0 reproduces the pre-§8.4 model exactly.
+
+**Implementation record.**
+- `computeHoldingsFrankingCredits` (`holdings-earnings.js`) does the per-lot walk and
+  reinvests the refund with `VALUE_KIND.UNITS` (new money, not a price move).
+- `SuperEarningsHandler` runs the credit through the same `factor: 1 − t` pass as the
+  growth, so §4.4 (Σ holdings = balance) survives.
+- A new `frankingCredit` field rides `SUPER_EARNINGS_APPLY` → `SUPER_EARNINGS_TAX`, and
+  is declared in the AU_RETIREMENT manifest so `pickPayload` keeps it.
+- The classifier books `t·gross + t·credit − credit`.
+- The handler takes a last-resort `defaultYield` beside `defaultRate`: a config without
+  ECONOMIC_REGIMES seeds no `marketDividendYields`, and the credit silently read 0 there
+  until this was added.
+- `design/requirements.md` EVT-23 amended.
+- Tests: `tests/unit/super-franking.test.mjs` (7). The accounting-integrity super rate
+  gained the credit term, and the measured ×1.0660 equals
+  (0.071824 + 0.397 × 0.0343 × 30/70) × 0.85 = 1.06601.
+
+**Golden moves: 12 of 13 re-golded** (every one with a super account).
+
+*Inertness first:* at `superFrankedPercent: 0`, `cross-border-reference` reproduces the
+pre-§8.4 fixture to the dollar (lifetime tax 791,312, net worth 11,884,551).
+
+| golden | net worth | lifetime tax |
+|---|---|---|
+| au-single-homeowner | +24.60% | −26.74% |
+| au-super-streams | +1.58% | −4.82% |
+| cross-border-reference | +1.19% | −8.96% |
+| cross-border-disposals | +0.40% | −2.38% |
+| speculative-stake | +0.21% | −3.41% |
+| speculative-conversion | +0.19% | −2.11% |
+| bond-par-conservation | +0.18% | −1.39% |
+| tips-ladder-conservation | +0.18% | −1.39% |
+| payroll-limits | +0.13% | −0.75% |
+| two-security-concentration | +0.09% | −2.14% |
+| wash-sale-harvest | +0.07% | −0.99% |
+| wash-sale-two-books | +0.05% | −0.69% |
+
+- **`au-single-homeowner` is not a cliff.** Traced year by year at 0 vs 1, every
+  non-super account is identical between the two arms at every year-end, so spending draws
+  the same money either way. The super gap is 2k in 2027, 149k in 2046 and 1,041k in 2066.
+  That is 323,379 of net credit compounding through two decades of untaxed pension phase.
+  (Its +24.60% matching P5c's +24.6% on the same golden is a coincidence.)
+- **Lifetime tax moves only through the fund-tax term.** US settle tax and personal AU
+  settle tax are identical between arms in both plans checked. The drop is the AUD
+  fund-tax change converted at `USD_AUD`: `cross-border-reference` −109,957 AUD / 1.55 =
+  −70,940, and `au-single-homeowner` (no FX rate, so 1) −311,549.
+- **`SUPER_WITHDRAWAL_EARNINGS_TAX`'s base rises** in `au-single-homeowner` (+75k): the
+  same withdrawals draw on a larger `earningsBasis`. That base is US ordinary income
+  (EVT-22), which that plan has no US person to pay.
+- **The design 52 lock-in** was re-based to 720,372 / 12,025,741. Its old constants had
+  drifted inside their band to 791,312 / 11,884,551 through later designs.
+
+**Trap met on the way.** The journal records one entry per *reducer* that consumes an
+action, and `getActions(type)` returns them all. `AU_TAX_SETTLE_APPLY` is consumed twice,
+so a naive sum over it reads the fund-tax change as double what `cumulativeTaxesPaid`
+moved. Filter on `entry.reducer` before summing any multi-reducer action.
+
+**Still not modelled** (unchanged, and now the fund's largest remaining gaps):
+- the fund's CGT treatment — the 15% is levied on *unrealised* growth every year, with no
+  one-third discount. It runs the same direction as this gap and may be larger. It is the
+  next item worth measuring.
+- the 45-day qualified-person rule (§2.3).
+- the transfer balance cap (design 77 §4.2).
+- the fund's loss carry-forward (design 84 G12).
 
 ---
 
@@ -1303,9 +1419,8 @@ touches the RNG.
   to Taxable Australian Property, which restricts which losses arise at all. The residency-aware
   cost-base handling belongs to design 62; do not reach for the resident branch as a stand-in.
 
-- **Franking credits inside super** (design 76 §8.4). A 15% fund rate (0% in pension phase)
-  against a 30% credit is a systematic cash refund. Separate, and only worth building if AU
-  shares actually land in super — which §7 makes newly plausible, so revisit after step 6.
+- ~~**Franking credits inside super** (design 76 §8.4).~~ **BUILT as §8.4** (15 Sep 2026):
+  +0.50%/yr in accumulation and +0.58%/yr in pension phase on the default mix.
 
 - **§1.1411-4(f)(4) deductions properly allocable to NII, beyond the §1211(b) allowance.** The
   regulation's (f) paragraph is a whole deduction regime. Only the capital-loss slice is in

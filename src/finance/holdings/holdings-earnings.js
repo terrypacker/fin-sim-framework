@@ -15,6 +15,8 @@ import { primaryResidencyState }    from '../residency-utils.js';
 import { resolveYield }             from '../economic-regimes/yield-curve.js';
 import { couponlessYield }          from '../economic-regimes/couponless-yield.js';
 import { addValue, isUnitised } from './holding-utils.js';
+import { RATE_KEYS }                from '../economic-regimes/rate-keys.js';
+import { frankingCreditOn }         from '../tax/au/franking.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -402,6 +404,71 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
         // is what the reducer used to infer (design 94 §9.4). Inert while equity is
         // scalar — there is no unit count to move — and load-bearing the moment step 3
         // unitises it. `costBasisDelta` stays 0: the basis question is F3, not this.
+        valueKind:        VALUE_KIND.UNITS,
+      }));
+    }
+  }
+  return { amount: +total.toFixed(2), holdingActions };
+}
+
+/**
+ * The franking credits a superannuation fund receives on its Australian-equity lots
+ * (design 90 §8.4).
+ *
+ * A fund's AU dividend is already inside the market total it grows at, so only the
+ * CREDIT is new money: per lot, the cash dividend `computeHoldingsDividends` would pay
+ * (same yield resolver, same regime cut), then s202-60(2) on it. Only `EQUITY_AU` lots
+ * frank — an ex-AU dividend carries no Australian credit.
+ *
+ * The credit is refundable to a complying fund (ITAA 1997 s67-25(1); (1A) excludes only
+ * non-complying funds) and survives the pension-phase exemption (s207-110(2)(b)), so the
+ * caller credits it in full, less the fund's own rate on it via `factor`.
+ *
+ * Each lot's share is reinvested with `VALUE_KIND.UNITS` — a refund is new money, not a
+ * price move.
+ *
+ * @param {object} opts
+ * @param {object} opts.state
+ * @param {string} opts.stateKey
+ * @param {string} opts.fallbackRateKey  - rate key for a lot without one
+ * @param {number|null} [opts.fallbackYield=null] - below the market's yield (see `baseDividendYield`)
+ * @param {number} [opts.frankedPercent=1]
+ * @param {number} [opts.factor=1]       - `1 − fund rate` for the part that reaches the member
+ * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsFrankingCredits({ state, stateKey, fallbackRateKey, fallbackYield = null, frankedPercent = 1, factor = 1 }) {
+  const account    = state?.[stateKey];
+  const holdings   = account?.holdings ?? [];
+  const adjMap     = state?.effectiveDividendAdjustments ?? {};
+  const securities = state?.securities ?? null;
+
+  // Rounded exactly as computeHoldingsDividends rounds the dividend it would pay.
+  const cashDividend = (mv, yld, rk) => +(mv * Math.max(0, yld * (1 + (adjMap[rk] ?? 0)))).toFixed(2);
+  const creditFor    = cash => +(frankingCreditOn(cash, { frankedPercent }) * factor).toFixed(2);
+
+  if (!holdings.length) {
+    if (fallbackRateKey !== RATE_KEYS.EQUITY_AU) return { amount: 0, holdingActions: [] };
+    const y0 = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;
+    return { amount: creditFor(cashDividend(account?.balance ?? 0, y0, fallbackRateKey)), holdingActions: [] };
+  }
+
+  let total = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h) continue;
+    if (h.allocation === 'BOND' || h.allocation === 'CASH' || h.allocation === 'GOLD') continue;
+    const inst = instrumentOf(h, securities);
+    const rk   = inst.rateKey ?? fallbackRateKey;
+    if (rk !== RATE_KEYS.EQUITY_AU) continue;
+    const yld    = baseDividendYield(h, inst, state, fallbackRateKey, fallbackYield);
+    const credit = creditFor(cashDividend(h.marketValue ?? 0, yld, rk));
+    total += credit;
+    if (credit !== 0) {
+      holdingActions.push(new HoldingTransactAction({
+        stateKey,
+        holdingId:        h.id,
+        marketValueDelta: credit,
+        costBasisDelta:   0,
         valueKind:        VALUE_KIND.UNITS,
       }));
     }

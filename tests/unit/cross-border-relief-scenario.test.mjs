@@ -356,8 +356,18 @@ function runDefaultIntlRetirement() {
 //
 //   lifetime tax   799,954 -> 793,691    (-6,263; inside tolerance, re-based anyway)
 //   net worth   12,038,047 -> 11,841,449 (-196,598, -1.63%)
-const EXPECTED_LIFETIME_TAX = 793_691;
-const EXPECTED_NET_WORTH     = 11_841_449;
+//
+// MOVED again by design 90 §8.4 (franking credits inside super). The base below is the
+// run at `superFrankedPercent: 0`, which reproduces the pre-§8.4 golden to the dollar —
+// the old constants had drifted inside the band (791,312 / 11,884,551) through later
+// designs. Lifetime tax FALLS because the fund's credit is refundable and
+// `cumulativeTaxesPaid` carries the fund tax (design 77 §5.4) — a negative fund tax is
+// a refund the fund really receives:
+//
+//   lifetime tax   791,312 -> 720,372    (-70,940; Σ credit × (1 − t) over the run is 124,225)
+//   net worth   11,884,551 -> 12,025,741 (+141,190, +1.19%)
+const EXPECTED_LIFETIME_TAX = 720_372;
+const EXPECTED_NET_WORTH     = 12_025_741;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

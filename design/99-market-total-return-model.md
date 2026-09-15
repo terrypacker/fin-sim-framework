@@ -548,7 +548,7 @@ balance-due payment.
 | D-1 | Where does the yield live? | On the **market** (with a security override), not the account. A 4% ASX yield is a fact about the ASX. |
 | D-2 | A saved scenario's differing account rate: warn only, or convert? | **Warn only** at P2. There is no faithful conversion: a rate on a wrapper of mixed holdings has no single holding to move to. Revisit if a real saved scenario needs it. |
 | D-3 | Price-vs-carve-out, or one uniform path (every account grows at price and reinvests the yield)? | Keep **two paths**, chosen by the handler's `yieldPaidSeparately`. Numerically identical, and the carve-out is what the design 84 s99B tax logic reads. |
-| D-4 | Does super pay franked dividends? | Out of scope. It is design 90 §8.4, and the market yield gives it a number to use when it lands. |
+| D-4 | Does super pay franked dividends? | Out of scope here. **Built as design 90 §8.4** (15 Sep 2026): the AU market yield sizes the fund's dividend, and `superFrankedPercent` the credit on it. |
 | D-5 | Do cash/savings accounts keep an account-level rate? | **Yes**, `Prime + primeSpread`. A bank account's rate is a contract with one institution, like a mortgage rate: it genuinely belongs to the account. It is the one account-level rate that survives. |
 | D-6 | Should coupon-less bond lots read the yield curve at their tenor? | Yes, but in **P5**, not P3b: it changes results. P3b only removes the account override. |
 

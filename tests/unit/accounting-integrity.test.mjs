@@ -130,8 +130,12 @@ test('per-account: untouched accounts compound at exactly their configured rate'
     // they pass 60 the rate reverts to the full `superGrowthRate` (see evt-super).
     // Design 99 P5c: super bootstraps across AU and ex-AU (APRA's MySuper split), so its
     // gross rate is the mix-weighted blend of the two markets' totals.
-    superAccount: Object.entries(DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER])
-      .reduce((s, [k, w]) => s + w * marketReturnFor(p, k).total, 0) * (1 - SUPER_TAX_RATE),
+    // Design 90 §8.4: plus the franking credit on the AU slice's dividend (30/70 of it),
+    // which the fund also keeps net of its 15%.
+    superAccount: (Object.entries(DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER])
+      .reduce((s, [k, w]) => s + w * marketReturnFor(p, k).total, 0)
+      + DEFAULT_EQUITY_MARKET_MIX_BY_ROLE[ACCOUNT_ROLES.SUPER].EQUITY_AU * au.yield * (0.30 / 0.70)
+        * (p.superFrankedPercent ?? 1)) * (1 - SUPER_TAX_RATE),
   };
   // Equity sleeves of the mixed books still grow at exactly the equity rate.
   const expectedEquitySleeve = {

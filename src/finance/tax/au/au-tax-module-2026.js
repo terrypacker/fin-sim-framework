@@ -528,8 +528,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
       // EVT-23: super earnings — AU super tax at 15% in accumulation phase;
       //   0% in pension/retirement phase (member ≥ 60), signalled by action.taxRate.
+      //   Design 90 §8.4 — a franking credit is assessable to the fund (s207-20(1)) and
+      //   offsets its tax refundably (s207-20(2), s67-25), so the fund's tax on it is
+      //   `t × credit − credit`. That can drive the year's fund tax NEGATIVE — a refund
+      //   the fund really receives — and it is booked as one, not floored.
       ['SUPER_EARNINGS_TAX', (state, action) => {
-        const superTax = action.amount * (action.taxRate ?? SUPER_TAX_RATE);
+        const rate     = action.taxRate ?? SUPER_TAX_RATE;
+        const credit   = action.frankingCredit ?? 0;
+        const superTax = action.amount * rate + credit * rate - credit;
         const accountKey = action.stateKey ?? 'superAccount';
         const account = state[accountKey];
         const perPerson = state.people != null && account != null;
