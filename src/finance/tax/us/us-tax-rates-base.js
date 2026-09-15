@@ -330,27 +330,47 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // is sheltered, which is what §1(h)(1)(D) reduces.
     const unrecap1250      = capLoss.unrecaptured1250Gain;
     const unrecap1250Taxed = unrecap1250 - shelter1250;
-    const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250Taxed, brackets);
-    const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,                    brackets);
-    const unrecap1250Tax  = Math.min(u1250Stacked.tax - u1250Base.tax,
-                                     unrecap1250Taxed * UNRECAPTURED_1250_MAX_RATE);
+    //
+    // The ceiling is applied PER DOLLAR, over a copy of the table clamped at 25% — the
+    // same shape as the 28% layer below. An aggregate `min(differential, 25% × slice)`
+    // overcharges a slice straddling the 24%→32% boundary: the worksheet taxes the part
+    // below the 24% top at regular rates (lines 21/44) and only the rest at 25% (lines
+    // 35–40), so 10k at 24% + 10k above is 4,900, not min(5,600, 5,000) = 5,000.
+    const u1250Brackets   = brackets.map(([lower, rate]) => [lower, Math.min(rate, UNRECAPTURED_1250_MAX_RATE)]);
+    const u1250Stacked    = applyBracketsDetailed(taxableOrdinaryAfterFeie + unrecap1250Taxed, u1250Brackets);
+    const u1250Base       = applyBracketsDetailed(taxableOrdinaryAfterFeie,                    u1250Brackets);
+    const unrecap1250Tax  = u1250Stacked.tax - u1250Base.tax;
+
+    // Step 2c: 28-percent rate gain (§1(h)(4)) — collectibles held more than a year.
+    // 28% is a CEILING, not a flat rate: §1(h)(1) says the tax "shall not exceed" the
+    // layered sum, and the Schedule D Tax Worksheet taxes the part of this gain that
+    // falls below the 24% bracket top at the regular rates (line 21 → line 44) and only
+    // the rest at 28% (lines 41–43). Stacked directly on ordinary + §1250 — worksheet
+    // lines 38–39 give the below-25% space to §1250 first — and taxed per dollar at
+    // min(bracket rate, 28%). With no ordinary bracket between 24% and 32%, that per-band
+    // clamp IS the worksheet, exactly.
+    // Reference: docs/us-tax/IRS-Schedule-D-Instructions-2025.txt, "Schedule D Tax
+    // Worksheet"; docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.txt
+    const collectibles      = capLoss.collectibleGain;
+    const collectiblesTaxed = collectibles - shelterColl;
+    const collFloor         = taxableOrdinaryAfterFeie + unrecap1250Taxed;
+    const collBrackets      = brackets.map(([lower, rate]) => [lower, Math.min(rate, COLLECTIBLES_RATE)]);
+    const collStacked       = applyBracketsDetailed(collFloor + collectiblesTaxed, collBrackets);
+    const collBase          = applyBracketsDetailed(collFloor,                     collBrackets);
+    const collectiblesTax   = collStacked.tax - collBase.tax;
 
     // Step 3: long-term capital gains tax — stack on top of taxable ordinary
     // income (IRC §1(h)). Capital gains sit in the brackets above the ordinary
     // income ceiling, so the tax is the bracket differential, not the bracket
-    // applied to gains alone. The §1250 layer sits between the two, so the LTCG base
-    // includes it; with no §1250 gain this is bit-identical to the pre-G7 computation.
+    // applied to gains alone. The §1250 and 28% layers sit between the two, so the LTCG
+    // base includes both: worksheet line 14 (taxable income less the ADJUSTED net capital
+    // gain, which excludes lines 18 and 19) is where the 0% band starts.
     const cg              = capLoss.longTermGain;
     const cgTaxed         = cg - shelterLtcg;
-    const ltcgFloor       = taxableOrdinaryAfterFeie + unrecap1250Taxed;
+    const ltcgFloor       = collFloor + collectiblesTaxed;
     const ltcgStacked     = applyBracketsDetailed(ltcgFloor + cgTaxed, ltcgBrackets);
     const ltcgBase        = applyBracketsDetailed(ltcgFloor,           ltcgBrackets);
     const capitalGainsTax = ltcgStacked.tax - ltcgBase.tax;
-
-    // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
-    const collectibles      = capLoss.collectibleGain;
-    const collectiblesTaxed = collectibles - shelterColl;
-    const collectiblesTax   = collectiblesTaxed * COLLECTIBLES_RATE;
 
     // Step 4b: §904(b)(2) capital gain rate differential (design 90 §4.5, step 9).
     // Computed here rather than beside `capBasket` because it needs the 0/15/20 rate-group
@@ -628,7 +648,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       brackets: this._bracketBreakdown({
         filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
         u1250Stacked, u1250Base, unrecap1250Taxed, unrecap1250Tax,
-        ltcgStacked, ltcgBase, collectibles, collectiblesTax,
+        ltcgStacked, ltcgBase, collectiblesTaxed, collectiblesTax, collStacked, collBase,
         niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
         usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
         selfEmploymentTax, seDeduction,
@@ -703,7 +723,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : []),
         { label: 'Tax on Ordinary Income',              amount:  ordinaryTax },
         { label: 'Long-Term Capital Gains Tax',         amount:  capitalGainsTax },
-        { label: 'Collectibles Tax (28%)',              amount:  collectiblesTax },
+        { label: 'Collectibles Tax (28% max)',          amount:  collectiblesTax },
         ...(unrecap1250 > 0
           ? [{ label: 'Unrecaptured \u00a71250 Gain (25% max)',  amount:  unrecap1250Tax }]
           : []),
@@ -745,7 +765,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
   _bracketBreakdown({
     filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
     u1250Stacked, u1250Base, unrecap1250Taxed, unrecap1250Tax,
-    ltcgStacked, ltcgBase, collectibles, collectiblesTax,
+    ltcgStacked, ltcgBase, collectiblesTaxed, collectiblesTax, collStacked, collBase,
     niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
     usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
     selfEmploymentTax, seDeduction,
@@ -767,30 +787,24 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       // bands are always differenced — they show which LTCG band the gain reached
       // given the ordinary income sitting underneath it.
       ltcg: subtractBands(ltcgStacked.bands, ltcgBase.bands),
-      // Unrecaptured §1250 gain (§1(h)(1)(D)) — the one rate group on this return whose
-      // tax is the LESSER of two computations, so a single band set cannot describe it.
-      // Which limb won is reported rather than left to be inferred:
-      //
-      //   ceilingApplied false → the ordinary bracket differential set the tax, and
-      //     `bands` are that differential; Σ band.tax equals the line exactly.
-      //   ceilingApplied true  → the 25% ceiling bit, and the line is `gain × 0.25`;
-      //     the differential bands are still carried, because "what the brackets would
-      //     have charged" is the only way to see BY HOW MUCH the ceiling helped.
-      //
-      // The document module picks one presentation from this so the worksheet's
-      // "Σ bands = line" invariant holds in both cases — attaching the differential
-      // unconditionally would fail it in exactly the years the ceiling matters.
+      // Unrecaptured §1250 gain (§1(h)(1)(D)) — the differential over the 25%-clamped
+      // table, so Σ band.tax IS the line and each band reports the rate that applied
+      // (regular below the 24% top, 25% above). The old aggregate min needed a
+      // `ceilingApplied` flag to pick between two presentations; per-dollar it does not.
       unrecap1250: unrecap1250Taxed > 0
         ? {
-            gain:           unrecap1250Taxed,
-            tax:            unrecap1250Tax,
-            ceilingRate:    UNRECAPTURED_1250_MAX_RATE,
-            ceilingApplied: (u1250Stacked.tax - u1250Base.tax)
-                            > unrecap1250Taxed * UNRECAPTURED_1250_MAX_RATE,
-            bands:          subtractBands(u1250Stacked.bands, u1250Base.bands),
+            gain:        unrecap1250Taxed,
+            tax:         unrecap1250Tax,
+            ceilingRate: UNRECAPTURED_1250_MAX_RATE,
+            bands:       subtractBands(u1250Stacked.bands, u1250Base.bands),
           }
         : null,
-      collectibles: flatRateBand(COLLECTIBLES_RATE, collectibles, collectiblesTax),
+      // 28-percent rate gain: the differential over the 28%-clamped table, so each band
+      // reports the rate that actually applied (regular below the 24% top, 28% above).
+      collectibles: {
+        ...flatRateBand(COLLECTIBLES_RATE, collectiblesTaxed, collectiblesTax),
+        bands: subtractBands(collStacked.bands, collBase.bands),
+      },
       niit: {
         ...flatRateBand(this._niitRate, niitBase, niitTax),
         threshold: niitThreshold,

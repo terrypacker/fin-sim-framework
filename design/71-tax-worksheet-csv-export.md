@@ -411,7 +411,7 @@ Scenario: MFJ, 2025 bracket table. Ordinary income \$300,000; \$23,000 pre-tax 4
 | 9 | ↳ band | BRACKET | | 0.00 | 0 | 96,700 | 0.00 | 0.00 |
 | 9 | ↳ band | BRACKET | | 0.15 | 96,700 | 600,050 | 40,000.00 | 6,000.00 |
 | 9 | ↳ band | BRACKET | | 0.20 | 600,050 | | 0.00 | 0.00 |
-| 10 | Collectibles Tax (28%) | LINE | 0.00 | | | | | |
+| 10 | Collectibles Tax (28% max) | LINE | 0.00 | | | | | |
 | 11 | Early Withdrawal Penalties | LINE | 0.00 | | | | | |
 | 12 | Net Investment Income Tax (Form 8960) | LINE | 1,824.00 | 0.038 | | | 48,000.00 | 1,824.00 |
 | 13 | Gross Tax | LINE | **52,798.00** | | | | | |

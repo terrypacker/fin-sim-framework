@@ -515,18 +515,43 @@ test('TE-7: US rates module applies 28% to collectible gains', () => {
   // 28%-rate gain once §1(h)(1)(D) has taken the §1250 layer (there is none here).
   const { netLiability } = usRates.computeTax(usState({ usCollectibleGainsYTD: 10000 }));
   assert.strictEqual(Math.round(netLiability * 100) / 100, 0);
-  // The 28% rate itself is unchanged — put it above the deduction and it reappears.
+  // Above the deduction it is taxed — but 28% is a ceiling (§1(h)(1)), so 10,000 sitting
+  // in the 10% bracket pays 10%, not 28%.
   const above = usRates.computeTax(usState({ usCollectibleGainsYTD: 40000 })).netLiability;
-  assert.strictEqual(Math.round(above * 100) / 100, 2800);   // (40000 - 30000) * 0.28
+  assert.strictEqual(Math.round(above * 100) / 100, 1000);   // (40000 - 30000) * 0.10
 });
 
-test('TE-7: US collectible rate is distinct from LTCG rate (28% vs 15%)', () => {
+test('TE-7: US collectible rate is distinct from LTCG rate (ordinary-capped-at-28% vs 0/15/20)', () => {
   const collectibleTax = usRates.computeTax(usState({ usCollectibleGainsYTD: 100000 })).netLiability;
   const ltcgTax        = usRates.computeTax(usState({ usCapitalGainsYTD:      100000 })).netLiability;
   // Both are net of the $30,000 standard deduction, so each is taxed on 70,000:
-  //   collectibles: 70000 * 0.28 = 19600 | LTCG: 70000 is inside the 0% band → 0
-  assert.strictEqual(Math.round(collectibleTax * 100) / 100, 19600);
-  assert.ok(collectibleTax > ltcgTax, 'collectible 28% rate exceeds LTCG 0%/15% on same amount');
+  //   collectibles: 23,850 × 10% + 46,150 × 12% = 7,923 | LTCG: inside the 0% band → 0
+  assert.strictEqual(Math.round(collectibleTax * 100) / 100, 7923);
+  assert.ok(collectibleTax > ltcgTax, 'collectible gain gets no 0% band');
+});
+
+test('TE-7: a top-bracket collectible gain pays exactly the 28% ceiling', () => {
+  // 1,000,000 of taxable ordinary income puts the whole gain in the 37% bracket, where
+  // the §1(h)(4) ceiling binds on every dollar.
+  const base = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 1_030_000 }));
+  const r    = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 1_030_000, usCollectibleGainsYTD: 100_000 }));
+  assert.strictEqual(Math.round(r.collectiblesTax * 100) / 100, 28_000);
+  assert.strictEqual(Math.round((r.ordinaryTax - base.ordinaryTax) * 100) / 100, 0,
+    'the gain is not also charged at ordinary rates');
+});
+
+test('TE-7: the 0/15/20 layer stacks ABOVE 28-percent rate gain (worksheet line 14)', () => {
+  // Ordinary income exactly absorbs the deduction. 90,000 of collectible gain fills
+  // [0, 90,000) at 10%/12%; the 20,000 LTCG then sits at [90,000, 110,000), so only
+  // 6,700 of it reaches the 0% band (96,700) and 13,300 pays 15%.
+  const r = usRates.computeTax(usState({
+    usOrdinaryIncomeYTD: 30_000, usCollectibleGainsYTD: 90_000, usCapitalGainsYTD: 20_000,
+  }));
+  assert.strictEqual(Math.round(r.collectiblesTax * 100) / 100, 10_323);  // 2,385 + 66,150 × 12%
+  assert.strictEqual(Math.round(r.capitalGainsTax * 100) / 100, 1_995);   // 13,300 × 15%
+  const sum = bands => bands.reduce((s, b) => s + b.tax, 0);
+  assert.ok(Math.abs(sum(r.brackets.collectibles.bands) - r.collectiblesTax) < 1e-6,
+    'collectible bands explain the line');
 });
 
 test('TE-7: AU collectible gains use capital gains treatment (50% CGT discount)', () => {
@@ -994,8 +1019,19 @@ test('SD-2: §1(h)(1)(D) takes the §1250 layer before the 28% and 0/15/20 layer
   // 30,000 of deduction: 20,000 kills the §1250 layer, the remaining 10,000 halves the
   // collectibles layer, and the 0/15/20 layer is untouched (and inside the 0% band).
   assert.strictEqual(r.unrecapturedSection1250Tax, 0, '§1250 layer fully sheltered');
-  assert.strictEqual(Math.round(r.collectiblesTax * 100) / 100, 2_800, '(20,000 - 10,000) * 0.28');
+  assert.strictEqual(Math.round(r.collectiblesTax * 100) / 100, 1_000,
+    '(20,000 - 10,000) in the 10% bracket — 28% is a ceiling');
   assert.strictEqual(r.capitalGainsTax, 0, '20,000 sits inside the 0% LTCG band');
+});
+
+test('SD-2b: the §1250 25% ceiling applies per dollar across the 24%→32% boundary', () => {
+  // MFJ 2025: the 24% bracket tops out at 394,600. 384,600 of taxable ordinary income
+  // leaves 10,000 of the 20,000 slice at 24% and puts 10,000 above it, capped at 25%:
+  // 2,400 + 2,500 = 4,900. The aggregate min(5,600, 5,000) = 5,000 overcharged by 100.
+  const r = usRates.computeTax(usState({
+    usOrdinaryIncomeYTD: 414_600, usUnrecaptured1250GainYTD: 20_000,
+  }));
+  assert.strictEqual(Math.round(r.unrecapturedSection1250Tax * 100) / 100, 4_900);
 });
 
 test('SD-3: the Form 1116 identity holds when the deduction outruns ordinary income', () => {

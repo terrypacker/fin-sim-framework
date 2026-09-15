@@ -1009,13 +1009,22 @@ export class UsTaxModule2026 extends BaseTaxModule {
         // Design 90 §4 — signed. A collectible LOSS is an ordinary capital loss (the 28%
         // rate of §1(h)(4) attaches to net collectible GAIN only), so it is booked into
         // the same bucket and _computeCapitalLossLimitation spills any excess into the
-        // long-term groups. Both characters land here: this bucket has always taxed a
-        // collectible gain at 28% regardless of holding period, which is a pre-existing
-        // simplification design 90 §4 does not change.
+        // long-term groups.
+        //
+        // Only the LONG slice is collectibles gain. §1(h)(5)(A) defines it as gain from a
+        // collectible "which is a capital asset held for more than 1 year", so a gold lot
+        // sold inside a year is ordinary short-term gain and a short-term collectible loss
+        // is an ordinary short-term loss — both book with the §1222 short character like
+        // any other disposal (design 57 Part 8). Same non-zero-only write as the
+        // STOCK_WITHDRAWAL_TAX reducer above.
+        // Reference: docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.txt
         const char = characterizeCapitalGain(action, gain);
         let next = {
           ...state,
-          usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + char.short + char.long,
+          usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + char.long,
+          ...(char.short !== 0
+            ? { usShortTermCapitalGainsYTD: (state.usShortTermCapitalGainsYTD ?? 0) + char.short }
+            : {}),
         };
         if (isAuResident) {
           // AU measures this gain from its OWN cost base — the s855-45 step-up at the

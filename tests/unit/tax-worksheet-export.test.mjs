@@ -208,7 +208,7 @@ test('TWE-8: gross tax reconciles to its component lines', () => {
     const get = label => lineNamed(yearRows, label)?.amount ?? 0;
     const components = get('Tax on Ordinary Income')
                      + get('Long-Term Capital Gains Tax')
-                     + get('Collectibles Tax (28%)')
+                     + get('Collectibles Tax (28% max)')
                      + get('Early Withdrawal Penalties')
                      + get('Net Investment Income Tax (Form 8960, 3.8%)')
                      // Employee FICA (design 95 phase 4) is inside grossTax like SECA

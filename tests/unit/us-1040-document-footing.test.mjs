@@ -219,25 +219,27 @@ test('F1040-8: the §1250 gain and its tax are both listed, matching the engine'
     'summary gross income counts the §1250 slice exactly once');
 });
 
-test('F1040-9: the §1250 supporting detail is whichever §1(h)(1)(D) limb set the tax', () => {
-  // The bracket differential wins: the bands ARE the computation and must sum to it.
-  const low = new UsTaxRates2025().computeTax(U1250_LOW_ORDINARY);
-  assert.equal(low.brackets.unrecap1250.ceilingApplied, false, 'fixture: differential wins');
-  const lowLine = line(new UsTaxDocument2026().generate(low, 2025),
+test('F1040-9: the §1250 bands foot to the line whether or not the 25% ceiling binds', () => {
+  // Per-dollar min(bracket rate, 25%) means ONE presentation serves both cases.
+  const sum = bands => bands.reduce((s, b) => s + b.tax, 0);
+  const lineFor = detail => line(new UsTaxDocument2026().generate(detail, 2025),
     'Tax Computation', 'Unrecaptured §1250 Gain Tax (25% max)');
-  assert.ok(lowLine.bands?.length, 'differenced bands attached');
-  assert.equal(lowLine.flat, undefined, 'no flat row — the ceiling did not bite');
-  assert.ok(Math.abs(lowLine.bands.reduce((s, b) => s + b.tax, 0) - lowLine.amount) < EPS,
-    'Σ band.tax equals the line, which is what the worksheet verifier checks');
 
-  // The ceiling wins: the bands would OVERSTATE the line, so a flat 25% row is shown.
-  const cap = new UsTaxRates2025().computeTax(U1250_CEILING);
-  assert.equal(cap.brackets.unrecap1250.ceilingApplied, true, 'fixture: ceiling binds');
-  const capLine = line(new UsTaxDocument2026().generate(cap, 2025),
-    'Tax Computation', 'Unrecaptured §1250 Gain Tax (25% max)');
-  assert.equal(capLine.bands, undefined, 'no band schedule — it would not foot to the line');
-  assert.equal(capLine.flat.rate, 0.25);
-  assert.ok(Math.abs(capLine.flat.rate * capLine.flat.income - capLine.amount) < EPS);
+  // Below the 24% top: the regular rates set every dollar.
+  const low     = new UsTaxRates2025().computeTax(U1250_LOW_ORDINARY);
+  const lowLine = lineFor(low);
+  assert.ok(lowLine.bands?.length, 'differenced bands attached');
+  assert.ok(Math.abs(sum(lowLine.bands) - lowLine.amount) < EPS,
+    'Σ band.tax equals the line, which is what the worksheet verifier checks');
+  assert.ok(lowLine.bands.every(b => b.income === 0 || b.rate < 0.25), 'no band clamped');
+
+  // Deep in the 35% bracket: every dollar is clamped, and the bands still foot.
+  const cap     = new UsTaxRates2025().computeTax(U1250_CEILING);
+  const capLine = lineFor(cap);
+  assert.ok(Math.abs(sum(capLine.bands) - capLine.amount) < EPS);
+  assert.ok(capLine.bands.filter(b => b.income > 0).every(b => b.rate === 0.25),
+    'the ceiling is visible as the band rate');
+  assert.ok(Math.abs(capLine.amount - U1250_CEILING.usUnrecaptured1250GainYTD * 0.25) < EPS);
 });
 
 test('F1040-10: §1(h)(1)(D)(ii) sheltering is disclosed, not left as a silent gap', () => {

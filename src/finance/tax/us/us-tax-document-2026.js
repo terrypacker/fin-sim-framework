@@ -149,21 +149,18 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             // stated total — the same defect design 71 §2.2 found for SECA, and what
             // `export:tax --check` catches as a Tax Computation footing violation.
             //
-            // The tax is the LESSER of the ordinary bracket differential and 25% of the
-            // slice, so the supporting detail is whichever limb actually set it: the
-            // differenced bands, or a flat 25% row. See `_bracketBreakdown`.
+            // Taxed per dollar at min(bracket rate, 25%), so the differenced bands always
+            // foot to the line. See `_bracketBreakdown`.
             ...(taxDetail.unrecapturedSection1250Tax > 0
               ? [{
                   label:  'Unrecaptured \u00a71250 Gain Tax (25% max)',
                   amount: taxDetail.unrecapturedSection1250Tax,
-                  ...(br.unrecap1250?.ceilingApplied
-                    ? { flat: { rate:   br.unrecap1250.ceilingRate,
-                                income: br.unrecap1250.gain,
-                                tax:    br.unrecap1250.tax } }
-                    : { bands: br.unrecap1250?.bands ?? [] }),
+                  bands:  br.unrecap1250?.bands ?? [],
                 }]
               : []),
-            { label: 'Collectibles Tax (28%)',      amount: taxDetail.collectiblesTax, flat: br.collectibles },
+            // §1(h)(4) — 28% is the ceiling; the bands show which part the regular rates
+            // set (below the 24% bracket top) and which part the ceiling did.
+            { label: 'Collectibles Tax (28% max)',  amount: taxDetail.collectiblesTax, bands: br.collectibles?.bands ?? [] },
             { label: 'Early Withdrawal Penalties',  amount: taxDetail.penaltyTax },
             // The drill hangs off the NII sub-row, NOT the tax line (design 73
             // §0b.2). What `niit-base-by-component` explains is the §1411 base —
@@ -373,7 +370,10 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
     const totalAdjustment = saleRecords.reduce((s, r) => s + (r.adjustment ?? 0), 0);
     const totalGain       = saleRecords.reduce((s, r) => s + r.gain,      0);
     const collectibles    = saleRecords.filter(r => r.collectible);
-    const rateGain28      = Math.max(0, collectibles.reduce((s, r) => s + r.gain, 0));
+    // Worksheet line 1 is collectibles gain from Form 8949 **Part II** only: §1(h)(5)(A)
+    // reaches a collectible held more than a year, so a row's short-term slice (line 7,
+    // below) is ordinary gain and stays out of the 28% group.
+    const rateGain28      = Math.max(0, collectibles.reduce((s, r) => s + r.gain - (r.shortTermGain ?? 0), 0));
     // Line 19, the §1250 counterpart of line 18. Same partitioning rule: the slice is
     // already inside the Part II totals, and this restates it so the Schedule D Tax
     // Worksheet can rate it at its own 25% ceiling.

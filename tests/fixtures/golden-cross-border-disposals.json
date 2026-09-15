@@ -154,8 +154,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 180628.789732,
-  "spouse": 64841.9107409
+  "primary": 180681.559732,
+  "spouse": 64841.4307409
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -174,7 +174,7 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 163300.454732,
+  "primary": 163353.704732,
   "spouse": 53813.7957409
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
@@ -184,7 +184,7 @@
  "auRealCapitalGainsYTD": 0,
  "auSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 935629.57,
+  "balance": 935586.68,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -192,7 +192,7 @@
   },
   "drawdownPriority": 0,
   "fxBasisRate": 1.55,
-  "fxBasisUsd": 603631.980645,
+  "fxBasisUsd": 603604.309677,
   "holdings": [
    {
     "acquisitionDateByCountry": null,
@@ -200,7 +200,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 935629.567486,
+    "costBasis": 935586.676206,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -211,7 +211,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 935629.567486,
+    "marketValue": 935586.676206,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_AU",
@@ -528,7 +528,7 @@
  "cumulativeConsumptionUtility": 284.26578966,
  "cumulativeConsumptionUtilityCount": 144,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 755941.494688,
+ "cumulativeTaxesPaid": 753186.550187,
  "currentPeriods": {
   "AU": {
    "endMs": 2161555200000,
@@ -1005,8 +1005,8 @@
  },
  "marketIndexAsOfMs": 2145830400000,
  "metrics": {
-  "netLiquidity": 6578812.55,
-  "netWorth": 7071773.21,
+  "netLiquidity": 6582346.25,
+  "netWorth": 7075306.9,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1664,7 +1664,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 3647598.61944,
+  "balance": 3651159.98638,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1678,7 +1678,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 3647598.61944,
+    "costBasis": 3651159.98638,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1689,7 +1689,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 3647598.61944,
+    "marketValue": 3651159.98638,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",
@@ -1902,7 +1902,7 @@
   "stateKey": "usStockAccount",
   "type": "brokerage"
  },
- "usTaxPaidOnUsSourceAud": 80401.0484088,
+ "usTaxPaidOnUsSourceAud": 80436.9057288,
  "usWithheldYTD": 0,
  "withinTierDraw": "SEQUENTIAL",
  "yieldCurve": {

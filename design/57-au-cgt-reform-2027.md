@@ -516,6 +516,86 @@ long/short test — §1(h)(4)'s 28% rate reaches *long-term* collectible gain, a
 is ordinary income — and they are not modelled. `collectibleGainByCountryAndTerm` already tallies
 the character (design 90 §3); the rates module does not yet branch on it. The date those rules
 need is the date this part makes authorable, so the field is in place ahead of the rule.
+→ Closed by Part 8.
+
+### ✅ Part 8 (2026-09-15) — US collectibles gain is LONG-term only
+
+§1(h)(5)(A) (now on disk, `docs/us-tax/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.txt`)
+defines "collectibles gain" and "collectibles loss" as gain or loss from a collectible "which is
+a capital asset held for more than 1 year". §1(h)(4)'s 28% group is built from those terms, so a
+collectible held a year or less is outside it altogether: its gain is ordinary short-term gain
+and its loss an ordinary short-term loss.
+
+**Delivered:**
+
+1. **`COLLECTIBLE_SALE_TAX` (US module) splits by character.** The long slice books to
+   `usCollectibleGainsYTD`; the short slice books to `usShortTermCapitalGainsYTD`, written only
+   when non-zero (the `STOCK_WITHDRAWAL_TAX` convention). `_computeCapitalLossLimitation` already
+   nets the short bucket as §1222 short and rates it in the ordinary layer, so nothing
+   downstream changed.
+2. **Schedule D line 18** subtracts each collectible row's `shortTermGain` — worksheet line 1
+   reads Form 8949 **Part II** only.
+
+**Reach.** A gold-sleeve lot (US brokerage, rebalancer, drawdown walk) has a `purchaseDate`, so
+it now splits. A standalone collectible has no US acquisition date, and `singleAssetTermFields`
+still defaults it to long-term. That's correct for a held collectible and unchanged here.
+
+**Nothing moved.** Goldens byte-identical, `test:unit` 6522 GREEN before the new cases
+(`collectible-holding-period.test.mjs`, 6; one Schedule D case in `tax-documents.test.mjs`). No
+golden sells a gold lot inside a year.
+
+**Still open:** `COLLECTIBLES_RATE` is applied flat. §1(h)(1)(F) makes 28% a *ceiling* ("shall
+not exceed"), so a collectible gain in a bracket below 28% is overtaxed. That is a separate
+defect from the term split. → Closed by Part 9.
+
+### ✅ Part 9 (2026-09-15) — 28% is a ceiling, and the 0/15/20 layer stacks above it
+
+Source: the Schedule D Tax Worksheet (`docs/us-tax/IRS-Schedule-D-Instructions-2025.txt`) and
+§1(h)(1) (on disk since Part 8). Two defects in `computeTax`, both visible in the worksheet's
+arithmetic:
+
+1. **The rate.** Line 21 → line 44 taxes everything below the 24% bracket top (line 19) at
+   regular rates, and lines 41–43 apply 28% only to what is left. The engine charged a flat 28%.
+   Now the collectible layer stacks on ordinary + §1250 (lines 38–39 give §1250 the below-25%
+   space first). It is taxed per dollar at `min(bracket rate, 28%)` over a clamped copy of the
+   bracket table. There is no ordinary bracket between 24% and 32%, so the per-band clamp *is*
+   the worksheet.
+2. **The stacking.** Line 14 (taxable income less the *adjusted* net capital gain, which excludes
+   lines 18 and 19) is where the 0% band starts. So the 0/15/20 layer sits above the 28% gain.
+   `ltcgFloor` left collectibles out, which handed a household holding both the 0% band a
+   second time.
+
+The breakdown's `collectibles` entry now carries `bands` (the differential over the clamped
+table), and the document line reads "Collectibles Tax (28% max)" with those bands, like the
+§1250 line. `_computeRateDifferentialAdjustment` still uses the statutory 28/37 factor for the
+§904(b)(2) group, on the same Pub 514 reasoning it already gives for §1250's 25%.
+
+**Moved:** one golden, `cross-border-disposals`. Its 2029 gold sale ($49,273 US gain) sat
+entirely in the 22% bracket: collectibles tax fell from $13,796 to $10,840, exactly 22%. The
+later years move by knock-on only (2033: +$26 as the extra cash compounds), and cumulative tax
+paid fell by $2,755. No golden has collectibles and LTCG in one year, so the restacking is
+guarded by unit tests only. TE-7 and SD-2 in `tax-rates.test.mjs` asserted the flat charge and
+were corrected, and two cases were added (the top-bracket ceiling, and LTCG above 28% gain).
+
+**Still open:** the §1250 layer caps with an aggregate `min(differential, 25% × slice)` rather
+than per dollar. When the slice straddles the 24%→32% boundary, that overcharges it: 10k at 24% +
+10k at 32% gives 5,000, where the worksheet gives 4,900. The clamped-table approach used here
+would fix it, but it moves any golden holding a depreciated property. → Closed by Part 10.
+
+### ✅ Part 10 (2026-09-15) — the §1250 25% ceiling, per dollar
+
+Same fix as Part 9, applied to §1(h)(1)(D). The unrecaptured §1250 layer is now the differential
+over a copy of the bracket table clamped at 25%, not `min(differential, 25% × slice)`. It matches
+the worksheet's lines 21/44 (regular rates below the 24% top) and lines 35–40 (25% above).
+
+The breakdown loses `ceilingApplied`. The aggregate min needed it to choose between a flat 25% row
+and the differential bands, because the bands would not foot to the line when the ceiling bound.
+Per dollar, the bands always foot, and a clamped band simply reports rate 0.25. The document
+attaches the bands unconditionally.
+
+**Nothing moved.** Goldens byte-identical: `cross-border-disposals`' property sale does not
+straddle the boundary, and the two presentations agree off it. F1040-9 was rewritten for the
+single presentation, and SD-2b in `tax-rates.test.mjs` pins the straddle case (4,900).
 
 ---
 

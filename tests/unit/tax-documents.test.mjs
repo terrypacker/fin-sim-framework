@@ -1062,6 +1062,29 @@ test('Schedule D line 18 restates the 28% slice without adding to the net gain',
     'and does not add to what transfers — that would double-count the disposal');
 });
 
+test('Schedule D line 18 excludes a collectible\'s short-term slice (design 57 Part 8)', () => {
+  // §1(h)(5)(A): collectibles gain is from a collectible "held for more than 1 year". A
+  // gold sale that consumed a fresh lot books that slice to the short-term accumulator,
+  // and the worksheet reads Form 8949 Part II only — so line 18 is the long slice alone.
+  const detail      = { ...usDetail({ usCollectibleGainsYTD: 30_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
+  const journal     = [{
+    date:      new Date(Date.UTC(2026, 3, 1)),
+    action:    { type: 'COLLECTIBLE_SALE_TAX', instanceId: 'i-col',
+                 data: { gain: 40_000, proceeds: 100_000, costBasis: 60_000, isGold: true } },
+    reducer:   { name: 'dynamic:US:COLLECTIBLE_SALE_TAX' },
+    stateDiff: [{ field: 'usCollectibleGainsYTD',      delta: 30_000 },
+                { field: 'usShortTermCapitalGainsYTD', delta: 10_000 }],
+  }, settleEntry];
+
+  const [, schedD] = new TaxDocumentRegistry().generate(settleEntry, journal);
+
+  assert.strictEqual(lineOf(schedD, 'Net Capital Gain (Line 16)').amount, 40_000);
+  assert.strictEqual(lineOf(schedD, 'Net Short-Term Gain / (Loss) (Line 7)').amount, 10_000);
+  assert.strictEqual(lineOf(schedD, '28% Rate Gain (Line 18').amount, 30_000,
+    'the short slice is ordinary gain and must not reach the 28% group');
+});
+
 test('Schedule D omits line 18 in a year with no collectible', () => {
   const detail      = { ...usDetail({ usCapitalGainsYTD: 20_000 }), taxYear: 2025 };
   const settleEntry = makeEntry('US', detail, Date.UTC(2026, 11, 31));
