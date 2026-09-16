@@ -558,9 +558,10 @@ model is also already inconsistent about it — money-market interest on a broke
 sleeve stays in the sleeve (`CashSleeveInterestApplyReducer`), while the dividend on the
 equity beside it leaves the account entirely.
 
-Then the surface was measured, across all fourteen goldens: **exactly one brokerage, in two
-scenarios, has a CASH sleeve at all.** Every other `us-stock`, `au-stock` and
-`fixed-income` account has none, and between them they route A\$8k–112k of dividend and
+Then the surface was measured, across all fifteen goldens: **exactly one brokerage, in two
+scenarios, has a CASH sleeve at all** — `usStockAccount` in `cross-border-reference` and
+`cross-border-disposals`, the only two with a `CASH` allocation among their holdings. Every
+other `us-stock`, `au-stock` and `fixed-income` account has none, and between them they route A\$8k–112k of dividend and
 coupon cash per run. So "land it in the account's cash sleeve" has nowhere to land: it would
 fall back to today's behaviour almost everywhere, and where it did not, the same event would
 behave differently depending on whether somebody had authored a cash lot — an inconsistency
@@ -574,7 +575,10 @@ classification and drawdown ordering (design 97). Those are the two designs that
 question, and answering it inside a dividend-routing change would settle it by accident.
 
 Handed on rather than answered here, with the number above so whoever picks it up starts
-from the surface rather than from the intuition.
+from the surface rather than from the intuition. **Recorded at the receiving end** (2026-09-16):
+design 97 §15 item 6 (does a brokerage hold cash — pool classification and the drawdown walk)
+and design 61 §12.2 item 5 (what a CASH sleeve does to the target mix and the drift band). A
+hand-off nobody wrote down is a hand-off to nobody.
 
 ## 7. Sequencing
 
@@ -589,7 +593,7 @@ from the surface rather than from the intuition.
 | 2b | ✅ **DONE** (2026-09-16) — `reinvestDividendsBySecurity` + the split emit + the per-security editor rows | medium | §5.1. New golden `dividend-drip-per-security` splits one payment two ways every year; DRIP-SEC-7 pins the tax invariance |
 | F8 | ✅ **DONE** (2026-09-16) — AU reinvests into a vintage lot WITH basis, like the US path | small | §7.1. Closes design 94 F3's AU half: AU capital gains halved on `au-single-homeowner`, ~A$41.6k less tax over the run |
 | F7 fallback | ✅ **DONE** (2026-09-16) — an EMPTY holdings array earns nothing; an ABSENT one keeps the scalar model | small | §7.1. Nothing moved — preventive, with the §4.4 gate as the backstop |
-| Q1 | ✅ **CLOSED as mis-framed** (2026-09-16) | — | §6. One brokerage in fourteen goldens has a CASH sleeve; the question belongs to designs 97 and 61 |
+| Q1 | ✅ **CLOSED as mis-framed** (2026-09-16) | — | §6. One brokerage in fifteen goldens has a CASH sleeve; the question belongs to designs 97 and 61, and is now **recorded there** — 97 §15.6, 61 §12.2.5 |
 
 **Design 106 is complete.** Phases 1 and 1b are the election; 2a is the fix the model wanted
 whether or not 2b ever happened; 2b is the per-security half the ask started from. F6, F7
@@ -630,7 +634,8 @@ this is preventive, and the §4.4 gate is the backstop if a future change reintr
 **Q1, closed as mis-framed** — §6. Measuring the surface before changing it showed that
 only one brokerage in the whole fixture set has a CASH sleeve to receive a dividend, so the
 question is not where the cash goes but whether a brokerage holds cash at all. That belongs
-to design 97 (pools) and design 61 (rebalance targets), and is handed on with the number.
+to design 97 (pools) and design 61 (rebalance targets), and is handed on with the number —
+written into design 97 §15 item 6 and design 61 §12.2 item 5, not merely pointed at.
 
 **Design 106 is closed.** What it set out to do — choose reinvestment per security per
 account — is done in both countries. What it found on the way was worth more than the

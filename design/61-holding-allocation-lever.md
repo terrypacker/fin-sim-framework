@@ -1163,6 +1163,32 @@ worse than described, for the terminal anchor**, where nothing buys it back at a
    Caveat that stands: a *taxable* account selling gold to hand the exposure to a shelter
    realizes 28% **now** to save later, so it only pays over a long enough remaining horizon.
    The drift band (Q1) is doing real work throttling that.
+
+5. **Would a CASH sleeve on every brokerage break the target mix?** New, handed here by design
+   106 §6 (2026-09-16); design 97 §15 item 6 holds the other half. Design 106 asked whether a
+   non-reinvested dividend should land in the paying account's own CASH sleeve instead of the
+   household transaction account, and closed it as mis-framed: across the fifteen goldens
+   exactly **one** brokerage, in two scenarios, has a CASH allocation at all, so the cash has
+   nowhere to land almost everywhere. The question one level up — *should a brokerage hold cash
+   at all?* — is partly this design's.
+
+   **Why it is ours.** A new CASH sleeve on every brokerage changes the mix the rebalancer
+   targets. Under Q3's totality rule a target is `{EQUITY .6, BOND .4, CASH 0, GOLD 0}`, so a
+   dividend landing in CASH would be swept straight back into equity at the next rebalance —
+   which is either exactly right (a broker's sweep, modelled) or a silent defeat of the whole
+   change, and the doc does not currently say which.
+
+   **And Q1's measurement says it may not sweep at all.** Q1 above established that the *band
+   still gates*: a position that ARRIVES at a zero-target class is not rebalanced away while it
+   sits inside the drift band. A dividend stream is exactly an arrival. So the realistic
+   outcome is not "swept back next period" but cash accumulating in the sleeve up to the band
+   width, then being corrected in a lump — a shape nobody has asked for and no test pins.
+
+   **Proposed, not settled:** if brokerages gain a CASH sleeve, its target is authored
+   explicitly (not left to default 0) and the sweep is a *policy* on the account rather than a
+   side effect of the drift band, so the two mechanisms do not silently compete. Needs design
+   97's half answered first — if income keeps its existing destination there, this question
+   does not arise.
 ---
 
 ## 13. Relationship to design 58

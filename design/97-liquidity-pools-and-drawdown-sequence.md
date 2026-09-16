@@ -1200,6 +1200,32 @@ thresholds instead of the author guessing them.
    reports zero balance and zero capacity, and is skipped by both walks — so authoring a pool
    for an account that only funds later in the plan is not an error. Same rationale as the
    dormant-at-value-0 property (`property-purchase-and-downsizer`).
+6. **Should a brokerage hold cash at all?** Handed here by design 106 §6, which asked the
+   narrower question — should a non-reinvested dividend land in the paying account's own CASH
+   sleeve rather than the household transaction account — and closed it as mis-framed once the
+   surface was measured. Two facts make it this design's question rather than a dividend one:
+
+   - **The sleeves are not there.** Across the fifteen goldens, exactly **one** brokerage, in
+     two scenarios, has a CASH allocation at all. Every other `us-stock`, `au-stock` and
+     `fixed-income` account is `EQUITY`/`BOND` only, and between them they route **A\$8k–112k
+     of dividend and coupon cash per run** to a transaction account. Routing income to the
+     paying account therefore has nowhere to land almost everywhere — it would fall back to
+     today's behaviour, and where it did not, the same event would behave differently
+     depending on whether somebody had authored a cash lot.
+   - **The model is already inconsistent.** Money-market interest on a brokerage's CASH sleeve
+     stays in the sleeve (`CashSleeveInterestApplyReducer`); the dividend on the equity beside
+     it leaves the account entirely.
+
+   Why it lands on **this** design: pool classification and the drawdown walk read *where cash
+   is*. Sending every dividend to the transaction account overstates household liquid cash and
+   understates the brokerage's, which is a pool-balance error, not a dividend-routing one. Note
+   this is narrower than Q2 above: Q2 asks whether income should enter the graph as an inbound
+   edge; this asks whether the *account* that income already lands in is the right one. Q2's
+   "no for effort 1" does not answer it.
+
+   Giving every brokerage a CASH sleeve also moves the rebalancer's target mix, which is design
+   61's half — recorded there at §12.2 item 5. Neither design can settle it alone, and answering
+   it inside a dividend-routing change would settle it by accident.
 
 
 ---
