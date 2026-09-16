@@ -32,7 +32,9 @@ import { computeHoldingsCoupons, couponFiringIndex, resolvePrevailingCouponRate 
  * holdings — direct Treasuries per 31 U.S.C. § 3124, and in-state munis → US state
  * ordinary income). See design 66 §G2 (generalizing the design-59 Treasury split).
  *
- * data.reinvest overrides the configured reinvest param for one-off events.
+ * data.reinvest overrides the configured reinvest param for one-off events, and
+ * `state[stateKey].reinvestDividends` — the account's own election (design 106) —
+ * overrides it for every event on that account.
  *
  * @param {object} [opts]
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
@@ -93,8 +95,12 @@ export class BondCouponScheduledHandler extends HandlerEntry {
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
-    const reinvest   = data?.reinvest ?? this.reinvest;
     const account    = state[stateKey];
+    // Design 106 §4 — the same account election that routes this account's dividends
+    // routes its coupons: one broker, one DRIP setting. Same precedence and the same
+    // reason for reading it from state rather than capturing it at construction — see
+    // DividendScheduledHandler.
+    const reinvest   = data?.reinvest ?? account?.reinvestDividends ?? this.reinvest;
     const residency  = account?.ownerId
       ? (state.people?.[account.ownerId]?.residency ?? null)
       : null;

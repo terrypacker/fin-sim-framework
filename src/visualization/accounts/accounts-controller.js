@@ -173,6 +173,13 @@ export class AccountsController {
     // the field for other types. A new account has no generated param yet, so the
     // flag rides the create payload rather than the param cascade.
     if ('isTransactionAccount' in data) account.isTransactionAccount = !!data.isTransactionAccount;
+    // Dividend-reinvestment election (design 106 §4). Tri-state, so `!!` would be the
+    // wrong coercion: null means "follow the plan-wide default" and must not become
+    // false. Brokerage only — the editor omits the field for every other type, and a
+    // stray value on a non-brokerage account would be read by nothing.
+    if ('reinvestDividends' in data) {
+      account.reinvestDividends = data.reinvestDividends == null ? null : !!data.reinvestDividends;
+    }
     // Prime-relative cash rate (design 56). The editor sends the derived spread (or a
     // legacy absolute when no Prime is configured); the builder has no setter, so stamp
     // them directly. null → not Prime-linked / unset (global default).
@@ -230,6 +237,10 @@ export class AccountsController {
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
     }
     if ('isTransactionAccount' in n) n.isTransactionAccount = !!n.isTransactionAccount;
+    // Dividend-reinvestment election (design 106 §4) — null clears back to the
+    // plan-wide default; true/false are elections. Same null-vs-false discipline as
+    // the nullable numbers below.
+    if ('reinvestDividends' in n) n.reinvestDividends = n.reinvestDividends == null ? null : !!n.reinvestDividends;
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);

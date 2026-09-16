@@ -207,8 +207,20 @@ class RetirementBuilder extends BaseInvestmentBuilder {
 // ─── Brokerage ────────────────────────────────────────────────────────────────
 
 class BrokerageAccountBuilder extends BaseInvestmentBuilder {
+  constructor() {
+    super();
+    this._reinvestDividends = null; // null = inherit the household default (design 106)
+  }
+
+  /** Dividend-reinvestment election for this broker: true / false / null = inherit. */
+  reinvestDividends(v) { this._reinvestDividends = v; return this; }
+
   build() {
-    return new BrokerageAccount(this._balance, this._investmentOpts());
+    const opts = this._investmentOpts();
+    // Only passed when the household has an opinion, so an unelected account keeps
+    // taking the toolset default (design 106 §4) and serializes to nothing.
+    if (this._reinvestDividends !== null) opts.reinvestDividends = this._reinvestDividends;
+    return new BrokerageAccount(this._balance, opts);
   }
 }
 

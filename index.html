@@ -699,6 +699,21 @@
           <input type="checkbox" data-id="isTransactionAccount"
                  title="Route this country's household cash (expenses, wages, contributions, taxes) through this account. Flag exactly one cash account per country."/>
         </div>
+        <!-- Dividend reinvestment election (design 106 §4). Shown only for the roles
+             where a dividend is actually separated from price return and there is a
+             cash branch to route it to (DIVIDEND_ELECTION_ROLES). Three states, not a
+             checkbox: "Default" is the account having no opinion and following the
+             plan-wide Reinvest Dividends param, which is not the same as electing
+             cash. -->
+        <div class="node-field" data-id="reinvestDividendsRow" style="display:none">
+          <label>Reinvest Dividends</label>
+          <select data-id="reinvestDividends"
+                  title="This broker's DRIP election. Reinvest = dividends (and this account's bond coupons) buy more of its holdings; Pay cash = they are paid out to the country's transaction account. Default follows the plan-wide Reinvest Dividends parameter, so changing that moves this account with it.">
+            <option value="">Default (plan-wide)</option>
+            <option value="true">Reinvest</option>
+            <option value="false">Pay cash</option>
+          </select>
+        </div>
         <!-- §988 currency basis (design 87). Shown only for a NON-USD cash account:
              §988(c)(1)(C)(ii) makes any foreign-currency bank deposit nonfunctional
              currency, so savings/transaction/offset all qualify, and USD never does

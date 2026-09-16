@@ -14,7 +14,7 @@ import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au
 import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
-import { SuperContributionApplyReducer, SuperSacrificeApplyReducer, SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperCapitalGainApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
+import { SuperContributionApplyReducer, SuperSacrificeApplyReducer, SuperNonConcessionalApplyReducer, AuSuperCapsAccumulateReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SUPER_CGT_DISCOUNT, superNetCapitalGain, superFundTaxRateOn, SuperCapitalGainApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { DOWNSIZER_MIN_AGE, DOWNSIZER_CAP_AUD, DOWNSIZER_MIN_OWNERSHIP_YEARS, downsizerContributions, SuperDownsizerContributionApplyReducer } from './finance/account-rules/au/downsizer-contribution.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { bondPrincipalUnits, isForeignBondAccount, section988ForBondPrincipal, section988ForRedemption } from './finance/account-rules/bond-currency-basis.js';
@@ -172,7 +172,7 @@ import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTer
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
-import { couponFederalExempt, couponStateExempt, baseDividendYield, priceOf, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
+import { couponFederalExempt, couponStateExempt, baseDividendYield, priceOf, computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withSleeveInclude, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { SECURITY_FIELDS, makeSecurity, buildSecurityRegistry, assertAllocationMatch, identityGroupOf, SYNTHETIC_SECURITY_PREFIX, syntheticSecurityId, syntheticEquitySecurities, scenarioSecurityRegistry } from './finance/holdings/security.js';
@@ -299,7 +299,7 @@ import { loanBalanceKeys, buildSpendingCube, checkClassificationTotal, spendingS
 import { TAX_CATEGORIES, summarizeSpendingForRun, percentiles, aggregateSpendingRuns, exceedanceRate, describeSpendingDistribution } from './finance/spending-reporting/spending-distribution.js';
 import { CATEGORY_ORDER, buildSpendingSeries, bySpendingTier, intentVsRealized } from './finance/spending-reporting/spending-grouping.js';
 import { CATEGORY_COLOR, CATEGORY_COLOR_DARK, colorForCategory } from './finance/spending-reporting/spending-palette.js';
-import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from './finance/state/account-roles.js';
+import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES, DIVIDEND_ELECTION_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { projectPerson, projectPeople } from './finance/state/person-projection.js';
 import { StateTaxService } from './finance/state-tax-service.js';
@@ -634,6 +634,9 @@ export const Finance = {
   SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer,
   SuperEarningsApplyReducer,
+  SUPER_CGT_DISCOUNT,
+  superNetCapitalGain,
+  superFundTaxRateOn,
   SuperCapitalGainApplyReducer,
   SuperContributionHandler,
   SuperWithdrawalContributionsHandler,
@@ -1178,6 +1181,7 @@ export const Finance = {
   priceOf,
   computeHoldingsGrowth,
   computeHoldingsDividends,
+  computeFundIncome,
   computeHoldingsCoupons,
   couponFiringFraction,
   couponFiringIndex,
@@ -1570,6 +1574,7 @@ export const Finance = {
   colorForCategory,
   ACCOUNT_ROLES,
   INHERITED_RETIREMENT_ROLES,
+  DIVIDEND_ELECTION_ROLES,
   InternationalRetirementFinancialState,
   projectPerson,
   projectPeople,

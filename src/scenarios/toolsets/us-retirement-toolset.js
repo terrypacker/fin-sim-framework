@@ -138,6 +138,15 @@ function _accountToStatePlain(account) {
   // stamped at its first disposition instead. Projected only when set, so legacy
   // accounts are byte-identical.
   if (account.fxBasisRate != null) plain.fxBasisRate = account.fxBasisRate;
+  // Dividend-reinvestment election (design 106 §4) — same rule as the two above, and it
+  // is the rule that decides WHERE this field is read. The handler is constructed once,
+  // at build time; a scenario loaded from a save restores its handlers from JSON rather
+  // than re-running this toolset, so an election read at construction would be stale on
+  // every loaded plan until the next Rebuild (the design-58 lever trap). Read from the
+  // runtime STATE entry instead and the account record stays authoritative. Projected
+  // only when the household has an opinion, so an unelected account is byte-identical
+  // and the handler's own default (the toolset param) still applies.
+  if (account.reinvestDividends != null) plain.reinvestDividends = account.reinvestDividends;
   if (account.type !== 'loan' && account.deductibleFraction != null) {
     plain.deductibleFraction = account.deductibleFraction;
   }
@@ -387,10 +396,13 @@ export const US_RETIREMENT = {
         description: 'Annual commodity growth rate for GOLD holdings (design 56 §7); decoupled from equity returns and central-bank Prime, taxed at the 28% collectibles rate on disposal.',
       },
       {
-        key: 'dividendReinvest', label: 'Reinvest Dividends',
+        key: 'dividendReinvest', label: 'Reinvest Dividends (default)',
         type: 'Boolean', group: 'US Retirement', mc: false, opt: true,
         defaultValue: false,
-        description: 'If true, US stock dividends are reinvested rather than taken as cash',
+        description: 'Household DEFAULT for US brokerage dividends and bond coupons: if true they ' +
+          'are reinvested, otherwise paid out as cash. A real DRIP election is made per broker, so ' +
+          'any brokerage account can override this on its own record (design 106); this value ' +
+          'applies to every account that has not.',
       },
       {
         key: 'fixedIncomeInterestRate', label: 'Fixed Income Interest Rate',
@@ -1209,24 +1221,32 @@ export const US_RETIREMENT = {
         earningsH.handledEvents.push(stockEvent);
         handlers.push(earningsH);
 
+        // Design 106 §4 — `reinvest` here is the household DEFAULT, not the answer. The
+        // per-account election lives on the account record, is projected into state by
+        // `_accountToStatePlain`, and is read there by the handler at call time so a
+        // loaded plan honours it without a Rebuild.
+        const reinvest = p.dividendReinvest;
         const divH = new DividendScheduledHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
           // Design 99 P2 — the yield is each holding's market's (baseDividendYield);
           // this is only its last resort, matching the earnings handler's.
           dividendRate: marketReturnFor(p, DividendScheduledHandler.rateKey).yield,
-          reinvest:     p.dividendReinvest,
+          reinvest,
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
 
         // Bond coupon interest on any BOND holdings in this account (design 59).
-        // Coupons come from each holding's couponRate; reinvest mirrors dividends.
+        // Coupons come from each holding's couponRate; reinvest mirrors dividends —
+        // deliberately the SAME election (design 106 §4), because the two already
+        // shared one flag and a broker's election covers what is held there. Splitting
+        // them is a `reinvestCoupons` field defaulting to this one, not a new concept.
         if (couponEvent) {
           const couponH = new BondCouponScheduledHandler({
             stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
             ownerId: acct.ownerId, stateKey: acct.stateKey,
-            reinvest: p.dividendReinvest,
+            reinvest,
           });
           couponH.handledEvents.push(couponEvent);
           handlers.push(couponH);

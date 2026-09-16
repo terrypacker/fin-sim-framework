@@ -13,6 +13,7 @@ import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../finance/holdings/allocation.js';
+import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
 import { SYNTHETIC_SECURITY_PREFIX } from '../../finance/holdings/security.js';
 import { rateKeyOptionsHtml } from './rate-key-options.js';
 import { effectiveEquityReturn } from '../../finance/holdings/effective-return.js';
@@ -173,6 +174,11 @@ export class AccountEditor extends BaseComponent {
       this._refreshExpectedReturn();
       // Country drives the currency default, and currency gates the §988 fields.
       this._applyFxBasisVisibility(el, typeSelect.value);
+      // On a NEW account the country also decides the ROLE a brokerage will be given,
+      // and the role is what gates the DRIP election (design 106 §4) — a US brokerage
+      // flipped to AU stops being able to act on one until phase 1b.
+      const reinvestRow = el.querySelector('[data-id="reinvestDividendsRow"]');
+      if (reinvestRow) reinvestRow.style.display = this._showsReinvestElection(el) ? '' : 'none';
     });
 
     // §988 currency basis (design 87). Populated here and re-gated whenever the
@@ -187,6 +193,13 @@ export class AccountEditor extends BaseComponent {
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
     el.querySelector('[data-id="isTransactionAccount"]').checked = !!this._node?.isTransactionAccount;
+    // Dividend-reinvestment election (design 106 §4). Tri-state: '' is "no opinion",
+    // which is why the record's null must map to '' and not to 'false'.
+    const reinvestSel = el.querySelector('[data-id="reinvestDividends"]');
+    if (reinvestSel) {
+      reinvestSel.value = this._node?.reinvestDividends == null
+        ? '' : String(!!this._node.reinvestDividends);
+    }
 
     // Cash "Interest Rate" (design 56): the user edits the ABSOLUTE rate; on save it
     // is stored as `primeSpread = absolute − Prime(country)`. Show the absolute the
@@ -279,6 +292,11 @@ export class AccountEditor extends BaseComponent {
       { dataId: 'contributionBasis',   field: 'contributionBasis',   coerce: toNumber },
       // Boolean transaction-account flag (§7) — the checkbox passes its `.checked`.
       { dataId: 'isTransactionAccount', field: 'isTransactionAccount', coerce: (raw) => !!raw },
+      // Tri-state Boolean (design 106 §4): the select passes its string value, and ''
+      // — "follow the plan-wide default" — has to survive as null rather than collapsing
+      // to false, which is a different election.
+      { dataId: 'reinvestDividends', field: 'reinvestDividends',
+        coerce: (raw) => (raw === '' || raw == null ? null : raw === 'true' || raw === true) },
     ];
     // `balance` is param-linked only when it is a free scalar. When holdings drive the
     // balance it is computed (and no balance param is generated), so linking would
@@ -1110,6 +1128,13 @@ export class AccountEditor extends BaseComponent {
     if (CASH_TYPES.has(type)) {
       data.isTransactionAccount = el.querySelector('[data-id="isTransactionAccount"]').checked;
     }
+    // Dividend-reinvestment election (design 106 §4) — only for the roles that can act
+    // on it. '' ⇒ null ⇒ follow the plan-wide default. When param-linked the generic
+    // drop at the end of this method removes it, the same as isTransactionAccount.
+    if (this._showsReinvestElection(el)) {
+      const raw = el.querySelector('[data-id="reinvestDividends"]')?.value ?? '';
+      data.reinvestDividends = raw === '' ? null : raw === 'true';
+    }
     // Prime-relative cash rate (design 56): the input is the ABSOLUTE rate the bank
     // quotes; store it as `primeSpread = absolute − Prime(country)` so a Prime move fans
     // out to this account. primeSpread wins over interestRate in seeding, so a linked
@@ -1298,12 +1323,33 @@ export class AccountEditor extends BaseComponent {
 
   // ─── Visibility ─────────────────────────────────────────────────────────────
 
+  /**
+   * True when this account's role can act on a dividend-reinvestment election
+   * (design 106 §4).
+   *
+   * An existing account knows its role. A NEW one has none yet — the controller derives
+   * it from type + country on save — so predict it the same way, or the election would be
+   * unreachable until after the account had been created and reopened.
+   */
+  _showsReinvestElection(el = this._rootEl) {
+    if (this._node?.role) return DIVIDEND_ELECTION_ROLES.has(this._node.role);
+    const type    = el?.querySelector('[data-id="type"]')?.value;
+    const country = el?.querySelector('[data-id="country"]')?.value;
+    if (type !== 'brokerage') return false;
+    return DIVIDEND_ELECTION_ROLES.has(country === 'AU' ? 'au-stock' : 'us-stock');
+  }
+
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
     // The transaction-account flag only applies to cash accounts (§7).
     const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
     if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';
+    // The DRIP election is gated on ROLE, not type: every brokerage is the same TYPE,
+    // but only a us-stock account today has a dividend that is separated from price
+    // return and a cash branch to route it to (design 106 §4 / DIVIDEND_ELECTION_ROLES).
+    const reinvestRow = el.querySelector('[data-id="reinvestDividendsRow"]');
+    if (reinvestRow) reinvestRow.style.display = this._showsReinvestElection(el) ? '' : 'none';
     // Prime-relative cash rate (design 56) — cash accounts + a brokerage's cash sleeve.
     const cashRateRow = el.querySelector('[data-id="cashRateRow"]');
     if (cashRateRow) {

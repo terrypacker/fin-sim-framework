@@ -46,7 +46,7 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-10 | US Brokerage | Fixed Income – Withdrawal | − balance | N | N | N | ✅ |
 | EVT-11 | US Brokerage | Fixed Income – Earnings | + balance | Ordinary Income | Ordinary Income if resident | Y | ✅ |
 | EVT-12 | US Brokerage | Stocks – Contribution | + contribution (basis) | N | N | N | ✅ |
-| EVT-13 | US Brokerage | Stocks – Dividend Yield | + contribution (basis) | Ordinary Income | Ordinary Income if resident | Y | ✅ |
+| EVT-13 | US Brokerage | Stocks – Dividend Yield | + contribution (basis) when reinvested, else cash to the transaction account | Ordinary Income | Ordinary Income if resident | Y | ✅ |
 | EVT-14 | US Brokerage | Stocks – Earnings | + earnings | N | N | N | ✅ |
 | EVT-15 | US Brokerage | Stocks – Withdrawal (sale) | − earnings or contribution | Capital Gain | Capital Gain if resident | Y | ✅ |
 | EVT-16 | AU Savings | Contribution | + balance | N | N | N | ✅ |

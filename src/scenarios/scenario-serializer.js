@@ -806,6 +806,13 @@ export class ScenarioSerializer {
     // Transaction-account flag (design 55 §7) — emitted only when true so legacy
     // accounts (default false) round-trip byte-for-byte.
     if (account.isTransactionAccount) d.isTransactionAccount = true;
+    // Dividend-reinvestment election (design 106 §4). DEVIATION-ONLY, and the test is
+    // `!= null` rather than truthiness: `false` is a real election ("this broker pays
+    // me the cash") and has to survive the round trip, while null means the account
+    // has no opinion and takes the household default. Writing the default out would
+    // be the `minimumAge` mistake — persisting a value nobody chose, which then stops
+    // tracking the thing it was copied from.
+    if (account.reinvestDividends != null) d.reinvestDividends = account.reinvestDividends;
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
     // and AccountService.register() re-bootstraps a default holding.
@@ -1337,6 +1344,10 @@ export class ScenarioSerializer {
     if (d.equityMarketMix !== undefined) opts.equityMarketMix = d.equityMarketMix;
     // Transaction-account flag (design 55 §7) — absent on legacy saves → false.
     if (d.isTransactionAccount !== undefined) opts.isTransactionAccount = d.isTransactionAccount;
+    // Dividend-reinvestment election (design 106 §4) — absent on legacy saves → null,
+    // i.e. inherit the household default, which is what every saved scenario did before
+    // the field existed.
+    if (d.reinvestDividends !== undefined) opts.reinvestDividends = d.reinvestDividends;
     let account;
     switch (d.__type) {
       case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;

@@ -39,6 +39,7 @@
  * transaction account (§7.4) instead of the old global us/auSavingsMinBalance params.
  */
 import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
+import { DIVIDEND_ELECTION_ROLES } from '../../finance/state/account-roles.js';
 
 // Retirement-account ledger scalar exposed as a param (design 53 §2 / account-basis
 // two-concepts). Per-lot holdings and cost basis stay in the account editor (design 25).
@@ -102,10 +103,34 @@ const IS_TRANSACTION_ACCOUNT = {
     'transfers replenish for its country of residence. Flag exactly one account per country.',
 };
 
+// Dividend-reinvestment election (design 106 §4). A household CHOICE, and a scalar,
+// so `opt: true` and `mc: false` per design 98 W2 — the household decides whether this
+// broker reinvests; nothing about it is uncertain. Sweepable for real: generated
+// `acct.` keys reach the optimizer/MPC candidate path since design 98 W0.
+//
+// `appliesTo` restricts it to the accounts where the election actually routes anything
+// (DIVIDEND_ELECTION_ROLES). Every brokerage TYPE would otherwise generate one —
+// including fixed-income and, until phase 1b, AU stock — and a param that changes
+// nothing is worse than no param: it reads as a lever, sweeps as a lever, and returns
+// byte-identical rollouts.
+//
+// defaultValue comes from the record, so an unelected account's param is null and the
+// cascade writing it back is a no-op. Setting it in the param editor is by nature an
+// explicit election (the Boolean control has two states, not three); "inherit the
+// household default" is expressed by the account editor's third option.
+const REINVEST_DIVIDENDS = {
+  field: 'reinvestDividends', label: 'Reinvest Dividends',
+  type: 'Boolean', mc: false, opt: true, nullable: true,
+  appliesTo: (a) => DIVIDEND_ELECTION_ROLES.has(a?.role),
+  description: 'When on, this account\'s dividends buy more of its holdings; when off, ' +
+    'they are paid out as cash to the country\'s transaction account. Leave unset to ' +
+    'follow the plan-wide Reinvest Dividends default.',
+};
+
 export const ACCOUNT_PARAM_TEMPLATES = {
   [ACCOUNT_TYPE.CHECKING]:        [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
   [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
-  [ACCOUNT_TYPE.BROKERAGE]:       [BALANCE],
+  [ACCOUNT_TYPE.BROKERAGE]:       [BALANCE, REINVEST_DIVIDENDS],
   [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS],
   [ACCOUNT_TYPE.FOUR_OH_ONE_K]:   [BALANCE, CONTRIBUTION_BASIS],

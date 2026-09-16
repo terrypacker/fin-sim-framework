@@ -171,36 +171,42 @@ export class ScenarioParamGenerator {
     // hidden, compile-only `balanceTarget` MC/Opt lever (BALANCE_TARGET) that the loader
     // cascade honors non-destructively; a holdings-free account keeps its scalar `balance`.
     const hasHoldings = Array.isArray(record.holdings) && record.holdings.length > 0;
-    return template.map((t) => (t.field === 'balance' && hasHoldings) ? BALANCE_TARGET : t).map((t) => {
-      const node = nodeType === 'person'
-        ? { type: 'person', id: identity, field: t.field }
-        : { type: nodeType, stateKey: identity, field: t.field };
-      const entry = {
-        key:          `${prefix}.${identity}.${t.field}`,
-        label:        `${recordName} — ${t.label}`,
-        type:         t.money ? 'Money' : t.type,
-        // A template field may file itself outside its record's group — the move-in
-        // date sits in "Cross Border" beside moveYear, the lever it is swept against.
-        group:        t.group ?? group,
-        defaultValue: recordFieldValue(record, t.deriveDefaultFrom ?? t.field),
-        node,
-        mc:           t.mc  ?? false,
-        opt:          t.opt ?? false,
-      };
-      if (t.hidden)  entry.hidden  = t.hidden;
-      if (t.fractionalYear) entry.fractionalYear = true;
-      if (t.options) entry.options = t.options;
-      // Field-level description (design 55 §4) → the param's hover tooltip in the
-      // Scenario panel. Without it the tooltip falls back to the generated key
-      // (`acct.<stateKey>.<field>`), which surfaced the raw stateKey on hover.
-      if (t.description) entry.description = t.description;
-      // design-10 Money seeding (§4). Deferred in Phase 1 (all templates Number),
-      // but supported so a later phase flips `money: true` on a template field.
-      if (t.money) {
-        entry.defaultCurrency   = record.currency?.code ?? record.currency ?? 'USD';
-        entry.currencyStateKeys = [`${identity}.${t.field}`];
-      }
-      return entry;
-    });
+    return template
+      .map((t) => (t.field === 'balance' && hasHoldings) ? BALANCE_TARGET : t)
+      // A template field may be live for only SOME records of its type (design 106 §4):
+      // `appliesTo(record)` is the per-record gate the type key cannot express. Absent ⇒
+      // the field applies to every record of the type, which is every existing entry.
+      .filter((t) => (typeof t.appliesTo !== 'function') || t.appliesTo(record))
+      .map((t) => {
+        const node = nodeType === 'person'
+          ? { type: 'person', id: identity, field: t.field }
+          : { type: nodeType, stateKey: identity, field: t.field };
+        const entry = {
+          key:          `${prefix}.${identity}.${t.field}`,
+          label:        `${recordName} — ${t.label}`,
+          type:         t.money ? 'Money' : t.type,
+          // A template field may file itself outside its record's group — the move-in
+          // date sits in "Cross Border" beside moveYear, the lever it is swept against.
+          group:        t.group ?? group,
+          defaultValue: recordFieldValue(record, t.deriveDefaultFrom ?? t.field),
+          node,
+          mc:           t.mc  ?? false,
+          opt:          t.opt ?? false,
+        };
+        if (t.hidden)  entry.hidden  = t.hidden;
+        if (t.fractionalYear) entry.fractionalYear = true;
+        if (t.options) entry.options = t.options;
+        // Field-level description (design 55 §4) → the param's hover tooltip in the
+        // Scenario panel. Without it the tooltip falls back to the generated key
+        // (`acct.<stateKey>.<field>`), which surfaced the raw stateKey on hover.
+        if (t.description) entry.description = t.description;
+        // design-10 Money seeding (§4). Deferred in Phase 1 (all templates Number),
+        // but supported so a later phase flips `money: true` on a template field.
+        if (t.money) {
+          entry.defaultCurrency   = record.currency?.code ?? record.currency ?? 'USD';
+          entry.currencyStateKeys = [`${identity}.${t.field}`];
+        }
+        return entry;
+      });
   }
 }

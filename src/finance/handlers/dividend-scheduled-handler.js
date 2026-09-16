@@ -30,7 +30,9 @@ import { computeHoldingsDividends } from '../holdings/holdings-earnings.js';
  *                    StockDividendCashApplyReducer: credits usSavingsAccount,
  *                    chains STOCK_DIVIDEND_TAX)
  *
- * data.reinvest overrides the configured reinvest param for one-off events.
+ * data.reinvest overrides the configured reinvest param for one-off events, and
+ * `state[stateKey].reinvestDividends` — the account's own election (design 106) —
+ * overrides the configured param for every event on that account.
  *
  * @param {object} [opts]
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
@@ -83,8 +85,14 @@ export class DividendScheduledHandler extends HandlerEntry {
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
-    const reinvest   = data?.reinvest ?? this.reinvest;
     const account    = state[stateKey];
+    // Design 106 §4 — precedence: a one-off event's own `data.reinvest`, then THIS
+    // ACCOUNT's election (a broker's DRIP setting, projected into state from the account
+    // record), then the household default this handler was built with. Read from state
+    // rather than captured at construction so a scenario loaded from a save — whose
+    // handlers come back from JSON, not from the toolset — honours the account's
+    // election without a Rebuild.
+    const reinvest   = data?.reinvest ?? account?.reinvestDividends ?? this.reinvest;
     const residency  = account?.ownerId
       ? (state.people?.[account.ownerId]?.residency ?? null)
       : null;

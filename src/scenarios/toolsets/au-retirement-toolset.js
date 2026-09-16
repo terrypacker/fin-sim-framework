@@ -926,6 +926,13 @@ function _accountToStatePlain(account) {
   // stamped at its first disposition instead. Projected only when set, so legacy
   // accounts are byte-identical.
   if (account.fxBasisRate != null) plain.fxBasisRate = account.fxBasisRate;
+  // Dividend-reinvestment election (design 106 §4). This projection and the US toolset's
+  // are two copies of one function, and whichever toolset seeds a given account's state
+  // entry first wins (`patches[stateKey] === undefined`) — so a field added to only one
+  // copy is present or absent depending on toolset order, which is exactly the kind of
+  // bug that looks like the feature not working at all. Projected only when the household
+  // has an opinion, so an unelected account is byte-identical.
+  if (account.reinvestDividends != null) plain.reinvestDividends = account.reinvestDividends;
   if (account.type !== 'loan' && account.deductibleFraction != null) {
     plain.deductibleFraction = account.deductibleFraction;
   }

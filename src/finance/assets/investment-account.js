@@ -320,10 +320,22 @@ export class InvestmentAccount extends Account {
 export class BrokerageAccount extends InvestmentAccount {
   /**
    * @param {number} balance
-   * @param {object} [opts] - All InvestmentAccount opts; type is set automatically
+   * @param {object} [opts] - All InvestmentAccount opts; type is set automatically, plus:
+   * @param {boolean|null} [opts.reinvestDividends=null] - Dividend-reinvestment election (design 106)
    */
   constructor(balance = 0, opts = {}) {
     super(balance, { ...opts, type: ACCOUNT_TYPE.BROKERAGE });
+    // Dividend-reinvestment election (design 106 §4). TRI-STATE, and the null is the
+    // point: a broker's DRIP setting is made per account, so this is where it lives —
+    // but an account that has never been asked must keep taking the household default
+    // (the toolset's `dividendReinvest`), or adding the field would silently pin every
+    // existing scenario to whatever value we chose here. true/false are the household
+    // OVERRIDING the default for this broker; null is "no opinion", which is not the
+    // same as false. Serialized only when non-null, the `allowsEarlyWithdrawal` rule.
+    //
+    // Only read for the roles in DIVIDEND_ELECTION_ROLES — a wrapper never separates its
+    // dividend from its price return, so there is nothing for an election to route.
+    this.reinvestDividends = opts.reinvestDividends ?? null;
   }
 }
 

@@ -58,3 +58,23 @@ export const INHERITED_RETIREMENT_ROLES = Object.freeze(new Set([
   ACCOUNT_ROLES.INHERITED_K401,
   ACCOUNT_ROLES.INHERITED_ROTH,
 ]));
+
+/**
+ * Roles where the dividend-reinvestment election is LIVE (design 106 §4).
+ *
+ * The election only means something where a dividend is separated from price return
+ * and there is somewhere else for the cash to go:
+ *   - `us-stock` — `DividendScheduledHandler` already branches reinvest / cash payout.
+ *   - `au-stock` — joins at phase 1b, once the franked-dividend CASH branch exists
+ *     (today an AU dividend is unconditionally reinvested, §4a).
+ *   - the sheltered wrappers and super are deliberately ABSENT: a wrapper's equity
+ *     earns its market's TOTAL return in one move and never separates the yield
+ *     (design 99 P2), and a super fund cannot pay income out at all (design 105).
+ *     There is no branch to elect, so no checkbox and no generated param.
+ *
+ * Shared by the param template, the toolset and the account editor so "where the
+ * election is live" has exactly one definition.
+ */
+export const DIVIDEND_ELECTION_ROLES = Object.freeze(new Set([
+  ACCOUNT_ROLES.US_STOCK,
+]));
