@@ -227,14 +227,76 @@ spelled `stockDividendReinvest` at the scenario level and forwarded to the tools
 toolset spelling is silently ignored. Two param stores, one of them fed only by a human —
 the same shape design 65's levers hit.
 
-### 4a. The AU half, which is not free
+### 4a. The AU half  ✅ **DONE** (2026-09-16)
 
-`IntlAuStockDividendHandler` has no cash branch: there is no
-`AU_DIVIDEND_FRANKED_*_CASH_APPLY`. Electing "no reinvest" on an AU brokerage account needs
-one built — credit the AU transaction account, keep the franking credit assessable with the
+`IntlAuStockDividendHandler` had no cash branch: before phase 1b, **every** franked
+dividend was reinvested. Electing "no reinvest" on an AU brokerage needed the branch
+built — credit the AU transaction account, keep the franking credit assessable with the
 gross-up exactly as the reinvest branch does (the credit attaches to the dividend, not to
 where the cash lands), and add the EVT-26/EVT-27 variants to `design/requirements.md`.
-Small, but it is new tax-path code rather than a re-route, so it is its own step.
+
+**What was built.** `AU_DIVIDEND_FRANKED_{RESIDENT,NONRESIDENT}_CASH_APPLY`, two reducers
+over one shared base in `au-brokerage-classes.js`, registered in `AU_BROKERAGE`
+unconditionally (the election is per account and can be flipped after the scenario is
+built; a reducer that exists only once someone has elected cash would make the first flip
+a silent no-op). The handler now branches on two axes — residency × election — and drops
+its `holdingActions` on the cash branch, because the money leaves rather than buying units.
+
+**The household default is TRUE on the AU side, and false on the US side.** Not an
+inconsistency: `auDividendReinvest` defaults to what the AU path has always done, and
+defaulting it to `false` to match the US would silently re-route every existing AU
+scenario's dividend stream. The US param defaults false because it always has.
+
+**Decision D5: the tax is identical on both branches, and that is the whole claim.** A
+dividend is derived when it is paid; where it is banked afterwards is not a tax fact. Both
+cash reducers chain the same tax action with the same amount, and the resident branch keeps
+its s207-20 gross-up and offset. Pinned by DRIP-6c, which runs the two arms for one year
+and asserts the assessed amount is equal to the cent. (Over a longer run the reinvested arm
+compounds a bigger book and so pays a bigger dividend the next year — the economics working,
+not the tax differing, which is why the assertion is on year one.)
+
+**The one thing the cash branch needs that the reinvest branch does not: `stateKey`.** The
+reinvest reducers fall back to `action.stateKey ?? 'auStockAccount'`; the cash ones credit a
+*different* account and so must be told which broker paid. That key is what
+`resolveAttributionAsset` uses to attribute the income — and the franking credit — to an
+owner (design 76 Gap C). Stamping the destination would hand a spouse's dividend, and the
+offset on it, to whoever owns the transaction account.
+
+### 4b. A design-76 Gap C bug found on the way, deliberately NOT fixed here
+
+Stamping `stateKey` on the cash branch made it obvious that the **reinvest** branch does not
+stamp it at all. With two AU brokerage accounts, every franked dividend is therefore
+credited — and attributed — to the canonical `auStockAccount`, whichever account actually
+earned it. The second account's dividends land in the first.
+
+This is not hypothetical: `golden-au-single-homeowner` holds an inherited AU brokerage
+beside the primary one. **Measured** by stamping the reinvest branch and re-running:
+**33 fields move, `auStockAccount.balance` by roughly half**, and the AU return moves with
+it (`auPersonOrdinaryIncomeYTD`, `auPersonFrankingCreditYTD`, `auPersonSuperTaxYTD`, the
+FTC pools and both wealth metrics).
+
+The one-line fix is known and was reverted deliberately. A six-figure correction to a
+tax attribution deserves its own change, its own re-gold and its own reading of the new
+number — not a silent side effect of adding a cash branch. Recorded here as **F6**; the
+same question almost certainly applies to the unfranked pair and to the US
+`STOCK_DIVIDEND_CASH_APPLY`, which stamps its tax with the SAVINGS key.
+
+### 4c. Phase 1b implementation record  ✅ (2026-09-16)
+
+| file | what |
+|---|---|
+| `au-brokerage-classes.js` | the shared cash base + the two reducers |
+| `au-brokerage-toolset.js` | registration, and `stateKey` declared on all four franked APPLY types for journal visibility |
+| `earnings-handlers.js` | the two-axis branch; `reinvest` resolved from state; `reinvest` serialized, defaulting TRUE on `fromJSON` so a save written before the field reloads reinvesting |
+| `au-retirement-toolset.js` | the `auDividendReinvest` household default |
+| `scenario-serializer.js` | the two new reducer classes in both registry blocks — without this a saved graph throws `Unknown reducer type` on load |
+| `account-roles.js` | `au-stock` joins `DIVIDEND_ELECTION_ROLES` |
+| `golden-specs.js` + `golden-au-dividend-cash.json` | a new golden: the default US→AU plan with the AU default flipped to cash, crossing the 2031 move so it reaches the non-resident branch before it and the resident branch after |
+| `reducer-postconditions-au.test.mjs` | conservation, untouched holdings, and the attribution stamp |
+| `evt-dividend-reinvest-election.test.mjs` (DRIP-6…6d) | the election end to end, and the tax invariance |
+
+**What moved:** no existing golden. One new fixture. 6,581 unit tests and 1,516 viz tests
+green.
 
 ## 5. Phase 2 — per security, within the account
 
@@ -300,7 +362,7 @@ account pay cash while another reinvests.
 | step | what | size | gate |
 |---|---|---|---|
 | 1 | ✅ **DONE** (2026-09-16) — account field + serializer + builder + template + toolset + editor (US) | small | §4.1 has the record. No golden moved; the election is read from STATE, not captured at build time |
-| 1b | AU franked-dividend cash branch + EVT-26/27 rows | small | AU-resident and non-resident cash payouts carry the same assessable amount and credit as the reinvest branch |
+| 1b | ✅ **DONE** (2026-09-16) — AU franked-dividend cash branch + EVT-26/27 rows | small | §4a/§4c have the record. New golden `au-dividend-cash` reaches both branches; DRIP-6c pins the tax invariance. Uncovered **F6** (§4b) |
 | 2a | US reinvest path emits per-holding actions (§2.1 fix (a)) | small–medium | **re-gold**; the two-security golden is the detector; Σ tax unchanged |
 | 2b | `dividendReinvestBySecurity` + the split emit + the per-security editor rows | medium | a partial election reinvests one security and pays the other in cash, in one account, in one year, with tax unchanged |
 

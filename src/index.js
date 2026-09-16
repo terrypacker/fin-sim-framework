@@ -9,7 +9,7 @@ import { AccountRulesEngine } from './finance/account-rules/account-rules-engine
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 } from './finance/account-rules/au/au-account-module-2026.js';
-import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from './finance/account-rules/au/au-brokerage-classes.js';
+import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from './finance/account-rules/au/au-brokerage-classes.js';
 import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au-fixed-income-classes.js';
 import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
@@ -605,6 +605,8 @@ export const Finance = {
   AuAccountModule2026,
   AuDividendFrankedResidentApplyReducer,
   AuDividendFrankedNonResidentApplyReducer,
+  AuDividendFrankedResidentCashApplyReducer,
+  AuDividendFrankedNonResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer,
   AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer,

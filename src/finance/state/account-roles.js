@@ -65,8 +65,9 @@ export const INHERITED_RETIREMENT_ROLES = Object.freeze(new Set([
  * The election only means something where a dividend is separated from price return
  * and there is somewhere else for the cash to go:
  *   - `us-stock` — `DividendScheduledHandler` already branches reinvest / cash payout.
- *   - `au-stock` — joins at phase 1b, once the franked-dividend CASH branch exists
- *     (today an AU dividend is unconditionally reinvested, §4a).
+ *   - `au-stock` — joined at phase 1b, which built the franked-dividend CASH branch
+ *     (`AU_DIVIDEND_FRANKED_{RESIDENT,NONRESIDENT}_CASH_APPLY`). The tax is identical on
+ *     both branches; only the destination of the money differs.
  *   - the sheltered wrappers and super are deliberately ABSENT: a wrapper's equity
  *     earns its market's TOTAL return in one move and never separates the yield
  *     (design 99 P2), and a super fund cannot pay income out at all (design 105).
@@ -77,4 +78,5 @@ export const INHERITED_RETIREMENT_ROLES = Object.freeze(new Set([
  */
 export const DIVIDEND_ELECTION_ROLES = Object.freeze(new Set([
   ACCOUNT_ROLES.US_STOCK,
+  ACCOUNT_ROLES.AU_STOCK,
 ]));

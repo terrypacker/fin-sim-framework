@@ -38,6 +38,7 @@ import {
 } from '../../src/finance/account-rules/au/au-super-classes.js';
 import {
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+  AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
 } from '../../src/finance/account-rules/au/au-brokerage-classes.js';
@@ -235,6 +236,58 @@ for (const [label, Reducer, type] of [
       .filter(([, v]) => typeof v === 'number' && !Number.isFinite(v))
       .map(([k, v]) => `${k}=${v}`);
     assert.deepEqual(bad, [], `non-finite field(s) written: ${bad.join(', ')}`);
+  });
+}
+
+// ── The CASH siblings (design 106 §4a) ───────────────────────────────────────
+//
+// Same dividend, different destination. Three things these pin, and each is a way the
+// pair could go wrong that the reinvest tests above cannot see:
+//   · the money leaves the brokerage and lands in the AU cash pool — conserved, not
+//     created (I3/I5);
+//   · the brokerage is untouched, INCLUDING its holdings: the reinvest path grows the
+//     paying lots, and a cash payout that also grew them would pay the dividend twice;
+//   · the chained TAX action names the PAYING account, not the account the cash landed
+//     in. That stateKey is what attributes the income and the franking credit to an
+//     owner (design 76 Gap C), so stamping the destination would hand one spouse's
+//     dividend — and the offset on it — to whoever owns the transaction account.
+
+for (const [label, Reducer, type, taxType] of [
+  ['AuDividendFrankedResidentCash', AuDividendFrankedResidentCashApplyReducer,
+   'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY', 'AU_DIVIDEND_FRANKED_RESIDENT_TAX'],
+  ['AuDividendFrankedNonResidentCash', AuDividendFrankedNonResidentCashApplyReducer,
+   'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY', 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX'],
+]) {
+  const seed = () => ({
+    auStockAccount:   acct('auStockAccount', 40000, 'AUD'),
+    auSavingsAccount: acct('auSavingsAccount', 10000, 'AUD'),
+  });
+
+  test(`${label}: the dividend moves brokerage → AU cash, conserved (I3/I5)`, () => {
+    const { next } = runAcct(new Reducer(makeServices()), seed(),
+      { type, amount: 700, stateKey: 'auStockAccount' });
+    assert.equal(next.auSavingsAccount.balance, 10700, 'cash pool credited');
+    assert.equal(next.auStockAccount.balance, 40000, 'the brokerage keeps its balance');
+  });
+
+  test(`${label}: the paying account's HOLDINGS are untouched`, () => {
+    const state = seed();
+    // Compared as plain data: `structuredClone` drops the Holding prototype, so a
+    // deepEqual on the instances fails on the class alone with every value identical.
+    const plain  = hs => JSON.parse(JSON.stringify(hs));
+    const before = plain(state.auStockAccount.holdings);
+    const next = new Reducer(makeServices()).reduce(state, { type, amount: 700, stateKey: 'auStockAccount' }, DATE);
+    assert.deepEqual(plain(next.auStockAccount.holdings), before,
+      'a paid-out dividend must not also buy units — that is the reinvest branch');
+  });
+
+  test(`${label}: the chained tax names the PAYING account, not the cash destination`, () => {
+    const next = new Reducer(makeServices())
+      .reduce(seed(), { type, amount: 700, stateKey: 'auStockAccount' }, DATE);
+    const tax = (next.next ?? []).find(a => a?.type === taxType);
+    assert.ok(tax, `expected a chained ${taxType}`);
+    assert.equal(tax.amount, 700, 'the taxable amount is the dividend, wherever it was banked');
+    assert.equal(tax.stateKey, 'auStockAccount', 'attribution follows the PAYER (design 76 Gap C)');
   });
 }
 

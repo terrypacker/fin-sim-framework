@@ -265,7 +265,7 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `us/us-collectible-classes.js` | CollectibleSale, CollectibleValueChange | ✅ |
 | `us/us-income-classes.js` | WagesIncome, WagesWithheld, SsIncome, SeIncomeUs, Bonus, CompanySale | ✅ |
 | `us/us-real-property-classes.js` | UsHouseSale | ✅ |
-| `au/au-brokerage-classes.js` | AuStockEarnings, AuStockWithdrawal, Au Dividend {Franked,Unfranked}×{Resident,NonResident} | ✅ |
+| `au/au-brokerage-classes.js` | AuStockEarnings, AuStockWithdrawal, Au Dividend {Franked,Unfranked}×{Resident,NonResident}, and the two Franked **Cash** siblings (design 106 §4a) | ✅ |
 | `au/au-fixed-income-classes.js` | AuFixedIncomeEarnings | ✅ scalar contract + event-level §4.4 (`earnings-holdings-sync`) |
 | `au/au-income-classes.js` | AuSeIncome | ✅ |
 | `au/au-income-classes.js` | AuWagesIncome | ✅ credits AUD pool (design 50) |

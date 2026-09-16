@@ -107,6 +107,86 @@ export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceRedu
 }
 
 /**
+ * EVT-26c / EVT-27c: AU franked dividend taken as CASH (design 106 §4a).
+ *
+ * The cash siblings of the two reducers above. Everything about the TAX is identical —
+ * a dividend is derived when it is paid, and where the money lands afterwards is not a
+ * tax fact — so these chain the same tax actions with the same amount, and the resident
+ * branch keeps the s207-20 gross-up and offset it has always had.
+ *
+ * Two things they must get right, and both are one line:
+ *
+ *   · **The cash goes to the AU transaction account, not to the brokerage.** Routed
+ *     through `resolveCashKey` like every other AU credit (design 55 §7.4), so a
+ *     household that has flagged a checking account is paid there.
+ *   · **The TAX action carries the SOURCE brokerage's stateKey, not the destination's.**
+ *     `resolveAttributionAsset` uses it to attribute the income — and the franking
+ *     credit — to an owner (design 76 Gap C). Stamping the cash account would hand a
+ *     spouse's dividend, and the offset on it, to whoever owns the transaction account.
+ *
+ * And one thing they must NOT do: emit `holdingActions`. The reinvest path grows the
+ * paying lots; on this path the money leaves the account, so the lots are untouched and
+ * the balance follows Σ marketValue as it always does.
+ */
+class AuDividendFrankedCashApplyReducerBase extends AccountServiceReducer {
+  constructor({ accountService, stateRegistry }, { name, actionType, taxType }) {
+    super(name, PRIORITY.CASH_FLOW);
+    this.accountService       = accountService;
+    this.stateRegistry        = stateRegistry;
+    this._taxType             = taxType;
+    this.reducedActionTypes   = [actionType];
+    this.generatedActionTypes = [taxType];
+  }
+
+  reduce(state, action, date) {
+    const sourceKey = action.stateKey ?? 'auStockAccount';
+    const cashKey   = resolveCashKey(this.stateRegistry, 'AU', state);
+    this.accountService.transaction(state[cashKey], action.amount, date);
+    return this.newState(
+      state, {},
+      [{
+        type: this._taxType, amount: action.amount, stateKey: sourceKey,
+        // Design 90 §8 — the credit is sized from these on the tax side, so a cash
+        // dividend must carry them exactly as the reinvest branch does or a partly
+        // franked dividend would be grossed up as if fully franked.
+        ...(action.frankedPercent   != null ? { frankedPercent:   action.frankedPercent }   : {}),
+        ...(action.corporateTaxRate != null ? { corporateTaxRate: action.corporateTaxRate } : {}),
+      }]
+    );
+  }
+}
+
+/** EVT-26c: franked dividend (resident), paid out as cash. */
+export class AuDividendFrankedResidentCashApplyReducer extends AuDividendFrankedCashApplyReducerBase {
+  static type        = 'AuDividendFrankedResidentCashApplyReducer';
+  static description = 'Pays a resident franked dividend out to the AU transaction account; chains AU_DIVIDEND_FRANKED_RESIDENT_TAX against the PAYING account (design 106 §4a).';
+  static actionType  = 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY';
+
+  constructor(services) {
+    super(services, {
+      name:       'AU Franked Dividend Resident Cash Apply',
+      actionType: 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
+      taxType:    'AU_DIVIDEND_FRANKED_RESIDENT_TAX',
+    });
+  }
+}
+
+/** EVT-27c: franked dividend (non-resident), paid out as cash. */
+export class AuDividendFrankedNonResidentCashApplyReducer extends AuDividendFrankedCashApplyReducerBase {
+  static type        = 'AuDividendFrankedNonResidentCashApplyReducer';
+  static description = 'Pays a non-resident franked dividend out to the AU transaction account; chains AU_DIVIDEND_FRANKED_NONRESIDENT_TAX (US ordinary income, no AU tax) against the PAYING account (design 106 §4a).';
+  static actionType  = 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY';
+
+  constructor(services) {
+    super(services, {
+      name:       'AU Franked Dividend Non-Resident Cash Apply',
+      actionType: 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY',
+      taxType:    'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX',
+    });
+  }
+}
+
+/**
  * EVT-28: AU unfranked dividend (resident) — stays in account.
  * Chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX.
  */

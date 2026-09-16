@@ -68,6 +68,24 @@ export const GOLDEN_SPECS = [
     simEnd:   new Date(Date.UTC(2050, 0, 1)),
   },
   {
+    name:        'au-dividend-cash',
+    description:
+      'Design 106 §4a — the AU franked dividend taken as CASH. Until phase 1b there was '
+      + 'no cash branch at all on the AU side: every franked dividend was reinvested, so '
+      + 'both `AU_DIVIDEND_FRANKED_*_CASH_APPLY` reducers were new code with no scenario '
+      + 'behind them. The default US→AU plan with the AU household default flipped to '
+      + 'cash, which crosses the 2031 move and so reaches BOTH branches in one run: the '
+      + 'NON-RESIDENT one (s128B(3)(ga) — Australia taxes nothing, the US taxes it as '
+      + 'ordinary income) before the move, and the RESIDENT one (s207-20 gross-up and '
+      + 'offset) after it. What the fixture is really pinning is that the ELECTION moves '
+      + 'the money without moving the tax: the assessable amount and the franking credit '
+      + 'are properties of the dividend, not of where it is banked. Short — eight years '
+      + 'either side of the move is enough to reach both branches twice.',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2034, 0, 1)),
+    params:   { auDividendReinvest: false },
+  },
+  {
     name:        'cross-border-disposals',
     description:
       'The disposal family, which no other golden reaches: both houses and the gold '

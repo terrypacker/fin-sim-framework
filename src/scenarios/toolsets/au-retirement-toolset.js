@@ -265,6 +265,17 @@ export const AU_RETIREMENT = {
         description: 'Fraction of the dividends on super\'s Australian shares that are franked (1 = fully franked, 0 = no franking credits). The fund receives a credit of 30/70 of the franked dividend (ITAA97 s202-60(2)) and it is refundable (s67-25): it offsets the fund\'s 15% tax in accumulation, and is paid in full in pension phase. Only the AU equity part of super earns it; international shares carry no Australian credit.',
       },
       {
+        // Design 106 §4a — the AU household DEFAULT for franked dividends, overridable
+        // per account. Defaults TRUE, unlike the US `dividendReinvest`, because that is
+        // what the AU path has always done: before this there was no cash branch at all,
+        // so every franked dividend was reinvested. Defaulting it to false to match the
+        // US would silently re-route every existing AU scenario's dividend stream.
+        key: 'auDividendReinvest', label: 'Reinvest AU Dividends (default)',
+        type: 'Boolean', group: 'AU Retirement', mc: false, opt: true,
+        defaultValue: true,
+        description: 'Household DEFAULT for AU brokerage franked dividends: if true they are reinvested into the paying holdings, otherwise paid out as cash to the AU transaction account. The franking credit is assessable and the s207-20 offset applies either way — where the cash lands is not a tax fact. Any AU brokerage account can override this on its own record (design 106).',
+      },
+      {
         // Shared key with US_RETIREMENT (merge dedupes by key). Kept identical in
         // its Money metadata so the effective param is consistent regardless of
         // toolset merge order (design/10 §Phase 5, design/32). Household-base,
@@ -692,6 +703,9 @@ export const AU_RETIREMENT = {
           // Design 99 P2 — the yield is each holding's market's (baseDividendYield);
           // this is only its last resort, matching the earnings handler's.
           dividendRate:  marketReturnFor(p, IntlAuStockDividendHandler.rateKey).yield,
+          // Design 106 §4a — the household DEFAULT; the per-account election overrides
+          // it at call time, read from state (see the US sibling for why not here).
+          reinvest:      p.auDividendReinvest ?? true,
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);

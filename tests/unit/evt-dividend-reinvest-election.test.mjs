@@ -157,6 +157,95 @@ test('DRIP-3c: an unelected plan is unchanged — the default still decides', ()
   assert.ok(fired(drip, 'STOCK_DIVIDEND_APPLY') && !fired(drip, 'STOCK_DIVIDEND_CASH_APPLY'));
 });
 
+// ── DRIP-6: the AU franked cash branch (phase 1b) ───────────────────────────
+
+/**
+ * Sum an action type's `amount` across the run, counting each ACTION once.
+ *
+ * Two traps, both of which return a plausible wrong number rather than an error: the
+ * payload lives at `entry.action.data`, not on the entry; and `getActions` yields one
+ * entry per REDUCER, so an action two reducers handle is counted twice unless the
+ * dedupe below drops it on `instanceId`.
+ */
+function sumAmount(sim, type) {
+  const seen = new Set();
+  let total = 0;
+  for (const e of (sim.journal?.getActions?.(type) ?? [])) {
+    const id = e?.action?.instanceId;
+    if (id != null && seen.has(id)) continue;
+    if (id != null) seen.add(id);
+    total += e?.action?.data?.amount ?? 0;
+  }
+  return +total.toFixed(2);
+}
+
+test('DRIP-6: an AU account electing cash pays out instead of reinvesting', () => {
+  const { sim } = loadScenarioSim({
+    ...RUN,
+    mutateCfg: (cfg) => {
+      const acct = (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK);
+      assert.ok(acct, 'the reference plan has an au-stock account');
+      acct.reinvestDividends = false;
+    },
+  });
+  // The reference plan is US-resident over this window, so it is the NON-resident
+  // branch that fires (s128B(3)(ga)).
+  assert.ok(fired(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY'), 'paid out as cash');
+  assert.ok(!fired(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY'), 'and nothing reinvested');
+});
+
+test('DRIP-6b: an unelected AU account still reinvests — the historic default', () => {
+  const { sim } = loadScenarioSim({ ...RUN });
+  assert.ok(fired(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY'));
+  assert.ok(!fired(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY'),
+    'before phase 1b there was no cash branch at all; an unelected plan must not find one now');
+});
+
+test('DRIP-6c: the election moves the MONEY without moving the TAX', () => {
+  // The whole claim of §4a. A dividend is derived when it is paid; where it is banked
+  // afterwards is not a tax fact, so the assessable amount must be identical.
+  const taxOf = (reinvest) => {
+    const { sim } = loadScenarioSim({
+      ...RUN,
+      mutateCfg: (cfg) => {
+        (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK).reinvestDividends = reinvest;
+      },
+    });
+    return sumAmount(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX');
+  };
+  const reinvested = taxOf(true);
+  assert.ok(reinvested > 0, 'the run pays a franked dividend at all');
+  // Equal to the cent in the FIRST year; over a multi-year run the reinvested arm
+  // compounds a larger book and so pays a larger dividend next year, which is the
+  // economics working rather than the tax differing. Assert on year one alone.
+  const firstYear = (reinvest) => {
+    const { sim } = loadScenarioSim({
+      simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+      mutateCfg: (cfg) => {
+        (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK).reinvestDividends = reinvest;
+      },
+    });
+    return sumAmount(sim, 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX');
+  };
+  assert.equal(firstYear(false), firstYear(true),
+    'the same dividend is assessed the same, wherever the cash lands');
+});
+
+test('DRIP-6d: the cash lands in the AU pool, and the brokerage keeps its lots', () => {
+  const arm = (reinvest) => loadScenarioSim({
+    simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+    mutateCfg: (cfg) => {
+      (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK).reinvestDividends = reinvest;
+    },
+  }).sim.state;
+
+  const cash = arm(false), drip = arm(true);
+  assert.ok(cash.auSavingsAccount.balance > drip.auSavingsAccount.balance,
+    'the cash arm banks the dividend');
+  assert.ok(drip.auStockAccount.balance > cash.auStockAccount.balance,
+    'and the reinvest arm keeps it in the brokerage');
+});
+
 // ── DRIP-4: serialization is deviation-only ─────────────────────────────────
 
 test('DRIP-4: the election round-trips, and an unelected account writes no key', () => {
@@ -177,7 +266,7 @@ test('DRIP-4: the election round-trips, and an unelected account writes no key',
 
 // ── DRIP-5: the generated param exists only where the election is live ──────
 
-test('DRIP-5: a `reinvestDividends` param is generated for us-stock and for nothing else', () => {
+test('DRIP-5: a `reinvestDividends` param is generated for the broker roles and no others', () => {
   const cfg = {
     accounts: [
       { stateKey: 'usStockAccount',  name: 'US Brokerage', type: 'brokerage', role: ACCOUNT_ROLES.US_STOCK },
@@ -190,8 +279,13 @@ test('DRIP-5: a `reinvestDividends` param is generated for us-stock and for noth
     .filter(p => p.key.endsWith('.reinvestDividends'))
     .map(p => p.key);
 
-  assert.deepEqual(keys, ['acct.usStockAccount.reinvestDividends'],
-    'a param that routes nothing is worse than no param: it reads as a lever and sweeps as one');
+  // us-stock since phase 1; au-stock since phase 1b built the franked cash branch.
+  // fixed-income and the wrappers are absent: a param that routes nothing is worse than
+  // no param, because it reads as a lever and sweeps as one.
+  assert.deepEqual(keys.sort(), [
+    'acct.auStockAccount.reinvestDividends',
+    'acct.usStockAccount.reinvestDividends',
+  ]);
 
   const entry = ScenarioParamGenerator.generate(cfg).find(p => p.key === keys[0]);
   assert.equal(entry.type, 'Boolean');

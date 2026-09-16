@@ -354,8 +354,24 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
 /**
  * Handles INTL_AU_STOCK_DIVIDEND events.
  * Computes annual AU stock dividends as: balance × dividendRate.
- * Routes to AU_DIVIDEND_FRANKED_RESIDENT_APPLY (AU resident) or
- * AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY (non-resident) based on the account owner's residency.
+ * Routes on TWO axes (design 106 §4a):
+ *
+ *   residency → AU_DIVIDEND_FRANKED_RESIDENT_* (AU resident) or
+ *               AU_DIVIDEND_FRANKED_NONRESIDENT_* (non-resident);
+ *   the account's reinvestment election → the `_APPLY` (reinvest: credit the account
+ *               and grow the paying lots) or `_CASH_APPLY` (pay out to the AU
+ *               transaction account, lots untouched) variant.
+ *
+ * The election is `data.reinvest ?? state[stateKey].reinvestDividends ?? this.reinvest`,
+ * the same three levels the US handler uses and read from state for the same reason —
+ * a loaded scenario restores its handlers from JSON and never re-runs the toolset.
+ * The default is TRUE here: before the cash branch existed every franked dividend was
+ * reinvested, and an unelected account must keep doing that.
+ *
+ * Tax is identical on both branches. A dividend is derived when it is paid; where the
+ * cash lands afterwards is not a tax fact, so the assessable amount, the s207-20
+ * gross-up and the offset are unchanged — see the cash reducers in au-brokerage-classes.
+ *
  * Assumes fully franked dividends, which is typical for Australian equities.
  */
 export class IntlAuStockDividendHandler extends HandlerEntry {
@@ -364,37 +380,44 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   static eventType   = 'INTL_AU_STOCK_DIVIDEND';
   static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = null, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = null, rateKey = null, reinvest = true } = {}) {
     super(null, 'AU Stock Dividend');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
     this._stateKeyFixed = stateKey;
     this.dividendRate  = dividendRate;
+    // Design 106 §4a — the household default. TRUE, because that is what this handler
+    // did before a cash branch existed; a save written without the field must reload
+    // reinvesting, which is why `fromJSON` defaults it to true rather than to false.
+    this.reinvest      = reinvest;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = [
       'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
       'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
+      'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
+      'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY',
       'RECORD_BALANCE',
     ];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? null, rateKey: d.rateKey ?? null });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, dividendRate: d.dividendRate ?? null, rateKey: d.rateKey ?? null, reinvest: d.reinvest ?? true });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, dividendRate: this.dividendRate, rateKey: this.rateKey };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this._stateKeyFixed, dividendRate: this.dividendRate, rateKey: this.rateKey, reinvest: this.reinvest };
   }
 
-  call({ state }) {
+  call({ data, state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     // Per-holding dividends: each sleeve pays holding.dividendYield (falling back
     // to the account-level dividendRate), scaled by the active regime's dividend
-    // adjustment for its rate key (design 28 §7). Reinvested into the sleeves via
-    // holdingActions, matching the franked-apply reducers' account-level credit.
+    // adjustment for its rate key (design 28 §7). On the reinvest branch these are
+    // emitted and grow the PAYING lots, matching the franked-apply reducers'
+    // account-level credit; on the cash branch they are dropped — the money leaves.
     const { amount, holdingActions } = computeHoldingsDividends({
       state, stateKey,
       fallbackYield:   this.dividendRate,
@@ -409,13 +432,29 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
     const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
     const residency  = state.people?.[personKey]?.residency ?? null;
+    // Design 106 §4a — see the class doc for the precedence and why it is read here.
+    const reinvest   = data?.reinvest ?? state[stateKey]?.reinvestDividends ?? this.reinvest;
     const actionType = residency === 'AU'
-      ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'
-      : 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
+      ? (reinvest ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'    : 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY')
+      : (reinvest ? 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY' : 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY');
 
     return [
-      { type: actionType, amount },
-      ...holdingActions,
+      // `stateKey` is stamped on the CASH branch only, and the asymmetry is deliberate
+      // (design 106 §4b). The cash reducers credit a different account than the one that
+      // paid, so they cannot fall back to `action.stateKey ?? 'auStockAccount'` the way
+      // the reinvest reducers do — they have to be told which broker paid, because that
+      // is what attributes the income and the franking credit to an owner downstream
+      // (design 76 Gap C).
+      //
+      // Stamping the REINVEST branch too would be the same fix and it is a real bug:
+      // with two AU brokerage accounts every dividend is credited and attributed to the
+      // canonical `auStockAccount` regardless of which account earned it. Measured on
+      // `golden-au-single-homeowner` (which has an inherited AU brokerage beside the
+      // primary): 33 fields move, `auStockAccount.balance` by roughly half. That is a
+      // correction worth making on its own, with its own re-gold — not a side effect of
+      // adding a cash branch.
+      reinvest ? { type: actionType, amount } : { type: actionType, amount, stateKey },
+      ...(reinvest ? holdingActions : []),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }

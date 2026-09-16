@@ -48,8 +48,12 @@
 export const COVERED = [
   'ASSET_APPRECIATE_APPLY',
   'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
+  // The cash siblings (design 106 §4a) — both reached by `au-dividend-cash`, which
+  // crosses the move and so pays a franked dividend out on each side of it.
+  'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY',
   'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX',
   'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
+  'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
   'AU_DIVIDEND_FRANKED_RESIDENT_TAX',
   'AU_FIXED_INCOME_EARNINGS_APPLY',
   'AU_FIXED_INCOME_EARNINGS_TAX',

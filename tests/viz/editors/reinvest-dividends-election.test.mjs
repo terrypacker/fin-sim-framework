@@ -48,14 +48,16 @@ const select = (el) => el.querySelector('[data-id="reinvestDividends"]');
 describe('account editor — dividend reinvestment election (design 106)', () => {
   beforeEach(() => loadHtml('../../index.html'));
 
-  test('shown for a us-stock brokerage', () => {
+  test('shown for both broker roles — us-stock (phase 1) and au-stock (phase 1b)', () => {
     expect(shown(render(brokerage())._rootEl)).toBe(true);
+    expect(shown(render(brokerage({ role: 'au-stock', country: 'AU' }))._rootEl)).toBe(true);
   });
 
   test('hidden where the election would route nothing', () => {
-    // fixed-income holds bonds and has no dividend stream; au-stock has no cash branch
-    // until phase 1b; a wrapper never separates the dividend at all (design 99 P2).
-    for (const role of ['fixed-income', 'au-stock', 'ira', 'roth-ira', 'k401', 'super']) {
+    // fixed-income holds bonds and has no dividend stream at all; a wrapper never
+    // separates the dividend from its price return (design 99 P2), and super cannot
+    // pay income out (design 105).
+    for (const role of ['fixed-income', 'ira', 'roth-ira', 'k401', 'super']) {
       const type = ['ira', 'roth-ira', 'k401', 'super'].includes(role)
         ? { 'ira': 'ira', 'roth-ira': 'roth', 'k401': '401k', 'super': 'super' }[role]
         : 'brokerage';
@@ -96,9 +98,15 @@ describe('account editor — dividend reinvestment election (design 106)', () =>
     el.querySelector('[data-id="type"]').dispatchEvent(new window.Event('change'));
     expect(shown(el)).toBe(true);
 
+    // AU is a broker role too since phase 1b, so the row stays — but a type that is
+    // not a brokerage at all takes it away.
     el.querySelector('[data-id="country"]').value = 'AU';
     el.querySelector('[data-id="country"]').dispatchEvent(new window.Event('change'));
-    expect(shown(el)).toBe(false);   // au-stock joins at phase 1b
+    expect(shown(el)).toBe(true);
+
+    el.querySelector('[data-id="type"]').value = 'savings';
+    el.querySelector('[data-id="type"]').dispatchEvent(new window.Event('change'));
+    expect(shown(el)).toBe(false);
   });
 
   test('an account that cannot act on the election never sends the field', () => {

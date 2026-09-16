@@ -59,8 +59,8 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-23 | Super | Earnings | + earnings (+ franking credit on AU dividends) | N | Super 15% on INCOME in accumulation (0% pension), less refundable franking credit; capital gains taxed only when realised (design 105) | N | ✅ |
 | EVT-24 | 401K | Contribution | + contribution | Negative Income (pre-tax) | N | N | ✅ |
 | EVT-25 | 401K | Earnings / Withdrawal | + earnings | Ordinary Income | N | N | ✅ |
-| EVT-26 | AU Brokerage | Stocks – Div Franked as Resident | + contribution (basis) | Ordinary Income | Ordinary Income (cash + gross-up) + Franking Credit offset | Y | ✅ |
-| EVT-27 | AU Brokerage | Stocks – Div Franked as Non-Resident | + contribution (basis) | Ordinary Income | N | N | ✅ |
+| EVT-26 | AU Brokerage | Stocks – Div Franked as Resident | + contribution (basis) when reinvested, else cash to the AU transaction account (design 106) | Ordinary Income | Ordinary Income (cash + gross-up) + Franking Credit offset — identical on both branches | Y | ✅ |
+| EVT-27 | AU Brokerage | Stocks – Div Franked as Non-Resident | + contribution (basis) when reinvested, else cash to the AU transaction account (design 106) | Ordinary Income | N | N | ✅ |
 | EVT-28 | AU Brokerage | Stocks – Div Unfranked as Resident | + contribution (basis) | Ordinary Income | Ordinary Income | Y | ✅ |
 | EVT-29 | AU Brokerage | Stocks – Div Unfranked as Non-Resident | + contribution (basis) | Ordinary Income | Non-Resident Withholding | Y | ✅ |
 | EVT-30 | AU Brokerage | Stocks – Earnings | + earnings | N | N | N | ✅ |

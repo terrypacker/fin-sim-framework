@@ -90,6 +90,10 @@ export const COVERED = [
   'AuSuperCapsAccumulateReducer',
   'SuperWithdrawalEarningsApplyReducer',
   'AuDividendFrankedResidentApplyReducer', 'AuDividendFrankedNonResidentApplyReducer',
+  // design 106 §4a — the CASH siblings. Same dividend, same tax, different destination;
+  // the postconditions pin the conservation, the untouched holdings, and that the chained
+  // tax names the PAYING account rather than the one the cash landed in.
+  'AuDividendFrankedResidentCashApplyReducer', 'AuDividendFrankedNonResidentCashApplyReducer',
   'AuDividendUnfrankedResidentApplyReducer', 'AuDividendUnfrankedNonResidentApplyReducer',
   'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
   'AuFixedIncomeEarningsApplyReducer', 'AuSeIncomeApplyReducer', 'AuWagesIncomeApplyReducer', 'AuHouseSaleApplyReducer',

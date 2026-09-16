@@ -11,6 +11,8 @@
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import {
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+  AuDividendFrankedResidentCashApplyReducer,
+  AuDividendFrankedNonResidentCashApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
   AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
@@ -34,10 +36,19 @@ export const AU_BROKERAGE = {
 
   types: {
     handlers: [AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler],
-    reducers: [AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer],
+    reducers: [AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+      AuDividendFrankedResidentCashApplyReducer, AuDividendFrankedNonResidentCashApplyReducer,
+      AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer],
     actions: [
-      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',    fields: { amount: ValueType.currency('AUD') } },
-      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      // `stateKey` names the account that PAID the dividend. The reinvest reducers
+      // default it to the canonical key, but the cash ones credit a different account
+      // and so cannot — and it is what attributes the income and the franking credit to
+      // an owner downstream (design 76 Gap C / design 106 §4a). Declared on all four so
+      // the journal shows which broker a dividend came from.
+      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',    fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',    fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY', fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',  fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD') } },
@@ -83,6 +94,12 @@ export const AU_BROKERAGE = {
     return [
       new AuDividendFrankedResidentApplyReducer({ accountService, stateRegistry }),
       new AuDividendFrankedNonResidentApplyReducer({ accountService, stateRegistry }),
+      // Design 106 §4a — the cash siblings. Registered unconditionally alongside them:
+      // the election is per account and can be flipped after the scenario is built, so
+      // a reducer that exists only when someone has already elected cash would make the
+      // first flip a silent no-op.
+      new AuDividendFrankedResidentCashApplyReducer({ accountService, stateRegistry }),
+      new AuDividendFrankedNonResidentCashApplyReducer({ accountService, stateRegistry }),
       new AuDividendUnfrankedResidentApplyReducer({ accountService, stateRegistry }),
       new AuDividendUnfrankedNonResidentApplyReducer({ accountService, stateRegistry }),
       new AuStockEarningsApplyReducer({ accountService, stateRegistry }),
