@@ -170,7 +170,7 @@ import { HOLDING_ACTION_TYPES, VALUE_KIND, HOLDING_ACTION_ENTRIES, HoldingTransa
 import { UNALLOCATED, HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, groupSnapshotByAllocation, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { YEAR_MS, LONG_TERM_TEST, isLongTerm, disposalTermFields, singleAssetTermFields, auIndexedCostBase, auCpiRate, auCpiLevel } from './finance/holdings/holding-period.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
-import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
+import { instrumentOf, isUnitised, PAR_PER_UNIT, unitiseBond, unitiseEquity, prevailingPrice, syncHolding, indexedRedemptionValue, promoteToUnitised, projectHoldingsToState, resize, addValue, reprice, split, establish, scaleHoldings, rescaleHoldingsToBalance, lotVintage, distributeHoldingsCredit, reinvestDividend, holdingsOutOfSync, LOT_POLICIES, compactLots } from './finance/holdings/holding-utils.js';
 import { applyCashBasisInvariant, Holding } from './finance/holdings/holding.js';
 import { couponFederalExempt, couponStateExempt, baseDividendYield, priceOf, computeHoldingsGrowth, computeHoldingsDividends, computeFundIncome, computeHoldingsCoupons, couponFiringFraction, couponFiringIndex, resolvePrevailingCouponRate, mergeCouponReinvestLots, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
@@ -1172,6 +1172,7 @@ export const Finance = {
   rescaleHoldingsToBalance,
   lotVintage,
   distributeHoldingsCredit,
+  reinvestDividend,
   holdingsOutOfSync,
   LOT_POLICIES,
   compactLots,

@@ -16,7 +16,7 @@ import { disposalTermFields, auCpiRate } from '../../holdings/holding-period.js'
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { mergeCouponReinvestLots }  from '../../holdings/holdings-earnings.js';
-import { lotVintage }              from '../../holdings/holding-utils.js';
+import { lotVintage, reinvestDividend } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 import { section988ForBondPrincipal } from '../bond-currency-basis.js';
 import { toMs } from '../main-residence.js';
@@ -161,13 +161,10 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
     // low-yield one: on a 15k/10k pair yielding 5% and 1%, the 1% security was credited
     // 340 of an 850 payment it had contributed 100 to. Absent slices (a replayed action,
     // or an account whose lots are gone) fall back to the whole-account distribution.
-    const vintage  = { stateKey: key, ...lotVintage(state, sa), label: 'Reinvested dividends' };
-    const slices   = Array.isArray(action._bySecurity) ? action._bySecurity : null;
-    const holdings = (slices && slices.length)
-      ? slices.reduce((hs, { securityId, amount: share }) => distributeHoldingsCredit(hs, share, {
-          ...vintage, only: h => (h?.securityId ?? null) === (securityId ?? null),
-        }), sa.holdings)
-      : distributeHoldingsCredit(sa.holdings, amount, vintage);
+    const holdings = reinvestDividend(sa.holdings, amount, {
+      slices: action._bySecurity, stateKey: key, ...lotVintage(state, sa),
+      label: 'Reinvested dividends',
+    });
     return this.newState(
       state,
       {

@@ -424,7 +424,9 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // adjustment for its rate key (design 28 §7). On the reinvest branch these are
     // emitted and grow the PAYING lots, matching the franked-apply reducers'
     // account-level credit; on the cash branch they are dropped — the money leaves.
-    const { amount, holdingActions, bySecurity } = computeHoldingsDividends({
+    // `holdingActions` is deliberately NOT taken: the reducer reinvests, opening a vintage
+    // lot per security rather than growing the lot that paid (design 106 §5).
+    const { amount, bySecurity } = computeHoldingsDividends({
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
@@ -454,18 +456,18 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // already per LOT, so filtering them to the elected securities IS the split. Only the
     // cash/reinvest amounts have to be re-totalled from the same breakdown.
     let reinvestAmount = 0, cashAmount = 0;
+    const reinvestSlices = [];
     if (bySecurity.length === 0) {
       // No lots — the whole-account fallback; there is no security to elect for.
       if (accountElection) reinvestAmount = amount; else cashAmount = amount;
     } else {
       for (const slice of bySecurity) {
-        if (elects(slice.securityId)) reinvestAmount += slice.amount;
+        if (elects(slice.securityId)) { reinvestSlices.push(slice); reinvestAmount += slice.amount; }
         else cashAmount += slice.amount;
       }
       reinvestAmount = +reinvestAmount.toFixed(2);
       cashAmount     = +cashAmount.toFixed(2);
     }
-    const lotSecurity = new Map((state[stateKey]?.holdings ?? []).map(h => [h?.id, h?.securityId ?? null]));
 
     const applyType = (reinvest) => residency === 'AU'
       ? (reinvest ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'    : 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY')
@@ -482,9 +484,16 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // Up to TWO apply actions for one event since 2b. Both chain the same tax action, so
     // the assessed total is unchanged by the split.
     const out = [];
-    if (reinvestAmount !== 0) out.push({ type: applyType(true),  amount: reinvestAmount, stateKey });
-    if (cashAmount     !== 0) out.push({ type: applyType(false), amount: cashAmount,     stateKey });
-    out.push(...holdingActions.filter(a => elects(lotSecurity.get(a.holdingId) ?? null)));
+    if (reinvestAmount !== 0) {
+      // `_bySecurity` carries the slices to the reducer, which opens a vintage lot per
+      // security (design 106 §5). The handler no longer emits `holdingActions` for the
+      // reinvested part: those ADDED the money to the paying lot, blending a purchase into
+      // an older acquisition date (design 93 §5.0a) and adding no basis (design 94 F3).
+      // The reducer does both correctly, exactly as the US one has since design 93.
+      out.push({ type: applyType(true), amount: reinvestAmount, stateKey,
+                 ...(reinvestSlices.length ? { _bySecurity: reinvestSlices } : {}) });
+    }
+    if (cashAmount !== 0) out.push({ type: applyType(false), amount: cashAmount, stateKey });
     out.push(new RecordBalanceAction(`${stateKey}.balance`, stateKey));
     return out;
   }

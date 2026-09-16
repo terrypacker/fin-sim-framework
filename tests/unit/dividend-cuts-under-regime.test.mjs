@@ -388,12 +388,17 @@ test('EVT-DIV-CUT-9: AU dividend handler applies the regime cut and reinvests in
 
   const actions = handler.call({ state });
   const apply   = actions.find(a => a.type?.startsWith('AU_DIVIDEND_FRANKED'));
-  const holding = actions.find(a => a.constructor?.name === 'HoldingTransactAction');
 
   const expected = +(50000 * 0.04 * 0.70).toFixed(2);  // 1400
   assert.strictEqual(apply.amount, expected, `Expected AU regime-cut ${expected}, got ${apply.amount}`);
-  assert.ok(holding, 'AU dividend should emit a HoldingTransactAction reinvesting into the sleeve');
-  assert.strictEqual(holding.marketValueDelta, expected, 'Reinvested delta should match the dividend');
+  // The reinvestment moved from the handler to the REDUCER at design 106 §5: it opens a
+  // vintage lot per security rather than growing the lot that paid, so the handler hands
+  // over the per-security breakdown instead of emitting HoldingTransactActions. The cut is
+  // still the subject here, and it must survive into that breakdown.
+  assert.ok(!actions.some(a => a.constructor?.name === 'HoldingTransactAction'),
+    'the handler no longer reinvests — the reducer does');
+  assert.deepEqual(apply._bySecurity, [{ securityId: null, amount: expected }],
+    'the cut dividend is carried per security for the reducer to reinvest');
 });
 
 test('EVT-DIV-CUT-10: Holding round-trips dividendYield through toJSON/fromJSON', () => {

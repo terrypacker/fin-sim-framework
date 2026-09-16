@@ -231,7 +231,7 @@
  },
  "auStockAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 95169.15,
+  "balance": 95169.11,
   "country": "AU",
   "currency": {
    "code": "AUD",
@@ -247,7 +247,7 @@
     "allocation": "EQUITY",
     "appreciationSchedule": null,
     "costBaseByCountry": {
-     "AU": 83417.04
+     "AU": 70472.89
     },
     "costBasis": 60000,
     "couponFrequency": 2,
@@ -260,9 +260,9 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 95169.15,
+    "marketValue": 75157.17,
     "maturityDate": null,
-    "pricePerUnit": 125.26197878,
+    "pricePerUnit": 125.26195,
     "purchaseDate": null,
     "rateKey": "EQUITY_AU",
     "rollAtMaturity": false,
@@ -270,7 +270,131 @@
     "securityId": "sec-auto-EQUITY_AU",
     "taxExemption": "none",
     "taxLossPartner": null,
-    "units": 759.76087019,
+    "units": 600,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": {
+     "AU": 1940630400000
+    },
+    "acquisitionPriceLevel": 1.19405229653,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": {
+     "AU": 10177.82
+    },
+    "costBasis": 9179.31,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2026",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 10854.33,
+    "maturityDate": null,
+    "pricePerUnit": 125.26200934,
+    "purchaseDate": "2026-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 86.65300882,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": {
+     "AU": 1940630400000
+    },
+    "acquisitionPriceLevel": 1.19405229653,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": {
+     "AU": 2766.31
+    },
+    "costBasis": 2678.72,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2030",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 2950.19,
+    "maturityDate": null,
+    "pricePerUnit": 125.26200433,
+    "purchaseDate": "2030-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 23.55215387,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": 1.19405229653,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 2954.76,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2031",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 3051.38,
+    "maturityDate": null,
+    "pricePerUnit": 125.26192286,
+    "purchaseDate": "2031-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 24.35999648,
+    "zeroCoupon": false
+   },
+   {
+    "acquisitionDateByCountry": null,
+    "acquisitionPriceLevel": 1.22987386542,
+    "allocation": "EQUITY",
+    "appreciationSchedule": null,
+    "costBaseByCountry": null,
+    "costBasis": 3056.11,
+    "couponFrequency": 2,
+    "couponRate": null,
+    "dividendYield": null,
+    "duration": null,
+    "faceValue": null,
+    "id": "reinvest-auStockAccount-sec-auto-EQUITY_AU|EQUITY|none||EQUITY_AU-2032",
+    "inflationLinked": false,
+    "issuingState": null,
+    "label": "Reinvested dividends",
+    "marketValue": 3156.04,
+    "maturityDate": null,
+    "pricePerUnit": 125.26175923,
+    "purchaseDate": "2032-07-01T00:00:00.000Z",
+    "rateKey": "EQUITY_AU",
+    "rollAtMaturity": false,
+    "rollTermYears": null,
+    "securityId": "sec-auto-EQUITY_AU",
+    "taxExemption": "none",
+    "taxLossPartner": null,
+    "units": 25.19555864,
     "zeroCoupon": false
    }
   ],
@@ -503,7 +627,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 228796.277781,
+ "cumulativeTaxesPaid": 228796.275837,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -623,10 +747,10 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 10049.6006516
+  "2032": 10049.6014347
  },
  "ftcPoolPassive": {
-  "2032": 1423.47022875
+  "2032": 1423.47033967
  },
  "ftcPoolResourced": {},
  "fxAnchorRates": {
@@ -913,8 +1037,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 2191127.9,
-  "netWorth": 5733203.23,
+  "netLiquidity": 2191127.88,
+  "netWorth": 5733203.21,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -1594,7 +1718,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 454922.403879,
+  "balance": 454922.405824,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -1608,7 +1732,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 454922.403879,
+    "costBasis": 454922.405824,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -1619,7 +1743,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 454922.403879,
+    "marketValue": 454922.405824,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",

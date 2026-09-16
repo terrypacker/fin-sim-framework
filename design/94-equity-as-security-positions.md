@@ -3074,7 +3074,12 @@ research and stay open. Old tags are kept because design 93 §8.2 cites §12.7.
   contradiction once positions name securities. Not C's to resolve; C must not resolve it by
   accident either.
 - **F3** — reinvested dividends and retained coupons add no basis while accretion and cash
-  interest do. Tax question; `design/inconsistencies.md`.
+  interest do. Tax question; `design/inconsistencies.md`. **The DIVIDEND half is closed**
+  (design 106 §7.1): the US path always opened a vintage lot carrying the basis, and AU now
+  does the same rather than growing the paying lot with `costBasisDelta: 0`. F3's own
+  sentence — "if a reinvested, taxed dividend adds no basis, it is taxed again as gain at
+  disposal" — was worth A$41.6k of tax over `au-single-homeowner`'s run, and halved its AU
+  capital gains. **The retained COUPON half is still open.**
 
 ## 13. Sequencing
 

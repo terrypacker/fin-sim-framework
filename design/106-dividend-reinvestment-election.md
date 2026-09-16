@@ -549,11 +549,32 @@ default stays the sweepable lever.
   (`resolveCashKey`), not the paying account's CASH sleeve.
 
 **Q1 — should a non-reinvested dividend land in the account's own cash sleeve instead?**
-A real broker sweeps it there, and the difference is not cosmetic: design 97's liquidity
-pools and the reserve read where cash is, so routing dividends to the transaction account
-overstates household liquid cash and understates the brokerage's. Out of scope here, but it
-is the question this design sits next to, and phase 1 makes it more visible by letting one
-account pay cash while another reinvests.
+**CLOSED as mis-framed** (2026-09-16), and the measurement is the reason.
+
+A real broker sweeps the cash into the account, and the difference looked material: design
+97's liquidity pools and the reserve read where cash is, so routing every dividend to the
+transaction account overstates household liquid cash and understates the brokerage's. The
+model is also already inconsistent about it — money-market interest on a brokerage's CASH
+sleeve stays in the sleeve (`CashSleeveInterestApplyReducer`), while the dividend on the
+equity beside it leaves the account entirely.
+
+Then the surface was measured, across all fourteen goldens: **exactly one brokerage, in two
+scenarios, has a CASH sleeve at all.** Every other `us-stock`, `au-stock` and
+`fixed-income` account has none, and between them they route A\$8k–112k of dividend and
+coupon cash per run. So "land it in the account's cash sleeve" has nowhere to land: it would
+fall back to today's behaviour almost everywhere, and where it did not, the same event would
+behave differently depending on whether somebody had authored a cash lot — an inconsistency
+rather than a model.
+
+**The real question is one level up: should a brokerage hold cash at all?** Making it so is
+not a dividend change. A new CASH sleeve on every brokerage moves the allocation mix the
+rebalancer targets — the specs author `CASH: 0`, so a dividend landing there would be swept
+straight back into equity at the next rebalance (design 61) — and it moves pool
+classification and drawdown ordering (design 97). Those are the two designs that own the
+question, and answering it inside a dividend-routing change would settle it by accident.
+
+Handed on rather than answered here, with the number above so whoever picks it up starts
+from the surface rather than from the intuition.
 
 ## 7. Sequencing
 
@@ -566,6 +587,9 @@ account pay cash while another reinvests.
 | F7 | ✅ **DONE** (2026-09-16) — F7a the AU earnings stamp (and a reducer ignoring it), F7b overdraw onto the CASH sleeve | small | §4b. Another ~A$871k off `au-single-homeowner`; **waiver list now empty**. The first diagnosis was wrong and the gate is what corrected it |
 | 2a | ✅ **DONE** (2026-09-16) — the reinvestment buys the PAYING instrument (`securityId` in the bucket key + per-security slices), **not** fix (a) | small–medium | §5.1. No golden moved economically — which is the finding: none reinvested a multi-security account |
 | 2b | ✅ **DONE** (2026-09-16) — `reinvestDividendsBySecurity` + the split emit + the per-security editor rows | medium | §5.1. New golden `dividend-drip-per-security` splits one payment two ways every year; DRIP-SEC-7 pins the tax invariance |
+| F8 | ✅ **DONE** (2026-09-16) — AU reinvests into a vintage lot WITH basis, like the US path | small | §7.1. Closes design 94 F3's AU half: AU capital gains halved on `au-single-homeowner`, ~A$41.6k less tax over the run |
+| F7 fallback | ✅ **DONE** (2026-09-16) — an EMPTY holdings array earns nothing; an ABSENT one keeps the scalar model | small | §7.1. Nothing moved — preventive, with the §4.4 gate as the backstop |
+| Q1 | ✅ **CLOSED as mis-framed** (2026-09-16) | — | §6. One brokerage in fourteen goldens has a CASH sleeve; the question belongs to designs 97 and 61 |
 
 **Design 106 is complete.** Phases 1 and 1b are the election; 2a is the fix the model wanted
 whether or not 2b ever happened; 2b is the per-security half the ask started from. F6, F7
@@ -573,16 +597,50 @@ and the §4.4 gate were not in the original plan — each was found by the step 
 the gate is the one worth keeping in mind: it is now the only thing in the suite asserting a
 RELATIONSHIP between fixture values rather than the values themselves.
 
-What is left, recorded rather than scheduled:
+### 7.1 The three items 2b left, closed  ✅ (2026-09-16)
 
-- **The AU lot mechanics.** AU reinvests by `addValue` into the paying lot, which design 93
-  §5.0a says a purchase should not do, and with `costBasisDelta: 0` (design 94 F3). The US
-  side opens a vintage lot with basis. Two paths, two answers; the AU one is wrong on both
-  counts and was deliberately left alone by 2a.
-- **Q1 (§6)** — a cash dividend lands in the country's transaction account rather than the
-  paying account's CASH sleeve, which design 97's pools read.
-- **The `!holdings.length` earnings fallback** (§4b F7), now guarded by the gate rather than
-  load-bearing.
+**F8 — the AU lot mechanics, fixed.** AU reinvested a dividend by `addValue` into the lot
+that paid it, with `costBasisDelta: 0`. Both halves were wrong, and design 94 had already
+written down why: §5.0a says a purchase is a NEW lot (the paying lot was bought on a
+different day, and FIFO, HIFO and the Division 115 12-month gate all read that date), and
+F3's own sentence is *"if a reinvested, taxed dividend adds no basis, it is taxed again as
+gain at disposal."* The AU brokerage was being taxed twice on every reinvested dividend.
+
+The four AU dividend-apply reducers now reinvest through the same `reinvestDividend` helper
+the US path uses — a vintage lot per security per year, carrying the basis the dividend was
+taxed on — and the handler hands them `_bySecurity` instead of emitting `holdingActions`.
+**This closes the AU half of design 94 F3.** Two of the four (the UNFRANKED pair, reachable
+only from authored one-off events) were also crediting `balance` while touching no lots at
+all, which is a §4.4 break waiting for the first scenario to author one; they are fixed by
+the same change.
+
+What it moved: cents on most goldens (rounding, `addValue` unrounded vs
+`distributeHoldingsCredit` rounded per bucket) and one real result on `au-single-homeowner`
+— **AU capital gains halved** (`auPersonCapitalGainsYTD` 8,341.98 → 4,024.31) and
+**cumulative tax fell about A\$41.6k**, with the inherited brokerage ending A\$79k higher
+because that tax was never owed. That is the double-taxation coming out.
+
+**F7's fallback, closed.** `computeHoldingsGrowth` / `computeHoldingsDividends` now
+distinguish an **empty** holdings array from an **absent** one: the first is an account
+drawn down to nothing, which earns nothing; the second is the pre-substrate scalar shape,
+where `balance × rate` is the whole model and every scalar-account unit test lives. Nothing
+moved — after F6 and F7a there is no lot-less account with a balance left to feed on — so
+this is preventive, and the §4.4 gate is the backstop if a future change reintroduces one.
+
+**Q1, closed as mis-framed** — §6. Measuring the surface before changing it showed that
+only one brokerage in the whole fixture set has a CASH sleeve to receive a dividend, so the
+question is not where the cash goes but whether a brokerage holds cash at all. That belongs
+to design 97 (pools) and design 61 (rebalance targets), and is handed on with the number.
+
+**Design 106 is closed.** What it set out to do — choose reinvestment per security per
+account — is done in both countries. What it found on the way was worth more than the
+feature: four missing attribution stamps (F6), a phantom balance that had been compounding
+and being spent for a decade (F7), a permanent §4.4 break in the cash primitive (F7b), a
+double-taxed AU reinvestment (F8, closing design 94 F3's AU half), and a gate that now
+asserts a RELATIONSHIP between fixture values rather than the values themselves — the
+absence of which is what let all of them sit.
+
+
 
 ## 8. References
 

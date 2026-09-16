@@ -121,12 +121,24 @@ describe('the wash-sale-harvest golden reaches §1091 end to end (§8.1o)', () =
   });
 
   test('an entry whose return is not yet filed is still PENDING at simEnd', () => {
-    // The carry, in the fixture: the last harvest's loss belongs to a return that the run
+    // The carry, in the fixture: the last harvest's losses belong to a return that the run
     // ends before April of. Pinning it is what stops `remaining` being quietly dropped.
+    //
+    // Asserted as a RULE rather than as a count. It was `length === 1` until design 106 §5
+    // gave the AU brokerage reinvestment vintage lots, which gave the harvester a second
+    // (tiny, AU-sourced) position to work with in the same window — so the run legitimately
+    // ends with two. What must hold is that every survivor belongs to the year whose return
+    // is still unfiled: an entry from an EARLIER year would be the leak the sibling test
+    // above guards, and a count cannot tell those two cases apart.
     const pending = run.state.washPendingLosses ?? [];
-    assert.equal(pending.length, 1);
-    assert.ok(pending[0].group && pending[0].units > 0 && pending[0].ms > 0,
-      'a pending entry must name its identity group, its units and its sale date');
+    assert.ok(pending.length >= 1, 'the final year harvested, so something must be pending');
+    const unfiledYear = new Date(run.state.usPendingReturn.currentPeriods.US.startMs).getUTCFullYear();
+    for (const p of pending) {
+      assert.ok(p.group && p.units > 0 && p.ms > 0,
+        'a pending entry must name its identity group, its units and its sale date');
+      assert.equal(new Date(p.ms).getUTCFullYear(), unfiledYear,
+        'a pending entry older than the unfiled return is one a filing failed to retire');
+    }
   });
 
   test('the audit ledger records the disallowance against the year it was FILED', () => {

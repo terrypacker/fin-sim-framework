@@ -15,6 +15,7 @@ import { consumeHoldings } from '../../holdings/holdings-fifo.js';
 import { disposalTermFields, auCpiRate } from '../../holdings/holding-period.js';
 import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { resolveCashKey } from '../cash-routing.js';
+import { reinvestDividend, lotVintage } from '../../holdings/holding-utils.js';
 import { section988ForBondPrincipal } from '../bond-currency-basis.js';
 import { toMs } from '../main-residence.js';
 
@@ -56,6 +57,18 @@ export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer
         [key]: {
           ...sa,
           balance: sa.balance + action.amount,
+          // Design 106 §5 — the reinvestment is a PURCHASE: it opens this year's vintage
+          // lot in the security that paid, carrying the basis the dividend was taxed on.
+          // The AU path used to grow the PAYING lot instead, through `holdingActions` the
+          // handler emitted, with `costBasisDelta: 0`. Both halves of that were wrong:
+          // design 93 §5.0a says a purchase is a new lot (the paying lot was bought on a
+          // different day, and FIFO, HIFO and the Division 115 12-month gate all read that
+          // date), and a taxed dividend that adds no basis is taxed AGAIN as gain at
+          // disposal — design 94 F3. The US path has done it this way since design 93.
+          holdings: reinvestDividend(sa.holdings, action.amount, {
+            slices: action._bySecurity, stateKey: key, ...lotVintage(state, sa),
+            label: 'Reinvested dividends',
+          }),
         },
       },
       [{ type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX', amount: action.amount, stateKey: key }]
@@ -99,6 +112,18 @@ export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceRedu
         [key]: {
           ...sa,
           balance: sa.balance + action.amount,
+          // Design 106 §5 — the reinvestment is a PURCHASE: it opens this year's vintage
+          // lot in the security that paid, carrying the basis the dividend was taxed on.
+          // The AU path used to grow the PAYING lot instead, through `holdingActions` the
+          // handler emitted, with `costBasisDelta: 0`. Both halves of that were wrong:
+          // design 93 §5.0a says a purchase is a new lot (the paying lot was bought on a
+          // different day, and FIFO, HIFO and the Division 115 12-month gate all read that
+          // date), and a taxed dividend that adds no basis is taxed AGAIN as gain at
+          // disposal — design 94 F3. The US path has done it this way since design 93.
+          holdings: reinvestDividend(sa.holdings, action.amount, {
+            slices: action._bySecurity, stateKey: key, ...lotVintage(state, sa),
+            label: 'Reinvested dividends',
+          }),
         },
       },
       [{ type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_TAX', amount: action.amount, stateKey: key }]
@@ -213,6 +238,18 @@ export class AuDividendUnfrankedResidentApplyReducer extends AccountServiceReduc
         [key]: {
           ...sa,
           balance: sa.balance + action.amount,
+          // Design 106 §5 — the reinvestment is a PURCHASE: it opens this year's vintage
+          // lot in the security that paid, carrying the basis the dividend was taxed on.
+          // The AU path used to grow the PAYING lot instead, through `holdingActions` the
+          // handler emitted, with `costBasisDelta: 0`. Both halves of that were wrong:
+          // design 93 §5.0a says a purchase is a new lot (the paying lot was bought on a
+          // different day, and FIFO, HIFO and the Division 115 12-month gate all read that
+          // date), and a taxed dividend that adds no basis is taxed AGAIN as gain at
+          // disposal — design 94 F3. The US path has done it this way since design 93.
+          holdings: reinvestDividend(sa.holdings, action.amount, {
+            slices: action._bySecurity, stateKey: key, ...lotVintage(state, sa),
+            label: 'Reinvested dividends',
+          }),
         },
       },
       [{ type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', amount: action.amount, stateKey: key }]
@@ -247,6 +284,18 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceRe
         [key]: {
           ...sa,
           balance: sa.balance + action.amount,
+          // Design 106 §5 — the reinvestment is a PURCHASE: it opens this year's vintage
+          // lot in the security that paid, carrying the basis the dividend was taxed on.
+          // The AU path used to grow the PAYING lot instead, through `holdingActions` the
+          // handler emitted, with `costBasisDelta: 0`. Both halves of that were wrong:
+          // design 93 §5.0a says a purchase is a new lot (the paying lot was bought on a
+          // different day, and FIFO, HIFO and the Division 115 12-month gate all read that
+          // date), and a taxed dividend that adds no basis is taxed AGAIN as gain at
+          // disposal — design 94 F3. The US path has done it this way since design 93.
+          holdings: reinvestDividend(sa.holdings, action.amount, {
+            slices: action._bySecurity, stateKey: key, ...lotVintage(state, sa),
+            label: 'Reinvested dividends',
+          }),
         },
       },
       [{ type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', amount: action.amount, stateKey: key }]

@@ -149,18 +149,37 @@ function runWalk(spec) {
  * while equity was scalar — on a scalar lot a PRICE move and a UNITS move are the same
  * operation, which is exactly why step 2a moved no golden. Step 3 unitises equity, so the
  * two are now distinguishable and this is the assertion that distinguishes them.
+ *
+ * Counted across the ACCOUNT's lots rather than on the one it was promoted with, since
+ * design 106 §5: a reinvested dividend is a purchase, so it opens that year's vintage lot
+ * instead of growing the lot that paid (design 93 §5.0a — the paying lot was bought on a
+ * different day, and FIFO, HIFO and the Division 115 gate all read that date). The defect
+ * this guards is unchanged and so is the assertion's force: if the money is repriced into
+ * existing units again, the account's TOTAL unit count stays flat and this fails. Before
+ * §5 the AU path grew the paying lot, which is the only reason this could ever read one.
  */
 describe('a reinvested dividend buys UNITS — design 94 §9.5b, closed', () => {
   const result = runWalk(specByName('cross-border-reference'));
 
-  test('the AU stock lot ends the run holding more units than it was promoted with', () => {
-    const lot = [...result.lots.entries()].find(([k]) => k.startsWith('auStockAccount.'))?.[1];
-    assert.ok(lot, 'the golden must still hold an AU stock position');
+  test('the AU stock position ends the run holding more units than it was promoted with', () => {
+    const lots = [...result.lots.entries()].filter(([k]) => k.startsWith('auStockAccount.'));
+    assert.ok(lots.length, 'the golden must still hold an AU stock position');
+    const units = lots.reduce((t, [, h]) => t + (h.units ?? 0), 0);
     // $60,000 at the PAR_PER_UNIT convention (§9.2) is where it starts.
-    assert.ok(lot.units > 600,
-      `the unit count is still ${lot.units} — a reinvested dividend is being routed through `
+    assert.ok(units > 600,
+      `the unit count is still ${units} — a reinvested dividend is being routed through `
       + 'reprice() again, which conserves the money and so fails no other test in the repo');
     assert.ok(result.total > 0);
+  });
+
+  test('…and it did so by opening vintage lots, not by growing the one that paid', () => {
+    // The other half of design 106 §5: a purchase gets its own acquisition date and its
+    // own basis. One lot would mean the money was blended into an older one.
+    const lots = [...result.lots.entries()].filter(([k]) => k.startsWith('auStockAccount.'));
+    assert.ok(lots.length > 1,
+      'the reinvested AU dividends should have opened at least one vintage lot');
+    assert.ok(lots.some(([k]) => k.includes('reinvest-')),
+      'and those lots should be the reinvestment vintages');
   });
 });
 

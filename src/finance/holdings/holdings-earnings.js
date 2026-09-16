@@ -203,8 +203,22 @@ export function computeHoldingsGrowth({
     return rate;
   };
 
+  // An account whose `holdings` array EXISTS but is EMPTY has been drawn down to nothing,
+  // and it earns nothing: there is no asset to earn on (design 106 §4b, F7). That is a
+  // different state from an account with NO holdings array at all — the pre-substrate
+  // scalar shape, which unit tests and any caller predating design 25 §5.4 still use, and
+  // for which "balance × rate" is the whole model.
+  //
+  // Conflating them is what let a phantom balance compound: a lot-less brokerage kept
+  // earning a return on a number with nothing behind it, and the apply reducer credited
+  // that return back to the same number. The phantom's SOURCE was two missing stateKey
+  // stamps (F6, F7a), and this is what fed on it — so the guard is here rather than left
+  // to the §4.4 gate alone, which can only see the damage after the fact.
+  if (Array.isArray(account?.holdings) && account.holdings.length === 0) {
+    return { amount: 0, derivedAmount: 0, holdingActions: [] };
+  }
   if (!holdings.length) {
-    // No holdings (defensive): fall back to the scalar-balance code path.
+    // No holdings ARRAY: the scalar-balance code path.
     const balance = account?.balance ?? 0;
     const y0      = isGrowthPath ? (state?.marketDividendYields?.[fallbackRateKey] ?? dividendYield ?? 0) : 0;
     const total0  = requireRate(fbRate, fallbackRateKey);
@@ -367,6 +381,11 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
 
   const effYield = (yld, rk) => Math.max(0, yld * (1 + (adjMap[rk] ?? 0)));
 
+  // Drawn down to nothing pays no dividend — see computeHoldingsGrowth for why an EMPTY
+  // holdings array and an ABSENT one are not the same state (design 106 §4b, F7).
+  if (Array.isArray(account?.holdings) && account.holdings.length === 0) {
+    return { amount: 0, holdingActions: [], bySecurity: [] };
+  }
   if (!holdings.length) {
     const balance = account?.balance ?? 0;
     const y0      = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;

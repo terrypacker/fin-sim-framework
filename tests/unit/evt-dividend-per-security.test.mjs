@@ -137,6 +137,42 @@ test('DRIP-SEC-5: an action with no slices falls back to the whole-account distr
   assert.equal(+(after).toFixed(2), 25_850, 'the money still lands, pro rata as before');
 });
 
+// ── An emptied account earns nothing (design 106 §4b, F7) ───────────────────
+
+import { computeHoldingsGrowth } from '../../src/finance/holdings/holdings-earnings.js';
+
+test('DRIP-SEC-10: a brokerage drawn to ZERO lots earns and pays nothing', () => {
+  // The phantom F7 fed on. `holdings: []` means the assets are gone; a return on the
+  // balance that is left is a return on nothing, and the apply reducer credits it back to
+  // that same balance, so it compounds.
+  const state = {
+    acct: { balance: 31_797.61, holdings: [] },
+    effectiveGrowthRates: { EQUITY_US: 0.07 },
+    marketDividendYields: { EQUITY_US: 0.02 },
+  };
+  assert.equal(computeHoldingsGrowth({
+    state, stateKey: 'acct', fallbackRate: 0.07, fallbackRateKey: 'EQUITY_US',
+  }).amount, 0);
+  assert.equal(computeHoldingsDividends({
+    state, stateKey: 'acct', fallbackYield: 0.02, fallbackRateKey: 'EQUITY_US',
+  }).amount, 0);
+});
+
+test('DRIP-SEC-11: an account with NO holdings array keeps the scalar-balance model', () => {
+  // A different state, and the distinction the guard turns on: the pre-substrate shape,
+  // which every scalar-account unit test and any pre-design-25 caller still uses.
+  const state = {
+    acct: { balance: 100_000 },
+    effectiveGrowthRates: { EQUITY_US: 0.07 },
+  };
+  assert.equal(computeHoldingsGrowth({
+    state, stateKey: 'acct', fallbackRate: 0.07, fallbackRateKey: 'EQUITY_US',
+  }).amount, 7_000);
+  assert.equal(computeHoldingsDividends({
+    state, stateKey: 'acct', fallbackYield: 0.02, fallbackRateKey: 'EQUITY_US',
+  }).amount, 2_000);
+});
+
 // ── The election, end to end (step 2b) ──────────────────────────────────────
 
 import { loadScenarioSim } from '../helpers/scenario-harness.js';

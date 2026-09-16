@@ -906,6 +906,31 @@ export function distributeHoldingsCredit(holdings, amount, {
 }
 
 /**
+ * Reinvest a dividend into an account's holdings, per SECURITY where the payment says
+ * which securities paid it (design 106 §5).
+ *
+ * The shared body of every dividend-apply reducer, US and AU. Each slice opens (or grows)
+ * that security's vintage lot for the year through {@link distributeHoldingsCredit}, so
+ * the money buys more of the instrument that paid it, carries the basis it was taxed on,
+ * and gets its own acquisition date. A payment with no breakdown — a replayed action, an
+ * authored one-off event, an account whose lots are gone — falls back to the
+ * whole-account distribution, which is what every caller did before 2a.
+ *
+ * @param {Array} holdings
+ * @param {number} amount   - the full reinvested amount (used only for the fallback)
+ * @param {object} opts     - `{ slices, ...vintage }`, vintage as distributeHoldingsCredit takes it
+ * @returns {Array} new holdings array
+ */
+export function reinvestDividend(holdings, amount, { slices = null, ...vintage } = {}) {
+  if (Array.isArray(slices) && slices.length) {
+    return slices.reduce((hs, { securityId, amount: share }) => distributeHoldingsCredit(hs, share, {
+      ...vintage, only: h => (h?.securityId ?? null) === (securityId ?? null),
+    }), holdings);
+  }
+  return distributeHoldingsCredit(holdings, amount, vintage);
+}
+
+/**
  * True when an account's holdings sum is out of sync with its balance beyond a
  * one-cent tolerance (the condition the on-load auto-heal repairs).
  *
