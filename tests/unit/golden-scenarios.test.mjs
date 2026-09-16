@@ -30,8 +30,11 @@ import { test }   from 'node:test';
 import assert     from 'node:assert/strict';
 
 import { GOLDEN_SPECS }  from '../helpers/golden-specs.js';
-import { getGoldenRun, diffAgainstFixture, writeFixture, readFixture, findNonFinite, REGOLD }
+import { getGoldenRun, diffAgainstFixture, writeFixture, readFixture, findNonFinite,
+         findOutOfSync, REGOLD }
   from '../helpers/golden-harness.js';
+import { isWaivedDesync, allWaivedDesyncs, KNOWN_DESYNCS }
+  from '../helpers/golden-invariant-waivers.js';
 
 for (const spec of GOLDEN_SPECS) {
   // Runs even under REGOLD: a NaN must never be baked into a fixture, where JSON
@@ -41,6 +44,46 @@ for (const spec of GOLDEN_SPECS) {
     assert.deepEqual(bad, [], `non-finite value(s) in final state:\n  ${bad.join('\n  ')}`);
   });
 }
+
+for (const spec of GOLDEN_SPECS) {
+  // Also runs under REGOLD, and for the same reason as the NaN check above: a fixture
+  // records values, so a balance that has parted company with the assets behind it is
+  // baked in as just another number and re-golds forever. The fixtures pin VALUES;
+  // this is the only thing pinning a RELATIONSHIP between them (design 25 §4.4).
+  test(`golden '${spec.name}': every account's balance equals Σ its holdings (§4.4)`, () => {
+    const found   = findOutOfSync(getGoldenRun(spec).state);
+    const unwaived = found.filter(f => !isWaivedDesync(spec.name, f.stateKey));
+    assert.deepEqual(unwaived.map(f => f.line), [],
+      `balance has come adrift from holdings:\n  ${unwaived.map(f => f.line).join('\n  ')}\n\n`
+      + 'Either the reducer that moved the money forgot to move the lots (or vice versa),\n'
+      + 'or this is a known defect — in which case add it to tests/helpers/\n'
+      + 'golden-invariant-waivers.js with what it is worth and what owns it.');
+  });
+}
+
+test('§4.4 waivers: every waived account is still out of sync', () => {
+  // The other half of the gate. A waiver is a defect somebody wrote down, so a fix that
+  // lands without deleting its line leaves the list quietly claiming a bug that is gone —
+  // and the next real one hides behind it.
+  const stale = [];
+  for (const { golden, stateKey } of allWaivedDesyncs()) {
+    const spec = GOLDEN_SPECS.find(s => s.name === golden);
+    if (!spec) { stale.push(`${golden}:${stateKey} — no such golden`); continue; }
+    if (!findOutOfSync(getGoldenRun(spec).state).some(f => f.stateKey === stateKey)) {
+      stale.push(`${golden}:${stateKey} — now in sync; delete the waiver`);
+    }
+  }
+  assert.deepEqual(stale, [], `stale §4.4 waiver(s):\n  ${stale.join('\n  ')}`);
+});
+
+test('§4.4 waivers: each one says what it is worth and what owns it', () => {
+  for (const [golden, accounts] of Object.entries(KNOWN_DESYNCS)) {
+    for (const [stateKey, note] of Object.entries(accounts)) {
+      assert.ok(note?.length > 40,
+        `waiver ${golden}:${stateKey} needs a note naming the defect and its size`);
+    }
+  }
+});
 
 for (const spec of GOLDEN_SPECS) {
   test(`golden '${spec.name}': end state matches fixture`, () => {

@@ -255,8 +255,8 @@
   "spouse": 0
  },
  "auPersonOrdinaryIncomeYTD": {
-  "primary": 95033.8001118,
-  "spouse": 48171.4616809
+  "primary": 93359.3118618,
+  "spouse": 49845.9499309
  },
  "auPersonRealCapitalGainsYTD": {
   "primary": 0,
@@ -275,8 +275,8 @@
   "spouse": 0
  },
  "auPersonUsSourceOrdinaryAudYTD": {
-  "primary": 93092.7601118,
-  "spouse": 48165.2116809
+  "primary": 91418.2718618,
+  "spouse": 49839.6999309
  },
  "auPersonUsSourceRealCapGainsAudYTD": {
   "primary": 0,
@@ -611,7 +611,7 @@
  "cumulativeConsumptionUtility": 165.82651609,
  "cumulativeConsumptionUtilityCount": 84,
  "cumulativeDeficit": 0,
- "cumulativeTaxesPaid": 241178.412827,
+ "cumulativeTaxesPaid": 241119.678277,
  "currentPeriods": {
   "AU": {
    "endMs": 2003788800000,
@@ -734,7 +734,7 @@
  "ftcCurrentPassive": 0,
  "ftcCurrentResourced": 0,
  "ftcPoolGeneral": {
-  "2032": 14776.769938
+  "2032": 14718.035388
  },
  "ftcPoolPassive": {},
  "ftcPoolResourced": {},
@@ -1139,8 +1139,8 @@
  },
  "marketIndexAsOfMs": 1988064000000,
  "metrics": {
-  "netLiquidity": 2908849,
-  "netWorth": 6418337.94,
+  "netLiquidity": 2908907.73,
+  "netWorth": 6418396.68,
   "offsetAppliedCapacity": 0,
   "offsetIdleCapacity": 0
  },
@@ -2350,7 +2350,7 @@
   "foreignGeneralIncomeYTD": 0,
   "foreignPassiveCapGainsYTD": -50200.24,
   "foreignPassiveIncomeYTD": -49297.5174194,
-  "ftcCurrentForeignTax": 31636.8994266,
+  "ftcCurrentForeignTax": 31578.1648766,
   "ftcCurrentGeneral": 0,
   "ftcCurrentPassive": 0,
   "ftcCurrentResourced": 0,
@@ -2388,7 +2388,7 @@
  "usPersonHousehold": true,
  "usSavingsAccount": {
   "allowsEarlyWithdrawal": false,
-  "balance": 459563.833539,
+  "balance": 459622.568089,
   "country": "US",
   "currency": {
    "code": "USD",
@@ -2402,7 +2402,7 @@
     "allocation": "CASH",
     "appreciationSchedule": null,
     "costBaseByCountry": null,
-    "costBasis": 459563.833539,
+    "costBasis": 459622.568089,
     "couponFrequency": 2,
     "couponRate": null,
     "dividendYield": null,
@@ -2413,7 +2413,7 @@
     "inflationLinked": false,
     "issuingState": null,
     "label": "",
-    "marketValue": 459563.833539,
+    "marketValue": 459622.568089,
     "maturityDate": null,
     "purchaseDate": null,
     "rateKey": "SAVINGS_US",

@@ -224,6 +224,68 @@ export function findNonFinite(state) {
   return bad;
 }
 
+/**
+ * The rounding slack allowed on one account's §4.4 check.
+ *
+ * Every lot's `marketValue` is rounded to the cent as it is written, so a sum over N lots
+ * can sit up to half a cent per lot away from a balance rounded once. Half a cent per lot
+ * plus a cent for the account total is that bound rather than a round number picked to make
+ * the suite pass: measured across the goldens, the largest legitimate drift is 2c on a
+ * 13-lot super account, and this admits 7.5c there.
+ *
+ * Deliberately much tighter than `holdings-invariant.test.mjs`'s flat ±$1.00. A dollar is
+ * a reasonable tolerance for the few-year run that test does; over a forty-year golden it
+ * is a place for real money to hide.
+ */
+export const syncTolerance = (lotCount) => 0.01 + 0.005 * lotCount;
+
+/**
+ * Every account in a state tree whose `balance` has come adrift from its holdings —
+ * design 25 §4.4:
+ *
+ *     for every account a:  a.balance === Σ a.holdings[i].marketValue
+ *
+ * Worth a dedicated check for the same reason `findNonFinite` is: the fixtures pin
+ * VALUES, and nothing pinned the RELATIONSHIPS between them, so a balance that had
+ * parted company with the assets behind it round-tripped through every re-gold as just
+ * another number. Turning this on for the first time (design 106 §4b) found two — one of
+ * them an account carrying A$67,428 with no holdings at all, which the drawdown had been
+ * spending for a decade.
+ *
+ * Two deliberate scoping decisions:
+ *
+ *  - **An EMPTY holdings array is checked, not skipped.** `holdingsOutOfSync` in
+ *    `holding-utils.js` returns false for one, and that is right where it is used (the
+ *    load path, deciding whether to rescale lots to a balance — there is nothing to
+ *    rescale). But "balance with no assets behind it" is precisely the shape F7 takes,
+ *    so skipping it here would skip the thing this check exists to find.
+ *  - **Liabilities are skipped.** A loan's `balance` is debt owed and it holds nothing
+ *    (design 54 §8), so `Σ holdings = 0` is correct there rather than a violation.
+ *
+ * Checks the END state only, which is what the harness keeps. A desync that opens and
+ * heals inside a run is invisible here; `holdings-invariant.test.mjs` is the per-tick
+ * check, on one scenario over a few years.
+ *
+ * @returns {{stateKey: string, balance: number, sum: number, delta: number, lots: number, line: string}[]}
+ */
+export function findOutOfSync(state) {
+  const out = [];
+  for (const [stateKey, v] of Object.entries(state ?? {})) {
+    if (!v || typeof v !== 'object') continue;
+    if (typeof v.balance !== 'number' || !Array.isArray(v.holdings)) continue;
+    if (v.type === 'loan') continue;
+    const sum   = v.holdings.reduce((t, h) => t + (h?.marketValue ?? 0), 0);
+    const delta = v.balance - sum;
+    if (Math.abs(delta) <= syncTolerance(v.holdings.length)) continue;
+    out.push({
+      stateKey, balance: v.balance, sum, delta, lots: v.holdings.length,
+      line: `${stateKey}: balance ${v.balance.toFixed(2)} vs Σ holdings ${sum.toFixed(2)} `
+          + `(${delta > 0 ? '+' : ''}${delta.toFixed(2)}, ${v.holdings.length} lot(s))`,
+    });
+  }
+  return out;
+}
+
 export const fixturePath = name => join(FIXTURE_DIR, `golden-${name}.json`);
 
 export function readFixture(name) {

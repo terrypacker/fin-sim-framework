@@ -136,6 +136,59 @@ test('transaction: multi-holding over-draw floors every sleeve at zero', () => {
   assert.strictEqual(account.holdings[1].costBasis, 0);
 });
 
+// ── Overdraw and the §4.4 invariant (design 106 §4b, F7b) ───────────────────
+//
+// `balance` takes the whole debit; the sleeves are capped at what they hold. Before F7b
+// the shortfall was simply dropped, and — because the CREDIT branch restores both sides
+// by the same figure — the gap then survived every later deposit. One −$3,000 debit
+// against an empty transaction account in 2036 left `us-single-homeowner`'s balance
+// $3,000 below its own CASH sleeve for the remaining thirty years.
+
+test('F7b: an overdraw against an EMPTY cash account keeps balance and sleeve together', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 0, holdings: [{ id: 'c', allocation: 'CASH', marketValue: 0, costBasis: 0 }] };
+  svc.transaction(account, -3_000, new Date());
+  assert.strictEqual(account.balance, -3_000);
+  assert.strictEqual(account.holdings[0].marketValue, -3_000,
+    'cash is the one sleeve that can honestly be negative — this is an overdraft');
+});
+
+test('F7b: and it HEALS — the next deposit brings both sides back to zero together', () => {
+  // The defect was not the negative; it was that the gap became permanent. Pinning the
+  // round trip is what stops that regressing.
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 0, holdings: [{ id: 'c', allocation: 'CASH', marketValue: 0, costBasis: 0 }] };
+  svc.transaction(account, -3_000, new Date());
+  svc.transaction(account, +3_000, new Date());
+  assert.strictEqual(account.balance, 0);
+  assert.strictEqual(account.holdings[0].marketValue, 0, 'not still holding a phantom 3,000');
+});
+
+test('F7b: a PARTIAL overdraw puts only the shortfall on the cash sleeve', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 1_000, holdings: [
+    { id: 'c', allocation: 'CASH',   marketValue: 400, costBasis: 400 },
+    { id: 'e', allocation: 'EQUITY', marketValue: 600, costBasis: 600 },
+  ] };
+  svc.transaction(account, -1_500, new Date());
+  const sum = account.holdings.reduce((t, h) => t + h.marketValue, 0);
+  assert.strictEqual(account.balance, -500);
+  assert.strictEqual(+sum.toFixed(2), -500, '§4.4 holds through the overdraw');
+  assert.strictEqual(account.holdings[1].marketValue, 0, 'the equity sleeve floors at zero');
+  assert.strictEqual(account.holdings[0].marketValue, -500, 'the cash sleeve carries the overdraft');
+});
+
+test('F7b: with NO cash sleeve the floors stand and the desync stays visible', () => {
+  // Owning −$3,000 of a stock is a worse lie than a balance that disagrees with its
+  // sleeves. An investment account is drawn through consumeHoldings, not this primitive;
+  // if one ever overdraws here, the golden §4.4 gate is where it should surface.
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 5_000, holdings: [{ id: 'e', allocation: 'EQUITY', marketValue: 5_000, costBasis: 5_000 }] };
+  svc.transaction(account, -8_000, new Date());
+  assert.strictEqual(account.holdings[0].marketValue, 0);
+  assert.strictEqual(account.balance, -3_000);
+});
+
 // Regression: a mid-year withdrawal from a multi-holding account must survive the
 // year-end earnings re-sync. Before the pro-rata fix, transaction() left holdings
 // untouched for multi-holding accounts, so HoldingTransactReducer._syncBalance

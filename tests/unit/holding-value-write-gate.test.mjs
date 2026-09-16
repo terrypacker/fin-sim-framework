@@ -104,7 +104,7 @@ function valueWriteSites() {
  * NUMBER so that converting one to a primitive (good) or adding a new raw write (needs a
  * decision) both show up here rather than passing quietly.
  */
-const EXPECTED_ANNOTATED = 26;
+const EXPECTED_ANNOTATED = 27;
 // 23 → 21 at design 93 §5b. Four of §4's annotated exceptions were the SAME statement
 // written four times — "there are no units to scale, so the money becomes the position" —
 // and they collapsed into the `establish()` primitive. `absorbIntoRungs`' hand-written
@@ -132,6 +132,10 @@ const EXPECTED_ANNOTATED = 26;
 // the object escapes. Converting them to a primitive is not available — `reprice` and
 // `resize` each move one of the two things a corporate action moves, and a spin-off moves
 // both at once — which is what an annotated exception is for.
+// 26 → 27 at design 106 §4b (F7b). `AccountService._absorbOverdraw` carries an overdrawn
+// amount onto a CASH sleeve, which means writing a NEGATIVE `marketValue` — the one thing
+// every primitive floors at zero, and the whole reason this site cannot use one. Nothing
+// there can desync: the branch is gated on `allocation === 'CASH'` and par is a bond field.
 
 describe('holding value-write gate (design 93 §4)', () => {
   test('no unannotated `{ ...holding, marketValue }` outside the primitives', () => {

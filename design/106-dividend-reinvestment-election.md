@@ -255,38 +255,169 @@ and asserts the assessed amount is equal to the cent. (Over a longer run the rei
 compounds a bigger book and so pays a bigger dividend the next year — the economics working,
 not the tax differing, which is why the assertion is on year one.)
 
-**The one thing the cash branch needs that the reinvest branch does not: `stateKey`.** The
-reinvest reducers fall back to `action.stateKey ?? 'auStockAccount'`; the cash ones credit a
-*different* account and so must be told which broker paid. That key is what
-`resolveAttributionAsset` uses to attribute the income — and the franking credit — to an
-owner (design 76 Gap C). Stamping the destination would hand a spouse's dividend, and the
-offset on it, to whoever owns the transaction account.
+**The cash branch must stamp `stateKey`**, because it credits a *different* account than the
+one that paid and so cannot fall back to `action.stateKey ?? 'auStockAccount'` the way the
+reinvest reducers do. That key is what `resolveAttributionAsset` uses to attribute the
+income — and the franking credit — to an owner (design 76 Gap C). Requiring it here is what
+exposed that the reinvest branch never stamped it either: **F6**, §4b.
 
-### 4b. A design-76 Gap C bug found on the way, deliberately NOT fixed here
+### 4b. F6 — the dividend must name the account that paid it  ✅ **DONE** (2026-09-16)
 
-Stamping `stateKey` on the cash branch made it obvious that the **reinvest** branch does not
-stamp it at all. With two AU brokerage accounts, every franked dividend is therefore
-credited — and attributed — to the canonical `auStockAccount`, whichever account actually
-earned it. The second account's dividends land in the first.
+Stamping `stateKey` on the cash branch made it obvious that the **reinvest** branch did not
+stamp it at all, and the same question turned out to apply on the US side. Done as its own
+pass after phase 1b, because it re-golds twelve fixtures.
 
-This is not hypothetical: `golden-au-single-homeowner` holds an inherited AU brokerage
-beside the primary one. **Measured** by stamping the reinvest branch and re-running:
-**33 fields move, `auStockAccount.balance` by roughly half**, and the AU return moves with
-it (`auPersonOrdinaryIncomeYTD`, `auPersonFrankingCreditYTD`, `auPersonSuperTaxYTD`, the
-FTC pools and both wealth metrics).
+**The four sites.**
 
-The one-line fix is known and was reverted deliberately. A six-figure correction to a
-tax attribution deserves its own change, its own re-gold and its own reading of the new
-number — not a silent side effect of adding a cash branch. Recorded here as **F6**; the
-same question almost certainly applies to the unfranked pair and to the US
-`STOCK_DIVIDEND_CASH_APPLY`, which stamps its tax with the SAVINGS key.
+| # | site | before | after |
+|---|---|---|---|
+| F6a | `IntlAuStockDividendHandler` reinvest branch | no `stateKey` — both reducers fell back to `'auStockAccount'` | stamps the paying account, as the cash branch already did |
+| F6b | `StockDividendCashApplyReducer` | chained `STOCK_DIVIDEND_TAX` with the **savings** key it had just credited | `action.stateKey ?? key` — the payer, with the destination as the replay fallback |
+| F6c | `BondCouponCashApplyReducer` | the same, for `BOND_COUPON_TAX` | the same fix |
+| F6d | the four bare `AuDividend*Handler` dispatchers | hard-coded `auStockAccount` | honour `data.stateKey`, defaulting to the canonical key |
+
+The handler in F6a is built **per account** — it has always known which account it was
+computing for. It simply never said, and both reducers' `action.stateKey ?? 'auStockAccount'`
+fallback silently supplied the wrong answer.
+
+#### What the re-gold actually showed — two different stories
+
+**Eleven goldens moved a little, and legibly.** `auPersonOrdinaryIncomeYTD` shifts from
+`spouse` to `primary` (on `cross-border-reference`: spouse 4,200 → 34, primary 44,914 →
+49,048) with small knock-on tax and cash. That is F6b/F6c: a US brokerage dividend taken as
+cash was being attributed through the *transaction account*, which design 55 §7.4 made a
+household hub with no particular relation to the brokerage, so a solely-owned account's
+dividend was being split across the household. The totals are conserved; only the owner
+changed. This is exactly what design 76 Gap B/C exist to do.
+
+**`au-single-homeowner` moved by 33 fields and roughly A$870k of net worth, and that is not
+attribution — the model was creating money.** The §4a measurement recorded this as a
+six-figure attribution move; running it down showed something worse.
+
+Before F6a, the AU dividend path emitted two things per event: `holdingActions` that grew
+**the paying account's lots**, and an `_APPLY` whose scalar balance credit landed on
+**`auStockAccount`** whatever the payer. This golden holds an inherited AU brokerage beside
+the primary one, and it pays **A$443,521** of dividends over thirty years. Every one of them
+grew the inherited account's lots *and* credited `auStockAccount.balance`.
+
+The committed fixture records the result plainly, and nothing was asserting on it:
+
+```
+auStockAccount.balance = 67,428.18     Σ holdings = 0
+```
+
+A brokerage drawn down to no lots at all, carrying sixty-seven thousand dollars of balance —
+a §4.4 invariant violation that is **spendable**. It fed `netWorth`, `netLiquidity` and the
+drawdown cascade, which is why removing it moves so much: the household had been living
+partly on money the model invented, sparing real accounts that are now drawn instead.
+
+After F6a that account holds 31,798 with no lots, so **F6 removes about half the phantom and
+not all of it**. The remainder has a different root cause and is recorded below as F7.
+
+#### F7 — the phantom's actual root cause  ✅ **DONE** (2026-09-16)
+
+**The first diagnosis was wrong, and the §4.4 gate is what corrected it.** F7 was written
+up as the `!holdings.length` fallback in `computeHoldingsGrowth` /
+`computeHoldingsDividends` manufacturing a return on a balance no asset backs. That
+fallback is real and it is a latent hazard, but it was not producing the money. It was
+*sustaining* a phantom that two missing stamps had already created.
+
+**F7a — the AU earnings path had the same hole as the dividend path, and a wider one.**
+`IntlAuStockEarningsHandler` emitted `AU_STOCK_EARNINGS_APPLY` with no `stateKey`, and
+`AuStockEarningsApplyReducer` did not merely fall back to the canonical key — it read
+`state.auStockAccount` **outright**, ignoring any stamp it was given. So on
+`au-single-homeowner` the inherited brokerage's price appreciation — **A\$424,013 across
+the run** — was added to `auStockAccount`'s scalar balance year after year while the
+inherited account's own lots grew correctly from `holdingActions`. Money in a balance with
+no asset behind it, compounding, spendable, and drawn down by the household as real cash.
+
+The US sibling has stamped its key since design 76 and its reducer honours it; the AU one
+was the outlier on both halves. Fixed to match, and the trace that found it is the same
+month-by-month walk §4b used: a lone `AU_STOCK_EARNINGS_APPLY(5,073.24)` with no account on
+it, landing on a balance that then ran A\$5,073.24 clear of its lots.
+
+**F7b — an overdraw in `AccountService.transaction` broke §4.4 permanently.** `balance`
+takes the whole debit; the sleeves are capped at what they hold (`toRemove = Math.min(-amount,
+totalMv)`), and the shortfall was dropped. Because the CREDIT branch then lands a later
+deposit on the sleeves in full, both sides recover by the same figure and **the gap
+survives forever**. On `us-single-homeowner` one −\$3,000 debit against an empty transaction
+account in 2036 left the balance \$3,000 below its own CASH sleeve for the remaining thirty
+years — money the household held and the balance could not see.
+
+The fix carries the shortfall onto a **CASH** sleeve, which may go negative: an overdrawn
+account is an overdraft, and what it owes is cash it does not have. It heals by
+construction — the sleeve goes to −X, the next deposit adds to both sides, and the two reach
+zero together. An account with **no** CASH sleeve keeps the existing floors and its desync
+stays visible to the gate, because owning −\$3,000 of a stock is a worse lie than a balance
+that disagrees with its sleeves. That also preserves the two `account-service.test.mjs`
+cases that pin the floor, which had been asserting the floor and not the invariant.
+
+**What it cost.** `au-single-homeowner` fell another **A\$871k** of net worth (5.13M → 4.26M),
+so across F6 and F7a that run shed roughly **A\$1.74M of invented wealth** over forty years.
+The corrected run is coherent rather than merely smaller: no out-of-funds date, no
+accumulated deficit, and every account reconciling to its lots. Eight fixtures moved; six of
+them by cents on a cash sleeve.
+
+**The fallback stays, and is now guarded rather than load-bearing.** With no phantom seed
+there is nothing for it to compound, and the gate below is what will notice if a future
+change reintroduces one. Whether it should be deleted outright for holdings-bearing types is
+a design-25 question, not this document's.
+
+**The waiver list is empty.** Both entries the §4.4 gate was born with were defects, and
+both were fixed rather than tolerated — which is what a waiver list is meant to drive
+toward. Guarded by `F7a` in `evt-dividend-reinvest-election.test.mjs` and `F7b`
+(overdraw, heal, partial, and the no-cash-sleeve case) in `account-service.test.mjs`.
+
+#### The §4.4 gate  ✅ **DONE** (2026-09-16)
+
+F7 was possible because the goldens pin **values** and nothing pinned the **relationships
+between** them. `findOutOfSync` (golden-harness.js) now checks
+`balance === Σ holdings.marketValue` on every account of every golden's end state, asserted
+per golden in `golden-scenarios.test.mjs` and — like the NaN check — **also under `REGOLD`**,
+because a fixture records values, so a balance adrift from its assets re-golds forever as
+just another number.
+
+Three decisions, each measured rather than chosen:
+
+- **Tolerance is per LOT, not flat.** Each `marketValue` is rounded to the cent as it is
+  written, so a sum over N lots can sit half a cent per lot from a balance rounded once:
+  `0.01 + 0.005 × lots`. Measured across the goldens, the largest legitimate drift is 2c on
+  a 13-lot super account, which this admits at 7.5c. `holdings-invariant.test.mjs` uses a
+  flat ±\$1.00 — reasonable for the few-year run it does, and over a forty-year golden a
+  place for real money to hide.
+- **An EMPTY holdings array is checked, not skipped.** `holdingsOutOfSync` in
+  `holding-utils.js` returns false for one, correctly for the load path it serves (there is
+  nothing to rescale). Reusing it here would have skipped exactly the shape F7 takes.
+- **Liabilities are skipped.** A loan's balance is debt owed and it holds nothing
+  (design 54 §8); `au-super-streams` carries A\$249,669 of mortgage that is not a violation.
+
+What it found on its first run were **two defects, both since fixed** (F7a and F7b above):
+the A\$31,798 phantom on `au-single-homeowner`, and a second one it would have taken much
+longer to notice — `us-single-homeowner`'s drained cash account, `balance 0` against a
+\$3,000 CASH sleeve. That one points the *other* way, understating rather than inventing,
+which is presumably why nothing had. Neither was visible in any fixture diff, because a
+fixture diff compares a number to the same number a year later; only a check on the
+RELATIONSHIP could see it.
+
+Waived, not skipped: a companion test asserts every waiver is **still** out of sync, so a fix
+that lands without deleting its line fails as loudly as a regression, and another asserts each
+waiver says what it is worth and what owns it. The checker has its own tests
+(`golden-sync-invariant.test.mjs`, SYNC-1…8), including the two scoping decisions above,
+because a gate that silently stops catching things is worse than no gate.
+
+#### Guarded by
+
+`F6-1` (a second AU brokerage keeps and is taxed on its own dividend) and `F6-2` (a US cash
+dividend is taxed against the brokerage, never the savings account) in
+`evt-dividend-reinvest-election.test.mjs`. `stateKey` is now declared on all six AU dividend
+APPLY types, so the journal — and every design 71 report — shows which broker paid.
 
 ### 4c. Phase 1b implementation record  ✅ (2026-09-16)
 
 | file | what |
 |---|---|
 | `au-brokerage-classes.js` | the shared cash base + the two reducers |
-| `au-brokerage-toolset.js` | registration, and `stateKey` declared on all four franked APPLY types for journal visibility |
+| `au-brokerage-toolset.js` | registration, and `stateKey` declared on all six AU dividend APPLY types for journal visibility |
 | `earnings-handlers.js` | the two-axis branch; `reinvest` resolved from state; `reinvest` serialized, defaulting TRUE on `fromJSON` so a save written before the field reloads reinvesting |
 | `au-retirement-toolset.js` | the `auDividendReinvest` household default |
 | `scenario-serializer.js` | the two new reducer classes in both registry blocks — without this a saved graph throws `Unknown reducer type` on load |
@@ -363,6 +494,9 @@ account pay cash while another reinvests.
 |---|---|---|---|
 | 1 | ✅ **DONE** (2026-09-16) — account field + serializer + builder + template + toolset + editor (US) | small | §4.1 has the record. No golden moved; the election is read from STATE, not captured at build time |
 | 1b | ✅ **DONE** (2026-09-16) — AU franked-dividend cash branch + EVT-26/27 rows | small | §4a/§4c have the record. New golden `au-dividend-cash` reaches both branches; DRIP-6c pins the tax invariance. Uncovered **F6** (§4b) |
+| F6 | ✅ **DONE** (2026-09-16) — the dividend names the account that paid it (4 sites) | small | §4b has the record. **Twelve goldens re-golded.** Eleven moved by attribution alone; `au-single-homeowner` shed ~A$870k of invented net worth. Uncovered **F7** |
+| §4.4 gate | ✅ **DONE** (2026-09-16) — `findOutOfSync` on every golden, per-lot tolerance, waivers with a staleness gate | small | §4b. Found two defects on its first run, neither visible in any fixture diff |
+| F7 | ✅ **DONE** (2026-09-16) — F7a the AU earnings stamp (and a reducer ignoring it), F7b overdraw onto the CASH sleeve | small | §4b. Another ~A$871k off `au-single-homeowner`; **waiver list now empty**. The first diagnosis was wrong and the gate is what corrected it |
 | 2a | US reinvest path emits per-holding actions (§2.1 fix (a)) | small–medium | **re-gold**; the two-security golden is the detector; Σ tax unchanged |
 | 2b | `dividendReinvestBySecurity` + the split emit + the per-security editor rows | medium | a partial election reinvests one security and pays the other in cash, in one account, in one year, with tax unchanged |
 

@@ -58,6 +58,11 @@ export class BondCouponCashApplyReducer extends Reducer {
     const { amount, federalTaxableAmount, stateTaxableAmount, residency } = action;
     const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], amount, date);
-    return this.newState(state, {}, [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency, stateKey: key }]);
+    // The PAYING account, not the cash destination — see the dividend sibling
+    // (design 106 §4b / F6). A coupon is derived by the account that holds the bond.
+    return this.newState(state, {}, [
+      { type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency,
+        stateKey: action.stateKey ?? key },
+    ]);
   }
 }

@@ -266,11 +266,16 @@ export class AuStockEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const sa = state.auStockAccount;
+    // Per-account (design 55 §7 / 76 Gap C), matching every sibling in this file and the
+    // US `StockEarningsApplyReducer`. This one alone read `state.auStockAccount` outright
+    // rather than honouring the stamped key, so a second AU brokerage's appreciation
+    // landed on the first account's balance — design 106 §4b, F7a.
+    const key = action.stateKey ?? 'auStockAccount';
+    const sa = state[key];
     // Negative in a losing year (design 84 G12) — see the US sibling: no ledger to
     // split, floor is defensive.
     return this.newState(state, {
-      auStockAccount: { ...sa, balance: Math.max(0, sa.balance + action.amount) },
+      [key]: { ...sa, balance: Math.max(0, sa.balance + action.amount) },
     });
   }
 }
@@ -382,9 +387,13 @@ export class AuDividendFrankedResidentHandler extends HandlerEntry {
   }
 
   call({ data }) {
+    // design 106 §4b / F6 — an authored one-off dividend event may name the account it
+    // was paid by; without it this dispatcher can only mean the canonical one, which is
+    // also what every pre-F6 saved event means.
+    const stateKey = data?.stateKey ?? 'auStockAccount';
     return [
-      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
+      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', amount: data.amount, stateKey },
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -400,9 +409,13 @@ export class AuDividendFrankedNonResidentHandler extends HandlerEntry {
   }
 
   call({ data }) {
+    // design 106 §4b / F6 — an authored one-off dividend event may name the account it
+    // was paid by; without it this dispatcher can only mean the canonical one, which is
+    // also what every pre-F6 saved event means.
+    const stateKey = data?.stateKey ?? 'auStockAccount';
     return [
-      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
+      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', amount: data.amount, stateKey },
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -418,9 +431,13 @@ export class AuDividendUnfrankedResidentHandler extends HandlerEntry {
   }
 
   call({ data }) {
+    // design 106 §4b / F6 — an authored one-off dividend event may name the account it
+    // was paid by; without it this dispatcher can only mean the canonical one, which is
+    // also what every pre-F6 saved event means.
+    const stateKey = data?.stateKey ?? 'auStockAccount';
     return [
-      { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
+      { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', amount: data.amount, stateKey },
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -436,9 +453,13 @@ export class AuDividendUnfrankedNonResidentHandler extends HandlerEntry {
   }
 
   call({ data }) {
+    // design 106 §4b / F6 — an authored one-off dividend event may name the account it
+    // was paid by; without it this dispatcher can only mean the canonical one, which is
+    // also what every pre-F6 saved event means.
+    const stateKey = data?.stateKey ?? 'auStockAccount';
     return [
-      { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
+      { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', amount: data.amount, stateKey },
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }

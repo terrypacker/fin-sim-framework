@@ -57,6 +57,16 @@ export class StockDividendCashApplyReducer extends Reducer {
     const { amount, residency } = action;
     const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], amount, date);
-    return this.newState(state, {}, [{ type: 'STOCK_DIVIDEND_TAX', amount, residency, stateKey: key }]);
+    // The tax names the account that PAID the dividend, not the one the cash landed in
+    // (design 106 §4b / F6). `bookAuResident` resolves this key to an owner for the AU
+    // return of a US-person AU resident (design 76 Gap B); stamping the savings key
+    // assessed one spouse's dividend against whoever owns the transaction account, and
+    // after design 55 §7.4 that account is a household hub with no particular relation
+    // to the brokerage. `action.stateKey` is the paying account — the handler has
+    // stamped it since design 76 — with the destination kept as the fallback for a
+    // replayed action dispatched without one.
+    return this.newState(state, {}, [
+      { type: 'STOCK_DIVIDEND_TAX', amount, residency, stateKey: action.stateKey ?? key },
+    ]);
   }
 }

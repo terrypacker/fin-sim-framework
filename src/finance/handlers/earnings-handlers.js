@@ -344,7 +344,13 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
     // short-circuits. See the file header.
     if (amount === 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'AU_STOCK_EARNINGS_APPLY', amount },
+      // `stateKey` names the account that EARNED it (design 106 §4b, F7a). Without it
+      // the reducer credited `state.auStockAccount` outright, so on a household with two
+      // AU brokerage accounts the second account's appreciation was added to the FIRST's
+      // scalar balance while its own lots grew correctly — money in the balance with no
+      // asset behind it, which is where F7's phantom starts. The US sibling
+      // (`STOCK_EARNINGS_APPLY`) has stamped it since design 76; this one never did.
+      { type: 'AU_STOCK_EARNINGS_APPLY', amount, stateKey },
       ...holdingActions,
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -439,21 +445,14 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       : (reinvest ? 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY' : 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY');
 
     return [
-      // `stateKey` is stamped on the CASH branch only, and the asymmetry is deliberate
-      // (design 106 §4b). The cash reducers credit a different account than the one that
-      // paid, so they cannot fall back to `action.stateKey ?? 'auStockAccount'` the way
-      // the reinvest reducers do — they have to be told which broker paid, because that
-      // is what attributes the income and the franking credit to an owner downstream
-      // (design 76 Gap C).
-      //
-      // Stamping the REINVEST branch too would be the same fix and it is a real bug:
-      // with two AU brokerage accounts every dividend is credited and attributed to the
-      // canonical `auStockAccount` regardless of which account earned it. Measured on
-      // `golden-au-single-homeowner` (which has an inherited AU brokerage beside the
-      // primary): 33 fields move, `auStockAccount.balance` by roughly half. That is a
-      // correction worth making on its own, with its own re-gold — not a side effect of
-      // adding a cash branch.
-      reinvest ? { type: actionType, amount } : { type: actionType, amount, stateKey },
+      // `stateKey` names the account that PAID (design 106 §4b / F6). This handler is
+      // constructed per account, so it has always KNOWN which one it was computing for —
+      // it just did not say. Without the stamp both reducers fall back to
+      // `action.stateKey ?? 'auStockAccount'`, so on a household with two AU brokerage
+      // accounts the second account's dividends were credited to the FIRST, and
+      // `resolveAttributionAsset` then assessed them — and the franking credit on them —
+      // against the first account's owner.
+      { type: actionType, amount, stateKey },
       ...(reinvest ? holdingActions : []),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

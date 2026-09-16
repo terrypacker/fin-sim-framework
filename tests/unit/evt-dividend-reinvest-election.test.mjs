@@ -246,6 +246,86 @@ test('DRIP-6d: the cash lands in the AU pool, and the brokerage keeps its lots',
     'and the reinvest arm keeps it in the brokerage');
 });
 
+// ── F6: the dividend names the account that PAID it ─────────────────────────
+
+test('F6-1: a second AU brokerage keeps its OWN dividend, and is taxed on it itself', () => {
+  // Before F6 the handler emitted no `stateKey`, so both reducers fell back to the
+  // canonical `auStockAccount`: the second account's dividend was credited to the
+  // FIRST, and `resolveAttributionAsset` then assessed it — and the franking credit on
+  // it — against the first account's owner. The handler is built per account and has
+  // always known which one it was computing for; it simply did not say.
+  const { sim } = loadScenarioSim({
+    simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+    mutateCfg: (cfg) => {
+      const first = (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK);
+      assert.ok(first, 'the reference plan has an au-stock account');
+      cfg.accounts.push({
+        ...structuredClone(first),
+        stateKey: 'auStockAccountTwo', id: 'au-stock-2', name: 'AU Brokerage 2',
+        holdings: (first.holdings ?? []).map((h, i) => ({ ...h, id: `two-${i}` })),
+      });
+    },
+  });
+
+  const keys = (sim.journal?.getActions?.('AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY') ?? [])
+    .map(e => e.action?.data?.stateKey);
+  assert.ok(keys.includes('auStockAccount'),    'the first account pays its own dividend');
+  assert.ok(keys.includes('auStockAccountTwo'), 'and so does the second');
+
+  // And the chained tax carries the same key, which is what reaches the AU return.
+  const taxKeys = (sim.journal?.getActions?.('AU_DIVIDEND_FRANKED_NONRESIDENT_TAX') ?? [])
+    .map(e => e.action?.data?.stateKey);
+  assert.ok(taxKeys.includes('auStockAccountTwo'),
+    'the second account is assessed on its own dividend (design 76 Gap C)');
+});
+
+test('F7a: a second AU brokerage keeps its own APPRECIATION too, not just its dividend', () => {
+  // The dividend path was F6; the EARNINGS path had the same hole and a wider one —
+  // `AuStockEarningsApplyReducer` read `state.auStockAccount` outright rather than the
+  // stamped key, so a second account's price appreciation was added to the FIRST
+  // account's scalar balance while its own lots grew correctly. That is money in a
+  // balance with no asset behind it, and it is where F7's phantom came from.
+  const { sim } = loadScenarioSim({
+    simStart: '2026-01-01', simEnd: '2028-01-01', stepTo: '2028-01-01',
+    mutateCfg: (cfg) => {
+      const first = (cfg.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.AU_STOCK);
+      cfg.accounts.push({
+        ...structuredClone(first),
+        stateKey: 'auStockAccountTwo', id: 'au-stock-2', name: 'AU Brokerage 2',
+        holdings: (first.holdings ?? []).map((h, i) => ({ ...h, id: `two-${i}` })),
+      });
+    },
+  });
+
+  const keys = (sim.journal?.getActions?.('AU_STOCK_EARNINGS_APPLY') ?? [])
+    .map(e => e.action?.data?.stateKey);
+  assert.ok(keys.includes('auStockAccountTwo'), 'the second account earns for itself');
+
+  // And the proof it lands where it is earned: both accounts reconcile to their lots.
+  for (const k of ['auStockAccount', 'auStockAccountTwo']) {
+    const a = sim.state[k];
+    const sum = (a.holdings ?? []).reduce((t, h) => t + (h?.marketValue ?? 0), 0);
+    assert.ok(Math.abs((a.balance ?? 0) - sum) < 0.05,
+      `${k}: balance ${a.balance} vs Σ holdings ${sum} — §4.4`);
+  }
+});
+
+test('F6-2: a US dividend paid in cash is taxed against the BROKERAGE, not the savings account', () => {
+  // The cash reducer credits the transaction account and used to stamp THAT key on the
+  // tax. `bookAuResident` resolves it to an owner for the AU return of a US-person AU
+  // resident, so the household hub's owner was assessed on the brokerage's dividend.
+  const { sim } = loadScenarioSim({
+    simStart: '2026-01-01', simEnd: '2027-01-01', stepTo: '2027-01-01',
+    params: { stockDividendReinvest: false },
+  });
+  const taxKeys = (sim.journal?.getActions?.('STOCK_DIVIDEND_TAX') ?? [])
+    .map(e => e.action?.data?.stateKey)
+    .filter(Boolean);
+  assert.ok(taxKeys.length > 0, 'the run pays a US dividend in cash');
+  assert.ok(taxKeys.every(k => k !== 'usSavingsAccount'),
+    `the payer, not the destination — got ${[...new Set(taxKeys)].join(', ')}`);
+});
+
 // ── DRIP-4: serialization is deviation-only ─────────────────────────────────
 
 test('DRIP-4: the election round-trips, and an unelected account writes no key', () => {

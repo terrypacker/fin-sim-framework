@@ -458,6 +458,56 @@ export class AccountService extends AssetService {
    * @param {number}  amount
    * @param {Date}    date
    */
+  /**
+   * Carry an overdrawn amount onto a sleeve, so `balance` and Σ marketValue stay equal
+   * through a debit the account could not cover (design 106 §4b, F7b).
+   *
+   * **Only a CASH sleeve takes it.** Cash is the one sleeve that can honestly be
+   * negative — an overdrawn account is an overdraft, and what it owes is cash it does not
+   * have. An equity or bond position cannot go below zero by being spent against: owning
+   * −$3,000 of a stock is a worse lie than a balance that disagrees with its sleeves, so
+   * an account with no CASH sleeve keeps the floors the debit loop applies and its
+   * desync stays visible — to the §4.4 gate on the goldens, which is the right place for
+   * it to surface. That also preserves the two `account-service.test.mjs` cases that pin
+   * the floor on allocation-less lots.
+   *
+   * In practice the accounts that overdraw are the cash ones: `transaction()` is the
+   * generic cash-movement primitive, and an investment account is drawn through
+   * `consumeHoldings` instead.
+   *
+   * Self-healing by construction: the sleeve goes to −X, the next deposit adds back to
+   * both sides, and the two arrive at zero together instead of carrying the gap forever.
+   *
+   * `costBasis` is deliberately NOT driven negative — basis is what was paid for an
+   * asset, and there is no asset here. It stays floored at zero, which is the one place
+   * this leaves `marketValue` and `costBasis` disagreeing in sign, and that disagreement
+   * is the honest description of an overdraft.
+   */
+  _absorbOverdraw(account, shortfall) {
+    const holdings = account.holdings;
+    if (!(shortfall > 0) || !Array.isArray(holdings) || holdings.length === 0) return;
+    const idx = holdings.findIndex(h => h?.allocation === 'CASH');
+    if (idx < 0) return;
+    account.holdings = holdings.map((h, i) => {
+      if (i !== idx) return h;
+      const value = (h.marketValue ?? 0) - shortfall;
+      const inst  = instrumentOf(h);
+      const price = (h.pricePerUnit ?? 0) > 0 ? h.pricePerUnit : (inst.parPerUnit ?? 0);
+      // par-reviewed: a CASH sleeve carries no par — `faceValue` is a BOND field and this
+      // branch is gated on `allocation === 'CASH'`, so there is no par to fall out of step
+      // with the value. `units` is re-derived from the same price the credit branch uses,
+      // which keeps `units × pricePerUnit === marketValue` through the negative and back,
+      // and a lot with no unit count keeps having none. Not routed through `resize` /
+      // `addValue` deliberately: both floor at zero, which is the behaviour this exists to
+      // step around, and both round to cents while this loop is unrounded (design 93 §9).
+      return {
+        ...h,
+        marketValue: value,
+        ...(h.units == null ? {} : { units: price > 0 ? value / price : 0 }),
+      };
+    });
+  }
+
   transaction(account, amount, date) {
     account.balance = account.balance + amount;
 
@@ -478,7 +528,22 @@ export class AccountService extends AssetService {
       // Debit (drawdown / transfer-out): pro-rate the withdrawal across sleeves
       // by market value, consuming each sleeve's cost basis in proportion to the
       // value removed, and never drive a position (or its basis) below zero.
-      if (totalMv <= 0) return;
+      //
+      // An OVERDRAW — a debit larger than the sleeves hold — is the §4.4 hazard here
+      // (design 106 §4b, F7b). `balance` above took the whole amount; the sleeves are
+      // capped at what they have, so the two part company by the shortfall, and they
+      // part company PERMANENTLY: the credit branch below lands a later deposit on the
+      // sleeves in full, restoring both sides by the same figure and preserving the gap
+      // forever. Measured on `us-single-homeowner`: one −$3,000 debit against an empty
+      // transaction account in 2036 left `balance` $3,000 below its own CASH sleeve for
+      // the remaining thirty years — money the household holds and the balance cannot
+      // see. So the shortfall is carried onto a sleeve rather than dropped; see
+      // `_absorbOverdraw` for which sleeve and why it may go negative.
+      const shortfall = Math.max(0, -amount - Math.max(0, totalMv));
+      if (totalMv <= 0) {
+        this._absorbOverdraw(account, shortfall);
+        return;
+      }
       const toRemove = Math.min(-amount, totalMv);
       let removed = 0;
       account.holdings = holdings.map((h, i) => {
@@ -515,6 +580,9 @@ export class AccountService extends AssetService {
           ...(h.units == null ? {} : { units: h.units * ratio }),
         };
       });
+      // The sleeves floored at zero; anything the debit still owes rides on one of them
+      // so Σ marketValue keeps tracking `balance`.
+      if (shortfall > 0) this._absorbOverdraw(account, shortfall);
     } else {
       // Credit (contribution / sale proceeds / transfer-in): distribute across
       // sleeves by market value; the deposited cash carries basis equal to its
