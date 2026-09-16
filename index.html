@@ -714,6 +714,16 @@
             <option value="false">Pay cash</option>
           </select>
         </div>
+        <!-- Per-SECURITY overrides of that election (design 106 §5). One row per distinct
+             security the account actually holds, built in JS because the list follows the
+             holdings; a typed control per row, never a JSON blob. Hidden when the account
+             holds no named instrument, because then there is nothing to override. -->
+        <div data-id="reinvestBySecurityRow" style="display:none">
+          <div class="node-field" style="align-items:flex-start">
+            <label>· by security</label>
+            <div data-id="reinvestBySecurityList" style="display:flex;flex-direction:column;gap:4px;flex:1"></div>
+          </div>
+        </div>
         <!-- §988 currency basis (design 87). Shown only for a NON-USD cash account:
              §988(c)(1)(C)(ii) makes any foreign-currency bank deposit nonfunctional
              currency, so savings/transaction/offset all qualify, and USD never does

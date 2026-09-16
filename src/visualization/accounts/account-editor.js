@@ -199,7 +199,14 @@ export class AccountEditor extends BaseComponent {
     if (reinvestSel) {
       reinvestSel.value = this._node?.reinvestDividends == null
         ? '' : String(!!this._node.reinvestDividends);
+      // Per-security overrides read the account's default for their "Default" label, so
+      // re-render the list whenever the account-level answer changes.
+      this.listen(reinvestSel, 'change', () => this._refreshReinvestBySecurity(el));
     }
+    // Working copy: edited by the rows, written back on save. Entries for securities the
+    // account no longer holds are dropped there, not here — see `_readForm`.
+    this._reinvestBySecurity = { ...(this._node?.reinvestDividendsBySecurity ?? {}) };
+    this._refreshReinvestBySecurity(el);
 
     // Cash "Interest Rate" (design 56): the user edits the ABSOLUTE rate; on save it
     // is stored as `primeSpread = absolute − Prime(country)`. Show the absolute the
@@ -588,6 +595,9 @@ export class AccountEditor extends BaseComponent {
    * id in `this._expanded` and survives the re-renders that field edits trigger.
    */
   _refreshHoldingsTbody() {
+    // The per-security election list is derived from the holdings, so it follows them:
+    // change a lot's security, add a lot or delete one, and the rows must agree.
+    queueMicrotask(() => this._refreshReinvestBySecurity());
     const tbody = this._tbodyEl;
     if (!tbody) return;
     tbody.replaceChildren();
@@ -1134,6 +1144,17 @@ export class AccountEditor extends BaseComponent {
     if (this._showsReinvestElection(el)) {
       const raw = el.querySelector('[data-id="reinvestDividends"]')?.value ?? '';
       data.reinvestDividends = raw === '' ? null : raw === 'true';
+      // Per-security overrides (design 106 §5), PRUNED to the securities the account still
+      // holds — the same reconciliation design 55 §14 does for orphaned generated params.
+      // An election left behind by a sold position is a rule nothing applies, and it comes
+      // back to life if that security is ever bought again, which is not what the user
+      // asked for years earlier.
+      const held = new Set(this._heldSecurityIds());
+      const map  = {};
+      for (const [id, v] of Object.entries(this._reinvestBySecurity ?? {})) {
+        if (held.has(id) && typeof v === 'boolean') map[id] = v;
+      }
+      data.reinvestDividendsBySecurity = Object.keys(map).length ? map : null;
     }
     // Prime-relative cash rate (design 56): the input is the ABSOLUTE rate the bank
     // quotes; store it as `primeSpread = absolute − Prime(country)` so a Prime move fans
@@ -1322,6 +1343,69 @@ export class AccountEditor extends BaseComponent {
   }
 
   // ─── Visibility ─────────────────────────────────────────────────────────────
+
+  /**
+   * The distinct securities this account actually holds, in holdings order (design 106 §5).
+   *
+   * Lots with no `securityId` are deliberately absent: an un-securitised sleeve is not an
+   * instrument anyone can elect for, and it follows the account's own answer. Nothing is
+   * offered for a security the account does not hold — an election for one would be an
+   * entry that changes nothing and then quietly rots when the holding it referred to is
+   * sold.
+   */
+  _heldSecurityIds() {
+    const seen = [];
+    for (const h of this._holdings) {
+      const id = h?.securityId;
+      if (id && !seen.includes(id)) seen.push(id);
+    }
+    return seen;
+  }
+
+  /**
+   * Render one row per held security: a tri-state select, defaulting to the ACCOUNT's
+   * answer rather than to a value of its own (design 106 §5, step 2b).
+   *
+   * "Default" here means the account, which is itself possibly "Default (plan-wide)" — two
+   * levels of inheritance, so the label spells out what the account currently resolves to
+   * rather than making the reader hold the chain in their head.
+   */
+  _refreshReinvestBySecurity(el = this._rootEl) {
+    const row  = el?.querySelector('[data-id="reinvestBySecurityRow"]');
+    const list = el?.querySelector('[data-id="reinvestBySecurityList"]');
+    if (!row || !list) return;
+
+    const ids = this._showsReinvestElection(el) ? this._heldSecurityIds() : [];
+    row.style.display = ids.length ? '' : 'none';
+    if (!ids.length) { list.innerHTML = ''; return; }
+
+    const acctRaw = el.querySelector('[data-id="reinvestDividends"]')?.value ?? '';
+    const acctSays = acctRaw === '' ? 'plan-wide' : (acctRaw === 'true' ? 'reinvest' : 'pay cash');
+    const label = (id) => {
+      const sec = this._securities?.[id];
+      return sec ? (sec.symbol || sec.name || sec.id) : id;
+    };
+
+    list.innerHTML = ids.map((id) => {
+      const v = this._reinvestBySecurity?.[id];
+      const cur = typeof v === 'boolean' ? String(v) : '';
+      const opt = (value, text) =>
+        `<option value="${value}"${value === cur ? ' selected' : ''}>${_escape(text)}</option>`;
+      return `<div style="display:flex;gap:6px;align-items:center">`
+        + `<span style="flex:1;font-size:0.9em">${_escape(label(id))}</span>`
+        + `<select class="h-input" data-sec="${_escape(id)}" style="flex:1">`
+        + opt('', `Account default (${acctSays})`) + opt('true', 'Reinvest') + opt('false', 'Pay cash')
+        + `</select></div>`;
+    }).join('');
+
+    for (const sel of list.querySelectorAll('select[data-sec]')) {
+      this.listen(sel, 'change', () => {
+        const id = sel.getAttribute('data-sec');
+        if (sel.value === '') delete this._reinvestBySecurity[id];
+        else this._reinvestBySecurity[id] = sel.value === 'true';
+      });
+    }
+  }
 
   /**
    * True when this account's role can act on a dividend-reinvestment election

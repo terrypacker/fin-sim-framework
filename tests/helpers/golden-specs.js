@@ -414,6 +414,49 @@ export const GOLDEN_SPECS = [
     },
   },
   {
+    name:        'dividend-drip-per-security',
+    description:
+      'Design 106 §5 — the per-(account x security) reinvestment election, which nothing '
+      + 'else in the suite reaches. Two authored securities in ONE taxable brokerage with '
+      + 'deliberately different yields (0.6% and 4%), the account electing to reinvest, and '
+      + 'the high-yield one electing OUT through `reinvestDividendsBySecurity`. So one '
+      + 'dividend event splits two ways every year: part opens a vintage lot in the '
+      + 'security that paid it, part is banked as cash. That split is the whole subject, '
+      + 'and it is what makes two things observable that a unit test can assert but only a '
+      + 'fixture can hold over time: the reinvested slice buys MORE OF THE PAYING '
+      + 'INSTRUMENT rather than a pro-rata share of the sleeve (step 2a — before it, the '
+      + '0.6% security was credited with part of the 4% one\'s dividend), and the tax is '
+      + 'untouched by where the money goes, because a dividend is derived when it is paid. '
+      + 'Reinvestment is also the case that GROWS the lot count fastest — one vintage per '
+      + 'security per year now, rather than one per sleeve — so the fixture doubles as the '
+      + 'check that `compactLots` still seasons them back down. Short (7y): the split '
+      + 'repeats annually and nothing here needs a lifetime.',
+    params: {
+      stockDividendReinvest: true,
+    },
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2033, 0, 1)),
+    mutateCfg: (cfg) => {
+      cfg.securities = [
+        // A high-yielding holding: the one whose dividend was partly buying the other.
+        { id: 'sec-inc', symbol: 'INC', name: 'Income fund', rateKey: 'EQUITY_US',
+          dividendYield: 0.04 },
+        // And a low-yielding one in the SAME sleeve, market and rate key — which is what
+        // made them share an income bucket before `securityId` joined the key.
+        { id: 'sec-gro', symbol: 'GRO', name: 'Growth fund', rateKey: 'EQUITY_US',
+          dividendYield: 0.006 },
+      ];
+      const acct = cfg.accounts.find(a => a.stateKey === 'usStockAccount');
+      const eq   = acct.holdings.filter(h => h.allocation === 'EQUITY');
+      eq[0].securityId = 'sec-inc';
+      (eq[1] ?? eq[0]).securityId = 'sec-gro';
+      // The account reinvests; the income fund is taken as cash instead. A real DRIP
+      // election, made per security at one broker.
+      acct.reinvestDividends = true;
+      acct.reinvestDividendsBySecurity = { 'sec-inc': false };
+    },
+  },
+  {
     name:        'wash-sale-harvest',
     description:
       'Design 94 §8.1o. The whole §1091 path — both reducers that write '

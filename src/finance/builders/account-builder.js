@@ -210,16 +210,23 @@ class BrokerageAccountBuilder extends BaseInvestmentBuilder {
   constructor() {
     super();
     this._reinvestDividends = null; // null = inherit the household default (design 106)
+    this._reinvestDividendsBySecurity = null; // null = no per-security overrides
   }
 
   /** Dividend-reinvestment election for this broker: true / false / null = inherit. */
   reinvestDividends(v) { this._reinvestDividends = v; return this; }
+
+  /** Per-security overrides of that election: `{ [securityId]: boolean }` (design 106 §5). */
+  reinvestDividendsBySecurity(v) { this._reinvestDividendsBySecurity = v; return this; }
 
   build() {
     const opts = this._investmentOpts();
     // Only passed when the household has an opinion, so an unelected account keeps
     // taking the toolset default (design 106 §4) and serializes to nothing.
     if (this._reinvestDividends !== null) opts.reinvestDividends = this._reinvestDividends;
+    if (this._reinvestDividendsBySecurity !== null) {
+      opts.reinvestDividendsBySecurity = this._reinvestDividendsBySecurity;
+    }
     return new BrokerageAccount(this._balance, opts);
   }
 }

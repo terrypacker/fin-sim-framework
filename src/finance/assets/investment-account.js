@@ -336,6 +336,21 @@ export class BrokerageAccount extends InvestmentAccount {
     // Only read for the roles in DIVIDEND_ELECTION_ROLES — a wrapper never separates its
     // dividend from its price return, so there is nothing for an election to route.
     this.reinvestDividends = opts.reinvestDividends ?? null;
+    // Per-SECURITY overrides of that default (design 106 §5, step 2b) —
+    // `{ [securityId]: boolean }`. A real broker's DRIP election is made per security and
+    // applies to every lot of it held there, which is exactly this shape: the account
+    // answers for any instrument the map does not name.
+    //
+    // D4 — one map plus a default, not an allow-list and a deny-list. They are the same
+    // object read two ways: with the account defaulting to cash, the map's `true` entries
+    // ARE the allow-list; with it defaulting to reinvest, its `false` entries ARE the
+    // deny-list. Two lists would need a rule for "in both" and "in neither", and that rule
+    // is the default we would have had to store anyway.
+    //
+    // null rather than `{}` when unset, so an account with no per-security opinion
+    // serializes to nothing and reloads byte-for-byte — the `reinvestDividends` rule one
+    // field up.
+    this.reinvestDividendsBySecurity = opts.reinvestDividendsBySecurity ?? null;
   }
 }
 

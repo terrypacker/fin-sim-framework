@@ -55,6 +55,13 @@ export const COVERED = [
   'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
   'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY',
   'AU_DIVIDEND_FRANKED_RESIDENT_TAX',
+  // The US REINVEST branches, closed by `dividend-drip-per-security` (design 106 §5).
+  // Both sat in KNOWN_GAPS for as long as the list has existed, for one reason: every
+  // golden took the `dividendReinvest: false` default, so the whole reinvestment half of
+  // the US brokerage — the vintage-lot machinery included — was reachable only by unit
+  // test. The golden that exercises the per-security election reaches it by construction.
+  'STOCK_DIVIDEND_APPLY',
+  'BOND_COUPON_APPLY',
   'AU_FIXED_INCOME_EARNINGS_APPLY',
   'AU_FIXED_INCOME_EARNINGS_TAX',
   'AU_HOUSE_SALE_APPLY',
@@ -284,7 +291,6 @@ export const KNOWN_GAPS = [
   // The reference golden holds a static mix and never rebalances. A glidepath golden
   // would reach the drift bands, the ladder roll, accretion and the holding ops.
   'ACCOUNT_RETITLE_APPLY',
-  'BOND_COUPON_APPLY',
   'FIXED_INCOME_CONTRIBUTION_APPLY',
   'FIXED_INCOME_WITHDRAWAL_APPLY',
   'HOLDING_RETITLE',
@@ -316,7 +322,6 @@ export const KNOWN_GAPS = [
   'AU_SAVINGS_WITHDRAWAL_APPLY',
   'AU_STOCK_WITHDRAWAL_APPLY',
   'AU_STOCK_WITHDRAWAL_TAX',
-  'STOCK_DIVIDEND_APPLY',
   'STOCK_WITHDRAWAL_APPLY',
 
   // ── Self-employment and bonus income (designs 69, 73, 76)

@@ -78,7 +78,7 @@ export class DividendScheduledHandler extends HandlerEntry {
     // Per-holding dividends: each sleeve pays holding.dividendYield (falling back
     // to the account-level dividendRate), scaled by the active regime's dividend
     // adjustment for its rate key (design 28 §7).
-    const { amount } = computeHoldingsDividends({
+    const { amount, bySecurity } = computeHoldingsDividends({
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
@@ -92,15 +92,54 @@ export class DividendScheduledHandler extends HandlerEntry {
     // rather than captured at construction so a scenario loaded from a save — whose
     // handlers come back from JSON, not from the toolset — honours the account's
     // election without a Rebuild.
-    const reinvest   = data?.reinvest ?? account?.reinvestDividends ?? this.reinvest;
+    const accountElection = data?.reinvest ?? account?.reinvestDividends ?? this.reinvest;
     const residency  = account?.ownerId
       ? (state.people?.[account.ownerId]?.residency ?? null)
       : null;
-    const actionType = reinvest ? 'STOCK_DIVIDEND_APPLY' : 'STOCK_DIVIDEND_CASH_APPLY';
 
-    return [
-      { type: actionType, amount, residency, stateKey },
-      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
-    ];
+    // Design 106 §5 (step 2b) — the election is per (account × security). The account's
+    // answer is the default; `reinvestDividendsBySecurity` overrides it for the
+    // instruments it names, which is how a broker's DRIP setting actually works. A one-off
+    // event's `data.reinvest` still outranks everything: it is an instruction about THIS
+    // payment, not a standing election.
+    const bySec = (data?.reinvest == null ? account?.reinvestDividendsBySecurity : null) ?? null;
+    const electionFor = (securityId) => {
+      const v = bySec?.[securityId];
+      return typeof v === 'boolean' ? v : accountElection;
+    };
+
+    // Partition the payment. `bySecurity` is empty only when the account has no lots —
+    // the whole-account fallback — in which case the account election decides all of it.
+    const reinvested = [];
+    let reinvestAmount = 0, cashAmount = 0;
+    if (bySecurity.length === 0) {
+      if (accountElection) reinvestAmount = amount; else cashAmount = amount;
+    } else {
+      for (const slice of bySecurity) {
+        if (electionFor(slice.securityId)) { reinvested.push(slice); reinvestAmount += slice.amount; }
+        else cashAmount += slice.amount;
+      }
+      reinvestAmount = +reinvestAmount.toFixed(2);
+      cashAmount     = +cashAmount.toFixed(2);
+    }
+
+    // Up to TWO apply actions for one economic event, which is new: before 2b a dividend
+    // went one way or the other in its entirety. Both chain STOCK_DIVIDEND_TAX, so the
+    // assessed total is unchanged by the split — `Σ tax == amount` is the invariant, and
+    // any journal rollup over this event must filter on `entry.reducer` before summing or
+    // it will count the payment twice (the AU_TAX_SETTLE_APPLY trap).
+    const actions = [];
+    if (reinvestAmount !== 0) {
+      // `_bySecurity` tells the reducer which instrument each slice came from, so the
+      // money buys more of that instrument (step 2a).
+      actions.push({ type: 'STOCK_DIVIDEND_APPLY', amount: reinvestAmount, residency, stateKey,
+                     ...(reinvested.length ? { _bySecurity: reinvested } : {}) });
+    }
+    if (cashAmount !== 0) {
+      // The cash branch needs no breakdown — the money leaves the account.
+      actions.push({ type: 'STOCK_DIVIDEND_CASH_APPLY', amount: cashAmount, residency, stateKey });
+    }
+    actions.push(new RecordBalanceAction(`${stateKey}.balance`, stateKey));
+    return actions;
   }
 }

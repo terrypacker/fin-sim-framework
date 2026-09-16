@@ -339,7 +339,9 @@ export function computeHoldingsGrowth({
  * already scaled by each regime's recovery factor in RegimeApplyReducer). The
  * `max(0, …)` floors a full dividend suspension (adj ≤ -1) at zero.
  *
- * Returns the same `{ amount, holdingActions }` shape as computeHoldingsGrowth so
+ * Returns `{ amount, holdingActions, bySecurity }` — the first two the same shape as
+ * computeHoldingsGrowth, and `bySecurity` the per-instrument breakdown of the same
+ * payment (design 106 §5), so
  * a handler can either emit the per-holding reinvestment actions (AU franked
  * dividends grow the sleeves) or use only the summed amount (US cash / account-
  * level apply). `costBasisDelta` is 0 — reinvested-dividend basis is raised at
@@ -369,11 +371,18 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     const balance = account?.balance ?? 0;
     const y0      = state?.marketDividendYields?.[fallbackRateKey] ?? fallbackYield ?? 0;
     const amount  = +(balance * effYield(y0, fallbackRateKey)).toFixed(2);
-    return { amount, holdingActions: [] };
+    // No lots ⇒ no security paid it; the caller falls back to the whole-account path.
+    return { amount, holdingActions: [], bySecurity: [] };
   }
 
   let total = 0;
   const holdingActions = [];
+  // Per-SECURITY slices (design 106 §5, step 2a). A reinvested dividend buys more of the
+  // instrument that paid it, and — from step 2b — the election that decides whether it is
+  // reinvested at all is per (account x security). Both need the payment broken down by
+  // security rather than summed, so the breakdown is built here, beside the arithmetic
+  // that knows which lot paid what, rather than re-derived by a reducer that does not.
+  const bySecurityMap = new Map();
   for (const h of holdings) {
     if (!h) continue;
     // Only EQUITY (and OTHER) sleeves pay an equity dividend. BOND, CASH and GOLD
@@ -394,6 +403,13 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
     const div = +(mv * effYield(yld, rk)).toFixed(2);
     total += div;
     if (div !== 0) {
+      // `securityId ?? null` — an un-securitised lot is its own instrument (design 94
+      // §5.3a), and grouping those under one null key is right: they are the pre-security
+      // world, where "the account's equity" is the only instrument there is.
+      const sid = h.securityId ?? null;
+      bySecurityMap.set(sid, +((bySecurityMap.get(sid) ?? 0) + div).toFixed(2));
+    }
+    if (div !== 0) {
       holdingActions.push(new HoldingTransactAction({
         stateKey,
         holdingId:        h.id,
@@ -408,7 +424,11 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
       }));
     }
   }
-  return { amount: +total.toFixed(2), holdingActions };
+  return {
+    amount: +total.toFixed(2),
+    holdingActions,
+    bySecurity: [...bySecurityMap.entries()].map(([securityId, amount]) => ({ securityId, amount })),
+  };
 }
 
 /**

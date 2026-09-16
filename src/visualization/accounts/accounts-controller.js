@@ -180,6 +180,12 @@ export class AccountsController {
     if ('reinvestDividends' in data) {
       account.reinvestDividends = data.reinvestDividends == null ? null : !!data.reinvestDividends;
     }
+    // Per-security overrides (design 106 §5). An empty map is the same statement as no
+    // map, so it is normalised to null and never persisted.
+    if ('reinvestDividendsBySecurity' in data) {
+      const m = data.reinvestDividendsBySecurity;
+      account.reinvestDividendsBySecurity = (m && Object.keys(m).length) ? { ...m } : null;
+    }
     // Prime-relative cash rate (design 56). The editor sends the derived spread (or a
     // legacy absolute when no Prime is configured); the builder has no setter, so stamp
     // them directly. null → not Prime-linked / unset (global default).
@@ -241,6 +247,10 @@ export class AccountsController {
     // plan-wide default; true/false are elections. Same null-vs-false discipline as
     // the nullable numbers below.
     if ('reinvestDividends' in n) n.reinvestDividends = n.reinvestDividends == null ? null : !!n.reinvestDividends;
+    if ('reinvestDividendsBySecurity' in n) {
+      const m = n.reinvestDividendsBySecurity;
+      n.reinvestDividendsBySecurity = (m && Object.keys(m).length) ? { ...m } : null;
+    }
     // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
     if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
     if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);

@@ -725,7 +725,16 @@ export function lotVintage(state, account) {
  * dividend/coupon path, the federal/state exemption split — can tell them apart.
  */
 function _incomeBucketKey(h) {
-  return [h?.allocation ?? '', h?.taxExemption ?? 'none',
+  // `securityId` joined the key at design 106 §5 (step 2a). Without it two securities in
+  // one account shared a bucket, so a dividend paid by one opened — or grew — a vintage lot
+  // whose `securityId` was copied from whichever of them happened to be the biggest lot in
+  // the bucket. A reinvested dividend buys more of the thing that paid it; naming the
+  // instrument is the difference between that and buying something else.
+  //
+  // It costs lots: each security now gets its own vintage lot per year. That is the same
+  // trade §5.0a already made for the tax identity, and `compactLots` seasons them back
+  // down on the same terms.
+  return [h?.securityId ?? '', h?.allocation ?? '', h?.taxExemption ?? 'none',
           h?.issuingState ?? '', h?.rateKey ?? ''].join('|');
 }
 
@@ -771,21 +780,31 @@ function _incomeBucketKey(h) {
  */
 export function distributeHoldingsCredit(holdings, amount, {
   stateKey = 'acct', year = null, purchaseMs = null, priceLevel = null,
-  label = 'Reinvested income',
+  label = 'Reinvested income', only = null,
 } = {}) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount === 0) return holdings;
-  const total = holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  // `only` restricts which lots the credit may be weighted across and land in (design 106
+  // §5, step 2a). The caller uses it to reinvest one security's dividend into that
+  // security's lots alone: the bucket key above keeps the vintage lots apart, but the
+  // pro-rata weighting would still spread the money across every bucket without this.
+  // Absent ⇒ every lot participates, which is every pre-2a caller.
+  const eligible = typeof only === 'function' ? holdings.filter(h => h && only(h)) : holdings;
+  if (eligible.length === 0) return holdings;
+  const total = eligible.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
   if (total <= 0) {
-    // No market value to weight against — the credit BECOMES the first position.
-    return holdings.map((h, i) => i === 0 ? establish(h, (h.marketValue ?? 0) + amount) : h);
+    // No market value to weight against — the credit BECOMES the first ELIGIBLE position.
+    const firstId = eligible[0]?.id;
+    return holdings.map(h => h?.id === firstId ? establish(h, (h.marketValue ?? 0) + amount) : h);
   }
 
   if (year == null) {
     // Pre-design-93 fallback: pro rata into the existing lots. Reachable only from a
     // caller that cannot say what year it is, which in the simulation is none of them.
+    const lastId = eligible[eligible.length - 1]?.id;
     let distributed = 0;
-    return holdings.map((h, i) => {
-      const share = i === holdings.length - 1
+    return holdings.map((h) => {
+      if (typeof only === 'function' && !only(h)) return h;
+      const share = h?.id === lastId
         ? +(amount - distributed).toFixed(2)
         : +(amount * ((h.marketValue ?? 0) / total)).toFixed(2);
       distributed += share;
@@ -799,7 +818,7 @@ export function distributeHoldingsCredit(holdings, amount, {
   // The lots each bucket already holds, so a new vintage can be established at the price
   // they are standing at rather than at the convention's 100 (`prevailingPrice`).
   const bucketLots = new Map();
-  for (const h of holdings) {
+  for (const h of eligible) {
     if (!h || (h.marketValue ?? 0) <= 0) continue;
     const key = _incomeBucketKey(h);
     if (!buckets.has(key)) { buckets.set(key, { mv: 0, template: h }); bucketLots.set(key, []); }
@@ -811,7 +830,8 @@ export function distributeHoldingsCredit(holdings, amount, {
     if ((h.marketValue ?? 0) > (b.template.marketValue ?? 0)) b.template = h;
   }
   if (buckets.size === 0) {
-    return holdings.map((h, i) => i === 0 ? establish(h, (h.marketValue ?? 0) + amount) : h);
+    const firstId = eligible[0]?.id;
+    return holdings.map(h => h?.id === firstId ? establish(h, (h.marketValue ?? 0) + amount) : h);
   }
 
   let next    = holdings.slice();

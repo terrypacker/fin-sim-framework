@@ -147,6 +147,13 @@ function _accountToStatePlain(account) {
   // only when the household has an opinion, so an unelected account is byte-identical
   // and the handler's own default (the toolset param) still applies.
   if (account.reinvestDividends != null) plain.reinvestDividends = account.reinvestDividends;
+  // …and its per-security overrides (design 106 §5). Same rule, same reason: the handler
+  // reads the election from the runtime STATE entry, so a field left out here is an
+  // authored election the simulation cannot see.
+  if (account.reinvestDividendsBySecurity != null
+      && Object.keys(account.reinvestDividendsBySecurity).length > 0) {
+    plain.reinvestDividendsBySecurity = { ...account.reinvestDividendsBySecurity };
+  }
   if (account.type !== 'loan' && account.deductibleFraction != null) {
     plain.deductibleFraction = account.deductibleFraction;
   }

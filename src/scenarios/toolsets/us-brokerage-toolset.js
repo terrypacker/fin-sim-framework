@@ -42,7 +42,14 @@ export const US_BROKERAGE = {
       { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
       // residency is projected onto every report row (JournalDataSource._project), so it
       // must be declared or the row's value goes null once the manifest gate is wired.
-      { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
+      // `stateKey` names the paying account (design 76 Gap B); the handler has stamped it
+      // since then and only the DECLARATION was missing, so the journal dropped it.
+      // `_bySecurity` (design 106 §5) carries the leading underscore the payload scanner
+      // treats as reducer plumbing, like the coupon path's `_reinvestBuckets`: it is how
+      // the handler hands the reducer a breakdown it must not re-derive, not something a
+      // report should read. What a report wants is the LOTS the reinvestment opened, and
+      // the holdings already carry those, one per security per year.
+      { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'STOCK_DIVIDEND_TAX',             fields: { amount: ValueType.currency('USD'), residency: ValueType.text() , stateKey: ValueType.text()} },
       { type: 'BOND_COUPON_APPLY',              fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'BOND_COUPON_CASH_APPLY',         fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },

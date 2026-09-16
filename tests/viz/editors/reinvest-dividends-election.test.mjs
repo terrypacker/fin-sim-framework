@@ -114,3 +114,95 @@ describe('account editor — dividend reinvestment election (design 106)', () =>
     expect('reinvestDividends' in editor._readForm(editor._rootEl)).toBe(false);
   });
 });
+
+describe('account editor — per-security election rows (design 106 §5)', () => {
+  beforeEach(() => loadHtml('../../index.html'));
+
+  const SECURITIES = {
+    'sec-inc': { id: 'sec-inc', symbol: 'INC', name: 'Income fund' },
+    'sec-gro': { id: 'sec-gro', symbol: 'GRO', name: 'Growth fund' },
+  };
+
+  function renderWithHoldings(node, holdings) {
+    const editor = new AccountEditor({
+      container: makeMockContainer(), node: { ...node, holdings }, people: [],
+      realProperties: [], accounts: [], primeRates: PRIME, securities: SECURITIES,
+    });
+    editor.render();
+    return editor;
+  }
+
+  const twoSecurities = () => [
+    { id: 'l1', securityId: 'sec-inc', allocation: 'EQUITY', marketValue: 10_000, costBasis: 10_000 },
+    { id: 'l2', securityId: 'sec-gro', allocation: 'EQUITY', marketValue: 10_000, costBasis: 10_000 },
+    // An un-securitised sleeve: not an instrument anyone can elect for.
+    { id: 'l3', allocation: 'BOND', marketValue: 5_000, costBasis: 5_000 },
+  ];
+
+  const rowsOf = (el) => [...el.querySelectorAll('[data-id="reinvestBySecurityList"] select[data-sec]')];
+
+  test('one row per DISTINCT held security, and none for an un-securitised sleeve', () => {
+    const el = renderWithHoldings(brokerage(), twoSecurities())._rootEl;
+    expect(rowsOf(el).map(s => s.getAttribute('data-sec'))).toEqual(['sec-inc', 'sec-gro']);
+    expect(el.querySelector('[data-id="reinvestBySecurityRow"]').style.display).not.toBe('none');
+  });
+
+  test('hidden when the account holds no named instrument — nothing to override', () => {
+    const el = renderWithHoldings(brokerage(), [
+      { id: 'l1', allocation: 'EQUITY', marketValue: 10_000, costBasis: 10_000 },
+    ])._rootEl;
+    expect(el.querySelector('[data-id="reinvestBySecurityRow"]').style.display).toBe('none');
+  });
+
+  test('the rows say what "default" currently resolves to on the account', () => {
+    // Two levels of inheritance — security → account → plan — so the label spells out
+    // where "default" lands rather than making the reader hold the chain in their head.
+    const editor = renderWithHoldings(brokerage({ reinvestDividends: true }), twoSecurities());
+    expect(rowsOf(editor._rootEl)[0].options[0].textContent).toBe('Account default (reinvest)');
+
+    const el = editor._rootEl;
+    el.querySelector('[data-id="reinvestDividends"]').value = 'false';
+    el.querySelector('[data-id="reinvestDividends"]').dispatchEvent(new window.Event('change'));
+    expect(rowsOf(el)[0].options[0].textContent).toBe('Account default (pay cash)');
+  });
+
+  test('an existing map populates its rows and round-trips', () => {
+    const editor = renderWithHoldings(
+      brokerage({ reinvestDividends: true, reinvestDividendsBySecurity: { 'sec-inc': false } }),
+      twoSecurities());
+    const el = editor._rootEl;
+    expect(rowsOf(el).map(s => s.value)).toEqual(['false', '']);
+    expect(editor._readForm(el).reinvestDividendsBySecurity).toEqual({ 'sec-inc': false });
+  });
+
+  test('choosing a value writes it; choosing "Account default" removes the entry', () => {
+    const editor = renderWithHoldings(brokerage({ reinvestDividends: true }), twoSecurities());
+    const el = editor._rootEl;
+    const [inc] = rowsOf(el);
+
+    inc.value = 'false';
+    inc.dispatchEvent(new window.Event('change'));
+    expect(editor._readForm(el).reinvestDividendsBySecurity).toEqual({ 'sec-inc': false });
+
+    inc.value = '';
+    inc.dispatchEvent(new window.Event('change'));
+    expect(editor._readForm(el).reinvestDividendsBySecurity).toBeNull();
+  });
+
+  test('an election for a security the account no longer holds is pruned on save', () => {
+    // The same reconciliation design 55 §14 does for orphaned generated params: a rule
+    // that applies to nothing should not sit in the file waiting to come back to life.
+    const editor = renderWithHoldings(
+      brokerage({ reinvestDividends: true,
+                  reinvestDividendsBySecurity: { 'sec-inc': false, 'sec-sold': true } }),
+      twoSecurities());
+    expect(editor._readForm(editor._rootEl).reinvestDividendsBySecurity).toEqual({ 'sec-inc': false });
+  });
+
+  test('the rows follow the holdings when a lot changes security', () => {
+    const editor = renderWithHoldings(brokerage(), twoSecurities());
+    editor._holdings[1].securityId = 'sec-inc';   // both lots now the same instrument
+    editor._refreshReinvestBySecurity(editor._rootEl);
+    expect(rowsOf(editor._rootEl).map(s => s.getAttribute('data-sec'))).toEqual(['sec-inc']);
+  });
+});

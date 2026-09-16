@@ -815,6 +815,13 @@ export class ScenarioSerializer {
     // be the `minimumAge` mistake — persisting a value nobody chose, which then stops
     // tracking the thing it was copied from.
     if (account.reinvestDividends != null) d.reinvestDividends = account.reinvestDividends;
+    // Per-security DRIP overrides (design 106 §5). Emitted only when it actually holds an
+    // entry: an empty map is the same statement as no map, and writing `{}` would be a
+    // fixture-moving no-op on every account that has never been asked.
+    if (account.reinvestDividendsBySecurity != null
+        && Object.keys(account.reinvestDividendsBySecurity).length > 0) {
+      d.reinvestDividendsBySecurity = { ...account.reinvestDividendsBySecurity };
+    }
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
     // and AccountService.register() re-bootstraps a default holding.
@@ -1350,6 +1357,9 @@ export class ScenarioSerializer {
     // i.e. inherit the household default, which is what every saved scenario did before
     // the field existed.
     if (d.reinvestDividends !== undefined) opts.reinvestDividends = d.reinvestDividends;
+    if (d.reinvestDividendsBySecurity !== undefined) {
+      opts.reinvestDividendsBySecurity = d.reinvestDividendsBySecurity;
+    }
     let account;
     switch (d.__type) {
       case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;

@@ -147,21 +147,34 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
     const { amount, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
     const sa = state[key];
+    // Reinvest the dividend into the holdings so Σ marketValue tracks the balance credit
+    // (§4.4 invariant). Without this the scalar balance credit desyncs from holdings and
+    // is discarded by the next earnings _syncBalance. (Brokerage basis is no longer
+    // tracked — design 53 P1.) design 93 §5.0a — the reinvestment opens THIS year's
+    // vintage lot in each sleeve bucket rather than blending into lots it was never
+    // bought with.
+    //
+    // Design 106 §5 (step 2a) — PER SECURITY. The handler breaks the payment down by the
+    // instrument that paid it and stamps the slices here; each one is reinvested into that
+    // instrument's own lots. Before this the whole payment was split pro rata by market
+    // value across income buckets, so a high-yield security's dividend partly bought a
+    // low-yield one: on a 15k/10k pair yielding 5% and 1%, the 1% security was credited
+    // 340 of an 850 payment it had contributed 100 to. Absent slices (a replayed action,
+    // or an account whose lots are gone) fall back to the whole-account distribution.
+    const vintage  = { stateKey: key, ...lotVintage(state, sa), label: 'Reinvested dividends' };
+    const slices   = Array.isArray(action._bySecurity) ? action._bySecurity : null;
+    const holdings = (slices && slices.length)
+      ? slices.reduce((hs, { securityId, amount: share }) => distributeHoldingsCredit(hs, share, {
+          ...vintage, only: h => (h?.securityId ?? null) === (securityId ?? null),
+        }), sa.holdings)
+      : distributeHoldingsCredit(sa.holdings, amount, vintage);
     return this.newState(
       state,
       {
         [key]: {
           ...sa,
           balance:  sa.balance + amount,
-          // Reinvest the dividend into the holdings so Σ marketValue tracks the
-          // balance credit (§4.4 invariant). Without this the scalar balance
-          // credit desyncs from holdings and is discarded by the next earnings
-          // _syncBalance. (Brokerage basis is no longer tracked — design 53 P1.)
-          // design 93 §5.0a — the reinvestment opens THIS year's vintage lot in each
-          // sleeve bucket rather than blending into lots it was never bought with.
-          holdings: distributeHoldingsCredit(sa.holdings, amount, {
-            stateKey: key, ...lotVintage(state, sa), label: 'Reinvested dividends',
-          }),
+          holdings,
         },
       },
       // Design 76 Gap B: stamp the account so the AU return attributes to its owner.

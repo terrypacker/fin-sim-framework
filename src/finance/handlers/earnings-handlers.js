@@ -424,7 +424,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     // adjustment for its rate key (design 28 §7). On the reinvest branch these are
     // emitted and grow the PAYING lots, matching the franked-apply reducers'
     // account-level credit; on the cash branch they are dropped — the money leaves.
-    const { amount, holdingActions } = computeHoldingsDividends({
+    const { amount, holdingActions, bySecurity } = computeHoldingsDividends({
       state, stateKey,
       fallbackYield:   this.dividendRate,
       fallbackRateKey: this.rateKey,
@@ -438,24 +438,55 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
     const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
     const residency  = state.people?.[personKey]?.residency ?? null;
-    // Design 106 §4a — see the class doc for the precedence and why it is read here.
-    const reinvest   = data?.reinvest ?? state[stateKey]?.reinvestDividends ?? this.reinvest;
-    const actionType = residency === 'AU'
+    // Design 106 §4a — see the class doc for the precedence and why it is read here, and
+    // §5 (step 2b) for the per-SECURITY layer: the account's answer is the default and
+    // `reinvestDividendsBySecurity` overrides it for the instruments it names. A one-off
+    // event's `data.reinvest` still outranks both — it is an instruction about THIS
+    // payment, not a standing election.
+    const accountElection = data?.reinvest ?? state[stateKey]?.reinvestDividends ?? this.reinvest;
+    const bySec = (data?.reinvest == null ? state[stateKey]?.reinvestDividendsBySecurity : null) ?? null;
+    const elects = (securityId) => {
+      const v = bySec?.[securityId];
+      return typeof v === 'boolean' ? v : accountElection;
+    };
+
+    // The AU side needs no `_bySecurity` plumbing on the action: `holdingActions` are
+    // already per LOT, so filtering them to the elected securities IS the split. Only the
+    // cash/reinvest amounts have to be re-totalled from the same breakdown.
+    let reinvestAmount = 0, cashAmount = 0;
+    if (bySecurity.length === 0) {
+      // No lots — the whole-account fallback; there is no security to elect for.
+      if (accountElection) reinvestAmount = amount; else cashAmount = amount;
+    } else {
+      for (const slice of bySecurity) {
+        if (elects(slice.securityId)) reinvestAmount += slice.amount;
+        else cashAmount += slice.amount;
+      }
+      reinvestAmount = +reinvestAmount.toFixed(2);
+      cashAmount     = +cashAmount.toFixed(2);
+    }
+    const lotSecurity = new Map((state[stateKey]?.holdings ?? []).map(h => [h?.id, h?.securityId ?? null]));
+
+    const applyType = (reinvest) => residency === 'AU'
       ? (reinvest ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'    : 'AU_DIVIDEND_FRANKED_RESIDENT_CASH_APPLY')
       : (reinvest ? 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY' : 'AU_DIVIDEND_FRANKED_NONRESIDENT_CASH_APPLY');
 
-    return [
-      // `stateKey` names the account that PAID (design 106 §4b / F6). This handler is
-      // constructed per account, so it has always KNOWN which one it was computing for —
-      // it just did not say. Without the stamp both reducers fall back to
-      // `action.stateKey ?? 'auStockAccount'`, so on a household with two AU brokerage
-      // accounts the second account's dividends were credited to the FIRST, and
-      // `resolveAttributionAsset` then assessed them — and the franking credit on them —
-      // against the first account's owner.
-      { type: actionType, amount, stateKey },
-      ...(reinvest ? holdingActions : []),
-      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
-    ];
+    // `stateKey` names the account that PAID (design 106 §4b / F6). This handler is
+    // constructed per account, so it has always KNOWN which one it was computing for — it
+    // just did not say. Without the stamp both reducers fall back to
+    // `action.stateKey ?? 'auStockAccount'`, so on a household with two AU brokerage
+    // accounts the second account's dividends were credited to the FIRST, and
+    // `resolveAttributionAsset` then assessed them — and the franking credit on them —
+    // against the first account's owner.
+    //
+    // Up to TWO apply actions for one event since 2b. Both chain the same tax action, so
+    // the assessed total is unchanged by the split.
+    const out = [];
+    if (reinvestAmount !== 0) out.push({ type: applyType(true),  amount: reinvestAmount, stateKey });
+    if (cashAmount     !== 0) out.push({ type: applyType(false), amount: cashAmount,     stateKey });
+    out.push(...holdingActions.filter(a => elects(lotSecurity.get(a.holdingId) ?? null)));
+    out.push(new RecordBalanceAction(`${stateKey}.balance`, stateKey));
+    return out;
   }
 }
 

@@ -429,7 +429,7 @@ APPLY types, so the journal — and every design 71 report — shows which broke
 **What moved:** no existing golden. One new fixture. 6,581 unit tests and 1,516 viz tests
 green.
 
-## 5. Phase 2 — per security, within the account
+## 5. Phase 2 — per security, within the account  ✅ **DONE** (2026-09-16)
 
 **Shape.** `reinvestDividends` stays the account default; add
 `dividendReinvestBySecurity: { [securityId]: boolean }`, absent entries inheriting the
@@ -441,35 +441,102 @@ the ask describes are the same object read two ways: with a default of `false` t
 deny-list. Storing lists instead needs a rule for "in both" and "in neither", and that rule
 is the default we would have had to store anyway.
 
-**Prerequisite — §2.1.** The US reinvest path must buy the paying security. Two ways:
+**Prerequisite — §2.1.** The US reinvest path must buy the paying security. Two ways were
+weighed, and **the one this document originally chose was wrong**:
 
-- **(a) Emit the per-holding actions, as AU does.** The handler already has them from
-  `computeHoldingsDividends`; the US path throws them away. Send `STOCK_DIVIDEND_APPLY`
-  with `holdingActions` and stop the reducer re-distributing. Matches the AU path, which
-  is the one that is right.
-- **(b) Add `securityId` to `_incomeBucketKey`.** Cheaper to write, but it fixes the
-  bucketing without giving the handler a way to split one payment two ways, so phase 2
-  still needs (a). Not worth doing separately.
+- **(a) Emit the per-holding actions, as AU does.** Rejected at build time. The AU path
+  adds the money to the lot that paid, via `addValue` — and `addValue`'s own comment says
+  what is wrong with that: *"this is still an addition to an EXISTING lot, which §5.0a says
+  a purchase should not be… the paths where it was a purchase — the dividend spread and
+  ladder absorption — now open a lot instead."* Taking (a) would have regressed design 93
+  §5.0a, the rule that a reinvestment is a PURCHASE with its own holding period, which
+  FIFO, HIFO, the Division 115 12-month gate, the post-2027 indexation clock and the
+  residency step-up all read. It would also have dropped the basis: those actions carry
+  `costBasisDelta: 0` (design 94 F3). "Matches AU" was the wrong test — the AU path is the
+  one that needs fixing, and §4b's F7 work is what made that visible.
+- **(b) Add `securityId` to `_incomeBucketKey`, and have the handler pass the per-security
+  amounts.** Taken. `distributeHoldingsCredit` already copies `template.securityId` onto the
+  vintage lot it opens; the only reason the lot named the wrong instrument is that the
+  bucket key could not tell two securities apart, so the template came from whichever had
+  the biggest lot. With the key fixed, each security gets its own vintage lot — basis,
+  holding period, compaction and §4.4 all unchanged.
 
-Take (a). **It moves goldens** — every account holding two or more securities that share an
-income bucket with different yields will reprice its lots.
-`tests/fixtures/golden-two-security-concentration.json` is the detector by construction
-(design 94 §9.8), and the re-gold is the gate, not a surprise.
+The bucket key alone is not enough: the payment was still **split pro rata by market
+value**, so a high-yield holding's dividend partly bought a low-yield one. The handler
+therefore hands the reducer the actual per-security breakdown (`_bySecurity`, mirroring the
+coupon path's `_reinvestBuckets`), and `distributeHoldingsCredit` gained an `only` filter so
+each slice is weighted and landed within its own security's lots.
 
-**The handler, after.** One `call()` partitions the account's holdings by the resolved
-election and emits up to two actions plus the per-holding moves:
-`STOCK_DIVIDEND_APPLY` for the reinvested slice (with its `holdingActions`) and
-`STOCK_DIVIDEND_CASH_APPLY` for the rest. Both already chain `STOCK_DIVIDEND_TAX`, so the
-taxable total is unchanged by the split — the invariant to pin is
-`Σ STOCK_DIVIDEND_TAX.amount == computeHoldingsDividends().amount`, per year, per account.
-Note for the journal: two reducers now fire for one economic event, so any rollup must
-filter on `entry.reducer` before summing (the `AU_TAX_SETTLE_APPLY` double-count trap).
+**The handler, after.** One `call()` partitions the payment by the resolved election and
+emits up to two apply actions: `STOCK_DIVIDEND_APPLY` for the reinvested slices (carrying
+`_bySecurity`) and `STOCK_DIVIDEND_CASH_APPLY` for the rest. Both chain
+`STOCK_DIVIDEND_TAX`, so the taxable total is unchanged by the split — the invariant pinned
+by DRIP-SEC-7 is `Σ STOCK_DIVIDEND_TAX == computeHoldingsDividends().amount`, whether the
+payment is wholly reinvested, wholly cash, or split. Note for the journal: two reducers now
+fire for one economic event, so any rollup must filter on `entry.reducer` before summing
+(the `AU_TAX_SETTLE_APPLY` double-count trap).
 
-**UI.** The account editor already resolves each lot's security (`account-editor.js:774`).
-Phase 2 adds a row list of the **distinct securities held in this account**, each with an
-inherit/on/off control — a typed editor, not a JSON textarea, composed the way the existing
-row-list editors are. A security that leaves the account leaves the list; its stale map
-entry is pruned on save the way orphaned generated params are reconciled (design 55 §14).
+**AU takes the same election with no new plumbing.** Its `holdingActions` are already per
+LOT, so filtering them to the elected securities *is* the split; only the two amounts have
+to be re-totalled. Its lot mechanics are untouched here — the `addValue` blend above is a
+defect in its own right, not phase 2's to fix.
+
+**UI.** A row list under the account's own election: one row per **distinct security the
+account holds**, each a tri-state select — a typed control, never a JSON blob. Two levels of
+inheritance (security → account → plan-wide) is one more than a reader should have to hold
+in their head, so each row's default option names what the account currently resolves to
+("Account default (pay cash)") and re-labels when the account's answer changes. Lots with no
+`securityId` get no row: an un-securitised sleeve is not an instrument anyone can elect for.
+The list follows the holdings, and a security that leaves the account has its entry pruned
+on save, the reconciliation design 55 §14 does for orphaned generated params.
+
+### 5.1 Phase 2 implementation record  ✅ (2026-09-16)
+
+**2a — the reinvestment buys the paying instrument.** `securityId` joined
+`_incomeBucketKey`; `computeHoldingsDividends` now returns a `bySecurity` breakdown beside
+its amount; the handler stamps it as `_bySecurity` on the reinvest branch; and
+`StockDividendApplyReducer` spends it one slice at a time through
+`distributeHoldingsCredit`'s new `only` filter. An action without slices — a replayed one,
+or an account with no lots — still takes the whole-account path.
+
+Concretely, on 15k at 5% beside 10k at 1% in one account: the 850 payment used to be split
+510/340 by market value, so the 1% security was credited with 240 of a dividend it had
+contributed 100 to. It is now 750/100.
+
+**No existing golden moved economically** — only lot IDs, which now carry the security. That
+is itself the finding: *no golden reinvested a multi-security account*, because every one of
+them took the `dividendReinvest: false` default. The fix shipped with nothing watching it,
+so step 2 added `dividend-drip-per-security`, which also closed two KNOWN_GAPS that had been
+open as long as the manifest has existed — `STOCK_DIVIDEND_APPLY` and `BOND_COUPON_APPLY`,
+the US reinvest branches, reachable until now by unit test alone.
+
+**2b — the election.** `account.reinvestDividendsBySecurity`, `{ [securityId]: boolean }`,
+null when empty and deviation-only at every layer (record, serializer, state projection) so
+an account with no per-security opinion is byte-identical. Resolution is
+`data.reinvest ?? bySecurity[securityId] ?? account.reinvestDividends ?? household default` —
+a one-off event's instruction still outranks a standing election, because it is about that
+payment rather than about the account.
+
+**What the new golden holds**, which is the clearest statement of the feature: the account
+elects reinvest, the 4% income fund elects OUT, and every year one dividend event splits two
+ways — `sec-gro` accumulates a vintage lot per year naming itself, `sec-inc` has none, and
+the savings account carries its cash. The assessed tax is identical to either undivided
+arm (DRIP-SEC-7).
+
+**The files:**
+
+| file | what |
+|---|---|
+| `holding-utils.js` | `securityId` in `_incomeBucketKey`; `only` on `distributeHoldingsCredit` |
+| `holdings-earnings.js` | `bySecurity` breakdown beside `amount` / `holdingActions` |
+| `dividend-scheduled-handler.js` | the two-way split and `_bySecurity` |
+| `us-brokerage-classes.js` | the reducer spends the slices per security |
+| `earnings-handlers.js` | the same election on the AU side, by filtering its per-lot actions |
+| `investment-account.js`, `account-builder.js`, `scenario-serializer.js`, both toolsets | the field, deviation-only, through to state |
+| `index.html`, `account-editor.js`, `accounts-controller.js` | the per-security row list, pruned on save |
+| `golden-specs.js` + `golden-dividend-drip-per-security.json` | the split, held over time |
+| `evt-dividend-per-security.test.mjs` (DRIP-SEC-1…9) | slicing, vintage lots, §4.4, the fallback, both readings of the map, and the tax invariance |
+| `reinvest-dividends-election.test.mjs` | the rows: which securities, the inherited label, pruning, following the holdings |
 
 **MC/Opt.** The map is an object, so neither flag — the template rules at
 `record-param-templates.js:22-30` say arrays and objects are not sweep axes. The account
@@ -497,11 +564,25 @@ account pay cash while another reinvests.
 | F6 | ✅ **DONE** (2026-09-16) — the dividend names the account that paid it (4 sites) | small | §4b has the record. **Twelve goldens re-golded.** Eleven moved by attribution alone; `au-single-homeowner` shed ~A$870k of invented net worth. Uncovered **F7** |
 | §4.4 gate | ✅ **DONE** (2026-09-16) — `findOutOfSync` on every golden, per-lot tolerance, waivers with a staleness gate | small | §4b. Found two defects on its first run, neither visible in any fixture diff |
 | F7 | ✅ **DONE** (2026-09-16) — F7a the AU earnings stamp (and a reducer ignoring it), F7b overdraw onto the CASH sleeve | small | §4b. Another ~A$871k off `au-single-homeowner`; **waiver list now empty**. The first diagnosis was wrong and the gate is what corrected it |
-| 2a | US reinvest path emits per-holding actions (§2.1 fix (a)) | small–medium | **re-gold**; the two-security golden is the detector; Σ tax unchanged |
-| 2b | `dividendReinvestBySecurity` + the split emit + the per-security editor rows | medium | a partial election reinvests one security and pays the other in cash, in one account, in one year, with tax unchanged |
+| 2a | ✅ **DONE** (2026-09-16) — the reinvestment buys the PAYING instrument (`securityId` in the bucket key + per-security slices), **not** fix (a) | small–medium | §5.1. No golden moved economically — which is the finding: none reinvested a multi-security account |
+| 2b | ✅ **DONE** (2026-09-16) — `reinvestDividendsBySecurity` + the split emit + the per-security editor rows | medium | §5.1. New golden `dividend-drip-per-security` splits one payment two ways every year; DRIP-SEC-7 pins the tax invariance |
 
-Phases 1 and 1b are shippable and useful on their own; 2a is a fix the model wants whether
-or not 2b ever happens.
+**Design 106 is complete.** Phases 1 and 1b are the election; 2a is the fix the model wanted
+whether or not 2b ever happened; 2b is the per-security half the ask started from. F6, F7
+and the §4.4 gate were not in the original plan — each was found by the step before it, and
+the gate is the one worth keeping in mind: it is now the only thing in the suite asserting a
+RELATIONSHIP between fixture values rather than the values themselves.
+
+What is left, recorded rather than scheduled:
+
+- **The AU lot mechanics.** AU reinvests by `addValue` into the paying lot, which design 93
+  §5.0a says a purchase should not do, and with `costBasisDelta: 0` (design 94 F3). The US
+  side opens a vintage lot with basis. Two paths, two answers; the AU one is wrong on both
+  counts and was deliberately left alone by 2a.
+- **Q1 (§6)** — a cash dividend lands in the country's transaction account rather than the
+  paying account's CASH sleeve, which design 97's pools read.
+- **The `!holdings.length` earnings fallback** (§4b F7), now guarded by the gate rather than
+  load-bearing.
 
 ## 8. References
 
