@@ -1,0 +1,184 @@
+ATO — "How we calculate your PAYG instalment amount or rate"
+QC 68098.  Page last updated 20 May 2025.  Captured 16 September 2026.
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/payg-instalments/calculate-your-payg-instalments/how-we-calculate-your-payg-instalment-amount-or-rate
+
+PROVENANCE: ato.gov.au 403s/hangs on every automated fetch, so this page was saved to PDF by
+hand (docs/au-tax/SOURCES.md).  The print-to-PDF has NO TEXT LAYER — `pdftotext` returns only
+the running headers — so the body below is OCR (`pdftoppm -r 200 -png` + `tesseract --psm 6`)
+of docs/au-tax/ato-rates/ato-payg-instalment-calculation-2026.pdf, which is kept alongside it.
+OCR artefacts are left uncorrected so the text can be diffed against a re-OCR; bullet markers
+read as "e", and "÷" reads as "+" in the instalment-rate formula on the rate line.
+Read the PDF, not this file, before transcribing any figure into a test.
+
+--- OCR BEGINS ---
+9/16/26, 2:34 PM How we calculate your PAYG instalment amount or rate | Australian Taxation Office
+, {9 4 Australian Government
+esas“ Australian Taxation Office
+Businesses and organisations > Business income, losses, deductions and concessions > ...
+> Calculate your PAYG instalments > How we calculate your PAYG instalment amount or rate
+
+How we calculate your PAYG instalment amount
+or rate
+We calculate your instalment amount or rate based on information in your
+most recent tax return.
+Last updated 20 May 2025
+
+On this page
+
+How we calculate your instalment amount
+
+How we calculate your instalment rate
+
+Carried-forward losses for companies
+How we calculate your instalment amount
+We calculate your PAYG instalment amount using information from your most recent tax
+return.
+We adjust this amount to reflect any likely growth in your income. The adjustment is
+based on changes in Australia’s gross domestic product (GDP).
+Your PAYG instalment amount is intended to reflect your expected tax liability for the year.
+If you vary your instalment amount or lodge a tax return, the instalment amount on your
+next activity statement will change, because it will be based on this new information.
+
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/pay g-instalments/calculate-your-payg-instalments/how-we-calculate-your-p... 1/5
+9/16/26, 2:34 PM How we calculate your PAYG instalment amount or rate | Australian Taxation Office
+
+How we calculate the GDP adjustment
+We update the GDP adjustment factor at the start of each income year using data from
+the Australian Bureau of Statistics or a percentage set by law. The adjustment is based on
+GDP changes over the previous 2 calendar years.
+The GDP adjustment for the 2026-27 income year is 5%.
+If your instalment amount was solely based on your previous tax situation, with no
+adjustment, it might not cover your actual tax liability. This means you might have to pay
+extra tax when you lodge your tax return.
+The GDP adjustment factor:
+e applies to PAYG instalments for the 2026-27 income year for taxpayers whose
+
+quarter starts on or after 1 April 2026
+e is used to calculate your PAYG instalments if you pay quarterly (or twice yearly)
+
+using the instalment amount
+e does not affect you if you work out your own instalments (using the rate method)
+
+or pay annually.
+How we calculate your instalment rate
+We calculate your PAYG instalment rate using information from your most recently lodged
+tax return.
+The instalment rate calculation is:
+
+(Estimated (notional) tax + instalment income) x 100.
+Reasonable instalment rates
+If the calculated rate is more than the highest income tax rate for your entity type, we will
+automatically reduce it to a more reasonable rate (see Reasonable instalment rates table
+(#TableReasonablelnstalmentRates)). The adjusted rate will appear on your activity
+statement.
+Your instalment rate may be high before our adjustment if:
+e you received income from an employee share scheme
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/pay g-instalments/calculate-your-payg-instalments/how-we-calculate-your-p... 2/5
+9/16/26, 2:34 PM How we calculate your PAYG instalment amount or rate | Australian Taxation Office
+
+e you had a compulsory repayment for a Higher Education Contribution Scheme
+(HECS)/ Higher Education Loan Program (HELP) debt, Student Financial
+Supplement Scheme (SFSS), Australian Apprenticeship Support Loan (AASL),
+Student Start-up Loan (SSL), ABSTUDY Student Start-up Loan (ABSTUDY SSL), or
+VET Student Loan (VSL) in your last tax return
+
+e you reported income at the wrong label in your last tax return
+
+e your return is amended to include excess superannuation contributions.
+
+Reasonable instalment rates by entity type
+Entity type Reasonable rate
+Individuals (including sole traders) 55%
+Trusts 55%
+Superannuation funds and self-managed superannuation funds 45%
+Corporate tax entities 30%
+
+Carried-forward losses for companies
+
+If you are a company and carry forward a tax loss in your most recent tax return, we will
+
+adjust your taxable income (for the purpose of calculating your instalment rate) by
+
+excluding the lesser of the:
+
+e tax loss deducted in the return
+
+e amount of any tax loss carried forward to the next income year.
+
+If the carried-forward loss is more than the tax loss deducted
+
+We will use the loss you claimed when we work out the adjusted taxable income from
+
+which we calculate your instalment rate.
+Example: remaining carried forward loss is more than the tax loss
+deducted
+
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/pay g-instalments/calculate-your-payg-instalments/how-we-calculate-your-p... 3/5
+9/16/26, 2:34 PM How we calculate your PAYG instalment amount or rate | Australian Taxation Office
+AJ Pty Ltd has assessable income of $100,000, deductions of $30,000 and a carried-
+forward loss of $10,000. AJ has chosen to deduct $4,000 of the loss in its current tax
+return and carry forward the balance of $6,000 to the next year
+($10,000 minus $4,000).
+The company's tax loss deduction in the current tax return ($4,000) is less than the
+carried-forward tax loss ($6,000).
+Therefore, its adjusted taxable income (which is used to calculate AJ's PAYG
+instalment rate) is:
+Assessable income $100,000
+minus deductions $30,000
+minus amount of deduction for tax loss $4,000
+Equals taxable income (adjusted) $66,000
+If the carried-forward loss is less than the tax loss deducted
+If the loss you carried forward to the next income year is less than the loss deducted in
+your most recent tax return, we will use the carried forward loss amount when we work
+out the adjusted taxable income from which we calculate your instalment rate.
+Example: remaining carried forward loss is less than the loss deducted
+AJ Pty Ltd has assessable income of $100,000, deductions of $30,000, and a carried
+forward loss of $10,000. AJ claims $7,000 of this loss as a deduction in its current tax
+return.
+The amount of the tax loss to be carried forward ($3,000) is less than the loss
+deducted in this tax return ($7,000).
+Therefore, the adjusted taxable income used to calculate AJ's PAYG instalment rate)
+is:
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/pay g-instalments/calculate-your-payg-instalments/how-we-calculate-your-p... 4/5
+9/16/26, 2:34 PM How we calculate your PAYG instalment amount or rate | Australian Taxation Office
+
+Assessable income $100,000
+minus deductions $30,000
+minus amount of tax loss carried forward to the next year $3,000
+Equals taxable income (adjusted) $67,000
+
+QC 68098
+
+Our commitment to you
+
+We are committed to providing you with accurate, consistent and clear information to help
+
+you understand your rights and entitlements and meet your obligations.
+
+If you follow our information and it turns out to be incorrect, or it is misleading and you make
+
+a mistake as a result, we will take that into account when determining what action, if any,
+
+we should take.
+
+Some of the information on this website applies to a specific financial year. This is clearly
+
+marked. Make sure you have the information for the right year before making decisions
+
+based on that information.
+
+If you feel that our information does not fully cover your circumstances, or you are unsure
+
+how it applies to you, contact us or seek professional advice.
+
+Copyright notice
+
+© Australian Taxation Office for the Commonwealth of Australia
+
+You are free to copy, adapt, modify, transmit and distribute this material as you wish (but
+
+not in any way that suggests the ATO or the Commonwealth endorses you or any of your
+
+services or products).
+
+https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/pay g-instalments/calculate-your-payg-instalments/how-we-calculate-your-p... 5/5

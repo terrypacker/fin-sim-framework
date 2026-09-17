@@ -1,0 +1,57 @@
+ATO Software Developers — "GDP adjustment for 2026–27 GST and PAYG instalments"
+Version 2027.  Original published date 11/06/2026 1:34pm.  Status: Current.
+Tax category: Tax preparation.  Resource type: Statement of formula / rates and thresholds.
+https://softwaredevelopers.ato.gov.au/GDPupliftfactor
+
+PROVENANCE: softwaredevelopers.ato.gov.au hangs (no response, not even a 403) on automated
+fetch, the same wall as ato.gov.au (docs/au-tax/SOURCES.md).  The page carries almost no body
+text — the whole substance is the "Description" field — so it was transcribed from the live
+page by the repository owner on 16 September 2026 rather than saved as a PDF.  It is
+CORROBORATED by an independent ATO page saved as a PDF the same day:
+`ato-payg-instalment-calculation-2026.txt` (QC 68098) states "The GDP adjustment for the
+2026-27 income year is 5%."  Two ATO publications, one figure.
+
+--- TRANSCRIPTION BEGINS ---
+
+GDP adjustment for 2026–27 GST and PAYG instalments
+
+Version
+2027
+
+Original Published Date
+11/06/2026 - 1:34pm
+
+Status
+Current
+
+Tax Category
+Tax preparation
+
+Resource Type
+Statement of formula / rates and thresholds
+
+Description
+From 1 July 2026, the gross domestic product (GDP) adjustment factor will change to 5% and
+will apply for the 2026–27 income year. This is used to work out quarterly GST and PAYG
+instalment amounts:
+
+Taxpayers with a substituted accounting period (SAP) whose income year commenced on
+1 January, 1 February or 1 March 2026 will continue to use the 2025–26 GDP adjustment of 4%.
+This is because their income year started before the current year's GDP adjustment of 5%.
+
+Taxpayers starting their income year from 1 April 2026 will have a GDP adjustment of 5%.
+
+--- TRANSCRIPTION ENDS ---
+
+WHAT THIS ESTABLISHES, for design 107 §8.2 / §15.2:
+
+  auGdpUplift = 0.05   for the 2026-27 AU income year (1 July 2026 – 30 June 2027).
+  The prior year's figure, 2025-26, was 4%.
+
+  Both are the `GDP adjustment` of TAA 1953 Sch 1 s 45-405(3) — the percentage the
+  base year's adjusted taxable income is multiplied by `1 + GDP adjustment` under
+  s 45-405(2).  The statutory overrides in s 45-405(9) (2% for 2022-23) and (10) (6% for
+  2023-24) are historical and do not bear on these years.
+
+  The substituted-accounting-period split is NOT modelled: this household's AU income year
+  is the ordinary 1 July – 30 June, so the "on or after 1 April 2026" test resolves to 5%.
