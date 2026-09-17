@@ -61,11 +61,16 @@ export class FxTickHandler extends HandlerEntry {
   }
 
   call({ sim, state }) {
+    // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
+    // process drawing more or fewer times cannot shift which year this value lands on. Falls
+    // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
+    const rng = sim.rngStream?.('fx', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+
     const stepFn = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.NONE;
     return this.pairs.map((pair) => {
       const prev  = state.fxDeviation?.[pair]   ?? 0;
       const sigma = state.effectiveFxVol?.[pair] ?? 0;
-      const z     = gaussianFrom(sim.rng);
+      const z     = gaussianFrom(rng);
       const next  = stepFn(prev, { sigma, dt: this.dt, k: this.reversionSpeed, z });
       return { type: 'FX_STEP_APPLY', pair, deviation: next };
     });

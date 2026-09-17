@@ -23,6 +23,13 @@ class EventSeriesBuilder {
     this._order       = 0;
     this._data        = {};
     this._meta        = {};
+    // Fixed calendar anchor. `SimulationAdapter._scheduleEventSeries` has always honoured
+    // `month`/`day` on an EventSeries — "anchor to a fixed calendar date each year" — but the
+    // builder had no way to say it, so the only reachable anchors were the interval snaps
+    // (month-end, year-end, semiannual). Design 107 §5.2 needs 1 January and 1 July, which is
+    // neither: an income year STARTS on those dates and every snap lands on an end.
+    this._month       = undefined;
+    this._day         = undefined;
   }
 
   id(v)          { this._id = v;          return this; }
@@ -32,6 +39,10 @@ class EventSeriesBuilder {
   color(v)       { this._color = v;       return this; }
   interval(v)    { this._interval = v;    return this; }
   startOffset(v) { this._startOffset = v; return this; }
+  /** 1-based calendar month to anchor each firing to; requires `day()`. */
+  month(v)       { this._month = v;       return this; }
+  /** Day of month to anchor each firing to; requires `month()`. */
+  day(v)         { this._day = v;         return this; }
   order(v)       { this._order = v;       return this; }
   data(v)        { this._data = v;        return this; }
   meta(v)        { this._meta = v;        return this; }
@@ -45,6 +56,8 @@ class EventSeriesBuilder {
       color:       this._color,
       interval:    this._interval,
       startOffset: this._startOffset,
+      month:       this._month,
+      day:         this._day,
       order:       this._order,
       data:        this._data,
       meta:        this._meta,

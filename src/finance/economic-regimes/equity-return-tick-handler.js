@@ -203,6 +203,11 @@ export class EquityReturnTickHandler extends HandlerEntry {
   }
 
   call({ sim, state }) {
+    // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
+    // process drawing more or fewer times cannot shift which year this value lands on. Falls
+    // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
+    const rng = sim.rngStream?.('equity', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+
     const bootstrapping = this.model === 'HISTORICAL_BOOTSTRAP';
     let marketDev, marketVar, bootstrap = null;
     if (bootstrapping) {
@@ -216,7 +221,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       const step = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.WHITE_NOISE;
       const prev = state.equityReturnMarketDev ?? 0;
       // ONE market draw, shared across all sleeves (design 74 §4).
-      const zMarket = gaussianFrom(sim.rng);
+      const zMarket = gaussianFrom(rng);
       marketDev = step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: zMarket });
       marketVar = this.vol * this.vol;
     }
@@ -245,7 +250,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
         // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced
         // and the market-only path reproduces exactly (design 74 §4 ⚠️).
         if (idioVol > 0) {
-          const zIdio = gaussianFrom(sim.rng);
+          const zIdio = gaussianFrom(rng);
           dev += idioVol * Math.sqrt(this.dt) * zIdio;
         }
       }
@@ -304,7 +309,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       // Same skip discipline as the sleeve loop: SKIPPED entirely at σ_idio = 0, not
       // drawn-and-multiplied-by-zero, so a beta-only security leaves the cursor alone.
       if (secIdio > 0) {
-        const zIdio = gaussianFrom(sim.rng);
+        const zIdio = gaussianFrom(rng);
         dev += secIdio * Math.sqrt(this.dt) * zIdio;
       }
       const comp = geometric
@@ -343,6 +348,10 @@ export class EquityReturnTickHandler extends HandlerEntry {
    * @private
    */
   _bootstrapStep(sim, state) {
+    // Design 107 §15.5 — its own substream. A separate label from the `equity` one the
+    // WHITE_NOISE/OU path uses: only one of the two draws in any given run, so sharing a label
+    // would be harmless today and would silently couple them the moment a mode drew both.
+    const rng = sim.rngStream?.('equity-bootstrap', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
     // The cursor's `index` is a SERIES index; the window maps it to its own deviations.
     // Under FULL (start 0) this is design 102's arithmetic exactly. A prior cursor outside
     // the window (never, within one run) starts a fresh block rather than reading off it.
@@ -355,7 +364,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
       rel       = (prior.index - start + 1) % n;
       remaining = prior.remaining - 1;
     } else {
-      rel       = Math.floor(sim.rng() * n);
+      rel       = Math.floor(rng() * n);
       remaining = Math.max(1, Math.round(this.blockLength)) - 1;
     }
     const index = start + rel;

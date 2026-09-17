@@ -12,6 +12,7 @@ import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
 import { POOL_TARGET_MODE, POOL_CAPACITY_MODE, POOL_SPEND_BASIS } from './liquidity-graph.js';
 import { ACCOUNT_TYPE }           from '../assets/account.js';
 import { isDrawdownAccessible }   from '../derived-metrics/net-liquidity.js';
+import { getResidency, primaryPersonKey } from '../residency-utils.js';
 
 /**
  * DESIGN 97 §12.1 — a pool is not a balance.
@@ -168,6 +169,13 @@ function spendForSpec(spec, ctx, poolState) {
 /** Resolve a `{ mode, value }` size spec to a base-currency figure. */
 function resolveSize(spec, ctx, poolState) {
   if (!spec) return null;
+  // Design 107 §15.3 — a size that applies only while resident in one country resolves to
+  // ZERO elsewhere, not to null. The distinction is load-bearing: null means "this pool sizes
+  // nothing" and leaves the rebalancer and the remainder pass alone, whereas 0 is a real
+  // target that says "hold nothing here" — which is what makes an edge OUT of the float
+  // (the sweep, §5.3 leg 0) see a pool with no demand of its own, and an edge IN ask for
+  // nothing.
+  if (spec.whenResident != null && ctx.residency !== spec.whenResident) return 0;
   switch (spec.mode) {
     case POOL_TARGET_MODE.YEARS_OF_SPEND: return spec.value * spendForSpec(spec, ctx, poolState);
     case POOL_TARGET_MODE.PERCENT:        return spec.value * (ctx.bookBase ?? 0);
@@ -348,6 +356,11 @@ export function poolContext(state, { expensesCurrency = 'RESIDENCE', baseCurrenc
     expensesCurrency,
     bookBase,
     annualSpend: annualSpendBase(state, { expensesCurrency, baseCurrency }),
+    // Read LIVE, every evaluation, and off the same person the spending path resolves its
+    // transaction account from (`MonthlyExpensesHandler`). A residency captured at build time
+    // would be the starting residency for the whole run — the exact shape of defect this repo
+    // has already paid for once (`config-field-in-state-is-not-read`).
+    residency: getResidency(state, primaryPersonKey(state)),
   };
 }
 

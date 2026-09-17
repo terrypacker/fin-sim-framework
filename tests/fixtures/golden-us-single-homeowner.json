@@ -24,7 +24,9 @@
  "auDiscountApportionedBaseYTD": 0,
  "auDiscountableGainsYTD": 0,
  "auFrankingCreditYTD": 0,
+ "auGdpUplift": 0.05,
  "auNonResidentWithholdingYTD": 0,
+ "auNotionalTaxRate": 0.25,
  "auNrWithholdingInterestYTD": 0,
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
@@ -1209,6 +1211,23 @@
  "stateOrdinaryIncomeYTD": 0,
  "statePensionIncomeYTD": 7542.15834772,
  "stateSsIncomeYTD": 0,
+ "taxBasis": {
+  "AU": {
+   "primary": {
+    "instalmentBase": 0,
+    "year": 2064
+   }
+  },
+  "US": {
+   "agi": 280218.98,
+   "tax": 33696.64,
+   "year": 2065
+  }
+ },
+ "taxInstalmentsPaid": {
+  "AU": 0,
+  "US": 0
+ },
  "usCapitalGainsYTD": 0,
  "usCollectibleGainsYTD": 0,
  "usFilingSingle": true,

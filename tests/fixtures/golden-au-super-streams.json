@@ -7,6 +7,7 @@
  "auDiscountApportionedBaseYTD": 0,
  "auDiscountableGainsYTD": 0,
  "auFrankingCreditYTD": 0,
+ "auGdpUplift": 0.05,
  "auHouseProperty": {
   "accumulatedDepreciation": 0,
   "acquisitionDate": null,
@@ -82,6 +83,7 @@
   "type": "loan"
  },
  "auNonResidentWithholdingYTD": 0,
+ "auNotionalTaxRate": 0.25,
  "auNrWithholdingInterestYTD": 0,
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
@@ -880,6 +882,17 @@
   "type": "super"
  },
  "superWithdrawalBlocked": false,
+ "taxBasis": {
+  "AU": {
+   "primary": {
+    "instalmentBase": 173903.91,
+    "year": 2031
+   }
+  }
+ },
+ "taxInstalmentsPaid": {
+  "AU": 0
+ },
  "usCapitalGainsYTD": 13545.51,
  "usCollectibleGainsYTD": 0,
  "usFilingSingle": true,

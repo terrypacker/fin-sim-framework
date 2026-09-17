@@ -566,6 +566,15 @@ export const ECONOMIC_REGIMES = {
         },
       },
       {
+        // Design 107 §5 — the paycheck trigger. It carries no amount: the destination pool's
+        // own `target` plus `amount.toTarget` resolve the demand from the LIVE spend line, so
+        // an amount here would be a second answer to a question the pool already answers.
+        // `date` is declared because a quarterly paycheck fires three times inside one tax
+        // period, and without it the reducer would date all three to the period's start.
+        type: 'SPENDING_REFILL',
+        fields: { date: ValueType.any() },
+      },
+      {
         // Design 97 §12.4 — executor 2, the cross-account pool flow. Declared because
         // `pickPayload` keeps only declared fields, and in strict mode an UNDECLARED type
         // throws: the design-97 panel reads this action out of the journal as the record of
@@ -1027,6 +1036,25 @@ export const ECONOMIC_REGIMES = {
         description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor — the US market\'s own volatility (0.18 is the mean of J.P. Morgan\'s and BlackRock\'s, design 90 §7.4). Each market loads on it by its beta (US 1.0; intl ex-US 0.85; intl ex-AU 0.81; AU 0.43) and adds its own idiosyncratic volatility. Only used when Stochastic Equity Returns is on.',
       },
       {
+        key:          'rngStreams',
+        label:        'Paired RNG Streams',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'Draw each stochastic process from its OWN year-keyed stream instead of one shared '
+          + 'cursor, so that two scenarios differing in policy experience the SAME realised path. Off (the '
+          + 'default) every process draws from `sim.rng` in whatever order the event queue runs them, which '
+          + 'is fine for one run and misleading for a comparison: measured on a paycheck-vs-no-paycheck pair, '
+          + 'both arms drew the identical 1,862 values in the identical order and still diverged, because the '
+          + 'same value landed on a different DATE in each — a z that is 2035\'s equity shock in one arm is '
+          + '2036\'s in the other. On, a draw is a pure function of (seed, process, year), so nothing another '
+          + 'process does can shift it and the difference between two arms is causal. Turning it on CHANGES '
+          + 'the path a given seed produces, so it is a property of a STUDY, not a better setting: switch it '
+          + 'on for every arm of a comparison, or none.',
+      },
+      {
         key:          'randomSeed',
         label:        'Random Seed',
         type:         'Number',
@@ -1415,6 +1443,53 @@ export const ECONOMIC_REGIMES = {
         enabled:  true,
         color:    '#66BB6A',
       }));
+    }
+
+    // ── design 107 §5 / §15.3 — THE PAYCHECK, following residency ────────────────────
+    //
+    // Scheduled only when `paycheckEnabled`, so a plan that has not opted in draws no extra
+    // event and stays byte-identical. That matters more here than usual: the event queue
+    // orders by `date || order` with no final tie-break, so an unconditional series would
+    // re-resolve same-date ties in every scenario that has one (design 100 §9 measured the
+    // cost of exactly that).
+    //
+    // BOTH calendars are scheduled — 1 January and 1 July — and the handler emits on whichever
+    // one is the current residency's income-year start (§15.3). Two series rather than one
+    // rescheduled series because the schedule is built once, before the run, and the residency
+    // it must follow is a fact about year 5.
+    //
+    // `month`/`day` anchor each to the START of an income year. Neither is reachable through
+    // an interval snap, all of which land on period ENDS, which is why `EventBuilder` grew the
+    // two accessors.
+    //
+    // `order: 1` puts the paycheck AFTER every order-0 event it shares a date with, and both
+    // of the ones that matter are order 0: `PERIOD_ADVANCE_*` and, on the move date itself,
+    // `CHANGE_RESIDENCY`. Two things follow, and both are the reason for the number:
+    //
+    //   · **the move year works at all.** The household moves on 1 July. Running first, the
+    //     paycheck would read the OLD residency, decline to fire on the AU calendar, and leave
+    //     the AU float unfunded for a year. Running last, the residency change has landed and
+    //     the same firing IS §15.3's move-year top-up — no separate event needed.
+    //   · **it reads the right spend line.** The advance inflates `state.monthlyExpenses`
+    //     first, so a `YEARS_OF_SPEND` target now sizes the year AHEAD rather than the year
+    //     just ended, which is what a paycheck is for.
+    //
+    // Sitting after an order-0 event is a strict `order` comparison, not a tie-break, so this
+    // does not depend on the queue's ordering of equal keys.
+    if (p.paycheckEnabled) {
+      const interval = p.paycheckCadence === 'QUARTERLY' ? 'quarterly' : 'annually';
+      for (const [cc, month] of [['US', 1], ['AU', 7]]) {
+        events.push(new EventSeries({
+          name:     `Spending Refill (paycheck, ${cc})`,
+          type:     `PAYCHECK_${cc}`,
+          interval,
+          month,
+          day:      1,
+          order:    1,
+          enabled:  true,
+          color:    '#7E57C2',
+        }));
+      }
     }
 
     return events;

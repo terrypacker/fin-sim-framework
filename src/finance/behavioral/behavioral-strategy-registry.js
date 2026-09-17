@@ -25,6 +25,7 @@ import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply
 import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import { PoolFlowReducer }                     from '../pools/pool-flow-reducer.js';
+import { SpendingRefillHandler }               from '../handlers/spending-refill-handler.js';
 import { PoolFlowApplyReducer }                from '../pools/pool-flow-apply-reducer.js';
 import { resolveLiquidityGraph }               from '../pools/liquidity-graph.js';
 import {
@@ -585,7 +586,26 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
    * perfectly good configuration and forcing a rebalancer on it would change its behaviour.
    */
   LIQUIDITY_POOLS: {
-    handlers: (_context) => [],
+    // Design 107 §5 — the paycheck. It belongs to this strategy rather than to a toolset
+    // because it is a pools feature end to end: the handler emits `SPENDING_REFILL`, and the
+    // only thing that answers it is `PoolFlowReducer` evaluating the graph's `PAYCHECK` edges.
+    // Wired only when the event was scheduled (`paycheckEnabled`), so a plan that has not
+    // opted in gains no handler and no event.
+    handlers: (context) => {
+      // One handler per calendar (design 107 §15.3). Both are wired whenever the events were
+      // scheduled; each declines to act unless the household is currently resident in its own
+      // country, so exactly one is live at any point in the run and the pair hands over by
+      // itself at the move.
+      const out = [];
+      for (const cc of ['US', 'AU']) {
+        const evt = context.schedulesById?.[`PAYCHECK_${cc}`];
+        if (!evt) continue;
+        const handler = new SpendingRefillHandler({ country: cc });
+        handler.handledEvents.push(evt);
+        out.push(handler);
+      }
+      return out;
+    },
     reducers: (context) => {
       const p     = context.parameters;
       const graph = resolveLiquidityGraph(p, context.accounts ?? []);
@@ -664,6 +684,41 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
           + 'surface an error you were never shown. Contrast `poolFlowsEnabled`, which turns off only '
           + 'the refill edges and leaves the pools, their sizing and the spend order live.',
         visibleWhen: { param: 'liquidityGraph', exists: true },
+      },
+      {
+        // ── design 107 §5 — the paycheck ──────────────────────────────────────────────
+        key: 'paycheckEnabled', label: 'Spending Paycheck Enabled',
+        type: 'Boolean', group: 'Spending', mc: false, opt: false,
+        defaultValue: false,
+        description: 'Fund living costs by a scheduled transfer into the spending float, instead '
+          + 'of the just-in-time top-up that fires whenever a debit would breach the transaction '
+          + 'account\'s minimum balance. Off (the default) is today\'s behaviour: a floor plus one '
+          + 'liquidation per month, in the exact amount of that month\'s shortfall. On, a '
+          + 'SPENDING_REFILL event fires the graph\'s `cadence: PAYCHECK` edges, which fill the '
+          + 'destination pool to its own `target` — so the float is sized by the pool and is '
+          + 'automatically net of any dividend cash that already landed in it. This changes WHEN '
+          + 'assets are sold, not how much is spent: an annual paycheck raises a year of spending in '
+          + 'one transaction instead of averaging across twelve, which is a real change in exposure '
+          + 'and the reason the reserve-sourced edge usually wants a gate (design 107 §15.1). '
+          + 'Requires at least one flow with `cadence: PAYCHECK` and a destination pool with a '
+          + '`target`, or the event fires and nothing moves.',
+        visibleWhen: { param: 'liquidityGraph', exists: true },
+      },
+      {
+        key: 'paycheckCadence', label: 'Paycheck Cadence',
+        type: 'Select', group: 'Spending', mc: false, opt: false,
+        options: [{ value: 'ANNUAL', label: 'Annual' }, { value: 'QUARTERLY', label: 'Quarterly' }],
+        defaultValue: 'ANNUAL',
+        description: 'How often the paycheck fires. ANNUAL is what advisers actually run and it '
+          + 'maximises the value of a skip rule — a year\'s funding is one decision, so "take this '
+          + 'year from the reserve instead of selling growth" is a decision there is somewhere to '
+          + 'make. QUARTERLY holds a quarter of the cash idle instead of a year and spreads the '
+          + 'liquidation over four dates, which is closer to what most households tolerate. The two '
+          + 'are the natural A/B: expect the mean to move very little and the trough to move. '
+          + 'The CALENDAR is not a setting: both income-year starts are scheduled (1 January and '
+          + '1 July) and each firing is answered only while the household is resident in that '
+          + 'country, so the paycheck follows a move by itself (design 107 §15.3).',
+        visibleWhen: { param: 'paycheckEnabled', equals: true },
       },
       {
         key: 'poolFlowsEnabled', label: 'Pool Refill Flows Enabled',

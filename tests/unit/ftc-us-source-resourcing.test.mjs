@@ -97,7 +97,12 @@ test('RS-2: the third "re-sourced by treaty" basket is not produced at all', () 
   });
   assert.equal(patch.ftcCurrentResourced, undefined,
     'Reg. §1.904-4(k)(1)(iv)(A) disapplies the separate category for Art. 22(4) relief');
-  assert.deepEqual(Object.keys(patch).sort(), ['ftcCurrentForeignTax']);
+  // The exact key set, as the proxy for "no third basket is staged anywhere". Design 107 §6
+  // added the two instalment-basis keys to this same patch — they are bookkeeping for next
+  // year's PAYG instalments and stage no foreign tax, so they belong here and do not weaken
+  // what this test asserts.
+  assert.deepEqual(Object.keys(patch).sort(),
+    ['ftcCurrentForeignTax', 'taxBasis', 'taxInstalmentsPaid']);
 });
 
 test('RS-3: the AU settle does not split — it stages one unapportioned figure', () => {

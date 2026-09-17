@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { ageAsOf }           from '../behavioral/rebalance-to-target-reducer.js';
 import { toBaseCurrency, currencyOf } from '../fx/to-base-currency.js';
-import { FLOW_EXECUTOR, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE } from './liquidity-graph.js';
+import { FLOW_EXECUTOR, FLOW_CADENCE, POOL_TARGET_MODE, POOL_SPEND_BASIS, POOL_DRAWDOWN_BASIS, POOL_GATE_SCOPE } from './liquidity-graph.js';
 import { poolContext, allPoolMetrics, householdReserve } from './pool-metrics.js';
 
 /**
@@ -75,7 +75,12 @@ export class PoolFlowReducer extends Reducer {
     this.flowsEnabled       = flowsEnabled !== false;
     this.baseCurrency       = baseCurrency;
     this.expensesCurrency   = expensesCurrency;
-    this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
+    // `SPENDING_REFILL` is design 107 §5.1's paycheck. It runs THIS evaluator rather than a
+    // second one: the demand, the gates, the shortfall sharing and the scoped draw are all
+    // decisions, and two derivations of one decision is how they come to disagree. What it
+    // does NOT run is the annual bookkeeping — see `isPaycheck` in `reduce`, and the narrowed
+    // cube write-back at the end of it.
+    this.reducedActionTypes   = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE', 'SPENDING_REFILL'];
     this.generatedActionTypes = ['POOL_FLOW_APPLY'];
     // The pools a rebalance veto can actually bind on: `RebalanceToTargetReducer#_applyVeto`
     // pins the target of a vetoed pool's ALLOCATION classes, so a pool that narrows no
@@ -356,7 +361,16 @@ export class PoolFlowReducer extends Reducer {
   }
 
   reduce(state, action, date) {
+    // Design 107 §5.1 — a PAYCHECK evaluation. It shares every DECISION with a period
+    // advance and none of the annual BOOKKEEPING, and the split is not cosmetic: the cube
+    // carries four series that are defined per calendar year — the market observation
+    // (`marketReturn` / `marketReturnYear`), the compounded return index and its peak, the
+    // trailing balance high, and the gate dwell streaks. Re-stamping any of them on a
+    // paycheck date would hand a later year's gate a mid-year reading of the year it is
+    // deciding in, which is the §20.2 clairvoyance defect arriving by a new road.
+    const isPaycheck = action?.type === 'SPENDING_REFILL';
     const asOfMs = action?.date != null ? new Date(action.date).getTime()
+                 : (isPaycheck && date) ? new Date(date).getTime()
                  : (state.currentPeriods?.[action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US']?.startMs
                     ?? (date ? new Date(date).getTime() : Date.now()));
 
@@ -374,9 +388,17 @@ export class PoolFlowReducer extends Reducer {
 
     // The trailing high, monotone, updated BEFORE the gates read it so a pool at a fresh peak
     // this period reads as 0% below its high rather than as one period stale.
+    //
+    // A PAYCHECK evaluation does NOT advance it. The high is a per-year observation like the
+    // rest of the series below, and a quarterly paycheck would otherwise sample the balance
+    // four extra times a year — ratcheting the peak of a pool that is merely being refilled,
+    // and so widening every `drawdownBasis: BALANCE` gate's measured drawdown for reasons
+    // that have nothing to do with the market.
     const highs = {};
     for (const pool of this.graph.pools) {
-      highs[pool.id] = Math.max(prior[pool.id]?.high ?? 0, metrics[pool.id].balance);
+      highs[pool.id] = isPaycheck
+        ? (prior[pool.id]?.high ?? metrics[pool.id].balance)
+        : Math.max(prior[pool.id]?.high ?? 0, metrics[pool.id].balance);
     }
 
     // The dwell streaks (§20.15). Persisted on the DESTINATION pool's cube entry — a flow has
@@ -408,6 +430,13 @@ export class PoolFlowReducer extends Reducer {
         (orderOf.get(a.to) - orderOf.get(b.to)) || (a.priority - b.priority) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
       for (const flow of flows) {
+        // Design 107 §5.1 — the two trigger sets are DISJOINT. A period advance never
+        // evaluates a PAYCHECK edge, and a paycheck evaluates nothing else. Without the
+        // second half a paycheck would re-decide every ordinary refill on a mid-year
+        // reading; without the first, a PAYCHECK edge authored on the AU calendar would
+        // still fire on the 1 January advance, which is the defect the cadence exists to fix.
+        const isPaycheckFlow = flow.cadence === FLOW_CADENCE.PAYCHECK;
+        if (isPaycheck !== isPaycheckFlow) continue;
         if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf) continue;
 
         const gate = this._gateOpen(flow, { metrics, highs, indices, indexHighs, state, asOfMs,
@@ -555,6 +584,40 @@ export class PoolFlowReducer extends Reducer {
       // re-deciding on an equity reading that only changes annually.
       for (const f of fired) {
         if (f.to === pool.id || f.from === pool.id) entry.lastFired[f.id] = yearOf;
+      }
+      // ── design 107 §5.1 — a PAYCHECK evaluation writes a NARROWER entry ────────────────
+      //
+      // Everything above that is a per-calendar-year observation is taken back from the prior
+      // entry rather than restamped: the market reading and the year it belongs to, the
+      // compounded return index and its peak, the trailing balance high, the gate dwell
+      // streaks, and (below) the trailing spend history. What a paycheck legitimately updates
+      // is the LIVE metrics — balance, target, cover — and the record of what it itself moved.
+      //
+      // Written as "start from prior, keep the live fields" rather than a list of fields to
+      // skip, because the failure modes are asymmetric: forgetting to carry a series silently
+      // corrupts a multi-year accumulator, while carrying one field too many shows up as a
+      // stale number in a panel. The safe default is to carry.
+      //
+      // `inflow`/`outflow`/`firedFlows`/`gatedFlows` ACCUMULATE instead of replacing. The two
+      // evaluations describe disjoint edge sets inside one period, and a US paycheck shares
+      // 1 January with the US advance — replacing would silently drop whichever ran first.
+      if (isPaycheck && prior[pool.id]) {
+        const q = prior[pool.id];
+        liquidityPools[pool.id] = {
+          ...q,
+          balance:            entry.balance,
+          capacity:           entry.capacity,
+          utilised:           entry.utilised,
+          target:             entry.target,
+          yearsOfCover:       entry.yearsOfCover,
+          yearsOfCoverTarget: entry.yearsOfCoverTarget,
+          inflow:      +((q.inflow  ?? 0) + (inflow[pool.id]  ?? 0)).toFixed(2),
+          outflow:     +((q.outflow ?? 0) + (outflow[pool.id] ?? 0)).toFixed(2),
+          firedFlows:  [...(q.firedFlows ?? []), ...entry.firedFlows],
+          gatedFlows:  [...(q.gatedFlows ?? []), ...entry.gatedFlows],
+          lastFired:   entry.lastFired,
+        };
+        continue;
       }
       // The TRAILING spend basis needs a series, and it has to be state: a window that
       // predates the run's start date is not recoverable from the journal.

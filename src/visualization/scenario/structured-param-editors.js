@@ -803,8 +803,14 @@ const gateBasisOptionsFor = (row) =>
 // reading — and because an arm built in a script and not reproducible in the app is a study
 // nobody can check.
 const CADENCE_OPTIONS = Object.freeze([
-  ['PERIOD', 'every period'],
-  ['ANNUAL', 'once a year'],
+  ['PERIOD',   'every period'],
+  ['ANNUAL',   'once a year'],
+  // Design 107 §5.1. Not a frequency like the other two: a PAYCHECK edge is invisible to the
+  // period advances entirely and fires only on the SPENDING_REFILL event, whose schedule is
+  // the paycheck's own (annual on either income year, or quarterly). It is the only way to
+  // put a refill on the AU calendar — `ANNUAL` is keyed on the CALENDAR year, so it always
+  // fires on the 1 January advance whatever it was meant to mean.
+  ['PAYCHECK', 'on the paycheck'],
 ]);
 
 const AMOUNT_OPTIONS = Object.freeze([
@@ -937,6 +943,12 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     // §12.2b. Drawn, not carried, so it can be ticked rather than hand-authored — which means
     // it also has to come OUT of `targetExtra` below, or the sync writes it twice.
     targetAfter: Array.isArray(p?.target?.after) ? [...p.target.after] : [],
+    // Design 107 §15.3. Drawn rather than carried, for the reason `targetAfter` is: it
+    // decides whether the pool wants anything at all, so an author who cannot see it cannot
+    // tell a float that is empty because it is abroad from one that is empty because it
+    // failed to fill. Like `targetAfter`, being drawn means it must also come OUT of
+    // `targetExtra` below or the sync writes it twice.
+    targetWhenResident: p?.target?.whenResident ?? '',
     capacity:    p?.capacity?.mode ?? 'BALANCE',
     // The capacity of an AMOUNT / YEARS_OF_SPEND pool. Without this cell those two modes are
     // selectable and unauthorable: `sizeSpec` requires a value for every non-derived mode, so
@@ -944,7 +956,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     capacityValue: Number.isFinite(Number(p?.capacity?.value)) ? Number(p.capacity.value) : null,
     // Carried, not drawn — see `extraKeys`.
     floor:         p?.floor ?? null,
-    targetExtra:   extraKeys(p?.target,   ['mode', 'value', 'after']),
+    targetExtra:   extraKeys(p?.target,   ['mode', 'value', 'after', 'whenResident']),
     capacityExtra: extraKeys(p?.capacity, ['mode', 'value']),
     // Round-tripped untouched: `ui` is opaque to the engine and belongs to the editor that
     // effort 2 will build (design 97 §14). Dropping it here would silently discard a layout.
@@ -972,7 +984,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     return {
       id: f?.id ?? null, from: f?.from ?? null, to: f?.to ?? null,
       priority: Number.isFinite(Number(f?.priority)) ? Number(f.priority) : 0,
-      cadence: f?.cadence === 'ANNUAL' ? 'ANNUAL' : 'PERIOD',
+      cadence: (f?.cadence === 'ANNUAL' || f?.cadence === 'PAYCHECK') ? f.cadence : 'PERIOD',
       triggerKind, triggerValue,
       rawGate: rows == null ? (f?.gate ?? null) : null,
       amountKind:  f?.amount?.fractionOfSource != null ? 'fractionOfSource' : 'toTarget',
@@ -1008,6 +1020,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
                           ? { after: (p.targetAfter ?? []).filter(
                                 id => id !== p.id && kept.some(q => q.id === id)) }
                           : {}),
+                        ...(p.targetWhenResident ? { whenResident: p.targetWhenResident } : {}),
                         ...(p.targetExtra ?? {}) } }
           : {}),
         ...(p.capacity && p.capacity !== 'BALANCE'
@@ -1206,6 +1219,11 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
       { field: 'targetValue', label: 'Size',     type: 'number',
         step: sizeAttr('targetMode', 'step'), min: sizeAttr('targetMode', 'min'),
         max:  sizeAttr('targetMode', 'max'),  title: sizeAttr('targetMode', 'title'), width: '0.7fr' },
+      // Design 107 §15.3 — the target applies only while the household lives there; elsewhere
+      // it resolves to 0 (hold nothing here), which is what drives the cross-border float
+      // hand-over and the sweep. Blank = always, i.e. every plan that does not move.
+      { field: 'targetWhenResident', label: 'While in', type: 'select', width: '0.9fr',
+        options: [['', 'anywhere'], ['US', 'US'], ['AU', 'AU']] },
       // §12.2b. Blank for every other target mode — `buildCheckSet` renders `emptyText` when a
       // row has no options, which is what a non-remainder row wants anyway.
       { field: 'targetAfter', label: 'Remainder of', type: 'checkset', width: '1.6fr',
@@ -1226,7 +1244,7 @@ export function buildLiquidityGraphEditor(param, accounts = []) {
     ],
     newRow:    () => ({ id: null, label: null, spendOrder: (pools.length + 1) * 10,
                         targetMode: '', targetValue: null, targetAfter: [], capacity: 'BALANCE',
-                        capacityValue: null, floor: null, targetExtra: null,
+                        capacityValue: null, floor: null, targetExtra: null, targetWhenResident: '',
                         capacityExtra: null, ui: null }),
     addLabel:  '+ Add Pool',
     emptyText: 'No pools — the drawdownPriority order applies and nothing refills (the default).',
@@ -1381,7 +1399,7 @@ function buildFlow(f, clauses = []) {
   if (gate) out.gate = gate;
   // Only when it is not the default: an authored `cadence: 'PERIOD'` on every edge would make
   // every previously-saved graph differ from itself on the next save, for nothing.
-  if (f.cadence === 'ANNUAL') out.cadence = 'ANNUAL';
+  if (f.cadence === 'ANNUAL' || f.cadence === 'PAYCHECK') out.cadence = f.cadence;
   if (f.amountKind === 'fractionOfSource' && f.amountValue != null) {
     out.amount = { fractionOfSource: f.amountValue, ...(f.amountExtra ?? {}) };
   } else if (f.amountExtra) {

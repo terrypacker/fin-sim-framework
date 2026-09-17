@@ -58,6 +58,16 @@ export const AU_TAX = {
                   // index factor this year was assessed under. Declared so the journal
                   // can explain a cap that differs from the published table.
                   limitIndexFactor: ValueType.number() } },
+      // ── design 107 §6–§8 — instalments and the refund they make routine ─────────
+      // The instalment is its OWN family, not TAX_PAYMENT_DEBIT: it chains one of those to
+      // move the cash, so counting both would double every instalment in "Tax Paid by Year".
+      { type: 'AU_TAX_INSTALMENT_DEBIT', family: 'TAX_INSTALMENT', cc: 'AU',
+        fields: { amount: ValueType.currency('AUD'), quarter: ValueType.number() } },
+      // A refund is a CREDIT and belongs to no debit family — netting it into the paid line
+      // would report a year that over-paid as one that paid less tax, which is not what
+      // happened: the tax was the same and the timing was wrong.
+      { type: 'AU_TAX_REFUND_CREDIT', cc: 'AU',
+        fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
         // `escalated` marks the re-issue that pays the part of the SAME bill the
         // first pass could not fund (see TaxPaymentDebitReducerBase). Must be
@@ -76,6 +86,64 @@ export const AU_TAX = {
 
   paramSchema(context) {
     return [
+      {
+        // ── design 107 §6–§8 — paying tax in instalments ─────────────────────────────
+        key: 'taxInstalmentsEnabled', label: 'Pay Tax in Instalments',
+        type: 'Boolean', group: 'Tax', mc: false, opt: false,
+        defaultValue: false,
+        description: 'Pay income tax across the year on the statutory dates instead of as one '
+          + 'lump at the settle. Off (the default) the whole year\'s liability is a single debit on '
+          + '31 December / 30 June, funded by a draw on that same date — so one date\'s market price '
+          + 'decides what must be sold to pay a bill computed on the previous twelve months, and a '
+          + 'crash landing in December is met by selling at the bottom in every path. On, the US pays '
+          + 'four instalments on 15 Apr / 15 Jun / 15 Sep / 15 Jan (IRC §6654(c)(2)) sized from the '
+          + 'PRIOR year\'s return — 100% of it, or 110% where that return\'s AGI exceeded \$150,000 '
+          + '(§6654(d)(1)(B)(ii), (C)(i)) — and Australia pays four PAYG instalments after each '
+          + 'quarter (TAA 1953 Sch 1 s 45-61) at 25/50/75/100% of GDP-adjusted notional tax '
+          + '(s 45-400(2)). The settle then moves only the true-up, and refunds an over-payment. '
+          + 'Note the two regimes differ in a way that matters: the US basis is last year\'s whole '
+          + 'tax including capital gains, so the prior-year safe harbour is complete, while '
+          + 's 45-330(1)(a) EXCLUDES net capital gain from the AU base — so an AU retiree funding '
+          + 'spending by realising gains still meets a large balancing payment at assessment. That '
+          + 'is the law, not a modelling gap.',
+      },
+      {
+        key: 'auGdpUplift', label: 'AU GDP Adjustment',
+        type: 'Number', group: 'Tax', mc: false, opt: false,
+        min: 0, max: 0.2, step: 0.01,
+        defaultValue: 0.05,
+        description: 'The GDP adjustment applied to the base year\'s income when the Commissioner '
+          + 'works out PAYG instalments (TAA 1953 Sch 1 s 45-405(2)–(3)); a negative figure reads as '
+          + '0% under s 45-405(3)(b). The default 0.05 is the ATO\'s published factor for the '
+          + '2026–27 income year (4% for 2025–26) — see docs/au-tax/ato-rates/. It moves only the '
+          + 'TIMING of cash, never the total tax, because the assessment credits the instalments '
+          + 'exactly (s 45-30), so it is not worth sweeping. It does NOT apply to an annual payer or '
+          + 'to the instalment-RATE method: the ATO applies it to the notified AMOUNT only.',
+        visibleWhen: { param: 'taxInstalmentsEnabled', equals: true },
+      },
+      {
+        key: 'auNotionalTaxRate', label: 'AU Notional Tax Rate',
+        type: 'Number', group: 'Tax', mc: false, opt: false,
+        min: 0, max: 0.6, step: 0.01,
+        defaultValue: 0.25,
+        description: 'The flat rate the base year\'s adjusted taxable income is re-taxed at to get '
+          + 'notional tax (s 45-325). A simplification, stated rather than hidden: the section wants '
+          + 'the base year\'s ADJUSTED TAX on that income, i.e. the progressive scale applied again, '
+          + 'and computing it would mean re-entering the AU tax engine on a counterfactual state '
+          + 'from inside a handler. The error is absorbed completely by the balancing payment at '
+          + 'assessment, so it shifts cash between quarters and nothing else.',
+        visibleWhen: { param: 'taxInstalmentsEnabled', equals: true },
+      },
+      {
+        key: 'auDeferredBasPayer', label: 'Deferred BAS Payer',
+        type: 'Boolean', group: 'Tax', mc: false, opt: false,
+        defaultValue: true,
+        description: 'Whether the s 45-61(2) due dates apply — the 28th of the month after each '
+          + 'instalment quarter rather than s 45-61(1)\'s 21st, with the December quarter falling on '
+          + 'the next 28 February. True (the default) is most individuals lodging through an agent, '
+          + 'and gives the 28 Oct / 28 Feb / 28 Apr / 28 Jul calendar people actually experience.',
+        visibleWhen: { param: 'taxInstalmentsEnabled', equals: true },
+      },
       {
         // Dedicated ATO CPI indexation rate for AU CGT cost-base indexation
         // (design 57 Part 2, Item A). Unset ⇒ the InflationAdjustReducer falls
@@ -123,6 +191,12 @@ export const AU_TAX = {
       // US_TAX's US entry and US_STATE_TAX's US_STATE entry by the compiler.
       bracketIndexSpreads:              { AU: context.parameters?.auBracketIndexSpread ?? 0 },
       bracketIndexAccumulator:          { AU: 1.0 },
+      // design 107 §8 — read by `AuTaxInstalmentHandler` when it sizes a PAYG instalment.
+      // In STATE, not just in `parameters`: the handler sees only live state, and a param the
+      // compiler never copies across is the classic silently-inert key this repo has paid for
+      // more than once.
+      auGdpUplift:                      context.parameters?.auGdpUplift ?? 0.05,
+      auNotionalTaxRate:                context.parameters?.auNotionalTaxRate ?? 0.25,
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
       auDiscountableGainsYTD:           0,   // CGT 50%-discount-eligible slice (design 62 §4)
@@ -220,7 +294,7 @@ function _getContributions(context) {
   for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));
   context._auTaxCapture = new TaxService().getContributions(
     ['AU'], periodService, context.startDate,
-    context.accountService, context.stateRegistry,
+    context.accountService, context.stateRegistry, context.parameters ?? {},
   );
   return context._auTaxCapture;
 }

@@ -19,6 +19,11 @@ import {
   UsTaxSettleHandler, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer,
   AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer,
 } from './tax/tax-settle-classes.js';
+import {
+  UsTaxInstalmentHandler, AuTaxInstalmentHandler,
+  UsTaxInstalmentDebitReducer, AuTaxInstalmentDebitReducer,
+  UsTaxRefundCreditReducer, AuTaxRefundCreditReducer,
+} from './tax/tax-instalment-classes.js';
 import { DynamicTaxReducer } from './tax/dynamic-tax-reducer.js';
 import { EventSeries } from '../simulation-framework/events/event-series.js';
 
@@ -44,6 +49,9 @@ const PERIOD_ADVANCE_REDUCER = { US: UsPeriodAdvanceReducer, AU: AuPeriodAdvance
 const TAX_SETTLE_HANDLER     = { US: UsTaxSettleHandler,     AU: AuTaxSettleHandler     };
 const TAX_SETTLE_APPLY_REDUCER = { US: UsTaxSettleApplyReducer, AU: AuTaxSettleApplyReducer };
 const TAX_PAYMENT_DEBIT_REDUCER = { US: UsTaxPaymentDebitReducer, AU: AuTaxPaymentDebitReducer };
+const TAX_INSTALMENT_HANDLER       = { US: UsTaxInstalmentHandler,       AU: AuTaxInstalmentHandler };
+const TAX_INSTALMENT_DEBIT_REDUCER = { US: UsTaxInstalmentDebitReducer,  AU: AuTaxInstalmentDebitReducer };
+const TAX_REFUND_CREDIT_REDUCER    = { US: UsTaxRefundCreditReducer,     AU: AuTaxRefundCreditReducer };
 
 /**
  * TaxService — coordinates TaxEngine and AccountRulesEngine.
@@ -94,7 +102,7 @@ export class TaxService {
    * @param {object}    stateRegistry
    * @returns {{ statePatches: object, events: object[], handlers: object[], reducers: object[] }}
    */
-  getContributions(countryCodes, periodService, startDate, accountService, stateRegistry) {
+  getContributions(countryCodes, periodService, startDate, accountService, stateRegistry, parameters = {}) {
     const startTs = startDate.getTime();
 
     // Resolve starting period for each country
@@ -161,6 +169,74 @@ export class TaxService {
 
       reducers.push(new TAX_SETTLE_APPLY_REDUCER[cc]());
       reducers.push(new TAX_PAYMENT_DEBIT_REDUCER[cc]({ accountService, stateRegistry }));
+      // ── design 107 §6–§8 — paying tax in instalments ─────────────────────────────
+      //
+      // The refund reducer is wired unconditionally and the instalment machinery is not.
+      // Asymmetric on purpose: the refund is the settle's own counterpart (an over-payment has
+      // to land somewhere the moment instalments exist, and a settle that emitted a refund
+      // nothing consumed would silently forfeit it), while four extra event series per country
+      // would re-resolve same-date ties in every scenario that never asked for them — the
+      // \$391k lesson recorded on the filing handler above.
+      reducers.push(new TAX_REFUND_CREDIT_REDUCER[cc]({ accountService, stateRegistry }));
+      if (parameters?.taxInstalmentsEnabled) {
+        reducers.push(new TAX_INSTALMENT_DEBIT_REDUCER[cc]());
+        // §6654(c)(2) for the US: 15 April, 15 June, 15 September, and 15 January of the
+        // FOLLOWING year — note the fourth is two weeks after the settle that closes the year
+        // it belongs to, which is why the settle credits three and not four.
+        //
+        // s 45-61 for Australia, on a 30 June income year: the 21st of the month after each
+        // instalment quarter, or the 28th for a `deferred BAS payer` — which is most
+        // individuals lodging through an agent, hence the default. s 45-61(2)(d) puts the
+        // December quarter's instalment at the next 28 February rather than 28 January.
+        const deferred = parameters?.auDeferredBasPayer !== false;
+        // ── THREE instalments, not four, and the reason is the settle date ──────────────
+        //
+        // Each regime's FOURTH instalment falls AFTER the settle that closes the year it
+        // belongs to: 15 January for a 31 December US year (§6654(c)(2)), 28 July for a 30 June
+        // AU one (s 45-61). The settle resets the year's running total and re-stamps the basis,
+        // so an instalment fired after it reads the NEW year's basis against a zeroed total and
+        // pays a full year in one go. Measured before this was fixed: every US instalment
+        // landed on 15 January, 34 of them.
+        //
+        // Crediting it to the right year would mean keying the running total by tax year. The
+        // cheaper answer is the one the statute already provides: **§6654(h)** — file and pay
+        // in full by 31 January and no addition to tax arises on the 4th required instalment.
+        // A settle that runs on 31 December and pays the balance IS paying in full by
+        // 31 January, so the fourth instalment is discharged by the settle rather than skipped.
+        // Australia has no §6654(h), but its assessment genuinely happens months after 30 June
+        // (a return is lodged by October), so a model that settles ON 30 June has already
+        // collapsed the fourth instalment into the assessment.
+        //
+        // The three that DO fall inside the year keep their exact statutory amounts, because
+        // `CUMULATIVE_SHARE` states each as a share of the required annual payment: 25/50/75.
+        // The balance is the settle's true-up, which is where it would have gone anyway.
+        const DUE = cc === 'US'
+          ? [[4, 15], [6, 15], [9, 15]]
+          : (deferred ? [[10, 28], [2, 28], [4, 28]]
+                      : [[10, 21], [1, 21], [4, 21]]);
+        DUE.forEach(([month, day], i) => {
+          const series = new EventSeries({
+            name:     `${cc} Tax Instalment Q${i + 1}`,
+            // One TYPE per quarter. `ScenarioCompiler` de-duplicates EventSeries by type, so
+            // four series sharing `TAX_INSTALMENT_${cc}` collapse to one and only the last
+            // survives — measured, and it put every US instalment on 15 January. A single
+            // series with a quarterly interval cannot express these dates either: neither
+            // calendar is evenly spaced (US Apr→Jun is two months, AU Oct→Feb is four).
+            type:     `TAX_INSTALMENT_${cc}_Q${i + 1}`,
+            interval: 'annually',
+            month, day,
+            data:     { cc, quarter: i + 1 },
+            enabled:  true,
+            color:    '#FFA726',
+            // Ahead of the settle band (100) — an instalment is never the true-up.
+            order:    90,
+          });
+          events.push(series);
+          const h = new TAX_INSTALMENT_HANDLER[cc]({ quarter: i + 1 });
+          h.handledEvents.push(series);
+          handlers.push(h);
+        });
+      }
       // FILING the prior year's return, as an event distinct from the tax year ENDING
       // (design 94 §8.1l). It exists because a 31-December settle cannot see whether a
       // 31-December sale was a wash — that window closes on 30 January. US only: Australia

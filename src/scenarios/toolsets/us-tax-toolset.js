@@ -68,6 +68,16 @@ export const US_TAX = {
                   disallowed: ValueType.currency('USD'), ledger: ValueType.any(),
                   remaining: ValueType.any(), capitalLoss: ValueType.any(),
                   basisAdjustments: ValueType.any() } },
+      // ── design 107 §6–§8 — instalments and the refund they make routine ─────────
+      // The instalment is its OWN family, not TAX_PAYMENT_DEBIT: it chains one of those to
+      // move the cash, so counting both would double every instalment in "Tax Paid by Year".
+      { type: 'US_TAX_INSTALMENT_DEBIT', family: 'TAX_INSTALMENT', cc: 'US',
+        fields: { amount: ValueType.currency('USD'), quarter: ValueType.number() } },
+      // A refund is a CREDIT and belongs to no debit family — netting it into the paid line
+      // would report a year that over-paid as one that paid less tax, which is not what
+      // happened: the tax was the same and the timing was wrong.
+      { type: 'US_TAX_REFUND_CREDIT', cc: 'US',
+        fields: { amount: ValueType.currency('USD') } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         // `escalated` — see AU_TAX_PAYMENT_DEBIT: the cross-border re-issue of the
         // unfunded part of this same bill. Declared so "Tax Paid by Year" can
@@ -240,7 +250,7 @@ function _getContributions(context) {
   for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
   context._usTaxCapture = new TaxService().getContributions(
     ['US'], periodService, context.startDate,
-    context.accountService, context.stateRegistry,
+    context.accountService, context.stateRegistry, context.parameters ?? {},
   );
   return context._usTaxCapture;
 }

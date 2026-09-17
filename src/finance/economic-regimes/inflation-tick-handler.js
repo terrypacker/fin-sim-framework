@@ -235,6 +235,11 @@ export class InflationTickHandler extends HandlerEntry {
   }
 
   call({ sim, state }) {
+    // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
+    // process drawing more or fewer times cannot shift which year this value lands on. Falls
+    // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
+    const rng = sim.rngStream?.('inflation', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+
     const joint = this.model === 'HISTORICAL_JOINT';
     const w     = Math.min(1, Math.max(0, (joint ? this.globalShareJoint : this.globalShare) ?? 0));
     const year  = joint ? state.equityReturnBootstrap?.year : null;
@@ -250,13 +255,13 @@ export class InflationTickHandler extends HandlerEntry {
       eg   = (e.US + e.AU) / Math.sqrt(2 + 2 * W.normalScoreCorr);
     } else {
       // Both country normals are drawn every year so the cursor doesn't depend on ρ.
-      const z1  = gaussianFrom(sim.rng);
-      const z2  = gaussianFrom(sim.rng);
+      const z1  = gaussianFrom(rng);
+      const z2  = gaussianFrom(rng);
       const rho = this.correlation ?? 0;
       e.US = z1;
       e.AU = rho * z1 + Math.sqrt(1 - rho * rho) * z2;
       // Skipped entirely at w = 0 (design 74 §4's rule), so a single-factor run draws four.
-      eg   = w > 0 ? gaussianFrom(sim.rng) : 0;
+      eg   = w > 0 ? gaussianFrom(rng) : 0;
     }
 
     const prevL = state.inflationLatent ?? {};
@@ -286,7 +291,7 @@ export class InflationTickHandler extends HandlerEntry {
         const noise = this.prime.noise?.[cc] ?? 0;
         let d = rho * (prevPrime[cc] ?? 0) + (1 - rho) * beta * deviation[cc];
         // Skipped entirely at 0, so the default link draws nothing (design 74 §4's rule).
-        if (noise > 0) d += noise * gaussianFrom(sim.rng);
+        if (noise > 0) d += noise * gaussianFrom(rng);
         primeDeviation[cc] = d;
       }
       out.primeDeviation = primeDeviation;

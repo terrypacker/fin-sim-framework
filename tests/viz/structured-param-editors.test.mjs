@@ -546,6 +546,36 @@ test('LiquidityGraph: a graph round-trips into three tables and back out unchang
   assert.deepStrictEqual(param.value, graph);
 });
 
+test('LiquidityGraph: a residency-conditional target and a PAYCHECK edge round-trip', () => {
+  // Design 107 §15.3 / §5.1. Both were authorable only by hand until they were drawn: a
+  // `whenResident` survived as carried `extraKeys` data, and a `PAYCHECK` cadence was
+  // COLLAPSED TO 'PERIOD' by the read — which would have silently turned an author's paycheck
+  // edge into an ordinary refill on the next save, and it would still have loaded and run.
+  const graph = {
+    pools: [
+      { id: 'spendingUs', label: 'Float — US', spendOrder: 0,
+        target: { mode: 'YEARS_OF_SPEND', value: 1, whenResident: 'US' },
+        claims: [{ key: 'usSavingsAccount' }] },
+      { id: 'buffer', label: 'Bucket 2', spendOrder: 20,
+        target: { mode: 'YEARS_OF_SPEND', value: 4 },
+        claims: [{ key: 'usStockAccount', sleeves: ['BOND'] }] },
+    ],
+    flows: [
+      // `amount` is left off deliberately: `{ toTarget: true }` is the COMPILER's default
+      // (`normalizeLiquidityGraph` fills it in), and the editor elides defaults for the same
+      // reason it elides `cadence: 'PERIOD'` — writing them onto every edge would make every
+      // previously-saved graph differ from itself on the next save, for nothing.
+      { id: 'paycheck', from: 'buffer', to: 'spendingUs', priority: 10, cadence: 'PAYCHECK' },
+    ],
+  };
+  const param = { name: 'liquidityGraph', value: graph };
+  mount(buildLiquidityGraphEditor(param, ACCOUNTS));
+  assert.deepStrictEqual(param.value, graph);
+  // And specifically, not written twice — once as a drawn column and once via `extraKeys`.
+  assert.deepStrictEqual(Object.keys(param.value.pools[0].target).sort(),
+    ['mode', 'value', 'whenResident']);
+});
+
 test('LiquidityGraph: a multi-account pool is just two claim rows', () => {
   const param = { name: 'liquidityGraph', value: {
     pools: [{ id: 'cash', spendOrder: 10, claims: [{ key: 'usSavingsAccount' }] }],

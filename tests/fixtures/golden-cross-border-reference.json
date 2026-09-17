@@ -56,6 +56,7 @@
   "type": "brokerage"
  },
  "auFrankingCreditYTD": 0,
+ "auGdpUplift": 0.05,
  "auHouseProperty": {
   "accumulatedDepreciation": 0,
   "acquisitionDate": null,
@@ -106,6 +107,7 @@
   "value": 2563304.16
  },
  "auNonResidentWithholdingYTD": 0,
+ "auNotionalTaxRate": 0.25,
  "auNrWithholdingInterestYTD": 0,
  "auNrWithholdingUnfrankedDividendYTD": 0,
  "auOrdinaryIncomeYTD": 0,
@@ -1865,6 +1867,27 @@
   "type": "super"
  },
  "superWithdrawalBlocked": false,
+ "taxBasis": {
+  "AU": {
+   "primary": {
+    "instalmentBase": 77300.75,
+    "year": 2048
+   },
+   "spouse": {
+    "instalmentBase": 67.58,
+    "year": 2048
+   }
+  },
+  "US": {
+   "agi": 102212.05,
+   "tax": 3866.26,
+   "year": 2049
+  }
+ },
+ "taxInstalmentsPaid": {
+  "AU": 0,
+  "US": 0
+ },
  "usCapitalGainsYTD": 0,
  "usCollectibleGainsYTD": 0,
  "usFeieElected": false,

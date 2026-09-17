@@ -58,6 +58,15 @@ and a crash-year draw on the reserve is indistinguishable in the telemetry from 
 Tuesday. Designs 97 §18–§20 spent a long time trying to score a reserve whose balance was
 partly payroll. Separating them is a measurement fix before it is a realism fix.
 
+> **Measured after phase 1 landed, and it is weaker than stated — for a reason that
+> strengthens (a).** On the reference plan the split moved the reserve's cover-years by
+> essentially nothing, because **the float is empty**: the flagged transaction account has a
+> `minimumBalance` of zero, the just-in-time top-up restores exactly that, and the account
+> therefore holds zero at every sample across the whole run. There is no contamination to
+> remove. Defect (b) is unobservable *because* of defect (a) — the value of the split is that
+> it gives the plan somewhere to state its float, and the first reading it states is
+> `0.00 years`. Phase 1 buys the instrument; phase 2 puts a number on it.
+
 **(c) Tax is a single forced sale on a fixed date.** One date's market price sets what the
 household must liquidate to pay a bill computed on the *previous* twelve months. A crash
 that lands in December is met by selling at the bottom, in every path, by construction.
@@ -82,6 +91,41 @@ year and the only thing that needs to hold it is the spending pool, for a few we
 mechanism, not two.
 
 ## 4. Two spending pools, not one pool with two claims
+
+### 4.0 What the spending pool IS — both readings are correct
+
+Worth stating flatly, because the natural reading of §3's table is that the spending pool is
+a new container that money sits in, and it is not.
+
+**A pool in this engine is not a balance. It is a named view over `(account, sleeves)`
+claims.** `poolMetrics` derives `balance` every period by walking the claims and summing what
+a draw would actually find — holdings market value where the account has lots,
+`Math.max(0, account.balance)` for a cash-like account
+(`src/finance/pools/pool-metrics.js:97-111`, and the §12.1 header above it: *"a pool is not a
+balance"*). Nothing is stored on the pool. Nothing can be.
+
+So both readings are true at once, and the apparent tension dissolves:
+
+- **It is a real node** in `liquidityGraph.pools` — authored, serialized, validated, and
+  visible in the pool editor like any other.
+- **Its balance IS the transaction account's balance**, by definition, because the
+  transaction account is its only claim. `SPENDING_REFILL` does not fill "the pool"; it
+  credits the transaction account, and the pool's balance is that number read back.
+
+What the pool node *adds* is exactly four things, and it is worth knowing it is only four:
+
+| the node gives you | which buys |
+|---|---|
+| `spendOrder: 0` | a position in the compiled drawdown sequence — the float is drawn first |
+| `target` | a number for `shortfall`, which is what a `toTarget` refill moves |
+| an id | something for flow edges to name as `from` / `to` |
+| a cube entry | `state.liquidityPools.spendingAu` — balance, target, cover-years, separately from the reserve's (§2.1 defect (b)) |
+
+That is the whole of it. If you deleted the two pool nodes and kept everything else, the
+household would behave identically except that the refill edges would have nothing to point
+at and the reserve's cover-years would silently re-absorb the grocery money.
+
+### 4.1 Why two, and not one pool with two claims
 
 The household spends from **the transaction account of the country it lives in** — that is
 already what `MonthlyExpensesHandler` does (`:160-172`), resolving residency and then the
@@ -108,7 +152,7 @@ Why two and not one pool with both claims:
 Both carry `spendOrder: 0` — the spending pool is always drawn first, which is what makes it
 the float. Neither is a rebalanceable sleeve, so neither participates in executor 1.
 
-### 4.1 The floor moves down, not up
+### 4.2 The floor moves down, not up
 
 It is tempting to implement the float by simply raising `minimumBalance` to a year of spend.
 That does not work, and the reason is §2's second row: the top-up restores the floor exactly,
@@ -124,44 +168,189 @@ because it counts events instead of stocks.
 
 ## 5. The paycheck
 
-A new scheduled event, `SPENDING_REFILL`, authored alongside `MONTHLY_EXPENSES` in the
-toolset schedule list (`src/scenarios/toolsets/us-retirement-toolset.js:748-757`).
+### 5.1 Why it is an event, and not just three flow edges
 
-**Cadence.** `ANNUAL` (default) or `QUARTERLY`. Annual is what advisors actually run and it
-maximises the option value of the skip rule below; quarterly halves the idle cash and is
-closer to what most people tolerate. Both are one parameter, and the pair is the natural A/B
-arm (§12).
+The first thing to try is no new machinery at all: author the refill as ordinary pool flows
+with `cadence: ANNUAL`, and let the existing `PoolFlowReducer` fire them. The annual paycheck
+dates even coincide with the period advances — 1 January is `PERIOD_ADVANCE_US`, 1 July is
+`PERIOD_ADVANCE_AU`.
 
-**Date.** The start of the residency country's income year, so the paycheck and the tax
-calendar share a boundary: 1 January while US-resident, 1 July while AU-resident. On a
-residency change the schedule follows the residency — the household's year is the year it is
-taxed on.
+**It does not work, and the reason is precise.** `cadence: ANNUAL` is keyed on the *calendar
+year*: `if (flow.cadence === 'ANNUAL' && prior[flow.to]?.lastFired?.[flow.id] === yearOf)
+continue` (`pool-flow-reducer.js:411`). The reducer fires on **both** advances
+(`:78`), so an `ANNUAL` edge into `spendingAu` fires at whichever advance comes first in the
+calendar year — **1 January, the US one** — and is then suppressed on 1 July. An AU-calendar
+annual paycheck is not authorable today. Quarterly is not authorable at all: `FLOW_CADENCE` is
+`{PERIOD, ANNUAL}` (`liquidity-graph.js:108`).
 
-**Amount.** Fill the spending pool to its target `S`, where
+So `SPENDING_REFILL` is a real scheduled event. But it needs **no second evaluator**:
+
+1. add `SPENDING_REFILL` to `PoolFlowReducer.reducedActionTypes` (`:78`);
+2. add a cadence value `PAYCHECK`, which fires only on that action and is skipped on a
+   period advance.
+
+Everything else — the (s, S) demand, the gate vocabulary, the shortfall sharing, the scoped
+draw, the FX and §988 handling — is reused unchanged. This is the smallest change that makes
+the calendar authorable, and it keeps one evaluator, which matters because a second one would
+have to re-derive `poolContext`, the return indices and the gate streaks, and two derivations
+of one decision is how they come to disagree.
+
+### 5.2 Cadence, date, amount
+
+**Cadence.** `ANNUAL` (default) or `QUARTERLY` — the event's schedule, not a flow property.
+
+**Date.** The start of the residency country's income year: 1 January while US-resident,
+1 July while AU-resident. Quarterly subdivides that year, not the calendar.
+
+**Amount.** The event carries no amount. It sets the pool's `target` and lets the edges fill
+to it — `amount.toTarget: true` makes the demand `m.shortfall` (`pool-flow-reducer.js:355`),
+which is the (s, S) band's upper edge `S`:
 
 ```
-S  =  (spend for the coming period)  +  (instalments scheduled in the coming period)  +  margin
+target(spendingXx)  =  (spend for the coming period)
+                     + (instalments scheduled in the coming period)   [if paycheckIncludesTax]
+                     + margin
 ```
 
-with `margin` an authored fraction (default 0). This is the whole point of building the
-paycheck and the instalments together: the retiree who transfers a year's money once a year
-transfers the tax with it, and a paycheck sized on living costs alone would guarantee a
-second, unplanned sale every quarter.
+Expressed as `YEARS_OF_SPEND` for the first term, so it tracks the live spend line through
+the age bands and inflation rather than freezing an authored dollar figure.
 
-**Source.** The existing flow machinery, in priority order, all of it already expressible:
+### 5.3 The source: three legs, and only two are authored
 
-1. accumulated cash yield (dividends and coupons not reinvested — design 106 decides which
-   those are; if `dividendReinvest` is off, this leg is free and happens with no sale at all);
-2. rebalancing-overweight sales (executor 1 — sell what is above target, which is how
-   "sell high" stays emergent rather than being a timing rule);
-3. the reserve/buffer pools, in `spendOrder`.
+This is the part §5 previously hand-waved. The three legs are not three flow edges.
 
-**The skip rule.** A `gate` on the reserve-sourced edge — the same `sourceDrawdownUnder` /
-`drawdownBasis: INDEX` shape already in use — lets the plan say *this year I take the paycheck
-from the reserve instead of from the portfolio*. Authored, defaulting **off**. It is not
-optional scaffolding: an annual paycheck concentrates a year of selling into one day, so
-`ANNUAL` without a skip rule is a risk increase over today's twelve averaged sales, and the
-gate is what pays for it. §15.1 has the reasoning and the three-arm grid that prices it.
+**Leg 0 — the sweep, and it is NOT optional. Found by measurement, phase 2.**
+
+Before any of the three legs below, the paycheck must empty the float the household is *not*
+living out of. The reason is a job the just-in-time cascade was silently doing: because the
+transaction account sits first in the drawdown sequence, every monthly top-up incidentally
+swept whatever had landed in it — and income keeps arriving in the country the household has
+left. On the reference plan that is Social Security, which pays into the US transaction
+account for the entire run, decades after the move to Australia.
+
+Replace the funding job without the sweeping job and that income simply piles up at the
+savings rate. Measured on the first working paycheck: **\$1.0M idle at the horizon**, against
+\$75k once the sweep edge existed.
+
+So the non-resident float carries `target: AMOUNT 0` and an edge into the resident one at a
+priority AHEAD of every other leg — cash that has already arrived funds the year before
+anything is sold. §15.3 treats this as a one-off at the residency change; it is not. It is
+needed every year, for as long as any income is denominated in the country left behind.
+
+**Leg 1 — yield. Free, and requires no configuration whatsoever.**
+
+When dividend reinvestment is off, `StockDividendCashApplyReducer` already credits the cash
+**to the country's transaction account** (`stock-dividend-cash-apply-reducer.js:55-62`; design
+106 §2). The transaction account is the spending pool's only claim. **So yield does not need
+an edge — it lands *inside* the pool and reduces `shortfall` directly.** A year of dividends
+arriving through the year means the next paycheck's `toTarget` demand is automatically net of
+them, and no sale is made for money that already arrived.
+
+That is the entire "spend the natural yield first" strategy, obtained for nothing, and it is
+worth saying explicitly because the obvious implementation — an edge from a `yield` pool — is
+both unnecessary and wrong (there is no pool to source it from; the cash is already here).
+
+Corollary worth carrying into design 106: **turning DRIP off makes the paycheck cheaper**, and
+the two designs interact through exactly this line.
+
+**Leg 2 — the sale, and "sell what's overweight" is *not* a flow.**
+
+When the shortfall survives leg 1, the refill edge raises cash through the scoped
+`replenishSavings` draw (`pool-flow-apply-reducer.js:98`). *Which sleeve that draw sells* is
+not a pool-graph decision at all — it is `drawdownRebalanceWeight`, design 65 Lever C:
+
+> `score(class) = taxRankNorm(class) − wMix · (actualFrac − targetFrac)`, sorted ascending, so
+> an **over-weight** sleeve scores lower and is sold first
+> (`holdings-selection.js:190-240`).
+
+So "fund the paycheck by selling what is above target" is one scalar, already wired, currently
+**`drawdownRebalanceWeight: 0`** in the reference scenario — i.e. off.
+
+> **MEASURED 17 Sep 2026, and this paragraph was wrong.** It called the scalar "the single
+> highest-leverage existing knob for this design". It is not a knob at all here: swept over
+> 0 / 0.5 / 1 / 2, with and without the paycheck, every run came back **byte-identical**.
+>
+> The cause is structural, and it is the graph. **A liquidity graph compiles the drawdown
+> into PER-SLEEVE entries** — `usStockAccount[BOND]`, `[GOLD]`, `[EQUITY]` are separate
+> steps — so `withSleeveInclude` narrows every draw to a single ALLOCATION class before the
+> sleeve ranker runs. Lever C reorders sleeves *within* one draw, and there is never more
+> than one sleeve in a draw. The control proves the lever itself is alive: with
+> `liquidityGraphEnabled: false`, where draws are whole-account, weight 2 moves terminal
+> wealth by **−1.19M**.
+>
+> So in a pool-graph plan **`spendOrder` IS the sleeve policy**, and design 65 Lever C is
+> dead alongside it. That is arguably correct — two mechanisms for one decision is what
+> §12.3 warns against — but it must be stated, because the parameter is visible, authorable
+> and silently inert. If the paycheck should prefer the over-weight class, it has to be said
+> in the graph: one source pool claiming several sleeves, not a second lever.
+
+It is not a pool edge; putting it in the graph would be modelling the same decision twice.
+
+**Leg 3 — the reserve edges, and the waterfall is emergent.**
+
+Two authored edges into each spending pool, e.g.:
+
+```
+buffer → spendingAu   priority 10   cadence PAYCHECK   amount.toTarget
+growth → spendingAu   priority 20   cadence PAYCHECK   amount.toTarget   gate: {...}
+```
+
+The ordering and the sharing are already implemented and need no new logic. Flows are sorted
+by *destination `spendOrder`, then edge `priority`, then id* (`pool-flow-reducer.js:404-408`),
+and each edge's demand is recomputed against what earlier edges already promised:
+
+```js
+const promised = inflow[flow.to] ?? 0;
+const destNow  = { ...dest, shortfall: Math.max(0, dest.shortfall - promised) };
+```
+
+(`:419-420`) — *"two sources into one pool must SHARE the shortfall, not each fill it."* So
+priority 10 takes what it can (capped by its own `available = balance − floor`), priority 20
+sees only what is left, and a third edge would see the remainder. The waterfall is the
+existing mechanism read in the right order, not a feature to build.
+
+### 5.4 The skip rule — yes, it is the same gate, with three constraints
+
+The direct answer: **it is exactly the existing `gate` vocabulary**, the same object that
+already sits on `growth-to-buffer` and `growth-to-offset` in the reference scenario, evaluated
+by the same `_gateOpen` / `_leafClauses` (`pool-flow-reducer.js:125`, `:202-270`). Nothing new is authored.
+
+But three things about it are not obvious, and each has already caused a defect:
+
+**(a) A gate needs a market to read, and a cash pool has none.** `poolMarketReturn` walks the
+claims' *rated lots* (`pool-metrics.js:66-82`). The spending pool claims a savings account,
+which holds none, so its reading is `null` — and the two return clauses treat absent readings
+asymmetrically by design: `sourceReturnOver` stays **open**, `targetReturnUnder` stays **shut**
+(`pool-flow-reducer.js:257-267`). A gate clause written against the spending pool is therefore
+a **constant**, not a condition: inert in one direction, permanently closed in the other. The
+gate has to read the **source**, and the source has to be a market pool. `growth → spendingAu`
+can carry a real gate; `buffer → spendingAu` carries one only to the extent the buffer holds
+rated bond lots; a cash-sourced edge cannot carry one at all.
+
+**(b) `gate.scope` is the decision, and the default is the aggressive one.** `SOURCE` (the
+default) does not merely stop the edge — `_applyVeto` pins the target of every ALLOCATION
+class the **source pool** claims, so the rebalancer may not sell those sleeves either. That is
+deliberate (§12.4b: otherwise the drift band launders the same sale through a bond target),
+and it is also the lever measured to **stop crash-year equity sales perfectly while raising
+failure by ~6 points**. For the paycheck's skip rule the intent is narrower — *take this
+year's money from the reserve instead* — which is `scope: EDGE`: cap the destination, leave
+the source's own rebalancing alone.
+
+**(c) A `SOURCE`-scoped gate here would silently re-govern the edges already in the
+scenario.** §12.4b: *"the tightest gate on any edge out of a source pool is that source's
+effective gate, and every looser one is unreachable"* — narrowed by §12.4c to mean the **veto**
+is pool-wide while each edge still fires on its own gate. The reference scenario already has
+two gated edges out of `growth` at `sourceDrawdownUnder: 0.2`. Adding a third out of the same
+pool at a different threshold, `SOURCE`-scoped, changes the effective veto for **all three**,
+and the §12.4b warning records what that did on a real plan: an authored multi-year bond
+reserve driven to a bond target of **exactly zero, for years**, while the cube went on
+reporting the target it wanted.
+
+So the skip rule is authored as: an `EDGE`-scoped gate, on the `growth`-sourced paycheck edge
+only, reading `sourceDrawdownUnder` with `drawdownBasis: INDEX` — the flow-neutral series,
+because a `BALANCE` basis in decumulation confounds "the market fell" with "we have been
+spending this pool", and latches shut forever after the first crash (§20.14). Default **off**;
+§15.1 prices it.
 
 **The move year.** The paycheck follows residency, with no lookahead: a full year on the old
 calendar, then a sweep-and-top-up triggered by the residency change itself, then the new
@@ -431,14 +620,26 @@ key-collision trap).
 | `spendingPoolEnabled` | `false` | build `spendingUs` / `spendingAu` and the paycheck. Off = today's behaviour, byte-identical. |
 | `paycheckCadence` | `ANNUAL` | `ANNUAL` \| `QUARTERLY` |
 | `paycheckMarginFraction` | `0` | extra fraction of the period's need |
-| `paycheckIncludesTax` | `true` | size the paycheck to cover scheduled instalments too (§5) |
+| `paycheckIncludesTax` | `true` | size the paycheck to cover scheduled instalments too (§5.2) |
+| `paycheckGateScope` | `EDGE` | §5.4(b) — `EDGE` caps the destination; `SOURCE` also vetoes the source's rebalancing, and re-governs every other edge out of that pool (§5.4(c)) |
+
+Two knobs this design depends on already exist and are **off** in the reference scenario —
+they are not new parameters, but leaving them where they are would hollow out the paycheck:
+
+| existing key | reference value | why §5 needs it |
+|---|---|---|
+| `drawdownRebalanceWeight` | `0` | §5.3 leg 2 — the whole of "fund the paycheck by selling what is over target". Needs design-61 `targetComposition` stamped or it silently no-ops. |
+| `dividendReinvest` | per design 106 | §5.3 leg 1 — with DRIP off, yield lands in the spending pool and the paycheck is cheaper by that much, with no sale and no configuration. |
 | `taxInstalmentsEnabled` | `false` | master switch for §6–§8 |
 | `usInstalmentBasis` | `PRIOR_YEAR` | `PRIOR_YEAR` \| `NONE`. The 90%-of-current branch is not modelled (§13). |
 | `usJanuary31Election` | `false` | §6654(h): file and pay by 31 Jan, skip the 4th instalment |
 | `auInstalmentCadence` | `QUARTERLY` | `QUARTERLY` \| `ANNUAL` (s 45-140 conditions are the author's to assert) |
 | `auDeferredBasPayer` | `true` | s 45-61(2) due dates rather than s 45-61(1) |
 | `auGdpUplift` | `0.05` | s 45-405 GDP adjustment — the ATO's 2026-27 figure (§8.2, §15.2). **Inert** when `auInstalmentCadence` is `ANNUAL`. |
-| `taxPenaltyModelled` | `false` | §6621 / s 8AAD charges on any shortfall |
+| ~~`taxPenaltyModelled`~~ | — | **withdrawn.** Paying to the safe harbour means no underpayment exists to charge; see build order item 5. |
+| `auGdpUplift` | `0.05` | s 45-405 GDP adjustment (§8.2, §15.2), in STATE as well as params |
+| `auNotionalTaxRate` | `0.25` | the flat rate the base year's income is re-taxed at for s 45-325 notional tax — a stated simplification, absorbed by the balancing payment |
+| `auDeferredBasPayer` | `true` | s 45-61(2) dates (28th) rather than s 45-61(1)'s 21st |
 
 Both master switches default **off**, and with both off not one cent moves. That is the
 condition for landing phase 1 without a re-gold.
@@ -511,15 +712,122 @@ measured \$391k of movement from a change with no economic content).
 
 ## 14. Build order
 
-1. **Spending pools** — config-only, both switches off. Lands with no golden movement and
-   immediately fixes defect (b): the reserve's cover stops including groceries.
-2. **`SPENDING_REFILL`** — the paycheck, annual and quarterly, plus dropping the floor.
-   First re-gold. Fixes (a).
-3. **`state.taxBasis` + the settle stamp** — no behaviour change, no instalments yet; it
-   only starts remembering. Landing this alone means step 4 has a year of basis by the time
-   it runs.
-4. **Instalment events, both countries.** Fixes (c).
-5. **Penalties** (§7.5, §8.5), off by default, only if a study needs them.
+1. **Spending pools** — config-only, both switches off. Lands with no golden movement.
+   **Done (16 Sep 2026).** It does not deliver what defect (b) promised — see the note in
+   §2.1 — but it lands the instrument and costs essentially nothing. Two things it surfaced,
+   both of which govern every later phase:
+   - **Claims are exclusive** (`liquidity-graph.js:625`), so the transaction accounts must
+     *leave* `cash`; they cannot be claimed twice. Give the two pools distinct `spendOrder`s
+     (0 and 1) — equal ones are a tie, and a compiled drawdown order settled by a tie is the
+     event-queue hazard in another costume.
+   - **A single run of a stochastic plan is not an A/B.** See §14.1.
+2. **`SPENDING_REFILL`** — the paycheck. **Done (17 Sep 2026)**, and it needed no re-gold:
+   the schedule is gated on `paycheckEnabled`, which defaults off, so a plan that has not
+   opted in gains no event and no queue tie moves. 6641 unit tests pass; PAY-1..PAY-9 cover
+   the new seam. Three things the build changed from what §5.1 assumed:
+   - **The cube write-back had to be narrowed.** Reusing the one evaluator is right, but the
+     cube carries four per-calendar-year series — the market observation, the compounded
+     return index and its peak, the trailing balance high, and the gate dwell streaks — and
+     restamping any of them on a paycheck date hands a later year's gate a mid-year sample
+     of the year it is deciding in. That is §20.2's clairvoyance defect by a new road. A
+     paycheck now carries those forward and writes only the live metrics plus its own flow
+     record, accumulating rather than replacing (a US paycheck shares 1 January with the US
+     advance).
+   - **The event and the action need different names** (`PAYCHECK` → `SPENDING_REFILL`). The
+     design-71 payload scan reads any `{ type: 'X', ... }` literal as an emission of action
+     X, so one name makes an `EventSeries`' `interval`/`month`/`order` read as undeclared
+     fields of the action. The repo's own convention already separates them
+     (`PERIOD_ADVANCE_US` → `US_PERIOD_ADVANCE`).
+   - **`EventBuilder` could not say "1 July".** `SimulationAdapter` has always honoured
+     `month`/`day` on an `EventSeries`, but the builder exposed no accessor, so the only
+     reachable anchors were the interval snaps — all of which land on period ENDS, and an
+     income year starts. Two one-line accessors.
+
+   Fixes (a) in the years the calendar applies to; the pre-move years wait on §15.3.
+
+2b. **Residency-following — done the same day.** §15.3's note above has what was built.
+   Measured against an honest control (the phase-1 structure, no float targets — the
+   phase-2a control was confounded, see below): `REPLENISH_SAVINGS` **537 → 81**, pre-move
+   13.5/yr → 3.0, post-move 12.0 → 3.7, terminal wealth **+10.4%**.
+
+   **Do not quote that +10.4% as the value of a paycheck.** Attribution: tax is *higher* in
+   the paycheck arm and FX fees are a flat \$15, so neither explains it. The difference is
+   almost entirely superannuation, and the direct count says why — the control makes **49**
+   `SUPER_WITHDRAWAL_EARNINGS_TAX` withdrawals and the paycheck arm makes **zero**. A
+   paycheck executes as a pool flow, and a pool flow's draw is SCOPED to the source pool's
+   claims; the just-in-time top-up walks the whole compiled sequence and falls through into
+   the wrappers whenever the earlier pools are dry. **The arms differ in what may be sold,
+   not only in when.** That is the confound §18.6 warns every pool study about. A cadence
+   measurement needs a control whose draw is scoped the same way, or the wrapper raid
+   dominates it.
+   ~~*Before* measuring anything, turn on `drawdownRebalanceWeight`~~ — **withdrawn.** It is
+   inert in any plan with a sleeve-narrowed graph (§5.3 leg 2), so there is nothing to turn
+   on. The sleeve policy is `spendOrder`.
+3. **`state.taxBasis` + the settle stamp** — **Done.** No behaviour change: the goldens moved
+   by exactly nine new bookkeeping fields and not one balance. Two things it surfaced:
+   - **The refund had to be capped at the instalments paid.** A settle that refunds
+     `tax − withheld − instalments` whenever that is negative also starts refunding
+     over-WITHHOLDING, which an earlier decision deliberately clamps to zero (the comment at
+     the debit chain says so). Uncapped, it moved a golden's terminal wealth by **+\$316k** —
+     caught because the first regold was compared against git rather than accepted. Capping
+     the refund at the instalment portion keeps every existing scenario byte-identical and
+     leaves the withholding clamp to its own future decision.
+   - The AU basis is **per person** and the US one is **one household record**, so they take
+     opposite paths on death (§15.4).
+
+4. **Instalment events, both countries.** **Done.** Two defects found only by running it:
+   - **`ScenarioCompiler` de-duplicates `EventSeries` by TYPE.** Four quarterly series sharing
+     one type collapse to one, and only the last survives — measured, it put every US
+     instalment on 15 January. Each quarter needs its own event type. A single series with a
+     `quarterly` interval cannot express either calendar anyway: neither is evenly spaced
+     (US Apr→Jun is two months, AU Oct→Feb is four).
+   - **The fourth instalment falls after the settle that resets the counter**, in both
+     regimes — 15 January for a 31 December US year, 28 July for a 30 June AU one. Fired
+     there it reads the NEW year's basis against a zeroed running total and pays a full year
+     at once. The fix is the one the statute already provides: **§6654(h)** discharges the
+     fourth instalment when the return is filed and paid in full by 31 January, which is what
+     a 31 December settle does. Three in-year instalments keep their exact statutory
+     amounts (25/50/75 of the required annual payment) and the settle trues up the rest.
+   Fixes (c).
+5. ~~**Penalties** (§7.5, §8.5)~~ — **CLOSED, not built (17 Sep 2026).** Building it would be
+   dead code, and the reason is the design itself:
+
+   - **US.** §6654(a) is an addition to tax on an *underpayment of a required instalment*.
+     This model computes every instalment from §6654(d)(1)(B)(ii)'s prior-year branch and pays
+     it in full — that IS the safe harbour, so by construction no underpayment exists. The only
+     way to miss one is to run out of cash, and that already fires `OUT_OF_FUNDS`, which is a
+     larger event than a penalty and is modelled properly.
+   - **US, the fourth instalment.** §6654(h) discharges it when the return is filed and paid in
+     full by 31 January, which is what a 31 December settle does (see the build-order note on
+     item 4). No addition arises on it either.
+   - **AU.** The GIC provisions reachable here are s 45-230 and s 45-232, and **both are about
+     VARYING** — a varied instalment rate, or an estimate of benchmark tax below 85% of the
+     real figure. §8.5 decided not to author a variation, on the ground that a simulator which
+     varies optimally every year is modelling clairvoyance. With no variation there is no
+     shortfall for the charge to attach to. s 45-80's charge is for paying LATE, which this
+     model cannot do: it pays, or it is insolvent.
+
+   So the penalty machinery would be reachable only in states the model already reports more
+   severely. `taxPenaltyModelled` is withdrawn from §10 rather than shipped as a switch that
+   turns on nothing. If a variation arm is ever built (§8.5), the GIC must be built with it —
+   an unvaried-vs-varied comparison with the charge switched off is free money, and that is the
+   one place this reasoning stops holding.
+
+### 14.1 Every A/B on a stochastic plan needs the stochastics off, or common random numbers
+
+Found the hard way in phase 1, and it will bite every later phase the same way.
+
+A plan authored with `randomSeed: null` and `equityReturnStochastic` /
+`inflationStochastic` / `propertyReturnStochastic` / `yieldCurveStochastic` all on is **one
+random path per run**. Any change that alters the number or order of RNG draws lands the run
+in a different world, and the terminal spread swamps anything this design does: phase 1's
+first before/after read as a **6.5× change in terminal net worth**, which was entirely path
+divergence. The tell was that the two runs did not share a spend line — their monthly
+expense levels at the horizon differed by two-thirds, i.e. two different inflation paths.
+
+So: switch the four flags off for a mechanism A/B, or go through the design 100 paired
+machinery with common random numbers. And run the two controls first — the same file twice,
+and an unmodified JSON round-trip — so the harness is cleared before the variant is blamed.
 
 After phase 2, run the §15.1 grid (A monthly-JIT / B annual-ungated / C annual-gated) before
 committing to a default cadence. Phase 2 is the first phase whose *direction* is unknown —
@@ -609,9 +917,34 @@ This is also what households actually do: you move your cash when you move. The 
 an FX round trip on the few months of USD that got swept — real, small, and already modelled
 correctly, because the sweep is an `INTL_TRANSFER` and realises its §988 disposition.
 
+> **Built 17 Sep 2026, and it needed no move-year trigger at all.** Two things replaced it,
+> and both are simpler than what this section proposed:
+>
+> - **`whenResident` on a pool's size spec.** The float a cross-border household needs is a
+>   fact about where it lives — a year of AUD in Australia, nothing in the account left
+>   behind — and no other mode could say it, because every one of them resolves to the same
+>   number for the whole run. It resolves to **0**, never null, when not resident: null means
+>   "sizes nothing" and would leave the sweep with no demand to read, while 0 is a real
+>   instruction to hold nothing here. That one primitive makes "which float wants money"
+>   something the graph states rather than something the author guesses, and the sweep,
+>   the top-up and the hand-over all fall out of it.
+> - **`order: 1` on the paycheck series.** `CHANGE_RESIDENCY` is order 0 on 1 July; the
+>   paycheck at order 1 runs after it, sees the new residency, and fires. The "off-cycle
+>   paycheck triggered by the residency change" and the first ordinary AU paycheck are the
+>   same firing. Being after an order-0 event is a strict comparison, not a tie-break, so it
+>   does not lean on the queue's ordering of equal keys. It also puts the paycheck after the
+>   advance has inflated the spend line, so a `YEARS_OF_SPEND` target sizes the year AHEAD.
+>
+> `paycheckCalendar` is retired: both income-year starts are scheduled and each handler
+> answers only its own residency, so the pair hands over by itself.
+>
+> **A move that does not land on an income-year start** leaves the new float waiting until the
+> next one. Left open deliberately — it cannot happen on a 1 July move, and closing it
+> speculatively means a second trigger whose only test is a scenario nobody runs.
+
 It also closes a trap the part-year rule would open. A September move funded Jan–Dec leaves
 ~4 months of money and 10 months until 1 July: the shortfall fires `REPLENISH_SAVINGS`, which
-§4.1 has just promoted into the "the plan failed" signal. Manufacturing that signal out of a
+§4.2 has just promoted into the "the plan failed" signal. Manufacturing that signal out of a
 bookkeeping choice would poison the one metric this design adds.
 
 ### 15.4 Residency needs no rule; death needs two, and they point opposite ways
@@ -645,13 +978,62 @@ cash-flow event in the run**, and §5's paycheck must be sized for it. Do not "f
   allowed to collapse into one number, which is why §6 carries `taxInstalmentsPaid` rather
   than deriving it.
 
+### 15.5 Paired RNG streams — BUILT, and §15.1 is answered (17 Sep 2026)
+
+§15.1's grid could not be run by seed-matching, and the diagnosis is sharper than "the arms get
+different random numbers". Tracing every draw in both arms: **the same values, in the same
+order** — 1,862 of them on seed 1 — and still divergent, because from draw 484 the same value
+lands on a different DATE. A z that is 2035's equity shock in one arm is 2036's in the other.
+Where the arms reach different years at all, even the counts part company. The failure is one
+of ALIGNMENT, invisible to any check that compares values.
+
+**`sim.rngStream(label, year)`** removes the coupling by construction: the generator's state is
+a hash of (seed, label, year), so a draw is a pure function of those three and nothing another
+process does can shift it. All six drawing processes are wired to it — equity,
+equity-bootstrap, inflation, property, fx, yield.
+
+Off by default (`rngStreams`). Turning it on changes the path a given seed produces, so it is a
+property of a STUDY, not a better setting: on for every arm of a comparison, or none. With it
+off nothing moves — every golden is unchanged.
+
+Verified: the same two arms now share an inflation path identical to four decimals for 44
+years, where before they read 4.87 against 6.37 at the horizon.
+
+**The grid, 12 truly-paired paths:**
+
+| arm | mean | median | failures |
+|---|---|---|---|
+| A monthly JIT | 25.7M | 9.6M | 2/12 |
+| B annual, ungated | 29.7M | **16.2M** | 3/12 |
+| C annual, gated | 29.7M | 16.2M | 3/12 |
+
+B beats A in **8/12**, asymmetrically — wins of +15.6M, +14.3M, +8.1M, +6.3M against losses no
+larger than 566k.
+
+**§15.1 is answered, and the answer is no.** Arms C and B are identical in 11 of 12 paths. The
+structural difference this design hoped might revive the skip rule — a single funding moment
+for the gate to attach to — does not revive it. Designs 97 §19/§20 stand, now on this design's
+own evidence.
+
+What remains is the tail: the paycheck wins the middle (median +6.6M, two-thirds of paths) and
+costs one extra failure in twelve. 3 against 2 is not a significant difference; it is the right
+question to take to a real Monte Carlo, which is now possible because the arms can finally be
+paired.
+
 ## 16. Still open
 
 Nothing blocking. Two things deferred by decision, recorded so they are not rediscovered as
 questions:
 
-1. Whether arm C of §15.1 changes the §19/§20 conclusion. That is a measurement, scheduled
-   after phase 2, not a design question.
+1. ~~Whether arm C of §15.1 changes the §19/§20 conclusion.~~ **Answered, §15.5: it does not**
+   — C and B are identical in 11 of 12 paired paths.
+2. **The scope-matched result stands, and is the strongest evidence so far.** Given paycheck
+   edges mirroring the whole spend walk — the same permission to sell the same accounts in the
+   same order — the paycheck still takes 1 superannuation withdrawal against the cascade's 49,
+   pays *less* tax, and ends **+9.8%**. The mechanism is timing: one annual draw taken just
+   after the refill flows have topped up the early pools finds money there, where twelve
+   monthly draws exhaust them and fall through. That is a real claim about cadence and it
+   deserves the tail measurement §15.5 is waiting on.
 
 (The `auGdpUplift` source, open when §15 was written, was closed the same day — see §15.2.)
 

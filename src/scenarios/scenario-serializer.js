@@ -45,6 +45,11 @@ import {
 // ─── Finance handler classes ────────────────────────────────────────────────
 import { UsSavingsInterestMonthlyHandler }              from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }                       from '../finance/handlers/monthly-expenses-handler.js';
+import { SpendingRefillHandler }                        from '../finance/handlers/spending-refill-handler.js';
+import { UsTaxInstalmentHandler, AuTaxInstalmentHandler,
+         UsTaxInstalmentDebitReducer, AuTaxInstalmentDebitReducer,
+         UsTaxRefundCreditReducer, AuTaxRefundCreditReducer }
+  from '../finance/tax/tax-instalment-classes.js';
 import { HouseRunningCostHandler }                      from '../finance/handlers/house-running-cost-handler.js';
 import { RealPropertyRepairTickHandler }                from '../finance/handlers/real-property-repair-tick-handler.js';
 import { HouseRepairApplyReducer }                      from '../finance/reducers/house-repair-apply-reducer.js';
@@ -249,7 +254,7 @@ const _ALL_CLASSES = [
   FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer,
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
-  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, HouseRepairApplyReducer,
+  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, SpendingRefillHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, HouseRepairApplyReducer,
   PayrollHandler,
   IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler, FxTickHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
@@ -261,6 +266,9 @@ const _ALL_CLASSES = [
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
   UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler, UsTaxFileHandler,
+  UsTaxInstalmentHandler, AuTaxInstalmentHandler,
+  UsTaxInstalmentDebitReducer, AuTaxInstalmentDebitReducer,
+  UsTaxRefundCreditReducer, AuTaxRefundCreditReducer,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,

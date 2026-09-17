@@ -58,6 +58,11 @@ export class YieldCurveTickHandler extends HandlerEntry {
   }
 
   call({ sim, state }) {
+    // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
+    // process drawing more or fewer times cannot shift which year this value lands on. Falls
+    // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
+    const rng = sim.rngStream?.('yield', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+
     const step = FX_PROCESS_MODELS.MEAN_REVERTING;
     // Design 103 §5.1 (B2): in joint mode the shock is the US 10-year yield change of the
     // historical year the equity bootstrap just replayed, re-centred and rescaled to `vol`,
@@ -72,7 +77,7 @@ export class YieldCurveTickHandler extends HandlerEntry {
       const prev = state.yieldCurveLevelDev?.[cc] ?? 0;
       const next = shock != null
         ? prev * Math.exp(-this.reversionSpeed * this.dt) + shock
-        : step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: gaussianFrom(sim.rng) });
+        : step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: gaussianFrom(rng) });
       return { type: 'YIELD_CURVE_STEP_APPLY', country: cc, deviation: next };
     });
   }

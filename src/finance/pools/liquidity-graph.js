@@ -104,8 +104,23 @@ export const POOL_CAPACITY_MODE = Object.freeze({
   YEARS_OF_SPEND: 'YEARS_OF_SPEND',
 });
 
-/** How often an edge may fire (design 97 §12.6). */
-export const FLOW_CADENCE = Object.freeze({ PERIOD: 'PERIOD', ANNUAL: 'ANNUAL' });
+/**
+ * How often an edge may fire (design 97 §12.6).
+ *
+ * `PERIOD` and `ANNUAL` are both driven by the tax-period advances, which is what makes
+ * them coarse: `PoolFlowReducer` fires on `US_PERIOD_ADVANCE` and `AU_PERIOD_ADVANCE`, six
+ * months apart, so `PERIOD` means "twice a year" and `ANNUAL` is suppressed by CALENDAR
+ * year — an `ANNUAL` edge therefore fires on 1 January, the US advance, and is dead until
+ * the next January. An edge that has to run on the AU income year cannot say so.
+ *
+ * `PAYCHECK` (design 107 §5.1) is the escape. It is the only cadence NOT driven by a period
+ * advance: it fires on the `SPENDING_REFILL` action and on nothing else, so the schedule
+ * lives on the event — annual on either country's calendar, or quarterly — rather than
+ * being implied by the tax calendar. The two sets are disjoint by construction: a period
+ * advance never evaluates a `PAYCHECK` edge and a `SPENDING_REFILL` never evaluates any
+ * other, which is what lets one evaluator serve both without the two deciding twice.
+ */
+export const FLOW_CADENCE = Object.freeze({ PERIOD: 'PERIOD', ANNUAL: 'ANNUAL', PAYCHECK: 'PAYCHECK' });
 
 /**
  * What series a drawdown gate measures the pool against (design 97 §20.14).
@@ -212,6 +227,25 @@ function sizeSpec(raw, what, allowed, defaultMode) {
   }
   if (mode === POOL_TARGET_MODE.PERCENT && out.value > 1) {
     err(`${what}.value is a FRACTION of the book, not a percentage — got ${out.value}`);
+  }
+  // ── design 107 §15.3 — a size that applies only while resident somewhere ─────────────
+  //
+  // A cross-border household needs a year of spending money in the country it LIVES in and
+  // approximately nothing in the one it left. That is a real, and changing, fact about the
+  // plan, and nothing else in the spec can say it: every other mode resolves to the same
+  // number for the whole run, so a per-residency float could only be authored by running two
+  // scenarios or by moving the money with an edge that has no way to know when to stop.
+  //
+  // Deliberately on the SIZE spec rather than on the pool. It is the target that is
+  // conditional — the pool exists, is claimed, is drawn from and is reported in every year of
+  // the run; what changes is how much it is asked to hold. A pool that blinked in and out of
+  // existence would take its cover-years reporting with it.
+  if (spec.whenResident != null) {
+    const cc = String(spec.whenResident).toUpperCase();
+    if (!['US', 'AU'].includes(cc)) {
+      err(`${what}.whenResident must be a country code (US or AU), got ${JSON.stringify(spec.whenResident)}`);
+    }
+    out.whenResident = cc;
   }
   return out;
 }

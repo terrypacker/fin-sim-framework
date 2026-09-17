@@ -405,6 +405,21 @@ export class StateSchemaRegistry {
     // `unusedByFy.<fy>` amount and `bringForward.{cap,used}`. `**` reaches those nested
     // leaves (a lone `*` matched only the record itself, so they were untyped); the
     // bring-forward trigger year is registered first so it is not read as money.
+    // ── design 107 §6 — the instalment basis ─────────────────────────────────────
+    // `year` first: the ** patterns below would otherwise claim it as money, and a tax YEAR
+    // rendered as $2,048.00 is the kind of wrong that reads as plausible.
+    this.registerPattern('taxBasis.US.year',    ParameterValueType.year());
+    this.registerPattern('taxBasis.AU.*.year',  ParameterValueType.year());
+    // The US basis is one household record in USD; the AU one is per person in AUD, because
+    // the Commissioner gives each person their own instalment rate.
+    this.registerPattern('taxBasis.US.**',      ParameterValueType.currency('USD'));
+    this.registerPattern('taxBasis.AU.**',      ParameterValueType.currency('AUD'));
+    // Rates, not money: a decimal fraction each (s 45-405's uplift, and the flat rate the
+    // base year's income is re-taxed at for s 45-325 notional tax).
+    this.register('auGdpUplift',               ParameterValueType.decimal(4));
+    this.register('auNotionalTaxRate',         ParameterValueType.decimal(4));
+    this.register('taxInstalmentsPaid.US',     ParameterValueType.currency('USD'));
+    this.register('taxInstalmentsPaid.AU',      ParameterValueType.currency('AUD'));
     this.registerPattern('auSuperCapsByPerson.*.bringForward.firstFy', ParameterValueType.year());
     this.registerPattern('auSuperCapsByPerson.**',              ParameterValueType.currency('AUD'));
     // design 86 G1 — Div 36 carried-forward tax losses, per person. Not a YTD field:

@@ -93,6 +93,11 @@ export class PropertyReturnTickHandler extends HandlerEntry {
   }
 
   call({ sim, state }) {
+    // Design 107 §15.5 — draw from this process's OWN year-keyed substream, so an unrelated
+    // process drawing more or fewer times cannot shift which year this value lands on. Falls
+    // back to the shared cursor unless `useRngStreams` is on, so default runs are unchanged.
+    const rng = sim.rngStream?.('property', (sim.currentDate ?? new Date()).getUTCFullYear()) ?? sim.rng;
+
     // Systematic market factor: reuse the equity path's shock (perfect co-movement) or, when
     // equity is off, draw our own so the house still has systematic variance (design 75 §4.4).
     let marketDev;
@@ -101,7 +106,7 @@ export class PropertyReturnTickHandler extends HandlerEntry {
     } else {
       const step    = FX_PROCESS_MODELS[this.model] ?? FX_PROCESS_MODELS.WHITE_NOISE;
       const prev    = state.propertyReturnMarketDev ?? 0;
-      const zMarket = gaussianFrom(sim.rng);
+      const zMarket = gaussianFrom(rng);
       marketDev     = step(prev, { sigma: this.marketVol, dt: this.dt, k: this.reversionSpeed, z: zMarket });
     }
 
@@ -118,7 +123,7 @@ export class PropertyReturnTickHandler extends HandlerEntry {
       // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced and
       // the market-only path reproduces exactly (design 74 §4 ⚠️).
       if (idioVol > 0) {
-        const zIdio = gaussianFrom(sim.rng);
+        const zIdio = gaussianFrom(rng);
         dev += idioVol * Math.sqrt(this.dt) * zIdio;
       }
       deviation[sleeve] = dev;

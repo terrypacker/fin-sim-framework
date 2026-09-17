@@ -527,14 +527,41 @@ class TaxSettleApplyReducerBase extends Reducer {
     // at zero regardless, so a future over-withholding is a visible no-refund rather
     // than a negative debit doing something unpredictable.
     const withheld   = Math.max(0, action.withheld ?? 0);
-    // NOT rounded. With nothing withheld this must be `tax` to the last bit, or every
-    // scenario that withholds nothing still moves by a fraction of a cent — which is
+    // ── design 107 §6 — instalments already paid are a CREDIT against this settle ────
+    //
+    // §6654 and s 45-30 are the same idea in two statutes: the year's instalments are credited
+    // when the assessment is made, and only the difference moves. Read from state rather than
+    // from the action because the instalments were paid across the year by a different
+    // reducer, and re-deriving the total here from the basis would get it wrong the moment an
+    // instalment was skipped for want of cash.
+    //
+    // NOTE the US asymmetry, which is real and not a rounding choice: the 4th required
+    // instalment for year Y is due 15 JANUARY of Y+1 (§6654(c)(2)), i.e. two weeks AFTER the
+    // settle that closes Y. So this credits three paid instalments, and the fourth is either
+    // paid in January or dissolved by §6654(h) — file and pay in full by 31 January and no
+    // addition arises on it. Either way the balance is what leaves here.
+    const instalments = Math.max(0, state.taxInstalmentsPaid?.[this.constructor.cc] ?? 0);
+    // NOT rounded. With nothing withheld and nothing paid this must be `tax` to the last bit,
+    // or every scenario that does neither still moves by a fraction of a cent — which is
     // exactly what a whole-state fixture is built to catch, and did.
-    const balanceDue = Math.max(0, tax - withheld);
-    if (balanceDue > 0) {
-      return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot }, {}, [{ type: this.constructor.debitActionType, amount: balanceDue }]);
-    }
-    return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot });
+    const balanceDue = Math.max(0, tax - withheld - instalments);
+    // Over-payment is a REFUND, and for instalments it has to exist: unlike withholding, they
+    // are sized from LAST year and routinely exceed this year's liability — that is what a
+    // safe harbour IS. Without a refund the household would silently forfeit the excess, and
+    // the 110% safe harbour would read as a 10% tax.
+    //
+    // Capped at the instalments, which is what keeps this inside design 107's scope. An
+    // over-WITHHOLDING is clamped to no-refund by a deliberate earlier decision, documented
+    // above: the withholding methods shipped so far cannot over-withhold, and changing that
+    // clamp is a separate question with its own measurement. So a year that over-withholds
+    // behaves exactly as it did, and only the instalment part can come back. With no
+    // instalments the term is identically zero and every existing scenario is byte-identical.
+    const overpaid   = Math.max(0, (withheld + instalments) - tax);
+    const refund     = Math.min(overpaid, instalments);
+    const next = [];
+    if (balanceDue > 0) next.push({ type: this.constructor.debitActionType, amount: balanceDue });
+    if (refund > 0.01) next.push({ type: this.constructor.refundActionType, amount: +refund.toFixed(2) });
+    return this.newState({ ...state, ...resets, ...extra, ...pendingSnapshot }, {}, next);
   }
 
   /**
@@ -589,8 +616,9 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static type            = 'UsTaxSettleApplyReducer';
   static category        = 'reducer';
   static cc              = 'US';
-  static applyActionType = 'US_TAX_SETTLE_APPLY';
-  static debitActionType = 'US_TAX_PAYMENT_DEBIT';
+  static applyActionType  = 'US_TAX_SETTLE_APPLY';
+  static debitActionType  = 'US_TAX_PAYMENT_DEBIT';
+  static refundActionType = 'US_TAX_REFUND_CREDIT';
   static description     = 'Resets US YTD tax fields after settlement; persists the drawn-down §904 FTC pools + FITO handoff; chains US_TAX_PAYMENT_DEBIT when tax > 0.';
 
   /**
@@ -634,6 +662,35 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     if (action.usTaxPaidOnUsSourceAud != null) {
       patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
     }
+    // ── design 107 §6 — the basis next year's instalments are computed from ──────────
+    //
+    // §6654(d)(1)(B)(ii) sizes the required annual payment off the tax shown on the
+    // PRECEDING year's return, and (C)(i) substitutes 110% for 100% when that return's AGI
+    // exceeded $150,000. Neither is knowable in April, which is exactly why real taxpayers
+    // use the prior-year branch and why this has to be remembered rather than derived.
+    //
+    // `tax` is the NET liability — §6654(f) defines "tax" as the liability after the credits
+    // in part IV of subchapter A of chapter 1, other than §31. The foreign tax credit is in
+    // that part, so for a US citizen resident in Australia this is decisive: sizing
+    // instalments on the gross US tax would have the household paying against a liability the
+    // treaty already extinguishes.
+    //
+    // ONE HOUSEHOLD RECORD, not per person: US tax is assessed MFJ and stamped once per
+    // settle. It therefore SURVIVES a death and is re-based at the next settle, which will be
+    // a single-filer return — dropping it would leave the survivor with no basis, hence no
+    // instalments, for a whole year (design 107 §15.4).
+    patches.taxBasis = {
+      ...(state.taxBasis ?? {}),
+      US: {
+        year: new Date(state.currentPeriods?.US?.startMs ?? 0).getUTCFullYear(),
+        tax:  +(action.tax ?? 0).toFixed(2),
+        agi:  +(action.taxDetail?.adjustedGrossIncome ?? 0).toFixed(2),
+      },
+    };
+    // The year's instalments have been credited against this settle; the next year starts
+    // from nothing. Kept OUT of `YTD_FIELDS` because that set is reset wholesale per country
+    // and this map is keyed by country itself.
+    patches.taxInstalmentsPaid = { ...(state.taxInstalmentsPaid ?? {}), US: 0 };
     return patches;
   }
 }
@@ -647,8 +704,9 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static type            = 'AuTaxSettleApplyReducer';
   static category        = 'reducer';
   static cc              = 'AU';
-  static applyActionType = 'AU_TAX_SETTLE_APPLY';
-  static debitActionType = 'AU_TAX_PAYMENT_DEBIT';
+  static applyActionType  = 'AU_TAX_SETTLE_APPLY';
+  static debitActionType  = 'AU_TAX_PAYMENT_DEBIT';
+  static refundActionType = 'AU_TAX_REFUND_CREDIT';
   static description     = 'Resets AU YTD tax fields after settlement; stages the whole AU liability as US §904 current-year foreign tax; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
 
   /**
@@ -730,11 +788,45 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
     // tax on the earlier gains and estimates the later ones. Null (no gains this FY)
     // leaves the previous determination standing rather than reading as 0%.
     const cgtRate = _auCgtEffectiveRate(action);
+    // ── design 107 §8 — the AU instalment base, and what it deliberately EXCLUDES ────
+    //
+    // s 45-330(1)(a): adjusted taxable income is total assessable income for the base
+    // assessment **reduced by any net capital gain included in it**. s 45-5(3) states the same
+    // as policy — the instalments are to approximate the year's liability "except so far as
+    // the amounts of those liabilities are attributable to a net capital gain".
+    //
+    // That exclusion is not an edge case for this plan, it is the central AU cash-flow fact: a
+    // retiree funding spending by realising gains pays instalments on a base that omits the
+    // very income generating most of the liability, and meets a large balancing payment at
+    // assessment. Modelling instalments WITHOUT it would produce a smooth, wrong answer.
+    //
+    // `ordinaryIncome` is the assessable income already net of capital gains, which is the
+    // closest thing the return carries to s 45-330(1)(a)'s figure. The section also subtracts
+    // deductions and unutilised tax losses; those are not separated here, so this is an
+    // OVER-statement of the base for a household with material deductions — documented rather
+    // than silently approximated.
+    //
+    // PER PERSON, unlike the US record: AU tax is assessed per person and the Commissioner
+    // gives each their own instalment rate. So a deceased person's key is DROPPED, with design
+    // 68 Gap 5's predicate — in `state.deceased` and absent from `state.people` — never zeroed.
+    const people   = state.people ?? {};
+    const deadKeys = new Set(Object.keys(state.deceased ?? {}).filter(k => people[k] == null));
+    const auBasis  = {};
+    for (const entry of (action.personTaxDetails ?? [])) {
+      const key = entry?.personKey;
+      if (!key || deadKeys.has(key)) continue;
+      auBasis[key] = {
+        year: action.fyStartYear ?? null,
+        instalmentBase: +Math.max(0, entry?.taxDetail?.inputs?.ordinaryIncome ?? 0).toFixed(2),
+      };
+    }
     return {
       ftcCurrentForeignTax: toUSD(auCreditable, 'AUD', state),
       ...(cgtRate != null ? { auCgtEffectiveRate: cgtRate } : {}),
       ..._auLossPoolPatch(state, action),
       ..._auSuperCapsRoll(state, action),
+      taxBasis: { ...(state.taxBasis ?? {}), AU: auBasis },
+      taxInstalmentsPaid: { ...(state.taxInstalmentsPaid ?? {}), AU: 0 },
     };
   }
 }

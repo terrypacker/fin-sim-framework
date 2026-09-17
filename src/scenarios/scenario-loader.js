@@ -293,9 +293,14 @@ export class ScenarioLoader {
    * @private
    */
   _applyRandomSeed(cfg, services) {
+    const sim = services?.simulationRegistry?.getPrimary?.();
+    // Design 107 §15.5 — year-keyed substreams, for comparing two arms against ONE realised
+    // path. Applied here rather than at `buildSim()` for the same reason the seed is: the
+    // parameters do not exist yet at construction. Read even when no seed is authored, because
+    // the two settings are independent — the default seed is still a seed.
+    if (sim && cfg?.parameters?.rngStreams === true) sim.useRngStreams = true;
     const seed = cfg?.parameters?.randomSeed;
     if (seed == null) return;
-    const sim = services?.simulationRegistry?.getPrimary?.();
     if (!sim || sim.seedWasExplicit) return;
     sim.reseed(seed);
   }

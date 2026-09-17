@@ -189,6 +189,16 @@ export const COVERED = [
  * this file exists to prevent.
  */
 export const KNOWN_GAPS = [
+  // ── Tax instalments and the refund they make routine (design 107 §6–§8)
+  // The refund reducers are wired into every scenario — the settle has to have somewhere to
+  // put an over-payment the moment instalments exist — but nothing FIRES them until a golden
+  // both enables `taxInstalmentsEnabled` and over-pays, i.e. has a year whose liability comes
+  // in under the prior year's. `US_TAX_INSTALMENT_DEBIT` / `AU_TAX_INSTALMENT_DEBIT` are not
+  // listed because they are not wired at all unless the parameter is on.
+  // One golden clears both: a plan with instalments enabled and a falling-income year.
+  'AU_TAX_REFUND_CREDIT',
+  'US_TAX_REFUND_CREDIT',
+
   // ── Loans, mortgages and leveraged property (designs 54, 86)
   // us-single-homeowner cleared LOAN_PAYMENT_APPLY: it holds a mortgaged primary
   // residence and amortises the linked Loan to discharge. What is left is what an

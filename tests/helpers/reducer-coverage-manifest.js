@@ -164,6 +164,10 @@ export const COVERED = [
   'DynamicTaxReducer', 'UsPeriodAdvanceReducer', 'AuPeriodAdvanceReducer',
   'UsTaxSettleApplyReducer', 'AuTaxSettleApplyReducer', 'UsTaxPaymentDebitReducer',
   'AuTaxPaymentDebitReducer',
+  // design 107 §6–§8 — instalments, and the refund a prior-year safe harbour makes routine
+  // (evt-tax-instalments.test.mjs)
+  'UsTaxInstalmentDebitReducer', 'AuTaxInstalmentDebitReducer',
+  'UsTaxRefundCreditReducer', 'AuTaxRefundCreditReducer',
   // design 94 §8.1l — the April filing of the prior US return (wash-sale.test.mjs)
   'UsTaxFileApplyReducer',
   // design 94 §7 / step 8 — splits, renames, spin-offs, mergers and returns of capital

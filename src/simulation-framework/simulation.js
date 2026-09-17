@@ -494,10 +494,65 @@ export class Simulation {
   reseed(seed) {
     if (seed == null || !Number.isFinite(Number(seed))) return;
     this.rngState = Math.trunc(Number(seed));
+    this.rngSeed  = Math.trunc(Number(seed));
+  }
+
+  /**
+   * A NAMED, YEAR-KEYED substream — the generator a study needs when it compares two arms
+   * (design 107 §15.5).
+   *
+   * `this.rng` is one shared, sequential cursor: every stochastic process draws from it in
+   * whatever order the event queue happens to run them. That is fine for one run and useless
+   * for comparing two, and the reason is subtler than "different random numbers". Measured on
+   * a paycheck-vs-no-paycheck pair: **both arms drew the identical 1,862 values in the
+   * identical order** — and still diverged, because from draw 484 onward the same value landed
+   * on a different DATE. A z that is 2035's equity shock in one arm is 2036's in the other, so
+   * the two arms are run against different worlds while appearing to share a seed. Where the
+   * arms also reach different years (ruin, a sale, a death), even the COUNTS part company.
+   *
+   * A substream removes the coupling by construction: the value is a pure function of
+   * (seed, label, year), so nothing any other process does — or fails to do — can shift it.
+   * Two arms then share a genuine realised path and their difference is causal.
+   *
+   * Deliberately NOT the default. Switching every process onto substreams changes the draw
+   * any existing run sees, which would move every stochastic golden for no modelling reason;
+   * `useRngStreams` opts in, and `rngStream` falls back to the shared cursor while it is off,
+   * so a scenario that never asks is byte-identical.
+   *
+   * Snapshot/replay safety: a substream holds its state in the returned closure and derives it
+   * from the seed, so it needs no entry in `SimulationHistory.takeSnapshot` — re-deriving it
+   * at the same (label, year) reproduces the same values, which a cursor cannot promise.
+   *
+   * @param {string} label  the drawing process, e.g. 'equity' — distinct per process
+   * @param {number} year   the calendar year the draw belongs to
+   * @returns {() => number} a uniform [0,1) generator
+   */
+  rngStream(label, year) {
+    if (!this.useRngStreams) return this.rng;
+    // FNV-1a over the three inputs: cheap, stable across platforms, and — unlike seed+year
+    // arithmetic — it does not put adjacent years on adjacent states, which for this
+    // generator would make consecutive years visibly correlated.
+    let h = 0x811c9dc5;
+    for (const ch of `${this.rngSeed}|${label}|${year}`) {
+      h ^= ch.charCodeAt(0);
+      h = Math.imul(h, 0x01000193);
+    }
+    let st = h | 0;
+    return () => {
+      let s = Math.trunc(st);
+      s = Math.trunc(s + 0x6D2B79F5);
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
+      st = s;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
   }
 
   createRNG(seed) {
     this.rngState = seed;
+    // The ORIGINAL seed, kept because `rngState` is a moving cursor and a substream must be
+    // derivable from something that does not move.
+    this.rngSeed  = seed;
 
     return () => {
       let s = Math.trunc(this.rngState);
