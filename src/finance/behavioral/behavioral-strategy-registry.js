@@ -706,8 +706,9 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
       },
       {
         key: 'paycheckCadence', label: 'Paycheck Cadence',
-        type: 'Select', group: 'Spending', mc: false, opt: false,
-        options: [{ value: 'ANNUAL', label: 'Annual' }, { value: 'QUARTERLY', label: 'Quarterly' }],
+        type: 'Enum', group: 'Spending', mc: false, opt: false,
+        options: ['ANNUAL', 'QUARTERLY'],
+        optionLabels: { ANNUAL: 'Annual', QUARTERLY: 'Quarterly' },
         defaultValue: 'ANNUAL',
         description: 'How often the paycheck fires. ANNUAL is what advisers actually run and it '
           + 'maximises the value of a skip rule — a year\'s funding is one decision, so "take this '
