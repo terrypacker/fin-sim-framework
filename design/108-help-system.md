@@ -255,7 +255,7 @@ A 33rd plugin, `help`, default pane `right`.
 |---|---|
 | `help-index.test.mjs` | the generator runs, and emits one entry per param in `buildFullParamSchema()`, one per `FINANCE_PLUGINS` id, one per declared action type |
 | | `contributedBy` reproduces the `_mergeParamSchema` first-writer-wins rule for a key contributed by two toolsets (the US/AU retirement spending family) |
-| `check-help.test.mjs` | a topic naming a nonexistent param fails; a topic over budget fails; a 12-word paste from a cited description fails |
+| `check-help.test.mjs` ✅ | a topic naming a nonexistent param fails; a topic over budget fails; a 12-word paste from a cited description fails |
 | | a changed description fails the stamp check, and `restamp` clears exactly that stamp and no other |
 | | a new `FINANCE_PLUGINS` entry with no topic fails |
 | | a script under `scripts/` with no `parseFlags` spec fails once D6 has landed |
@@ -286,7 +286,18 @@ testable edit, and the payoff is not only documentation: `parseFlags` errors on 
 flag, which is the failure mode `cli.mjs` records as having produced "a complete, plausible,
 meaningless grid".
 
-**Phase 3 — the gate, in warn mode.** `check-help.mjs` runs and reports; nothing fails yet.
+**Phase 3 — the gate, in warn mode. ✅ DONE 2026-09-17.** `scripts/lib/help-topics.mjs`
+(reader, stamps, checks), `npm run help:gate`, `npm run help:restamp`, and
+`check-help.test.mjs`. Wired into `npm test` as `help:gate -- --quiet`: it prints the
+one-line summary and exits 0. Today that reads **32 structural · 0 stamp · 21 backlog**, the
+32 being the panel topics phase 4 owes and the 21 the groups Q4 has not settled. `--strict`
+makes structural errors and drift fatal, and `--kinds panel` restricts it to one kind, which
+is the mechanism phase 4 flips. One seed topic, `help/concepts/event-sourcing.md`, exists so
+the machinery runs against real data rather than only fixtures; `public/help/main.htm` is
+still there and retires in phase 6 as planned. `--template <kind>` prints a blank topic
+generated from the same constants the gate reads.
+
+Original plan: `check-help.mjs` runs and reports; nothing fails yet.
 Stamps are written by the generator as topics appear.
 
 **Phase 4 — tier 2 prose.** 32 panel topics, then 21 group concepts. The gate flips to
