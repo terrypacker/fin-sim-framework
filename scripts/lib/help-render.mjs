@@ -106,11 +106,13 @@ function renderTools(tools) {
     byGroup.get(t.group).push(t);
   }
   const missing = tools.filter(t => !t.purpose).length;
+  const entry   = tools.filter(t => t.entryPoint);
+  const onSpec  = entry.filter(t => t.flags || t.positional);
 
   const out = [`## Headless tools (${tools.length})`, '',
     'Command-line entry points under `scripts/`. **Purpose** is harvested from each script\'s',
-    'docblock, not re-authored here. Flags are listed only for scripts on the declarative',
-    `\`parseFlags\` spec — ${tools.filter(t => t.flags?.length).length} of ${tools.length} today;`,
+    'docblock, not re-authored here. Arguments are listed only for scripts on the declarative',
+    `\`parseFlags\` spec — ${onSpec.length} of ${entry.length} entry points today;`,
     'design 108 D6 migrates the rest, after which a missing spec is a gate failure.',
     missing ? `${missing} scripts carry no docblock naming themselves and show \`(undocumented)\`.` : '', ''];
 
@@ -120,6 +122,13 @@ function renderTools(tools) {
       const run = t.npmScript ? ` — \`npm run ${t.npmScript}\`` : '';
       out.push(`- **\`${t.path}\`**${run}`);
       out.push(`  ${t.purpose ? esc(t.purpose) : '_(undocumented — no docblock names this file)_'}`);
+      if (t.positional) {
+        const p    = t.positional;
+        const meta = [p.type, p.variadic ? 'repeatable' : null, p.required ? 'required' : null,
+          p.default != null ? `default ${code(p.default)}` : null,
+          p.choices?.length ? `one of ${p.choices.join('|')}` : null].filter(Boolean).join(', ');
+        out.push(`    - \`<${p.name}>\` (${meta})${p.help ? ` — ${esc(p.help)}` : ''}`);
+      }
       for (const f of t.flags ?? []) {
         const meta = [f.type, f.default != null ? `default ${code(f.default)}` : null,
           f.choices?.length ? `one of ${f.choices.join('|')}` : null].filter(Boolean).join(', ');
