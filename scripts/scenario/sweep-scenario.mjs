@@ -60,46 +60,24 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }        from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }      from '../../src/scenarios/scenario-loader.js';
 import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+import { parseFlags }          from '../lib/cli.mjs';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
-function parseArgs(argv) {
-  const opts = { file: null, param: null, range: null, step: 1, values: null, to: null, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case '--param':  opts.param = argv[++i]; break;
-      case '--range':  opts.range = argv[++i]; break;
-      case '--step':   opts.step = Number(argv[++i]); break;
-      case '--values': opts.values = argv[++i].split(',').map(s => Number(s.trim())); break;
-      case '--to':     opts.to = argv[++i]; break;
-      case '--json':   opts.json = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      default:
-        if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
-        opts.file = a;
-    }
-  }
-  return opts;
-}
-
-const HELP = `sweep-scenario — vary one param across a range and table the results
-
-Usage:
-  node scripts/sweep-scenario.mjs <file.json> --param <name> (--range a:b | --values a,b,c)
-
-Options:
-  --param <name>     Param to vary (must exist in the scenario's params).
-  --range <a:b>      Inclusive numeric range.
-  --step <n>         Range step (default 1).
-  --values <a,b,c>   Explicit values instead of --range.
-  --to <YYYY-MM-DD>  Stop before simEnd.
-  --json             Machine-readable output.
-  -h, --help         Show this help.
-
-Run with a bogus --param to list every param in a given scenario. Since design/55
-most domain-record fields are exposed (prop.*/acct.*/coll.*/person.*); company
-equity is the exception — only the global companySaleYear.`;
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'npm run sweep -- <file.json> --param <name> (--range a:b | --values a,b,c)\n\n'
+       + 'sweep-scenario — vary one param across a range and table the results.\n\n'
+       + 'Run with a bogus --param to list every param in a given scenario. Since design/55\n'
+       + 'most domain-record fields are exposed (prop.*/acct.*/coll.*/person.*); company\n'
+       + 'equity is the exception — only the global companySaleYear.',
+  positional: { name: 'file', type: 'string', required: true, help: 'scenario export to sweep' },
+  param:  { type: 'string', help: "param to vary (must exist in the scenario's params)" },
+  range:  { type: 'string', help: 'inclusive numeric range, a:b' },
+  step:   { type: 'number', default: 1, help: 'range step' },
+  values: { type: 'list',   help: 'explicit values instead of --range' },
+  to:     { type: 'string', help: 'stop at this YYYY-MM-DD instead of simEnd' },
+  json:   { type: 'flag',   help: 'machine-readable output' },
+});
 
 // ─── Running ────────────────────────────────────────────────────────────────
 
@@ -150,10 +128,9 @@ function runOne(baseCfg, param, value, endDate) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || !opts.file || !opts.param || (!opts.range && !opts.values)) {
-    console.log(HELP);
-    process.exit(opts.help ? 0 : 1);
+  if (!opts.param || (!opts.range && !opts.values)) {
+    console.error('\nsweep-scenario needs --param and one of --range / --values.  (-h for options)\n');
+    process.exit(1);
   }
 
   const parsed = JSON.parse(readFileSync(opts.file, 'utf8'));
@@ -161,7 +138,8 @@ function main() {
             : Array.isArray(parsed)           ? parsed[0]
             : parsed;
 
-  let values = opts.values;
+  // `--values` arrives as strings; the sweep sets a numeric param.
+  let values = opts.values?.map(Number);
   if (!values) {
     const [lo, hi] = opts.range.split(':').map(Number);
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
