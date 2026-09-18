@@ -213,10 +213,14 @@ export function refsOf(topic) {
  *   errors    structural — a dead reference, a budget overrun, a paste, or a registered
  *             panel with no `kind: panel` topic. Edit the topic, or write one.
  *   drift     a stamp no longer matches. Look, then `npm run help:restamp -- <id>`.
- *   backlog   a param GROUP with no concept topic. REPORTED, never fatal: Q4 has not
- *             settled which of the 21 groups deserve a topic of their own — Economic
- *             Shocks at 52 params plainly needs several and some small groups need none —
- *             and a gate on work nobody has scoped teaches people to disable the gate.
+ *   backlog   a PARAM no topic cites, grouped for readability. REPORTED, never fatal.
+ *
+ *             Counted per param rather than per group because Q4 settled on per-MECHANIC
+ *             topics: the 21 groups are a UI arrangement, not a conceptual one, and
+ *             "Economic Shocks" alone is seven unrelated mechanics. Under that scheme a
+ *             per-group count would call a 52-param group covered the moment one topic
+ *             mentioned one of its params, which is a number that reports success while
+ *             the surface stays unexplained — the §2.1 failure with a progress bar on it.
  *
  * Each error carries a `kind`, because phase 4 flips the gate to failing ONE KIND AT A
  * TIME: `panel` can be enforced while `concept` topics are still being written.
@@ -311,14 +315,16 @@ export function checkTopics({ topics, index, root = ROOT }) {
   const coveredParams = new Set(topics.flatMap(t => t.params));
   const groups = new Map();
   for (const p of index.params) {
-    if (!p.group) continue;
-    const g = groups.get(p.group) ?? { total: 0, covered: 0 };
+    const group = p.group ?? '(ungrouped)';
+    const g = groups.get(group) ?? { total: 0, missing: [] };
     g.total++;
-    if (coveredParams.has(p.key)) g.covered++;
-    groups.set(p.group, g);
+    if (!coveredParams.has(p.key)) g.missing.push(p.key);
+    groups.set(group, g);
   }
-  for (const [group, g] of [...groups].sort((a, b) => b[1].total - a[1].total)) {
-    if (!g.covered) backlog.push({ kind: 'group', id: group, what: `${g.total} params, no topic` });
+  for (const [group, g] of [...groups].sort((a, b) => b[1].missing.length - a[1].missing.length)) {
+    if (!g.missing.length) continue;
+    backlog.push({ kind: 'param', id: group, count: g.missing.length, keys: g.missing,
+      what: `${g.missing.length} of ${g.total} params uncited` });
   }
 
   return { errors, drift, backlog, topics };

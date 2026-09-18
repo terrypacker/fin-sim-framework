@@ -19,10 +19,8 @@
  *               whole reason this exists.  → edit the topic, or write one.
  *   stamp drift a param's description moved under a topic that cites it.
  *               → LOOK, then `npm run help:restamp -- <topic-id>`.
- *   backlog     a param GROUP with no concept topic.
- *               → never fatal. Q4 has not settled which of the 21 groups deserve a topic
- *                 of their own, and a gate on work nobody has scoped teaches people to
- *                 switch the gate off, which costs more than the backlog does.
+ *   backlog     params no topic cites, grouped for readability.
+ *               → never fatal. It is the phase-4 worklist, not a rule.
  *
  * `--strict` makes the first two fatal. **Phase 3 runs WITHOUT it** — the gate reports
  * while the topics are still being written, because a gate that fails before there is
@@ -46,7 +44,7 @@ const opts = parseFlags(process.argv.slice(2), {
   strict:  { type: 'flag', help: 'exit 1 on any structural error or stamp drift (design 108 D5)' },
   enforce: { type: 'list', help: 'report everything, but exit 1 only for these kinds — the phase-4 flip' },
   kinds:   { type: 'list', help: 'restrict the REPORT to these topic kinds' },
-  backlog: { type: 'flag', help: 'print only the backlog of param groups with no concept topic' },
+  backlog: { type: 'flag', help: 'print only the params no topic cites — the phase-4 worklist' },
   quiet:   { type: 'flag', help: 'the one-line summary only, no per-item detail (what `npm test` runs)' },
   template: { type: 'string', choices: Object.keys(BUDGETS),
               help: 'print a blank topic of this kind and exit' },
@@ -100,8 +98,13 @@ const backlog = all.backlog;
 const plural = (n, s) => `${n} ${s}${n === 1 ? '' : 's'}`;
 
 if (opts.backlog) {
-  for (const b of backlog) console.log(`  ${b.kind.padEnd(6)} ${String(b.id).padEnd(28)} ${b.what}`);
-  console.log(`\n${plural(backlog.length, 'item')} with no topic yet.`);
+  let total = 0;
+  for (const b of backlog) {
+    total += b.count ?? 1;
+    console.log(`  ${String(b.id).padEnd(24)} ${b.what}`);
+    if (b.keys) console.log(`    ${b.keys.join(' ')}`);
+  }
+  console.log(`\n${plural(total, 'param')} cited by no topic.`);
   process.exit(0);
 }
 
@@ -139,7 +142,8 @@ if (detail && drift.length) {
   const scope = opts.kinds?.length ? `  [kinds: ${opts.kinds.join(', ')}]` : '';
   console.log(`\n${plural(topics.length, 'topic')} (${kinds})`
     + ` · ${errors.length} structural · ${drift.length} stamp`
-    + ` · ${backlog.length} backlog (--backlog to list)${scope}`);
+    + ` · ${backlog.reduce((n, b) => n + (b.count ?? 1), 0)} params uncited`
+    + ` (--backlog to list)${scope}`);
 }
 
 // `--enforce panel` is design 108 phase 4: `panel` is complete and fails the build, while
