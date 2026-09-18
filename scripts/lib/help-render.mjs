@@ -175,6 +175,21 @@ function renderTopics(topics) {
   return out;
 }
 
+function renderDesign(design) {
+  const out = [`## Design documents (${design.length})`, '',
+    'Tier 3 — the full argument behind each mechanic, in `design/`. The title is each',
+    'file\'s own H1, read out of it; there is no summary column, because a one-line precis',
+    'of an argument is a second copy of that argument and the argument is what changes.',
+    'Numbered order, not alphabetical: this is a series, and sorting it as text puts 100',
+    'between 10 and 11.', '',
+    '| doc | title |', '|---|---|'];
+  for (const d of design) {
+    out.push(`| [\`${d.path}\`](../design/${d.path}) | ${cell(d.title ?? '_(no title)_')} |`);
+  }
+  out.push('');
+  return out;
+}
+
 /** The whole reference, as one markdown document. */
 export function renderReferenceMarkdown(index) {
   const c = index.counts;
@@ -190,7 +205,7 @@ export function renderReferenceMarkdown(index) {
     'doc named in the relevant parameter description, or read the tier-2 topic under `help/`',
     'that cites it — the last section of this file lists every one.',
     '',
-    `${c.params} parameters · ${c.panels} panels · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics`,
+    `${c.params} parameters · ${c.panels} panels · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics · ${c.design} design docs`,
     '',
     '---',
     '',
@@ -205,5 +220,7 @@ export function renderReferenceMarkdown(index) {
     ...renderState(index.state),
     '---', '',
     ...renderTopics(index.topics),
+    '---', '',
+    ...renderDesign(index.design),
   ].join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }

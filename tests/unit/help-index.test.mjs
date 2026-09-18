@@ -23,11 +23,13 @@
 
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join }                      from 'node:path';
 
 import {
   collectParams, collectPanels, collectActions, collectTools, collectState,
   purposeFromDocblock, flagsFromSource, specFromSource, isEntryPoint, buildHelpIndex,
-  collectTopics,
+  collectTopics, collectDesign, ROOT,
 } from '../../scripts/lib/help-index.mjs';
 import { readTopics, BUDGETS }     from '../../scripts/lib/help-topics.mjs';
 import { renderReferenceMarkdown } from '../../scripts/lib/help-render.mjs';
@@ -304,4 +306,43 @@ test('HELP-15: a topic is never a restatement — the index carries the citation
   for (const t of index.topics) {
     for (const k of t.params) assert.ok(paramKeys.has(k), `${t.id} cites dead param ${k}`);
   }
+});
+
+/* ───────────────────────────────── design ───────────────────────────────── */
+
+test('HELP-16: every design doc is listed, with its OWN title and no summary', () => {
+  const onDisk = readdirSync(join(ROOT, 'design'))
+    .filter(f => f.endsWith('.md') && f !== 'README.md').sort();
+  const listed = collectDesign();
+
+  assert.deepEqual([...listed.map(d => d.path)].sort(), onDisk,
+    'the index must neither drop nor invent a design doc');
+  for (const d of listed) {
+    assert.ok(d.title, `${d.path}: no H1 to take a title from`);
+    // A title is read; a summary would be written, and a written summary of an argument
+    // is the second copy that rotted the two lists this collector replaced (§2.1).
+    const h1 = readFileSync(join(ROOT, 'design', d.path), 'utf8').match(/^#\s+(.+)$/m)[1].trim();
+    assert.equal(d.title, h1, `${d.path}: the title must be the file's own H1, verbatim`);
+  }
+});
+
+test('HELP-17: the design list is in SERIES order, not alphabetical', () => {
+  const nums = collectDesign().map(d => d.number).filter(n => n !== null);
+  assert.deepEqual(nums, [...nums].sort((a, b) => a - b),
+    'lexicographic order puts 100 between 10 and 11 and makes 116 rows unreadable');
+  // The unnumbered files sort last, so the series is never interrupted.
+  const kinds = collectDesign().map(d => d.number === null);
+  assert.deepEqual(kinds, [...kinds].sort((a, b) => a - b));
+});
+
+test('HELP-18: the README points at the generated index instead of copying it', () => {
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+
+  // The two tables design 108 §2.1 measured, and the exact shape they had. A row per
+  // plugin id, or a bullet per design filename, means the copy is back.
+  assert.ok(!/^\|\s*`?scenario`?\s*\|/m.test(readme),
+    'the plugin table is back — point at help/REFERENCE.md instead of re-listing panels');
+  assert.ok(!/^-\s+`\d+-[a-z-]+\.md`/m.test(readme),
+    'the design-doc list is back — it covered 19 of 116 last time and would again');
+  assert.ok(readme.includes('help/REFERENCE.md'), 'and it must say where the real list is');
 });

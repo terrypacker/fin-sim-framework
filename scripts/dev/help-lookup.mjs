@@ -35,10 +35,10 @@ import { join }                     from 'node:path';
 import { parseFlags }     from '../lib/cli.mjs';
 import { buildHelpIndex, ROOT } from '../lib/help-index.mjs';
 
-const KINDS = ['all', 'params', 'panels', 'actions', 'tools', 'state', 'topics'];
+const KINDS = ['all', 'params', 'panels', 'actions', 'tools', 'state', 'topics', 'design'];
 
 const opts = parseFlags(process.argv.slice(2), {
-  usage: 'npm run help -- --find <text> [--kind params|panels|actions|tools|state|topics] [--limit n]',
+  usage: 'npm run help -- --find <text> [--kind params|panels|actions|tools|state|topics|design] [--limit n]',
   find:  { type: 'string',                     help: 'text to search for (case-insensitive)' },
   kind:  { type: 'string', default: 'all', choices: KINDS, help: 'restrict to one surface' },
   limit: { type: 'number', default: 25,        help: 'max matches per surface' },
@@ -118,6 +118,10 @@ total += section('topics', 'TOPICS',
       t.design.length && `design ${t.design.join(', ')}`].filter(Boolean).join(' · ');
     if (!opts.brief && cites) console.log(`      cites: ${cites}`);
   });
+
+total += section('design', 'DESIGN DOCUMENTS',
+  (index.design ?? []).filter(d => hit(d.path, d.title)),
+  (d) => console.log(`  design/${d.path}\n      ${d.title ?? '(no title)'}`));
 
 total += section('state', 'STATE FIELDS',
   index.state.filter(s => hit(s.path, s.kind)),

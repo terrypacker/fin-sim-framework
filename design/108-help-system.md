@@ -1,7 +1,7 @@
 # 108 — The help system: generated reference, stamped prose, two surfaces
 
-**Status:** phases 1-5 BUILT; phase 6 (retiring the drifted copies) remains. Originally
-proposed, and **fully specified bar one seam** — §12 records the seven decisions
+**Status:** COMPLETE — all six phases built (phase 6, 18 Sep 2026). Originally proposed,
+and **fully specified bar one seam** — §12 records the seven decisions
 taken with the user on 17 Sep 2026, and §13 holds the single remaining question (Q4, which
 phase 4 settles against the real topic list rather than in advance). This design touches no
 reducer, no handler and no scenario param, so it moves no golden. Its whole cost is tooling,
@@ -244,7 +244,9 @@ A 33rd plugin, `help`, default pane `right`.
   that the temptation to inline their argument fails the gate instead of succeeding quietly.
 - **It does not backfill the README tables.** Once tier 1 exists, `README.md:406` and
   `README.md:544` should be replaced by a pointer to the generated file rather than repaired
-  by hand — repairing them recreates the exact copy that produced §2.1.
+  by hand — repairing them recreates the exact copy that produced §2.1. (Phase 6 did this.
+  The design-doc half needed a `design[]` collector first, since there was no generated file
+  to point at — see §11 phase 6.)
 - **It does not add a scenario parameter, a handler or a reducer.** No golden moves.
 - **It does not build a global search.** The param filter already searches descriptions; a
   cross-index search over panels, actions and topics is a natural follow-on, and is out of
@@ -332,8 +334,28 @@ listening to nothing since before the workbench existed.
 The gate's own test had hard-coded `32 panel`, and the 33rd panel broke it. That literal was
 a small drifting index of exactly the §2.1 kind, so it now counts `FINANCE_PLUGINS`.
 
-**Phase 6 — retire the copies.** Replace the README plugin table and design-doc list with
-pointers; fold `public/help/main.htm` into the `event-sourcing` concept.
+**Phase 6 — retire the copies. ✅ DONE 2026-09-18.** All three §2.1 rows are gone, and none
+of them was repaired by hand:
+
+- The README plugin table and design-doc list are pointers to `help/REFERENCE.md`. So is the
+  plugin list inside the README's own architecture diagram, which was a *fourth* copy — 18
+  of 33 — that §2.1 had not counted.
+- A **`design[]` collector** was added to tier 1, because the design-doc list had nothing
+  generated to point AT. It reads each file's own H1 as its title and sorts the series
+  numerically (lexicographic puts 100 between 10 and 11). `--kind design` searches it. It
+  carries **no summary column**, which is the whole point: a precis of an argument is a
+  second copy of that argument, and the argument changes without the filename changing.
+- `design/README.md`'s index went the same way. It had drifted in *both* directions — 106
+  documents missing, and four of the ten it did list filed under "Unimplemented Features"
+  had long since shipped. Its "General Rules" and the three backlog ideas that have no
+  design document survive, because those exist nowhere else.
+- The README's two how-to recipes now name the help obligation each incurs: adding a panel
+  owes `help/panels/<id>.md` (the build fails without it), adding a param owes
+  `npm run help:build`.
+- `public/help/main.htm` is deleted. Its five lines had already been folded into
+  `help/concepts/event-sourcing.md` when that topic was written in phase 3.
+
+A test (`HELP-18`) now fails if either README list comes back, in the shape it had.
 
 ## 12. Decisions (17 Sep 2026)
 

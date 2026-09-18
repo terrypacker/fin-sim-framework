@@ -375,6 +375,39 @@ export async function collectState() {
   ].sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/* ──────────────────────────────── design ─────────────────────────────── */
+
+/**
+ * Tier 3 — every design document, with its own H1 as its title (design 108 §11 phase 6).
+ *
+ * This collector exists because of the OTHER two rows of §2.1. The README's design list
+ * covered `0-` through `19-` of 117 files and `design/README.md` covered 10, and both
+ * drifted the same way the plugin table did: a design doc was added, and nothing failed
+ * when the list was not updated. Nothing here is written down — the title is read out of
+ * the file, so a doc added tomorrow is listed the next time this runs.
+ *
+ * NOT a summary. A one-line precis of an argument is a second copy of that argument, and
+ * a design doc's argument changes without its filename changing, which is the exact shape
+ * that rotted the old list. A reader gets the title and the path; the doc says the rest.
+ *
+ * Sorted NUMERICALLY, because these are a numbered series: lexicographic order puts 100
+ * between 10 and 11 and makes the list unreadable at exactly the size it now is. The five
+ * unnumbered files sort last, by name.
+ */
+export function collectDesign(root = ROOT) {
+  const dir = join(root, 'design');
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.md') && f !== 'README.md')   // README.md is the index, not a design doc
+    .map((file) => {
+      const text  = readFileSync(join(dir, file), 'utf8');
+      const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? null;
+      return { path: file, number: /^\d+/.test(file) ? parseInt(file, 10) : null, title };
+    })
+    .sort((a, b) => (a.number === null) - (b.number === null)
+      || (a.number ?? 0) - (b.number ?? 0)
+      || a.path.localeCompare(b.path));
+}
+
 /* ──────────────────────────────── topics ─────────────────────────────── */
 
 /**
@@ -424,7 +457,8 @@ export async function buildHelpIndex() {
   const [params, panels, actions, state, topics] = await Promise.all([
     collectParams(), collectPanels(), collectActions(), collectState(), collectTopics(),
   ]);
-  const tools = collectTools(pkg.scripts);
+  const tools  = collectTools(pkg.scripts);
+  const design = collectDesign();
 
   return {
     counts: {
@@ -436,7 +470,8 @@ export async function buildHelpIndex() {
       toolsWithFlags: tools.filter(t => t.entryPoint && (t.flags || t.positional)).length,
       state: state.length,
       topics: topics.length,
+      design: design.length,
     },
-    params, panels, actions, tools, state, topics,
+    params, panels, actions, tools, state, topics, design,
   };
 }

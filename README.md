@@ -3,6 +3,8 @@
 A deterministic, event-driven simulation framework for modeling complex financial workflows over time. It is purpose-built around the **International Retirement** scenario (US + AU cross-border retirement) and exposes those mechanics through a pluggable workbench UI, declarative scenario composition (toolsets), Monte Carlo, and parameter optimization.
 
 > **Audience**: this README is the orientation guide for anyone (human or AI) joining the codebase. It documents the **current architecture** and how to extend it. Deeper, per-feature designs live in `design/*.md`. Known inconsistencies and rework candidates are tracked in [`design/inconsistencies.md`](design/inconsistencies.md).
+>
+> **For the exact surface — every parameter, panel, journal action, CLI tool, state field type and design doc — read [`help/REFERENCE.md`](help/REFERENCE.md).** It is generated from the code by `npm run help:build`, so unlike a README section it cannot go stale; `npm run help -- --find <text>` searches it. Prose about *why* a mechanic exists lives in [`help/`](help/) and is rendered by the app's own Help panel. See [`design/108-help-system.md`](design/108-help-system.md).
 
 ---
 
@@ -35,11 +37,9 @@ The dev server entry point is `index.html` → `src/main.js` → `SimulationWork
 │  index.html → main.js → SimulationWorkbench → WorkbenchApp → BaseApp        │
 │                                                                             │
 │  ┌──────────────────────── WorkbenchShell ─────────────────────────────┐    │
-│  │   Dockable plugins:                                                 │    │
-│  │   scenario · mc-config · opt-config · config-list · inspector       │    │
-│  │   config-graph · timeline · chart · mc-results · opt-results        │    │
-│  │   state-panel · action-detail · mc-runs · opt-runs · exec-history   │    │
-│  │   lineage · dashboard · perf                                        │    │
+│  │   Dockable plugins — scenario, params, graph, timeline, charts,     │    │
+│  │   MC/opt config + results, state, journal, help, …                  │    │
+│  │   (the full list is generated into help/REFERENCE.md)               │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                              ▲   reads/edits                                │
 │                              │                                              │
@@ -405,24 +405,18 @@ Dockable, plugin-based UI. Composition:
 
 ### Finance plugin package (`src/visualization/workbench/plugins/finance/`)
 
-The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT_LAYOUT`:
+The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT_LAYOUT`.
 
-| Plugin ID | Title | Purpose |
-|---|---|---|
-| `scenario` | Scenario | Scenario picker + param editor + Rebuild / Load Defaults / Save |
-| `mc-config` / `mc-results` / `mc-runs` | Monte Carlo | Configure, run, and inspect MC sweeps |
-| `opt-config` / `opt-results` / `opt-runs` | Optimize | Same triad for optimization |
-| `config-list` | Nodes | Flat list of all graph nodes (search + add) |
-| `inspector` | Edit | Selected-node editor (mounts the right `*-editor.js`) |
-| `config-graph` | Graph | The dockable SVG/echarts node-and-edge canvas |
-| `timeline` | Timeline | Journal timeline with filters + CSV download |
-| `chart` | Chart | Time-series chart (ECharts) of any numeric `sim.state` path; grouped filter + multi-axis |
-| `state-panel` | State | Live state inspector + per-node state-change diffs; click any numeric row to chart/promote it |
-| `action-detail` | Action Detail | Selected journal-entry details + payload + before/after |
-| `exec-history` | Node History | Per-node execution history (uses ExecutionGraph) |
-| `lineage` | Lineage | Upstream/downstream causal tracing for a selected execution node |
-| `dashboard` | Dashboard | Headline KPI cards |
-| `perf` | Performance | Sim-loop performance telemetry |
+**The list of panels is not written down here.** It used to be, as a 14-row table, and it
+covered 18 of the 32 plugins that existed by the time anyone checked — every panel added in
+the last year was missing, because nothing failed when a commit did not update the copy
+(design 108 §2.1). So:
+
+- **[`help/REFERENCE.md`](help/REFERENCE.md) § Workbench panels** — every registered panel,
+  its id, title, default pane and source file, generated from `FINANCE_PLUGINS` itself.
+- **[`help/panels/`](help/panels/)** — one topic per panel saying what it is *for*, when you
+  would open it, and what it needs loaded. The in-app **Help** panel renders these, and
+  follows whichever tab you are on.
 
 `WorkbenchApp` (`src/apps/workbench-app.js`) instantiates the shell with these plugins and offers built-in workspace templates: **Default**, **Analysis**, **Debugging**, **Review**. Users can save their own templates per `storageKey` (`sim-workbench-layout-prod`).
 
@@ -532,36 +526,27 @@ Notable suites:
 2. Construct a descriptor with `definePlugin({ id, title, component, category, defaultPane })`.
 3. Add it to `FINANCE_PLUGINS` in `src/visualization/workbench/plugins/finance/finance-plugin-package.js`, and to whichever workspace templates should include it by default.
 4. The plugin gets the `WorkbenchRuntime` in its constructor — subscribe to runtime events (`SCENARIO_READY`, `BREAKPOINT_HIT`, …) and read services via `ServiceRegistry.getInstance()`.
+5. **Write its help topic**, `help/panels/<id>.md` — 250 words on what it shows, when to open it, and what it needs loaded. `npm test` fails until it exists: that is the point, since every one of the 14 panels missing from the old table got there by a commit that could have documented it and did not. Start from `npm run help:gate -- --template panel`, then `npm run help:build && npm run help:restamp -- <id>`.
 
 ### Add a scenario parameter
 
 1. Add a typed entry to the owning toolset's `paramSchema(context)` (key, label, type, group, defaultValue, `mc`, `opt`).
 2. Reference it in the toolset's `state()` / `schedules()` / `handlers()` via `context.parameters.<key>`.
 3. If the param should drive a person/account field, add a `node: { type, id|stateKey, field }` declaration so `ScenarioLoader`'s cascade applies it before compile.
+4. Run **`npm run help:build`** and commit `help/REFERENCE.md` — `npm test` fails on a stale one. The generated row *is* the documentation: write the `description` in the toolset, never a second copy elsewhere. If the new key belongs to a mechanic a `help/concepts/` topic already explains, add it to that topic's `params:` list.
 
 ---
 
 ## Design Documents
 
-Architecture decisions and forward-looking proposals live in `design/`:
+Architecture decisions and forward-looking proposals live in `design/`, mostly as a
+numbered series `<n>-<slug>.md`, each opening with its own title.
 
-- `0-period-engine.md` — UTC-ms period model.
-- `1-adjustment-entry-system.md` — manual ledger adjustments.
-- `2-unified-event-schema.md` — single event stream proposal.
-- `3-branching-event-streams.md` / `4-branch-diff-insight-engine.md` / `5-branch-merge-reconciliation.md` — branching simulations.
-- `6-workbench-ui.md`, `7-workbench-ui-plan.md` — workbench overhaul (implemented).
-- `8-serialization-test-plan.md`.
-- `9-toolset-compiler.md` — toolset architecture (implemented).
-- `10-display-settings-service.md`.
-- `11-taxservice-declarative-refactor.md`.
-- `12-toolset-ownership-refactor.md`.
-- `13-prebuilt-scenario-parameters.md` — typed param round-tripping (implemented).
-- `14-vite-migration.md`.
-- `15-config-as-source-of-truth.md` — config-as-bootstrap, defaults and state ownership (draft).
-- `16-journal-reporting-plugin.md` — journal reporting plugin design (draft).
-- `17-scenario-as-graph-node.md` — scenario as graph node; `ScenarioRegistry` graph-backed (implemented).
-- `18-performance-enhancements.md` — simulation performance enhancements (Phase 1 complete).
-- `19-type-registry.md` — `TypeRegistry`, action-type families, per-country tax split, serializer rewrite (implemented).
+**They are indexed in [`help/REFERENCE.md`](help/REFERENCE.md) § Design documents**, which
+reads every file's title out of the file. The list that used to sit here ran `0-` through
+`19-` and was missing 97 documents; it is exactly the drift design 108 §2.1 measured, and
+repairing it by hand would only restart the clock. `npm run help -- --find <text> --kind
+design` searches the same index.
 
 Known structural issues, leaky boundaries, and rework candidates: **[`design/inconsistencies.md`](design/inconsistencies.md)**.
 
