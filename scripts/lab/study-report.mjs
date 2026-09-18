@@ -56,31 +56,26 @@ import { execFileSync } from 'node:child_process';
 import { buildGridModel } from '../lib/grid-report.mjs';
 import { pairedRescues, pairedMetric, failureRate, failureByBand, failureDrivers } from '../lib/mc-analysis.mjs';
 import { percentile, moneyAuto } from '../lib/format.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const USAGE = `
-study-report.mjs — render a study directory as one HTML page.
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/study-report.mjs --dir <study-dir> [options]\n\n'
+       + 'study-report — render a study directory as one HTML page.',
+  dir:      { type: 'string', help: 'REQUIRED. directory of out-*.json grids and mc-out*/ arm dirs' },
+  out:      { type: 'string', help: 'output path (default <dir>/report.html)' },
+  scenario: { type: 'string', help: 'scenario file to freshness-check against' },
+  pairs:    { type: 'string', help: '"a:b,c:d" MC arm pairs (default: report-config.json, else vs the first arm)' },
+  open:     { type: 'flag',   help: 'open the result when done (macOS)' },
+});
 
-  node scripts/lab/study-report.mjs --dir <study-dir> [options]
-
-  --dir <dir>       REQUIRED. Directory of out-*.json grids and mc-out*/ arm dirs.
-  --out <file>      Output path (default <dir>/report.html).
-  --scenario <file> Scenario file to freshness-check against.
-  --pairs <list>    "a:b,c:d" MC arm pairs (default: report-config.json, else vs first arm).
-  --open            Open the result when done (macOS).
-`;
-
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-
-const askedForHelp = argv.includes('-h') || argv.includes('--help');
-if (askedForHelp || !flag('--dir')) {
-  console.log(USAGE);
-  process.exit(askedForHelp ? 0 : 2);   // asking for help is not an error
+if (!opts.dir) {
+  console.error('\nstudy-report needs --dir <study-dir>.  (-h for options)\n');
+  process.exit(2);
 }
 
-const dir = resolve(flag('--dir'));
+const dir = resolve(opts.dir);
 if (!existsSync(dir)) { console.error(`no such directory: ${dir}`); process.exit(2); }
-const outFile = flag('--out') ?? join(dir, 'report.html');
+const outFile = opts.out ?? join(dir, 'report.html');
 
 // Optional per-study configuration. Everything in it is a display choice; a study
 // without one still renders, just with the generic defaults.
@@ -145,7 +140,7 @@ for (const name of mcDirs) {
 // it — a bare "scenarios/x.json" in the JSON is repo-relative, not study-relative.
 
 const REPO = resolve(new URL('../..', import.meta.url).pathname);
-const scenarioPath = flag('--scenario')
+const scenarioPath = opts.scenario
   ?? (grids.find(g => g.source)?.source ?? mcSets.find(s => s.meta.source)?.meta.source ?? null);
 // The recorded source carries the scenario INDEX (`…json#0`); that is provenance, not
 // part of the filename, and leaving it on makes every freshness check report "missing".
@@ -549,8 +544,8 @@ for (const s of mcSets) {
 
   const rateItems = s.keys.map(k => ({ label: k, value: failureRate(s.arms[k].rows) }));
   const cfgPairs = studyCfg.pairs?.[s.name] ?? studyCfg.pairs;
-  const pairSpec = flag('--pairs')
-    ? flag('--pairs').split(',').map(x => x.split(':').map(y => y.trim()))
+  const pairSpec = opts.pairs
+    ? opts.pairs.split(',').map(x => x.split(':').map(y => y.trim()))
     : (Array.isArray(cfgPairs) ? cfgPairs.map(x => (Array.isArray(x) ? x : x.split(':').map(y => y.trim())))
                                : s.keys.slice(1).map(k => [s.keys[0], k]));
   const pairs = pairSpec
@@ -897,6 +892,6 @@ writeFileSync(outFile, html);
 console.log(`study report → ${outFile}`);
 console.log(`  ${grids.length} grids, ${mcSets.length} monte carlo set(s)`);
 if (stale.length) console.log(`  ** ${stale.length} output(s) OLDER than the scenario — flagged in the report`);
-if (argv.includes('--open')) {
+if (opts.open) {
   try { execFileSync('open', [outFile]); } catch { /* not macOS, or no opener — the path is printed above */ }
 }

@@ -50,7 +50,8 @@ import { dirname, resolve, basename }                         from 'node:path';
 import { execFileSync }                                       from 'node:child_process';
 import { createRequire }                                      from 'node:module';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { openSim }             from '../lib/run.mjs';
 import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { buildSpendingCube, checkClassificationTotal, spendingSummary, categoriesByValue }
@@ -66,31 +67,22 @@ import { CATEGORY_COLOR }
 import { PALETTE_CYCLE }
   from '../../src/finance/reporting-common/palette-cycle.js';
 
-const USAGE = `
-spending-report.mjs — what the plan actually costs, as one HTML page.
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/spending-report.mjs [--scenario <file.json>] [options]\n\n'
+       + 'spending-report — what the plan actually costs, as one HTML page.',
+  scenario: { type: 'string', help: 'workbench export to run (default: the built-in synthetic scenario)' },
+  index:    { type: 'number', default: 0, help: 'which scenario inside that file' },
+  out:      { type: 'string', default: 'scenarios/spending-report.html', help: 'output path' },
+  csv:      { type: 'flag',   help: 'also write the raw cube beside the page as .csv' },
+  open:     { type: 'flag',   help: 'open the result when done (macOS)' },
+});
 
-  node scripts/lab/spending-report.mjs [--scenario <file.json>] [options]
-
-  --scenario <file> Workbench export to run (default: built-in synthetic scenario).
-  --index <n>       Which scenario inside that file (default 0).
-  --out <file>      Output path (default scenarios/spending-report.html).
-  --csv             Also write the raw cube beside the page as .csv.
-  --open            Open the result when done (macOS).
-`;
-
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const has  = (n) => argv.includes(n);
-
-if (has('-h') || has('--help')) { console.log(USAGE); process.exit(0); }
-
-const { file: scenarioFile, index: scenarioIndex } = parseSourceArgs(argv);
-const outFile = resolve(flag('--out') ?? 'scenarios/spending-report.html');
+const outFile = resolve(opts.out);
 const BASE    = 'USD';
 
 // ─── run + classify ──────────────────────────────────────────────────────────
 
-const source = loadBaseConfig({ file: scenarioFile, index: scenarioIndex });
+const source = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const cfg    = source.cfg;
 
 // The balance sampler rides design 82's `year-boundary` cadence — the SAME seam and the
@@ -663,7 +655,7 @@ mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, html);
 console.log(`wrote ${outFile}  (${(html.length / 1024 / 1024).toFixed(2)} MB, ${cube.rows.length} cube rows)`);
 
-if (has('--csv')) {
+if (opts.csv) {
   const csvPath = outFile.replace(/\.html?$/i, '') + '.csv';
   const cols = ['date', 'year', 'actionType', 'stateKey', 'currency', 'category', 'tier',
     'amountLocal', 'amount', 'amountReal', 'intent', 'intentReal', 'instanceId'];
@@ -690,6 +682,6 @@ console.log(`spending ${money(summary.spendingReal)} real / ${money(summary.spen
             `"all debits" overstates by ${pct(summary.overstatement, 0)}, ` +
             `nominal overstates the same spending by ${summary.inflationFactor?.toFixed(2) ?? '—'}×`);
 
-if (has('--open') && existsSync(outFile)) {
+if (opts.open && existsSync(outFile)) {
   try { execFileSync('open', [outFile]); } catch { /* not macOS, or no opener */ }
 }

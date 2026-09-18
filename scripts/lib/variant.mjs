@@ -67,6 +67,11 @@
  * stay REAL and must not be pre-inflated by the caller.
  */
 
+// The one thing this module reads from `src/`. Design 99 made the four market totals the
+// only equity rates, so the shift below has to know them; restating the list here would
+// be a copy of the table docs/market-returns/SOURCES.md is the authority for.
+import { MARKET_GROWTH_PARAMS } from '../../src/finance/economic-regimes/market-returns.js';
+
 /**
  * @param {object} cfg    base cfg (not mutated)
  * @param {object} levers see the table above

@@ -31,14 +31,7 @@
  * Usage:
  *   node scripts/lab/spending-trace.mjs [--strategy GUARDRAIL] [--scenario plan.json]
  *
- *   --strategy <name>    FIXED | GUARDRAIL | EXPLICIT_BANDS | … (default: leave as authored)
- *   --returns <list>     comma-separated equity returns to trace (default: 0.08,0.06,0.05,0.04)
- *   --levers <json|file> lever bag applied to every case (see lib/variant.mjs)
- *   --years <list>       report years (default: evenly spaced across the horizon)
- *   --country <cc>       inflation accumulator to deflate by (default US)
- *   --scenario <file>    base scenario export; omitted => synthetic default
- *   --index <n>          scenario index in that file
- *   --json               machine-readable output
+ *   Run `--help` for the flags; the spec in this file is the only copy of them.
  *
  * Example:
  *   node scripts/lab/spending-trace.mjs --scenario plan.json --strategy GUARDRAIL \
@@ -47,32 +40,43 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { buildVariant, baseEquityRate } from '../lib/variant.mjs';
 import { traceRealSpending } from '../lib/run.mjs';
 import { money, pct, columns } from '../lib/format.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const list = (n, d) => (flag(n) ? flag(n).split(',').map(Number) : d);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/spending-trace.mjs [--strategy GUARDRAIL] [--scenario plan.json]\n\n'
+       + 'spending-trace — what an adaptive strategy actually pays out, year by year.',
+  strategy: { type: 'string', help: 'FIXED | GUARDRAIL | EXPLICIT_BANDS | … (default: leave as authored)' },
+  returns:  { type: 'list',   default: [0.08, 0.06, 0.05, 0.04], help: 'equity returns to trace' },
+  levers:   { type: 'string', help: 'lever bag applied to every case: inline JSON or a file (see lib/variant.mjs)' },
+  years:    { type: 'list',   help: 'report years (default: evenly spaced across the horizon)' },
+  country:  { type: 'string', default: 'US', help: 'inflation accumulator to deflate by' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+  json:     { type: 'flag',   help: 'machine-readable output' },
+});
 
-const strategy = flag('--strategy') ?? null;
-const country  = flag('--country') ?? 'US';
-const returns  = list('--returns', [0.08, 0.06, 0.05, 0.04]);
+const strategy = opts.strategy ?? null;
+const country  = opts.country;
+const returns  = opts.returns.map(Number);
 
 let levers = {};
-const lv = flag('--levers');
-if (lv) levers = JSON.parse(existsSync(lv) ? readFileSync(lv, 'utf8') : lv);
+if (opts.levers) {
+  levers = JSON.parse(existsSync(opts.levers) ? readFileSync(opts.levers, 'utf8') : opts.levers);
+}
 
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
 const base = loadBaseConfig(source);
 
 const baseRate = baseEquityRate(base.cfg);
 
 const startYear = new Date(base.cfg.simStart).getUTCFullYear();
 const endYear   = new Date(base.cfg.simEnd).getUTCFullYear();
-const reportYears = flag('--years')
-  ? list('--years')
+const reportYears = opts.years
+  ? opts.years.map(Number)
   : evenlySpaced(startYear + 1, endYear, 7);
 
 function evenlySpaced(a, b, k) {
@@ -93,7 +97,7 @@ const cases = returns.map(rate => {
   return { rate, ...t };
 });
 
-if (argv.includes('--json')) {
+if (opts.json) {
   console.log(JSON.stringify({ source: base.source, strategy, levers, country, cases }, null, 1));
   process.exit(0);
 }

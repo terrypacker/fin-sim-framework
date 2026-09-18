@@ -2485,7 +2485,7 @@ year and still throws.
 
 ```
 FTC_LIMITATION_STRICT=off node scripts/lab/spending-mc.mjs \
-  --scenario <plan.json> -n 30
+  --scenario <plan.json> --n 30
 ```
 
 with `console.warn` captured — 16 warnings, 8 distinct shapes. `FTC_LIMITATION_STRICT=on`
