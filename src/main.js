@@ -25,6 +25,7 @@ import '../assets/css/plugins/spending.css';
 import '../assets/css/plugins/liquidity-pools.css';
 import '../assets/css/plugins/paycheque.css';
 import '../assets/css/plugins/mpc-cockpit.css';
+import '../assets/css/plugins/help.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';

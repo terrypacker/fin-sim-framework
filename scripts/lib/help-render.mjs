@@ -153,6 +153,28 @@ function renderState(state) {
   return out;
 }
 
+function renderTopics(topics) {
+  const out = [`## Topics (${topics.length})`, '',
+    'Tier 2 — the hand-written prose under `help/`, listed by what it CITES rather than',
+    'summarised. A topic may not restate a param description (design 108 §3), so there is',
+    'nothing here to duplicate: the row points at the file, and the file says the thing',
+    'tier 1 cannot. **Cites** is the frontmatter, which is also what the gate checks and',
+    'what the in-app panel keys on.', '',
+    '| topic | kind | words | cites |', '|---|---|---|---|'];
+  for (const t of topics) {
+    const cites = [
+      t.panels.length  && `${t.panels.length} panel${t.panels.length > 1 ? 's' : ''}`,
+      t.params.length  && `${t.params.length} param${t.params.length > 1 ? 's' : ''}`,
+      t.actions.length && `${t.actions.length} action${t.actions.length > 1 ? 's' : ''}`,
+      t.tools.length   && `${t.tools.length} tool${t.tools.length > 1 ? 's' : ''}`,
+      t.design.length  && `design ${t.design.map(d => d.split('-')[0]).join(', ')}`,
+    ].filter(Boolean).join(' · ') || '—';
+    out.push(`| [${cell(t.title)}](${t.path.replace(/^help\//, '')}) | ${t.kind} | ${t.words} | ${cites} |`);
+  }
+  out.push('');
+  return out;
+}
+
 /** The whole reference, as one markdown document. */
 export function renderReferenceMarkdown(index) {
   const c = index.counts;
@@ -165,9 +187,10 @@ export function renderReferenceMarkdown(index) {
     '',
     'This is tier 1 of the help system (design 108): the complete, exact surface, with no',
     'prose about it. For *why* a mechanic exists and when to reach for it, follow the design',
-    'doc named in the relevant parameter description, or read `help/` once tier 2 lands.',
+    'doc named in the relevant parameter description, or read the tier-2 topic under `help/`',
+    'that cites it — the last section of this file lists every one.',
     '',
-    `${c.params} parameters · ${c.panels} panels · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types`,
+    `${c.params} parameters · ${c.panels} panels · ${c.actions} action types · ${c.tools} tools · ${c.state} state field types · ${c.topics} topics`,
     '',
     '---',
     '',
@@ -180,5 +203,7 @@ export function renderReferenceMarkdown(index) {
     ...renderActions(index.actions),
     '---', '',
     ...renderState(index.state),
+    '---', '',
+    ...renderTopics(index.topics),
   ].join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }

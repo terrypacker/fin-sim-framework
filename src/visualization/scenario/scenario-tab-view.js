@@ -34,6 +34,17 @@ export class ScenarioTabView {
     /** @type {function(object): void} */
     this.onOpenLinkedNode = null;
     /**
+     * Ask the Help panel for the full text on one thing (design 108 §8). Called with
+     * exactly one of `{ param: key }` or `{ group: label }`.
+     *
+     * A CALLBACK rather than a bus publish because this view knows nothing about the
+     * workbench — it is also driven by the non-workbench scenario page — and because the
+     * `?` must simply not render when no one is listening. An affordance that opens
+     * nothing is worse than no affordance.
+     * @type {function({param?:string, group?:string}): void|null}
+     */
+    this.onOpenHelp = null;
+    /**
      * Supplies the list of persons for person-picker param editors (e.g. the
      * ExpenseEventList Person column). The presenter wires this from the
      * personService so the view stays service-agnostic.
@@ -393,6 +404,23 @@ export class ScenarioTabView {
     label.textContent = group;
 
     header.append(caret, label);
+
+    // `stopPropagation`, because the header's own click toggles the fold: without it,
+    // asking for help on a group would also collapse the group you asked about.
+    if (typeof this.onOpenHelp === 'function') {
+      const helpBtn = document.createElement('button');
+      helpBtn.type = 'button';
+      helpBtn.className = 'param-help-btn param-help-btn--group';
+      helpBtn.textContent = '?';
+      helpBtn.title = `Help: ${group}`;
+      helpBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.onOpenHelp({ group });
+      });
+      header.appendChild(helpBtn);
+    }
+
     header.addEventListener('click', () => {
       this._groupFold.toggle(group, this._paramFilter);
       this._renderParamsList(scenario);
@@ -496,6 +524,23 @@ export class ScenarioTabView {
       // so hovering surfaces the toolset's authoritative documentation.
       const tooltip = param.description || (param.label ? param.name : '');
       if (tooltip) labelEl.title = tooltip;
+
+      // The `?` opens the WHOLE description in the Help panel. The `title` above stays as
+      // the hover shortcut: it is right for the short ones, and the reason this button
+      // exists is that it is wrong for the 134 descriptions over 200 characters, which a
+      // native tooltip truncates (design 108 §2).
+      if (typeof this.onOpenHelp === 'function' && param.label) {
+        const helpBtn = document.createElement('button');
+        helpBtn.type = 'button';
+        helpBtn.className = 'param-help-btn';
+        helpBtn.textContent = '?';
+        helpBtn.title = `Help: ${param.label}`;
+        helpBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.onOpenHelp({ param: param.name });
+        });
+        labelEl.appendChild(helpBtn);
+      }
 
       // Click-through to open the linked account/person editor. Only shown
       // when a node was resolved and the presenter wired a handler.

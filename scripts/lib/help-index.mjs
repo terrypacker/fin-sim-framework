@@ -375,13 +375,54 @@ export async function collectState() {
   ].sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/* ──────────────────────────────── topics ─────────────────────────────── */
+
+/**
+ * Tier 2, resolved: every hand-written topic under `help/`, with its markdown already
+ * rendered to HTML (design 108 §8, D2).
+ *
+ * Pre-rendering here rather than in the browser is what keeps the in-app panel free of a
+ * runtime markdown dependency: `marked` is a devDependency, it runs once per build, and
+ * the browser receives HTML it only has to insert. Nothing about the topic tree is
+ * re-described — the frontmatter reader the GATE uses is the same one, so a topic the
+ * gate accepts is a topic the panel can render, and one it rejects cannot silently ship.
+ *
+ * `help-topics.mjs` imports `ROOT` from this file, so this import is DYNAMIC: a static
+ * one would make the pair a cycle, and `ROOT` is evaluated at module top level.
+ *
+ * Relative `*.md` links between topics are left exactly as authored. Rewriting them to
+ * ids here would bake a navigation scheme into the index; the panel resolves them at
+ * click time instead, and the same link keeps working when the file is read on disk.
+ */
+export async function collectTopics() {
+  const { readTopics } = await import('./help-topics.mjs');
+  const { marked }     = await import('marked');
+
+  return readTopics()
+    .filter(t => !t.error && t.id)
+    .map(t => ({
+      id:      t.id,
+      kind:    t.kind,
+      title:   t.title,
+      path:    t.path,
+      panels:  t.panels,
+      params:  t.params,
+      actions: t.actions,
+      tools:   t.tools,
+      design:  t.design,
+      words:   t.words,
+      html:    marked.parse(t.body.trim(), { async: false }),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
 /* ──────────────────────────────── index ──────────────────────────────── */
 
 /** The whole tier-1 index. Deterministic: same tree in, byte-identical index out. */
 export async function buildHelpIndex() {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const [params, panels, actions, state] = await Promise.all([
-    collectParams(), collectPanels(), collectActions(), collectState(),
+  const [params, panels, actions, state, topics] = await Promise.all([
+    collectParams(), collectPanels(), collectActions(), collectState(), collectTopics(),
   ]);
   const tools = collectTools(pkg.scripts);
 
@@ -394,7 +435,8 @@ export async function buildHelpIndex() {
       entryPoints:    tools.filter(t => t.entryPoint).length,
       toolsWithFlags: tools.filter(t => t.entryPoint && (t.flags || t.positional)).length,
       state: state.length,
+      topics: topics.length,
     },
-    params, panels, actions, tools, state,
+    params, panels, actions, tools, state, topics,
   };
 }

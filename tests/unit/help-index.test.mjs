@@ -27,7 +27,9 @@ import assert    from 'node:assert/strict';
 import {
   collectParams, collectPanels, collectActions, collectTools, collectState,
   purposeFromDocblock, flagsFromSource, specFromSource, isEntryPoint, buildHelpIndex,
+  collectTopics,
 } from '../../scripts/lib/help-index.mjs';
+import { readTopics, BUDGETS }     from '../../scripts/lib/help-topics.mjs';
 import { renderReferenceMarkdown } from '../../scripts/lib/help-render.mjs';
 import { IntlRetirementScenario }  from '../../src/scenarios/intl-retirement-scenario.js';
 import { FINANCE_PLUGINS }         from '../../src/visualization/workbench/plugins/finance/finance-plugin-package.js';
@@ -265,4 +267,41 @@ test('HELP-13: the index counts agree with the collectors they summarise', async
   assert.equal(index.counts.actions, index.actions.length);
   assert.equal(index.counts.tools,   index.tools.length);
   assert.equal(index.counts.state,   index.state.length);
+});
+
+/* ───────────────────────────────── topics ───────────────────────────────── */
+
+test('HELP-14: topics[] is the topic tree the GATE reads, with its markdown pre-rendered', async () => {
+  const [topics, onDisk] = [await collectTopics(), readTopics()];
+
+  // One source of truth for what a topic IS. If the panel resolved topics differently from
+  // the gate, a topic the gate rejects could still ship, which is the drift this design is
+  // about, one level down.
+  assert.deepEqual(topics.map(t => t.id).sort(),
+    onDisk.filter(t => !t.error && t.id).map(t => t.id).sort());
+
+  for (const t of topics) {
+    assert.ok(t.html.trim().startsWith('<'), `${t.id}: html must be RENDERED, not markdown`);
+    assert.ok(!/^\s*#{1,6}\s/m.test(t.html), `${t.id}: a raw heading means the render was skipped`);
+    assert.ok(BUDGETS[t.kind], `${t.id}: kind must be one the budgets know`);
+  }
+});
+
+test('HELP-15: a topic is never a restatement — the index carries the citation, not a copy', async () => {
+  const index = await buildHelpIndex();
+  assert.equal(index.counts.topics, index.topics.length);
+
+  // Every id the panel can be asked for resolves, and every panel has one — the promise
+  // the gate makes, asserted against the shipped index rather than against the tree.
+  const ids = new Set(index.topics.map(t => t.id));
+  assert.equal(ids.size, index.topics.length, 'ids are unique');
+  for (const p of index.panels) {
+    assert.ok(index.topics.some(t => t.kind === 'panel' && t.panels.includes(p.id)),
+      `panel "${p.id}" has no topic, so the Help panel would show a fallback`);
+  }
+  // And every param a topic cites is a real param, so a `?` can always be answered.
+  const paramKeys = new Set(index.params.map(p => p.key));
+  for (const t of index.topics) {
+    for (const k of t.params) assert.ok(paramKeys.has(k), `${t.id} cites dead param ${k}`);
+  }
 });
