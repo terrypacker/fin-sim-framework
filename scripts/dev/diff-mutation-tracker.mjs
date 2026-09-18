@@ -48,20 +48,17 @@ import { Simulation }      from '../../src/simulation-framework/simulation.js';
 import { deepClone, diffStates, MutationTracker } from '../../src/simulation-framework/state-utils.js';
 import { FieldReducer, AccountTransactionReducer } from '../../src/simulation-framework/reducers.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { parseFlags } from '../lib/cli.mjs';
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
-const opts = { file: null, to: null, verbose: false };
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  if (a === '--to') opts.to = argv[++i];
-  else if (a === '--verbose') opts.verbose = true;
-  else if (a === '-h' || a === '--help') {
-    console.log('Usage: node scripts/dev/diff-mutation-tracker.mjs [scenario.json] [--to YYYY-MM-DD] [--verbose]');
-    process.exit(0);
-  } else opts.file = a;
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/dev/diff-mutation-tracker.mjs [scenario.json] [options]\n\n'
+       + 'diff-mutation-tracker — compare MutationTracker against a full state diff.',
+  positional: { name: 'file', type: 'string', help: 'scenario export (default: the built-in reference)' },
+  to:      { type: 'string', help: 'stop at this YYYY-MM-DD' },
+  verbose: { type: 'flag',   help: 'list every differing path' },
+});
 
 // ─── Comparison ───────────────────────────────────────────────────────────────
 

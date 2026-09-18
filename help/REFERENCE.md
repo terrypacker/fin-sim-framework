@@ -574,7 +574,7 @@ true statement about the registry, not a gap in this file.
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 12 of 64 entry points today;
+`parseFlags` spec — 17 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
@@ -589,6 +589,7 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/dev/build-fx-series.mjs`** — `npm run build:fx-series`
   derive the engine-readable monthly FX series from the pinned
+    - `--check` (flag) — report whether the series is in sync; write nothing
 - **`scripts/dev/build-help-index.mjs`** — `npm run prebuild`
   regenerate the tier-1 help reference (design 108 phase 1)
 - **`scripts/dev/build-historical-equity-returns.mjs`**
@@ -597,8 +598,13 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
   _(undocumented — no docblock names this file)_
 - **`scripts/dev/check-requirements.js`** — `npm run requirements`
   Scans test files for requirement IDs in test names and reports coverage against the full list defined in docs/requirements.md
+    - `--missing` (flag) — list only the uncovered ids
+    - `--category` (string) — restrict to one requirement category
 - **`scripts/dev/diff-mutation-tracker.mjs`**
   design 78 §5.4 gate
+    - `<file>` (string) — scenario export (default: the built-in reference)
+    - `--to` (string) — stop at this YYYY-MM-DD
+    - `--verbose` (flag) — list every differing path
 - **`scripts/dev/help-lookup.mjs`** — `npm run help`
   search the help index from the command line (design 108 §7)
     - `--find` (string) — text to search for (case-insensitive)
@@ -607,6 +613,9 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
     - `--brief` (flag) — omit descriptions — just the keys
 - **`scripts/dev/migrate-holding-rate-keys.mjs`**
   bring saved scenario exports up to the strict
+    - `<files>` (list, repeatable, required) — scenario export(s) to migrate, in place
+    - `--dry-run` (flag) — report what would change and write nothing
+    - `--quiet` (flag) — print only the totals
 
 ### scripts/lab/
 
@@ -665,6 +674,13 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/montecarlo/mc-report.mjs`**
   turn raw Monte Carlo arm output into a decision
+    - `--dir` (string) — directory of per-arm JSON files
+    - `--pairs` (string) — comma-separated a:b comparisons (default: every arm against the first)
+    - `--metric` (string, default `afterTaxNW`) — money metric to table
+    - `--thresholds` (string) — JSON file of mix thresholds
+    - `--floor` (flag) — report against the spending floor
+    - `--html` (string) — write the mix report HTML here
+    - `--json` (flag) — structured output
 - **`scripts/montecarlo/mc-run.mjs`**
   run Monte Carlo ARMS from a spec and write raw per-path results
     - `--arms` (string) — REQUIRED. { base, arms } spec file
