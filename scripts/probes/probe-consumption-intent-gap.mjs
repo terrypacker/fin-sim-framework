@@ -72,24 +72,24 @@
  */
 
 import { openSim }                        from '../lib/run.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { JournalFxRates }                 from '../../src/finance/journal-reporting/report-currency.js';
 import { AccumulateConsumptionUtilityReducer } from '../../src/finance/reducers/accumulate-consumption-utility-reducer.js';
 
 // ─── args ────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
-if (argv.includes('-h') || argv.includes('--help')) {
-  const { readFileSync } = await import('node:fs');
-  const src  = readFileSync(new URL(import.meta.url), 'utf8');
-  const from = src.indexOf('/**');
-  console.log(src.slice(from, src.indexOf('*/', from) + 2));
-  process.exit(0);
-}
-const flag   = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const stress = Number(flag('--stress') ?? 1);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-consumption-intent-gap.mjs [options]\n\n'
+       + 'probe-consumption-intent-gap — the gap between what the plan intends and what it consumes.',
+  stress:   { type: 'number', default: 1, help: 'stress multiplier on the intent' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const source = loadBaseConfig(parseSourceArgs(argv));
+const stress = opts.stress;
+
+const source = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const cfg    = source.cfg;
 
 // ─── stress: scale every expense lever, both param stores plus initialState ──

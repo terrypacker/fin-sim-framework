@@ -37,20 +37,26 @@
  */
 
 // ── args ──────────────────────────────────────────────────────────────────────
-const argv = process.argv.slice(2);
-const arg = (k, d) => {
-  const i = argv.indexOf(`--${k}`);
-  if (i === -1) return d;
-  const v = argv[i + 1];
-  return v == null || v.startsWith('--') ? true : v;
-};
-const PATHS      = Number(arg('paths', 3000));
-const YEARS      = Number(arg('years', 40));
-const LTCG       = Number(arg('ltcg', 0.15));
-const CRASH      = !arg('no-crash', false);
-const CRASH_YEAR = Number(arg('crash-year', 12));
-const SEED       = Number(arg('seed', 0xC0FFEE));
-const TARGET_EQ  = Number(arg('target', 0.60));
+import { parseFlags } from '../lib/cli.mjs';
+
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/prototype-rebalance-cadence.mjs [options]\n\n'
+       + 'prototype-rebalance-cadence — how often to rebalance, net of the tax it triggers.',
+  paths:      { type: 'number', default: 3000, help: 'simulated paths' },
+  years:      { type: 'number', default: 40,   help: 'horizon in years' },
+  ltcg:       { type: 'number', default: 0.15, help: 'long-term capital gains rate (0.20, 0.28 collectible)' },
+  noCrash:    { type: 'flag',   help: 'run without the mid-horizon crash' },
+  crashYear:  { type: 'number', default: 12,   help: 'year the crash lands' },
+  seed:       { type: 'number', default: 0xC0FFEE, help: 'RNG seed' },
+  target:     { type: 'number', default: 0.60, help: 'target equity share' },
+});
+const PATHS      = opts.paths;
+const YEARS      = opts.years;
+const LTCG       = opts.ltcg;
+const CRASH      = !opts.noCrash;
+const CRASH_YEAR = opts.crashYear;
+const SEED       = opts.seed;
+const TARGET_EQ  = opts.target;
 
 // EQUITY / BOND annual return + vol (lognormal monthly)
 const EQ_MU = 0.07, EQ_SIG = 0.16;

@@ -74,11 +74,16 @@
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { PoolFlowReducer }        from '../../src/finance/pools/pool-flow-reducer.js';
 import { openSim, quiet }         from '../lib/run.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? Number(argv[i + 1]) : d; };
-const SEED = flag('--seed', 7);
-const VOL  = flag('--vol', 0.25);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-pool-gate-foresight.mjs [--seed 7] [--vol 0.25]\n\n'
+       + 'probe-pool-gate-foresight — does the pool gate need foresight it does not have?',
+  seed: { type: 'number', default: 7,    help: 'RNG seed' },
+  vol:  { type: 'number', default: 0.25, help: 'equity return volatility' },
+});
+const SEED = opts.seed;
+const VOL  = opts.vol;
 
 const EQUITY_KEY = 'usStockAccount';
 

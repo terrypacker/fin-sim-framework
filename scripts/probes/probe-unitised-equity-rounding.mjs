@@ -57,13 +57,21 @@
  *        [--years 44] [--seed 12345] [--par 100]
  */
 
-const argv = process.argv.slice(2);
-const at   = (flag, dflt) => { const i = argv.indexOf(flag); return i >= 0 ? Number(argv[i + 1]) : dflt; };
+import { parseFlags } from '../lib/cli.mjs';
 
-const POSITIONS = at('--positions', 20000);
-const YEARS     = at('--years', 44);
-const SEED      = at('--seed', 12345);
-const PAR       = at('--par', 100);          // design 93 §5b's PAR_PER_UNIT convention
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-unitised-equity-rounding.mjs [options]\n\n'
+       + 'probe-unitised-equity-rounding — what unit rounding costs over a full horizon.',
+  positions: { type: 'number', default: 20000, help: 'positions to simulate' },
+  years:     { type: 'number', default: 44,    help: 'horizon in years' },
+  seed:      { type: 'number', default: 12345, help: 'RNG seed' },
+  par:       { type: 'number', default: 100,   help: "par value per unit (design 93 §5b's PAR_PER_UNIT)" },
+});
+
+const POSITIONS = opts.positions;
+const YEARS     = opts.years;
+const SEED      = opts.seed;
+const PAR       = opts.par;
 
 // The engine's rounding: money at 2dp, unit counts and per-unit prices at 8dp.
 const r2 = x => +x.toFixed(2);

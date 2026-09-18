@@ -32,9 +32,15 @@
  */
 
 // ── args ──────────────────────────────────────────────────────────────────────
-const argv = process.argv.slice(2);
-const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i === -1 ? d : Number(argv[i + 1]); };
-const YEARS  = arg('years', 30);
+import { parseFlags } from '../lib/cli.mjs';
+
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/prototype-crossborder-allocation-scope.mjs [--years 30] [--gold-au 0.15]\n\n'
+       + 'prototype-crossborder-allocation-scope — should the target mix be global or per country?',
+  years:  { type: 'number', default: 30,   help: 'horizon in years' },
+  goldAu: { type: 'number', default: 0.15, help: "gold share of the AU side (AU's 50% CGT discount)" },
+});
+const YEARS  = opts.years;
 const START  = 1_000_000;                     // total, split 50/50 US/AU at t0
 
 // target overall mix (must sum to 1)
@@ -46,7 +52,7 @@ const GROWTH = { EQUITY: 0.06, BOND: 0.02, GOLD: 0.03 };
 // effective terminal CGT rate per (country, class). GOLD is the asymmetry.
 const CGT = {
   US: { EQUITY: 0.15, BOND: 0.15, GOLD: 0.28 },                         // US collectibles 28%
-  AU: { EQUITY: 0.15, BOND: 0.15, GOLD: arg('gold-au', 0.15) },         // AU: 50% CGT discount
+  AU: { EQUITY: 0.15, BOND: 0.15, GOLD: opts.goldAu },         // AU: 50% CGT discount
 };
 
 const CLASSES   = Object.keys(TARGET);

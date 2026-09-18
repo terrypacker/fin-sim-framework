@@ -43,8 +43,13 @@ import { BaseScenario }           from '../../src/scenarios/base-scenario.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { RATE_KEYS }              from '../../src/finance/economic-regimes/rate-keys.js';
+import { parseFlags } from '../lib/cli.mjs';
 
-const SEEDS   = Number(process.argv[2] ?? 25);
+const { seeds: SEEDS } = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-wash-sale-materiality.mjs [<seeds>]\n\n'
+       + 'probe-wash-sale-materiality — how much the wash-sale rule is worth.',
+  positional: { name: 'seeds', type: 'number', default: 25, help: 'seeds to run' },
+});
 const SIM_END = Date.UTC(2050, 0, 1);
 const DAY     = 24 * 60 * 60 * 1000;
 const WINDOW  = 30 * DAY;               // §1.1091-1(a): 30 before + sale day + 30 after

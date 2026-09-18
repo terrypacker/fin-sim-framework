@@ -56,14 +56,22 @@
 
 import { openSim, quiet, summarize } from '../lib/run.mjs';
 import { allParams }                 from '../lib/variant.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { ALLOCATION }                from '../../src/finance/holdings/allocation.js';
 
-const argv   = process.argv.slice(2);
-const at     = (f, d) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : d; };
-const source = parseSourceArgs(argv);
-const SLACK  = Number(at('--slack-years', 8));
-const AS_OF  = new Date(at('--as-of', '2039-09-01'));
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-claims-as-placement.mjs [options]\n\n'
+       + 'probe-claims-as-placement — do pool claims behave as a placement rule?',
+  slackYears: { type: 'number', default: 8, help: 'years of slack to allow' },
+  asOf:       { type: 'string', default: '2039-09-01', help: 'as-of date' },
+  scenario:   { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:      { type: 'number', default: 0, help: 'scenario index in that file' },
+});
+
+const source = { file: opts.scenario, index: opts.index };
+const SLACK  = opts.slackYears;
+const AS_OF  = new Date(opts.asOf);
 const ROTHS  = ['rothAccount', 'spouseRothAccount'];
 
 const ALL = [ALLOCATION.EQUITY, ALLOCATION.BOND, ALLOCATION.CASH, ALLOCATION.GOLD];

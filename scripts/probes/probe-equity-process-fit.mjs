@@ -39,11 +39,16 @@ import { EquityReturnTickHandler, HISTORICAL_BOOTSTRAP_SERIES } from '../../src/
 import { EquityReturnStepReducer } from '../../src/finance/economic-regimes/equity-return-step-reducer.js';
 import { EQUITY_SLEEVES, RATE_KEYS } from '../../src/finance/economic-regimes/rate-keys.js';
 import { gaussianFrom }  from '../../src/finance/fx/fx-process-models.js';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv  = process.argv.slice(2);
-const flag  = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? Number(argv[i + 1]) : d; };
-const PATHS = flag('paths', 2000);
-const SEED  = flag('seed', 7);
+const opts  = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-equity-process-fit.mjs [--paths 2000] [--seed 7]\n\n'
+       + 'probe-equity-process-fit — which return process fits the observed history.',
+  paths: { type: 'number', default: 2000, help: 'simulated paths per model' },
+  seed:  { type: 'number', default: 7,    help: 'RNG seed' },
+});
+const PATHS = opts.paths;
+const SEED  = opts.seed;
 
 // ── data ─────────────────────────────────────────────────────────────────────────
 const root = fileURLToPath(new URL('../../', import.meta.url));

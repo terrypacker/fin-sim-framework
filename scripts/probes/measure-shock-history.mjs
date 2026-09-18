@@ -26,6 +26,14 @@
 import fs   from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseFlags } from '../lib/cli.mjs';
+
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/measure-shock-history.mjs [--write]\n\n'
+       + 'measure-shock-history — calibrate the shock library against observed history.',
+  write: { type: 'flag', help: 'write the measured figures back into the source file' },
+});
+
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DATA = path.join(ROOT, 'docs/economic-shocks/data');
@@ -590,7 +598,7 @@ say('FRED\'s NBER UK share series begin in 1887 — so the preset is US-led by n
 say('');
 
 const text = out.join('\n') + '\n';
-if (process.argv.includes('--write')) {
+if (opts.write) {
   const dest = path.join(ROOT, 'docs/economic-shocks/MEASUREMENTS.md');
   fs.writeFileSync(dest, text);
   console.log(`wrote ${dest}`);

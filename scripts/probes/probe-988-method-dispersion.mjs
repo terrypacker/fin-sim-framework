@@ -59,29 +59,30 @@ import { openSim, quiet } from '../lib/run.mjs';
 import { computeAfterTaxNetWorth, afterTaxOptionsFromParams }
   from '../../src/finance/derived-metrics/after-tax.js';
 import { LEDGER_METHOD } from '../../src/finance/account-rules/currency-lots.js';
+import { parseFlags }    from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const num  = (n, d) => { const v = flag(n); return v == null ? d : Number(v); };
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-988-method-dispersion.mjs [options]\n\n'
+       + 'probe-988-method-dispersion — how far apart the §988 basis methods land.',
+  seeds:     { type: 'number', default: 40,   help: 'seeds per method' },
+  vol:       { type: 'number', default: 0.10, help: 'FX volatility' },
+  reversion: { type: 'number', default: 0.5,  help: 'FX reversion speed' },
+  moveYear:  { type: 'number', help: 'residency move year override' },
+  auRental:  { type: 'flag',   help: 'add an AU rental position' },
+  json:      { type: 'string', help: 'write the structured result here' },
+  scenario:  { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:     { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-if (argv.includes('--help') || argv.includes('-h')) {
-  console.log(`usage: probe-988-method-dispersion.mjs [--scenario plan.json] [--index 0]
-       [--seeds 40] [--vol 0.10] [--reversion 0.5] [--move-year <y>]
-       [--au-rental] [--json out.json]`);
-  process.exit(0);
-}
-
-const SEEDS     = num('seeds', 40);
-const VOL       = num('vol', 0.10);
-const REVERSION = num('reversion', 0.5);
-const MOVE_YEAR = flag('move-year') != null ? Number(flag('move-year')) : null;
-// Make the AU property an income-producing rental with running costs, so the §212
-// (ORDINARY) branch of §988 actually fires — see armCfg for why nothing else can.
-const AU_RENTAL = argv.includes('--au-rental');
+const SEEDS     = opts.seeds;
+const VOL       = opts.vol;
+const REVERSION = opts.reversion;
+const MOVE_YEAR = opts.moveYear ?? null;
+const AU_RENTAL = opts.auRental;
 const METHODS   = [LEDGER_METHOD.PRO_RATA, LEDGER_METHOD.FIFO];
 
 const { cfg: base, source, synthetic } = loadBaseConfig({
-  file: flag('scenario'), index: num('index', 0),
+  file: opts.scenario, index: opts.index,
 });
 
 /**
@@ -274,7 +275,7 @@ if (totalActions === 0) {
   console.log('  flips across paths is a bet on which world you get, not a recommendation.');
 }
 
-if (flag('json')) {
-  writeFileSync(flag('json'), JSON.stringify({ ...out, rows }, null, 2));
-  console.log(`\nwrote ${flag('json')}`);
+if (opts.json) {
+  writeFileSync(opts.json, JSON.stringify({ ...out, rows }, null, 2));
+  console.log(`\nwrote ${opts.json}`);
 }

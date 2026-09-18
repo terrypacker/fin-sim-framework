@@ -35,6 +35,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { execFileSync }              from 'node:child_process';
 import { join }                      from 'node:path';
+import { parseFlags } from '../lib/cli.mjs';
 
 const DIR = 'tests/fixtures';
 
@@ -47,7 +48,11 @@ function flatten(v, p = '', out = {}) {
   return out;
 }
 
-const removalsArg = process.argv.find(x => x.startsWith('--removals='))?.slice('--removals='.length) ?? null;
+const { removals: removalsArg } = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-regold-additive.mjs [--removals <spec>]\n\n'
+       + 'probe-regold-additive — is a golden regold purely additive?',
+  removals: { type: 'string', help: 'removal spec to check against' },
+});
 /** (key, committed flat map) → whether this removal is one the change was meant to make. */
 const expectedRemoval = removalsArg == null ? null
   : removalsArg === 'balance-copies'

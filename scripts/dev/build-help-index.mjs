@@ -35,6 +35,13 @@ import { dirname, join }                                      from 'node:path';
 
 import { buildHelpIndex, ROOT }       from '../lib/help-index.mjs';
 import { renderReferenceMarkdown }    from '../lib/help-render.mjs';
+import { parseFlags }                 from '../lib/cli.mjs';
+
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/dev/build-help-index.mjs [--check]\n\n'
+       + 'build-help-index — regenerate the tier-1 help reference (design 108 phase 1).',
+  check: { type: 'flag', help: 'write nothing; exit 1 if help/REFERENCE.md is not what this run would produce' },
+});
 
 const REFERENCE = join(ROOT, 'help/REFERENCE.md');
 const INDEX     = join(ROOT, 'public/help/help-index.json');
@@ -48,7 +55,7 @@ const index    = await buildHelpIndex();
 const markdown = renderReferenceMarkdown(index);
 const json     = `${JSON.stringify(index, null, 2)}\n`;
 
-if (process.argv.includes('--check')) {
+if (opts.check) {
   const current = existsSync(REFERENCE) ? readFileSync(REFERENCE, 'utf8') : null;
   if (current === markdown) {
     console.log(`help/REFERENCE.md is up to date (${index.counts.params} params, ${index.counts.panels} panels).`);

@@ -40,11 +40,16 @@
 
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { openSim, quiet }         from '../lib/run.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? Number(argv[i + 1]) : d; };
-const N   = flag('n', 40);
-const VOL = flag('vol', 0.18);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-return-autocorrelation.mjs [--n 40] [--vol 0.18]\n\n'
+       + 'probe-return-autocorrelation — how much autocorrelation each return world carries.',
+  n:   { type: 'number', default: 40,   help: 'years per world' },
+  vol: { type: 'number', default: 0.18, help: 'equity return volatility' },
+});
+const N   = opts.n;
+const VOL = opts.vol;
 
 /** The worlds worth naming: no memory, and the OU at three pull-back speeds. */
 const WORLDS = [

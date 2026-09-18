@@ -2,14 +2,21 @@
  * Probe: AU CGT per-person attribution + CGT Schedule contents for one FY.
  * Usage: node scripts/probes/probe-au-cgt-attribution.mjs --scenario scenarios/fin-sim-scenarios.json --fy 2031
  */
-import { loadBaseConfig, parseSourceArgs } from '../lib/scenario-source.mjs';
+import { loadBaseConfig } from '../lib/scenario-source.mjs';
+import { parseFlags }     from '../lib/cli.mjs';
 import { openSim, quiet } from '../lib/run.mjs';
 import { TaxDocumentRegistry } from '../../src/finance/tax/tax-document-registry.js';
 
-const argv = process.argv.slice(2);
-const at = (f) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : undefined; };
-const fy = Number(at('--fy') ?? 2031);
-const { cfg } = loadBaseConfig(parseSourceArgs(argv));
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-au-cgt-attribution.mjs [--fy 2031]\n\n'
+       + 'probe-au-cgt-attribution — which disposals the AU CGT of one financial year came from.',
+  fy:       { type: 'number', default: 2031, help: 'Australian financial year' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+});
+
+const fy = opts.fy;
+const { cfg } = loadBaseConfig({ file: opts.scenario, index: opts.index });
 
 const sim = quiet(() => {
   const s = openSim(cfg, { telemetry: 'full' });

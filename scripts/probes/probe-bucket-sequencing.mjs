@@ -69,22 +69,31 @@
  */
 
 import { openSim, quiet } from '../lib/run.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
 const WRAPPER_TYPES = new Set(['ira', '401k', 'k401', 'roth', 'super']);
 const SLEEVES       = ['CASH', 'BOND', 'EQUITY', 'GOLD'];
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const has  = (n) => argv.includes(n);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-bucket-sequencing.mjs [options]\n\n'
+       + 'probe-bucket-sequencing — which sleeve each draw actually comes out of.',
+  from:            { type: 'number', default: 2027, help: 'first reported year' },
+  to:              { type: 'number', default: 2045, help: 'last reported year' },
+  offsetPriority:  { type: 'string', help: 'offset priority override' },
+  noPinFx:         { type: 'flag',   help: 'let FX float instead of pinning it' },
+  noShocks:        { type: 'flag',   help: 'strip the scenario shocks' },
+  scenario:        { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:           { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const FROM     = Number(flag('--from', 2027));
-const TO       = Number(flag('--to',   2045));
-const OFF_PRIO = flag('--offset-priority', null);
-const PIN_FX   = !has('--no-pin-fx');
-const NO_SHOCK = has('--no-shocks');
+const FROM     = opts.from;
+const TO       = opts.to;
+const OFF_PRIO = opts.offsetPriority ?? null;
+const PIN_FX   = !opts.noPinFx;
+const NO_SHOCK = opts.noShocks;
 
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
 const { cfg: base, ...meta } = loadBaseConfig(source);
 const cfg = structuredClone(base);
 
