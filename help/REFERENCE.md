@@ -8,7 +8,7 @@ This is tier 1 of the help system (design 108): the complete, exact surface, wit
 prose about it. For *why* a mechanic exists and when to reach for it, follow the design
 doc named in the relevant parameter description, or read `help/` once tier 2 lands.
 
-221 parameters · 32 panels · 173 action types · 77 tools · 266 state field types
+221 parameters · 32 panels · 173 action types · 79 tools · 266 state field types
 
 ---
 
@@ -570,11 +570,11 @@ true statement about the registry, not a gap in this file.
 
 ---
 
-## Headless tools (77)
+## Headless tools (79)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments come from each script's declarative
-`parseFlags` spec: 64 of 64 entry points carry one (design 108 D6 — all of them).
+`parseFlags` spec: 66 of 66 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -596,6 +596,13 @@ docblock, not re-authored here. Arguments come from each script's declarative
   designs 102 §4.1 / §6 and 103 §5.3
 - **`scripts/dev/build-index.js`** — `npm run build:index`
   _(undocumented — no docblock names this file)_
+- **`scripts/dev/check-help.mjs`** — `npm run help:gate`
+  the tier-2 gate (design 108 §6)
+    - `--strict` (flag) — exit 1 on structural errors or stamp drift (design 108 D5)
+    - `--kinds` (list) — restrict the report to these topic kinds — phase 4 enforces one kind at a time
+    - `--backlog` (flag) — print only the backlog of param groups with no concept topic
+    - `--quiet` (flag) — the one-line summary only, no per-item detail (what `npm test` runs)
+    - `--template` (string) — print a blank topic of this kind and exit
 - **`scripts/dev/check-requirements.js`** — `npm run requirements`
   Scans test files for requirement IDs in test names and reports coverage against the full list defined in docs/requirements.md
     - `--missing` (flag) — list only the uncovered ids
@@ -616,6 +623,12 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `<files>` (list, repeatable, required) — scenario export(s) to migrate, in place
     - `--dry-run` (flag) — report what would change and write nothing
     - `--quiet` (flag) — print only the totals
+- **`scripts/dev/restamp-help.mjs`** — `npm run help:restamp`
+  the re-gold half of the tier-2 gate (design 108 §6)
+    - `<topic>` (string) — the topic id to restamp
+    - `--ref` (string) — restamp only this one reference
+    - `--all` (flag) — restamp every topic (a bulk change that really did touch everything)
+    - `--dry-run` (flag) — report what would change and write nothing
 
 ### scripts/lab/
 

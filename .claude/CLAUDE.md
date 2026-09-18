@@ -5,3 +5,10 @@ state-field surface. It is generated from the code by `npm run help:build`, so i
 and never stale — read it instead of grepping `src/` to find a parameter or a tool.
 Narrow searches: `npm run help -- --find <text> [--kind params|panels|actions|tools|state]`.
 Never hand-edit it; change the `description` in the toolset and regenerate.
+
+Hand-written explanations live in `help/*.md` as stamped topics (design 108 §5-6). If you
+edit a param description or a file a topic stamps, `npm run help:gate` names the topic that
+now claims something stale — read it, fix it if it is wrong, then
+`npm run help:restamp -- <topic-id>`. Start a new topic from `npm run help:gate -- --template
+<panel|concept|workflow>`; never restate a param description in one, because tier 1 already
+emits it exactly and the gate fails on a 12-word shared run.
