@@ -74,26 +74,38 @@
 
 import { openSim, quiet } from '../lib/run.mjs';
 import { buildVariant }    from '../lib/variant.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
 // Roles/types whose money is behind an age gate. Counted, never called cover.
 const WRAPPER_TYPES = new Set(['ira', '401k', 'k401', 'roth', 'super']);
 const EQUITYISH     = new Set(['EQUITY', 'GOLD']);
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const has  = (n) => argv.includes(n);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-bucket-cover.mjs [options]\n\n'
+       + 'probe-bucket-cover — how many years of spending the short buckets actually cover.',
+  years:       { type: 'number', default: 5,    help: 'target years of cover' },
+  from:        { type: 'number', default: 2027, help: 'first reported year' },
+  to:          { type: 'number', default: 2050, help: 'last reported year' },
+  paySource:   { type: 'string', help: 'account the loan payment draws from' },
+  ioUntil:     { type: 'number', help: 'hold the loan interest-only until this year' },
+  loan:        { type: 'string', default: 'auHousePropertyLoan', help: 'loan key to vary' },
+  noPinFx:     { type: 'flag',   help: 'let FX float instead of pinning it' },
+  keepShocks:  { type: 'flag',   help: "keep the scenario's own shocks" },
+  scenario:    { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:       { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const TARGET   = Number(flag('--years', 5));
-const FROM     = Number(flag('--from', 2027));
-const TO       = Number(flag('--to',   2050));
-const PAY_SRC  = flag('--pay-source', null);
-const IO_UNTIL = flag('--io-until', null) && Number(flag('--io-until'));
-const LOAN_KEY = flag('--loan', 'auHousePropertyLoan');
-const PIN_FX   = !has('--no-pin-fx');
-const KEEP_SHK = has('--keep-shocks');
+const TARGET   = opts.years;
+const FROM     = opts.from;
+const TO       = opts.to;
+const PAY_SRC  = opts.paySource ?? null;
+const IO_UNTIL = opts.ioUntil ?? null;
+const LOAN_KEY = opts.loan;
+const PIN_FX   = !opts.noPinFx;
+const KEEP_SHK = opts.keepShocks;
 
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
 const { cfg: base, ...meta } = loadBaseConfig(source);
 
 let cfg = structuredClone(base);

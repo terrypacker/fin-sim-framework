@@ -573,9 +573,8 @@ true statement about the registry, not a gap in this file.
 ## Headless tools (77)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
-docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 39 of 64 entry points today;
-design 108 D6 migrates the rest, after which a missing spec is a gate failure.
+docblock, not re-authored here. Arguments come from each script's declarative
+`parseFlags` spec: 64 of 64 entry points carry one (design 108 D6 — all of them).
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
 ### scripts/config-converters/
@@ -592,6 +591,7 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
     - `--check` (flag) — report whether the series is in sync; write nothing
 - **`scripts/dev/build-help-index.mjs`** — `npm run prebuild`
   regenerate the tier-1 help reference (design 108 phase 1)
+    - `--check` (flag) — write nothing; exit 1 if help/REFERENCE.md is not what this run would produce
 - **`scripts/dev/build-historical-equity-returns.mjs`**
   designs 102 §4.1 / §6 and 103 §5.3
 - **`scripts/dev/build-index.js`** — `npm run build:index`
@@ -830,64 +830,157 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/probes/measure-shock-history.mjs`**
   derive the empirical numbers behind SHOCK_LIBRARY
+    - `--write` (flag) — write the measured figures back into the source file
 - **`scripts/probes/probe-904-limitation.mjs`**
   what the §904 limitation actually did, year by year
+    - `--to` (string) — stop at this YYYY-MM-DD instead of the scenario's simEnd
+    - `--json` (flag) — machine-readable output
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-988-method-dispersion.mjs`** — `npm run probe:988-method`
   design 87 G6's DECIDING measurement
+    - `--seeds` (number, default `40`) — seeds per method
+    - `--vol` (number, default `0.1`) — FX volatility
+    - `--reversion` (number, default `0.5`) — FX reversion speed
+    - `--move-year` (number) — residency move year override
+    - `--au-rental` (flag) — add an AU rental position
+    - `--json` (string) — write the structured result here
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-au-cgt-attribution.mjs`**
   _(undocumented — no docblock names this file)_
+    - `--fy` (number, default `2031`) — Australian financial year
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-bucket-cover.mjs`**
   the three-pool ("bucket") cover schedule, year by year
+    - `--years` (number, default `5`) — target years of cover
+    - `--from` (number, default `2027`) — first reported year
+    - `--to` (number, default `2050`) — last reported year
+    - `--pay-source` (string) — account the loan payment draws from
+    - `--io-until` (number) — hold the loan interest-only until this year
+    - `--loan` (string, default `auHousePropertyLoan`) — loan key to vary
+    - `--no-pin-fx` (flag) — let FX float instead of pinning it
+    - `--keep-shocks` (flag) — keep the scenario's own shocks
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-bucket-sequencing.mjs`**
   is the plan actually DRAINING its buckets in order?
+    - `--from` (number, default `2027`) — first reported year
+    - `--to` (number, default `2045`) — last reported year
+    - `--offset-priority` (string) — offset priority override
+    - `--no-pin-fx` (flag) — let FX float instead of pinning it
+    - `--no-shocks` (flag) — strip the scenario shocks
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-claims-as-placement.mjs`**
   what does joining pool CLAIMS to PLACEMENT cost?
+    - `--slack-years` (number, default `8`) — years of slack to allow
+    - `--as-of` (string, default `2039-09-01`) — as-of date
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-consumption-intent-gap.mjs`**
   design 89 §5.1 step A, and the step-D regression
+    - `--stress` (number, default `1`) — stress multiplier on the intent
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-equity-process-fit.mjs`**
   design 102 §2
+    - `--paths` (number, default `2000`) — simulated paths per model
+    - `--seed` (number, default `7`) — RNG seed
 - **`scripts/probes/probe-fito-handoff.mjs`**
   design 83 G5
+    - `--to` (string) — stop at this YYYY-MM-DD instead of the scenario's simEnd
+    - `--json` (flag) — machine-readable output
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-foreign-property-cgt.mjs`** — `npm run probe:foreign-property-cgt`
   End-to-end runtime check for design 62 §5 (Gap 3): the foreign (US) house of an AU resident is stepped up at the move and AU-assessed on sale, net of the AU main-residence exemption
 - **`scripts/probes/probe-inflation-joint.mjs`**
   design 103 §2
 - **`scripts/probes/probe-market-index-cost.mjs`**
   what the market index costs a run (design 101 §6.2)
+    - `--name` (string, default `cross-border-reference`) — built-in scenario to time
+    - `--runs` (number, default `6`) — timed runs
 - **`scripts/probes/probe-offset-payment-drain.mjs`**
   design 97 §20, integrity check 2
 - **`scripts/probes/probe-payload-gate-diff.mjs`**
   what wiring the manifest gate would change
+    - `<years>` (number, default `44`) — horizon in years
 - **`scripts/probes/probe-pool-gate-foresight.mjs`**
   design 97 §20, integrity check 1
+    - `--seed` (number, default `7`) — RNG seed
+    - `--vol` (number, default `0.25`) — equity return volatility
 - **`scripts/probes/probe-prime-inflation.mjs`**
   design 104 §2
 - **`scripts/probes/probe-refill-laundering.mjs`**
   does the DRAW ORDER survive the REBALANCER?
+    - `--from` (number, default `2027`) — first reported year
+    - `--to` (number, default `2042`) — last reported year
+    - `--shock` (string) — shock preset to inject
+    - `--shock-year` (number) — year the shock lands
+    - `--b-tail` (string, default `equity`, one of equity|bonds) — arm B's tail sleeve
+    - `--no-pin-fx` (flag) — let FX float instead of pinning it
+    - `--no-shocks` (flag) — strip the scenario shocks
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-regold-additive.mjs`**
   is a regold ONLY added keys? (design 101 §6.3)
+    - `--removals` (string) — removal spec to check against
 - **`scripts/probes/probe-residency-cgt.mjs`** — `npm run probe:residency-cgt`
   Headless probe / regression check for the AU residency-change CGT holding-period gate (design 62 §4, Gap 1), driving the REAL production code paths: - AccountService.recordResidencyChange — s855-45 deemed-acquisition step-up + per-country deemed-acquisition date stamp - consumeHoldingsFifo — realized basis + the discountable-gain split (≥12 months from the deemed-acquisition date) - AuTaxRates2025.computeTax / _cgtRelief — the pre-2027 Division 115 50% discount, now applied only to the eligible slice
 - **`scripts/probes/probe-return-autocorrelation.mjs`**
   design 97 §20.9
+    - `--n` (number, default `40`) — years per world
+    - `--vol` (number, default `0.18`) — equity return volatility
 - **`scripts/probes/probe-security-registry-clone-cost.mjs`**
   design 94 §6.4's deciding measurement
+    - `--step-to` (string, default `2035-01-01`) — end date for the end-to-end arm
+    - `--iters` (number, default `2000`) — micro-benchmark iterations
+    - `--counts` (list, default `5,20,50`) — security counts to benchmark
+    - `--levels` (list, default `off,journal,metrics,full`) — telemetry levels
+    - `--reps` (number, default `3`) — repetitions per cell
+    - `--n` (number, default `20`) — end-to-end runs
+    - `--no-end-to-end` (flag) — skip the end-to-end arm
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-spending-composition.mjs`**
   design 89 §3, §4 and §10, reproducible
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-step3-regold-delta.mjs`**
   _(undocumented — no docblock names this file)_
 - **`scripts/probes/probe-tax-payment-tax-leak.mjs`** — `npm run probe:tax-payment-leak`
   Quantifies the SECOND-ORDER TAX generated when a tax bill is paid by liquidating assets — the tax on the sale that funds the tax
+    - `--stress` (flag) — run the stressed arm
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
 - **`scripts/probes/probe-unitised-equity-rounding.mjs`**
   design 94 §9.3's deciding measurement
+    - `--positions` (number, default `20000`) — positions to simulate
+    - `--years` (number, default `44`) — horizon in years
+    - `--seed` (number, default `12345`) — RNG seed
+    - `--par` (number, default `100`) — par value per unit (design 93 §5b's PAR_PER_UNIT)
 - **`scripts/probes/probe-wash-sale-materiality.mjs`**
   _(undocumented — no docblock names this file)_
+    - `<seeds>` (number, default `25`) — seeds to run
 - **`scripts/probes/prototype-crossborder-allocation-scope.mjs`**
   _(undocumented — no docblock names this file)_
+    - `--years` (number, default `30`) — horizon in years
+    - `--gold-au` (number, default `0.15`) — gold share of the AU side (AU's 50% CGT discount)
 - **`scripts/probes/prototype-rebalance-cadence.mjs`**
   _(undocumented — no docblock names this file)_
+    - `--paths` (number, default `3000`) — simulated paths
+    - `--years` (number, default `40`) — horizon in years
+    - `--ltcg` (number, default `0.15`) — long-term capital gains rate (0.20, 0.28 collectible)
+    - `--no-crash` (flag) — run without the mid-horizon crash
+    - `--crash-year` (number, default `12`) — year the crash lands
+    - `--seed` (number, default `12648430`) — RNG seed
+    - `--target` (number, default `0.6`) — target equity share
 - **`scripts/probes/shock-path-engine.mjs`**
   the EMERGENT equity path of every shock preset, measured by running
+    - `--write` (flag) — write the generated table back into the source file
+    - `--start-sensitivity` (flag) — also report sensitivity to the start date
 
 ### scripts/scenario/
 

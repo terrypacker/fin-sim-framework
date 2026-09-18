@@ -27,23 +27,26 @@
  *                                                [--json] [--to YYYY-MM-DD]
  */
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { openSim, quiet } from '../lib/run.mjs';
 import { money } from '../lib/format.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (name) => argv.includes(name);
-const opt  = (name, dflt = null) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && argv[i + 1] != null ? argv[i + 1] : dflt;
-};
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-904-limitation.mjs [options]\n\n'
+       + 'probe-904-limitation — the §904 FTC limitation, basket by basket.',
+  to:       { type: 'string', help: "stop at this YYYY-MM-DD instead of the scenario's simEnd" },
+  json:     { type: 'flag',   help: 'machine-readable output' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const loaded = loadBaseConfig(parseSourceArgs(argv));
+const loaded = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const cfg    = loaded.cfg;
-const asJson = flag('--json');
+const asJson = opts.json;
 
 const sim = quiet(() => openSim(cfg, { telemetry: 'full' }));
-quiet(() => sim.stepTo(opt('--to') ? new Date(opt('--to')) : new Date(cfg.simEnd)));
+quiet(() => sim.stepTo(opts.to ? new Date(opts.to) : new Date(cfg.simEnd)));
 
 const rows = [];
 const seen = new Set();

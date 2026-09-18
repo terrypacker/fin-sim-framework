@@ -60,21 +60,33 @@
  * ENGINE rather than about a plan. Say which you ran.
  */
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { openSim, quiet } from '../lib/run.mjs';
 import { deepClone } from '../../src/simulation-framework/state-utils.js';
 
-const argv = process.argv.slice(2);
-const at   = (flag, dflt) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : dflt; };
-const has  = (flag) => argv.includes(flag);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-security-registry-clone-cost.mjs [options]\n\n'
+       + 'probe-security-registry-clone-cost — what cloning the security registry costs per step.',
+  stepTo:     { type: 'string', default: '2035-01-01', help: 'end date for the end-to-end arm' },
+  iters:      { type: 'number', default: 2000, help: 'micro-benchmark iterations' },
+  counts:     { type: 'list',   default: [5, 20, 50], help: 'security counts to benchmark' },
+  levels:     { type: 'list',   default: ['off', 'journal', 'metrics', 'full'], help: 'telemetry levels' },
+  reps:       { type: 'number', default: 3, help: 'repetitions per cell' },
+  n:          { type: 'number', default: 20, help: 'end-to-end runs' },
+  noEndToEnd: { type: 'flag',   help: 'skip the end-to-end arm' },
+  scenario:   { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:      { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const stepTo    = at('--step-to', '2035-01-01');
-const iters     = Number(at('--iters', 2000));
-const counts    = String(at('--counts', '5,20,50')).split(',').map(Number).filter(Boolean);
-const levels    = String(at('--levels', 'off,journal,metrics,full')).split(',');
-const reps      = Number(at('--reps', 3));
-const endToEndN = Number(at('--n', 20));
-const endToEnd  = !has('--no-end-to-end');
+const stepTo = opts.stepTo;
+const iters  = opts.iters;
+const counts = opts.counts.map(Number).filter(Boolean);
+const levels = opts.levels;
+const reps   = opts.reps;
+
+const endToEndN = opts.n;
+const endToEnd  = !opts.noEndToEnd;
 
 /**
  * One synthetic Security, shaped exactly like design 94 §4's entity — every field, so the
@@ -102,7 +114,7 @@ function benchClone(obj, n) {
 
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
 
-const src = loadBaseConfig(parseSourceArgs(argv));
+const src = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const simEnd = new Date(src.cfg.simEnd);
 
 /** One whole run, timed. The registry is spliced in AFTER load so the arms differ only here. */

@@ -58,7 +58,8 @@
  */
 
 import { openSim }                        from '../lib/run.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { ServiceRegistry }                from '../../src/services/service-registry.js';
 import { ReportDefinition, ReportDefinitionRegistry } from '../../src/finance/journal-reporting/report-definition-registry.js';
 import { createReportApis, runReport }    from '../../src/finance/journal-reporting/run-report.js';
@@ -104,18 +105,14 @@ class DebitsByActionTypeDef extends ReportDefinition {
 
 // ─── run ─────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
-if (argv.includes('-h') || argv.includes('--help')) {
-  const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL(import.meta.url), 'utf8');
-  // The file's own doc comment is the usage text — one copy, never out of date.
-  // Search for the close AFTER the open: the license header above closes first.
-  const from = src.indexOf('/**');
-  console.log(src.slice(from, src.indexOf('*/', from) + 2));
-  process.exit(0);
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-spending-composition.mjs [options]\n\n'
+       + 'probe-spending-composition — what the plan\'s spending is actually made of.',
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const source = loadBaseConfig(parseSourceArgs(argv));
+const source = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const cfg    = source.cfg;
 
 const sim = openSim(cfg, { telemetry: 'full' });

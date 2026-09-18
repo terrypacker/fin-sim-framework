@@ -35,6 +35,15 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { BaseScenario }    from '../../src/index.js';
 import { SHOCK_LIBRARY }   from '../../src/finance/economic-shocks/shock-library.js';
+import { parseFlags } from '../lib/cli.mjs';
+
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/shock-path-engine.mjs [--write] [--start-sensitivity]\n\n'
+       + 'shock-path-engine — trace what each shock preset does to the return path.',
+  write:            { type: 'flag', help: 'write the generated table back into the source file' },
+  startSensitivity: { type: 'flag', help: 'also report sensitivity to the start date' },
+});
+
 
 /**
  * What each preset is calibrated to, transcribed from docs/economic-shocks/MEASUREMENTS.md.
@@ -195,13 +204,13 @@ emit('but that composition is arithmetic, not a simulation, because this probe\'
 emit('holds no property. Treat it as one notch less verified than the rows above.');
 emit('');
 
-if (process.argv.includes('--write')) {
+if (opts.write) {
   const dest = path.join(ROOT, 'docs/economic-shocks/CALIBRATION.md');
   fs.writeFileSync(dest, out.join('\n') + '\n');
   console.log(`\nwrote ${dest}`);
 }
 
-if (process.argv.includes('--start-sensitivity')) {
+if (opts.startSensitivity) {
   console.log('');
   console.log('## Start-date sensitivity');
   console.log('');

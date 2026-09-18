@@ -246,8 +246,8 @@ export function isEntryPoint(text) {
 /**
  * The `parseFlags` spec, read from the source rather than by running the script.
  *
- * Design 108 D6 migrates every entry point onto it. Until a script is migrated it
- * contributes its purpose and `flags: null` — a real finding, and what the gate counts.
+ * Design 108 D6 put every entry point on it. A script that contributes `flags: null` is
+ * therefore a real finding — a new tool that skipped the spec — and what the gate counts.
  * A declared `positional:` comes back as its own field rather than a flag named
  * "positional", because it is not spelled `--positional` on the command line.
  */

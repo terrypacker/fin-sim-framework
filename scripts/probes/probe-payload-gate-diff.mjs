@@ -35,8 +35,13 @@ import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
+import { parseFlags } from '../lib/cli.mjs';
 
-const YEARS     = Number(process.argv[2] ?? 44);
+const { years: YEARS } = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-payload-gate-diff.mjs [<years>]\n\n'
+       + 'probe-payload-gate-diff — what the journal payload gate changes over a horizon.',
+  positional: { name: 'years', type: 'number', default: 44, help: 'horizon in years' },
+});
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2026 + YEARS, 0, 1));
 

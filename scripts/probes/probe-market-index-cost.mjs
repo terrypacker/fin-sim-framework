@@ -27,9 +27,16 @@
 import { specByName }         from '../../tests/helpers/golden-specs.js';
 import { runGolden }          from '../../tests/helpers/golden-harness.js';
 import { MarketIndexReducer } from '../../src/finance/economic-regimes/market-index.js';
+import { parseFlags } from '../lib/cli.mjs';
 
-const name = process.argv[2] ?? 'cross-border-reference';
-const runs = Number(process.argv[3] ?? 6);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-market-index-cost.mjs [--name <scenario>] [--runs 6]\n\n'
+       + 'probe-market-index-cost — what the market index costs per run.',
+  name: { type: 'string', default: 'cross-border-reference', help: 'built-in scenario to time' },
+  runs: { type: 'number', default: 6, help: 'timed runs' },
+});
+const name = opts.name;
+const runs = opts.runs;
 const spec = specByName(name);
 
 const live = MarketIndexReducer.prototype.reduce;

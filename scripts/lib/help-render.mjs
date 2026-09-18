@@ -111,9 +111,10 @@ function renderTools(tools) {
 
   const out = [`## Headless tools (${tools.length})`, '',
     'Command-line entry points under `scripts/`. **Purpose** is harvested from each script\'s',
-    'docblock, not re-authored here. Arguments are listed only for scripts on the declarative',
-    `\`parseFlags\` spec — ${onSpec.length} of ${entry.length} entry points today;`,
-    'design 108 D6 migrates the rest, after which a missing spec is a gate failure.',
+    'docblock, not re-authored here. Arguments come from each script\'s declarative',
+    `\`parseFlags\` spec: ${onSpec.length} of ${entry.length} entry points carry one`
+      + `${onSpec.length === entry.length ? ' (design 108 D6 — all of them).'
+        : ', and design 108 D6 migrates the rest.'}`,
     missing ? `${missing} scripts carry no docblock naming themselves and show \`(undocumented)\`.` : '', ''];
 
   for (const [group, entries] of [...byGroup].sort((a, b) => a[0].localeCompare(b[0]))) {

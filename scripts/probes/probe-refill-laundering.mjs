@@ -63,7 +63,8 @@
  */
 
 import { openSim, quiet, summarize } from '../lib/run.mjs';
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { allParams } from '../lib/variant.mjs';
 import { SHOCK_LIBRARY } from '../../src/finance/economic-shocks/shock-library.js';
 
@@ -71,32 +72,30 @@ const WRAPPER_TYPES = new Set(['ira', '401k', 'k401', 'roth', 'super']);
 const CASH_TYPES    = new Set(['savings', 'checking']);
 const SLEEVES       = ['CASH', 'BOND', 'EQUITY', 'GOLD'];
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const has  = (n) => argv.includes(n);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/probes/probe-refill-laundering.mjs [options]\n\n'
+       + 'probe-refill-laundering — does a bucket refill launder a forced sale into a voluntary one?',
+  from:       { type: 'number', default: 2027, help: 'first reported year' },
+  to:         { type: 'number', default: 2042, help: 'last reported year' },
+  shock:      { type: 'string', help: 'shock preset to inject' },
+  shockYear:  { type: 'number', help: 'year the shock lands' },
+  bTail:      { type: 'string', default: 'equity', choices: ['equity', 'bonds'],
+                help: "arm B's tail sleeve" },
+  noPinFx:    { type: 'flag',   help: 'let FX float instead of pinning it' },
+  noShocks:   { type: 'flag',   help: 'strip the scenario shocks' },
+  scenario:   { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:      { type: 'number', default: 0, help: 'scenario index in that file' },
+});
 
-const FROM       = Number(flag('--from', 2027));
-const TO         = Number(flag('--to',   2042));
-const SHOCK      = flag('--shock', null);
-const SHOCK_YEAR = flag('--shock-year', null);
-const PIN_FX     = !has('--no-pin-fx');
-const NO_SHOCK   = has('--no-shocks');
-// STUDY.md's dry-powder arm says "spend the offset and use the bonds to buy into the market".
-// It does not say what funds spending once the offset is dry, and the two readings are
-// different arms: EQUITY (the default — bonds are never spent, they are only a rebalance
-// source) or BOND (bonds are spent, just after the offset instead of before it). The answer
-// moves the arm's headline number, so it is a flag rather than a silent choice.
-const B_TAIL     = (flag('--b-tail', 'equity') === 'bonds') ? 'bonds' : 'equity';
+const FROM       = opts.from;
+const TO         = opts.to;
+const SHOCK      = opts.shock ?? null;
+const SHOCK_YEAR = opts.shockYear ?? null;
+const PIN_FX     = !opts.noPinFx;
+const NO_SHOCK   = opts.noShocks;
+const B_TAIL     = opts.bTail;
 
-// An unknown preset resolves to null in the toolset and the run silently has NO shock at
-// all — indistinguishable from a no-crash column, and the exact failure mode this probe
-// already throws for on an inert sequence. Refuse it here instead.
-if (SHOCK && !SHOCK_LIBRARY[SHOCK]) {
-  console.error(`unknown --shock '${SHOCK}'. Known: ${Object.keys(SHOCK_LIBRARY).join(', ')}`);
-  process.exit(1);
-}
-
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
 const { cfg: base, ...meta } = loadBaseConfig(source);
 
 /**
