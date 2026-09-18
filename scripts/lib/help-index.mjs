@@ -231,16 +231,36 @@ export function purposeFromDocblock(text, basename) {
 }
 
 /**
+ * Does this file parse a command line, or is it a module something else imports?
+ *
+ * `scripts/` holds both — `lab/sequence-risk/arms.mjs` and `scenario.mjs` are shared
+ * definitions, not things you run. D6 says every ENTRY POINT declares its flags; a module
+ * has no command line to declare, so counting it as missing a spec would make the gate's
+ * number permanently unreachable. Reading argv is the honest test: it is precisely what
+ * makes a file something you can mistype a flag at.
+ */
+export function isEntryPoint(text) {
+  return /process\.argv|parseFlags/.test(text);
+}
+
+/**
  * The `parseFlags` spec, read from the source rather than by running the script.
  *
- * Only 2 of 61 entry points use it today; design 108 D6 migrates the rest, and until then
- * a script without a spec contributes its purpose and an empty flag list. `flags: null`
- * is therefore a real finding — it is what the gate counts.
+ * Design 108 D6 migrates every entry point onto it. Until a script is migrated it
+ * contributes its purpose and `flags: null` — a real finding, and what the gate counts.
+ * A declared `positional:` comes back as its own field rather than a flag named
+ * "positional", because it is not spelled `--positional` on the command line.
  */
 export function flagsFromSource(text) {
+  return specFromSource(text).flags;
+}
+
+/** @returns {{flags: object[]|null, positional: object|null}} */
+export function specFromSource(text) {
+  const none = { flags: null, positional: null };
   let ast;
   try { ast = parse(text, { sourceType: 'module', errorRecovery: true }); }
-  catch { return null; }
+  catch { return none; }
 
   let spec = null;
   const walk = (node) => {
@@ -257,7 +277,7 @@ export function flagsFromSource(text) {
     }
   };
   walk(ast.program);
-  if (!spec) return null;
+  if (!spec) return none;
 
   const literal = (n) => (n?.type === 'StringLiteral' || n?.type === 'NumericLiteral'
     ? n.value
@@ -266,6 +286,7 @@ export function flagsFromSource(text) {
     : n?.type === 'NullLiteral' ? null : undefined);
 
   const flags = [];
+  let positional = null;
   for (const prop of spec.properties) {
     const name = prop.key?.name ?? prop.key?.value;
     if (!name || name === 'usage') continue;
@@ -274,15 +295,20 @@ export function flagsFromSource(text) {
       const k = p.key?.name ?? p.key?.value;
       if (k) cfg[k] = literal(p.value);
     }
-    flags.push({
-      name:    name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`),
+    const entry = {
+      name:    (cfg.name ?? name).replace(/[A-Z]/g, c => `-${c.toLowerCase()}`),
       type:    cfg.type ?? null,
       default: cfg.default ?? null,
       choices: cfg.choices ?? null,
       help:    cfg.help ?? null,
-    });
+    };
+    if (name === 'positional') {
+      positional = { ...entry, variadic: cfg.variadic ?? false, required: cfg.required ?? false };
+    } else {
+      flags.push(entry);
+    }
   }
-  return flags;
+  return { flags, positional };
 }
 
 /** Every headless entry point under `scripts/`, with its purpose and flag spec. */
@@ -306,12 +332,20 @@ export function collectTools(pkgScripts = {}) {
       const repoPath = relative(ROOT, path);
       const basename = repoPath.split('/').pop();
       const text     = readFileSync(path, 'utf8');
+      const js       = !basename.endsWith('.py');
+      const spec     = js ? specFromSource(text) : { flags: null, positional: null };
       tools.push({
-        path:      repoPath,
-        group:     dir,
-        npmScript: npmFor.get(repoPath) ?? null,
-        purpose:   purposeFromDocblock(text, basename),
-        flags:     basename.endsWith('.py') ? null : flagsFromSource(text),
+        path:       repoPath,
+        group:      dir,
+        npmScript:  npmFor.get(repoPath) ?? null,
+        purpose:    purposeFromDocblock(text, basename),
+        // `entryPoint` gates the D6 count: only a JS file that reads a command line can
+        // carry a `parseFlags` spec. A module has no command line; the two Python
+        // converters have one but not this parser.
+        entryPoint: js && isEntryPoint(text),
+        lang:       js ? 'js' : 'py',
+        flags:      spec.flags,
+        positional: spec.positional,
       });
     }
   }
@@ -354,7 +388,11 @@ export async function buildHelpIndex() {
   return {
     counts: {
       params: params.length, panels: panels.length, actions: actions.length,
-      tools: tools.length, toolsWithFlags: tools.filter(t => t.flags?.length).length,
+      tools: tools.length,
+      // D6 counts ENTRY POINTS. A module under `scripts/` has no command line to declare,
+      // so including it would put the target permanently out of reach.
+      entryPoints:    tools.filter(t => t.entryPoint).length,
+      toolsWithFlags: tools.filter(t => t.entryPoint && (t.flags || t.positional)).length,
       state: state.length,
     },
     params, panels, actions, tools, state,

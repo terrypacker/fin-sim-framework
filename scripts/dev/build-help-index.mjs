@@ -64,7 +64,7 @@ if (process.argv.includes('--check')) {
 write(REFERENCE, markdown);
 write(INDEX, json);
 
-const { params, panels, actions, tools, toolsWithFlags, state } = index.counts;
+const { params, panels, actions, tools, entryPoints, toolsWithFlags, state } = index.counts;
 console.log(`help/REFERENCE.md          ${params} params · ${panels} panels · ${actions} actions · ${tools} tools · ${state} state types`);
 console.log(`public/help/help-index.json  ${(json.length / 1024).toFixed(0)} KB`);
 
@@ -73,4 +73,6 @@ if (undocumented.length) {
   console.log(`\n${undocumented.length} scripts carry no docblock naming themselves:`);
   for (const t of undocumented) console.log(`  ${t.path}`);
 }
-console.log(`\n${tools - toolsWithFlags} of ${tools} tools are not on the parseFlags spec (design 108 D6).`);
+const unmigrated = index.tools.filter(t => t.entryPoint && !t.flags && !t.positional);
+console.log(`\n${entryPoints - toolsWithFlags} of ${entryPoints} entry points are not on the parseFlags spec (design 108 D6).`);
+for (const t of unmigrated) console.log(`  ${t.path}`);

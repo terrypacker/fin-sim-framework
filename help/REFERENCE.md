@@ -573,8 +573,8 @@ true statement about the registry, not a gap in this file.
 ## Headless tools (77)
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
-docblock, not re-authored here. Flags are listed only for scripts on the declarative
-`parseFlags` spec — 3 of 77 today;
+docblock, not re-authored here. Arguments are listed only for scripts on the declarative
+`parseFlags` spec — 3 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 

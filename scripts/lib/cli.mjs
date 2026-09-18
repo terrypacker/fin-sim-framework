@@ -33,6 +33,18 @@
  * Flags are `--kebab-case` on the command line and `camelCase` on the result, so
  * `--shock-year` reads back as `opts.shockYear`. `-h` / `--help` prints the usage
  * built from `help:` strings and exits 0.
+ *
+ * A bare word is an error *unless the script declares one*, because "this script takes
+ * flags only" is the same protection as "this flag does not exist" — a stray word that
+ * lands in an ignored bucket is the silence this module removes. Scripts whose primary
+ * argument reads better bare declare it:
+ *
+ *   positional: { name: 'files', type: 'list', variadic: true, help: 'scenario export(s)' }
+ *
+ * `variadic` collects every bare word into an array (`opts.files`); without it exactly
+ * one is taken. `required: true` makes its absence an error rather than a default, which
+ * is what a mode selector wants (`frontier.mjs <sweep|glide>`). `choices` applies the
+ * same way it does to a flag.
  */
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -47,8 +59,9 @@ const kebab = (s) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
  * function for a caller that wants to handle the error itself.
  *
  * @param {string[]} argv  usually `process.argv.slice(2)`
- * @param {object}   spec  `{ usage?, <name>: { type, default?, help?, choices? } }`
+ * @param {object}   spec  `{ usage?, positional?, <name>: { type, default?, help?, choices? } }`
  *        type: 'string' | 'number' | 'flag' | 'list' (comma-separated → string[])
+ *        positional: `{ name, type, variadic?, required?, default?, help?, choices? }`
  * @returns {object} parsed values, keyed camelCase
  */
 export function parseFlags(argv, spec = {}) {
@@ -62,17 +75,22 @@ export function parseFlags(argv, spec = {}) {
 
 /** @see parseFlags */
 export function parseFlagsOrThrow(argv, spec = {}) {
-  const { usage = '', ...flags } = spec;
+  const { usage = '', positional = null, ...flags } = spec;
   const byFlag = new Map();
   for (const [name, def] of Object.entries(flags)) byFlag.set(`--${kebab(name)}`, [name, def]);
+
+  const dfltOf = (def) => (def.default !== undefined && def.type !== 'flag'
+    ? `  (default: ${Array.isArray(def.default) ? def.default.join(',') || '—' : def.default})` : '');
 
   const help = () => {
     const lines = Object.entries(flags).map(([name, def]) => {
       const arg = def.type === 'flag' ? '' : ` <${def.type}>`;
-      const dflt = def.default !== undefined && def.type !== 'flag'
-        ? `  (default: ${Array.isArray(def.default) ? def.default.join(',') || '—' : def.default})` : '';
-      return `  --${kebab(name)}${arg}`.padEnd(28) + `${def.help ?? ''}${dflt}`;
+      return `  --${kebab(name)}${arg}`.padEnd(28) + `${def.help ?? ''}${dfltOf(def)}`;
     });
+    if (positional) {
+      const label = positional.variadic ? `<${positional.name}…>` : `<${positional.name}>`;
+      lines.unshift(`  ${label}`.padEnd(28) + `${positional.help ?? ''}${dfltOf(positional)}`, '');
+    }
     console.log(`\n${usage}\n\n${lines.join('\n')}\n`);
   };
 
@@ -82,11 +100,20 @@ export function parseFlagsOrThrow(argv, spec = {}) {
   for (const [name, def] of Object.entries(flags)) {
     out[camel(name)] = def.type === 'flag' ? false : def.default;
   }
+  const bare = [];
 
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (!token.startsWith('--')) {
-      throw new Error(`cli: unexpected argument "${token}". This script takes flags only.`);
+      if (!positional) {
+        throw new Error(`cli: unexpected argument "${token}". This script takes flags only.`);
+      }
+      if (!positional.variadic && bare.length) {
+        throw new Error(`cli: this script takes one <${positional.name}>, `
+          + `got "${bare[0]}" and "${token}".`);
+      }
+      bare.push(token);
+      continue;
     }
     const hit = byFlag.get(token);
     if (!hit) {
@@ -105,23 +132,48 @@ export function parseFlagsOrThrow(argv, spec = {}) {
     if (raw === undefined || raw.startsWith('--')) {
       throw new Error(`cli: ${token} needs a value.`);
     }
-    let value;
-    if (def.type === 'number') {
-      value = Number(raw);
-      if (!Number.isFinite(value)) throw new Error(`cli: ${token} expects a number, got "${raw}".`);
-    } else if (def.type === 'list') {
-      value = raw.split(',').map(s => s.trim()).filter(Boolean);
+    out[camel(name)] = coerce(token, def, raw);
+  }
+
+  if (positional) {
+    const label = `<${positional.name}>`;
+    if (positional.required && !bare.length) {
+      throw new Error(`cli: ${label} is required.`
+        + (positional.choices ? `  one of ${positional.choices.join(', ')}` : ''));
+    }
+    if (positional.variadic) {
+      // The words ARE the array, so each is coerced on its own — a `list` positional
+      // must not additionally split on commas.
+      const word = { ...positional, type: positional.type === 'list' ? 'string' : positional.type };
+      out[camel(positional.name)] = bare.length
+        ? bare.map(w => coerce(label, word, w))
+        : (positional.default ?? []);
+    } else if (bare.length) {
+      out[camel(positional.name)] = coerce(label, positional, bare[0]);
     } else {
-      value = raw;
+      out[camel(positional.name)] = positional.default;
     }
-    if (def.choices && !(def.type === 'list'
-      ? value.every(v => def.choices.includes(v))
-      : def.choices.includes(value))) {
-      throw new Error(`cli: ${token} must be one of ${def.choices.join(', ')} — got "${raw}".`);
-    }
-    out[camel(name)] = value;
   }
   return out;
+}
+
+/** Turn one raw word into the declared type, refusing anything outside `choices`. */
+function coerce(label, def, raw) {
+  let value;
+  if (def.type === 'number') {
+    value = Number(raw);
+    if (!Number.isFinite(value)) throw new Error(`cli: ${label} expects a number, got "${raw}".`);
+  } else if (def.type === 'list') {
+    value = raw.split(',').map(s => s.trim()).filter(Boolean);
+  } else {
+    value = raw;
+  }
+  if (def.choices && !(Array.isArray(value)
+    ? value.every(v => def.choices.includes(v))
+    : def.choices.includes(value))) {
+    throw new Error(`cli: ${label} must be one of ${def.choices.join(', ')} — got "${raw}".`);
+  }
+  return value;
 }
 
 /**

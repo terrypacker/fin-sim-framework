@@ -26,7 +26,7 @@ import assert    from 'node:assert/strict';
 
 import {
   collectParams, collectPanels, collectActions, collectTools, collectState,
-  purposeFromDocblock, flagsFromSource, buildHelpIndex,
+  purposeFromDocblock, flagsFromSource, specFromSource, isEntryPoint, buildHelpIndex,
 } from '../../scripts/lib/help-index.mjs';
 import { renderReferenceMarkdown } from '../../scripts/lib/help-render.mjs';
 import { IntlRetirementScenario }  from '../../src/scenarios/intl-retirement-scenario.js';
@@ -178,6 +178,37 @@ test('HELP-8: the parseFlags spec is read from source, with help text and defaul
   assert.equal(flags[1].default, 300);
   assert.equal(flags[3].type, 'flag');
   assert.equal(flagsFromSource('const x = 1;'), null, 'a script with no spec reports none');
+});
+
+test('HELP-8b: a declared positional is read as one, not as a flag named "positional"', () => {
+  // It is spelled bare on the command line, so listing it as `--positional` would print a
+  // flag that does not exist — the exact class of wrongness this generator exists to avoid.
+  const src = `
+    const opts = parseFlags(process.argv.slice(2), {
+      usage: 'npm run scenario -- <file.json> [more…]',
+      positional: { name: 'files', type: 'list', variadic: true, help: 'scenario export(s)' },
+      to: { type: 'string', default: null },
+    });`;
+  const { flags, positional } = specFromSource(src);
+
+  assert.deepEqual(flags.map(f => f.name), ['to']);
+  assert.equal(positional.name, 'files');
+  assert.equal(positional.variadic, true);
+  assert.equal(positional.required, false);
+  assert.equal(positional.help, 'scenario export(s)');
+  assert.equal(specFromSource('const x = 1;').positional, null);
+});
+
+test('HELP-8c: a module under scripts/ is not counted as an entry point', () => {
+  // D6 targets files that parse a command line. Counting a shared definition module would
+  // put "every entry point on the spec" permanently out of reach and make the gate a liar.
+  assert.equal(isEntryPoint('export const ARMS = [1, 2];'), false);
+  assert.equal(isEntryPoint('const argv = process.argv.slice(2);'), true);
+
+  const tools = collectTools({});
+  const arms  = tools.find(t => t.path.endsWith('sequence-risk/arms.mjs'));
+  assert.ok(arms, 'the module is still listed in the reference');
+  assert.equal(arms.entryPoint, false, 'but it is not part of the D6 count');
 });
 
 test('HELP-9: every headless entry point is listed, and an undocumented one is not hidden', () => {

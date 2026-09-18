@@ -90,6 +90,54 @@ describe('cli — parsing', () => {
   });
 });
 
+describe('cli — declared positionals', () => {
+  // A bare word stays an error unless the script declares one: the protection is the
+  // same as for flags, and an undeclared word that lands in an ignored bucket is exactly
+  // the silence this module exists to remove.
+  const FILES = {
+    usage: 'npm run scenario -- <file.json> [more…]',
+    positional: { name: 'files', type: 'list', variadic: true, help: 'scenario export(s)' },
+    to: { type: 'string', default: null },
+  };
+  const MODE = {
+    usage: 'frontier.mjs <mode>',
+    positional: { name: 'mode', type: 'string', required: true, choices: ['sweep', 'glide'] },
+    lo: { type: 'number', default: 0 },
+  };
+
+  test('a variadic positional collects every bare word, in order', () => {
+    const o = parse(['a.json', '--to', '2040-01-01', 'b.json'], FILES);
+    assert.deepEqual(o.files, ['a.json', 'b.json']);
+    assert.equal(o.to, '2040-01-01');
+  });
+
+  test('a variadic `list` does NOT also split on commas', () => {
+    // The words are the array. Splitting too would turn one awkward filename into two.
+    assert.deepEqual(parse(['a,b.json'], FILES).files, ['a,b.json']);
+  });
+
+  test('no words yields the default, not undefined', () => {
+    assert.deepEqual(parse([], FILES).files, []);
+  });
+
+  test('a required positional missing is an error naming the choices', () => {
+    assert.throws(() => parse(['--lo', '1'], MODE), /<mode> is required.*one of sweep, glide/s);
+  });
+
+  test('a positional outside `choices` is refused', () => {
+    assert.throws(() => parse(['sideways'], MODE), /<mode> must be one of sweep, glide/);
+    assert.equal(parse(['glide'], MODE).mode, 'glide');
+  });
+
+  test('a second word where only one is declared is an error, not a silent drop', () => {
+    assert.throws(() => parse(['sweep', 'glide'], MODE), /takes one <mode>/);
+  });
+
+  test('declaring a positional does not weaken the unknown-flag error', () => {
+    assert.throws(() => parse(['a.json', '--too', '2040'], FILES), /unknown flag "--too"/);
+  });
+});
+
 describe('cli — setParam writes both stores', () => {
   test('an existing row is matched by `name`, and `parameters` follows', () => {
     const cfg = { params: [{ name: 'monthlyExpenses', key: 'monthlyExpenses', value: 1 }],
