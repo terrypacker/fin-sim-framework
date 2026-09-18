@@ -259,7 +259,7 @@ A 33rd plugin, `help`, default pane `right`.
 | | a changed description fails the stamp check, and `restamp` clears exactly that stamp and no other |
 | | a new `FINANCE_PLUGINS` entry with no topic fails |
 | | a script under `scripts/` with no `parseFlags` spec fails once D6 has landed |
-| `cli-migration.test.mjs` | every entry point under `scripts/` parses `--help` and exits 0; an unknown flag exits 2 rather than running the default |
+| `cli-migration.test.mjs` ✅ | every entry point under `scripts/` parses `--help` and exits 0; an unknown flag exits 2 rather than running the default |
 | `help-plugin.test.mjs` (viz) | `TAB_ACTIVATED` renders the matching topic; a tab with no topic renders the fallback, not a throw |
 | | the `?` affordance renders the full description for the longest param in the schema without truncation |
 
@@ -269,8 +269,16 @@ A 33rd plugin, `help`, default pane `right`.
 `npm run help`, the `.claude/CLAUDE.md` pointer. Delivers the LLM half outright, and produces
 the exact inventory of what tier 2 owes.
 
-**Phase 2 — the CLI migration (D6).** Move the 59 hand-rolled argv parsers onto
-`parseFlags`. Independent of every other phase and parallelisable, but it belongs early for
+**Phase 2 — the CLI migration (D6). ✅ DONE 2026-09-17.** All 64 entry points are on
+`parseFlags`; `cli-migration.test.mjs` runs `--help` on every one and fails on a script that
+declares no arguments. Two additions to `cli.mjs` the real tree demanded: a declared
+`positional:` (`variadic`, `required`, `choices`), so `npm run scenario -- a.json b.json`
+and `frontier.mjs <mode>` survive the migration rather than being rewritten as flags; and
+`repeat: true`, because `--csv <name>=<file>` is repeatable in both §988 tools and last-wins
+there ingests one account and reports on it as the whole pool. `isEntryPoint()` keeps
+modules and the two Python converters out of the D6 denominator. Original plan below.
+
+Move the 59 hand-rolled argv parsers onto `parseFlags`. Independent of every other phase and parallelisable, but it belongs early for
 two reasons: it completes `tools[]` while the generator is still being shaped around it, and
 `cli.mjs` was written for exactly this migration and has stalled at 2 of 61 once already —
 the longer it waits, the larger it gets. Each script is a small, mechanical, individually
@@ -314,7 +322,8 @@ push teaches you to push first, and local failure is the whole mechanism that wo
 caught the drift in §2.1. No escape hatch is built up front; §6 records `HELP_STRICT=off` as
 the shape to add if mid-refactor friction proves real.
 
-**D6 — All 61 CLI entry points migrate to `parseFlags`.** (Was Q2.) It completes `tools[]`,
+**D6 — All 61 CLI entry points migrate to `parseFlags`.** (Was Q2. ✅ **DONE** — 64 of 64;
+the count rose because `isEntryPoint()` counts what actually reads a command line.) It completes `tools[]`,
 gives every script a real `--help`, and — independently of documentation — makes a mistyped
 flag an error instead of a silent default. Scheduled as §11 phase 2, early, because this
 migration has already stalled at 2 of 61 once and only grows.
