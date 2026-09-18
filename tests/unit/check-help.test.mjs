@@ -315,6 +315,17 @@ describe('check-help — the committed help/ tree', () => {
     }
   });
 
+  test('every panel is covered, and the panel kind is CLEAN — it is enforced', () => {
+    // design 108 phase 4: `panel` is complete, so `npm test` runs the gate with
+    // `--enforce panel`. This asserts the same thing in-process, so a failure names the
+    // topic rather than only failing a shell step.
+    const gate = execFileSync(process.execPath,
+      [fileURLToPath(new URL('../../scripts/dev/check-help.mjs', import.meta.url)),
+       '--quiet', '--enforce', 'panel'], { encoding: 'utf8' });
+    assert.match(gate, /32 panel/);
+    assert.match(gate, /0 structural · 0 stamp/);
+  });
+
   test('the seed topic is stamped against the live registries', () => {
     // If this fails, `npm run help:restamp -- <id>` after reading what moved.
     const text = readFileSync(new URL('../../help/concepts/event-sourcing.md', import.meta.url), 'utf8');

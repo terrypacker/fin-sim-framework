@@ -598,8 +598,9 @@ docblock, not re-authored here. Arguments come from each script's declarative
   _(undocumented — no docblock names this file)_
 - **`scripts/dev/check-help.mjs`** — `npm run help:gate`
   the tier-2 gate (design 108 §6)
-    - `--strict` (flag) — exit 1 on structural errors or stamp drift (design 108 D5)
-    - `--kinds` (list) — restrict the report to these topic kinds — phase 4 enforces one kind at a time
+    - `--strict` (flag) — exit 1 on any structural error or stamp drift (design 108 D5)
+    - `--enforce` (list) — report everything, but exit 1 only for these kinds — the phase-4 flip
+    - `--kinds` (list) — restrict the REPORT to these topic kinds
     - `--backlog` (flag) — print only the backlog of param groups with no concept topic
     - `--quiet` (flag) — the one-line summary only, no per-item detail (what `npm test` runs)
     - `--template` (string) — print a blank topic of this kind and exit

@@ -43,8 +43,9 @@ import { parseFlags } from '../lib/cli.mjs';
 const opts = parseFlags(process.argv.slice(2), {
   usage: 'node scripts/dev/check-help.mjs [--strict] [--backlog]\n\n'
        + 'check-help — does the hand-written help/ tree still describe the code?',
-  strict:  { type: 'flag', help: 'exit 1 on structural errors or stamp drift (design 108 D5)' },
-  kinds:   { type: 'list', help: 'restrict the report to these topic kinds — phase 4 enforces one kind at a time' },
+  strict:  { type: 'flag', help: 'exit 1 on any structural error or stamp drift (design 108 D5)' },
+  enforce: { type: 'list', help: 'report everything, but exit 1 only for these kinds — the phase-4 flip' },
+  kinds:   { type: 'list', help: 'restrict the REPORT to these topic kinds' },
   backlog: { type: 'flag', help: 'print only the backlog of param groups with no concept topic' },
   quiet:   { type: 'flag', help: 'the one-line summary only, no per-item detail (what `npm test` runs)' },
   template: { type: 'string', choices: Object.keys(BUDGETS),
@@ -141,9 +142,26 @@ if (detail && drift.length) {
     + ` · ${backlog.length} backlog (--backlog to list)${scope}`);
 }
 
-if (opts.strict && (errors.length || drift.length)) process.exit(1);
+// `--enforce panel` is design 108 phase 4: `panel` is complete and fails the build, while
+// `concept` is still being written and only reports. One gate, turned on a kind at a time,
+// rather than a second gate nobody remembers to run.
+const enforced = opts.strict
+  ? [...errors, ...drift]
+  : (opts.enforce?.length
+      ? [...errors.filter(e => opts.enforce.includes(e.kind)),
+         ...drift.filter(d => opts.enforce.includes(byId.get(d.id)?.kind ?? 'topic'))]
+      : []);
+
+if (enforced.length) {
+  console.error(`\n${plural(enforced.length, 'finding')} in `
+    + `${opts.strict ? 'every kind' : `enforced kind${opts.enforce.length === 1 ? '' : 's'} `
+      + opts.enforce.join(', ')}.`
+    + (detail ? '' : '  Run `npm run help:gate` for the detail.'));
+  process.exit(1);
+}
 
 if (errors.length || drift.length) {
-  console.log(`warn mode — design 108 phase 3. \`--strict\` makes ${detail ? 'the above' : 'this'} fatal.`
+  const un = opts.enforce?.length ? ` outside ${opts.enforce.join(', ')}` : '';
+  console.log(`warn mode${un} — design 108. \`--strict\` makes ${detail ? 'the above' : 'this'} fatal.`
     + (detail ? '' : '  Run `npm run help:gate` for the detail.'));
 }
