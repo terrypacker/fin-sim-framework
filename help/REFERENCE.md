@@ -9,7 +9,7 @@ prose about it. For *why* a mechanic exists and when to reach for it, follow the
 doc named in the relevant parameter description, or read the tier-2 topic under `help/`
 that cites it — the last section of this file lists every one.
 
-221 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 58 topics
+221 parameters · 33 panels · 173 action types · 79 tools · 266 state field types · 58 topics · 116 design docs
 
 ---
 
@@ -1638,4 +1638,133 @@ what the in-app panel keys on.
 | [Timeline](panels/timeline.md) | panel | 203 | 1 panel |
 | [US Tax](concepts/us-tax.md) | concept | 244 | 1 panel · 9 params · design 71 |
 | [Watchlist](panels/watchlist.md) | panel | 209 | 1 panel · design 101 |
+
+---
+
+## Design documents (116)
+
+Tier 3 — the full argument behind each mechanic, in `design/`. The title is each
+file's own H1, read out of it; there is no summary column, because a one-line precis
+of an argument is a second copy of that argument and the argument is what changes.
+Numbered order, not alphabetical: this is a series, and sorting it as text puts 100
+between 10 and 11.
+
+| doc | title |
+|---|---|
+| [`0-period-engine.md`](../design/0-period-engine.md) | Period Engine (UTC Epoch-Based) |
+| [`1-adjustment-entry-system.md`](../design/1-adjustment-entry-system.md) | Adjustment Entry System — Technical Requirements Specification |
+| [`2-unified-event-schema.md`](../design/2-unified-event-schema.md) | Unified Event Schema — Financial + Simulation Pipeline |
+| [`3-branching-event-streams.md`](../design/3-branching-event-streams.md) | Branching Event Streams (Forkable Timelines) |
+| [`4-branch-diff-insight-engine.md`](../design/4-branch-diff-insight-engine.md) | Branch Diff Engine & Automated Insight Generation |
+| [`5-branch-merge-reconciliation.md`](../design/5-branch-merge-reconciliation.md) | Branch Merge & Reconciliation Engine |
+| [`6-workbench-ui.md`](../design/6-workbench-ui.md) | Simulation Workbench UI Redesign Proposal |
+| [`7-workbench-ui-plan.md`](../design/7-workbench-ui-plan.md) | Workbench UI Implementation Plan |
+| [`8-serialization-test-plan.md`](../design/8-serialization-test-plan.md) | Scenario Serialization — Test Plan & Foundation |
+| [`9-toolset-compiler.md`](../design/9-toolset-compiler.md) | 9 — Toolset Compiler MVP |
+| [`10-display-settings-service.md`](../design/10-display-settings-service.md) | Design: AppDisplaySettings Service — Unified Timezone, Currency & Theme |
+| [`11-taxservice-declarative-refactor.md`](../design/11-taxservice-declarative-refactor.md) | 11 — TaxService Declarative Refactor |
+| [`12-toolset-ownership-refactor.md`](../design/12-toolset-ownership-refactor.md) | Design 12 — Toolset Ownership Refactor |
+| [`13-prebuilt-scenario-parameters.md`](../design/13-prebuilt-scenario-parameters.md) | Design 13 — Prebuilt Scenario Parameter Editing |
+| [`14-vite-migration.md`](../design/14-vite-migration.md) | Design: Vite Migration |
+| [`15-config-as-source-of-truth.md`](../design/15-config-as-source-of-truth.md) | Design 15 — Config as Source of Truth (Defaults as Bootstrap Only) |
+| [`16-journal-reporting-plugin.md`](../design/16-journal-reporting-plugin.md) | 16 — Journal Reporting Plugin |
+| [`17-scenario-as-graph-node.md`](../design/17-scenario-as-graph-node.md) | 17 — Scenario as Graph Node |
+| [`18-performance-enhancements.md`](../design/18-performance-enhancements.md) | Design: Simulation Performance Enhancements |
+| [`19-type-registry.md`](../design/19-type-registry.md) | 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split |
+| [`20-decouple-residency-from-citizenship.md`](../design/20-decouple-residency-from-citizenship.md) | 20 — Decouple Residency from Citizenship; Per-Person, Country-Coded |
+| [`21-financial-shock-and-regime-framework.md`](../design/21-financial-shock-and-regime-framework.md) | 21 — Financial Shock & Economic Regime Framework |
+| [`22-css-design-system.md`](../design/22-css-design-system.md) | 22 — CSS Design System Rework |
+| [`23-fx-exchange.md`](../design/23-fx-exchange.md) | 23 — FX Exchange Service |
+| [`24-financial-modeling-roadmap.md`](../design/24-financial-modeling-roadmap.md) | 24 — Financial Modeling Roadmap |
+| [`25-holding-level-state.md`](../design/25-holding-level-state.md) | 25 — Holding-Level State |
+| [`25a-mc-nested-param-paths.md`](../design/25a-mc-nested-param-paths.md) | 25a — Monte Carlo Config: Nested Parameter Paths |
+| [`26-dynamic-spending-strategies.md`](../design/26-dynamic-spending-strategies.md) | 26 — Dynamic Spending Strategies |
+| [`27-mortality-and-survivor-mechanics.md`](../design/27-mortality-and-survivor-mechanics.md) | 27 — Mortality & Survivor Mechanics |
+| [`28-time-varying-appreciation-and-bond-duration.md`](../design/28-time-varying-appreciation-and-bond-duration.md) | 28 — Time-Varying Appreciation & Bond Duration |
+| [`29-behavioral-layer.md`](../design/29-behavioral-layer.md) | 29 — Behavioral Layer |
+| [`30-decision-graph-analysis.md`](../design/30-decision-graph-analysis.md) | 30 — Decision-Graph Analysis & Scenario Comparison |
+| [`31-state-field-exploration.md`](../design/31-state-field-exploration.md) | 31 — State-Field Exploration (Path-Addressable Time-Series) |
+| [`32-param-field-linking.md`](../design/32-param-field-linking.md) | Design: Parameter ↔ Field Linking — one source of truth for editable values |
+| [`33-age-banded-spending.md`](../design/33-age-banded-spending.md) | 33 — Age-Banded Spending |
+| [`34-us-state-income-tax.md`](../design/34-us-state-income-tax.md) | 34 — US State Income Tax (Residency-Based, Pluggable by Year) |
+| [`35-drawdown-owner-ordering.md`](../design/35-drawdown-owner-ordering.md) | 35 — Drawdown Owner Ordering |
+| [`36-au-move-tax-effect-analysis.md`](../design/36-au-move-tax-effect-analysis.md) | 36 — US→AU Move: All-Else-Equal Tax-Effect Analysis |
+| [`37-reducer-test-framework.md`](../design/37-reducer-test-framework.md) | 37 — Reducer Test Framework & Postcondition Coverage |
+| [`38-optimization-solver-framework.md`](../design/38-optimization-solver-framework.md) | 38 — Optimization Solver Framework |
+| [`39-mpc-financial-controller.md`](../design/39-mpc-financial-controller.md) | 39 — MPC Financial Controller (closed-loop advisor cockpit) |
+| [`40-after-tax-net-worth.md`](../design/40-after-tax-net-worth.md) | 40 — After-Tax Re-pricing (pricing the embedded deferred-tax liability) |
+| [`41-windowed-prediction-horizon.md`](../design/41-windowed-prediction-horizon.md) | 41 — Windowed Prediction Horizon (sliding fixed-length look-ahead) |
+| [`42-roth-lever-snapshot-rollout-fidelity.md`](../design/42-roth-lever-snapshot-rollout-fidelity.md) | 42 — Roth Lever: snapshot-rollout fidelity (the income-target must move the rollout) |
+| [`43-basis-accounting-integrity.md`](../design/43-basis-accounting-integrity.md) | 43 — Basis-Accounting Integrity (cost basis & the contribution/earnings ledger) |
+| [`44-cross-border-drawdown-actions.md`](../design/44-cross-border-drawdown-actions.md) | 44 — Cross-Border Drawdown Actions (missing INTL_TRANSFER and withdrawal-tax actions in `replenishSavings`) |
+| [`45-early-withdrawal-decant-lever.md`](../design/45-early-withdrawal-decant-lever.md) | 45 — Early-Withdrawal "Decant" Lever (proactive pre-move US retirement drawdown, + multi-lever MPC) |
+| [`46-mpc-performance-implementation.md`](../design/46-mpc-performance-implementation.md) | 46 — Implementation Guide: Structured Online Surrogate |
+| [`46-mpc-performance.md`](../design/46-mpc-performance.md) | 46 — MPC Performance (structured online surrogate over the black-box sim) |
+| [`47-time-varying-fx-rates.md`](../design/47-time-varying-fx-rates.md) | 47 — Time-Varying FX Rates (regime-driven, seeded, snapshot-cheap) |
+| [`48-rental-income.md`](../design/48-rental-income.md) | 48 — Rental Income on Real Property (dual-country, occupancy-driven, tax-aware) |
+| [`49-company-sale-asset.md`](../design/49-company-sale-asset.md) | 49 — Company Sale as a First-Class Sellable Asset (`CompanyEquity`) |
+| [`50-au-source-wages.md`](../design/50-au-source-wages.md) | 50 — AU-source Wages (currency-routed, residency-aware tax) |
+| [`51-tax-bucket-fx-normalization.md`](../design/51-tax-bucket-fx-normalization.md) | 51 — Tax-bucket FX normalization (single canonical currency per accumulator) |
+| [`52-true-foreign-tax-credit.md`](../design/52-true-foreign-tax-credit.md) | 52 — True Cross-Border Relief (FEIE + basketed FTC + AU FITO) |
+| [`53-account-basis-refactor-and-offset.md`](../design/53-account-basis-refactor-and-offset.md) | 53 — Account basis refactor + AU offset account |
+| [`54-loan-liability-accounts.md`](../design/54-loan-liability-accounts.md) | 54 — Loan (liability) accounts + offset re-targeting |
+| [`55-configuration-driven-parameters.md`](../design/55-configuration-driven-parameters.md) | 55 — Configuration-driven (dynamic) parameters |
+| [`56-prime-relative-rates.md`](../design/56-prime-relative-rates.md) | 56 — Prime-relative rates (central-bank anchored cash & loan rates) |
+| [`57-au-cgt-reform-2027.md`](../design/57-au-cgt-reform-2027.md) | 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027) |
+| [`58-drawdown-cross-border-lever.md`](../design/58-drawdown-cross-border-lever.md) | 58 — Drawdown control levers: cross-border mode, orderable priority, and pooled-tier draws |
+| [`59-treasury-bond-state-tax.md`](../design/59-treasury-bond-state-tax.md) | 59 — Treasury-aware bond coupon taxation (US state exemption) |
+| [`60-cash-sleeve-money-market-yield.md`](../design/60-cash-sleeve-money-market-yield.md) | 60 — Money-market yield on cash sleeves of equity-served accounts |
+| [`61-holding-allocation-lever-implementation.md`](../design/61-holding-allocation-lever-implementation.md) | 61 — Implementation Guide: Holding-allocation lever |
+| [`61-holding-allocation-lever.md`](../design/61-holding-allocation-lever.md) | 61 — Holding-allocation lever: optimize the Stock/Bond/Cash/Gold mix over time |
+| [`62-residency-change-cgt-fidelity.md`](../design/62-residency-change-cgt-fidelity.md) | 62 — Residency-change CGT fidelity (deemed-acquisition holding period + foreign real property) |
+| [`63-inheritance.md`](../design/63-inheritance.md) | 63 — Inheritance (scheduled bequest of external-decedent assets + per-country death tax) |
+| [`64-mpc-attention-mechanisms.md`](../design/64-mpc-attention-mechanisms.md) | 64 — Attention Mechanisms for the MPC Solver |
+| [`65-allocation-aware-drawdown.md`](../design/65-allocation-aware-drawdown.md) | 65 — Allocation-aware drawdown: choose *which holding type* to sell for a debit |
+| [`66-bond-fidelity.md`](../design/66-bond-fidelity.md) | 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income |
+| [`67-bond-yield-curve.md`](../design/67-bond-yield-curve.md) | 67 — Bond yield curve: from a single fixed-income rate to a term structure |
+| [`68-year-of-death-tax-settlement.md`](../design/68-year-of-death-tax-settlement.md) | 68 — Year-of-death tax settlement fidelity |
+| [`69-self-employment-income.md`](../design/69-self-employment-income.md) | 69 — Self-Employment Income (US SECA + AU sole-trader), both countries |
+| [`70-account-display-names.md`](../design/70-account-display-names.md) | 70 — Account display names (show the name, keep the key) |
+| [`71-tax-worksheet-csv-export.md`](../design/71-tax-worksheet-csv-export.md) | 71 — Tax worksheet CSV export (validate the tax framework by hand) |
+| [`72-company-equity-sale-fixes.md`](../design/72-company-equity-sale-fixes.md) | 72 — Company equity sale: cross-border fidelity fixes |
+| [`73-tax-export-validation-fixes.md`](../design/73-tax-export-validation-fixes.md) | 73 — Cross-border source defects surfaced by tax-export validation |
+| [`74-stochastic-return-paths.md`](../design/74-stochastic-return-paths.md) | 74 — Stochastic return paths: from one constant rate per run to sequence-of-returns risk |
+| [`75-house-costs-and-property-return-path.md`](../design/75-house-costs-and-property-return-path.md) | 75 — House costs and the property return path: appreciation that co-moves with markets, plus the running cost of owning |
+| [`76-au-per-person-income-attribution.md`](../design/76-au-per-person-income-attribution.md) | 76 — AU per-person income attribution |
+| [`77-au-super-fund-tax-and-ftc-creditability.md`](../design/77-au-super-fund-tax-and-ftc-creditability.md) | 77 — AU super fund tax: incidence, the age-60 gate, and FTC creditability |
+| [`78-simulation-telemetry-cost.md`](../design/78-simulation-telemetry-cost.md) | 78 — Simulation performance: telemetry cost and history-proportional work |
+| [`79-real-vs-nominal-display.md`](../design/79-real-vs-nominal-display.md) | 79 — Real vs. Nominal value display (constant-dollar toggle) |
+| [`80-feasibility-preserving-harvest.md`](../design/80-feasibility-preserving-harvest.md) | 80 — Feasibility-preserving harvest: why a baked plan goes broke and the controller doesn't |
+| [`81-run-as-replayable-artifact.md`](../design/81-run-as-replayable-artifact.md) | 81 — The run as a replayable artifact: playback, branching, and a decision graph rooted at an epoch |
+| [`82-allocation-over-time-reporting.md`](../design/82-allocation-over-time-reporting.md) | 82 — Allocation over time: reporting the realized asset mix |
+| [`83-us-au-tax-treaty-intricacies.md`](../design/83-us-au-tax-treaty-intricacies.md) | 83 — US–AU tax treaty intricacies: §904 baskets, resourcing, and the limitation |
+| [`84-roth-s99b-decant-vs-hold.md`](../design/84-roth-s99b-decant-vs-hold.md) | 84 — Roth IRA under s99B: decant before the move, or hold and pay Australia? |
+| [`85-cross-border-tax-coupling.md`](../design/85-cross-border-tax-coupling.md) | 85 — Cross-border tax coupling: where country-pair logic should live |
+| [`86-leveraged-property-fidelity.md`](../design/86-leveraged-property-fidelity.md) | 86 — Leveraged property fidelity: loss carryforward, interest-only debt, and interest deductibility |
+| [`87-foreign-currency-basis-pools.md`](../design/87-foreign-currency-basis-pools.md) | 87 — Foreign-currency basis pools: §988 on cash, not just on debt |
+| [`88-speculative-assets.md`](../design/88-speculative-assets.md) | 88 — Speculative assets: model the what-if without banking it |
+| [`89-spending-over-time-reporting.md`](../design/89-spending-over-time-reporting.md) | 89 — Spending over time: what the plan actually costs |
+| [`90-equity-fidelity-and-capital-losses.md`](../design/90-equity-fidelity-and-capital-losses.md) | 90 — Equity fidelity and capital losses |
+| [`91-journal-payload-manifest.md`](../design/91-journal-payload-manifest.md) | 91 — The journal payload manifest: what it gates, and what it doesn't |
+| [`92-fx-observation-overlay.md`](../design/92-fx-observation-overlay.md) | 92 — The FX observation overlay: driving the simulation from a published rate feed |
+| [`93-holding-units-substrate.md`](../design/93-holding-units-substrate.md) | 93 — Units as the holding substrate: making par, and eventually shares, unfalsifiable |
+| [`94-equity-as-security-positions.md`](../design/94-equity-as-security-positions.md) | 94 — Equity as security positions (design 93's Option C) |
+| [`95-wage-logic-and-payroll-contributions.md`](../design/95-wage-logic-and-payroll-contributions.md) | 95 — Wage logic: splits, payroll contributions, and the taxes on a paycheque |
+| [`96-percent-of-wealth-spending.md`](../design/96-percent-of-wealth-spending.md) | 96 — Percent-of-wealth spending, and a configurable wealth basis |
+| [`97-liquidity-pools-and-drawdown-sequence.md`](../design/97-liquidity-pools-and-drawdown-sequence.md) | 97 — Liquidity Pools: the unified drawdown sequence (scaffolding) |
+| [`98-sweepable-parameter-surface.md`](../design/98-sweepable-parameter-surface.md) | 98 — The sweepable parameter surface (Monte Carlo + Optimizer) |
+| [`99-market-total-return-model.md`](../design/99-market-total-return-model.md) | 99 — One return per market: accounts derive their growth from their holdings |
+| [`100-mc-analysis-surface.md`](../design/100-mc-analysis-surface.md) | 100 — The Monte Carlo analysis surface (in-app) |
+| [`101-watchlists.md`](../design/101-watchlists.md) | 101 — Watchlists: named field sets that any panel can read and feed |
+| [`102-historical-bootstrap-equity-returns.md`](../design/102-historical-bootstrap-equity-returns.md) | 102 — Historical block bootstrap for equity returns |
+| [`103-stochastic-inflation-and-joint-history.md`](../design/103-stochastic-inflation-and-joint-history.md) | 103 — A stochastic inflation path, and history's years sampled jointly |
+| [`104-prime-rate-follows-inflation.md`](../design/104-prime-rate-follows-inflation.md) | 104 — The prime rate follows inflation |
+| [`105-super-fund-cgt-realisation.md`](../design/105-super-fund-cgt-realisation.md) | 105 — Super fund CGT on realisation |
+| [`106-dividend-reinvestment-election.md`](../design/106-dividend-reinvestment-election.md) | 106 — Dividend reinvestment as an account election (and, later, a per-security one) |
+| [`107-retirement-paycheck-and-tax-instalments.md`](../design/107-retirement-paycheck-and-tax-instalments.md) | 107 — The retirement paycheck, and paying tax in instalments |
+| [`108-help-system.md`](../design/108-help-system.md) | 108 — The help system: generated reference, stamped prose, two surfaces |
+| [`bus-unification-plan.md`](../design/bus-unification-plan.md) | Bus Unification Plan |
+| [`inconsistencies.md`](../design/inconsistencies.md) | Inconsistencies, Rework Candidates, and Open Questions |
+| [`requirements.md`](../design/requirements.md) | Requirements Tracker |
+| [`roth-conversion-design.md`](../design/roth-conversion-design.md) | Roth Conversion: Design & TODO |
 
