@@ -241,13 +241,23 @@ describe('check-help — stamps', () => {
 /* ──────────────────────────────── backlog ────────────────────────────────── */
 
 describe('check-help — the backlog reports without failing', () => {
-  test('a param group with no topic is backlog, not an error', () => {
-    // Q4 has not settled which groups deserve a topic, and a gate on unscoped work
-    // teaches people to switch the gate off.
+  test('an uncited param is backlog, named, and never an error', () => {
+    // Counted per PARAM, not per group: Q4 settled on per-mechanic topics, and a per-group
+    // count would call a 52-param group covered the moment one topic cited one of its
+    // params — a number that reports success while the surface stays unexplained.
     const r = withTopic('id: t\nkind: panel\ntitle: T\npanels: [pools]\nstamps:\n  panel:pools: x',
       GOOD_BODY);
-    assert.ok(r.backlog.some(b => b.kind === 'group' && b.id === 'Nobody'));
-    assert.doesNotMatch(msgs(r), /Nobody/, 'a group with no topic must never be an error');
+    const nobody = r.backlog.find(b => b.id === 'Nobody');
+    assert.ok(nobody, 'the uncited param\'s group must be reported');
+    assert.deepEqual(nobody.keys, ['lonelyParam'], 'and it must NAME the uncited params');
+    assert.doesNotMatch(msgs(r), /lonelyParam/, 'an uncited param must never be an error');
+  });
+
+  test('citing a param clears it from the backlog', () => {
+    const r = withTopic(
+      'id: t\nkind: concept\ntitle: T\nparams: [lonelyParam]\nstamps:\n  param:lonelyParam: x',
+      GOOD_BODY);
+    assert.equal(r.backlog.find(b => b.id === 'Nobody'), undefined);
   });
 });
 
@@ -315,15 +325,17 @@ describe('check-help — the committed help/ tree', () => {
     }
   });
 
-  test('every panel is covered, and the panel kind is CLEAN — it is enforced', () => {
-    // design 108 phase 4: `panel` is complete, so `npm test` runs the gate with
-    // `--enforce panel`. This asserts the same thing in-process, so a failure names the
-    // topic rather than only failing a shell step.
+  test('panel and concept are both complete and CLEAN — both are enforced', () => {
+    // design 108 phase 4 is done: every panel has a topic and every param is cited, so
+    // `npm test` runs the gate with `--enforce panel,concept`. Asserting it here too means
+    // a failure names the topic rather than only failing a shell step.
     const gate = execFileSync(process.execPath,
       [fileURLToPath(new URL('../../scripts/dev/check-help.mjs', import.meta.url)),
-       '--quiet', '--enforce', 'panel'], { encoding: 'utf8' });
+       '--quiet', '--enforce', 'panel,concept'], { encoding: 'utf8' });
     assert.match(gate, /32 panel/);
     assert.match(gate, /0 structural · 0 stamp/);
+    assert.match(gate, /0 params uncited/,
+      'Q4 settled on per-mechanic topics covering the whole param surface');
   });
 
   test('the seed topic is stamped against the live registries', () => {
