@@ -50,6 +50,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { FxRateTable } from '../lib/fx-rates.mjs';
+import { parseFlags }  from '../lib/cli.mjs';
 import {
   readAccountCsv, loadRules, classifyRow, attachRates, groupByAccount,
 } from '../lib/section988-source.mjs';
@@ -58,40 +59,41 @@ import {
   LEDGER_METHOD, POOLING, PERSONAL_DE_MINIMIS_USD,
 } from '../lib/section988-ledger.mjs';
 
-function parseArgs(argv) {
-  const opts = { csv: [], top: 15 };
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    const next = () => argv[++i];
-    if (a === '--csv') {
-      const spec = next();
-      const eq = spec.indexOf('=');
-      if (eq < 0) throw new Error(`--csv expects <name>=<file>, got "${spec}"`);
-      opts.csv.push({ name: spec.slice(0, eq), file: spec.slice(eq + 1) });
-    } else if (a === '--rules') opts.rules = next();
-    else if (a === '--rates') opts.rates = next();
-    else if (a === '--method') opts.method = next();
-    else if (a === '--pooling') opts.pooling = next();
-    else if (a === '--seed-rate') opts.seedRate = Number.parseFloat(next());
-    else if (a === '--seed-sweep') opts.seedSweep = next();
-    else if (a === '--audit') opts.audit = next();
-    else if (a === '--audit-all') opts.auditAll = true;
-    else if (a === '--year') opts.year = next();
-    else if (a === '--top') opts.top = Number.parseInt(next(), 10);
-    else if (a === '--compare') opts.compare = true;
-    else if (a === '--json') opts.json = true;
-    else if (a === '--help' || a === '-h') opts.help = true;
-    else throw new Error(`unknown option ${a}`);
-  }
-  return opts;
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/tax/section988-ledger.mjs \\\n'
+       + '  --csv pool=scenarios/S988/pool-review.csv \\\n'
+       + '  --rules scenarios/S988/section988-rules.json\n\n'
+       + 'section988-ledger — compute §988 gain from validated history (design 87 G5).\n\n'
+       + 'Run scripts/tax/section988-ingest.mjs until every gate is green FIRST. This\n'
+       + 'ledger is path-dependent and absorbs an ingest error silently, forever.',
+  csv:       { type: 'string', repeat: true, help: '<name>=<file> classified history' },
+  rules:     { type: 'string', help: 'the same rules file the ingest used' },
+  rates:     { type: 'string', help: 'rate table override' },
+  method:    { type: 'string', default: 'pro-rata',    choices: ['fifo', 'pro-rata'], help: 'basis method' },
+  pooling:   { type: 'string', default: 'per-account', choices: ['per-account', 'commingled'], help: 'pooling rule' },
+  compare:   { type: 'flag',   help: 'run all four method × pooling combinations and print the spread' },
+  seedRate:  { type: 'number', help: 're-price every assumed row at this rate (a what-if)' },
+  seedSweep: { type: 'string', help: 'from:to[:step] or a list — what the seeded assumption is worth' },
+  audit:     { type: 'string', help: 'write the per-row audit CSV and foot it against the report' },
+  auditAll:  { type: 'flag',   help: 'include IGNORE / unclassified rows in that CSV too' },
+  year:      { type: 'string', help: 'list every disposition in one tax year' },
+  top:       { type: 'number', default: 15, help: 'rows per report section' },
+  json:      { type: 'flag',   help: 'structured output' },
+});
+
+/** `--csv pool=file.csv` → `{ name, file }`. The name labels the account in every report. */
+opts.csv = opts.csv.map((spec) => {
+  const eq = spec.indexOf('=');
+  if (eq < 0) { console.error(`\ncli: --csv expects <name>=<file>, got "${spec}".\n`); process.exit(2); }
+  return { name: spec.slice(0, eq), file: spec.slice(eq + 1) };
+});
+
 
 const money = (n) => (n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const out = (s = '') => process.stdout.write(`${s}\n`);
 
 function main() {
-  const opts = parseArgs(process.argv);
-  if (opts.help || opts.csv.length === 0) { out(usage()); process.exitCode = opts.help ? 0 : 1; return; }
+  if (opts.csv.length === 0) { out(usage()); process.exitCode = 1; return; }
 
   const rateTable = FxRateTable.load(opts.rates);
   const { rules } = opts.rules ? loadRules(opts.rules) : { rules: [] };
@@ -360,30 +362,8 @@ function reportCompare(cmp) {
 }
 
 function usage() {
-  return [
-    'section988-ledger.mjs — compute §988 gain from validated history (design 87 G5).',
-    '',
-    'Run scripts/tax/section988-ingest.mjs until every gate is green FIRST. This ledger',
-    'is path-dependent and absorbs an ingest error silently, forever.',
-    '',
-    'Usage:',
-    '  node scripts/tax/section988-ledger.mjs \\',
-    '    --csv pool=scenarios/S988/pool-review.csv \\',
-    '    --rules scenarios/S988/section988-rules.json',
-    '',
-    'Options:',
-    '  --csv <name>=<file>   Classified history. Repeatable.',
-    '  --rules <file>        The same rules file the ingest used.',
-    '  --method <m>          fifo | pro-rata      (default pro-rata)',
-    '  --pooling <p>         per-account | commingled  (default per-account)',
-    '  --compare             Run all four combinations and print the spread.',
-    '  --seed-rate <r>       Re-price every assumed row at this rate (a what-if).',
-    '  --seed-sweep <spec>   from:to[:step] or a list — what the seeded assumption is worth.',
-    '  --audit <file>        Write the per-row audit CSV and foot it against the report.',
-    '  --audit-all           Include IGNORE / unclassified rows in that CSV too.',
-    '  --year <YYYY>         List every disposition in one tax year.',
-    '  --rates / --top / --json',
-  ].join('\n');
+  return 'section988-ledger.mjs — compute §988 gain from validated history (design 87 G5).\n\n'
+    + '  Needs at least one --csv <name>=<file>.  Run with --help for every flag.';
 }
 
 try {

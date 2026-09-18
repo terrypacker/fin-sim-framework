@@ -43,6 +43,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, basename }            from 'node:path';
 
+import { parseFlags }                from '../lib/cli.mjs';
+
 // ─── CSV ──────────────────────────────────────────────────────────────────────
 
 /** RFC 4180 reader — the exports quote any field carrying a separator. */
@@ -127,29 +129,18 @@ function crossfoot(dir, tolerance) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-const HELP = `crossfoot-drill-reports — verify drill reports against the worksheet lines that link to them
-
-Usage:
-  node scripts/crossfoot-drill-reports.mjs <dir> [<dir> …]
-
-Options:
-  --tolerance <n>  Absolute match tolerance (default 0.02).
-  --verbose        List every disagreeing year.
-  -h, --help       Show this help.`;
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/tax/crossfoot-drill-reports.mjs <dir> [<dir> …]\n\n'
+       + 'crossfoot-drill-reports — verify drill reports against the worksheet lines\n'
+       + 'that link to them.',
+  positional: { name: 'dirs', type: 'list', variadic: true, required: true,
+                help: 'drill-report directories to crossfoot' },
+  tolerance: { type: 'number', default: 0.02, help: 'absolute match tolerance' },
+  verbose:   { type: 'flag',   help: 'list every disagreeing year' },
+});
 
 function main() {
-  const argv = process.argv.slice(2);
-  const dirs = [];
-  let tolerance = 0.02, verbose = false;
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--tolerance')            tolerance = Number(argv[++i]);
-    else if (a === '--verbose')         verbose = true;
-    else if (a === '-h' || a === '--help') { console.log(HELP); return; }
-    else if (a.startsWith('-'))         { console.error(`Unknown option: ${a}`); process.exit(2); }
-    else dirs.push(a);
-  }
-  if (!dirs.length) { console.log(HELP); process.exit(1); }
+  const { dirs, tolerance, verbose } = opts;
 
   let failed = 0;
   for (const dir of dirs) {

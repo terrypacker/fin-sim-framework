@@ -45,6 +45,10 @@
  * one is taken. `required: true` makes its absence an error rather than a default, which
  * is what a mode selector wants (`frontier.mjs <sweep|glide>`). `choices` applies the
  * same way it does to a flag.
+ *
+ * A flag marked `repeat: true` accumulates instead of overwriting, for the
+ * `--csv a=x.csv --csv b=y.csv` shape the §988 tools use. Without it the last wins,
+ * which is the right default for everything else.
  */
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -61,6 +65,7 @@ const kebab = (s) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
  * @param {string[]} argv  usually `process.argv.slice(2)`
  * @param {object}   spec  `{ usage?, positional?, <name>: { type, default?, help?, choices? } }`
  *        type: 'string' | 'number' | 'flag' | 'list' (comma-separated → string[])
+ *        repeat: accumulate every occurrence into an array instead of last-wins
  *        positional: `{ name, type, variadic?, required?, default?, help?, choices? }`
  * @returns {object} parsed values, keyed camelCase
  */
@@ -79,17 +84,24 @@ export function parseFlagsOrThrow(argv, spec = {}) {
   const byFlag = new Map();
   for (const [name, def] of Object.entries(flags)) byFlag.set(`--${kebab(name)}`, [name, def]);
 
+  // padEnd alone runs a long flag straight into its help text.
+  const pad = (s) => (s.length >= 28 ? `${s}  ` : s.padEnd(28));
+
+  const oneOf = (def) => (def.choices ? `  [${def.choices.join('|')}]` : '');
+
   const dfltOf = (def) => (def.default !== undefined && def.type !== 'flag'
     ? `  (default: ${Array.isArray(def.default) ? def.default.join(',') || '—' : def.default})` : '');
 
   const help = () => {
     const lines = Object.entries(flags).map(([name, def]) => {
       const arg = def.type === 'flag' ? '' : ` <${def.type}>`;
-      return `  --${kebab(name)}${arg}`.padEnd(28) + `${def.help ?? ''}${dfltOf(def)}`;
+      const rep = def.repeat ? ' (repeatable)' : '';
+      return pad(`  --${kebab(name)}${arg}`) + `${def.help ?? ''}${rep}${oneOf(def)}${dfltOf(def)}`;
     });
     if (positional) {
       const label = positional.variadic ? `<${positional.name}…>` : `<${positional.name}>`;
-      lines.unshift(`  ${label}`.padEnd(28) + `${positional.help ?? ''}${dfltOf(positional)}`, '');
+      lines.unshift(pad(`  ${label}`)
+        + `${positional.help ?? ''}${oneOf(positional)}${dfltOf(positional)}`, '');
     }
     console.log(`\n${usage}\n\n${lines.join('\n')}\n`);
   };
@@ -98,7 +110,8 @@ export function parseFlagsOrThrow(argv, spec = {}) {
 
   const out = {};
   for (const [name, def] of Object.entries(flags)) {
-    out[camel(name)] = def.type === 'flag' ? false : def.default;
+    out[camel(name)] = def.repeat ? (def.default ?? [])
+      : def.type === 'flag' ? false : def.default;
   }
   const bare = [];
 
@@ -132,7 +145,9 @@ export function parseFlagsOrThrow(argv, spec = {}) {
     if (raw === undefined || raw.startsWith('--')) {
       throw new Error(`cli: ${token} needs a value.`);
     }
-    out[camel(name)] = coerce(token, def, raw);
+    const value = coerce(token, def, raw);
+    if (def.repeat) out[camel(name)].push(value);
+    else            out[camel(name)] = value;
   }
 
   if (positional) {
