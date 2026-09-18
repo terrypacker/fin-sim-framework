@@ -48,6 +48,7 @@ import { makeInitialSnapshot }     from '../../src/finance/mpc/mpc-controller.js
 import { drawdownWeightKey, allocWeightKey, ALLOCATION_OPTIMIZED_MODE }
   from '../../src/scenarios/intl-retirement-scenario.js';
 import { sleeveWeightKey } from '../../src/finance/holdings/holdings-selection.js';
+import { parseFlags }      from '../lib/cli.mjs';
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));
@@ -155,7 +156,15 @@ const SELL_EQUITY_LAST = {
   [sleeveWeightKey('CASH')]: 0.10,   [sleeveWeightKey('BOND')]: 0.20,
 };
 
-const lever = process.argv[2] ?? 'all';
+const LEVERS = ['all', 'crossBorderDrawdown', 'withinTierDraw', 'drawdownWeights',
+  'allocationMix', 'drawdownSleeve'];
+
+const { lever } = parseFlags(process.argv.slice(2), {
+  usage: `node scripts/lab/verify-mpc-lever.mjs [${LEVERS.join('|')}]\n\n`
+       + 'verify-mpc-lever — does each MPC lever actually move the outcome?',
+  positional: { name: 'lever', type: 'string', default: 'all', choices: LEVERS,
+                help: 'which lever to verify' },
+});
 function runXborder()  { verify('Lever A — crossBorderDrawdown (LOCAL_FIRST vs GLOBAL)',
   { crossBorderDrawdown: 'LOCAL_FIRST' }, { crossBorderDrawdown: 'GLOBAL' }); }
 function runWithin()   { verify('Lever C — withinTierDraw (SEQUENTIAL vs PROPORTIONAL)',
@@ -175,4 +184,4 @@ else if (lever === 'withinTierDraw')      runWithin();
 else if (lever === 'drawdownWeights')     runWeights();
 else if (lever === 'allocationMix')       runAllocMix();
 else if (lever === 'drawdownSleeve')      runSleeve();
-else console.log(`Unknown lever "${lever}". Use: all | crossBorderDrawdown | withinTierDraw | drawdownWeights | allocationMix | drawdownSleeve`);
+// No `else`: `choices` above already refused anything not in LEVERS.

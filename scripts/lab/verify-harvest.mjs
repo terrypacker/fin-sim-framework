@@ -37,21 +37,31 @@
  */
 
 import { harvestLab, report, fmtFeasibility, fmtUsd, OBJECTIVES } from '../lib/harvest-lab.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (name, dflt) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && argv[i + 1] != null ? argv[i + 1] : dflt;
-};
-const levers = (argv.find(a => !a.startsWith('--') && !/^\d/.test(a)) ?? 'SPENDING')
-  .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/verify-harvest.mjs [LEVER[,LEVER…]] [options]\n\n'
+       + 'verify-harvest — does applying the harvested plan reproduce the solver\'s own run?',
+  positional: { name: 'levers', type: 'list', default: ['SPENDING'],
+                help: 'lever keys to harvest' },
+  goal:   { type: 'string', default: 'MAX_NET_WORTH', help: 'optimization objective key' },
+  seeds:  { type: 'list',   default: [1], help: 'RNG seeds' },
+  epochs: { type: 'number', default: 5,  help: 'decision epochs' },
+  budget: { type: 'number', default: 24, help: 'solver budget per epoch' },
+  solver: { type: 'string', default: 'CEM', help: 'solver key' },
+  birth:  { type: 'string', default: '1978-04-15', help: 'birth date the ages are taken from' },
+  resolve: { type: 'flag', help: 're-solve at each epoch (the VoTV arm)' },
+  votv:    { type: 'flag', help: 'alias for --resolve' },
+});
+
+const levers = opts.levers.map(s => s.toUpperCase()).filter(Boolean);
+const BIRTH  = opts.birth;
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));
 // "Now" sits after the move (2031) and into retirement, where the levers actually
 // change the outcome — the same regime verify-mpc-lever.mjs targets.
 const NOW       = new Date(Date.UTC(2041, 0, 1));
-const BIRTH     = flag('birth', '1978-04-15');
 
 // EXPLICIT_BANDS so the SPENDING lever is live; a moderate spend so the plan stays
 // solvent and the terminal is order-sensitive rather than floored.
@@ -62,17 +72,17 @@ const BASE = {
 };
 for (const k of Object.keys(BASE)) if (BASE[k] === undefined) delete BASE[k];
 
-const objective = OBJECTIVES[flag('goal', 'MAX_NET_WORTH')] ?? OBJECTIVES.MAX_NET_WORTH;
-const seeds  = String(flag('seeds', '1')).split(',').map(Number).filter(Number.isFinite);
-const epochs = Number(flag('epochs', 5));
-const budget = Number(flag('budget', 24));
-const resolve = argv.includes('--votv') || argv.includes('--resolve');
+const objective = OBJECTIVES[opts.goal] ?? OBJECTIVES.MAX_NET_WORTH;
+const seeds  = opts.seeds.map(Number).filter(Number.isFinite);
+const epochs = opts.epochs;
+const budget = opts.budget;
+const resolve = opts.votv || opts.resolve;
 
 for (const seed of seeds) {
   const out = await harvestLab({
     levers, baseParams: BASE, objective,
     simStart: SIM_START, simEnd: SIM_END, asOf: NOW, birthDate: BIRTH,
-    solverKey: flag('solver', 'CEM'), budget, seed, epochs, resolve,
+    solverKey: opts.solver, budget, seed, epochs, resolve,
   });
   report({ title: `harvest verification · levers ${levers.join('+')} · seed ${seed}`, out });
 

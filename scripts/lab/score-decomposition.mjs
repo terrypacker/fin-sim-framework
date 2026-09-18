@@ -40,19 +40,35 @@ import { OPTIMIZATION_OBJECTIVES, objectivePrimaryMetric,
 import { CockpitController, COCKPIT_CONTROLS } from '../../src/finance/mpc/cockpit-controller.js';
 import { makeInitialSnapshot }      from '../../src/finance/mpc/mpc-controller.js';
 import { loadScenario, readParams, withParams, cloneCfg, fmtUsd } from '../lib/scenario-probe.mjs';
+import { parseFlags }              from '../lib/cli.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const file    = argv.find(a => !a.startsWith('--')) ?? 'scenarios/fin-sim-die-with.json';
-const epochsN = Number(flag('epochs', 24));
-const budget  = Number(flag('budget', 20));
-const seed    = Number(flag('seed', 1));
-const levers  = String(flag('levers',
-  'SPENDING,ROTH,ALLOCATION_MIX,DRAWDOWN_WEIGHTS,DRAWDOWN_SLEEVE,DRAWDOWN_XBORDER,DRAWDOWN_WITHINTIER,BOND_LADDER'))
-  .split(',').map(s => s.trim().toUpperCase());
-const [rMin, rMax, rStep] = String(flag('spend-range', '7000:10000')).split(':').map(Number);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/score-decomposition.mjs [<file.json>] [options]\n\n'
+       + 'score-decomposition — which lever family each point of the objective came from.',
+  positional: { name: 'file', type: 'string', default: 'scenarios/fin-sim-die-with.json',
+                help: 'scenario export to decompose' },
+  epochs:     { type: 'number', default: 24, help: 'decision epochs' },
+  budget:     { type: 'number', default: 20, help: 'solver budget per epoch' },
+  seed:       { type: 'number', default: 1,  help: 'RNG seed' },
+  levers:     { type: 'list',
+                default: ['SPENDING', 'ROTH', 'ALLOCATION_MIX', 'DRAWDOWN_WEIGHTS',
+                          'DRAWDOWN_SLEEVE', 'DRAWDOWN_XBORDER', 'DRAWDOWN_WITHINTIER',
+                          'BOND_LADDER'],
+                help: 'lever keys the solver may move' },
+  spendRange: { type: 'string', default: '7000:10000', help: 'lo:hi[:step] bound on the spending lever' },
+  goal:       { type: 'string', default: 'DIE_WITH_TARGET_LIQUID', help: 'optimization objective key' },
+  solver:     { type: 'string', default: 'CEM', help: 'solver key' },
+  scenario:   { type: 'string', help: 'scenario NAME inside that file (default: the first)' },
+});
 
-const cfg      = loadScenario(file, flag('scenario', null));
+const file    = opts.file;
+const epochsN = opts.epochs;
+const budget  = opts.budget;
+const seed    = opts.seed;
+const levers  = opts.levers.map(s => s.toUpperCase());
+const [rMin, rMax, rStep] = opts.spendRange.split(':').map(Number);
+
+const cfg      = loadScenario(file, opts.scenario ?? null);
 const simStart = new Date(cfg.simStart);
 const simEnd   = new Date(cfg.simEnd);
 
@@ -61,7 +77,7 @@ const preRunBands = bands.filter(b => b.monthlyAmount === bands[0]?.monthlyAmoun
 const preRunCfg   = withParams(cfg, { spendingExpenseBands: preRunBands });
 const baseParams  = Object.fromEntries((preRunCfg.params ?? []).map(p => [p.key ?? p.name, p.value]));
 
-const objKey    = flag('goal', 'DIE_WITH_TARGET_LIQUID');
+const objKey    = opts.goal;
 const objective = OPTIMIZATION_OBJECTIVES[objKey];
 if (!objective) { console.error(`unknown goal ${objKey}`); process.exit(2); }
 const metric = objectivePrimaryMetric(objective);
@@ -94,7 +110,7 @@ controller.setSnapshot(snapshot0);
 
 let n = 0;
 await quietAsync(() => controller.autoRun({
-  solverKey: flag('solver', 'CEM'), solverOptions: { budget, seed }, stepYears: 1,
+  solverKey: opts.solver, solverOptions: { budget, seed }, stepYears: 1,
   shouldStop: () => n >= epochsN, onEpoch: () => { n += 1; },
 }));
 

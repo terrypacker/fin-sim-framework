@@ -24,15 +24,7 @@
  *                                     [--workers 8] [--out results.json]
  *   node scripts/lab/variant-grid.mjs --spec scripts/specs/example-grid.json
  *
- * Options:
- *   --spec <file>      REQUIRED. Grid definition (see below).
- *   --scenario <file>  Base scenario export. Omitted ⇒ the built-in synthetic
- *                      default, which is fine for a smoke test and near-useless
- *                      for a real solvency question (see lib/scenario-source.mjs).
- *   --index <n>        Which scenario in the file (default 0).
- *   --workers <n>      Worker processes (default 8).
- *   --out <file>       Also write raw results as JSON, for re-reporting later.
- *   --json             Print raw results instead of tables.
+ * Run `--help` for the flags; the spec in this file is the only copy of them.
  *
  * ─── the spec ────────────────────────────────────────────────────────────────
  *
@@ -85,37 +77,31 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
-import { runJobsParallel, parseWorkers } from '../lib/parallel.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
+import { runJobsParallel } from '../lib/parallel.mjs';
 import { buildGridModel, makeIdOf } from '../lib/grid-report.mjs';
 import { table, note } from '../lib/format.mjs';
 
-const USAGE = `
-variant-grid.mjs — run an N-dimensional grid of scenario variants and table it.
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/variant-grid.mjs --spec <spec.json> [options]\n\n'
+       + 'variant-grid — run every cell of a declarative lever grid.',
+  spec:     { type: 'string', help: 'the grid spec' },
+  out:      { type: 'string', help: 'write the results JSON here (what paired-delta reads)' },
+  workers:  { type: 'number', default: 8, help: 'worker processes' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+  json:     { type: 'flag',   help: 'machine-readable output' },
+});
 
-  node scripts/lab/variant-grid.mjs --spec <spec.json> [options]
-
-  --spec <file>      REQUIRED. Grid definition; see scripts/specs/example-grid.json.
-  --scenario <file>  Base scenario export. Omitted => built-in synthetic default.
-  --index <n>        Which scenario in the file (default 0).
-  --workers <n>      Worker processes (default 8).
-  --out <file>       Also write raw results as JSON.
-  --json             Print raw results instead of tables.
-
-Read the header of this file for the spec format and for what "reduce" does.
-`;
-
-const WORKER = new URL('../lib/grid-worker.mjs', import.meta.url).pathname;
-const argv = process.argv.slice(2);
-const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
-
-if (argv.includes('-h') || argv.includes('--help') || !flag('--spec')) {
-  console.log(USAGE);
-  process.exit(flag('--spec') ? 0 : 2);
+if (!opts.spec) {
+  console.error('\nvariant-grid needs --spec <spec.json>.  (-h for options)\n');
+  process.exit(2);
 }
 
-const spec = JSON.parse(readFileSync(flag('--spec'), 'utf8'));
-const source = parseSourceArgs(argv);
+const spec = JSON.parse(readFileSync(opts.spec, 'utf8'));
+
+const source = { file: opts.scenario, index: opts.index };
 const base = loadBaseConfig(source);
 
 // ─── axis handling ───────────────────────────────────────────────────────────
@@ -161,14 +147,14 @@ const jobs = crossProduct().map(idx => ({ id: idOf(idx), levers: leversFor(idx),
 
 const results = await runJobsParallel({
   jobs: jobs.map(({ id, levers }) => ({ id, levers })),
-  source, worker: WORKER, workers: parseWorkers(argv), label: 'grid cells',
+  source, worker: WORKER, workers: Math.max(1, opts.workers), label: 'grid cells',
 });
 
-if (flag('--out')) {
-  writeFileSync(flag('--out'), JSON.stringify({ spec, source: base.source, results }, null, 1));
-  console.error(`raw results → ${flag('--out')}`);
+if (opts.out) {
+  writeFileSync(opts.out, JSON.stringify({ spec, source: base.source, results }, null, 1));
+  console.error(`raw results → ${opts.out}`);
 }
-if (argv.includes('--json')) {
+if (opts.json) {
   console.log(JSON.stringify({ spec, source: base.source, results }, null, 1));
   process.exit(0);
 }

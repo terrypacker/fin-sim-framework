@@ -43,21 +43,30 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { runJobsParallel, parseWorkers } from '../../lib/parallel.mjs';
+import { runJobsParallel } from '../../lib/parallel.mjs';
+import { parseFlags }      from '../../lib/cli.mjs';
 import { arms, PROCESSES } from './arms.mjs';
 import { DEFAULTS } from './scenario.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const N       = Number(flag('n', 300));
-const VOL     = Number(flag('vol', 0.18));
-const SHOCK   = flag('shock', null);
-const CRASH   = Number(flag('crash', 2032));
-const OUT     = flag('out', null);
-// §20.6's spend calibration ("a plan that SURVIVES centrally") was computed with the windfall
-// of §20.12 still in the plan, so it has to be re-checkable without editing DEFAULTS.
-const SPEND   = flag('spend', null) != null ? Number(flag('spend', null)) : null;
-const WORKERS = parseWorkers(argv, 8);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/sequence-risk/run-mc.mjs [options]\n\n'
+       + 'run-mc — the sequence-risk Monte Carlo across the liquidity-graph arms.',
+  n:       { type: 'number', default: 300,  help: 'paths per arm' },
+  vol:     { type: 'number', default: 0.18, help: 'equity return volatility' },
+  shock:   { type: 'string', help: 'shock preset to land on the crash year' },
+  crash:   { type: 'number', default: 2032, help: 'crash year' },
+  out:     { type: 'string', help: 'directory to write per-arm JSON into' },
+  spend:   { type: 'number', help: "monthly spend override (§20.6's calibration, re-checkable)" },
+  workers: { type: 'number', default: 8, help: 'worker processes' },
+});
+
+const N       = opts.n;
+const VOL     = opts.vol;
+const SHOCK   = opts.shock ?? null;
+const CRASH   = opts.crash;
+const OUT     = opts.out ?? null;
+const SPEND   = opts.spend ?? null;
+const WORKERS = Math.max(1, opts.workers);
 
 const HERE   = dirname(fileURLToPath(import.meta.url));
 const ARMS   = arms();

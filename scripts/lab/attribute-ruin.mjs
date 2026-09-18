@@ -27,15 +27,23 @@
  *   node scripts/lab/attribute-ruin.mjs <file> --only DRAWDOWN_WEIGHTS,SPENDING
  */
 
+import { parseFlags } from '../lib/cli.mjs';
 import { loadScenario, withParams, readParams, runCfg, reportArm, fmtUsd }
   from '../lib/scenario-probe.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const file = argv.find(a => !a.startsWith('--')) ?? 'scenarios/fin-sim-die-with.json';
-const only = flag('only', null)?.split(',').map(s => s.trim().toUpperCase());
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/attribute-ruin.mjs [<file.json>] [--only DRAWDOWN_WEIGHTS,SPENDING]\n\n'
+       + 'attribute-ruin — which harvested lever a solvency flip is attributable to.',
+  positional: { name: 'file', type: 'string', default: 'scenarios/fin-sim-die-with.json',
+                help: 'scenario export to attribute' },
+  only:     { type: 'list',   help: 'run only these arm keys' },
+  scenario: { type: 'string', help: 'scenario NAME inside that file (default: the first)' },
+});
 
-const cfg = loadScenario(file, flag('scenario', null));
+const file = opts.file;
+const only = opts.only?.map(s => s.toUpperCase());
+
+const cfg = loadScenario(file, opts.scenario ?? null);
 
 /**
  * The reversion arms. Each names the harvested params it neutralises and the

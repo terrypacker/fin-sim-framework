@@ -49,20 +49,28 @@
 
 import { readFileSync } from 'node:fs';
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
+import { parseFlags } from '../lib/cli.mjs';
 
-if (argv.includes('--help') || argv.includes('-h') || !flag('spec') || !flag('results')) {
-  console.log('usage: paired-delta.mjs --spec <spec.json> --results <results.json> '
-    + '--pair <axisName> [--metric afterTaxNW]');
-  process.exit(argv.includes('--help') || argv.includes('-h') ? 0 : 1);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/paired-delta.mjs --spec <spec.json> --results <results.json> \\\n'
+       + '     --pair <axisName> [--metric afterTaxNW]\n\n'
+       + 'paired-delta — the paired A/B delta along one axis of a variant grid.',
+  spec:    { type: 'string', help: 'the grid spec' },
+  results: { type: 'string', help: "what `variant-grid --out` wrote" },
+  pair:    { type: 'string', help: 'axis name to pair on' },
+  metric:  { type: 'string', default: 'afterTaxNW', help: 'metric to difference' },
+});
+
+if (!opts.spec || !opts.results) {
+  console.error('\npaired-delta needs --spec and --results.  (-h for options)\n');
+  process.exit(1);
 }
 
-const spec    = JSON.parse(readFileSync(flag('spec'), 'utf8'));
-const rawRes  = JSON.parse(readFileSync(flag('results'), 'utf8'));
+const spec    = JSON.parse(readFileSync(opts.spec, 'utf8'));
+const rawRes  = JSON.parse(readFileSync(opts.results, 'utf8'));
 const results = Array.isArray(rawRes) ? rawRes : (rawRes.results ?? rawRes.rows ?? []);
-const metric  = flag('metric', 'afterTaxNW');
-const pairAxis = flag('pair');
+const metric  = opts.metric;
+const pairAxis = opts.pair;
 
 const axisNames = Object.keys(spec.axes ?? {});
 if (!axisNames.includes(pairAxis)) {

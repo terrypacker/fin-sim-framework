@@ -75,23 +75,23 @@
 
 import { writeFileSync } from 'node:fs';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { buildVariant }        from '../lib/variant.mjs';
 import { openSim, quiet }      from '../lib/run.mjs';
 import { money, pct, columns } from '../lib/format.mjs';
 import { TaxSettleService }    from '../../src/finance/tax-settle-service.js';
 import { toAUD }               from '../../src/finance/tax/tax-fx.js';
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-const has  = (n) => argv.includes(`--${n}`);
-
-if (has('help') || has('h')) {
-  console.log(/** @type {string} */ (String(
-    'roth-ledger.mjs — per-year Australian tax attributable to the Roth.\n'
-    + 'See the file header for options and for how the attribution is computed.')));
-  process.exit(0);
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/roth-ledger.mjs [--scenario plan.json] [options]\n\n'
+       + 'roth-ledger — per-year Australian tax attributable to the Roth.\n\n'
+       + 'See the file header for how the attribution is computed.',
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+  levers:   { type: 'string', help: 'lever bag as inline JSON (see lib/variant.mjs)' },
+  csv:      { type: 'string', help: 'also write the rows here as CSV' },
+});
 
 // The tax actions that put Roth money onto an Australian return. All three are
 // s99B assessable and none carry US tax for FITO to relieve; the rollover pair covers
@@ -112,13 +112,12 @@ function sum(state, ownerOf, field) {
 }
 
 function main() {
-  const source = parseSourceArgs(argv);
   const { cfg: base, synthetic } = loadBaseConfig({
-    file:  flag('scenario', source?.file ?? null),
-    index: Number(flag('index', 0)),
+    file:  opts.scenario ?? null,
+    index: opts.index,
   });
 
-  const levers = flag('levers') ? JSON.parse(flag('levers')) : {};
+  const levers = opts.levers ? JSON.parse(opts.levers) : {};
   const cfg    = Object.keys(levers).length ? buildVariant(base, levers) : base;
 
   // stateKey → owner, so an earnings action can be attributed to the right person's
@@ -227,8 +226,8 @@ function main() {
     });
   }
 
-  report({ rows, drift, cfg, synthetic, source: flag('scenario', null) });
-  if (flag('csv')) writeCsv(flag('csv'), rows);
+  report({ rows, drift, cfg, synthetic, source: opts.scenario ?? null });
+  if (opts.csv) writeCsv(opts.csv, rows);
 }
 
 /**

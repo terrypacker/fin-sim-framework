@@ -66,7 +66,8 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { buildVariant, baseEquityRate } from '../lib/variant.mjs';
 import { run } from '../lib/run.mjs';
 import { money, pct, columns } from '../lib/format.mjs';
@@ -97,28 +98,37 @@ const MODES = {
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
-const mode = argv[0];
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const num = (n, d) => { const v = flag(n); return v != null ? Number(v) : d; };
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/frontier.mjs <mode> [options]\n\n'
+       + 'frontier — sweep one axis until the plan stops surviving. See the file header.',
+  positional: { name: 'mode', type: 'string', required: true, choices: Object.keys(MODES),
+                help: 'which frontier to trace' },
+  lo:       { type: 'number', help: "range low  (default: the mode's own)" },
+  hi:       { type: 'number', help: "range high (default: the mode's own)" },
+  step:     { type: 'number', help: "range step (default: the mode's own)" },
+  bisect:   { type: 'flag',   help: 'bisect to the edge instead of stepping the whole range' },
+  person:   { type: 'string', default: 'primary', help: 'person the mode applies to' },
+  levers:   { type: 'string', help: 'lever bag applied to every case: inline JSON or a file' },
+  scenario: { type: 'string', help: 'base scenario export; omitted ⇒ the synthetic default' },
+  index:    { type: 'number', default: 0, help: 'scenario index in that file' },
+  json:     { type: 'flag',   help: 'machine-readable output' },
+});
 
-if (!MODES[mode]) {
-  console.error(`usage: frontier.mjs <${Object.keys(MODES).join('|')}> [options]  (see file header)`);
-  process.exit(2);
-}
-
+const mode = opts.mode;
 const M = MODES[mode];
-const lo = num('--lo', M.defaults.lo);
-const hi = num('--hi', M.defaults.hi);
-const step = num('--step', M.defaults.step);
-const bisect = argv.includes('--bisect');
-const person = flag('--person') ?? 'primary';
+const lo     = opts.lo   ?? M.defaults.lo;
+const hi     = opts.hi   ?? M.defaults.hi;
+const step   = opts.step ?? M.defaults.step;
+const bisect = opts.bisect;
+const person = opts.person;
 
 let levers = {};
-const lv = flag('--levers');
-if (lv) levers = JSON.parse(existsSync(lv) ? readFileSync(lv, 'utf8') : lv);
+if (opts.levers) {
+  levers = JSON.parse(existsSync(opts.levers) ? readFileSync(opts.levers, 'utf8') : opts.levers);
+}
 
-const source = parseSourceArgs(argv);
+const source = { file: opts.scenario, index: opts.index };
+
 const base = loadBaseConfig(source);
 
 const ctx = { person, baseRate: baseEquityRate(base.cfg) };
@@ -186,7 +196,7 @@ const secs = ((Date.now() - started) / 1000).toFixed(0);
 
 // ─── report ──────────────────────────────────────────────────────────────────
 
-if (argv.includes('--json')) {
+if (opts.json) {
   console.log(JSON.stringify({ mode, source: base.source, levers, lo, hi, step, ...res }, null, 1));
   process.exit(0);
 }

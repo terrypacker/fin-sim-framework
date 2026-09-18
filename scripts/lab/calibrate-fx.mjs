@@ -40,6 +40,7 @@
 
 import { USD_AUD_H10_MONTHLY } from '../../src/finance/fx/data/usd-aud-h10-monthly.js';
 import { calibrateWindow, POST_FLOAT_MONTH } from '../lib/fx-calibration.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
 const POST_FLOAT = POST_FLOAT_MONTH;
 
@@ -50,13 +51,14 @@ const COMPARE_WINDOWS = [
   { from: '2000-01',  label: 'modern era'           },
 ];
 
-const argv = process.argv.slice(2);
-const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
-
-if (argv.includes('--help') || argv.includes('-h')) {
-  console.log('usage: calibrate-fx.mjs [--from YYYY-MM] [--to YYYY-MM] [--compare] [--json]');
-  process.exit(0);
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/calibrate-fx.mjs [--from YYYY-MM] [--to YYYY-MM] [--compare] [--json]\n\n'
+       + 'calibrate-fx — fit the USD/AUD process over a window of observed history.',
+  from:    { type: 'string', help: 'window start YYYY-MM (default: the post-float month)' },
+  to:      { type: 'string', help: 'window end YYYY-MM (default: the last observation)' },
+  compare: { type: 'flag',   help: 'fit the standard window set instead of one window' },
+  json:    { type: 'flag',   help: 'machine-readable output' },
+});
 
 const calibrate = (from, to) => calibrateWindow(USD_AUD_H10_MONTHLY, from, to);
 
@@ -113,11 +115,11 @@ function report(rows) {
   );
 }
 
-const rows = argv.includes('--compare')
-  ? COMPARE_WINDOWS.map(({ from, label }) => ({ label, r: calibrate(from, flag('to')) }))
-  : [{ label: 'selected', r: calibrate(flag('from', POST_FLOAT), flag('to')) }];
+const rows = opts.compare
+  ? COMPARE_WINDOWS.map(({ from, label }) => ({ label, r: calibrate(from, opts.to) }))
+  : [{ label: 'selected', r: calibrate(opts.from ?? POST_FLOAT, opts.to) }];
 
-if (argv.includes('--json')) {
+if (opts.json) {
   console.log(JSON.stringify({
     series: {
       id:           USD_AUD_H10_MONTHLY.id,
