@@ -72,7 +72,8 @@ import { dirname, resolve, basename }                         from 'node:path';
 import { execFileSync }                                       from 'node:child_process';
 import { createRequire }                                      from 'node:module';
 
-import { loadBaseConfig, parseSourceArgs } from '../lib/scenario-source.mjs';
+import { loadBaseConfig } from '../lib/scenario-source.mjs';
+import { parseFlags }     from '../lib/cli.mjs';
 import { openSim, quiet }         from '../lib/run.mjs';
 import { ServiceRegistry }        from '../../src/services/service-registry.js';
 import { buildAllocationSeries, mixAt } from '../../src/finance/allocation-reporting/allocation-grouping.js';
@@ -82,31 +83,22 @@ import { targetedStateKeys, driftAgainstTarget } from '../../src/finance/allocat
 import { ASSET_CLASS_COLOR }      from '../../src/finance/allocation-reporting/allocation-palette.js';
 import { PALETTE_CYCLE }          from '../../src/finance/reporting-common/palette-cycle.js';
 
-const USAGE = `
-allocation-report.mjs — asset allocation over time, as one HTML page.
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/allocation-report.mjs [--scenario <file.json>] [options]\n\n'
+       + 'allocation-report — asset allocation over time, as one HTML page.',
+  scenario: { type: 'string', help: 'workbench export to run (default: the built-in synthetic scenario)' },
+  index:    { type: 'number', default: 0, help: 'which scenario inside that file' },
+  out:      { type: 'string', default: 'scenarios/allocation-report.html', help: 'output path' },
+  csv:      { type: 'flag',   help: 'also write the raw cube beside the page as .csv' },
+  open:     { type: 'flag',   help: 'open the result when done (macOS)' },
+});
 
-  node scripts/lab/allocation-report.mjs [--scenario <file.json>] [options]
-
-  --scenario <file> Workbench export to run (default: built-in synthetic scenario).
-  --index <n>       Which scenario inside that file (default 0).
-  --out <file>      Output path (default scenarios/allocation-report.html).
-  --csv             Also write the raw cube beside the page as .csv.
-  --open            Open the result when done (macOS).
-`;
-
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const has  = (n) => argv.includes(n);
-
-if (has('-h') || has('--help')) { console.log(USAGE); process.exit(0); }
-
-const { file: scenarioFile, index: scenarioIndex } = parseSourceArgs(argv);
-const outFile      = resolve(flag('--out') ?? 'scenarios/allocation-report.html');
-const BASE         = 'USD';
+const outFile = resolve(opts.out);
+const BASE    = 'USD';
 
 // ─── run + sample ────────────────────────────────────────────────────────────
 
-const { cfg, source } = loadBaseConfig({ file: scenarioFile, index: scenarioIndex });
+const { cfg, source } = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const start = new Date(cfg.simStart);
 const end   = new Date(cfg.simEnd);
 
@@ -771,7 +763,7 @@ mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, html);
 console.log(`wrote ${outFile}  (${(html.length / 1024 / 1024).toFixed(2)} MB, ${rows.length} cube rows)`);
 
-if (has('--csv')) {
+if (opts.csv) {
   const csvPath = outFile.replace(/\.html?$/i, '') + '.csv';
   const cols = ['date', 'stateKey', 'name', 'source', 'kind', 'role', 'type', 'domicileCountry',
     'exposureCountry', 'currency', 'assetClass', 'allocation', 'rateKey', 'holdingCount',
@@ -792,6 +784,6 @@ if (Math.abs(worstTie.delta) >= 1) {
   console.error(`** cube does NOT tie to net worth (worst gap ${money(worstTie.delta)} in ${worstTie.year})`);
 }
 
-if (has('--open') && existsSync(outFile)) {
+if (opts.open && existsSync(outFile)) {
   try { execFileSync('open', [outFile]); } catch { /* not macOS, or no opener */ }
 }

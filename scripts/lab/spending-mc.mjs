@@ -12,7 +12,7 @@
 /**
  * spending-mc.mjs — what the plan costs, as a DISTRIBUTION. Design 89 §11.1 phase 6.
  *
- *   node scripts/lab/spending-mc.mjs [--scenario <file.json>] [-n 100] [options]
+ *   node scripts/lab/spending-mc.mjs [--scenario <file.json>] [--n 100] [options]
  *
  * The lab page and the workbench panel describe one path. This answers what a single path
  * cannot: how *often* tax is more than half the cost of the plan, what the p90 real cost
@@ -43,40 +43,33 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve }         from 'node:path';
 
-import { loadBaseConfig, parseSourceArgs, describeSource } from '../lib/scenario-source.mjs';
+import { loadBaseConfig, describeSource } from '../lib/scenario-source.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 import { buildMcConfig, runArm }    from '../lib/mc.mjs';
 import { aggregateSpendingRuns, exceedanceRate, describeSpendingDistribution, TAX_CATEGORIES }
   from '../../src/finance/spending-reporting/spending-distribution.js';
 import { SPEND_TIER } from '../../src/finance/spending-reporting/spending-classification.js';
 
-const USAGE = `
-spending-mc.mjs — what the plan costs, as a distribution (design 89 phase 6).
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/lab/spending-mc.mjs [--scenario <file.json>] [--n 100] [options]\n\n'
+       + 'spending-mc — what the plan costs, as a distribution (design 89 phase 6).\n\n'
+       + 'Budget ~4 SECONDS PER PATH: n=50 is ~3 minutes, n=1000 is over an hour.',
+  scenario:     { type: 'string', help: 'workbench export to run (default: the built-in synthetic scenario)' },
+  index:        { type: 'number', default: 0, help: 'which scenario inside that file' },
+  n:            { type: 'number', default: 25, help: 'paths' },
+  shock:        { type: 'flag',   help: 'enable the manufactured-crash variables' },
+  noRecentre:   { type: 'flag',   help: 'skip re-centring the MC variables on the scenario (rarely wanted)' },
+  taxThreshold: { type: 'list',   default: [0.4, 0.5, 0.6], help: 'report P(tax share > f) at each of these' },
+  json:         { type: 'string', help: 'also write the raw per-path summaries + the aggregate here' },
+});
 
-  node scripts/lab/spending-mc.mjs [--scenario <file.json>] [options]
+const n          = opts.n;
+const shock      = opts.shock;
+const recentre   = !opts.noRecentre;
+const jsonOut    = opts.json ?? null;
+const thresholds = opts.taxThreshold.map(Number).filter(Number.isFinite);
 
-  --scenario <file> Workbench export to run (default: built-in synthetic scenario).
-  --index <n>       Which scenario inside that file (default 0).
-  -n <count>        Paths (default 25). Budget ~4 SECONDS PER PATH — see the header.
-  --shock           Enable the manufactured-crash variables.
-  --no-recentre     Skip re-centring the MC variables on the scenario (rarely wanted).
-  --tax-threshold <f>  Report P(tax share > f). Repeatable. Default 0.4,0.5,0.6.
-  --json <file>     Also write the raw per-path summaries + the aggregate.
-`;
-
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
-const has  = (n) => argv.includes(n);
-
-if (has('-h') || has('--help')) { console.log(USAGE); process.exit(0); }
-
-const n          = Number(flag('-n', '25'));
-const shock      = has('--shock');
-const recentre   = !has('--no-recentre');
-const jsonOut    = flag('--json', null);
-const thresholds = String(flag('--tax-threshold', '0.4,0.5,0.6'))
-  .split(',').map(s => Number(s.trim())).filter(Number.isFinite);
-
-const source = loadBaseConfig(parseSourceArgs(argv));
+const source = loadBaseConfig({ file: opts.scenario, index: opts.index });
 const cfg    = source.cfg;
 
 const { mcConfig, shocks, recentred } = buildMcConfig(cfg, { shock, recentre });

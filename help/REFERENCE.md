@@ -574,7 +574,7 @@ true statement about the registry, not a gap in this file.
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 17 of 64 entry points today;
+`parseFlags` spec — 22 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
@@ -621,6 +621,11 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/lab/allocation-report.mjs`**
   asset allocation over time, as one HTML page
+    - `--scenario` (string) — workbench export to run (default: the built-in synthetic scenario)
+    - `--index` (number, default `0`) — which scenario inside that file
+    - `--out` (string, default `scenarios/allocation-report.html`) — output path
+    - `--csv` (flag) — also write the raw cube beside the page as .csv
+    - `--open` (flag) — open the result when done (macOS)
 - **`scripts/lab/attribute-ruin.mjs`**
   WHICH harvested lever made the baked plan insolvent?
 - **`scripts/lab/calibrate-fx.mjs`** — `npm run calibrate:fx`
@@ -655,12 +660,37 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
   how far over the open-loop affordable line did the harvest
 - **`scripts/lab/spending-mc.mjs`**
   what the plan costs, as a DISTRIBUTION
+    - `--scenario` (string) — workbench export to run (default: the built-in synthetic scenario)
+    - `--index` (number, default `0`) — which scenario inside that file
+    - `--n` (number, default `25`) — paths
+    - `--shock` (flag) — enable the manufactured-crash variables
+    - `--no-recentre` (flag) — skip re-centring the MC variables on the scenario (rarely wanted)
+    - `--tax-threshold` (list, default `0.4,0.5,0.6`) — report P(tax share > f) at each of these
+    - `--json` (string) — also write the raw per-path summaries + the aggregate here
 - **`scripts/lab/spending-report.mjs`**
   what the plan actually costs, as one HTML page
+    - `--scenario` (string) — workbench export to run (default: the built-in synthetic scenario)
+    - `--index` (number, default `0`) — which scenario inside that file
+    - `--out` (string, default `scenarios/spending-report.html`) — output path
+    - `--csv` (flag) — also write the raw cube beside the page as .csv
+    - `--open` (flag) — open the result when done (macOS)
 - **`scripts/lab/spending-trace.mjs`**
   what an adaptive spending rule actually COSTS you
+    - `--strategy` (string) — FIXED | GUARDRAIL | EXPLICIT_BANDS | … (default: leave as authored)
+    - `--returns` (list, default `0.08,0.06,0.05,0.04`) — equity returns to trace
+    - `--levers` (string) — lever bag applied to every case: inline JSON or a file (see lib/variant.mjs)
+    - `--years` (list) — report years (default: evenly spaced across the horizon)
+    - `--country` (string, default `US`) — inflation accumulator to deflate by
+    - `--scenario` (string) — base scenario export; omitted ⇒ the synthetic default
+    - `--index` (number, default `0`) — scenario index in that file
+    - `--json` (flag) — machine-readable output
 - **`scripts/lab/study-report.mjs`**
   read a finished study directory and render it as one HTML page
+    - `--dir` (string) — REQUIRED. directory of out-*.json grids and mc-out*/ arm dirs
+    - `--out` (string) — output path (default <dir>/report.html)
+    - `--scenario` (string) — scenario file to freshness-check against
+    - `--pairs` (string) — "a:b,c:d" MC arm pairs (default: report-config.json, else vs the first arm)
+    - `--open` (flag) — open the result when done (macOS)
 - **`scripts/lab/variant-grid.mjs`**
   run an N-dimensional grid of scenario variants and table it
 - **`scripts/lab/verify-harvest.mjs`** — `npm run verify:harvest`
