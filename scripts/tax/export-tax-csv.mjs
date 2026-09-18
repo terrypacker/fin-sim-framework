@@ -97,72 +97,40 @@ import {
   verifyWorksheetRows,
 } from '../../src/finance/tax/tax-worksheet-export.js';
 import { withBom }                 from '../../src/utils/csv.js';
+import { parseFlags }              from '../lib/cli.mjs';
 
 // ─── CLI parsing ──────────────────────────────────────────────────────────────
 
-function parseArgs(argv) {
-  const opts = {
-    file: null, reference: false, cc: ['US'], years: null, state: null,
-    schedules: false, to: null, out: null, check: false, first: false, help: false,
-    drillReports: null, drillOut: 'drill-reports', drillDetail: 'groups',
-    drillCc: null, listDrillReports: false,
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case '--reference': opts.reference = true; break;
-      case '--cc':        opts.cc = splitList(argv[++i]).map(s => s.toUpperCase()); break;
-      case '--state':     opts.state = String(argv[++i] ?? '').toUpperCase(); break;
-      case '--year':      opts.years = splitList(argv[++i]).map(Number); break;
-      case '--schedules': opts.schedules = true; break;
-      case '--to':        opts.to = argv[++i]; break;
-      case '--out':       opts.out = argv[++i]; break;
-      case '--check':     opts.check = true; break;
-      case '--first':     opts.first = true; break;
-      case '--drill-reports': opts.drillReports = splitList(argv[++i]); break;
-      case '--drill-out':     opts.drillOut     = argv[++i]; break;
-      case '--drill-detail':  opts.drillDetail  = String(argv[++i] ?? '').toLowerCase(); break;
-      case '--drill-cc':      opts.drillCc      = splitList(argv[++i]).map(s => s.toUpperCase()); break;
-      case '--list-drill-reports': opts.listDrillReports = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      default:
-        if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
-        else if (!opts.file) opts.file = a;
-        else { console.error(`Unexpected extra argument: ${a}`); process.exit(2); }
-    }
-  }
-  return opts;
-}
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/tax/export-tax-csv.mjs --reference > tax.csv\n'
+       + 'node scripts/tax/export-tax-csv.mjs <file.json> [options] > tax.csv\n'
+       + 'node scripts/tax/export-tax-csv.mjs --reference --state NE --cc STATE > state-tax.csv\n\n'
+       + 'export-tax-csv — headless tax worksheet CSV export (design 71).',
+  positional: { name: 'file', type: 'string', help: 'scenario export; omit with --reference' },
+  reference:  { type: 'flag',   help: 'run the built-in reference scenario instead of loading a file' },
+  cc:         { type: 'list',   default: ['US'], choices: ['US', 'AU', 'STATE', 'us', 'au', 'state'],
+                help: "jurisdictions to export; STATE is the US state return, riding in the 'form' column with country US" },
+  state:      { type: 'string', help: 'residency state for --reference (NE, HI, SD); without it the reference scenario yields no STATE rows' },
+  year:       { type: 'list',   help: 'restrict to these tax years (default: all settled years)' },
+  schedules:  { type: 'flag',   help: 'also emit supplementary forms (Schedule D)' },
+  to:         { type: 'string', help: "stop the run at this YYYY-MM-DD instead of the scenario's simEnd" },
+  out:        { type: 'string', help: 'write to a file instead of stdout' },
+  check:      { type: 'flag',   help: 'verify the design 71 §6 footing invariants; non-zero exit on failure' },
+  first:      { type: 'flag',   help: 'export only the first scenario if the file holds several' },
 
-const splitList = s => String(s ?? '').split(',').map(x => x.trim()).filter(Boolean);
+  drillReports:     { type: 'list',   help: 'export these drill reports alongside the worksheet ("all" for every one)' },
+  drillOut:         { type: 'string', default: 'drill-reports', help: 'drill report output directory' },
+  drillDetail:      { type: 'string', default: 'groups', choices: ['groups', 'entries'],
+                      help: 'one row per group per year, or per entry' },
+  drillCc:          { type: 'list',   help: 'countries for cc-faceted reports (default: --cc, else US,AU)' },
+  listDrillReports: { type: 'flag',   help: 'list every report id + title and exit' },
+});
 
-const HELP = `export-tax-csv — headless tax worksheet CSV export (design 71)
-
-Usage:
-  node scripts/export-tax-csv.mjs --reference > tax.csv
-  node scripts/export-tax-csv.mjs <file.json> [options] > tax.csv
-  node scripts/export-tax-csv.mjs --reference --state NE --cc STATE > state-tax.csv
-
-Options:
-  --reference        Run the built-in reference scenario instead of loading a file.
-  --cc <J[,J]>       Jurisdictions to export: US, AU, STATE (default US). STATE is the
-                     US state return; it rides in the 'form' column, country stays US.
-  --state <CODE>     Residency state for --reference (NE, HI, SD). Required to get any
-                     STATE rows out of the reference scenario, which has none by default.
-  --year <Y[,Y]>     Restrict to these tax years (default: all settled years).
-  --schedules        Also emit supplementary forms (Schedule D).
-  --to <YYYY-MM-DD>  Stop the run at this date instead of the scenario's simEnd.
-  --out <path>       Write to a file instead of stdout.
-  --check            Verify the design 71 §6 footing invariants; non-zero exit on failure.
-  --first            Only export the first scenario if the file holds several.
-  -h, --help         Show this help.
-
-Drill reports (journal-backed reports, all years stacked into one file each):
-  --drill-reports <all|id[,id]>   Export drill reports alongside the worksheet.
-  --drill-out <dir>               Output directory (default ./drill-reports).
-  --drill-detail <groups|entries> One row per group per year (default) or per entry.
-  --drill-cc <J[,J]>              Countries for cc-faceted reports (default: --cc, US,AU).
-  --list-drill-reports            List every report id + title and exit.`;
+// Normalised once, here, rather than at each of the dozen use sites below.
+opts.cc      = opts.cc.map(c => c.toUpperCase());
+opts.state   = opts.state ? opts.state.toUpperCase() : null;
+opts.years   = opts.year?.map(Number) ?? null;
+opts.drillCc = opts.drillCc?.map(c => c.toUpperCase()) ?? null;
 
 // ─── Running ──────────────────────────────────────────────────────────────────
 
@@ -284,8 +252,6 @@ async function writeDrillReports(runs, opts) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
-
   // Listing needs no scenario — answer it before demanding an input.
   if (opts.listDrillReports) {
     for (const def of new ReportDefinitionRegistry().getAll()) {
@@ -294,14 +260,9 @@ async function main() {
     return;
   }
 
-  if (opts.help || (!opts.file && !opts.reference)) {
-    console.log(HELP);
-    process.exit(opts.help ? 0 : 1);
-  }
-
-  if (!['groups', 'entries'].includes(opts.drillDetail)) {
-    console.error(`--drill-detail must be 'groups' or 'entries' (got '${opts.drillDetail}').`);
-    process.exit(2);
+  if (!opts.file && !opts.reference) {
+    console.error('\nexport-tax-csv needs a <file.json> or --reference.  (-h for options)\n');
+    process.exit(1);
   }
 
   const endDate = opts.to ? new Date(opts.to) : null;

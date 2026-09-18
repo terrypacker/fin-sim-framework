@@ -34,6 +34,8 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import { parseFlags } from '../lib/cli.mjs';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RATES_DIR = resolve(HERE, '../../rates');
 
@@ -77,7 +79,11 @@ function diffSeries(before, after) {
 }
 
 async function main() {
-  const check = process.argv.includes('--check');
+  const { check } = parseFlags(process.argv.slice(2), {
+    usage: 'node scripts/tax/fetch-fx-rates.mjs [--check]\n\n'
+         + 'fetch-fx-rates — refresh the pinned FRED daily FX series.',
+    check: { type: 'flag', help: 'report what would change without writing anything' },
+  });
 
   for (const series of SERIES) {
     const target = resolve(RATES_DIR, series.file);

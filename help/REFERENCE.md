@@ -574,7 +574,7 @@ true statement about the registry, not a gap in this file.
 
 Command-line entry points under `scripts/`. **Purpose** is harvested from each script's
 docblock, not re-authored here. Arguments are listed only for scripts on the declarative
-`parseFlags` spec — 7 of 64 entry points today;
+`parseFlags` spec — 12 of 64 entry points today;
 design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 6 scripts carry no docblock naming themselves and show `(undocumented)`.
 
@@ -799,14 +799,58 @@ design 108 D6 migrates the rest, after which a missing spec is a gate failure.
 
 - **`scripts/tax/crossfoot-drill-reports.mjs`** — `npm run crossfoot`
   design 73 §0
+    - `<dirs>` (list, repeatable, required) — drill-report directories to crossfoot
+    - `--tolerance` (number, default `0.02`) — absolute match tolerance
+    - `--verbose` (flag) — list every disagreeing year
 - **`scripts/tax/export-tax-csv.mjs`** — `npm run export:tax`
   design 71 Phase 4
+    - `<file>` (string) — scenario export; omit with --reference
+    - `--reference` (flag) — run the built-in reference scenario instead of loading a file
+    - `--cc` (list, default `US`, one of US|AU|STATE|us|au|state) — jurisdictions to export; STATE is the US state return, riding in the 'form' column with country US
+    - `--state` (string) — residency state for --reference (NE, HI, SD); without it the reference scenario yields no STATE rows
+    - `--year` (list) — restrict to these tax years (default: all settled years)
+    - `--schedules` (flag) — also emit supplementary forms (Schedule D)
+    - `--to` (string) — stop the run at this YYYY-MM-DD instead of the scenario's simEnd
+    - `--out` (string) — write to a file instead of stdout
+    - `--check` (flag) — verify the design 71 §6 footing invariants; non-zero exit on failure
+    - `--first` (flag) — export only the first scenario if the file holds several
+    - `--drill-reports` (list) — export these drill reports alongside the worksheet ("all" for every one)
+    - `--drill-out` (string, default `drill-reports`) — drill report output directory
+    - `--drill-detail` (string, default `groups`, one of groups|entries) — one row per group per year, or per entry
+    - `--drill-cc` (list) — countries for cc-faceted reports (default: --cc, else US,AU)
+    - `--list-drill-reports` (flag) — list every report id + title and exit
 - **`scripts/tax/fetch-fx-rates.mjs`** — `npm run fetch:rates`
   refresh the pinned daily exchange-rate series in `rates/`
+    - `--check` (flag) — report what would change without writing anything
 - **`scripts/tax/section988-ingest.mjs`** — `npm run section988:ingest`
   validate real foreign-currency account history before any
+    - `--csv` (string) — <name>=<file> account to ingest; `name` labels it in reports
+    - `--rules` (string) — classification rules; --rules-schema prints the format
+    - `--rules-schema` (flag) — print the rules file format and exit
+    - `--rates` (string) — rate table override (default rates/DEXUSAL-daily.csv)
+    - `--from` (string) — restrict REPORTING from this YYYY-MM-DD; ingest always reads everything
+    - `--to` (string) — restrict reporting to this YYYY-MM-DD
+    - `--top` (number, default `15`) — rows per report section
+    - `--emit-classified` (string) — write the rows back out with Kind/BusinessFraction filled in and a Status column
+    - `--card-statement` (string) — <name>=<file> credit-card statement; needs a "card" block in the rules file
+    - `--card-schema` (flag) — print the card block format and exit
+    - `--force` (flag) — allow --emit-classified to overwrite a file that is not one of the --csv inputs
+    - `--json` (flag) — emit the structured result instead of the human report
 - **`scripts/tax/section988-ledger.mjs`**
   design 87 G5
+    - `--csv` (string) — <name>=<file> classified history
+    - `--rules` (string) — the same rules file the ingest used
+    - `--rates` (string) — rate table override
+    - `--method` (string, default `pro-rata`, one of fifo|pro-rata) — basis method
+    - `--pooling` (string, default `per-account`, one of per-account|commingled) — pooling rule
+    - `--compare` (flag) — run all four method × pooling combinations and print the spread
+    - `--seed-rate` (number) — re-price every assumed row at this rate (a what-if)
+    - `--seed-sweep` (string) — from:to[:step] or a list — what the seeded assumption is worth
+    - `--audit` (string) — write the per-row audit CSV and foot it against the report
+    - `--audit-all` (flag) — include IGNORE / unclassified rows in that CSV too
+    - `--year` (string) — list every disposition in one tax year
+    - `--top` (number, default `15`) — rows per report section
+    - `--json` (flag) — structured output
 
 ---
 

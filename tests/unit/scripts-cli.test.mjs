@@ -138,6 +138,29 @@ describe('cli — declared positionals', () => {
   });
 });
 
+describe('cli — repeatable flags', () => {
+  const SPEC2 = {
+    usage: 'test',
+    csv:  { type: 'string', repeat: true },
+    rules: { type: 'string', default: 'rules.json' },
+  };
+
+  test('a repeated flag accumulates rather than overwriting', () => {
+    // `--csv a=x.csv --csv b=y.csv` is how the §988 tools name several ledgers. Last-wins
+    // would silently ingest one file and report on it as though it were all of them.
+    assert.deepEqual(parse(['--csv', 'a=x.csv', '--csv', 'b=y.csv'], SPEC2).csv,
+      ['a=x.csv', 'b=y.csv']);
+  });
+
+  test('an absent repeatable flag is [], not undefined', () => {
+    assert.deepEqual(parse([], SPEC2).csv, []);
+  });
+
+  test('a flag NOT marked repeatable still takes the last value', () => {
+    assert.equal(parse(['--rules', 'a.json', '--rules', 'b.json'], SPEC2).rules, 'b.json');
+  });
+});
+
 describe('cli — setParam writes both stores', () => {
   test('an existing row is matched by `name`, and `parameters` follows', () => {
     const cfg = { params: [{ name: 'monthlyExpenses', key: 'monthlyExpenses', value: 1 }],

@@ -28,36 +28,11 @@
  * Pass only one and they cannot — see the RECONCILIATION section of the report, which
  * is where currency of unknown basis shows up.
  *
- * Usage:
- *   node scripts/tax/section988-ingest.mjs \
- *     --csv offset=scenarios/OffsetAccountTransactions.csv \
- *     --csv savings=scenarios/SavingsTransactions.csv \
- *     --rules scenarios/section988-rules.json
- *
- * Options:
- *   --csv <name>=<file>   An account to ingest. Repeatable. `name` labels it in reports.
- *   --rules <file>        Classification rules (see --rules-schema). Real descriptions
- *                         carry payee names, so keep yours in gitignored `scenarios/`.
- *   --rules-schema        Print the rules file format and exit.
- *   --rates <file>        Override the pinned rate table (default rates/DEXUSAL-daily.csv).
- *   --from <YYYY-MM-DD>   Restrict *reporting* to a window. Ingest always reads
- *   --to   <YYYY-MM-DD>   everything, because basis reaches back before any query.
- *   --emit-classified <f> Write every row back out with Kind/BusinessFraction pre-filled
- *                         from the rules and a Status column saying which ones need you.
- *                         Fix those in a spreadsheet and feed the file back in as --csv;
- *                         the columns override the rules permanently. The file carries
- *                         an Account column, so one sheet holds the whole pool.
- *   --card-statement <name>=<file>
- *                         A credit-card statement. Repeatable. Each payment's business
- *                         fraction is derived from the purchases it retired and stamped
- *                         onto the account row that paid it. Needs a "card" block in the
- *                         rules file — see --card-schema.
- *   --card-schema         Print the card block format and exit.
- *   --json                Emit the structured result instead of the human report.
- *   --top <n>             Rows to show per report section (default 15).
+ * Run `--help` for the flags; the spec in this file is the only copy of them.
  */
 
 import { FxRateTable } from '../lib/fx-rates.mjs';
+import { parseFlags }  from '../lib/cli.mjs';
 import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -73,37 +48,44 @@ import {
 
 /* ───────────────────────────────── arguments ───────────────────────────────────── */
 
-function parseArgs(argv) {
-  const opts = { csv: [], cards: [], top: 15 };
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    const next = () => argv[++i];
-    if (a === '--csv') {
-      const spec = next();
-      const eq = spec.indexOf('=');
-      if (eq < 0) throw new Error(`--csv expects <name>=<file>, got "${spec}"`);
-      opts.csv.push({ name: spec.slice(0, eq), file: spec.slice(eq + 1) });
-    } else if (a === '--card-statement') {
-      const spec = next();
-      const eq = spec.indexOf('=');
-      opts.cards.push(eq < 0
-        ? { name: `card${opts.cards.length + 1}`, file: spec }
-        : { name: spec.slice(0, eq), file: spec.slice(eq + 1) });
-    } else if (a === '--card-schema') opts.cardSchema = true;
-    else if (a === '--rules') opts.rules = next();
-    else if (a === '--rates') opts.rates = next();
-    else if (a === '--from') opts.from = next();
-    else if (a === '--to') opts.to = next();
-    else if (a === '--top') opts.top = Number.parseInt(next(), 10);
-    else if (a === '--emit-classified') opts.emitClassified = next();
-    else if (a === '--force') opts.force = true;
-    else if (a === '--json') opts.json = true;
-    else if (a === '--rules-schema') opts.rulesSchema = true;
-    else if (a === '--help' || a === '-h') opts.help = true;
-    else throw new Error(`unknown option ${a}`);
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/tax/section988-ingest.mjs \\\n'
+       + '  --csv offset=scenarios/OffsetAccountTransactions.csv \\\n'
+       + '  --rules scenarios/section988-rules.json\n\n'
+       + 'section988-ingest — validate foreign-currency account history (computes no tax).\n\n'
+       + 'Pass EVERY account in the same currency with repeated --csv, or internal\n'
+       + 'transfers cannot reconcile (§1.988-2(a)(2)(iii)(B)(1); see the file header).',
+  csv:            { type: 'string', repeat: true, help: '<name>=<file> account to ingest; `name` labels it in reports' },
+  rules:          { type: 'string', help: 'classification rules; --rules-schema prints the format' },
+  rulesSchema:    { type: 'flag',   help: 'print the rules file format and exit' },
+  rates:          { type: 'string', help: 'rate table override (default rates/DEXUSAL-daily.csv)' },
+  from:           { type: 'string', help: 'restrict REPORTING from this YYYY-MM-DD; ingest always reads everything' },
+  to:             { type: 'string', help: 'restrict reporting to this YYYY-MM-DD' },
+  top:            { type: 'number', default: 15, help: 'rows per report section' },
+  emitClassified: { type: 'string', help: 'write the rows back out with Kind/BusinessFraction filled in and a Status column' },
+  cardStatement:  { type: 'string', repeat: true, help: '<name>=<file> credit-card statement; needs a "card" block in the rules file' },
+  cardSchema:     { type: 'flag',   help: 'print the card block format and exit' },
+  force:          { type: 'flag',   help: 'allow --emit-classified to overwrite a file that is not one of the --csv inputs' },
+  json:           { type: 'flag',   help: 'emit the structured result instead of the human report' },
+});
+
+/**
+ * `--csv pool=file.csv` → `{ name, file }`.
+ *
+ * A card statement may be passed bare, since one statement needs no label to be
+ * unambiguous; an account may not, because the name is what labels it in every report.
+ */
+const namedFiles = (specs, { labelled = true, prefix = '' } = {}) => specs.map((spec, i) => {
+  const eq = spec.indexOf('=');
+  if (eq < 0) {
+    if (labelled) throw new Error(`--csv expects <name>=<file>, got "${spec}"`);
+    return { name: `${prefix}${i + 1}`, file: spec };
   }
-  return opts;
-}
+  return { name: spec.slice(0, eq), file: spec.slice(eq + 1) };
+});
+
+opts.csv   = namedFiles(opts.csv);
+opts.cards = namedFiles(opts.cardStatement, { labelled: false, prefix: 'card' });
 
 const money = (n) => (n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const pct = (n) => (n == null ? '—' : `${(n * 100).toFixed(1)}%`);
@@ -183,13 +165,11 @@ function guardEmitTarget(opts) {
 /* ─────────────────────────────────── main ──────────────────────────────────────── */
 
 function main() {
-  const opts = parseArgs(process.argv);
-
   if (opts.rulesSchema) { out(RULES_SCHEMA); return; }
   if (opts.cardSchema) { out(CARD_SCHEMA); return; }
-  if (opts.help || opts.csv.length === 0) {
+  if (opts.csv.length === 0) {
     out(readFileHeaderUsage());
-    process.exitCode = opts.help ? 0 : 1;
+    process.exitCode = 1;
     return;
   }
 
@@ -696,34 +676,8 @@ function reportCards(cards, top) {
 }
 
 function readFileHeaderUsage() {
-  return [
-    'section988-ingest.mjs — validate foreign-currency account history (computes no tax).',
-    '',
-    'Usage:',
-    '  node scripts/tax/section988-ingest.mjs \\',
-    '    --csv offset=scenarios/OffsetAccountTransactions.csv \\',
-    '    --rules scenarios/section988-rules.json',
-    '',
-    'Options:',
-    '  --csv <name>=<file>   Account to ingest. Repeatable — pass EVERY account in the',
-    '                        same currency, or internal transfers cannot reconcile.',
-    '  --rules <file>        Classification rules. --rules-schema prints the format.',
-    '  --rates <file>        Rate table override (default rates/DEXUSAL-daily.csv).',
-    '  --from / --to         Restrict reporting; ingest always reads everything.',
-    '  --top <n>             Rows per report section (default 15).',
-    '  --emit-classified <f> Write the rows back out with Kind/BusinessFraction filled',
-    '                        in from the rules and a Status column flagging what needs',
-    '                        you. Fix those, then feed that file back in as --csv — the',
-    '                        columns override rules. Carries Account, so one edited',
-    '                        sheet can hold every account in the pool.',
-    '  --card-statement <name>=<file>',
-    '                        Credit-card statement. Repeatable. Derives each payment\'s',
-    '                        business fraction from the purchases it retired. Needs a',
-    '                        "card" block in the rules file — --card-schema prints it.',
-    '  --force               Allow --emit-classified to overwrite a file that is not',
-    '                        one of the --csv inputs. Refused by default.',
-    '  --json                Structured output.',
-  ].join('\n');
+  return 'section988-ingest.mjs — validate foreign-currency account history (computes no tax).\n\n'
+    + '  Needs at least one --csv <name>=<file>.  Run with --help for every flag.';
 }
 
 try {
