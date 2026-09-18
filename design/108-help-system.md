@@ -300,7 +300,14 @@ generated from the same constants the gate reads.
 Original plan: `check-help.mjs` runs and reports; nothing fails yet.
 Stamps are written by the generator as topics appear.
 
-**Phase 4 — tier 2 prose.** 32 panel topics, then 21 group concepts. The gate flips to
+**Phase 4 — tier 2 prose. ✅ DONE 2026-09-17.** 32 panel topics and **25 concept topics**,
+12,500 words, every one inside its budget. `npm test` runs the gate with
+`--enforce panel,concept`, so both kinds now fail the build. **Q4 is settled: per-MECHANIC**
+(see §13). The backlog metric changed with it — it counts uncited PARAMS, not groups,
+because under per-mechanic topics a per-group count would call a 52-param group covered the
+moment one topic cited one of its params. It reads 0 of 221.
+
+Original plan: 32 panel topics, then 21 group concepts. The gate flips to
 failing per-kind as each kind completes, so `panel` can be enforced while `concept` is still
 being written. Q4 is settled here, against the real list.
 
@@ -346,7 +353,17 @@ shown to be cheap; until then `actions[]` carries the type and its field schema 
 
 ## 13. Still open
 
-- **Q4 — Per-group concept topics, or per-mechanic?** The 21 groups are a UI grouping, not a
-  conceptual one: Economic Shocks at 52 params plainly needs several topics, and some small
-  groups need none of their own. Phase 4 should settle this against the real list rather than
-  assume the groups are the right seams.
+- ~~**Q4 — Per-group concept topics, or per-mechanic?**~~ **SETTLED 2026-09-17:
+  per-mechanic**, and the guess in this section was right. Against the real list the groups
+  are an arrangement of a panel, not of the engine:
+
+  | group | what it actually is |
+  |---|---|
+  | Economic Shocks (52) | five mechanics — return paths, inflation, rates + yield curve, shocks, RNG |
+  | Spending (44) | four — drawdown order, the spending rule, pools, funding timing |
+  | US Retirement (9) | a junk drawer: `inflationRate` and `goldGrowthRate` are return assumptions, not US retirement |
+  | Allocation + Behavioral | rebalancing is split across both; pool sizing sits in Behavioral |
+  | 5 small groups | Company Equity is one param; none deserve a page of their own |
+
+  25 mechanic topics cover all 221 params. Five groups dissolve entirely, three split, and
+  two merge.

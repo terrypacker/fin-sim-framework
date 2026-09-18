@@ -601,7 +601,7 @@ docblock, not re-authored here. Arguments come from each script's declarative
     - `--strict` (flag) — exit 1 on any structural error or stamp drift (design 108 D5)
     - `--enforce` (list) — report everything, but exit 1 only for these kinds — the phase-4 flip
     - `--kinds` (list) — restrict the REPORT to these topic kinds
-    - `--backlog` (flag) — print only the backlog of param groups with no concept topic
+    - `--backlog` (flag) — print only the params no topic cites — the phase-4 worklist
     - `--quiet` (flag) — the one-line summary only, no per-item detail (what `npm test` runs)
     - `--template` (string) — print a blank topic of this kind and exit
 - **`scripts/dev/check-requirements.js`** — `npm run requirements`
