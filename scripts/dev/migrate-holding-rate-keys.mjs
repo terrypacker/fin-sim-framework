@@ -45,18 +45,18 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { RATE_KEYS }       from '../../src/finance/economic-regimes/rate-keys.js';
 import { ALLOCATION_VALUES } from '../../src/finance/holdings/allocation.js';
 import { resolveRateKey }  from '../../src/finance/holdings/default-allocations.js';
+import { parseFlags }      from '../lib/cli.mjs';
 
 const KNOWN_RATE_KEYS = new Set(Object.values(RATE_KEYS));
 
-const argv    = process.argv.slice(2);
-const dryRun  = argv.includes('--dry-run');
-const quiet   = argv.includes('--quiet');
-const files   = argv.filter(a => !a.startsWith('-'));
-
-if (files.length === 0) {
-  console.error('usage: migrate-holding-rate-keys.mjs <file.json> [more.json ...] [--dry-run] [--quiet]');
-  process.exit(2);
-}
+const { files, dryRun, quiet } = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/dev/migrate-holding-rate-keys.mjs <file.json> [more.json …] [options]\n\n'
+       + 'migrate-holding-rate-keys — rewrite legacy holding rate keys in saved scenarios.',
+  positional: { name: 'files', type: 'list', variadic: true, required: true,
+                help: 'scenario export(s) to migrate, in place' },
+  dryRun: { type: 'flag', help: 'report what would change and write nothing' },
+  quiet:  { type: 'flag', help: 'print only the totals' },
+});
 
 let totalFixed = 0, totalBad = 0;
 

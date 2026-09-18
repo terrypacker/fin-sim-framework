@@ -66,15 +66,25 @@ import {
 } from '../lib/mc-analysis.mjs';
 import { millions, thousands, money, moneyAuto, pct, percentile, columns } from '../lib/format.mjs';
 import { renderMixReport } from '../lib/mix-report-html.mjs';
+import { parseFlags }      from '../lib/cli.mjs';
 import {
   mixBands, thresholdProbabilities, outcomeGapAt, DEFAULT_MIX_THRESHOLDS,
 } from '../../src/finance/allocation-reporting/mix-distribution.js';
 
-const argv = process.argv.slice(2);
-const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
+const opts = parseFlags(process.argv.slice(2), {
+  usage: 'node scripts/montecarlo/mc-report.mjs --dir <dir> [options]\n\n'
+       + 'mc-report — table and compare the arm JSON an MC run left in a directory.',
+  dir:        { type: 'string', help: 'directory of per-arm JSON files' },
+  pairs:      { type: 'string', help: 'comma-separated a:b comparisons (default: every arm against the first)' },
+  metric:     { type: 'string', default: 'afterTaxNW', help: 'money metric to table' },
+  thresholds: { type: 'string', help: 'JSON file of mix thresholds' },
+  floor:      { type: 'flag',   help: 'report against the spending floor' },
+  html:       { type: 'string', help: 'write the mix report HTML here' },
+  json:       { type: 'flag',   help: 'structured output' },
+});
 
-const dir = flag('--dir');
-if (!dir) { console.error('usage: mc-report.mjs --dir <dir> [--pairs "a:b"] [--metric afterTaxNW] [--json]'); process.exit(2); }
+const dir = opts.dir;
+if (!dir) { console.error('\nmc-report needs --dir <dir>.  (-h for options)\n'); process.exit(2); }
 
 const files = readdirSync(dir).filter(f => f.endsWith('.json'));
 if (!files.length) { console.error(`no arm JSON files in ${dir}`); process.exit(2); }
@@ -122,12 +132,12 @@ if (cadences.size > 1) {
 const mixKeys = keys.filter(k => arms[k].mixSeries?.paths?.length);
 // A hand-written threshold file is the normal case, so fill the two fields a report
 // prints rather than crashing on the one the author left out.
-const thresholds = (flag('--thresholds')
-  ? JSON.parse(readFileSync(flag('--thresholds'), 'utf8'))
+const thresholds = (opts.thresholds
+  ? JSON.parse(readFileSync(opts.thresholds, 'utf8'))
   : DEFAULT_MIX_THRESHOLDS
 ).map((s, i) => ({ ...s, key: s.key ?? `threshold-${i}`, label: s.label ?? s.key ?? `threshold-${i}` }));
 
-if (argv.includes('--json')) {
+if (opts.json) {
   console.log(JSON.stringify({
     arms: Object.fromEntries(keys.map(k => [k, {
       n: arms[k].n, failureRate: failureRate(arms[k].rows), pathShape: arms[k].pathShape,
@@ -197,7 +207,7 @@ console.log('Terminal net worth percentiles. No mean is shown — see the header
 // Post-peak by default: the whole-path floor is the OPENING BALANCE on any plan still
 // accumulating at t0, and no strategy can change that. `--floor` asks for it anyway, which is
 // the right reading for a plan that decumulates from day one.
-const useFloor  = argv.includes('--floor');
+const useFloor  = opts.floor;
 const troughKey = useFloor ? 'minRealNetLiq' : 'troughRealNetLiq';
 const yearKey   = useFloor ? 'minRealNetLiqYear' : 'troughRealNetLiqYear';
 const hasTrough = keys.some(k => arms[k].rows?.some(r => Number.isFinite(r[troughKey])));
@@ -236,8 +246,8 @@ if (inconsistentN) {
 
 // ─── 2. paired ───────────────────────────────────────────────────────────────
 
-const pairs = flag('--pairs')
-  ? flag('--pairs').split(',').map(s => s.split(':').map(x => x.trim()))
+const pairs = opts.pairs
+  ? opts.pairs.split(',').map(s => s.split(':').map(x => x.trim()))
   : keys.slice(1).map(k => [keys[0], k]);
 
 console.log('\n\n════ PAIRED — what each change rescues, world by world ════');
@@ -264,7 +274,7 @@ for (const [a, b] of pairs) {
 // not fail either way, so those counts come back near-empty and say nothing. This is
 // the same paired discipline asked of wealth instead (design 84 §6.4b).
 
-const moneyMetric = flag('--metric') ?? 'afterTaxNW';
+const moneyMetric = opts.metric;
 const hasMoney = keys.some(k => arms[k].rows?.some(r => Number.isFinite(r[moneyMetric])));
 
 if (hasMoney) {
@@ -489,7 +499,7 @@ if (mixKeys.length === 0) {
 
 // ─── the chart page ──────────────────────────────────────────────────────────
 
-const htmlOut = flag('--html');
+const htmlOut = opts.html;
 if (htmlOut) {
   if (mixKeys.length === 0) {
     console.error('\n** --html needs a mix matrix; re-run mc-run.mjs with --mix.');

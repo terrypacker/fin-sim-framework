@@ -14,6 +14,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { parseFlags } from '../lib/cli.mjs';
+
 const ROOT = resolve(import.meta.dirname, '../..');
 const TEST_DIRS = ['tests/unit', 'tests/viz'];
 
@@ -60,12 +62,14 @@ function extractCoveredIds(content) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
-  const missingOnly = args.includes('--missing');
-  const catFilter = (() => {
-    const i = args.indexOf('--category');
-    return i !== -1 ? args[i + 1]?.toUpperCase() : null;
-  })();
+  const opts = parseFlags(process.argv.slice(2), {
+    usage: 'node scripts/dev/check-requirements.js [options]\n\n'
+         + 'check-requirements — which design requirement ids the test suite names.',
+    missing:  { type: 'flag',   help: 'list only the uncovered ids' },
+    category: { type: 'string', help: 'restrict to one requirement category' },
+  });
+  const missingOnly = opts.missing;
+  const catFilter   = opts.category?.toUpperCase() ?? null;
 
   const content = collectTestContent();
   const covered = extractCoveredIds(content);

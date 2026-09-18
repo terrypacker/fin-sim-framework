@@ -54,6 +54,7 @@ import { fileURLToPath }              from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
 
 import { FxRateTable, DEFAULT_RATE_FILE, toAudPerUsd } from '../lib/fx-rates.mjs';
+import { parseFlags } from '../lib/cli.mjs';
 
 const HERE      = dirname(fileURLToPath(import.meta.url));
 const REPO      = resolvePath(HERE, '../..');
@@ -192,7 +193,11 @@ export const USD_AUD_H10_MONTHLY = Object.freeze({
 }
 
 function main() {
-  const check = process.argv.includes('--check');
+  const { check } = parseFlags(process.argv.slice(2), {
+    usage: 'node scripts/dev/build-fx-series.mjs [--check]\n\n'
+         + 'build-fx-series — regenerate the observed monthly USD/AUD series from the pinned CSV.',
+    check: { type: 'flag', help: 'report whether the series is in sync; write nothing' },
+  });
 
   const table        = FxRateTable.load();
   const csv          = readFileSync(DEFAULT_RATE_FILE);
